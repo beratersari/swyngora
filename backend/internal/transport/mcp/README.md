@@ -186,7 +186,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_export` | Export job status / progress |
 | `list_exports` | List recent export jobs |
 | `cancel_export` | Cancel pending/running export |
-| `preview_import` | Preview restore of an export file (counts plus custom-signal addNames / updateNames) |
+| `preview_import` | Preview restore of an export file (counts plus custom-signal addNames / updateNames / conflicts) |
 | `confirm_import` | Apply preview with merge or replace |
 | `get_import` | Import job status / progress |
 | `list_imports` | List recent import jobs |

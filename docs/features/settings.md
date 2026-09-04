@@ -9,8 +9,9 @@ buys existed as HTTP + MCP only. Users need a desk page.
 
 - Route `/settings` (nav item).
 - Tabs: API keys, export, import, sharing, recurring buys.
-- Import preview lists custom signal mixes that will be **added** vs **updated**
-  before confirm (`addNames` / `updateNames` from `POST /api/v1/import/preview`).
+- Import preview lists custom signal mixes that will be **added**, **updated**,
+  or **conflicted**. Same-name conflicts let the user pick which saved mix to
+  update; no pick skips that name (`customSignalResolutions` on confirm).
 - Uses existing OpenAPI endpoints and the current `X-Client-Id`.
 - Creating a **read** key shows the secret once and does **not** write it
   to `swyngora.apiAuthToken` (read keys 403 paper mutations). A **trade**

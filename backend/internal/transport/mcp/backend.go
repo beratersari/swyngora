@@ -4014,13 +4014,16 @@ func importJobJSON(j *domain.ImportJob) (json.RawMessage, error) {
 	for k, v := range j.SectionCounts {
 		sec := map[string]any{
 			"valid": v.Valid, "invalid": v.Invalid, "willAdd": v.WillAdd,
-			"willUpdate": v.WillUpdate, "duplicates": v.Duplicates,
+			"willUpdate": v.WillUpdate, "willConflict": v.WillConflict, "duplicates": v.Duplicates,
 		}
 		if len(v.AddNames) > 0 {
 			sec["addNames"] = v.AddNames
 		}
 		if len(v.UpdateNames) > 0 {
 			sec["updateNames"] = v.UpdateNames
+		}
+		if len(v.Conflicts) > 0 {
+			sec["conflicts"] = v.Conflicts
 		}
 		secs[string(k)] = sec
 	}
@@ -4035,7 +4038,7 @@ func importJobJSON(j *domain.ImportJob) (json.RawMessage, error) {
 		"totals": map[string]any{
 			"valid": j.Totals.Valid, "invalid": j.Totals.Invalid,
 			"willAdd": j.Totals.WillAdd, "willUpdate": j.Totals.WillUpdate,
-			"duplicates": j.Totals.Duplicates,
+			"willConflict": j.Totals.WillConflict, "duplicates": j.Totals.Duplicates,
 		},
 		"added": added, "fileName": j.FileName, "byteSize": j.ByteSize,
 		"createdAt": j.CreatedAt.UTC().Format(time.RFC3339Nano),
@@ -4065,11 +4068,11 @@ func (b *Backend) PreviewImport(ctx context.Context, clientID, fileName, format 
 	return importJobJSON(job)
 }
 
-func (b *Backend) ConfirmImport(ctx context.Context, clientID, id, mode string) (json.RawMessage, error) {
+func (b *Backend) ConfirmImport(ctx context.Context, clientID, id, mode string, resolutions []domain.CustomSignalResolution) (json.RawMessage, error) {
 	if b.Import == nil {
 		return nil, fmt.Errorf("%w: import not configured", domain.ErrUpstream)
 	}
-	job, err := b.Import.Confirm(ctx, clientID, id, mode)
+	job, err := b.Import.Confirm(ctx, clientID, id, mode, resolutions)
 	if err != nil {
 		return nil, err
 	}

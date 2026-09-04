@@ -2676,10 +2676,12 @@ func (c *APIClient) PreviewImport(ctx context.Context, clientID, fileName, forma
 }
 
 // ConfirmImport starts applying a previewed import.
-func (c *APIClient) ConfirmImport(ctx context.Context, clientID, id, mode string) (json.RawMessage, error) {
-	return c.sendJSON(ctx, http.MethodPost, "/api/v1/import/"+url.PathEscape(id)+"/confirm", map[string]string{
-		"clientId": clientID, "mode": mode,
-	})
+func (c *APIClient) ConfirmImport(ctx context.Context, clientID, id, mode string, resolutions []domain.CustomSignalResolution) (json.RawMessage, error) {
+	body := map[string]any{"clientId": clientID, "mode": mode}
+	if len(resolutions) > 0 {
+		body["customSignalResolutions"] = resolutions
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/import/"+url.PathEscape(id)+"/confirm", body)
 }
 
 // GetImport returns import job status.

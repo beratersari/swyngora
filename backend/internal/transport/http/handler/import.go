@@ -23,13 +23,15 @@ func NewImportHandler(svc *dataimport.Service) *ImportHandler {
 }
 
 type importSectionCountDTO struct {
-	Valid       int      `json:"valid"`
-	Invalid     int      `json:"invalid"`
-	WillAdd     int      `json:"willAdd"`
-	WillUpdate  int      `json:"willUpdate"`
-	Duplicates  int      `json:"duplicates"`
-	AddNames    []string `json:"addNames,omitempty"`
-	UpdateNames []string `json:"updateNames,omitempty"`
+	Valid        int                            `json:"valid"`
+	Invalid      int                            `json:"invalid"`
+	WillAdd      int                            `json:"willAdd"`
+	WillUpdate   int                            `json:"willUpdate"`
+	WillConflict int                            `json:"willConflict"`
+	Duplicates   int                            `json:"duplicates"`
+	AddNames     []string                       `json:"addNames,omitempty"`
+	UpdateNames  []string                       `json:"updateNames,omitempty"`
+	Conflicts    []domain.ImportProfileConflict `json:"conflicts,omitempty"`
 }
 
 type importJobDTO struct {
@@ -60,7 +62,7 @@ func importToDTO(j *domain.ImportJob) importJobDTO {
 		Totals: importSectionCountDTO{
 			Valid: j.Totals.Valid, Invalid: j.Totals.Invalid,
 			WillAdd: j.Totals.WillAdd, WillUpdate: j.Totals.WillUpdate,
-			Duplicates: j.Totals.Duplicates,
+			WillConflict: j.Totals.WillConflict, Duplicates: j.Totals.Duplicates,
 		},
 		CreatedAt: j.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
@@ -69,7 +71,8 @@ func importToDTO(j *domain.ImportJob) importJobDTO {
 		for k, v := range j.SectionCounts {
 			d.Sections[string(k)] = importSectionCountDTO{
 				Valid: v.Valid, Invalid: v.Invalid, WillAdd: v.WillAdd, WillUpdate: v.WillUpdate,
-				Duplicates: v.Duplicates, AddNames: v.AddNames, UpdateNames: v.UpdateNames,
+				WillConflict: v.WillConflict, Duplicates: v.Duplicates,
+				AddNames: v.AddNames, UpdateNames: v.UpdateNames, Conflicts: v.Conflicts,
 			}
 		}
 	}
@@ -159,8 +162,9 @@ func (h *ImportHandler) Preview(w http.ResponseWriter, r *http.Request) {
 }
 
 type confirmBody struct {
-	ClientID string `json:"clientId"`
-	Mode     string `json:"mode"`
+	ClientID                 string                           `json:"clientId"`
+	Mode                     string                           `json:"mode"`
+	CustomSignalResolutions  []domain.CustomSignalResolution  `json:"customSignalResolutions"`
 }
 
 // Confirm handles POST /api/v1/import/{id}/confirm
@@ -179,7 +183,7 @@ func (h *ImportHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 	if mode == "" {
 		mode = r.URL.Query().Get("mode")
 	}
-	job, err := h.svc.Confirm(r.Context(), clientID, id, mode)
+	job, err := h.svc.Confirm(r.Context(), clientID, id, mode, body.CustomSignalResolutions)
 	if err != nil {
 		writeError(w, err)
 		return

@@ -41,27 +41,62 @@ const (
 
 // ImportSectionCount is per-section stats from preview / result.
 type ImportSectionCount struct {
-	Valid      int `json:"valid"`
-	Invalid    int `json:"invalid"`
-	WillAdd    int `json:"willAdd"`    // valid records that would be inserted under the chosen mode
-	WillUpdate int `json:"willUpdate"` // valid records that match existing data and would be overwritten
-	Duplicates int `json:"duplicates"` // valid but already present (merge skip) or duplicates within file
+	Valid        int `json:"valid"`
+	Invalid      int `json:"invalid"`
+	WillAdd      int `json:"willAdd"`      // valid records that would be inserted under the chosen mode
+	WillUpdate   int `json:"willUpdate"`   // valid records that match exactly one existing name
+	WillConflict int `json:"willConflict"` // custom-signal names that need a user pick
+	Duplicates   int `json:"duplicates"`   // valid but already present (merge skip) or duplicates within file
 	// AddNames / UpdateNames list custom-signal profile names in the preview
 	// (empty for other sections). Sorted for stable responses.
-	AddNames    []string `json:"addNames,omitempty"`
-	UpdateNames []string `json:"updateNames,omitempty"`
+	AddNames    []string                `json:"addNames,omitempty"`
+	UpdateNames []string                `json:"updateNames,omitempty"`
+	Conflicts   []ImportProfileConflict `json:"conflicts,omitempty"`
+}
+
+// ImportProfileIncoming is one file row in a same-name conflict group.
+type ImportProfileIncoming struct {
+	Index     int                `json:"index"`
+	IsDefault bool               `json:"isDefault,omitempty"`
+	Weights   map[string]float64 `json:"weights,omitempty"`
+}
+
+// ImportProfileCandidate is an existing saved mix the user can update.
+type ImportProfileCandidate struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	IsDefault bool   `json:"isDefault,omitempty"`
+	UpdatedAt string `json:"updatedAt,omitempty"`
+}
+
+// ImportProfileConflict is a custom-signal name with more than one file row
+// and/or more than one existing mix. Confirm must pick incomingIndex and/or
+// profileId; omitting the name skips that group.
+type ImportProfileConflict struct {
+	Name       string                    `json:"name"`
+	Incoming   []ImportProfileIncoming   `json:"incoming"`
+	Candidates []ImportProfileCandidate  `json:"candidates"`
+}
+
+// CustomSignalResolution is the user's pick for one conflicted name.
+// Empty ProfileID or a missing IncomingIndex (when required) means skip.
+type CustomSignalResolution struct {
+	Name          string `json:"name"`
+	IncomingIndex *int   `json:"incomingIndex,omitempty"`
+	ProfileID     string `json:"profileId,omitempty"`
 }
 
 // ImportPreviewTotals aggregates section counts.
 type ImportPreviewTotals struct {
-	Valid      int `json:"valid"`
-	Invalid    int `json:"invalid"`
-	WillAdd    int `json:"willAdd"`
-	WillUpdate int `json:"willUpdate"`
-	Duplicates int `json:"duplicates"`
+	Valid        int `json:"valid"`
+	Invalid      int `json:"invalid"`
+	WillAdd      int `json:"willAdd"`
+	WillUpdate   int `json:"willUpdate"`
+	WillConflict int `json:"willConflict"`
+	Duplicates   int `json:"duplicates"`
 }
 
-// CloneImportSectionCount copies name slices so store clones cannot mutate the source.
+// CloneImportSectionCount copies name and conflict slices so store clones cannot mutate the source.
 func CloneImportSectionCount(v ImportSectionCount) ImportSectionCount {
 	if len(v.AddNames) > 0 {
 		v.AddNames = append([]string(nil), v.AddNames...)
@@ -69,7 +104,35 @@ func CloneImportSectionCount(v ImportSectionCount) ImportSectionCount {
 	if len(v.UpdateNames) > 0 {
 		v.UpdateNames = append([]string(nil), v.UpdateNames...)
 	}
+	if len(v.Conflicts) > 0 {
+		cp := make([]ImportProfileConflict, len(v.Conflicts))
+		for i, c := range v.Conflicts {
+			cp[i] = cloneImportProfileConflict(c)
+		}
+		v.Conflicts = cp
+	}
 	return v
+}
+
+func cloneImportProfileConflict(c ImportProfileConflict) ImportProfileConflict {
+	if len(c.Incoming) > 0 {
+		inc := make([]ImportProfileIncoming, len(c.Incoming))
+		for i, in := range c.Incoming {
+			inc[i] = in
+			if in.Weights != nil {
+				w := make(map[string]float64, len(in.Weights))
+				for k, val := range in.Weights {
+					w[k] = val
+				}
+				inc[i].Weights = w
+			}
+		}
+		c.Incoming = inc
+	}
+	if len(c.Candidates) > 0 {
+		c.Candidates = append([]ImportProfileCandidate(nil), c.Candidates...)
+	}
+	return c
 }
 
 // ImportJob tracks an upload, preview, and optional background apply.

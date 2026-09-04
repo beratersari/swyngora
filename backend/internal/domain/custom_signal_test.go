@@ -228,19 +228,69 @@ func TestCustomSignalCatalog(t *testing.T) {
 	}
 }
 
-func TestClassifyCustomSignalProfiles(t *testing.T) {
+func TestClassifyCustomSignalImport(t *testing.T) {
 	t.Parallel()
-	existing := []CustomSignalProfile{{Name: "Hunt mix"}, {Name: "Trend"}}
-	incoming := []CustomSignalProfile{{Name: "hunt mix"}, {Name: "New mix"}, {Name: "Trend"}}
-	add, update := ClassifyCustomSignalProfiles(incoming, existing)
-	if len(add) != 1 || add[0] != "New mix" {
-		t.Fatalf("add=%v", add)
+	existing := []CustomSignalProfile{
+		{ID: "a", Name: "Hunt mix"}, {ID: "b", Name: "Trend"},
+		{ID: "c", Name: "Hunt mix"},
 	}
-	if len(update) != 2 || update[0] != "Trend" || update[1] != "hunt mix" {
-		t.Fatalf("update=%v", update)
+	incoming := []CustomSignalProfile{
+		{Name: "hunt mix"}, {Name: "New mix"}, {Name: "Trend"}, {Name: "Hunt mix"},
 	}
-	add, update = ClassifyCustomSignalProfiles(nil, existing)
-	if len(add) != 0 || len(update) != 0 {
-		t.Fatalf("empty incoming add=%v update=%v", add, update)
+	got := ClassifyCustomSignalImport(incoming, existing, false)
+	if len(got.AddNames) != 1 || got.AddNames[0] != "New mix" {
+		t.Fatalf("add=%v", got.AddNames)
+	}
+	if len(got.UpdateNames) != 1 || got.UpdateNames[0] != "Trend" {
+		t.Fatalf("update=%v", got.UpdateNames)
+	}
+	if len(got.Conflicts) != 1 || got.Conflicts[0].Name != "hunt mix" {
+		t.Fatalf("conflicts=%+v", got.Conflicts)
+	}
+	if len(got.Conflicts[0].Incoming) != 2 || len(got.Conflicts[0].Candidates) != 2 {
+		t.Fatalf("conflict %+v", got.Conflicts[0])
+	}
+	repl := ClassifyCustomSignalImport(incoming, existing, true)
+	if len(repl.Conflicts) != 1 || len(repl.UpdateNames) != 1 || repl.UpdateNames[0] != "Trend" {
+		t.Fatalf("replace class add=%v update=%v conflicts=%+v", repl.AddNames, repl.UpdateNames, repl.Conflicts)
+	}
+
+	empty := ClassifyCustomSignalImport(nil, existing, false)
+	if len(empty.AddNames) != 0 || len(empty.UpdateNames) != 0 || len(empty.Conflicts) != 0 {
+		t.Fatalf("empty incoming %+v", empty)
+	}
+}
+
+func TestValidateCustomSignalResolutions(t *testing.T) {
+	t.Parallel()
+	conflicts := []ImportProfileConflict{{
+		Name:       "Hunt mix",
+		Incoming:   []ImportProfileIncoming{{Index: 0}, {Index: 1}},
+		Candidates: []ImportProfileCandidate{{ID: "a"}, {ID: "b"}},
+	}}
+	idx := 1
+	if err := ValidateCustomSignalResolutions(conflicts, []CustomSignalResolution{
+		{Name: "Hunt mix", IncomingIndex: &idx, ProfileID: "b"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateCustomSignalResolutions(conflicts, nil); err != nil {
+		t.Fatal(err)
+	}
+	bad := 5
+	if err := ValidateCustomSignalResolutions(conflicts, []CustomSignalResolution{
+		{Name: "Hunt mix", IncomingIndex: &bad, ProfileID: "b"},
+	}); err == nil {
+		t.Fatal("expected incomingIndex error")
+	}
+	if err := ValidateCustomSignalResolutions(conflicts, []CustomSignalResolution{
+		{Name: "Hunt mix", ProfileID: "missing"},
+	}); err == nil {
+		t.Fatal("expected profileId error")
+	}
+	if err := ValidateCustomSignalResolutions(conflicts, []CustomSignalResolution{
+		{Name: "Unknown"},
+	}); err == nil {
+		t.Fatal("expected unknown name error")
 	}
 }

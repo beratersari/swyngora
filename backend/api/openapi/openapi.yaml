@@ -6873,9 +6873,10 @@ paths:
       description: |
         Accepts multipart form field `file` (or raw JSON/CSV body).
         Parses watchlist, shares, alerts, backtests, paper portfolios, and custom signal profiles; returns counts of valid, invalid,
-        willAdd, willUpdate, and duplicates. customSignals includes addNames (new mixes) and updateNames
-        (same name already saved). Merge overwrites matching profile weights; replace recreates after purge.
-        Does not apply data until confirm.
+        willAdd, willUpdate, willConflict, and duplicates. customSignals includes addNames (new mixes),
+        updateNames (exactly one saved mix), and conflicts (more than one file row or saved mix with
+        the same name). Confirm with customSignalResolutions to pick which saved mix to update;
+        omitted conflicts are not imported. Does not apply data until confirm.
         Ownership is always the uploading clientId (file clientId is ignored).
       operationId: previewImport
       tags: [Import]
@@ -6968,7 +6969,9 @@ paths:
       summary: Start applying a previewed import
       description: |
         mode=merge adds only missing records (no duplicate symbols/shares/ids). Same-name custom
-        signal profiles are updated in place (weights + default flag), not skipped.
+        signal profiles with exactly one saved mix are updated in place. Names that match more than
+        one file row or more than one saved mix are conflicts — pass customSignalResolutions
+        (name + incomingIndex and/or profileId). Omitted conflicts are skipped.
         mode=replace clears existing section data for the client then imports from the file.
         Only one pending/running import per client (409 otherwise). Runs in the background.
       operationId: confirmImport
@@ -6993,6 +6996,11 @@ paths:
               properties:
                 clientId: { type: string }
                 mode: { type: string, enum: [merge, replace] }
+                customSignalResolutions:
+                  type: array
+                  description: Picks for same-name custom signal conflicts. Omit a name to skip it.
+                  items:
+                    $ref: '#/components/schemas/CustomSignalResolution'
       responses:
         '202':
           description: Import queued
@@ -9740,7 +9748,10 @@ components:
         willAdd: { type: integer }
         willUpdate:
           type: integer
-          description: Valid records that match existing data and would be overwritten (custom signal profiles by name)
+          description: Valid custom-signal names that match exactly one saved mix
+        willConflict:
+          type: integer
+          description: Custom-signal names that need a user pick (more than one file row or saved mix)
         duplicates: { type: integer }
         addNames:
           type: array
@@ -9750,6 +9761,43 @@ components:
           type: array
           items: { type: string }
           description: Custom signal profile names that already exist and would be updated
+        conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportProfileConflict'
+    ImportProfileIncoming:
+      type: object
+      properties:
+        index: { type: integer }
+        isDefault: { type: boolean }
+        weights:
+          type: object
+          additionalProperties: { type: number }
+    ImportProfileCandidate:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        isDefault: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+    ImportProfileConflict:
+      type: object
+      properties:
+        name: { type: string }
+        incoming:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportProfileIncoming'
+        candidates:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImportProfileCandidate'
+    CustomSignalResolution:
+      type: object
+      properties:
+        name: { type: string }
+        incomingIndex: { type: integer, description: Which file row to apply when the file has more than one mix with this name }
+        profileId: { type: string, description: Which saved mix to update when more than one exists; omit to skip }
     Account:
       type: object
       properties:

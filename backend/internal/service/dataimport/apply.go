@@ -28,6 +28,7 @@ func (s *Service) runJob(ctx context.Context, job *domain.ImportJob) error {
 		mode = domain.ImportModeMerge
 	}
 	added := map[domain.ExportSection]int{}
+	resolutions := s.loadResolutions(job)
 	steps := []struct {
 		sec domain.ExportSection
 		fn  func(context.Context, string, domain.ImportMode, *payload) (int, error)
@@ -37,13 +38,12 @@ func (s *Service) runJob(ctx context.Context, job *domain.ImportJob) error {
 		{domain.ExportSectionAlerts, s.applyAlerts},
 		{domain.ExportSectionBacktests, s.applyBacktests},
 		{domain.ExportSectionPortfolios, s.applyPortfolios},
-		{domain.ExportSectionCustomSignals, s.applyCustomSignals},
 	}
 	for i, step := range steps {
 		if canceled() {
 			return s.store.Finish(ctx, job.ID, domain.ImportCanceled, added, "", time.Now().UTC())
 		}
-		pct := float64(i) / float64(len(steps)) * 100
+		pct := float64(i) / float64(len(steps)+1) * 100
 		_ = s.store.UpdateProgress(ctx, job.ID, pct, string(step.sec))
 		n, err := step.fn(ctx, job.ClientID, mode, pl)
 		if err != nil {
@@ -51,6 +51,15 @@ func (s *Service) runJob(ctx context.Context, job *domain.ImportJob) error {
 		}
 		added[step.sec] = n
 	}
+	if canceled() {
+		return s.store.Finish(ctx, job.ID, domain.ImportCanceled, added, "", time.Now().UTC())
+	}
+	_ = s.store.UpdateProgress(ctx, job.ID, float64(len(steps))/float64(len(steps)+1)*100, string(domain.ExportSectionCustomSignals))
+	nCS, err := s.applyCustomSignals(ctx, job.ClientID, mode, pl, resolutions)
+	if err != nil {
+		return err
+	}
+	added[domain.ExportSectionCustomSignals] = nCS
 	if canceled() {
 		return s.store.Finish(ctx, job.ID, domain.ImportCanceled, added, "", time.Now().UTC())
 	}
@@ -243,7 +252,7 @@ func (s *Service) applyBacktests(ctx context.Context, clientID string, mode doma
 	return n, nil
 }
 
-func (s *Service) applyCustomSignals(ctx context.Context, clientID string, mode domain.ImportMode, pl *payload) (int, error) {
+func (s *Service) applyCustomSignals(ctx context.Context, clientID string, mode domain.ImportMode, pl *payload, resolutions []domain.CustomSignalResolution) (int, error) {
 	if s.data.CustomSignals == nil {
 		return 0, nil
 	}
@@ -252,24 +261,50 @@ func (s *Service) applyCustomSignals(ctx context.Context, clientID string, mode 
 			return 0, err
 		}
 	}
-	existingByName := map[string]domain.CustomSignalProfile{}
+	var existing []domain.CustomSignalProfile
 	if mode == domain.ImportModeMerge {
 		list, err := s.data.CustomSignals.ListProfiles(ctx, clientID)
 		if err != nil {
 			return 0, err
 		}
-		for _, p := range list {
-			existingByName[strings.ToLower(p.Name)] = p
-		}
+		existing = list
 	}
-	n := 0
+	class := domain.ClassifyCustomSignalImport(pl.CustomSignals, existing, mode == domain.ImportModeReplace)
+	byRes := domain.ResolutionByName(resolutions)
+	incomingByName := map[string][]domain.CustomSignalProfile{}
 	for _, p := range pl.CustomSignals {
-		key := strings.ToLower(p.Name)
-		if cur, ok := existingByName[key]; ok {
-			cur.Weights = p.Weights
-			cur.IsDefault = p.IsDefault
-			cur.UpdatedAt = time.Now().UTC()
-			if _, err := s.data.CustomSignals.UpdateProfile(ctx, cur); err != nil {
+		key := strings.ToLower(strings.TrimSpace(p.Name))
+		incomingByName[key] = append(incomingByName[key], p)
+	}
+	existingByName := map[string][]domain.CustomSignalProfile{}
+	for _, p := range existing {
+		key := strings.ToLower(strings.TrimSpace(p.Name))
+		existingByName[key] = append(existingByName[key], p)
+	}
+	conflictNames := map[string]struct{}{}
+	for _, c := range class.Conflicts {
+		conflictNames[strings.ToLower(c.Name)] = struct{}{}
+	}
+
+	n := 0
+	seen := map[string]struct{}{}
+	for _, p := range pl.CustomSignals {
+		key := strings.ToLower(strings.TrimSpace(p.Name))
+		if _, done := seen[key]; done {
+			continue
+		}
+		seen[key] = struct{}{}
+		inc := incomingByName[key]
+		ex := existingByName[key]
+		chosen, target, ok := pickCustomSignalApply(inc, ex, byRes[key], conflictNames)
+		if !ok {
+			continue
+		}
+		if target != nil {
+			target.Weights = chosen.Weights
+			target.IsDefault = chosen.IsDefault
+			target.UpdatedAt = time.Now().UTC()
+			if _, err := s.data.CustomSignals.UpdateProfile(ctx, *target); err != nil {
 				continue
 			}
 			n++
@@ -278,13 +313,54 @@ func (s *Service) applyCustomSignals(ctx context.Context, clientID string, mode 
 		if cnt, err := s.data.CustomSignals.CountProfiles(ctx, clientID); err == nil && cnt >= domain.MaxCustomSignalProfilesPerClient {
 			break
 		}
-		p.ID = uuid.NewString()
-		p.ClientID = clientID
-		if _, err := s.data.CustomSignals.CreateProfile(ctx, p); err != nil {
+		chosen.ID = uuid.NewString()
+		chosen.ClientID = clientID
+		if _, err := s.data.CustomSignals.CreateProfile(ctx, chosen); err != nil {
 			continue
 		}
-		existingByName[key] = p
 		n++
 	}
 	return n, nil
+}
+
+func pickCustomSignalApply(inc, ex []domain.CustomSignalProfile, res domain.CustomSignalResolution, conflicts map[string]struct{}) (domain.CustomSignalProfile, *domain.CustomSignalProfile, bool) {
+	if len(inc) == 0 {
+		return domain.CustomSignalProfile{}, nil, false
+	}
+	key := strings.ToLower(strings.TrimSpace(inc[0].Name))
+	_, isConflict := conflicts[key]
+	incIdx := 0
+	if isConflict {
+		if res.Name == "" && res.IncomingIndex == nil && res.ProfileID == "" {
+			return domain.CustomSignalProfile{}, nil, false
+		}
+		if len(inc) > 1 {
+			if res.IncomingIndex == nil {
+				return domain.CustomSignalProfile{}, nil, false
+			}
+			incIdx = *res.IncomingIndex
+		}
+	}
+	if incIdx < 0 || incIdx >= len(inc) {
+		return domain.CustomSignalProfile{}, nil, false
+	}
+	chosen := inc[incIdx]
+	if len(ex) == 0 {
+		return chosen, nil, true
+	}
+	if len(ex) == 1 {
+		cur := ex[0]
+		return chosen, &cur, true
+	}
+	id := strings.TrimSpace(res.ProfileID)
+	if id == "" {
+		return domain.CustomSignalProfile{}, nil, false
+	}
+	for i := range ex {
+		if ex[i].ID == id {
+			cur := ex[i]
+			return chosen, &cur, true
+		}
+	}
+	return domain.CustomSignalProfile{}, nil, false
 }

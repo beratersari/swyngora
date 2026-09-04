@@ -117,31 +117,145 @@ type CustomSignalProfilePort interface {
 	PurgeProfiles(ctx context.Context, clientID string) error
 }
 
-// ClassifyCustomSignalProfiles splits file-deduped mixes into new names vs
-// names that already exist for the client (case-insensitive). Names are sorted.
-func ClassifyCustomSignalProfiles(incoming, existing []CustomSignalProfile) (addNames, updateNames []string) {
-	have := make(map[string]struct{}, len(existing))
+// CustomSignalImportClass is the preview split for named mixes.
+type CustomSignalImportClass struct {
+	AddNames    []string
+	UpdateNames []string
+	Conflicts   []ImportProfileConflict
+}
+
+// ClassifyCustomSignalImport groups incoming mixes by name (case-insensitive).
+// A name is a conflict when the file has more than one row or (on merge) more
+// than one saved mix. replace=true ignores existing-name collisions (purge first).
+func ClassifyCustomSignalImport(incoming, existing []CustomSignalProfile, replace bool) CustomSignalImportClass {
+	existingByName := map[string][]CustomSignalProfile{}
 	for _, p := range existing {
 		key := strings.ToLower(strings.TrimSpace(p.Name))
 		if key == "" {
 			continue
 		}
-		have[key] = struct{}{}
+		existingByName[key] = append(existingByName[key], p)
 	}
+	incomingByName := map[string][]CustomSignalProfile{}
+	var nameOrder []string
+	seen := map[string]struct{}{}
 	for _, p := range incoming {
 		name := strings.TrimSpace(p.Name)
 		if name == "" {
 			continue
 		}
-		if _, ok := have[strings.ToLower(name)]; ok {
-			updateNames = append(updateNames, name)
-		} else {
-			addNames = append(addNames, name)
+		key := strings.ToLower(name)
+		incomingByName[key] = append(incomingByName[key], p)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		nameOrder = append(nameOrder, name)
+	}
+	var out CustomSignalImportClass
+	for _, display := range nameOrder {
+		key := strings.ToLower(display)
+		inc := incomingByName[key]
+		ex := existingByName[key]
+		if len(inc) > 1 || (!replace && len(ex) > 1) {
+			out.Conflicts = append(out.Conflicts, newImportProfileConflict(display, inc, ex))
+			continue
+		}
+		if len(ex) == 1 {
+			out.UpdateNames = append(out.UpdateNames, display)
+			continue
+		}
+		out.AddNames = append(out.AddNames, display)
+	}
+	sort.Strings(out.AddNames)
+	sort.Strings(out.UpdateNames)
+	sort.Slice(out.Conflicts, func(i, j int) bool {
+		return strings.ToLower(out.Conflicts[i].Name) < strings.ToLower(out.Conflicts[j].Name)
+	})
+	return out
+}
+
+func newImportProfileConflict(name string, incoming, existing []CustomSignalProfile) ImportProfileConflict {
+	c := ImportProfileConflict{Name: name}
+	for i, p := range incoming {
+		item := ImportProfileIncoming{Index: i, IsDefault: p.IsDefault}
+		if p.Weights.Pct != nil {
+			item.Weights = make(map[string]float64, len(p.Weights.Pct))
+			for k, v := range p.Weights.Pct {
+				if v != 0 {
+					item.Weights[k] = v
+				}
+			}
+		}
+		c.Incoming = append(c.Incoming, item)
+	}
+	for _, p := range existing {
+		cand := ImportProfileCandidate{ID: p.ID, Name: p.Name, IsDefault: p.IsDefault}
+		if !p.UpdatedAt.IsZero() {
+			cand.UpdatedAt = p.UpdatedAt.UTC().Format(time.RFC3339Nano)
+		}
+		c.Candidates = append(c.Candidates, cand)
+	}
+	return c
+}
+
+// ValidateCustomSignalResolutions checks picks against preview conflicts.
+// Unknown names, out-of-range incomingIndex, or a profileId that is not a
+// candidate are errors. Omitting a conflict (skip) is valid.
+func ValidateCustomSignalResolutions(conflicts []ImportProfileConflict, res []CustomSignalResolution) error {
+	byName := make(map[string]ImportProfileConflict, len(conflicts))
+	for _, c := range conflicts {
+		byName[strings.ToLower(strings.TrimSpace(c.Name))] = c
+	}
+	seen := map[string]struct{}{}
+	for _, r := range res {
+		name := strings.TrimSpace(r.Name)
+		if name == "" {
+			return fmt.Errorf("%w: resolution name is required", ErrInvalidArgument)
+		}
+		key := strings.ToLower(name)
+		if _, dup := seen[key]; dup {
+			return fmt.Errorf("%w: duplicate resolution for %q", ErrInvalidArgument, name)
+		}
+		seen[key] = struct{}{}
+		c, ok := byName[key]
+		if !ok {
+			return fmt.Errorf("%w: no conflict named %q", ErrInvalidArgument, name)
+		}
+		if r.IncomingIndex != nil && (*r.IncomingIndex < 0 || *r.IncomingIndex >= len(c.Incoming)) {
+			return fmt.Errorf("%w: incomingIndex out of range for %q", ErrInvalidArgument, name)
+		}
+		id := strings.TrimSpace(r.ProfileID)
+		if id == "" {
+			continue
+		}
+		found := false
+		for _, cand := range c.Candidates {
+			if cand.ID == id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("%w: profileId is not a candidate for %q", ErrInvalidArgument, name)
 		}
 	}
-	sort.Strings(addNames)
-	sort.Strings(updateNames)
-	return addNames, updateNames
+	return nil
+}
+
+// ResolutionByName maps lowercased names to the first matching pick.
+func ResolutionByName(res []CustomSignalResolution) map[string]CustomSignalResolution {
+	out := make(map[string]CustomSignalResolution, len(res))
+	for _, r := range res {
+		key := strings.ToLower(strings.TrimSpace(r.Name))
+		if key == "" {
+			continue
+		}
+		if _, ok := out[key]; !ok {
+			out[key] = r
+		}
+	}
+	return out
 }
 
 // DuplicateCustomSignalProfileName appends " (copy)" and trims to the name cap.

@@ -298,8 +298,8 @@ func (s *Service) computePreviewCounts(ctx context.Context, clientID string, par
 		}
 		counts[domain.ExportSectionPortfolios] = c
 	}
-	// Custom signal profiles: same-name mixes are updates (merge overwrites
-	// weights; replace recreates after purge). File-internal dupes stay in Duplicates.
+	// Custom signal profiles: unique names add/update; 2+ file rows or
+	// 2+ saved mixes with the same name are conflicts (user must pick).
 	{
 		c := domain.ImportSectionCount{
 			Valid:      len(parsed.Payload.CustomSignals),
@@ -314,9 +314,13 @@ func (s *Service) computePreviewCounts(ctx context.Context, clientID string, par
 			}
 			existing = list
 		}
-		c.AddNames, c.UpdateNames = domain.ClassifyCustomSignalProfiles(parsed.Payload.CustomSignals, existing)
+		class := domain.ClassifyCustomSignalImport(parsed.Payload.CustomSignals, existing, mode == domain.ImportModeReplace)
+		c.AddNames = class.AddNames
+		c.UpdateNames = class.UpdateNames
+		c.Conflicts = class.Conflicts
 		c.WillAdd = len(c.AddNames)
 		c.WillUpdate = len(c.UpdateNames)
+		c.WillConflict = len(c.Conflicts)
 		counts[domain.ExportSectionCustomSignals] = c
 	}
 	var totals domain.ImportPreviewTotals
@@ -325,13 +329,16 @@ func (s *Service) computePreviewCounts(ctx context.Context, clientID string, par
 		totals.Invalid += c.Invalid
 		totals.WillAdd += c.WillAdd
 		totals.WillUpdate += c.WillUpdate
+		totals.WillConflict += c.WillConflict
 		totals.Duplicates += c.Duplicates
 	}
 	return counts, totals, nil
 }
 
 // Confirm starts applying a previewed import with the given mode.
-func (s *Service) Confirm(ctx context.Context, clientID, id, mode string) (*domain.ImportJob, error) {
+// resolutions picks a file row and/or saved mix for each custom-signal name
+// conflict; omitted conflicts are skipped.
+func (s *Service) Confirm(ctx context.Context, clientID, id, mode string, resolutions []domain.CustomSignalResolution) (*domain.ImportJob, error) {
 	if s.store == nil {
 		return nil, fmt.Errorf("%w: import store not configured", domain.ErrUpstream)
 	}
@@ -378,8 +385,54 @@ func (s *Service) Confirm(ctx context.Context, clientID, id, mode string) (*doma
 		counts[sec] = cc
 	}
 	totals.Invalid = job.Totals.Invalid
+	if cs, ok := counts[domain.ExportSectionCustomSignals]; ok {
+		if err := domain.ValidateCustomSignalResolutions(cs.Conflicts, resolutions); err != nil {
+			return nil, err
+		}
+	}
+	if err := s.writeResolutions(job, resolutions); err != nil {
+		return nil, err
+	}
 	_ = s.store.UpdatePreviewStats(ctx, id, counts, totals, job.PayloadPath)
 	return s.store.Confirm(ctx, clientID, id, m, time.Now().UTC())
+}
+
+func resolutionsPath(payloadPath string) string {
+	if strings.HasSuffix(payloadPath, ".payload.json") {
+		return strings.TrimSuffix(payloadPath, ".payload.json") + ".resolutions.json"
+	}
+	return payloadPath + ".resolutions.json"
+}
+
+func (s *Service) writeResolutions(job *domain.ImportJob, res []domain.CustomSignalResolution) error {
+	if job == nil || job.PayloadPath == "" {
+		return fmt.Errorf("%w: import payload missing", domain.ErrNotFound)
+	}
+	path := resolutionsPath(job.PayloadPath)
+	if len(res) == 0 {
+		_ = os.Remove(path)
+		return nil
+	}
+	b, err := json.Marshal(res)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, b, 0o600)
+}
+
+func (s *Service) loadResolutions(job *domain.ImportJob) []domain.CustomSignalResolution {
+	if job == nil || job.PayloadPath == "" {
+		return nil
+	}
+	raw, err := os.ReadFile(resolutionsPath(job.PayloadPath))
+	if err != nil {
+		return nil
+	}
+	var res []domain.CustomSignalResolution
+	if err := json.Unmarshal(raw, &res); err != nil {
+		return nil
+	}
+	return res
 }
 
 func (s *Service) loadPayload(job *domain.ImportJob) (*payload, error) {
@@ -474,6 +527,7 @@ func (s *Service) deleteJobAndFiles(ctx context.Context, j *domain.ImportJob) er
 	}
 	if j.PayloadPath != "" {
 		_ = os.Remove(j.PayloadPath)
+		_ = os.Remove(resolutionsPath(j.PayloadPath))
 	}
 	return s.store.Delete(ctx, j.ID)
 }

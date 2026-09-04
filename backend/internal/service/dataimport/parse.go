@@ -233,19 +233,12 @@ func parseJSON(data []byte, importer string) (*parseResult, error) {
 		seenPF[key] = struct{}{}
 		res.Payload.Portfolios = append(res.Payload.Portfolios, snap)
 	}
-	seenCS := map[string]struct{}{}
 	for _, row := range w.CustomSignals {
 		p, err := normalizeCustomSignal(importer, row.ID, row.Name, row.Weights, row.IsDefault, row.CreatedAt, row.UpdatedAt)
 		if err != nil {
 			res.Invalid[domain.ExportSectionCustomSignals]++
 			continue
 		}
-		key := strings.ToLower(p.Name)
-		if _, ok := seenCS[key]; ok {
-			res.FileDuplicates[domain.ExportSectionCustomSignals]++
-			continue
-		}
-		seenCS[key] = struct{}{}
 		res.Payload.CustomSignals = append(res.Payload.CustomSignals, p)
 	}
 	return res, nil
@@ -281,7 +274,6 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 	backtestsByID := map[string]*backtestBundle{}
 	csvBooks := map[string]*wirePortfolioBook{}
 	fileOwner := ""
-	seenCS := map[string]struct{}{}
 
 	for {
 		rec, err := r.Read()
@@ -527,12 +519,6 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 				res.Invalid[domain.ExportSectionCustomSignals]++
 				continue
 			}
-			key := strings.ToLower(p.Name)
-			if _, ok := seenCS[key]; ok {
-				res.FileDuplicates[domain.ExportSectionCustomSignals]++
-				continue
-			}
-			seenCS[key] = struct{}{}
 			res.Payload.CustomSignals = append(res.Payload.CustomSignals, p)
 		}
 	}

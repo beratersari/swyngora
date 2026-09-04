@@ -192,7 +192,7 @@ type DataPort interface {
 	ListExports(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	CancelExport(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	PreviewImport(ctx context.Context, clientID, fileName, format string, fileBytes []byte) (json.RawMessage, error)
-	ConfirmImport(ctx context.Context, clientID, id, mode string) (json.RawMessage, error)
+	ConfirmImport(ctx context.Context, clientID, id, mode string, resolutions []domain.CustomSignalResolution) (json.RawMessage, error)
 	GetImport(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListImports(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	CancelImport(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -3970,7 +3970,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("preview_import",
-		mcp.WithDescription("Preview restoring a prior JSON export of watchlist/shares/alerts/backtests/portfolios/customSignals. Returns valid/invalid/willAdd/willUpdate counts without applying. customSignals includes addNames (new mixes) and updateNames (same name already saved — merge overwrites weights). Pass export JSON as content. Then call confirm_import with mode merge|replace."),
+		mcp.WithDescription("Preview restoring a prior JSON export of watchlist/shares/alerts/backtests/portfolios/customSignals. Returns valid/invalid/willAdd/willUpdate/willConflict counts without applying. customSignals includes addNames, updateNames, and conflicts (same name on more than one file row or saved mix). Unresolved conflicts are skipped. Pass export JSON as content. Then call confirm_import."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Full export file text (JSON preferred)")),
 		mcp.WithString("format", mcp.Description("json (default) or csv")),
@@ -3993,10 +3993,11 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("confirm_import",
-		mcp.WithDescription("Start applying a previewed import. mode=merge (skip duplicates) or replace (clear then import). One active apply per client."),
+		mcp.WithDescription("Start applying a previewed import. mode=merge (skip duplicates) or replace (clear then import). For custom-signal name conflicts pass customSignalResolutions JSON [{name, incomingIndex, profileId}]. Omitted conflicts are not imported. One active apply per client."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithString("importId", mcp.Required(), mcp.Description("Import job id from preview")),
 		mcp.WithString("mode", mcp.Required(), mcp.Description("merge or replace")),
+		mcp.WithString("customSignalResolutions", mcp.Description("JSON array of {name, incomingIndex?, profileId?} for same-name custom signal conflicts")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -4010,7 +4011,13 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.ConfirmImport(ctx, clientID, id, mode)
+		var resolutions []domain.CustomSignalResolution
+		if rawRes := strings.TrimSpace(req.GetString("customSignalResolutions", "")); rawRes != "" {
+			if err := json.Unmarshal([]byte(rawRes), &resolutions); err != nil {
+				return mcp.NewToolResultError("customSignalResolutions must be a JSON array"), nil
+			}
+		}
+		raw, err := api.ConfirmImport(ctx, clientID, id, mode, resolutions)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
 
 ### Added
+- **Import same-name profile conflicts:** preview lists `conflicts` when a custom-signal name appears more than once in the file or already exists on more than one saved mix. Confirm accepts `customSignalResolutions` (`name` + `incomingIndex` / `profileId`). No pick skips that name. Settings Import shows radios to choose which saved mix to update (`docs/features/user-data-import.md`)
 - **Import preview names for custom signal profiles:** `POST /api/v1/import/preview` lists `addNames` (new mixes) and `updateNames` (same name already saved) on the `customSignals` section, plus a `willUpdate` count. Merge overwrites matching profile weights in place instead of skipping the name. Settings **Import** tab shows those two lists before confirm (`docs/features/user-data-import.md`)
 - **Custom signal export/import:** user data export/import includes named custom swing mixes (`customSignals` JSON/CSV section). Merge updates the same profile name; replace replaces every mix; new ids are reminted; an imported default becomes this client's Custom tab default
 - **Custom signal default and duplicate:** save a mix as the Custom tab default; duplicate and edit named mixes (`POST /api/v1/swing/custom/profiles/{id}/default`, `.../duplicate`)

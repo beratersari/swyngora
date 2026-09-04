@@ -29,11 +29,18 @@ export const importApi = baseApi.injectEndpoints({
       query: ({ id }) => `/api/v1/import/${encodeURIComponent(id)}`,
       providesTags: (_r, _e, arg) => [{ type: 'ImportJob', id: arg.id }],
     }),
-    confirmImport: build.mutation<ImportJob, { id: string; mode: 'merge' | 'replace' }>({
-      query: ({ id, mode }) => ({
+    confirmImport: build.mutation<
+      ImportJob,
+      {
+        id: string;
+        mode: 'merge' | 'replace';
+        customSignalResolutions?: { name: string; incomingIndex?: number; profileId?: string }[];
+      }
+    >({
+      query: ({ id, mode, customSignalResolutions }) => ({
         url: `/api/v1/import/${encodeURIComponent(id)}/confirm`,
         method: 'POST',
-        body: { mode },
+        body: { mode, customSignalResolutions },
       }),
       invalidatesTags: ['ImportJob', 'CustomSignalProfile'],
     }),

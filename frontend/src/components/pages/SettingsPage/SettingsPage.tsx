@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Button, Form, Input, InputNumber, Select, Table, Tabs, Typography, message } from 'antd';
+import { Alert, Button, Form, Input, InputNumber, Radio, Select, Table, Tabs, Typography, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { PageHeader } from '@/components/molecules/PageHeader';
@@ -33,9 +33,11 @@ import {
   createdKeySessionToken,
   currentClientId,
   customSignalImportPreview,
+  customSignalResolutionsFromPicks,
   exportDownloadHref,
+  type CustomSignalConflictPick,
 } from './SettingsPage.helpers';
-import { FormRow, NameList, PageStack, Section } from './SettingsPage.styles';
+import { ConflictCard, FormRow, NameList, PageStack, Section } from './SettingsPage.styles';
 
 export function SettingsPage() {
   const { t } = useTranslation(['settings', 'common']);
@@ -215,6 +217,7 @@ function ImportPane() {
   const [file, setFile] = useState<File | null>(null);
   const [job, setJob] = useState<ImportJob | null>(null);
   const [mode, setMode] = useState<'merge' | 'replace'>('merge');
+  const [picks, setPicks] = useState<Record<string, CustomSignalConflictPick>>({});
   const profiles = customSignalImportPreview(job);
 
   return (
@@ -230,6 +233,7 @@ function ImportPane() {
           onChange={(e) => {
             setFile(e.target.files?.[0] ?? null);
             setJob(null);
+            setPicks({});
           }}
         />
         <Button
@@ -240,6 +244,7 @@ function ImportPane() {
             if (!file) return;
             const got = await preview({ file }).unwrap();
             setJob(got);
+            setPicks({});
             void message.success(t('settings:import.previewed'));
           }}
         >
@@ -261,6 +266,7 @@ function ImportPane() {
               valid: job.totals?.valid ?? 0,
               willAdd: job.totals?.willAdd ?? 0,
               willUpdate: job.totals?.willUpdate ?? 0,
+              willConflict: job.totals?.willConflict ?? 0,
             })}
           </Text>
           <Text variant="label" color="primary">
@@ -283,11 +289,79 @@ function ImportPane() {
               profiles.updateNames.map((name) => <li key={name}>{name}</li>)
             )}
           </NameList>
+          <Text variant="label" color="primary">
+            {t('settings:import.profilesConflict')}
+          </Text>
+          {profiles.conflicts.length === 0 ? (
+            <NameList data-testid="import-preview-conflicts">
+              <li>{t('settings:import.none')}</li>
+            </NameList>
+          ) : (
+            <div data-testid="import-preview-conflicts">
+              {profiles.conflicts.map((conflict) => {
+                const name = conflict.name ?? '';
+                const pick = picks[name] ?? {};
+                const needIncoming = (conflict.incoming?.length ?? 0) > 1;
+                const needTarget = (conflict.candidates?.length ?? 0) > 1;
+                return (
+                  <ConflictCard key={name} data-testid={`import-conflict-${name}`}>
+                    <Text variant="label" color="primary">
+                      {name}
+                    </Text>
+                    <Text variant="caption" color="secondary">
+                      {t('settings:import.conflictHint')}
+                    </Text>
+                    {needIncoming ? (
+                      <Radio.Group
+                        value={pick.incomingIndex}
+                        onChange={(e) =>
+                          setPicks((cur) => ({ ...cur, [name]: { ...cur[name], incomingIndex: e.target.value as number } }))
+                        }
+                        options={(conflict.incoming ?? []).map((row) => ({
+                          value: row.index ?? 0,
+                          label: t('settings:import.incomingOption', {
+                            index: (row.index ?? 0) + 1,
+                            default: row.isDefault ? t('settings:import.defaultBadge') : '',
+                          }),
+                        }))}
+                      />
+                    ) : null}
+                    {needTarget ? (
+                      <Radio.Group
+                        value={pick.profileId ?? ''}
+                        onChange={(e) =>
+                          setPicks((cur) => ({
+                            ...cur,
+                            [name]: { ...cur[name], profileId: String(e.target.value || '') || undefined },
+                          }))
+                        }
+                        options={[
+                          { value: '', label: t('settings:import.skip') },
+                          ...(conflict.candidates ?? []).map((cand) => ({
+                            value: cand.id ?? '',
+                            label: t('settings:import.candidateOption', {
+                              name: cand.name ?? cand.id,
+                              id: (cand.id ?? '').slice(0, 8),
+                              default: cand.isDefault ? t('settings:import.defaultBadge') : '',
+                            }),
+                          })),
+                        ]}
+                      />
+                    ) : null}
+                  </ConflictCard>
+                );
+              })}
+            </div>
+          )}
           <Form
             layout="inline"
             onFinish={async () => {
               if (!job.id) return;
-              await confirm({ id: job.id, mode }).unwrap();
+              await confirm({
+                id: job.id,
+                mode,
+                customSignalResolutions: customSignalResolutionsFromPicks(profiles.conflicts, picks),
+              }).unwrap();
               void message.success(t('settings:import.started'));
             }}
           >

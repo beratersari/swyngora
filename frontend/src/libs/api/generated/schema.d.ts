@@ -3542,9 +3542,10 @@ export interface paths {
          * Upload an export file and get a restore preview
          * @description Accepts multipart form field `file` (or raw JSON/CSV body).
          *     Parses watchlist, shares, alerts, backtests, paper portfolios, and custom signal profiles; returns counts of valid, invalid,
-         *     willAdd, willUpdate, and duplicates. customSignals includes addNames (new mixes) and updateNames
-         *     (same name already saved). Merge overwrites matching profile weights; replace recreates after purge.
-         *     Does not apply data until confirm.
+         *     willAdd, willUpdate, willConflict, and duplicates. customSignals includes addNames (new mixes),
+         *     updateNames (exactly one saved mix), and conflicts (more than one file row or saved mix with
+         *     the same name). Confirm with customSignalResolutions to pick which saved mix to update;
+         *     omitted conflicts are not imported. Does not apply data until confirm.
          *     Ownership is always the uploading clientId (file clientId is ignored).
          */
         post: operations["previewImport"];
@@ -3600,7 +3601,9 @@ export interface paths {
         /**
          * Start applying a previewed import
          * @description mode=merge adds only missing records (no duplicate symbols/shares/ids). Same-name custom
-         *     signal profiles are updated in place (weights + default flag), not skipped.
+         *     signal profiles with exactly one saved mix are updated in place. Names that match more than
+         *     one file row or more than one saved mix are conflicts — pass customSignalResolutions
+         *     (name + incomingIndex and/or profileId). Omitted conflicts are skipped.
          *     mode=replace clears existing section data for the client then imports from the file.
          *     Only one pending/running import per client (409 otherwise). Runs in the background.
          */
@@ -6097,13 +6100,42 @@ export interface components {
             valid?: number;
             invalid?: number;
             willAdd?: number;
-            /** @description Valid records that match existing data and would be overwritten (custom signal profiles by name) */
+            /** @description Valid custom-signal names that match exactly one saved mix */
             willUpdate?: number;
+            /** @description Custom-signal names that need a user pick (more than one file row or saved mix) */
+            willConflict?: number;
             duplicates?: number;
             /** @description Custom signal profile names that would be created as new */
             addNames?: string[];
             /** @description Custom signal profile names that already exist and would be updated */
             updateNames?: string[];
+            conflicts?: components["schemas"]["ImportProfileConflict"][];
+        };
+        ImportProfileIncoming: {
+            index?: number;
+            isDefault?: boolean;
+            weights?: {
+                [key: string]: number;
+            };
+        };
+        ImportProfileCandidate: {
+            id?: string;
+            name?: string;
+            isDefault?: boolean;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        ImportProfileConflict: {
+            name?: string;
+            incoming?: components["schemas"]["ImportProfileIncoming"][];
+            candidates?: components["schemas"]["ImportProfileCandidate"][];
+        };
+        CustomSignalResolution: {
+            name?: string;
+            /** @description Which file row to apply when the file has more than one mix with this name */
+            incomingIndex?: number;
+            /** @description Which saved mix to update when more than one exists; omit to skip */
+            profileId?: string;
         };
         Account: {
             clientId?: string;
@@ -12567,6 +12599,8 @@ export interface operations {
                     clientId?: string;
                     /** @enum {string} */
                     mode: "merge" | "replace";
+                    /** @description Picks for same-name custom signal conflicts. Omit a name to skip it. */
+                    customSignalResolutions?: components["schemas"]["CustomSignalResolution"][];
                 };
             };
         };

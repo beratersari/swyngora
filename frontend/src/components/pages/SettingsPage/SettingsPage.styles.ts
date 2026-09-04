@@ -25,3 +25,12 @@ export const NameList = styled.ul`
   padding-left: ${({ theme }) => theme.spacing[4]}px;
   color: ${({ theme }) => theme.semantic.text.primary};
 `;
+
+export const ConflictCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${({ theme }) => theme.spacing[2]}px;
+  padding: ${({ theme }) => theme.spacing[3]}px;
+  border: 1px solid ${({ theme }) => theme.semantic.border.subtle};
+  border-radius: ${({ theme }) => theme.radii.md}px;
+`;

@@ -316,7 +316,7 @@ func TestImport_PreviewMergeConfirm(t *testing.T) {
 	}
 
 	// Confirm merge
-	job, err = svc.Confirm(ctx, "user1", job.ID, "merge")
+	job, err = svc.Confirm(ctx, "user1", job.ID, "merge", nil)
 	if err != nil || job.Status != domain.ImportPending {
 		t.Fatalf("%+v %v", job, err)
 	}
@@ -361,7 +361,7 @@ func TestImport_ReplaceAndNoDoubleShare(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	job, err = svc.Confirm(ctx, "user1", job.ID, "replace")
+	job, err = svc.Confirm(ctx, "user1", job.ID, "replace", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -399,14 +399,14 @@ func TestImport_ConfirmConflictActive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Confirm(ctx, "user1", j1.ID, "merge"); err != nil {
+	if _, err := svc.Confirm(ctx, "user1", j1.ID, "merge", nil); err != nil {
 		t.Fatal(err)
 	}
 	j2, err := svc.Preview(ctx, PreviewInput{ClientID: "user1", FileBytes: sampleExportJSON()})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = svc.Confirm(ctx, "user1", j2.ID, "merge")
+	_, err = svc.Confirm(ctx, "user1", j2.ID, "merge", nil)
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("%v", err)
 	}
@@ -464,7 +464,7 @@ func TestImport_PortfoliosMergeAndReplace(t *testing.T) {
 	if sec.Valid != 1 || sec.WillAdd != 1 {
 		t.Fatalf("preview %+v", sec)
 	}
-	if _, err := svc.Confirm(ctx, "carol", job.ID, "replace"); err != nil {
+	if _, err := svc.Confirm(ctx, "carol", job.ID, "replace", nil); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := svc.ProcessPending(ctx); err != nil || n != 1 {
@@ -561,14 +561,14 @@ func TestImport_CustomSignalsMergeAndReplace(t *testing.T) {
 		t.Fatal(err)
 	}
 	sec := job.SectionCounts[domain.ExportSectionCustomSignals]
-	if sec.Valid != 1 || sec.Invalid != 1 || sec.Duplicates != 1 || sec.WillAdd != 0 || sec.WillUpdate != 1 {
+	if sec.Valid != 2 || sec.Invalid != 1 || sec.WillAdd != 0 || sec.WillUpdate != 0 || sec.WillConflict != 1 {
 		t.Fatalf("merge preview %+v", sec)
 	}
-	if len(sec.UpdateNames) != 1 || sec.UpdateNames[0] != "Hunt mix" || len(sec.AddNames) != 0 {
-		t.Fatalf("profile names add=%v update=%v", sec.AddNames, sec.UpdateNames)
+	if len(sec.Conflicts) != 1 || sec.Conflicts[0].Name != "Hunt mix" || len(sec.Conflicts[0].Incoming) != 2 || len(sec.Conflicts[0].Candidates) != 1 {
+		t.Fatalf("conflict %+v", sec.Conflicts)
 	}
 
-	if _, err := svc.Confirm(ctx, "user1", job.ID, "merge"); err != nil {
+	if _, err := svc.Confirm(ctx, "user1", job.ID, "merge", nil); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := svc.ProcessPending(ctx); err != nil || n != 1 {
@@ -576,21 +576,43 @@ func TestImport_CustomSignalsMergeAndReplace(t *testing.T) {
 	}
 	list, err := store.ListProfiles(ctx, "user1")
 	if err != nil || len(list) != 1 || list[0].ID != "keep-me" {
-		t.Fatalf("merge must keep existing id %+v %v", list, err)
+		t.Fatalf("unresolved conflict must skip %+v %v", list, err)
 	}
-	if list[0].Weights.Pct[domain.CustomFactorHuntUp] != 60 || list[0].Weights.Pct[domain.CustomFactorRSIRecovery] != 40 {
-		t.Fatalf("merge must update weights %+v", list[0])
+	if list[0].Weights.Pct[domain.CustomFactorHuntUp] != 100 {
+		t.Fatalf("skip must keep original weights %+v", list[0])
 	}
 
+	idx0 := 0
 	job2, err := svc.Preview(ctx, PreviewInput{ClientID: "user1", FileBytes: sampleCustomSignalJSON(), FormatHint: "json"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	sec2 := job2.SectionCounts[domain.ExportSectionCustomSignals]
-	if sec2.Valid != 1 || sec2.WillUpdate != 1 || sec2.WillAdd != 0 || sec2.UpdateNames[0] != "Hunt mix" {
-		t.Fatalf("replace preview %+v", sec2)
+	if _, err := svc.Confirm(ctx, "user1", job2.ID, "merge", []domain.CustomSignalResolution{
+		{Name: "Hunt mix", IncomingIndex: &idx0, ProfileID: "keep-me"},
+	}); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := svc.Confirm(ctx, "user1", job2.ID, "replace"); err != nil {
+	if n, err := svc.ProcessPending(ctx); err != nil || n != 1 {
+		t.Fatalf("n=%d err=%v", n, err)
+	}
+	list, err = store.ListProfiles(ctx, "user1")
+	if err != nil || len(list) != 1 || list[0].ID != "keep-me" {
+		t.Fatalf("resolved merge %+v %v", list, err)
+	}
+	if list[0].Weights.Pct[domain.CustomFactorHuntUp] != 60 || list[0].Weights.Pct[domain.CustomFactorRSIRecovery] != 40 {
+		t.Fatalf("merge must update chosen incoming %+v", list[0])
+	}
+
+	job3, err := svc.Preview(ctx, PreviewInput{ClientID: "user1", FileBytes: sampleCustomSignalJSON(), FormatHint: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job3.SectionCounts[domain.ExportSectionCustomSignals].WillConflict != 1 {
+		t.Fatalf("replace preview %+v", job3.SectionCounts[domain.ExportSectionCustomSignals])
+	}
+	if _, err := svc.Confirm(ctx, "user1", job3.ID, "replace", []domain.CustomSignalResolution{
+		{Name: "Hunt mix", IncomingIndex: &idx0},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := svc.ProcessPending(ctx); err != nil || n != 1 {
@@ -606,6 +628,76 @@ func TestImport_CustomSignalsMergeAndReplace(t *testing.T) {
 	}
 	if got.Name != "Hunt mix" || !got.IsDefault || got.Weights.Pct[domain.CustomFactorHuntUp] != 60 {
 		t.Fatalf("imported %+v", got)
+	}
+}
+
+func TestImport_CustomSignalsNameConflictPickTarget(t *testing.T) {
+	dir := t.TempDir()
+	store, err := scannerstore.Open(filepath.Join(dir, "scan.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	svc, err := New(importstore.NewMemory(), DataSources{CustomSignals: store}, Options{
+		FileDir: filepath.Join(dir, "imp"), FileTTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	now := time.Now().UTC()
+	w, err := domain.ParseCustomSignalWeightMap(map[string]float64{domain.CustomFactorHuntUp: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"keep-a", "keep-b"} {
+		if _, err := store.CreateProfile(ctx, domain.CustomSignalProfile{
+			ID: id, ClientID: "user1", Name: "Hunt mix", Weights: w, CreatedAt: now, UpdatedAt: now,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pl := map[string]any{
+		"clientId": "other",
+		"customSignals": []map[string]any{
+			{
+				"id": "old-1", "name": "Hunt mix", "isDefault": true,
+				"weights":   map[string]float64{domain.CustomFactorRSIRecovery: 40, domain.CustomFactorHuntUp: 60},
+				"createdAt": now.Format(time.RFC3339Nano), "updatedAt": now.Format(time.RFC3339Nano),
+			},
+		},
+	}
+	raw, _ := json.Marshal(pl)
+	job, err := svc.Preview(ctx, PreviewInput{ClientID: "user1", FileBytes: raw, FormatHint: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sec := job.SectionCounts[domain.ExportSectionCustomSignals]
+	if sec.WillConflict != 1 || sec.WillUpdate != 0 || len(sec.Conflicts) != 1 || len(sec.Conflicts[0].Candidates) != 2 {
+		t.Fatalf("preview %+v", sec)
+	}
+
+	if _, err := svc.Confirm(ctx, "user1", job.ID, "merge", []domain.CustomSignalResolution{
+		{Name: "Hunt mix", ProfileID: "keep-b"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := svc.ProcessPending(ctx); err != nil || n != 1 {
+		t.Fatalf("n=%d err=%v", n, err)
+	}
+	list, err := store.ListProfiles(ctx, "user1")
+	if err != nil || len(list) != 2 {
+		t.Fatalf("list %+v %v", list, err)
+	}
+	byID := map[string]domain.CustomSignalProfile{}
+	for _, p := range list {
+		byID[p.ID] = p
+	}
+	if byID["keep-a"].Weights.Pct[domain.CustomFactorHuntUp] != 100 {
+		t.Fatalf("unselected must stay %+v", byID["keep-a"])
+	}
+	if byID["keep-b"].Weights.Pct[domain.CustomFactorHuntUp] != 60 || byID["keep-b"].Weights.Pct[domain.CustomFactorRSIRecovery] != 40 {
+		t.Fatalf("selected must update %+v", byID["keep-b"])
 	}
 }
 
@@ -668,7 +760,7 @@ func TestImport_CustomSignalsPreviewAddAndUpdate(t *testing.T) {
 		t.Fatalf("totals %+v", job.Totals)
 	}
 
-	if _, err := svc.Confirm(ctx, "user1", job.ID, "merge"); err != nil {
+	if _, err := svc.Confirm(ctx, "user1", job.ID, "merge", nil); err != nil {
 		t.Fatal(err)
 	}
 	if n, err := svc.ProcessPending(ctx); err != nil || n != 1 {

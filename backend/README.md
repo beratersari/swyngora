@@ -165,7 +165,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/export/{id}` | Export progress / status |
 | `POST` | `/api/v1/export/{id}/cancel` | Cancel pending/running export |
 | `GET` | `/api/v1/export/{id}/download` | Download completed file (owner only; TTL) |
-| `POST` | `/api/v1/import/preview` | Upload export file; get valid/invalid/willAdd/willUpdate counts plus custom-signal `addNames` / `updateNames` |
+| `POST` | `/api/v1/import/preview` | Upload export file; get valid/invalid/willAdd/willUpdate/willConflict plus custom-signal `addNames` / `updateNames` / `conflicts` |
 | `POST` | `/api/v1/import/{id}/confirm` | Apply preview (`merge` or `replace`) in background |
 | `GET` | `/api/v1/import` | List import jobs |
 | `GET` | `/api/v1/import/{id}` | Import status / progress |
@@ -203,7 +203,7 @@ Optional candle params: `startTime`, `endTime` (RFC3339 or Unix ms).
 
 **User data export:** `POST /api/v1/export` queues a JSON or CSV dump of the caller's watchlist, shares, alerts, backtests, paper portfolios, and custom signal profiles. One active job per client; poll progress; cancel supported; download is owner-only; files expire (`EXPORT_FILE_TTL`, default 1h). See `docs/features/user-data-export.md`.
 
-**User data import:** `POST /api/v1/import/preview` uploads a prior export and returns valid/invalid/willAdd/willUpdate counts; custom signal mixes include `addNames` (new) and `updateNames` (same name already saved). `confirm` with `merge` or `replace` applies in the background with progress/cancel and dedupe (portfolios: merge skips existing id/name; replace recreates owned books; extra non-UUID or globally colliding book ids are reminted so they cannot occupy another tenant’s first book; custom signal mixes: merge updates the same name in place and adds new names, replace replaces every mix, new ids reminted). See `docs/features/user-data-import.md`.
+**User data import:** `POST /api/v1/import/preview` uploads a prior export and returns valid/invalid/willAdd/willUpdate/willConflict counts; custom signal mixes include `addNames` (new), `updateNames` (exactly one saved mix), and `conflicts` (more than one file row or saved mix with the same name). `confirm` with `merge` or `replace` applies in the background; pass `customSignalResolutions` to pick which saved mix to update — omitted conflicts are skipped. See `docs/features/user-data-import.md`.
 
 **Account close:** `POST /api/v1/account/close` closes a `clientId` for 7 days (reopen allowed); product APIs and shared-list access stop; paper recurring plans are paused and open paper/margin orders canceled; workers skip the tenant. `X-Client-Id`, `?clientId=`, and JSON `clientId` must agree (else 400). Paper `PlaceOrder` and Telegram Confirm also refuse a closed owner. After grace, watchlists/shares/alerts/backtests/import-export files, paper books, price-diff watches, and funding-arb watches are purged. See `docs/features/account-close.md`.
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createdKeySessionToken,
   customSignalImportPreview,
+  customSignalResolutionsFromPicks,
   exportDownloadHref,
 } from './SettingsPage.helpers';
 
@@ -26,14 +27,18 @@ describe('customSignalImportPreview', () => {
     expect(customSignalImportPreview(undefined)).toEqual({
       addNames: [],
       updateNames: [],
+      conflicts: [],
       willAdd: 0,
       willUpdate: 0,
+      willConflict: 0,
     });
     expect(customSignalImportPreview({ sections: {} })).toEqual({
       addNames: [],
       updateNames: [],
+      conflicts: [],
       willAdd: 0,
       willUpdate: 0,
+      willConflict: 0,
     });
   });
 
@@ -43,17 +48,35 @@ describe('customSignalImportPreview', () => {
         customSignals: {
           willAdd: 1,
           willUpdate: 2,
+          willConflict: 1,
           addNames: ['Trend mix'],
           updateNames: ['Hunt mix', 'Default'],
+          conflicts: [{ name: 'Hunt mix', incoming: [{ index: 0 }], candidates: [{ id: 'a' }, { id: 'b' }] }],
         },
       },
     });
-    expect(got).toEqual({
-      addNames: ['Trend mix'],
-      updateNames: ['Hunt mix', 'Default'],
-      willAdd: 1,
-      willUpdate: 2,
-    });
+    expect(got.addNames).toEqual(['Trend mix']);
+    expect(got.updateNames).toEqual(['Hunt mix', 'Default']);
+    expect(got.conflicts).toHaveLength(1);
+    expect(got.willConflict).toBe(1);
+  });
+
+  it('omits unresolved name conflicts from confirm payload', () => {
+    const conflicts = [
+      {
+        name: 'Hunt mix',
+        incoming: [{ index: 0 }],
+        candidates: [
+          { id: 'a', name: 'Hunt mix' },
+          { id: 'b', name: 'Hunt mix' },
+        ],
+      },
+    ];
+    expect(customSignalResolutionsFromPicks(conflicts, {})).toEqual([]);
+    expect(customSignalResolutionsFromPicks(conflicts, { 'Hunt mix': {} })).toEqual([]);
+    expect(customSignalResolutionsFromPicks(conflicts, { 'Hunt mix': { profileId: 'b' } })).toEqual([
+      { name: 'Hunt mix', profileId: 'b' },
+    ]);
   });
 });
 
