@@ -118,6 +118,12 @@ export { pickSpotForSymbol } from './pickSpot';
 export { pumpScanHitsToRows } from './pumpScan';
 export { ALERT_KINDS, alertDisplayLabel, ALERT_FIRE_COOLDOWN_MS, parseFiniteNumber } from './alerts';
 export { comparePairKey, parseComparePairsParam, serializeComparePairs, closesToPercentSeries, MAX_COMPARE_PAIRS } from './compareSeries';
+export {
+  pickForensicsVenue,
+  forensicsVenueOptions,
+  forensicsPhaseById,
+  formatForensicsTime,
+} from './forensics';
 export type { ComparePair } from './compareSeries';
 export {
   ruleTypeShort,

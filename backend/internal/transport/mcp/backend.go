@@ -457,11 +457,34 @@ func (b *Backend) GetAroundPrecursors(ctx context.Context, exchange, symbol, loo
 	return mustJSON(got)
 }
 
-func (b *Backend) GetAroundSimilar(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields, weights, minCoverage, horizons string) (json.RawMessage, error) {
+func (b *Backend) GetAroundSimilar(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields, weights, minCoverage, horizons, at string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
 	}
-	got, err := b.Market.GetAroundSimilar(ctx, exchange, symbol, lookback, interval, direction, minReturnPct, limit, window, during, fields, weights, minCoverage, horizons)
+	var when time.Time
+	if at != "" {
+		t, err := parseMCPTime(at)
+		if err != nil {
+			return nil, err
+		}
+		when = t
+	}
+	got, err := b.Market.GetAroundSimilar(ctx, exchange, symbol, lookback, interval, direction, minReturnPct, limit, window, during, fields, weights, minCoverage, horizons, when)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) GetForensics(ctx context.Context, exchange, symbol, at, window, during, lookback, interval, direction string, minReturnPct float64, limit int, fields, weights, minCoverage, horizons string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	when, err := parseMCPTime(at)
+	if err != nil {
+		return nil, err
+	}
+	got, err := b.Market.GetForensics(ctx, exchange, symbol, window, during, when, lookback, interval, direction, minReturnPct, limit, fields, weights, minCoverage, horizons)
 	if err != nil {
 		return nil, err
 	}

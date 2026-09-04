@@ -30,6 +30,7 @@ const NAV_ITEMS = [
   { to: '/pumps', key: 'nav.pumps' as const },
   { to: '/alerts', key: 'nav.alerts' as const },
   { to: '/compare', key: 'nav.compare' as const },
+  { to: '/forensics', key: 'nav.forensics' as const },
   { to: '/ai', key: 'nav.ai' as const },
   { to: '/settings', key: 'nav.settings' as const },
 ];

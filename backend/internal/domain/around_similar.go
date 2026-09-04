@@ -141,6 +141,7 @@ type AroundSimilarReport struct {
 	MinCoverage    float64
 	MinReturnPct   float64
 	Horizons       []string
+	At             time.Time // comparison anchor (selected time, or now when omitted)
 	AsOf           time.Time
 	Current        AroundPhase
 	Matches        []AroundSimilarHit

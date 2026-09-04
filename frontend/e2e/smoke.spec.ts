@@ -17,6 +17,7 @@ test.describe('Swyngora web shell', () => {
     await expect(page.getByRole('link', { name: /pumps|pump/i }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: /alerts|uyarılar/i }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: /compare|karşılaştır/i }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: /forensics|inceleme/i }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: /^ai$|yapay zeka/i }).first()).toBeVisible();
   });
 

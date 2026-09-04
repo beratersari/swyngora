@@ -2245,12 +2245,100 @@ paths:
           in: query
           description: After-windows CSV (default 15m,1h,4h). Example 5m,30m,2h. Matching candle size; each reports avg, median, up, down, sample, and similarity bands.
           schema: { type: string, example: "30m,2h,6h" }
+        - name: at
+          in: query
+          description: Optional event time (RFC3339 or unix ms). When set, compares the tape before this time instead of the current last window.
+          schema: { type: string, example: "2026-08-20T14:00:00Z" }
       responses:
         '200':
           description: Similar past setups, afterHorizons, thin coverage in skipped
           content:
             application/json:
               schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/forensics:
+    get:
+      summary: Market forensics (before / during / after + similar past moves)
+      description: |
+        One report for a coin and a chosen time. Combines the around-the-move
+        tape (**before** / **during** / **after** — price, volume, takers,
+        VWAP, vs typical, POC, sweeps, stored book/futures) with past
+        important-move setups that looked like the **before** window, and
+        how price moved after those (`afterHorizons`). `at` is required
+        (RFC3339 or unix ms). Same `window` / `during` as `/around`. Same
+        similar-move knobs as `/around/similar` (`lookback`, `fields`,
+        `weights`, `minCoverage`, `horizons`). If similar-move search
+        fails, `tape` is still returned and `similarError` explains why.
+        Informational only.
+      operationId: getMarketForensics
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: at
+          in: query
+          required: true
+          description: Event time (RFC3339 or unix ms) — start of the during window
+          schema: { type: string, example: "2026-08-20T14:00:00Z" }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + combined)
+          schema: { type: string, default: all }
+        - name: window
+          in: query
+          description: Before/after lookback — 15m | 30m | 1h | 2h | 4h (default 1h)
+          schema: { type: string, default: "1h" }
+        - name: during
+          in: query
+          description: Move window starting at `at` — 5m | 15m | 30m | 1h (default 15m)
+          schema: { type: string, default: "15m" }
+        - name: lookback
+          in: query
+          description: How far back to search similar moves — 4h | 12h | 24h | 3d | 7d (default 7d)
+          schema: { type: string, default: "7d" }
+        - name: interval
+          in: query
+          description: 15m | 1h (default 15m)
+          schema: { type: string, default: "15m" }
+        - name: direction
+          in: query
+          description: up | down | both (default both)
+          schema: { type: string, default: both }
+        - name: minReturnPct
+          in: query
+          description: Minimum |return| percent for past moves
+          schema: { type: number }
+        - name: limit
+          in: query
+          description: How many nearest similar cases (default 5, max 10)
+          schema: { type: integer, default: 5 }
+        - name: fields
+          in: query
+          description: Tape to compare — price,volume,takers,oi,book (default all)
+          schema: { type: string, example: "volume,book,oi" }
+        - name: weights
+          in: query
+          description: Importance per field — book:3,oi:3,volume:1
+          schema: { type: string, example: "book:3,oi:3,volume:1" }
+        - name: minCoverage
+          in: query
+          description: Minimum percent of selected data that must be present (default 60)
+          schema: { type: number, default: 60, minimum: 0, maximum: 100 }
+        - name: horizons
+          in: query
+          description: After-windows CSV (default 15m,1h,4h)
+          schema: { type: string, example: "15m,1h,4h" }
+      responses:
+        '200':
+          description: Forensics tape plus similar past moves
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MarketForensics' }
         '400':
           $ref: '#/components/responses/Error'
         '502':
@@ -10003,6 +10091,21 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/RSIHeatmapRow' }
+        note: { type: string }
+    MarketForensics:
+      type: object
+      description: Around-the-move tape plus similar past setups for one event time
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        at: { type: string, format: date-time }
+        window: { type: string }
+        during: { type: string }
+        asOf: { type: string, format: date-time }
+        tape: { type: object, description: Before / during / after around-the-move tape }
+        similar: { type: object, description: Similar past setups and afterHorizons }
+        similarError: { type: string, description: Set when similar-move search failed }
+        summary: { type: string }
         note: { type: string }
     SpotMarket:
       type: object

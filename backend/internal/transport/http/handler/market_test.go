@@ -778,6 +778,37 @@ func TestGetAroundSimilar_OK(t *testing.T) {
 	}
 }
 
+func TestGetForensics_OK(t *testing.T) {
+	h := NewMarketHandler(market.New(volumeProfileMarket{}, stubSupply{}))
+	at := time.Now().UTC().Add(-90 * time.Minute).Format(time.RFC3339)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/forensics?symbol=BTCUSDT&window=1h&during=15m&lookback=24h&at="+at, nil)
+	rr := httptest.NewRecorder()
+	h.GetForensics(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body forensicsResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Window != "1h" || body.Tape.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+	if body.Summary == "" || body.Note == "" {
+		t.Fatalf("missing summary/note %+v", body)
+	}
+}
+
+func TestGetForensics_MissingAt(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/forensics?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetForensics(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetAroundSimilar_BadWeights(t *testing.T) {
 	h := NewMarketHandler(market.New(volumeProfileMarket{}, stubSupply{}))
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/around/similar?symbol=BTCUSDT&fields=volume,book&weights=price:2", nil)

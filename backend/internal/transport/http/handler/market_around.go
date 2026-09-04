@@ -91,30 +91,43 @@ func (h *MarketHandler) GetAroundPrecursors(w http.ResponseWriter, r *http.Reque
 // GetAroundSimilar handles GET /api/v1/market/around/similar.
 func (h *MarketHandler) GetAroundSimilar(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	var minPct float64
-	if raw := q.Get("minReturnPct"); raw != "" {
-		n, err := parseAroundFloat(raw)
-		if err != nil || n < 0 {
-			writeError(w, fmt.Errorf("%w: minReturnPct must be a number >= 0", domain.ErrInvalidArgument))
-			return
-		}
-		minPct = n
+	minPct, limit, at, err := parseAroundSimilarQuery(q)
+	if err != nil {
+		writeError(w, err)
+		return
 	}
-	var limit int
-	if raw := q.Get("limit"); raw != "" {
-		n, err := parseAroundInt(raw)
-		if err != nil {
-			writeError(w, fmt.Errorf("%w: limit must be an integer", domain.ErrInvalidArgument))
-			return
-		}
-		limit = n
-	}
-	got, err := h.svc.GetAroundSimilar(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("lookback"), q.Get("interval"), q.Get("direction"), minPct, limit, q.Get("window"), q.Get("during"), q.Get("fields"), q.Get("weights"), q.Get("minCoverage"), q.Get("horizons"))
+	got, err := h.svc.GetAroundSimilar(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("lookback"), q.Get("interval"), q.Get("direction"), minPct, limit, q.Get("window"), q.Get("during"), q.Get("fields"), q.Get("weights"), q.Get("minCoverage"), q.Get("horizons"), at)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, aroundSimilarToDTO(got))
+}
+
+// GetForensics handles GET /api/v1/market/forensics.
+func (h *MarketHandler) GetForensics(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	raw := q.Get("at")
+	if raw == "" {
+		writeError(w, fmt.Errorf("%w: at time is required", domain.ErrInvalidArgument))
+		return
+	}
+	at, err := parseTimeParam(raw)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	minPct, limit, _, err := parseAroundSimilarQuery(q)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	got, err := h.svc.GetForensics(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("window"), q.Get("during"), at, q.Get("lookback"), q.Get("interval"), q.Get("direction"), minPct, limit, q.Get("fields"), q.Get("weights"), q.Get("minCoverage"), q.Get("horizons"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, forensicsToDTO(got))
 }
 
 // GetAroundCompare handles GET /api/v1/market/around/compare.
@@ -688,7 +701,7 @@ func aroundSimilarToDTO(a *domain.AroundSimilarReport) aroundSimilarResponse {
 	if a == nil {
 		return aroundSimilarResponse{}
 	}
-	return aroundSimilarResponse{
+	out := aroundSimilarResponse{
 		Symbol: a.Symbol, Exchange: a.Exchange, Lookback: a.Lookback, Window: a.Window,
 		Interval: a.Interval, Fields: append([]string(nil), a.Fields...),
 		Weights: aroundSimilarWeightsToDTO(a.Weights), MinCoverage: formatHistQty(a.MinCoverage),
@@ -700,6 +713,27 @@ func aroundSimilarToDTO(a *domain.AroundSimilarReport) aroundSimilarResponse {
 		AfterHorizons: aroundSimilarHorizonsToDTO(a.AfterHorizons),
 		Summary:       a.Summary, Note: a.Note,
 	}
+	if !a.At.IsZero() {
+		out.At = a.At.UTC()
+	}
+	return out
+}
+
+func forensicsToDTO(a *domain.ForensicsReport) forensicsResponse {
+	if a == nil {
+		return forensicsResponse{}
+	}
+	out := forensicsResponse{
+		Symbol: a.Symbol, Exchange: a.Exchange, At: a.At.UTC(),
+		Window: a.Window, During: a.During, AsOf: a.AsOf.UTC(),
+		Tape: aroundToDTO(a.Tape), SimilarError: a.SimilarError,
+		Summary: a.Summary, Note: a.Note,
+	}
+	if a.Similar != nil {
+		sim := aroundSimilarToDTO(a.Similar)
+		out.Similar = &sim
+	}
+	return out
 }
 
 func aroundSimilarHitsToDTO(in []domain.AroundSimilarHit) []aroundSimilarHitDTO {
@@ -813,6 +847,7 @@ type aroundSimilarResponse struct {
 	MinCoverage    string                    `json:"minCoverage"`
 	MinReturnPct   string                    `json:"minReturnPct"`
 	Horizons       []string                  `json:"horizons,omitempty"`
+	At             time.Time                 `json:"at,omitempty"`
 	AsOf           time.Time                 `json:"asOf"`
 	Current        aroundPhaseDTO            `json:"current"`
 	Matches        []aroundSimilarHitDTO     `json:"matches"`
@@ -848,6 +883,45 @@ type aroundSimilarBandDTO struct {
 	Down       int    `json:"down"`
 	AveragePct string `json:"averagePct,omitempty"`
 	MedianPct  string `json:"medianPct,omitempty"`
+}
+
+type forensicsResponse struct {
+	Symbol       string                 `json:"symbol"`
+	Exchange     string                 `json:"exchange"`
+	At           time.Time              `json:"at"`
+	Window       string                 `json:"window"`
+	During       string                 `json:"during"`
+	AsOf         time.Time              `json:"asOf"`
+	Tape         aroundResponse         `json:"tape"`
+	Similar      *aroundSimilarResponse `json:"similar,omitempty"`
+	SimilarError string                 `json:"similarError,omitempty"`
+	Summary      string                 `json:"summary"`
+	Note         string                 `json:"note"`
+}
+
+func parseAroundSimilarQuery(q interface{ Get(string) string }) (minPct float64, limit int, at time.Time, err error) {
+	if raw := q.Get("minReturnPct"); raw != "" {
+		n, e := parseAroundFloat(raw)
+		if e != nil || n < 0 {
+			return 0, 0, time.Time{}, fmt.Errorf("%w: minReturnPct must be a number >= 0", domain.ErrInvalidArgument)
+		}
+		minPct = n
+	}
+	if raw := q.Get("limit"); raw != "" {
+		n, e := parseAroundInt(raw)
+		if e != nil {
+			return 0, 0, time.Time{}, fmt.Errorf("%w: limit must be an integer", domain.ErrInvalidArgument)
+		}
+		limit = n
+	}
+	if raw := q.Get("at"); raw != "" {
+		t, e := parseTimeParam(raw)
+		if e != nil {
+			return 0, 0, time.Time{}, e
+		}
+		at = t
+	}
+	return minPct, limit, at, nil
 }
 
 func parseAroundFloat(raw string) (float64, error) {

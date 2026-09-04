@@ -70,7 +70,8 @@ type DataPort interface {
 	CompareAround(ctx context.Context, exchange, symbol, from, to, window, during string) (json.RawMessage, error)
 	FindAroundMoves(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during string) (json.RawMessage, error)
 	GetAroundPrecursors(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during string) (json.RawMessage, error)
-	GetAroundSimilar(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields, weights, minCoverage, horizons string) (json.RawMessage, error)
+	GetAroundSimilar(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields, weights, minCoverage, horizons, at string) (json.RawMessage, error)
+	GetForensics(ctx context.Context, exchange, symbol, at, window, during, lookback, interval, direction string, minReturnPct float64, limit int, fields, weights, minCoverage, horizons string) (json.RawMessage, error)
 	GetAbsorption(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLiquiditySweeps(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeSurge(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -1195,6 +1196,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("weights", mcp.Description("Importance per field, e.g. book:3,oi:3,volume:1 (defaults: book and oi 3, takers 1.5, volume and price 1)")),
 		mcp.WithNumber("minCoverage", mcp.Description("Minimum % of selected data that must be present (default 60). Below that goes to skipped, not matches.")),
 		mcp.WithString("horizons", mcp.Description("After-windows CSV, e.g. 5m,30m,2h (default 15m,1h,4h). Matching candle size. Each reports avg, median, up, down, sample, and similarity bands.")),
+		mcp.WithString("at", mcp.Description("Optional event time (RFC3339 or unix ms). When set, compares the tape before this time instead of the current last window.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")
 		if err != nil {
@@ -1204,7 +1206,43 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if v := req.GetFloat("minCoverage", -1); v >= 0 {
 			minCov = strconv.FormatFloat(v, 'f', -1, 64)
 		}
-		raw, err := api.GetAroundSimilar(ctx, req.GetString("exchange", "all"), symbol, req.GetString("lookback", ""), req.GetString("interval", ""), req.GetString("direction", ""), req.GetFloat("minReturnPct", 0), int(req.GetFloat("limit", 0)), req.GetString("window", ""), req.GetString("during", ""), req.GetString("fields", ""), req.GetString("weights", ""), minCov, req.GetString("horizons", ""))
+		raw, err := api.GetAroundSimilar(ctx, req.GetString("exchange", "all"), symbol, req.GetString("lookback", ""), req.GetString("interval", ""), req.GetString("direction", ""), req.GetFloat("minReturnPct", 0), int(req.GetFloat("limit", 0)), req.GetString("window", ""), req.GetString("during", ""), req.GetString("fields", ""), req.GetString("weights", ""), minCov, req.GetString("horizons", ""), req.GetString("at", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_market_forensics",
+		mcp.WithDescription("Market forensics for a coin and a chosen time: what happened before, during, and after that move (price, volume, takers, VWAP, vs typical, POC, sweeps, stored book/futures), plus past important-move setups that looked like the before-window and how price moved after those. at is required. Same window/during as get_around. Same similar knobs as find_around_similar. If similar-move search fails, tape is still returned. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("at", mcp.Required(), mcp.Description("Event time (RFC3339 or unix ms). Start of the during window.")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
+		mcp.WithString("window", mcp.Description("15m | 30m | 1h | 2h | 4h (default 1h)")),
+		mcp.WithString("during", mcp.Description("5m | 15m | 30m | 1h (default 15m)")),
+		mcp.WithString("lookback", mcp.Description("4h | 12h | 24h | 3d | 7d (default 7d)")),
+		mcp.WithString("interval", mcp.Description("15m | 1h (default 15m)")),
+		mcp.WithString("direction", mcp.Description("up | down | both (default both)")),
+		mcp.WithNumber("minReturnPct", mcp.Description("Minimum |return| %% for past moves")),
+		mcp.WithNumber("limit", mcp.Description("How many nearest cases (default 5, max 10)")),
+		mcp.WithString("fields", mcp.Description("Which tape to compare: price,volume,takers,oi,book (default all)")),
+		mcp.WithString("weights", mcp.Description("Importance per field, e.g. book:3,oi:3,volume:1")),
+		mcp.WithNumber("minCoverage", mcp.Description("Minimum % of selected data that must be present (default 60)")),
+		mcp.WithString("horizons", mcp.Description("After-windows CSV, e.g. 15m,1h,4h")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		at, err := req.RequireString("at")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		minCov := ""
+		if v := req.GetFloat("minCoverage", -1); v >= 0 {
+			minCov = strconv.FormatFloat(v, 'f', -1, 64)
+		}
+		raw, err := api.GetForensics(ctx, req.GetString("exchange", "all"), symbol, at, req.GetString("window", ""), req.GetString("during", ""), req.GetString("lookback", ""), req.GetString("interval", ""), req.GetString("direction", ""), req.GetFloat("minReturnPct", 0), int(req.GetFloat("limit", 0)), req.GetString("fields", ""), req.GetString("weights", ""), minCov, req.GetString("horizons", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

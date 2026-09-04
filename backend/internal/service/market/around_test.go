@@ -236,7 +236,7 @@ func TestGetAroundSimilar_ReturnsReport(t *testing.T) {
 		tape = append(tape, aroundTape(now.Add(-time.Duration(hoursAgo)*time.Hour))...)
 	}
 	svc := New(&fakeMarket{candles: tape, ticker: &domain.Ticker24h{LastPrice: "105"}}, &fakeSupply{})
-	got, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book,oi", "book:3,oi:3,volume:1", "60", "30m,2h")
+	got, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book,oi", "book:3,oi:3,volume:1", "60", "30m,2h", time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,13 +277,13 @@ func TestGetAroundSimilar_ReturnsReport(t *testing.T) {
 
 func TestGetAroundSimilar_BadWeights(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{})
-	if _, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book", "price:2", "60", ""); !errors.Is(err, domain.ErrInvalidArgument) {
+	if _, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book", "price:2", "60", "", time.Time{}); !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("%v", err)
 	}
-	if _, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book", "", "101", ""); !errors.Is(err, domain.ErrInvalidArgument) {
+	if _, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book", "", "101", "", time.Time{}); !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("%v", err)
 	}
-	if _, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book", "", "60", "rsi"); !errors.Is(err, domain.ErrInvalidArgument) {
+	if _, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book", "", "60", "rsi", time.Time{}); !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("%v", err)
 	}
 }
@@ -292,6 +292,44 @@ func TestFindAroundMoves_BadSymbol(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{})
 	if _, err := svc.FindAroundMoves(context.Background(), "all", "  ", "24h", "15m", "both", 0, 0, "", ""); !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("%v", err)
+	}
+}
+
+func TestGetForensics_ReturnsTape(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Minute)
+	at := now.Add(-2 * time.Hour)
+	svc := New(&fakeMarket{candles: aroundTape(at), ticker: &domain.Ticker24h{LastPrice: "105"}}, &fakeSupply{})
+	got, err := svc.GetForensics(context.Background(), "binance", "BTCUSDT", "1h", "15m", at, "24h", "15m", "both", 1.5, 5, "volume,book,oi", "", "60", "30m,2h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Tape == nil || got.Symbol != "BTCUSDT" || got.Summary == "" {
+		t.Fatalf("%+v", got)
+	}
+	if got.At.UTC() != at.UTC() {
+		t.Fatalf("at %s want %s", got.At, at)
+	}
+	if got.Note == "" {
+		t.Fatal("missing note")
+	}
+	if got.Similar == nil && got.SimilarError == "" {
+		t.Fatal("expected similar or similarError")
+	}
+	if got.Similar != nil && got.Similar.At.IsZero() {
+		t.Fatal("similar at should be set")
+	}
+}
+
+func TestGetAroundSimilar_UsesSelectedAt(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Minute)
+	at := now.Add(-3 * time.Hour)
+	svc := New(&fakeMarket{candles: aroundTape(at), ticker: &domain.Ticker24h{LastPrice: "105"}}, &fakeSupply{})
+	got, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume", "", "0", "", at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.At.UTC() != at.UTC() {
+		t.Fatalf("at %s want %s", got.At, at)
 	}
 }
 

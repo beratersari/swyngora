@@ -717,6 +717,65 @@ class AroundSimilarInput(BaseModel):
         default="",
         description="After-windows CSV, e.g. 5m,30m,2h (default 15m,1h,4h). Matching candle size. Each reports avg, median, up, down, sample, and similarity bands 40-60/60-80/80-100.",
     )
+    at: str = Field(
+        default="",
+        description="Optional event time (RFC3339 or unix ms). When set, compares the tape before this time instead of the current last window.",
+    )
+
+
+class ForensicsInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    at: str = Field(
+        description="Event time (RFC3339 or unix ms). Start of the during window.",
+    )
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both + combined)",
+    )
+    window: str = Field(
+        default="1h",
+        description="Before/after lookback: 15m|30m|1h|2h|4h (default 1h)",
+    )
+    during: str = Field(
+        default="15m",
+        description="Move window starting at at: 5m|15m|30m|1h (default 15m)",
+    )
+    lookback: str = Field(
+        default="7d",
+        description="4h|12h|24h|3d|7d (default 7d)",
+    )
+    interval: str = Field(
+        default="15m",
+        description="15m|1h (default 15m)",
+    )
+    direction: str = Field(
+        default="both",
+        description="up|down|both (default both)",
+    )
+    min_return_pct: float = Field(
+        default=0,
+        description="Minimum |return| percent for past moves",
+    )
+    limit: int = Field(
+        default=0,
+        description="How many nearest cases (default 5, max 10)",
+    )
+    fields: str = Field(
+        default="",
+        description="Tape to compare: price,volume,takers,oi,book (default all)",
+    )
+    weights: str = Field(
+        default="",
+        description="Importance per field, e.g. book:3,oi:3,volume:1",
+    )
+    min_coverage: float = Field(
+        default=-1,
+        description="Minimum % of selected data that must be present (default 60)",
+    )
+    horizons: str = Field(
+        default="",
+        description="After-windows CSV, e.g. 15m,1h,4h",
+    )
 
 
 class AroundCompareInput(BaseModel):
@@ -2109,6 +2168,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         weights: str = "",
         min_coverage: float = -1,
         horizons: str = "",
+        at: str = "",
     ) -> str:
         params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
         if lookback:
@@ -2133,7 +2193,54 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             params["minCoverage"] = min_coverage
         if horizons:
             params["horizons"] = horizons
+        if at:
+            params["at"] = at
         return http.get("/api/v1/market/around/similar", params)
+
+    def get_market_forensics(
+        symbol: str,
+        at: str,
+        exchange: str = "all",
+        window: str = "1h",
+        during: str = "15m",
+        lookback: str = "7d",
+        interval: str = "15m",
+        direction: str = "both",
+        min_return_pct: float = 0,
+        limit: int = 0,
+        fields: str = "",
+        weights: str = "",
+        min_coverage: float = -1,
+        horizons: str = "",
+    ) -> str:
+        params: dict[str, Any] = {
+            "symbol": symbol,
+            "at": at,
+            "exchange": exchange,
+        }
+        if window:
+            params["window"] = window
+        if during:
+            params["during"] = during
+        if lookback:
+            params["lookback"] = lookback
+        if interval:
+            params["interval"] = interval
+        if direction:
+            params["direction"] = direction
+        if min_return_pct:
+            params["minReturnPct"] = min_return_pct
+        if limit:
+            params["limit"] = limit
+        if fields:
+            params["fields"] = fields
+        if weights:
+            params["weights"] = weights
+        if min_coverage >= 0:
+            params["minCoverage"] = min_coverage
+        if horizons:
+            params["horizons"] = horizons
+        return http.get("/api/v1/market/forensics", params)
 
     def get_vwap(
         symbol: str,
@@ -4419,9 +4526,27 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "horizons is a CSV of after-windows (default "
                 "15m,1h,4h; e.g. 5m,30m,2h) on matching candle "
                 "size, with avg, median, up, down, sample, and "
-                "similarity bands 40-60/60-80/80-100."
+                "similarity bands 40-60/60-80/80-100. "
+                "Optional at compares the tape before that time "
+                "instead of the current last window."
             ),
             args_schema=AroundSimilarInput,
+        ),
+        StructuredTool.from_function(
+            get_market_forensics,
+            name="get_market_forensics",
+            description=(
+                "Market forensics for a coin and a chosen time: what "
+                "happened before, during, and after that move (price, "
+                "volume, takers, VWAP, vs typical, POC, sweeps, stored "
+                "book/futures), plus past important-move setups that "
+                "looked like the before-window and how price moved after "
+                "those. at is required. Prefer this when the user asks "
+                "what happened around a move and what similar past cases "
+                "did next. If similar-move search fails, tape is still "
+                "returned."
+            ),
+            args_schema=ForensicsInput,
         ),
         StructuredTool.from_function(
             get_vwap,

@@ -10,6 +10,7 @@ import signalsEn from './locales/en/signals.json';
 import portfolioEn from './locales/en/portfolio.json';
 import heatmapEn from './locales/en/heatmap.json';
 import liquidationsEn from './locales/en/liquidations.json';
+import forensicsEn from './locales/en/forensics.json';
 import settingsEn from './locales/en/settings.json';
 import commonTr from './locales/tr/common.json';
 import marketsTr from './locales/tr/markets.json';
@@ -23,6 +24,7 @@ import signalsTr from './locales/tr/signals.json';
 import portfolioTr from './locales/tr/portfolio.json';
 import heatmapTr from './locales/tr/heatmap.json';
 import liquidationsTr from './locales/tr/liquidations.json';
+import forensicsTr from './locales/tr/forensics.json';
 import settingsTr from './locales/tr/settings.json';
 
 /**
@@ -43,6 +45,7 @@ export const resources = {
     portfolio: portfolioEn,
     heatmap: heatmapEn,
     liquidations: liquidationsEn,
+    forensics: forensicsEn,
     settings: settingsEn,
   },
   tr: {
@@ -58,6 +61,7 @@ export const resources = {
     portfolio: portfolioTr,
     heatmap: heatmapTr,
     liquidations: liquidationsTr,
+    forensics: forensicsTr,
     settings: settingsTr,
   },
 } as const;

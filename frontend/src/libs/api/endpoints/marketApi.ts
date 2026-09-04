@@ -67,6 +67,8 @@ import type {
   LiquidationHuntQuery,
   LiquidationMaxPain,
   LiquidationMaxPainQuery,
+  MarketForensics,
+  MarketForensicsQuery,
 } from './marketApi.types';
 // delist types re-exported below
 
@@ -91,6 +93,8 @@ export type {
   MarketLiquidationCascade,
   MarketLiquidationCascadeScan,
   MarketCvd,
+  MarketForensics,
+  MarketForensicsQuery,
   CandlesQuery,
   Ticker24hQuery,
   SpotOrderBook,
@@ -336,6 +340,13 @@ export const marketApi = baseApi.injectEndpoints({
       }),
     }),
 
+    getMarketForensics: build.query<MarketForensics, MarketForensicsQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/forensics',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
     getIndicators: build.query<IndicatorsResponse, IndicatorsQuery>({
       query: (arg) => ({
         url: '/api/v1/market/indicators',
@@ -458,6 +469,7 @@ export const {
   useGetMarketLiquidationMaxPainQuery,
   useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketCvdQuery,
+  useGetMarketForensicsQuery,
   useGetIndicatorsQuery,
   useLazyGetIndicatorsQuery,
   useGetPumpEventsQuery,

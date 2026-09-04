@@ -781,8 +781,9 @@ func (c *APIClient) GetAroundPrecursors(ctx context.Context, exchange, symbol, l
 	return c.get(ctx, "/api/v1/market/around/precursors", q)
 }
 
-// GetAroundSimilar ranks past important-move setups against the current tape.
-func (c *APIClient) GetAroundSimilar(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields, weights, minCoverage, horizons string) (json.RawMessage, error) {
+// GetAroundSimilar ranks past important-move setups against the tape before at
+// (or the current last window when at is empty).
+func (c *APIClient) GetAroundSimilar(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields, weights, minCoverage, horizons, at string) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)
 	if exchange != "" {
@@ -821,7 +822,54 @@ func (c *APIClient) GetAroundSimilar(ctx context.Context, exchange, symbol, look
 	if horizons != "" {
 		q.Set("horizons", horizons)
 	}
+	if at != "" {
+		q.Set("at", at)
+	}
 	return c.get(ctx, "/api/v1/market/around/similar", q)
+}
+
+// GetForensics returns the around-the-move tape plus similar past setups.
+func (c *APIClient) GetForensics(ctx context.Context, exchange, symbol, at, window, during, lookback, interval, direction string, minReturnPct float64, limit int, fields, weights, minCoverage, horizons string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	q.Set("at", at)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if window != "" {
+		q.Set("window", window)
+	}
+	if during != "" {
+		q.Set("during", during)
+	}
+	if lookback != "" {
+		q.Set("lookback", lookback)
+	}
+	if interval != "" {
+		q.Set("interval", interval)
+	}
+	if direction != "" {
+		q.Set("direction", direction)
+	}
+	if minReturnPct > 0 {
+		q.Set("minReturnPct", strconv.FormatFloat(minReturnPct, 'f', -1, 64))
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if fields != "" {
+		q.Set("fields", fields)
+	}
+	if weights != "" {
+		q.Set("weights", weights)
+	}
+	if minCoverage != "" {
+		q.Set("minCoverage", minCoverage)
+	}
+	if horizons != "" {
+		q.Set("horizons", horizons)
+	}
+	return c.get(ctx, "/api/v1/market/forensics", q)
 }
 
 // GetVWAP returns volume-weighted average price from startTime (or window) to now.

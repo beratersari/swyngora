@@ -1315,6 +1315,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/forensics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Market forensics (before / during / after + similar past moves)
+         * @description One report for a coin and a chosen time. Combines the around-the-move
+         *     tape (**before** / **during** / **after** — price, volume, takers,
+         *     VWAP, vs typical, POC, sweeps, stored book/futures) with past
+         *     important-move setups that looked like the **before** window, and
+         *     how price moved after those (`afterHorizons`). `at` is required
+         *     (RFC3339 or unix ms). Same `window` / `during` as `/around`. Same
+         *     similar-move knobs as `/around/similar` (`lookback`, `fields`,
+         *     `weights`, `minCoverage`, `horizons`). If similar-move search
+         *     fails, `tape` is still returned and `similarError` explains why.
+         *     Informational only.
+         */
+        get: operations["getMarketForensics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/vwap": {
         parameters: {
             query?: never;
@@ -6333,6 +6362,25 @@ export interface components {
             items?: components["schemas"]["RSIHeatmapRow"][];
             note?: string;
         };
+        /** @description Around-the-move tape plus similar past setups for one event time */
+        MarketForensics: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            at?: string;
+            window?: string;
+            during?: string;
+            /** Format: date-time */
+            asOf?: string;
+            /** @description Before / during / after around-the-move tape */
+            tape?: Record<string, never>;
+            /** @description Similar past setups and afterHorizons */
+            similar?: Record<string, never>;
+            /** @description Set when similar-move search failed */
+            similarError?: string;
+            summary?: string;
+            note?: string;
+        };
         SpotMarket: {
             symbol?: string;
             lastPrice?: string;
@@ -8106,6 +8154,8 @@ export interface operations {
                 minCoverage?: number;
                 /** @description After-windows CSV (default 15m,1h,4h). Example 5m,30m,2h. Matching candle size; each reports avg, median, up, down, sample, and similarity bands. */
                 horizons?: string;
+                /** @description Optional event time (RFC3339 or unix ms). When set, compares the tape before this time instead of the current last window. */
+                at?: string;
             };
             header?: never;
             path?: never;
@@ -8120,6 +8170,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketForensics: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description Event time (RFC3339 or unix ms) — start of the during window */
+                at: string;
+                /** @description binance | bybit | all (default all = both + combined) */
+                exchange?: string;
+                /** @description Before/after lookback — 15m | 30m | 1h | 2h | 4h (default 1h) */
+                window?: string;
+                /** @description Move window starting at `at` — 5m | 15m | 30m | 1h (default 15m) */
+                during?: string;
+                /** @description How far back to search similar moves — 4h | 12h | 24h | 3d | 7d (default 7d) */
+                lookback?: string;
+                /** @description 15m | 1h (default 15m) */
+                interval?: string;
+                /** @description up | down | both (default both) */
+                direction?: string;
+                /** @description Minimum |return| percent for past moves */
+                minReturnPct?: number;
+                /** @description How many nearest similar cases (default 5, max 10) */
+                limit?: number;
+                /** @description Tape to compare — price,volume,takers,oi,book (default all) */
+                fields?: string;
+                /** @description Importance per field — book:3,oi:3,volume:1 */
+                weights?: string;
+                /** @description Minimum percent of selected data that must be present (default 60) */
+                minCoverage?: number;
+                /** @description After-windows CSV (default 15m,1h,4h) */
+                horizons?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Forensics tape plus similar past moves */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketForensics"];
                 };
             };
             400: components["responses"]["Error"];

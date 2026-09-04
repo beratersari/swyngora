@@ -73,6 +73,10 @@ export type LiquidationCascadeScanQuery = NonNullable<
   operations['scanMarketLiquidationCascades']['parameters']['query']
 >;
 export type CvdQuery = NonNullable<operations['getMarketCVD']['parameters']['query']>;
+export type MarketForensicsQuery = NonNullable<
+  operations['getMarketForensics']['parameters']['query']
+>;
+export type MarketForensics = components['schemas']['MarketForensics'];
 
 export type MarketCvdVenue = {
   exchange?: string;

@@ -97,6 +97,10 @@ Each combo reports how often it showed up before **increases** vs
 
 `GET /api/v1/market/around/similar?symbol=BTCUSDT`
 
+Optional `at` compares the tape **before that event time** instead of
+the current last window. Combined with `/around` in
+[`forensics.md`](forensics.md).
+
 Compares the **current** tape (last `window`, default 1h) to the
 setup before past important moves. `fields` selects which pieces to
 use (`price`, `volume`, `takers`, `oi`, `book`). Example:
@@ -140,10 +144,10 @@ itself (`afterReturnPct`). MCP: `find_around_similar`.
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/around.go`, `around_compare.go`, `around_moves.go`, `around_precursors.go`, `around_similar.go` |
-| Service | `backend/internal/service/market/around.go`, `around_moves.go` |
-| HTTP | `GET /api/v1/market/around`, `.../compare`, `.../moves`, `.../precursors`, `.../similar` |
-| MCP / AI | `get_around`, `compare_around`, `find_around_moves`, `find_around_precursors`, `find_around_similar` |
+| Domain | `backend/internal/domain/around.go`, `around_compare.go`, `around_moves.go`, `around_precursors.go`, `around_similar.go`, `around_forensics.go` |
+| Service | `backend/internal/service/market/around.go`, `around_moves.go`, `around_forensics.go` |
+| HTTP | `GET /api/v1/market/around`, `.../compare`, `.../moves`, `.../precursors`, `.../similar`, `GET /api/v1/market/forensics` |
+| MCP / AI | `get_around`, `compare_around`, `find_around_moves`, `find_around_precursors`, `find_around_similar`, `get_market_forensics` |
 
 ## How to verify
 
@@ -157,4 +161,6 @@ curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT&fields=volume,book,oi"
 curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT&fields=volume,book,oi&weights=book:3,oi:3,volume:1&minCoverage=60"
 curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT&horizons=5m,30m,2h"
+curl "http://localhost:8080/api/v1/market/around/similar?symbol=BTCUSDT&at=2026-08-20T14:00:00Z"
+curl "http://localhost:8080/api/v1/market/forensics?symbol=BTCUSDT&at=2026-08-20T14:00:00Z"
 ```

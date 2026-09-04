@@ -234,6 +234,24 @@ class _Transport(httpx.BaseTransport):
                     "combined": {"current": {"kind": "bid", "score": 72}},
                 },
             )
+        if request.url.path.endswith("/forensics"):
+            return httpx.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "summary": "Price rose 2% during. 2 similar cases went up after.",
+                    "tape": {
+                        "combined": {
+                            "phases": [
+                                {"phase": "before"},
+                                {"phase": "during"},
+                                {"phase": "after"},
+                            ]
+                        }
+                    },
+                    "similar": {"matches": [{"afterReturnPct": "+3.5"}]},
+                },
+            )
         if request.url.path.endswith("/around/similar"):
             return httpx.Response(
                 200,
@@ -462,6 +480,15 @@ def test_market_tools_hit_api(monkeypatch):
     assert "find_around_similar" in by_name
     sim = json.loads(by_name["find_around_similar"].invoke({"symbol": "BTCUSDT"}))
     assert sim["matches"][0]["afterReturnPct"] == "+3.5"
+
+    assert "get_market_forensics" in by_name
+    forensic = json.loads(
+        by_name["get_market_forensics"].invoke(
+            {"symbol": "BTCUSDT", "at": "2026-08-20T14:00:00Z"}
+        )
+    )
+    assert forensic["tape"]["combined"]["phases"][1]["phase"] == "during"
+    assert forensic["similar"]["matches"][0]["afterReturnPct"] == "+3.5"
 
     assert "get_vwap" in by_name
     vwap = json.loads(by_name["get_vwap"].invoke({"symbol": "BTCUSDT", "window": "24h"}))

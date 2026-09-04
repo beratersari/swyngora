@@ -3,6 +3,7 @@ import { AiChatPage } from '@/components/pages/AiChatPage';
 import { AlertsPage } from '@/components/pages/AlertsPage';
 import { CoinDetailPage } from '@/components/pages/CoinDetailPage';
 import { ComparePage } from '@/components/pages/ComparePage';
+import { ForensicsPage } from '@/components/pages/ForensicsPage';
 import { HeatmapPage } from '@/components/pages/HeatmapPage';
 import { LiquidationsPage } from '@/components/pages/LiquidationsPage';
 import { MarketsPage } from '@/components/pages/MarketsPage';
@@ -25,6 +26,7 @@ export function AppRoutes() {
       <Route path="/pumps" element={<PumpsPage />} />
       <Route path="/alerts" element={<AlertsPage />} />
       <Route path="/compare" element={<ComparePage />} />
+      <Route path="/forensics" element={<ForensicsPage />} />
       <Route path="/heatmap" element={<HeatmapPage />} />
       <Route path="/settings" element={<SettingsPage />} />
       <Route path="/ai" element={<AiChatPage />} />

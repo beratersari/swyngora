@@ -1,0 +1,26 @@
+import { describe, expect, it } from 'vitest';
+import { screen } from '@testing-library/react';
+import { renderWithProviders } from '@/test/render';
+import { ForensicsTape } from './ForensicsTape';
+
+describe('ForensicsTape', () => {
+  it('renders three phases and a change row', () => {
+    renderWithProviders(
+      <ForensicsTape
+        venue={{
+          exchange: 'combined',
+          phases: [
+            { phase: 'before', complete: true, price: { close: '100' } },
+            { phase: 'during', complete: true, price: { close: '107' } },
+            { phase: 'after', complete: true, price: { close: '105' } },
+          ],
+          changes: [{ metric: 'price', before: '100', during: '107', after: '105', path: 'faded' }],
+        }}
+      />,
+    );
+    expect(screen.getAllByText(/before|önce/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/during|sırada/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('107').length).toBeGreaterThan(0);
+    expect(screen.getByText('faded')).toBeInTheDocument();
+  });
+});

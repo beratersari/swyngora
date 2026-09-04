@@ -136,8 +136,9 @@ func (s *Service) GetAroundPrecursors(ctx context.Context, exchange, symbol, loo
 
 const aroundSimilarDisclaimer = "Compares the current tape (last window) to the setup before past important moves. Each past match uses only tape that was already available before that move started (dataFrom–dataTo). fields selects which pieces to use (price, volume, takers, oi, book). weights sets importance (default book and oi 3, takers 1.5, volume and price 1). minCoverage (default 60) drops cases that lack enough selected data from matches into skipped. Uncompared fields have no score. Only overlapping price-move ranges count as one past event. horizons (default 15m,1h,4h) sets the after windows and uses matching candle size (5m horizons use 5m bars). Each horizon reports avg, median, up, down, sample, and the same stats in similarity bands 40–60, 60–80, 80–100. Informational only — not financial advice."
 
-// GetAroundSimilar finds past important-move setups that look like the current tape.
-func (s *Service) GetAroundSimilar(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields, weights string, minCoverageRaw, horizons string) (*domain.AroundSimilarReport, error) {
+// GetAroundSimilar finds past important-move setups that look like the tape
+// before `at`. A zero `at` uses the current last-window tape (now − 1s).
+func (s *Service) GetAroundSimilar(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields, weights string, minCoverageRaw, horizons string, at time.Time) (*domain.AroundSimilarReport, error) {
 	if lookback == "" {
 		lookback = domain.DefaultAroundPrecursorsLookback
 	}
@@ -161,7 +162,15 @@ func (s *Service) GetAroundSimilar(ctx context.Context, exchange, symbol, lookba
 		return nil, err
 	}
 	now := time.Now().UTC()
-	curRep, err := s.GetAround(ctx, exchange, symbol, window, "15m", now.Add(-time.Second))
+	anchor := now.Add(-time.Second)
+	if !at.IsZero() {
+		anchor = at.UTC()
+	}
+	currentDuring := "15m"
+	if !at.IsZero() && during != "" {
+		currentDuring = during
+	}
+	curRep, err := s.GetAround(ctx, exchange, symbol, window, currentDuring, anchor)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +180,7 @@ func (s *Service) GetAroundSimilar(ctx context.Context, exchange, symbol, lookba
 			Symbol: curRep.Symbol, Exchange: curRep.Exchange, Lookback: lookback, Window: window,
 			Fields: want.IDs(), Weights: domain.ListAroundSimilarWeights(want, wts),
 			MinCoverage: minCov, Horizons: domain.AroundSimilarHorizonIDs(hs),
-			AsOf: now, Note: aroundSimilarDisclaimer,
+			At: anchor, AsOf: now, Note: aroundSimilarDisclaimer,
 			Summary: "Not enough current tape to compare.",
 		}, nil
 	}
@@ -189,7 +198,7 @@ func (s *Service) GetAroundSimilar(ctx context.Context, exchange, symbol, lookba
 		Window: window, Interval: moves.Interval, Fields: want.IDs(),
 		Weights: domain.ListAroundSimilarWeights(want, wts), MinCoverage: minCov,
 		MinReturnPct: moves.MinReturnPct, Horizons: domain.AroundSimilarHorizonIDs(hs),
-		AsOf: now, Current: current, Matches: display, Skipped: skipped,
+		At: anchor, AsOf: now, Current: current, Matches: display, Skipped: skipped,
 		Events: len(hits), Note: aroundSimilarDisclaimer,
 	}
 	if len(hits) > 0 {
