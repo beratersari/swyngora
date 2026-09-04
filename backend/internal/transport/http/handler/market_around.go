@@ -143,6 +143,9 @@ func (h *MarketHandler) ScanForensics(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	if h.Radar != nil && got != nil && len(got.Hits) > 0 {
+		_, _ = h.Radar.RecordHits(r.Context(), got)
+	}
 	writeJSON(w, http.StatusOK, forensicsScanToDTO(got))
 }
 

@@ -115,7 +115,7 @@ func TestAPIClient_GetRSIHeatmap_OmitsEmpty(t *testing.T) {
 
 func TestInProcessMCP_GetRSIHeatmapTool(t *testing.T) {
 	svc := market.New(rsiHeatMarket{}, rsiHeatSupply{})
-	s := NewInProcessServer(svc, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	s := NewInProcessServer(svc, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	if s == nil {
 		t.Fatal("server")
 	}

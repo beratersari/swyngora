@@ -184,6 +184,7 @@ func TestNewRouter_RoutesAndCORS(t *testing.T) {
 		{"/api/v1/market/around/similar?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/forensics?symbol=BTCUSDT&at=2026-08-23T12:00:00Z", http.StatusOK, nil},
 		{"/api/v1/market/forensics/scan?limit=3&lookback=24h", http.StatusOK, nil},
+		{"/api/v1/market/forensics/radar?since=7d", http.StatusOK, nil},
 		{"/api/v1/market/absorption?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/liquidity-sweeps?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/basis?symbol=BTCUSDT", http.StatusOK, nil},

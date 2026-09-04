@@ -75,6 +75,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/around/similar` | Past important-move setups like the current tape (optional `at`); unique events; caller-picked after horizons |
 | `GET` | `/api/v1/market/forensics` | Around-the-move tape plus similar past setups for a chosen time |
 | `GET` | `/api/v1/market/forensics/scan` | Coins whose current tape looks like past pre-move setups, plus what usually happened after |
+| `GET` | `/api/v1/market/forensics/radar` | Saved Setup Radar hits and what price did after, plus lean usefulness |
 | `GET` | `/api/v1/market/vwap` | Volume-weighted average price from a start time; last vs VWAP; Binance, Bybit, combined |
 | `GET` | `/api/v1/market/absorption` | Large market buys/sells vs price hold; which side is absorbing and how strong |
 | `GET` | `/api/v1/market/liquidity-sweeps` | Poke through a prior high/low that comes back; level, excursion, time, volume |
@@ -324,6 +325,9 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `PRICE_DIFF_CHECK_INTERVAL` | `30s` | How often active price-diff watches are evaluated |
 | `FUNDING_ARB_DB_PATH` | `data/fundingarb.db` | SQLite for funding-arb follow watches/signals |
 | `FUNDING_ARB_CHECK_INTERVAL` | `30s` | How often active funding-arb watches are evaluated |
+| `RADAR_DB_PATH` | `data/radar.db` | SQLite for saved Setup Radar hits and after-fills |
+| `RADAR_SCAN_INTERVAL` | `15m` | How often the worker scans and records new Setup Radar hits |
+| `RADAR_FILL_INTERVAL` | `1m` | How often due radar after-windows are filled from candles |
 | `SCANNER_DB_PATH` | `data/scanner.db` | SQLite file for indicator scanner rules/results |
 | `EXPORT_DB_PATH` | `data/export.db` | SQLite file for user data export jobs |
 | `EXPORT_FILE_DIR` | `data/exports` | Directory for export download files |

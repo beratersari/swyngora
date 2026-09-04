@@ -31,6 +31,7 @@ TAPE_TOOLS: frozenset[str] = frozenset(
         "find_around_similar",
         "get_market_forensics",
         "scan_market_forensics",
+        "review_setup_radar",
         "get_absorption",
         "get_liquidity_sweeps",
         "get_volume_surge",

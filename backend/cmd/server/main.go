@@ -32,6 +32,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/importstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/pricediffstore"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/radarstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/routescan"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/scannerstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/tronscan"
@@ -52,6 +53,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricediff"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/radar"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/realtime"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/supplyjob"
@@ -398,6 +400,20 @@ func main() {
 	fundingArbSvc := fundingarb.New(fundingArbStore, marketSvc)
 	logger.Info("funding-arb watch store ready", "driver", "sqlite", "path", fundingArbStore.Path())
 
+	radarStore, err := radarstore.Open(cfg.RadarDBPath)
+	if err != nil {
+		logger.Error("radar sqlite open failed", "path", cfg.RadarDBPath, "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := radarStore.Close(); err != nil {
+			logger.Error("radar sqlite close", "err", err)
+		}
+	}()
+	radarSvc := radar.New(radarStore, marketSvc)
+	radarSvc.Log = logger
+	logger.Info("setup radar store ready", "driver", "sqlite", "path", radarStore.Path())
+
 	exportStore, err := exportstore.Open(cfg.ExportDBPath)
 	if err != nil {
 		logger.Error("export sqlite open failed", "path", cfg.ExportDBPath, "err", err)
@@ -568,6 +584,14 @@ func main() {
 	}
 	go fundingArbChecker.Start(ctx)
 
+	radarWorker := &radar.Worker{
+		Radar:     radarSvc,
+		ScanEvery: cfg.RadarScanInterval,
+		FillEvery: cfg.RadarFillInterval,
+		Logger:    logger,
+	}
+	go radarWorker.Start(ctx)
+
 	backtestWorker := &scanner.BacktestWorker{
 		Scanner:  scannerSvc,
 		Interval: 2 * time.Second,
@@ -618,7 +642,7 @@ func main() {
 	// MCP tools run in-process (same binary / same port as REST). Optional via MCP_ENABLED.
 	var mcpHTTP http.Handler
 	if cfg.MCPEnabled {
-		mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc, scannerSvc, exportSvc, importSvc, priceDiffSvc, apiKeySvc, accountSvc, swingSvc, fundingArbSvc)
+		mcpServer := mcpx.NewInProcessServer(marketSvc, watchSvc, alertSvc, portfolioSvc, scannerSvc, exportSvc, importSvc, priceDiffSvc, apiKeySvc, accountSvc, swingSvc, fundingArbSvc, radarSvc)
 		mcpHTTP = mcpx.NewHTTPHandler(mcpServer)
 	}
 
@@ -636,6 +660,7 @@ func main() {
 		Portfolio:          portfolioSvc,
 		PriceDiff:          priceDiffSvc,
 		FundingArb:         fundingArbSvc,
+		Radar:              radarSvc,
 		Scanner:            scannerSvc,
 		Swing:              swingSvc,
 		Export:             exportSvc,

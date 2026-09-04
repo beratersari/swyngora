@@ -800,6 +800,13 @@ class ForensicsScanInput(BaseModel):
     horizons: str = Field(default="", description="After-windows CSV")
 
 
+class SetupRadarReviewInput(BaseModel):
+    exchange: str = Field(default="all", description="binance | bybit | all")
+    symbol: str = Field(default="", description="Optional pair filter")
+    since: str = Field(default="7d", description="24h | 7d | 30d")
+    limit: int = Field(default=50, description="How many saved hits")
+
+
 class AroundCompareInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     from_time: str = Field(
@@ -2323,6 +2330,19 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if horizons:
             params["horizons"] = horizons
         return http.get("/api/v1/market/forensics/scan", params)
+
+    def review_setup_radar(
+        exchange: str = "all",
+        symbol: str = "",
+        since: str = "7d",
+        limit: int = 50,
+    ) -> str:
+        params: dict[str, Any] = {"exchange": exchange, "since": since}
+        if symbol:
+            params["symbol"] = symbol
+        if limit:
+            params["limit"] = limit
+        return http.get("/api/v1/market/forensics/radar", params)
 
     def get_vwap(
         symbol: str,
@@ -4663,6 +4683,16 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "what usually happened after those similar cases."
             ),
             args_schema=ForensicsScanInput,
+        ),
+        StructuredTool.from_function(
+            review_setup_radar,
+            name="review_setup_radar",
+            description=(
+                "Review saved Setup Radar hits and what price did after "
+                "each one (15m / 1h / 4h). Usefulness is how often an "
+                "up/down lean matched the later move."
+            ),
+            args_schema=SetupRadarReviewInput,
         ),
         StructuredTool.from_function(
             get_vwap,

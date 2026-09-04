@@ -22,7 +22,8 @@
   },
   "view": {
     "event": "Bir zaman",
-    "now": "Şimdi"
+    "now": "Şimdi",
+    "review": "İnceleme"
   },
   "scan": {
     "lookback": "Geriye bakış",
@@ -49,6 +50,16 @@
       "mixed": "Karışık",
       "unknown": "Bilinmiyor"
     }
+  },
+  "review": {
+    "since": "Başlangıç",
+    "empty": "Bu pencerede kayıtlı Kurulum radarı sonucu yok.",
+    "loadFailed": "Radar geçmişi yüklenemedi",
+    "resource": "radar geçmişi",
+    "useful": "Eğilim tuttu",
+    "after15m": "15dk sonra",
+    "after1h": "1s sonra",
+    "after4h": "4s sonra"
   },
   "phases": {
     "before": "Önce",

@@ -917,6 +917,24 @@ func (c *APIClient) ScanForensics(ctx context.Context, exchange, quote, lookback
 	return c.get(ctx, "/api/v1/market/forensics/scan", q)
 }
 
+// ReviewSetupRadar lists saved Setup Radar hits and after-outcomes.
+func (c *APIClient) ReviewSetupRadar(ctx context.Context, exchange, symbol, since string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if symbol != "" {
+		q.Set("symbol", symbol)
+	}
+	if since != "" {
+		q.Set("since", since)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/forensics/radar", q)
+}
+
 // GetVWAP returns volume-weighted average price from startTime (or window) to now.
 func (c *APIClient) GetVWAP(ctx context.Context, exchange, symbol, window, startTime, endTime string) (json.RawMessage, error) {
 	q := url.Values{}

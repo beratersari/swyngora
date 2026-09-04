@@ -17,6 +17,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricediff"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/radar"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/swing"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
@@ -35,6 +36,7 @@ type Backend struct {
 	Swing      *swing.Service
 	APIKeys    *apikey.Service
 	FundingArb *fundingarb.Service
+	Radar      *radar.Service
 }
 
 func (b *Backend) GetTicker(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
@@ -384,6 +386,17 @@ func (b *Backend) GetLiquiditySweeps(ctx context.Context, exchange, symbol strin
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
 	}
 	got, err := b.Market.GetLiquiditySweeps(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func (b *Backend) ReviewSetupRadar(ctx context.Context, exchange, symbol, since string, limit int) (json.RawMessage, error) {
+	if b.Radar == nil {
+		return nil, fmt.Errorf("%w: radar history not configured", domain.ErrUpstream)
+	}
+	got, err := b.Radar.Review(ctx, exchange, symbol, since, limit)
 	if err != nil {
 		return nil, err
 	}

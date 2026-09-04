@@ -14,6 +14,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricediff"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/radar"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/realtime"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/swing"
@@ -44,6 +45,8 @@ type RouterOptions struct {
 	Portfolio *portfolio.Service
 	// PriceDiff enables cross-exchange price difference tracking when non-nil.
 	PriceDiff *pricediff.Service
+	// Radar enables Setup Radar history / review when non-nil.
+	Radar *radar.Service
 	// FundingArb enables funding-arb follow watches when non-nil.
 	FundingArb *fundingarb.Service
 	// Scanner enables technical indicator scanner routes when non-nil.
@@ -78,6 +81,9 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 
 	health := handler.NewHealthHandler()
 	mh := handler.NewMarketHandler(marketSvc)
+	if opts.Radar != nil {
+		mh.Radar = opts.Radar
+	}
 	tickets := middleware.NewWSTicketIssuer()
 
 	mux.Handle("GET /health", health)
@@ -125,6 +131,7 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 	mux.HandleFunc("GET /api/v1/market/around/moves", mh.GetAroundMoves)
 	mux.HandleFunc("GET /api/v1/market/around", mh.GetAround)
 	mux.HandleFunc("GET /api/v1/market/forensics/scan", mh.ScanForensics)
+	mux.HandleFunc("GET /api/v1/market/forensics/radar", mh.ReviewRadar)
 	mux.HandleFunc("GET /api/v1/market/forensics", mh.GetForensics)
 	mux.HandleFunc("GET /api/v1/market/absorption", mh.GetAbsorption)
 	mux.HandleFunc("GET /api/v1/market/liquidity-sweeps", mh.GetLiquiditySweeps)

@@ -6,12 +6,14 @@ import { Text } from '@/components/atoms/Text';
 import { PageHeader } from '@/components/molecules/PageHeader';
 import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
 import { ForensicsNowScan } from '@/components/organisms/ForensicsNowScan';
+import { ForensicsRadarReview } from '@/components/organisms/ForensicsRadarReview';
 import { ForensicsSimilar } from '@/components/organisms/ForensicsSimilar';
 import { ForensicsTape } from '@/components/organisms/ForensicsTape';
 import { ForensicsWhy } from '@/components/organisms/ForensicsWhy';
 import {
   rtkErrorMessage,
   useGetMarketForensicsQuery,
+  useReviewSetupRadarQuery,
   useScanMarketForensicsQuery,
 } from '@/libs/api';
 import { rtkCurrent, rtkCurrentPending } from '@/libs/utils';
@@ -19,6 +21,7 @@ import {
   FORENSICS_DURINGS,
   FORENSICS_EXCHANGES,
   FORENSICS_LOOKBACKS,
+  FORENSICS_SINCES,
   FORENSICS_WINDOWS,
 } from './ForensicsPage.constants';
 import {
@@ -27,13 +30,14 @@ import {
   parseForensicsDuring,
   parseForensicsExchange,
   parseForensicsLookback,
+  parseForensicsSince,
   parseForensicsSymbol,
   parseForensicsView,
   parseForensicsWindow,
   utcToDatetimeLocal,
 } from './ForensicsPage.helpers';
 import { forensicsVenueOptions, pickForensicsVenue } from '@/libs/utils/forensics';
-import type { ForensicsScan } from '@/libs/types/forensics.types';
+import type { ForensicsRadarReview as ForensicsRadarReviewData, ForensicsScan } from '@/libs/types/forensics.types';
 import {
   DatetimeInput,
   EmptyHint,
@@ -54,6 +58,7 @@ export function ForensicsPage() {
   const windowId = parseForensicsWindow(searchParams.get('window'));
   const during = parseForensicsDuring(searchParams.get('during'));
   const lookback = parseForensicsLookback(searchParams.get('lookback'));
+  const since = parseForensicsSince(searchParams.get('since'));
   const at = parseForensicsAt(searchParams.get('at'));
   const [venueId, setVenueId] = useState('combined');
 
@@ -79,9 +84,19 @@ export function ForensicsPage() {
     { exchange, lookback, window: windowId, limit: 12 },
     { skip: view !== 'now', refetchOnFocus: true },
   );
+  const reviewQuery = useReviewSetupRadarQuery(
+    { exchange, since, limit: 50 },
+    { skip: view !== 'review', refetchOnFocus: true },
+  );
   const report = rtkCurrent(query) as ForensicsReport | undefined;
   const scan = rtkCurrent(scanQuery) as ForensicsScan | undefined;
-  const loading = view === 'now' ? rtkCurrentPending(scanQuery) : rtkCurrentPending(query);
+  const review = rtkCurrent(reviewQuery) as ForensicsRadarReviewData | undefined;
+  const loading =
+    view === 'now'
+      ? rtkCurrentPending(scanQuery)
+      : view === 'review'
+        ? rtkCurrentPending(reviewQuery)
+        : rtkCurrentPending(query);
   const venues = useMemo(() => forensicsVenueOptions(report?.tape), [report?.tape]);
   const venue = pickForensicsVenue(report?.tape, venueId);
 
@@ -98,6 +113,7 @@ export function ForensicsPage() {
         options={[
           { label: t('forensics:view.event'), value: 'event' },
           { label: t('forensics:view.now'), value: 'now' },
+          { label: t('forensics:view.review'), value: 'review' },
         ]}
         onChange={(v) => patchParams({ view: String(v) })}
       />
@@ -147,7 +163,8 @@ export function ForensicsPage() {
               />
             </Field>
           </>
-        ) : (
+        ) : null}
+        {view === 'now' ? (
           <Field>
             <Text variant="caption" color="secondary">
               {t('forensics:scan.lookback')}
@@ -159,7 +176,21 @@ export function ForensicsPage() {
               onChange={(v) => patchParams({ lookback: v })}
             />
           </Field>
-        )}
+        ) : null}
+        {view === 'review' ? (
+          <Field>
+            <Text variant="caption" color="secondary">
+              {t('forensics:review.since')}
+            </Text>
+            <Select
+              value={since}
+              style={{ minWidth: 100 }}
+              options={FORENSICS_SINCES.map((w) => ({ value: w, label: w }))}
+              onChange={(v) => patchParams({ since: v })}
+            />
+          </Field>
+        ) : null}
+        {view !== 'review' ? (
         <Field>
           <Text variant="caption" color="secondary">
             {t('forensics:window')}
@@ -171,6 +202,7 @@ export function ForensicsPage() {
             onChange={(v) => patchParams({ window: v })}
           />
         </Field>
+        ) : null}
         {view === 'event' ? (
           <Field>
             <Text variant="caption" color="secondary">
@@ -220,6 +252,15 @@ export function ForensicsPage() {
         </ErrorHint>
       ) : null}
 
+      {view === 'review' && reviewQuery.isError ? (
+        <ErrorHint>
+          <Text variant="bodySm">{t('forensics:review.loadFailed')}</Text>
+          <Text variant="caption" color="secondary">
+            {rtkErrorMessage(reviewQuery.error, { resource: t('forensics:review.resource') })}
+          </Text>
+        </ErrorHint>
+      ) : null}
+
       {view === 'event' && (!symbol || !at) ? (
         <EmptyHint>
           <Text variant="bodySm" color="secondary">
@@ -233,6 +274,12 @@ export function ForensicsPage() {
           scan={scan}
           isLoading={loading}
           onOpenSymbol={(sym) => patchParams({ view: 'event', symbol: sym })}
+        />
+      ) : view === 'review' ? (
+        <ForensicsRadarReview
+          review={review}
+          isLoading={loading}
+          onOpenCase={(sym, foundAt) => patchParams({ view: 'event', symbol: sym, at: foundAt })}
         />
       ) : (
         <>

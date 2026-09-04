@@ -7,6 +7,12 @@ vi.mock('@/libs/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/libs/api')>();
   return {
     ...actual,
+    useReviewSetupRadarQuery: () => ({
+      data: { summary: '', cases: [], horizons: [] },
+      currentData: { summary: '', cases: [], horizons: [] },
+      isLoading: false,
+      isError: false,
+    }),
     useScanMarketForensicsQuery: () => ({
       data: {
         summary: '1 of 4 scanned coin(s) currently look like a past pre-move setup.',

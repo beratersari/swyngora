@@ -1371,6 +1371,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/forensics/radar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Review saved Setup Radar hits and after-outcomes
+         * @description Lists past Setup Radar appearances and what price did after 15m / 1h / 4h.
+         *     Usefulness is how often an up/down lean matched the later move.
+         *     Hits are saved when Now scans or the background worker finds a new
+         *     appearance (one per coin per 4h). Informational only.
+         */
+        get: operations["reviewSetupRadar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/vwap": {
         parameters: {
             query?: never;
@@ -6470,6 +6493,51 @@ export interface components {
             closestReturnPct?: string;
             summary?: string;
         };
+        /** @description Saved Setup Radar hits and how useful they were */
+        MarketForensicsRadarReview: {
+            exchange?: string;
+            symbol?: string;
+            since?: string;
+            /** Format: date-time */
+            from?: string;
+            limit?: number;
+            /** Format: date-time */
+            asOf?: string;
+            summary?: string;
+            note?: string;
+            horizons?: {
+                horizon?: string;
+                sample?: number;
+                leanRight?: number;
+                leanWrong?: number;
+                up?: number;
+                down?: number;
+                flat?: number;
+                medianPct?: string;
+                averagePct?: string;
+                usefulPct?: string;
+            }[];
+            cases?: {
+                id?: string;
+                exchange?: string;
+                symbol?: string;
+                /** Format: date-time */
+                foundAt?: string;
+                foundPrice?: string;
+                similarity?: string;
+                lean?: string;
+                whySimilar?: string;
+                afterStory?: string;
+                after?: {
+                    horizon?: string;
+                    dueAt?: string;
+                    filledAt?: string;
+                    returnPct?: string;
+                    direction?: string;
+                    useful?: boolean | null;
+                }[];
+            }[];
+        };
         SpotMarket: {
             symbol?: string;
             lastPrice?: string;
@@ -8362,6 +8430,33 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             502: components["responses"]["Error"];
+        };
+    };
+    reviewSetupRadar: {
+        parameters: {
+            query?: {
+                exchange?: string;
+                symbol?: string;
+                /** @description 24h | 7d | 30d (default 7d) */
+                since?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Saved setups and usefulness stats */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketForensicsRadarReview"];
+                };
+            };
+            400: components["responses"]["Error"];
         };
     };
     getMarketVWAP: {

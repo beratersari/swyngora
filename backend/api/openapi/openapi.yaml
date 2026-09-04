@@ -2420,6 +2420,38 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/forensics/radar:
+    get:
+      summary: Review saved Setup Radar hits and after-outcomes
+      description: |
+        Lists past Setup Radar appearances and what price did after 15m / 1h / 4h.
+        Usefulness is how often an up/down lean matched the later move.
+        Hits are saved when Now scans or the background worker finds a new
+        appearance (one per coin per 4h). Informational only.
+      operationId: reviewSetupRadar
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          schema: { type: string, default: all }
+        - name: symbol
+          in: query
+          schema: { type: string }
+        - name: since
+          in: query
+          description: 24h | 7d | 30d (default 7d)
+          schema: { type: string, default: 7d }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50, maximum: 200 }
+      responses:
+        '200':
+          description: Saved setups and usefulness stats
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MarketForensicsRadarReview' }
+        '400':
+          $ref: '#/components/responses/Error'
   /api/v1/market/vwap:
     get:
       summary: Volume-weighted average price
@@ -10247,6 +10279,58 @@ components:
         closestDirection: { type: string }
         closestReturnPct: { type: string }
         summary: { type: string }
+    MarketForensicsRadarReview:
+      type: object
+      description: Saved Setup Radar hits and how useful they were
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        since: { type: string }
+        from: { type: string, format: date-time }
+        limit: { type: integer }
+        asOf: { type: string, format: date-time }
+        summary: { type: string }
+        note: { type: string }
+        horizons:
+          type: array
+          items:
+            type: object
+            properties:
+              horizon: { type: string }
+              sample: { type: integer }
+              leanRight: { type: integer }
+              leanWrong: { type: integer }
+              up: { type: integer }
+              down: { type: integer }
+              flat: { type: integer }
+              medianPct: { type: string }
+              averagePct: { type: string }
+              usefulPct: { type: string }
+        cases:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              exchange: { type: string }
+              symbol: { type: string }
+              foundAt: { type: string, format: date-time }
+              foundPrice: { type: string }
+              similarity: { type: string }
+              lean: { type: string }
+              whySimilar: { type: string }
+              afterStory: { type: string }
+              after:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    horizon: { type: string }
+                    dueAt: { type: string }
+                    filledAt: { type: string }
+                    returnPct: { type: string }
+                    direction: { type: string }
+                    useful: { type: boolean, nullable: true }
     SpotMarket:
       type: object
       properties:

@@ -22,7 +22,8 @@
   },
   "view": {
     "event": "A time",
-    "now": "Now"
+    "now": "Now",
+    "review": "Review"
   },
   "scan": {
     "lookback": "Lookback",
@@ -49,6 +50,16 @@
       "mixed": "Split",
       "unknown": "Unknown"
     }
+  },
+  "review": {
+    "since": "Since",
+    "empty": "No saved Setup Radar hits in this window yet.",
+    "loadFailed": "Could not load radar history",
+    "resource": "radar history",
+    "useful": "Lean useful",
+    "after15m": "After 15m",
+    "after1h": "After 1h",
+    "after4h": "After 4h"
   },
   "phases": {
     "before": "Before",

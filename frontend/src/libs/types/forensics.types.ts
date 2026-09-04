@@ -1,7 +1,7 @@
 export type ForensicsExchange = 'all' | 'binance' | 'bybit';
 export type ForensicsWindow = '15m' | '30m' | '1h' | '2h' | '4h';
 export type ForensicsDuring = '5m' | '15m' | '30m' | '1h';
-export type ForensicsView = 'event' | 'now';
+export type ForensicsView = 'event' | 'now' | 'review';
 export type ForensicsLookback = '4h' | '12h' | '24h' | '3d' | '7d';
 export type ForensicsPhaseId = 'before' | 'during' | 'after';
 
@@ -202,6 +202,52 @@ export type ForensicsScanHit = {
   whySimilar?: string;
   afterStory?: string;
   summary?: string;
+};
+
+export type ForensicsRadarAfter = {
+  horizon?: string;
+  dueAt?: string;
+  filledAt?: string;
+  returnPct?: string;
+  direction?: string;
+  price?: string;
+  useful?: boolean | null;
+};
+
+export type ForensicsRadarCase = {
+  id?: string;
+  exchange?: string;
+  symbol?: string;
+  foundAt?: string;
+  foundPrice?: string;
+  similarity?: string;
+  lean?: string;
+  whySimilar?: string;
+  afterStory?: string;
+  after?: ForensicsRadarAfter[];
+};
+
+export type ForensicsRadarHorizon = {
+  horizon?: string;
+  sample?: number;
+  leanRight?: number;
+  leanWrong?: number;
+  up?: number;
+  down?: number;
+  flat?: number;
+  medianPct?: string;
+  averagePct?: string;
+  usefulPct?: string;
+};
+
+export type ForensicsRadarReview = {
+  exchange?: string;
+  symbol?: string;
+  since?: string;
+  summary?: string;
+  note?: string;
+  cases?: ForensicsRadarCase[];
+  horizons?: ForensicsRadarHorizon[];
 };
 
 export type ForensicsScan = {

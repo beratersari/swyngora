@@ -26,6 +26,7 @@ describe('ForensicsPage helpers', () => {
     expect(parseForensicsDuring('5m')).toBe('5m');
     expect(parseForensicsDuring('2h')).toBe('15m');
     expect(parseForensicsView('now')).toBe('now');
+    expect(parseForensicsView('review')).toBe('review');
     expect(parseForensicsView('nope')).toBe('event');
     expect(parseForensicsLookback('7d')).toBe('7d');
     expect(parseForensicsLookback('9d')).toBe('3d');

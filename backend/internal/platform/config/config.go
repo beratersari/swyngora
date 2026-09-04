@@ -124,6 +124,13 @@ type Config struct {
 	// FundingArbCheckInterval is how often active funding-arb watches are evaluated.
 	FundingArbCheckInterval time.Duration
 
+	// RadarDBPath is the SQLite file for saved Setup Radar hits and after-fills.
+	RadarDBPath string
+	// RadarScanInterval is how often the worker scans and records new hits.
+	RadarScanInterval time.Duration
+	// RadarFillInterval is how often due after-windows are filled from candles.
+	RadarFillInterval time.Duration
+
 	// ExportDBPath is the SQLite file for user data export job metadata.
 	ExportDBPath string
 	// ExportFileDir is the directory where export download files are written.
@@ -275,6 +282,10 @@ func Load() Config {
 
 		FundingArbDBPath:        getenv("FUNDING_ARB_DB_PATH", "data/fundingarb.db"),
 		FundingArbCheckInterval: positiveDurationEnv("FUNDING_ARB_CHECK_INTERVAL", 30*time.Second),
+
+		RadarDBPath:        getenv("RADAR_DB_PATH", "data/radar.db"),
+		RadarScanInterval:  positiveDurationEnv("RADAR_SCAN_INTERVAL", 15*time.Minute),
+		RadarFillInterval:  positiveDurationEnv("RADAR_FILL_INTERVAL", time.Minute),
 
 		ExportDBPath:         getenv("EXPORT_DB_PATH", "data/export.db"),
 		ExportFileDir:        getenv("EXPORT_FILE_DIR", "data/exports"),

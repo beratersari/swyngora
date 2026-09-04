@@ -141,6 +141,12 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.ScannerCheckInterval != 60*time.Second {
 		t.Fatalf("ScannerCheckInterval default=%v", cfg.ScannerCheckInterval)
 	}
+	if cfg.RadarDBPath != "data/radar.db" {
+		t.Fatalf("RadarDBPath default=%q", cfg.RadarDBPath)
+	}
+	if cfg.RadarScanInterval != 15*time.Minute {
+		t.Fatalf("RadarScanInterval default=%v", cfg.RadarScanInterval)
+	}
 	if cfg.APIAuthToken != "" {
 		t.Fatalf("APIAuthToken default empty, got %q", cfg.APIAuthToken)
 	}

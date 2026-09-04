@@ -7,7 +7,9 @@ import {
   DEFAULT_FORENSICS_WINDOW,
   FORENSICS_DURINGS,
   FORENSICS_EXCHANGES,
+  DEFAULT_FORENSICS_SINCE,
   FORENSICS_LOOKBACKS,
+  FORENSICS_SINCES,
   FORENSICS_VIEWS,
   FORENSICS_WINDOWS,
 } from './ForensicsPage.constants';
@@ -45,6 +47,11 @@ export function parseForensicsLookback(raw: string | null): ForensicsLookback {
   return (FORENSICS_LOOKBACKS as readonly string[]).includes(s)
     ? (s as ForensicsLookback)
     : DEFAULT_FORENSICS_LOOKBACK;
+}
+
+export function parseForensicsSince(raw: string | null): string {
+  const s = (raw ?? '').trim().toLowerCase();
+  return (FORENSICS_SINCES as readonly string[]).includes(s) ? s : DEFAULT_FORENSICS_SINCE;
 }
 
 export function parseForensicsDuring(raw: string | null): ForensicsDuring {

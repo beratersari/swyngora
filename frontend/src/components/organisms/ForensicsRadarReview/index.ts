@@ -1,0 +1,1 @@
+export { ForensicsRadarReview } from './ForensicsRadarReview';

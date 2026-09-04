@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -11,9 +12,16 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 )
 
+// RadarReviewer lists saved Setup Radar hits and after-outcomes.
+type RadarReviewer interface {
+	Review(ctx context.Context, exchange, symbol, since string, limit int) (*domain.RadarReview, error)
+	RecordHits(ctx context.Context, report *domain.ForensicsScanReport) (int, error)
+}
+
 // MarketHandler is the transport adapter for market use cases.
 type MarketHandler struct {
-	svc *market.Service
+	svc   *market.Service
+	Radar RadarReviewer
 }
 
 // NewMarketHandler constructs the market HTTP handler.

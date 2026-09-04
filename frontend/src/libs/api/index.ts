@@ -33,6 +33,7 @@ export {
   useGetMarketCvdQuery,
   useGetMarketForensicsQuery,
   useScanMarketForensicsQuery,
+  useReviewSetupRadarQuery,
   useGetIndicatorsQuery,
   useLazyGetIndicatorsQuery,
   useGetPumpEventsQuery,

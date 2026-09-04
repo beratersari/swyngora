@@ -249,6 +249,14 @@ class _Transport(httpx.BaseTransport):
                     "armed": True,
                 },
             )
+        if request.url.path.endswith("/forensics/radar"):
+            return httpx.Response(
+                200,
+                json={
+                    "summary": "Saved 1 setup(s) over 7d.",
+                    "cases": [{"symbol": "BTCUSDT", "lean": "up", "similarity": "82"}],
+                },
+            )
         if request.url.path.endswith("/forensics/scan"):
             return httpx.Response(
                 200,
@@ -523,6 +531,10 @@ def test_market_tools_hit_api(monkeypatch):
     assert "scan_market_forensics" in by_name
     scan = json.loads(by_name["scan_market_forensics"].invoke({}))
     assert scan["hits"][0]["symbol"] == "BTCUSDT"
+
+    assert "review_setup_radar" in by_name
+    hist = json.loads(by_name["review_setup_radar"].invoke({}))
+    assert hist["cases"][0]["symbol"] == "BTCUSDT"
 
     assert "create_setup_radar_alert" in by_name
     radar = json.loads(

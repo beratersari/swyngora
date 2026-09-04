@@ -71,7 +71,9 @@ import type {
   MarketForensicsQuery,
   MarketForensicsScan,
   MarketForensicsScanQuery,
+  MarketForensicsRadarQuery,
 } from './marketApi.types';
+import type { ForensicsRadarReview } from '@/libs/types/forensics.types';
 // delist types re-exported below
 
 export type {
@@ -358,6 +360,13 @@ export const marketApi = baseApi.injectEndpoints({
       }),
     }),
 
+    reviewSetupRadar: build.query<ForensicsRadarReview, MarketForensicsRadarQuery | void>({
+      query: (arg) => ({
+        url: '/api/v1/market/forensics/radar',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
     getIndicators: build.query<IndicatorsResponse, IndicatorsQuery>({
       query: (arg) => ({
         url: '/api/v1/market/indicators',
@@ -482,6 +491,7 @@ export const {
   useGetMarketCvdQuery,
   useGetMarketForensicsQuery,
   useScanMarketForensicsQuery,
+  useReviewSetupRadarQuery,
   useGetIndicatorsQuery,
   useLazyGetIndicatorsQuery,
   useGetPumpEventsQuery,

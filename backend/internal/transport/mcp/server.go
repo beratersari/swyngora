@@ -21,6 +21,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/portfolio"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricealert"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/pricediff"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/service/radar"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/scanner"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/swing"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/watchlist"
@@ -73,6 +74,7 @@ type DataPort interface {
 	GetAroundSimilar(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields, weights, minCoverage, horizons, at string) (json.RawMessage, error)
 	GetForensics(ctx context.Context, exchange, symbol, at, window, during, lookback, interval, direction string, minReturnPct float64, limit int, fields, weights, minCoverage, horizons string) (json.RawMessage, error)
 	ScanForensics(ctx context.Context, exchange, quote, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields, weights, minCoverage, horizons string) (json.RawMessage, error)
+	ReviewSetupRadar(ctx context.Context, exchange, symbol, since string, limit int) (json.RawMessage, error)
 	GetAbsorption(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLiquiditySweeps(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeSurge(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -259,9 +261,9 @@ func NewServer(opts ServerOptions) *server.MCPServer {
 }
 
 // NewInProcessServer wires MCP tools to market/watchlist/alert/portfolio/scanner/export services (same process as HTTP).
-func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service, alertSvc *pricealert.Service, portfolioSvc *portfolio.Service, scannerSvc *scanner.Service, exportSvc *exportsvc.Service, importSvc *dataimport.Service, priceDiffSvc *pricediff.Service, apiKeySvc *apikey.Service, accountSvc *account.Service, swingSvc *swing.Service, fundingArbSvc *fundingarb.Service) *server.MCPServer {
+func NewInProcessServer(marketSvc *market.Service, watchSvc *watchlist.Service, alertSvc *pricealert.Service, portfolioSvc *portfolio.Service, scannerSvc *scanner.Service, exportSvc *exportsvc.Service, importSvc *dataimport.Service, priceDiffSvc *pricediff.Service, apiKeySvc *apikey.Service, accountSvc *account.Service, swingSvc *swing.Service, fundingArbSvc *fundingarb.Service, radarSvc *radar.Service) *server.MCPServer {
 	return NewServer(ServerOptions{
-		Data:     &Backend{Market: marketSvc, Watch: watchSvc, Alerts: alertSvc, Portfolio: portfolioSvc, Scanner: scannerSvc, Export: exportSvc, Import: importSvc, PriceDiff: priceDiffSvc, APIKeys: apiKeySvc, Swing: swingSvc, FundingArb: fundingArbSvc},
+		Data:     &Backend{Market: marketSvc, Watch: watchSvc, Alerts: alertSvc, Portfolio: portfolioSvc, Scanner: scannerSvc, Export: exportSvc, Import: importSvc, PriceDiff: priceDiffSvc, APIKeys: apiKeySvc, Swing: swingSvc, FundingArb: fundingArbSvc, Radar: radarSvc},
 		Accounts: accountSvc,
 		Name:     "swyngora-mcp",
 	})
@@ -1092,6 +1094,20 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetLiquiditySweeps(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("review_setup_radar",
+		mcp.WithDescription("Review saved Setup Radar hits and what price did after each one (15m / 1h / 4h). Usefulness is how often an up/down lean matched the later move. since=24h|7d|30d (default 7d). Informational only — not financial advice."),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithString("symbol", mcp.Description("Optional pair to filter, e.g. BTCUSDT")),
+		mcp.WithString("since", mcp.Description("24h | 7d | 30d (default 7d)")),
+		mcp.WithNumber("limit", mcp.Description("How many saved hits to return (default 50, max 200)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.ReviewSetupRadar(ctx, req.GetString("exchange", "all"), req.GetString("symbol", ""), req.GetString("since", "7d"), int(req.GetFloat("limit", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
