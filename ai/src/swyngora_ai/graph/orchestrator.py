@@ -5,7 +5,7 @@ from __future__ import annotations
 import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
@@ -19,11 +19,21 @@ from swyngora_ai.graph.route import classify_route
 from swyngora_ai.graph.tape_fetch import prefetch_tape
 from swyngora_ai.grounding import apply_grounding, grounded_references
 from swyngora_ai.language import disclaimer_for, empty_reply_for, has_advice_disclaimer
-from swyngora_ai.llm.errors import NoteLLMError, format_llm_failures, note_handlers_on
+from swyngora_ai.llm.errors import (
+    NoteLLMError,
+    NoteToolError,
+    format_llm_failures,
+    note_handlers_on,
+)
 from swyngora_ai.llm.factory import build_chat_model
-from swyngora_ai.llm.retry import MODEL_RETRY, build_agent_middleware
+from swyngora_ai.llm.retry import (
+    build_agent_middleware,
+    default_agent_middleware,
+    is_model_call_limit_text,
+)
 from swyngora_ai.memory.finmem import FinMem, SessionMemory, as_human_ai, memory_key
 from swyngora_ai.progress import (
+    as_tool_error_preview,
     emit,
     emit_tool_outcome,
     is_tool_error_text,
@@ -149,6 +159,8 @@ def extract_trace(messages: Sequence[BaseMessage]) -> tuple[str, list[str], list
             continue
         if t not in uniq_think:
             uniq_think.append(t)
+    if is_model_call_limit_text(final):
+        emit("status", "Model call limit reached…")
     return final, uniq_tools, uniq_think[:12]
 
 
@@ -170,20 +182,82 @@ def _preview_output(result: object) -> str:
     return preview
 
 
-def _emit_tool_call(item: Any, specialist: str | None) -> None:
-    name = str(getattr(item, "tool_name", None) or "unnamed_tool")
+def _tool_call_id(item: Any) -> str:
+    return str(getattr(item, "tool_call_id", None) or getattr(item, "tool_name", None) or "unnamed")
+
+
+def _tool_call_name(item: Any) -> str:
+    return str(getattr(item, "tool_name", None) or "unnamed_tool")
+
+
+def _emit_tool_start(item: Any, specialist: str | None) -> None:
+    name = _tool_call_name(item)
     raw_args = getattr(item, "input", None) or {}
     args = raw_args if isinstance(raw_args, dict) else {}
     label = f"{specialist} → {name}" if specialist else name
     emit("tool", f"{label}({_fmt_tool_args(args)})" if args else label)
     emit("status", f"Calling {name}…")
-    # v3 is pull-based: item.output stays None until output_deltas is consumed.
-    # Our tools return one complete string, so discard chunks and just wait.
-    for _ in getattr(item, "output_deltas", ()) or ():
-        pass
-    preview = _preview_output(getattr(item, "output", None))
+
+
+def _emit_tool_finished(name: str, output: object | None, error: str | None = None) -> None:
+    """Classify the terminal attempt. Empty output is a failure, not a tick."""
+    if output is not None:
+        preview = _preview_output(output)
+        if getattr(output, "status", None) == "error" or not preview:
+            preview = (
+                preview
+                if is_tool_error_text(preview)
+                else as_tool_error_preview(preview or error or "")
+            )
+    else:
+        preview = as_tool_error_preview(error or "")
     emit_tool_outcome(name, preview)
     emit("status", f"{name} failed" if is_tool_error_text(preview) else f"{name} done")
+
+
+def _observe_tool_call(
+    item: Any,
+    specialist: str | None,
+    started: set[str],
+    pending: dict[str, tuple[str, str]],
+) -> None:
+    """One v3 tool_calls item. Retries share tool_call_id — start once, outcome last."""
+    # v3 is pull-based: item.output stays None until output_deltas is consumed.
+    for _ in getattr(item, "output_deltas", ()) or ():
+        pass
+    call_id = _tool_call_id(item)
+    name = _tool_call_name(item)
+    if call_id not in started:
+        _emit_tool_start(item, specialist)
+        started.add(call_id)
+    output = getattr(item, "output", None)
+    error = getattr(item, "error", None)
+    if output is not None:
+        pending.pop(call_id, None)
+        _emit_tool_finished(name, output)
+        return
+    if error:
+        pending[call_id] = (name, str(error))
+        return
+    if getattr(item, "completed", True):
+        pending.setdefault(call_id, (name, ""))
+
+
+def _flush_pending_tool_errors(pending: dict[str, tuple[str, str]]) -> None:
+    for name, err in pending.values():
+        _emit_tool_finished(name, None, err)
+    pending.clear()
+
+
+def _config_with_tool_notes(config: RunnableConfig) -> RunnableConfig:
+    """Attach NoteToolError so leaf tool retries show up on the thinking trace."""
+    raw = config.get("callbacks")
+    existing: list[Any] = list(raw) if isinstance(raw, list) else ([] if raw is None else [raw])
+    if any(isinstance(cb, NoteToolError) for cb in existing):
+        return config
+    merged = dict(config)
+    merged["callbacks"] = [*existing, NoteToolError()]
+    return cast(RunnableConfig, merged)
 
 
 def run_agent_with_progress(
@@ -194,19 +268,26 @@ def run_agent_with_progress(
     specialist: str | None = None,
 ) -> list[BaseMessage]:
     """Run a create_agent graph via stream_events v3 and emit Process events."""
+    # Specialists own the market tools. The orchestrator run only calls specialists,
+    # so attaching here too would double Retrying lines (inner inherits callbacks).
+    if specialist is not None:
+        config = _config_with_tool_notes(config)
     with warnings.catch_warnings():
         warnings.filterwarnings(
             "ignore",
             message="The v3 streaming protocol on Pregel is experimental.",
         )
         stream = graph.stream_events({"messages": messages}, config, version="v3")
+        started: set[str] = set()
+        pending: dict[str, tuple[str, str]] = {}
         for kind, item in stream.interleave("tool_calls", "messages"):
             if kind == "tool_calls":
-                _emit_tool_call(item, specialist)
+                _observe_tool_call(item, specialist, started, pending)
             elif kind == "messages":
                 text = str(getattr(item, "text", None) or "").strip()
                 if text:
                     emit("status", "Composing answer…")
+        _flush_pending_tool_errors(pending)
         out = stream.output or {}
     return list(out.get("messages") or [])
 
@@ -227,7 +308,9 @@ class Orchestrator:
             self.memory = FinMem(path=self.settings.memory_path)
         injected = model is not None
         self.model = model or build_chat_model(self.settings)
-        self._middleware = [MODEL_RETRY] if injected else build_agent_middleware(self.settings)
+        self._middleware = (
+            default_agent_middleware() if injected else build_agent_middleware(self.settings)
+        )
         self._runner = SpecialistRunner(self.model, self.settings, middleware=self._middleware)
         tools = self._runner.as_orchestrator_tools()
         system = ORCHESTRATOR_SYSTEM.format(client_id=self.settings.default_client_id)
@@ -253,11 +336,13 @@ class Orchestrator:
         *,
         can_trade: bool = True,
         can_manage_keys: bool = True,
+        surface: str = "cli",
     ) -> ChatResult:
         """Run one user turn; returns answer + tool/thinking trace.
 
         on_event: optional callback(dict) for live updates (type/text).
         can_trade / can_manage_keys gate HTTP tools when the Go proxy uses master auth.
+        surface: LangSmith tag (cli | serve); traces only if LANGSMITH_* is set.
         """
         tools_acc: list[str] = []
         thinking_acc: list[str] = []
@@ -303,7 +388,14 @@ class Orchestrator:
                     if isinstance(self.memory, FinMem):
                         self.memory.note_tape(cid)
             config: RunnableConfig = {
-                "recursion_limit": max(24, self.settings.max_agent_iterations * 4)
+                "recursion_limit": max(24, self.settings.max_agent_iterations * 4),
+                "run_name": "swyngora-chat",
+                "tags": [surface, self.settings.llm_provider],
+                "metadata": {
+                    "session_id": public_session,
+                    "provider": self.settings.llm_provider,
+                    "surface": surface,
+                },
             }
 
             emit("status", "Orchestrator running…")

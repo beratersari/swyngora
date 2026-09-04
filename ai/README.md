@@ -22,7 +22,7 @@ User
 |-----------|-----------------|
 | Centralized control | Orchestrator owns routing; specialists do not talk to each other |
 | Tool-grounded numbers | Market agent must call tools; no invented prices |
-| Fail soft | Tool errors returned as text; orchestrator degrades |
+| Fail soft | Tool errors returned as text; orchestrator degrades. Read-tool timeout/429/5xx retry twice first |
 | Provider constraint | **Ollama** (local default) or **Grok/xAI** only |
 | No paid data tiers | DuckDuckGo free search; market data via our backend |
 
@@ -65,6 +65,12 @@ python -m swyngora_ai.serve --host 127.0.0.1 --port 8090
 # POST /v1/chat/stream   → NDJSON status/thinking/tool/final/done
 
 # Flags: --session, --provider ollama|grok; swyngora-ai --help
+
+# Optional traces: copy LANGSMITH_* from .env.example into ai/.env and
+# set LANGSMITH_API_KEY. Endpoint defaults to APAC; change it from
+# https://docs.langchain.com/langsmith/trace-with-langchain if needed.
+# Restart swyngora-ai and swyngora-ai-serve. Open project Swyngora.
+# Mobile Ask / web /ai use the serve process, not the CLI.
 ```
 
 ## Environment
@@ -83,8 +89,12 @@ Copy [`ai/.env.example`](.env.example) → `ai/.env` (or use repo-root / `backen
 | `GROK_REASONING_EFFORT` | `low` | Grok only: `none` \| `low` \| `medium` \| `high` |
 | `SWYNGORA_API_URL` | `http://localhost:8080` | Backend API |
 | `AI_DEFAULT_CLIENT_ID` | `ai-assistant` | Watchlist client id |
-| `AI_MAX_ITERATIONS` | `8` | Specialist ReAct depth hint |
+| `AI_MAX_ITERATIONS` | `8` | LangGraph `recursion_limit` hint (model-step cap is 6 via `ModelCallLimitMiddleware`) |
 | `AI_TEMPERATURE` | `0.2` | Sampling temperature |
+| `LANGSMITH_API_KEY` | empty | Personal LangSmith key. CLI traces go to **your** LangSmith |
+| `LANGSMITH_TRACING` | — | Set `true` in `.env` (copied from `.env.example`) to send traces |
+| `LANGSMITH_PROJECT` | `Swyngora` | LangSmith project name (created automatically) |
+| `LANGSMITH_ENDPOINT` | APAC | Required when tracing. Default `https://apac.api.smith.langchain.com`. Other regions: [LangSmith tracing docs](https://docs.langchain.com/langsmith/trace-with-langchain). |
 
 ## Tests
 

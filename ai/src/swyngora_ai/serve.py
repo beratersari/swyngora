@@ -20,7 +20,7 @@ from urllib.parse import urlparse
 
 import typer
 
-from swyngora_ai.config import get_settings
+from swyngora_ai.config import get_settings, load_env_files
 from swyngora_ai.graph.orchestrator import Orchestrator, build_orchestrator
 
 _orch: Orchestrator | None = None
@@ -119,6 +119,7 @@ class Handler(BaseHTTPRequestHandler):
                 client_id=client_id,
                 can_trade=can_trade,
                 can_manage_keys=can_manage_keys,
+                surface="serve",
             )
             self._json(
                 200,
@@ -157,6 +158,7 @@ class Handler(BaseHTTPRequestHandler):
                     client_id=client_id,
                     can_trade=can_trade,
                     can_manage_keys=can_manage_keys,
+                    surface="serve",
                 )
                 q.put(
                     {
@@ -214,6 +216,7 @@ app = typer.Typer(
 
 
 def run_server(host: str, port: int) -> int:
+    load_env_files()
     try:
         get_orch()
     except Exception as e:  # noqa: BLE001

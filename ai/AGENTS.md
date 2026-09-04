@@ -4,7 +4,7 @@ Closest wins for files under `ai/`.
 
 ## Scope
 
-Python multi-agent assistant (LangGraph orchestrator + specialists). LLM providers: **Ollama** and **Grok (xAI)** only. `create_agent` retries the primary, then falls back to the other provider via `build_agent_middleware`.
+Python multi-agent assistant (LangGraph orchestrator + specialists). LLM providers: **Ollama** and **Grok (xAI)** only. `create_agent` retries the primary, then falls back to the other provider via `build_agent_middleware`. The same list includes `ModelCallLimitMiddleware` (`run_limit=6` per invoke, orchestrator and each specialist) and `ToolRetryMiddleware` for transient **read** market-tool HTTP errors (`ToolTransientError`: timeout, connect, 429, 5xx). `NoteToolError` (`on_tool_error`) logs tool-retry lines on the thinking trace (same `status` channel as model retry). The tool column classifies the final v3 stream item per `tool_call_id` (`output` / `error`); an exhausted raise is `tool_error`, not a ✓. A specialist return is prefixed `ERROR` when every nested tool failed, so `market_tape_agent` is not ticked. Mutating paper/account calls stay fail-soft strings and are not retried.
 
 ## Rules
 
@@ -31,3 +31,5 @@ swyngora-ai "your question"
 Package manager is **uv** (not pip). `uv sync` reads `pyproject.toml` / `uv.lock` and creates `ai/.venv`. Activate that venv, then run `pytest`, `ruff`, `ty`, and `swyngora-ai` as usual. Recreate a stale pip venv with `rm -rf .venv && uv sync`.
 
 Ruff and ty config live in `pyproject.toml`. Run from `ai/`. Use `ruff check --fix . && ruff format .` to apply auto-fixes.
+
+Optional LangSmith: copy `LANGSMITH_TRACING` / `LANGSMITH_PROJECT` / `LANGSMITH_API_KEY` / `LANGSMITH_ENDPOINT` from `.env.example` into `ai/.env` and set `LANGSMITH_API_KEY`. Endpoint defaults to APAC; other regions: [LangSmith tracing docs](https://docs.langchain.com/langsmith/trace-with-langchain). The CLI **and** `swyngora-ai-serve` load `ai/.env` into `os.environ` (mobile Ask / web `/ai` go through serve). Restart the process after editing `.env`. No `--trace` flag. Empty key = no traces.

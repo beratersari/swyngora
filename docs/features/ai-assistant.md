@@ -33,6 +33,8 @@ User → Orchestrator (create_agent)
 ## Behavior
 
 - Each `create_agent` model step retries the current provider (1 try + 3 retries, exponential backoff), then calls the other of ChatXAI / ChatOllama if that client can be built. Next step starts on the primary again. The CLI spinner / Process stream show `Retrying {model} (2/4)…`, `failed after 4 tries`, and `Falling back to {model}…`. If both fail, the CLI/serve error lists primary then fallback (model + exception). `analyze()` is still a bare `invoke` (no retry or fallback).
+- The same middleware list includes stock `ModelCallLimitMiddleware` (`run_limit=6`, `exit_behavior="end"`) on the orchestrator **and** each specialist. A looping agent stops after 6 model steps with `Model call limits exceeded…` (Process: `Model call limit reached…`) instead of a recursion crash. Retries inside one step still count as one. `AI_MAX_ITERATIONS` only sizes LangGraph `recursion_limit`. `analyze()` / `debate()` / prefetch are not capped.
+- Read market tools (`GET` via `_HTTP`) raise `ToolTransientError` on timeout, connect failure, 429, and 5xx. The same `build_agent_middleware` list includes stock `ToolRetryMiddleware` (2 retries). `NoteToolError` (`on_tool_error`) logs `Retrying get_ticker (2/3)…` and `get_ticker failed after 3 tries` on the thinking trace only (same `status` channel as model retry). Attempts are counted per `tool_call_id`; one handler per chat turn. After the last attempt the tool still returns an `ERROR …` string. The tool column classifies the **final** v3 stream item per `tool_call_id` (`item.output` / `item.error`); an exhausted raise is `tool_error`, not a ✓. If every leaf tool in a specialist run failed, that specialist's return is prefixed `ERROR …` so the orchestrator line is `market_tape_agent failed`, not a tick. Paper/account `POST`/`PUT`/`PATCH`/`DELETE` and 4xx (except 429) never raise or auto-retry. Prefetch `get_ticker` swallows leftover exceptions so a tape refresh cannot abort the chat turn.
 - Market numbers must come from tools (ticker, candles, supply, holders, indicators, spot).
 - Paper sell realized PnL uses tax lots (`list_portfolio_lots`, `lotMethod` fifo|lifo) after the sell fee; buy lot cost includes the buy fee. Per-exchange rates: `get_paper_trading_costs`.
 - Paper tools accept `portfolio_id` when the tenant has more than one book (same as HTTP `portfolioId`), including place/list/cancel spot, OCO/bracket, margin open, recurring-buy create, basket create, and cancel-all. Tenant-level lists (`list_portfolios`, API keys, scanner, custom-signal profiles, price-diff) take `client_id` only. Pending orders include `trailing_stop` + trail fields. Custom swing mixes: `scan_custom_signals` / `create_custom_signal_profile` (weights sum to 100; missing hunt adds 0).
@@ -61,6 +63,12 @@ export SWYNGORA_API_URL=http://localhost:8080
 # export SWYNGORA_API_TOKEN=...   # same as backend API_AUTH_TOKEN when set
 # export AI_SERVICE_TOKEN=...     # shared with Go proxy for :8090
 # export AI_MEMORY_PATH=data/ai-memory.db
+# Optional LangSmith: copy LANGSMITH_TRACING, LANGSMITH_PROJECT,
+# LANGSMITH_API_KEY, LANGSMITH_ENDPOINT from ai/.env.example into ai/.env
+# and set LANGSMITH_API_KEY=... Endpoint defaults to APAC; other regions:
+# https://docs.langchain.com/langsmith/trace-with-langchain
+# Restart swyngora-ai (CLI) and swyngora-ai-serve (:8090). Mobile Ask / web /ai
+# go through serve, not the CLI.
 swyngora-ai "BTC RSI on binance 1h and recent news"
 ```
 

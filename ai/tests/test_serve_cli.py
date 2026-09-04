@@ -30,6 +30,16 @@ def test_invalid_port_is_nonzero() -> None:
     assert result.exit_code != 0
 
 
+def test_serve_loads_env_files(monkeypatch) -> None:
+    called: list[int] = []
+    monkeypatch.setattr("swyngora_ai.serve.load_env_files", lambda: called.append(1))
+    monkeypatch.setattr("swyngora_ai.serve.get_orch", object)
+    monkeypatch.setattr("swyngora_ai.serve.ThreadingHTTPServer", _FakeServer)
+    result = runner.invoke(app, ["--host", "127.0.0.1", "--port", "8091"])
+    assert result.exit_code == 0
+    assert called == [1]
+
+
 def test_host_port_passed_to_server(monkeypatch) -> None:
     seen: list[tuple[str, int]] = []
 

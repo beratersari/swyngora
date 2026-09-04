@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, field_validator
@@ -16,10 +17,47 @@ from swyngora_ai.constants import (
 
 GrokReasoningEffort = Literal["none", "low", "medium", "high"]
 
+# Same files Settings reads. Order: first file that sets a key wins for os.environ
+# (load_env_files uses override=False). Shell exports always win.
+ENV_FILES = (".env", "ai/.env", "../.env", "../backend/.env", "backend/.env")
+
+
+def _default_env_paths() -> tuple[Path, ...]:
+    """Prefer ai/.env next to this package so cwd does not matter."""
+    ai_root = Path(__file__).resolve().parents[2]
+    repo = ai_root.parent
+    cwd = Path.cwd()
+    return (
+        ai_root / ".env",
+        cwd / ".env",
+        repo / ".env",
+        repo / "backend" / ".env",
+        cwd / "ai" / ".env",
+        cwd / "backend" / ".env",
+    )
+
+
+def load_env_files(*paths: str | Path) -> None:
+    """Copy env files into os.environ without overriding variables already set.
+
+    With no args, loads ai/.env (package dir) first, then cwd / repo / backend.
+    Pass explicit paths in tests.
+    """
+    from dotenv import load_dotenv
+
+    seen: set[Path] = set()
+    for raw in paths or _default_env_paths():
+        path = Path(raw)
+        resolved = path.resolve()
+        if resolved in seen or not path.is_file():
+            continue
+        seen.add(resolved)
+        load_dotenv(path, override=False)
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=(".env", "ai/.env", "../.env", "../backend/.env", "backend/.env"),
+        env_file=ENV_FILES,
         env_file_encoding="utf-8",
         extra="ignore",
     )

@@ -67,6 +67,28 @@ def test_should_refresh_tape_uses_finmem_ttl():
     assert not _should_refresh_tape(mem, "c1", "hello")
 
 
+def test_orchestrator_chat_survives_prefetch_ticker_timeout(monkeypatch):
+    from swyngora_ai.graph import tape_fetch as tf
+    from swyngora_ai.tools.errors import ToolTransientError
+
+    class _Boom:
+        name = "get_ticker"
+
+        def invoke(self, args: dict[str, Any]) -> str:
+            raise ToolTransientError("timeout: blip")
+
+    monkeypatch.setattr(tf, "build_market_tools", lambda settings, pack=None: [_Boom()])
+    orch = Orchestrator(
+        settings=Settings(_env_file=None),
+        memory=FinMem(path=":memory:"),
+        model=ScriptedModel(
+            responses=[AIMessage(content="Could not refresh tape. Not financial advice.")]
+        ),
+    )
+    out = orch.chat("What is BTC price?", session_id="prefetch-boom")
+    assert "Could not refresh" in out.reply
+
+
 def test_orchestrator_chat_with_scripted_model():
     model = ScriptedModel(
         responses=[
@@ -83,6 +105,36 @@ def test_orchestrator_chat_with_scripted_model():
     assert isinstance(out.tools, list)
     assert isinstance(out.thinking, list)
     assert isinstance(out.references, list)
+
+
+def test_orchestrator_chat_attaches_trace_metadata(monkeypatch):
+    captured: dict[str, Any] = {}
+
+    def _capture(
+        graph: Any, messages: Any, config: Any, specialist: str | None = None
+    ) -> list[AIMessage]:
+        captured.update(config)
+        return [AIMessage(content="ok. Not financial advice.")]
+
+    monkeypatch.setattr("swyngora_ai.graph.orchestrator.run_agent_with_progress", _capture)
+    settings = Settings(_env_file=None, llm_provider="ollama")
+    orch = Orchestrator(
+        settings=settings,
+        memory=SessionMemory(),
+        model=ScriptedModel(responses=[AIMessage(content="unused")]),
+    )
+    orch.chat("What is BTC price?", session_id="desk-1")
+    assert captured["run_name"] == "swyngora-chat"
+    assert captured["tags"] == ["cli", settings.llm_provider]
+    assert captured["metadata"] == {
+        "session_id": "desk-1",
+        "provider": settings.llm_provider,
+        "surface": "cli",
+    }
+    orch.chat("What is BTC price?", session_id="http-1", surface="serve")
+    assert captured["tags"] == ["serve", settings.llm_provider]
+    assert captured["metadata"]["surface"] == "serve"
+    assert captured["metadata"]["session_id"] == "http-1"
 
 
 def test_orchestrator_emits_live_process_events():

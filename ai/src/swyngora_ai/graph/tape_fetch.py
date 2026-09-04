@@ -37,8 +37,11 @@ def prefetch_tape(
         emit("tool", f"prefetch → get_ticker(symbol={inst.symbol}, exchange={inst.exchange})")
         if ticker is None:
             continue
-        raw = ticker.invoke({"symbol": inst.symbol, "exchange": inst.exchange})
-        blobs.append(raw if isinstance(raw, str) else str(raw))
+        try:
+            raw = ticker.invoke({"symbol": inst.symbol, "exchange": inst.exchange})
+            blobs.append(raw if isinstance(raw, str) else str(raw))
+        except Exception as e:  # noqa: BLE001
+            emit("tool_error", f"get_ticker failed: {e}")
         if indicators is None:
             continue
         try:
