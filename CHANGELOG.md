@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
 
 ### Added
+- **AI model-step cap:** orchestrator and each specialist stop after 6 `create_agent` model steps (`ModelCallLimitMiddleware`, fail-soft message) so a loop cannot ride `recursion_limit` or the 300s Go timeout (`docs/features/ai-assistant.md`)
 - **AI tool-retry status:** thinking trace logs `Retrying get_ticker (2/3)…` and `get_ticker failed after 3 tries` on transient GET failures (`docs/features/ai-assistant.md`)
 - **AI market-tool retries:** read tools (`GET`) retry timeout, connect, 429, and 5xx twice via `ToolRetryMiddleware`. After that they still return `ERROR …`. Paper/account mutations and other 4xx are not retried (`docs/features/ai-assistant.md`)
 - **AI LangSmith traces (opt-in):** copy `LANGSMITH_TRACING` / `LANGSMITH_PROJECT=Swyngora` / `LANGSMITH_API_KEY` / `LANGSMITH_ENDPOINT` from `ai/.env.example` into `ai/.env`. Endpoint defaults to APAC; other regions from the [LangSmith tracing docs](https://docs.langchain.com/langsmith/trace-with-langchain). The CLI and `swyngora-ai-serve` load `ai/.env` (mobile Ask / web `/ai` use serve). Empty key sends nothing (`docs/features/ai-assistant.md`)

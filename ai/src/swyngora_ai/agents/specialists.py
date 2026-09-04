@@ -30,7 +30,7 @@ from swyngora_ai.constants import (
     SPECIALIST_WEB,
     SPECIALIST_X,
 )
-from swyngora_ai.llm.retry import MODEL_RETRY, TOOL_RETRY
+from swyngora_ai.llm.retry import default_agent_middleware, is_model_call_limit_text
 from swyngora_ai.progress import as_tool_error_preview, emit, is_tool_error_text
 from swyngora_ai.references import extract_references
 from swyngora_ai.tools.market_http import build_market_tools
@@ -107,7 +107,7 @@ def _run_react(
             model,
             list(tools),
             system_prompt=system,
-            middleware=list(middleware) if middleware is not None else [MODEL_RETRY, TOOL_RETRY],
+            middleware=list(middleware) if middleware is not None else default_agent_middleware(),
         )
     msgs = run_agent_with_progress(
         agent,
@@ -127,7 +127,7 @@ def _run_react(
         lines = "\n".join(f"- [{r.title}]({r.url})" for r in refs[:12])
         reply = f"{reply.rstrip()}\n\nSOURCES:\n{lines}"
     # Orchestrator classifies this return as ✓ unless it starts with ERROR.
-    if _all_leaf_tools_failed(msgs):
+    if _all_leaf_tools_failed(msgs) or is_model_call_limit_text(reply):
         reply = as_tool_error_preview(reply)
     return reply
 
@@ -148,7 +148,9 @@ class SpecialistRunner:
         self.model = model
         self.settings = settings or get_settings()
         self.client_id = self.settings.default_client_id
-        self._middleware = list(middleware) if middleware is not None else [MODEL_RETRY, TOOL_RETRY]
+        self._middleware = (
+            list(middleware) if middleware is not None else default_agent_middleware()
+        )
         self._compiled: dict[str, Any] = {}
         self._tools: dict[str, list[BaseTool]] = {}
         self._systems: dict[str, str] = {}

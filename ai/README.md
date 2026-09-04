@@ -89,7 +89,7 @@ Copy [`ai/.env.example`](.env.example) → `ai/.env` (or use repo-root / `backen
 | `GROK_REASONING_EFFORT` | `low` | Grok only: `none` \| `low` \| `medium` \| `high` |
 | `SWYNGORA_API_URL` | `http://localhost:8080` | Backend API |
 | `AI_DEFAULT_CLIENT_ID` | `ai-assistant` | Watchlist client id |
-| `AI_MAX_ITERATIONS` | `8` | Specialist ReAct depth hint |
+| `AI_MAX_ITERATIONS` | `8` | LangGraph `recursion_limit` hint (model-step cap is 6 via `ModelCallLimitMiddleware`) |
 | `AI_TEMPERATURE` | `0.2` | Sampling temperature |
 | `LANGSMITH_API_KEY` | empty | Personal LangSmith key. CLI traces go to **your** LangSmith |
 | `LANGSMITH_TRACING` | — | Set `true` in `.env` (copied from `.env.example`) to send traces |

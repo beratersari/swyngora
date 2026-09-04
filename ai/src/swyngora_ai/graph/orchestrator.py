@@ -26,7 +26,11 @@ from swyngora_ai.llm.errors import (
     note_handlers_on,
 )
 from swyngora_ai.llm.factory import build_chat_model
-from swyngora_ai.llm.retry import MODEL_RETRY, TOOL_RETRY, build_agent_middleware
+from swyngora_ai.llm.retry import (
+    build_agent_middleware,
+    default_agent_middleware,
+    is_model_call_limit_text,
+)
 from swyngora_ai.memory.finmem import FinMem, SessionMemory, as_human_ai, memory_key
 from swyngora_ai.progress import (
     as_tool_error_preview,
@@ -155,6 +159,8 @@ def extract_trace(messages: Sequence[BaseMessage]) -> tuple[str, list[str], list
             continue
         if t not in uniq_think:
             uniq_think.append(t)
+    if is_model_call_limit_text(final):
+        emit("status", "Model call limit reached…")
     return final, uniq_tools, uniq_think[:12]
 
 
@@ -303,7 +309,7 @@ class Orchestrator:
         injected = model is not None
         self.model = model or build_chat_model(self.settings)
         self._middleware = (
-            [MODEL_RETRY, TOOL_RETRY] if injected else build_agent_middleware(self.settings)
+            default_agent_middleware() if injected else build_agent_middleware(self.settings)
         )
         self._runner = SpecialistRunner(self.model, self.settings, middleware=self._middleware)
         tools = self._runner.as_orchestrator_tools()
