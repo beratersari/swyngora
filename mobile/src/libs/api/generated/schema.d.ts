@@ -1333,7 +1333,9 @@ export interface paths {
          *     similar-move knobs as `/around/similar` (`lookback`, `fields`,
          *     `weights`, `minCoverage`, `horizons`). If similar-move search
          *     fails, `tape` is still returned and `similarError` explains why.
-         *     Informational only.
+         *     `why` is a plain-language read of why the move may have happened
+         *     (before / during / after plus similar past cases), not a metric
+         *     dump. Informational only.
          */
         get: operations["getMarketForensics"];
         put?: never;
@@ -6378,8 +6380,22 @@ export interface components {
             similar?: Record<string, never>;
             /** @description Set when similar-move search failed */
             similarError?: string;
+            why?: components["schemas"]["MarketForensicsWhy"];
             summary?: string;
             note?: string;
+        };
+        /** @description Plain-language read of why the move may have happened */
+        MarketForensicsWhy: {
+            headline?: string;
+            /** @description What the tape looked like before the move */
+            before?: string;
+            /** @description What happened during the move */
+            during?: string;
+            /** @description What happened after the move */
+            after?: string;
+            /** @description How similar past setups resolved */
+            similar?: string;
+            caution?: string;
         };
         SpotMarket: {
             symbol?: string;

@@ -18,20 +18,32 @@ type ForensicsReport struct {
 	Tape         *AroundReport
 	Similar      *AroundSimilarReport
 	SimilarError string
+	Why          ForensicsWhy
 	Summary      string
 	Note         string
 }
 
-// ExplainForensics joins the tape and similar-move summaries.
+// ForensicsWhy is a plain-language read of why the move may have happened.
+type ForensicsWhy struct {
+	Headline string
+	Before   string
+	During   string
+	After    string
+	Similar  string
+	Caution  string
+}
+
+// ExplainForensics joins the why-story into one paragraph for summaries and tools.
 func ExplainForensics(r ForensicsReport) string {
-	var parts []string
-	if r.Tape != nil && strings.TrimSpace(r.Tape.Summary) != "" {
-		parts = append(parts, strings.TrimSpace(r.Tape.Summary))
+	w := r.Why
+	if w.Headline == "" && w.Before == "" && w.During == "" {
+		w = ExplainForensicsWhy(r)
 	}
-	if r.Similar != nil && strings.TrimSpace(r.Similar.Summary) != "" {
-		parts = append(parts, strings.TrimSpace(r.Similar.Summary))
-	} else if strings.TrimSpace(r.SimilarError) != "" {
-		parts = append(parts, "Similar past moves could not be loaded.")
+	var parts []string
+	for _, s := range []string{w.Headline, w.Before, w.During, w.After, w.Similar} {
+		if t := strings.TrimSpace(s); t != "" {
+			parts = append(parts, t)
+		}
 	}
 	if len(parts) == 0 {
 		return "No forensics tape for this time."

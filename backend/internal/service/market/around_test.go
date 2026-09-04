@@ -312,6 +312,9 @@ func TestGetForensics_ReturnsTape(t *testing.T) {
 	if got.Note == "" {
 		t.Fatal("missing note")
 	}
+	if got.Why.Headline == "" {
+		t.Fatal("missing why")
+	}
 	if got.Similar == nil && got.SimilarError == "" {
 		t.Fatal("expected similar or similarError")
 	}

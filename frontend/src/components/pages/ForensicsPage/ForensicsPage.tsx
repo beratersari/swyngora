@@ -7,6 +7,7 @@ import { PageHeader } from '@/components/molecules/PageHeader';
 import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
 import { ForensicsSimilar } from '@/components/organisms/ForensicsSimilar';
 import { ForensicsTape } from '@/components/organisms/ForensicsTape';
+import { ForensicsWhy } from '@/components/organisms/ForensicsWhy';
 import { rtkErrorMessage, useGetMarketForensicsQuery } from '@/libs/api';
 import { rtkCurrent, rtkCurrentPending } from '@/libs/utils';
 import {
@@ -175,11 +176,12 @@ export function ForensicsPage() {
         </EmptyHint>
       ) : null}
 
-      {report?.summary ? (
+      <ForensicsWhy why={report?.why} isLoading={loading} />
+
+      {report?.note && !report.why ? (
         <SummaryBlock>
-          <Text variant="bodySm">{report.summary}</Text>
           <Text variant="caption" color="secondary">
-            {report.note || t('forensics:disclaimer')}
+            {report.note}
           </Text>
         </SummaryBlock>
       ) : null}

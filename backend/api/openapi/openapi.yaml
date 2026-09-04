@@ -2272,7 +2272,9 @@ paths:
         similar-move knobs as `/around/similar` (`lookback`, `fields`,
         `weights`, `minCoverage`, `horizons`). If similar-move search
         fails, `tape` is still returned and `similarError` explains why.
-        Informational only.
+        `why` is a plain-language read of why the move may have happened
+        (before / during / after plus similar past cases), not a metric
+        dump. Informational only.
       operationId: getMarketForensics
       tags: [Market]
       parameters:
@@ -10105,8 +10107,20 @@ components:
         tape: { type: object, description: Before / during / after around-the-move tape }
         similar: { type: object, description: Similar past setups and afterHorizons }
         similarError: { type: string, description: Set when similar-move search failed }
+        why:
+          $ref: '#/components/schemas/MarketForensicsWhy'
         summary: { type: string }
         note: { type: string }
+    MarketForensicsWhy:
+      type: object
+      description: Plain-language read of why the move may have happened
+      properties:
+        headline: { type: string }
+        before: { type: string, description: What the tape looked like before the move }
+        during: { type: string, description: What happened during the move }
+        after: { type: string, description: What happened after the move }
+        similar: { type: string, description: How similar past setups resolved }
+        caution: { type: string }
     SpotMarket:
       type: object
       properties:

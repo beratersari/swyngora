@@ -797,6 +797,9 @@ func TestGetForensics_OK(t *testing.T) {
 	if body.Summary == "" || body.Note == "" {
 		t.Fatalf("missing summary/note %+v", body)
 	}
+	if body.Why == nil || body.Why.Headline == "" {
+		t.Fatalf("missing why %+v", body)
+	}
 }
 
 func TestGetForensics_MissingAt(t *testing.T) {

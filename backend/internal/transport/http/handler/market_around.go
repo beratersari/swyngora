@@ -727,6 +727,7 @@ func forensicsToDTO(a *domain.ForensicsReport) forensicsResponse {
 		Symbol: a.Symbol, Exchange: a.Exchange, At: a.At.UTC(),
 		Window: a.Window, During: a.During, AsOf: a.AsOf.UTC(),
 		Tape: aroundToDTO(a.Tape), SimilarError: a.SimilarError,
+		Why:     forensicsWhyToDTO(a.Why),
 		Summary: a.Summary, Note: a.Note,
 	}
 	if a.Similar != nil {
@@ -885,6 +886,15 @@ type aroundSimilarBandDTO struct {
 	MedianPct  string `json:"medianPct,omitempty"`
 }
 
+type forensicsWhyDTO struct {
+	Headline string `json:"headline"`
+	Before   string `json:"before,omitempty"`
+	During   string `json:"during,omitempty"`
+	After    string `json:"after,omitempty"`
+	Similar  string `json:"similar,omitempty"`
+	Caution  string `json:"caution,omitempty"`
+}
+
 type forensicsResponse struct {
 	Symbol       string                 `json:"symbol"`
 	Exchange     string                 `json:"exchange"`
@@ -895,8 +905,19 @@ type forensicsResponse struct {
 	Tape         aroundResponse         `json:"tape"`
 	Similar      *aroundSimilarResponse `json:"similar,omitempty"`
 	SimilarError string                 `json:"similarError,omitempty"`
+	Why          *forensicsWhyDTO       `json:"why,omitempty"`
 	Summary      string                 `json:"summary"`
 	Note         string                 `json:"note"`
+}
+
+func forensicsWhyToDTO(w domain.ForensicsWhy) *forensicsWhyDTO {
+	if w.Headline == "" && w.Before == "" && w.During == "" && w.After == "" && w.Similar == "" {
+		return nil
+	}
+	return &forensicsWhyDTO{
+		Headline: w.Headline, Before: w.Before, During: w.During,
+		After: w.After, Similar: w.Similar, Caution: w.Caution,
+	}
 }
 
 func parseAroundSimilarQuery(q interface{ Get(string) string }) (minPct float64, limit int, at time.Time, err error) {

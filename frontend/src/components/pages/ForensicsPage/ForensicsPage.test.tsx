@@ -10,8 +10,15 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetMarketForensicsQuery: () => ({
       data: {
         symbol: 'BTCUSDT',
-        summary: 'Price rose during the move. Two similar cases went up after.',
+        summary: 'BTC rose on unusually heavy trading.',
         note: 'Informational only',
+        why: {
+          headline: 'BTC rose on unusually heavy trading.',
+          before: 'Bids had already thinned, so there was less support under the market.',
+          during: 'Open interest fell as price rose — a short-cover shape.',
+          after: 'After the move, BTC went quiet.',
+          similar: 'When the tape looked like this before, BTC more often kept rising over the next 1h.',
+        },
         tape: {
           combined: {
             exchange: 'combined',
@@ -41,8 +48,15 @@ vi.mock('@/libs/api', async (importOriginal) => {
       },
       currentData: {
         symbol: 'BTCUSDT',
-        summary: 'Price rose during the move. Two similar cases went up after.',
+        summary: 'BTC rose on unusually heavy trading.',
         note: 'Informational only',
+        why: {
+          headline: 'BTC rose on unusually heavy trading.',
+          before: 'Bids had already thinned, so there was less support under the market.',
+          during: 'Open interest fell as price rose — a short-cover shape.',
+          after: 'After the move, BTC went quiet.',
+          similar: 'When the tape looked like this before, BTC more often kept rising over the next 1h.',
+        },
         tape: {
           combined: {
             exchange: 'combined',
@@ -88,7 +102,8 @@ describe('ForensicsPage', () => {
       routerEntries: ['/forensics?symbol=BTCUSDT&at=2026-08-20T14:00:00Z'],
     });
     expect(await screen.findByText(/market forensics|piyasa incelemesi/i)).toBeInTheDocument();
-    expect(screen.getByText(/price rose during the move/i)).toBeInTheDocument();
+    expect(screen.getByText(/why this may have happened|neden olmuş olabilir/i)).toBeInTheDocument();
+    expect(screen.getByText(/less support under the market/i)).toBeInTheDocument();
     expect(screen.getByText(/similar past moves|benzer geçmiş hareketler/i)).toBeInTheDocument();
     expect(screen.getByText('+3.5')).toBeInTheDocument();
   });

@@ -140,6 +140,15 @@ export type ForensicsSimilar = {
   events?: number;
 };
 
+export type ForensicsWhy = {
+  headline?: string;
+  before?: string;
+  during?: string;
+  after?: string;
+  similar?: string;
+  caution?: string;
+};
+
 export type ForensicsReport = {
   symbol?: string;
   exchange?: string;
@@ -150,6 +159,7 @@ export type ForensicsReport = {
   tape?: ForensicsTape;
   similar?: ForensicsSimilar | null;
   similarError?: string;
+  why?: ForensicsWhy | null;
   summary?: string;
   note?: string;
 };

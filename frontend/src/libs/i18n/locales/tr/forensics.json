@@ -13,6 +13,13 @@
   "loadFailed": "İnceleme yüklenemedi",
   "resource": "inceleme bandı",
   "disclaimer": "Yalnızca bilgi amaçlıdır — yatırım tavsiyesi değildir.",
+  "why": {
+    "title": "Bu neden olmuş olabilir",
+    "before": "Hareketten önce",
+    "during": "Hareket sırasında",
+    "after": "Hareketten sonra",
+    "similar": "Benzer hareketler ne yaptı"
+  },
   "phases": {
     "before": "Önce",
     "during": "Sırada",

@@ -1214,7 +1214,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_market_forensics",
-		mcp.WithDescription("Market forensics for a coin and a chosen time: what happened before, during, and after that move (price, volume, takers, VWAP, vs typical, POC, sweeps, stored book/futures), plus past important-move setups that looked like the before-window and how price moved after those. at is required. Same window/during as get_around. Same similar knobs as find_around_similar. If similar-move search fails, tape is still returned. Not financial advice."),
+		mcp.WithDescription("Market forensics for a coin and a chosen time: what happened before, during, and after that move (price, volume, takers, VWAP, vs typical, POC, sweeps, stored book/futures), plus past important-move setups that looked like the before-window and how price moved after those. why is a plain-language read of why the move may have happened (not a metric dump). at is required. Same window/during as get_around. Same similar knobs as find_around_similar. If similar-move search fails, tape is still returned. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("at", mcp.Required(), mcp.Description("Event time (RFC3339 or unix ms). Start of the during window.")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),

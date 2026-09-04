@@ -29,6 +29,12 @@ tape:
 If similar-move search fails, `tape` is still returned and
 `similarError` explains why.
 
+`why` is a plain-language story of **why the move may have happened**
+(before / during / after, plus similar past cases). It interprets the
+tape — volume vs typical, who was aggressive, book thinning, open
+interest vs price, funding, liquidations, sweeps — instead of listing
+raw metrics. Informational only.
+
 `/around*` endpoints stay as they are. Optional `at` on
 `/around/similar` compares the tape **before that time** instead of
 the current last window.

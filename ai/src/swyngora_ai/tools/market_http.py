@@ -4541,10 +4541,11 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "volume, takers, VWAP, vs typical, POC, sweeps, stored "
                 "book/futures), plus past important-move setups that "
                 "looked like the before-window and how price moved after "
-                "those. at is required. Prefer this when the user asks "
-                "what happened around a move and what similar past cases "
-                "did next. If similar-move search fails, tape is still "
-                "returned."
+                "those. why is a plain-language read of why the move "
+                "may have happened (not a metric dump). at is required. "
+                "Prefer this when the user asks what happened around a "
+                "move and what similar past cases did next. If "
+                "similar-move search fails, tape is still returned."
             ),
             args_schema=ForensicsInput,
         ),
