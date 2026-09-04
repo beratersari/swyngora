@@ -33,6 +33,8 @@
     "after1h": "After 1h",
     "after4h": "After 4h",
     "afterStory": "What usually happened after",
+    "alert": "Create alert",
+    "alertAny": "Alert when any coin looks like a past setup",
     "leans": {
       "up": "Usually rose",
       "down": "Usually fell",

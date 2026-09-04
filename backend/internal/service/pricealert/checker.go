@@ -29,9 +29,30 @@ type LiquidationAlertSource interface {
 	ListLiquidationEvents(exchange, symbol string, since time.Time) []domain.LiquidationEvent
 }
 
+// SetupRadarSource compares the current tape to past pre-move setups.
+// *market.Service implements this via RadarCoin / RadarScan.
+type SetupRadarSource interface {
+	RadarCoin(ctx context.Context, exchange, symbol string) (*domain.AroundSimilarReport, error)
+	RadarScan(ctx context.Context, exchange string) (*domain.ForensicsScanReport, error)
+}
+
 // AccountChecker reports whether a tenant is closed so workers can skip them.
 type AccountChecker interface {
 	IsClosed(ctx context.Context, clientID string) (bool, *domain.Account, error)
+}
+
+const defaultRadarTTL = 3 * time.Minute
+
+type radarCoinEntry struct {
+	at  time.Time
+	rep *domain.AroundSimilarReport
+	err error
+}
+
+type radarScanEntry struct {
+	at   time.Time
+	rep  *domain.ForensicsScanReport
+	err  error
 }
 
 func tenantClosed(ctx context.Context, accounts AccountChecker, clientID string) bool {
@@ -51,12 +72,19 @@ type Checker struct {
 	Market       TickerFetcher
 	Books        BookFetcher
 	Liquidations LiquidationAlertSource
+	Radar        SetupRadarSource
 	Accounts     AccountChecker
 	Interval     time.Duration
 	Logger       *slog.Logger
+	// RadarTTL caches Setup Radar scans. 0 = 3m; < 0 disables (tests that change data).
+	RadarTTL time.Duration
 	// now and sleep are injectable for tests.
 	now   func() time.Time
 	sleep func(context.Context, time.Duration) error
+
+	radarMu    sync.Mutex
+	radarCoins map[string]radarCoinEntry
+	radarScans map[string]radarScanEntry
 }
 
 // Start runs the check loop until ctx is cancelled. Blocking — call in a goroutine.
@@ -120,6 +148,8 @@ func (c *Checker) RunOnce(ctx context.Context) {
 	notionalGroups := map[key][]domain.PriceAlert{}
 	cascadeCoin := map[key][]domain.PriceAlert{}
 	cascadeScan := map[string][]domain.PriceAlert{}
+	radarCoin := map[key][]domain.PriceAlert{}
+	radarScan := map[string][]domain.PriceAlert{}
 	for _, a := range active {
 		if tenantClosed(ctx, c.Accounts, a.ClientID) {
 			continue
@@ -140,6 +170,17 @@ func (c *Checker) RunOnce(ctx context.Context) {
 			} else {
 				k := key{ex: string(a.Exchange), sym: a.Symbol}
 				cascadeCoin[k] = append(cascadeCoin[k], a)
+			}
+		case domain.IsSetupRadarAlert(a.Kind):
+			if strings.EqualFold(a.Symbol, domain.LiqAlertSymbolAll) || strings.EqualFold(a.Symbol, "all") {
+				ex := string(a.Exchange)
+				if ex == "" {
+					ex = "all"
+				}
+				radarScan[ex] = append(radarScan[ex], a)
+			} else {
+				k := key{ex: string(a.Exchange), sym: a.Symbol}
+				radarCoin[k] = append(radarCoin[k], a)
 			}
 		case domain.IsBookAlert(a.Kind):
 			rng := a.RangePct
@@ -225,6 +266,34 @@ func (c *Checker) RunOnce(ctx context.Context) {
 			}
 			defer func() { <-sem }()
 			c.evalBookGroup(ctx, k.ex, k.sym, k.rng, alerts)
+		}()
+	}
+	for k, alerts := range radarCoin {
+		k, alerts := k, alerts
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			select {
+			case <-ctx.Done():
+				return
+			case sem <- struct{}{}:
+			}
+			defer func() { <-sem }()
+			c.evalRadarCoin(ctx, k.ex, k.sym, alerts)
+		}()
+	}
+	for ex, alerts := range radarScan {
+		ex, alerts := ex, alerts
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			select {
+			case <-ctx.Done():
+				return
+			case sem <- struct{}{}:
+			}
+			defer func() { <-sem }()
+			c.evalRadarScan(ctx, ex, alerts)
 		}()
 	}
 	wg.Wait()
@@ -438,6 +507,135 @@ func (c *Checker) finishCascade(ctx context.Context, a domain.PriceAlert, met bo
 		"exchange", detail.Exchange, "symbol", detail.Symbol,
 		"grade", detail.Grade, "side", detail.Side, "score", detail.Score,
 	)
+}
+
+func (c *Checker) evalRadarCoin(ctx context.Context, exchange, symbol string, alerts []domain.PriceAlert) {
+	if c.Radar == nil {
+		c.Logger.Debug("setup radar alerts skipped (no radar source)", "exchange", exchange, "symbol", symbol)
+		return
+	}
+	rep, err := c.cachedRadarCoin(ctx, exchange, symbol)
+	if err != nil || rep == nil {
+		c.Logger.Debug("setup radar coin failed", "exchange", exchange, "symbol", symbol, "err", err)
+		return
+	}
+	now := c.now().UTC()
+	for _, a := range alerts {
+		met, metric, detail := domain.SetupRadarObservationFromSimilar(a, rep)
+		c.finishRadar(ctx, a, met, metric, detail, now)
+	}
+}
+
+func (c *Checker) evalRadarScan(ctx context.Context, exchange string, alerts []domain.PriceAlert) {
+	if c.Radar == nil {
+		c.Logger.Debug("setup radar scan alerts skipped (no radar source)", "exchange", exchange)
+		return
+	}
+	scan, err := c.cachedRadarScan(ctx, exchange)
+	if err != nil || scan == nil {
+		c.Logger.Debug("setup radar scan failed", "exchange", exchange, "err", err)
+		return
+	}
+	now := c.now().UTC()
+	for _, a := range alerts {
+		met, metric, detail := domain.SetupRadarObservationFromScan(a, scan)
+		c.finishRadar(ctx, a, met, metric, detail, now)
+	}
+}
+
+func (c *Checker) finishRadar(ctx context.Context, a domain.PriceAlert, met bool, metric float64, detail domain.SetupRadarAlertDetail, now time.Time) {
+	ev := domain.EvaluateAlertState(a, met)
+	extra := map[string]any{
+		"exchange":   detail.Exchange,
+		"symbol":     detail.Symbol,
+		"similarity": detail.Similarity,
+		"threshold":  detail.Threshold,
+		"lean":       detail.Lean,
+		"matches":    detail.Matches,
+		"afterStory": detail.AfterStory,
+		"summary":    detail.Summary,
+	}
+	if len(detail.Symbols) > 0 {
+		extra["symbols"] = detail.Symbols
+	}
+	updated, fired, err := c.Alerts.ProcessObservationExtra(ctx, a, ev, metric, now, extra)
+	if err != nil {
+		c.Logger.Debug("process setup radar alert failed", "id", a.ID, "err", err)
+		return
+	}
+	if !fired || updated == nil {
+		return
+	}
+	c.Logger.Info("setup radar alert triggered",
+		"id", updated.ID, "clientId", updated.ClientID,
+		"exchange", detail.Exchange, "symbol", detail.Symbol,
+		"similarity", detail.Similarity, "lean", detail.Lean,
+	)
+}
+
+func (c *Checker) radarTTL() time.Duration {
+	if c.RadarTTL < 0 {
+		return -1
+	}
+	if c.RadarTTL == 0 {
+		return defaultRadarTTL
+	}
+	return c.RadarTTL
+}
+
+func (c *Checker) cachedRadarCoin(ctx context.Context, exchange, symbol string) (*domain.AroundSimilarReport, error) {
+	ttl := c.radarTTL()
+	key := strings.ToLower(strings.TrimSpace(exchange)) + "|" + strings.ToUpper(strings.TrimSpace(symbol))
+	now := c.now().UTC()
+	if ttl > 0 {
+		c.radarMu.Lock()
+		if c.radarCoins != nil {
+			if e, ok := c.radarCoins[key]; ok && now.Sub(e.at) < ttl {
+				c.radarMu.Unlock()
+				return e.rep, e.err
+			}
+		}
+		c.radarMu.Unlock()
+	}
+	rep, err := c.Radar.RadarCoin(ctx, exchange, symbol)
+	if ttl > 0 {
+		c.radarMu.Lock()
+		if c.radarCoins == nil {
+			c.radarCoins = map[string]radarCoinEntry{}
+		}
+		c.radarCoins[key] = radarCoinEntry{at: now, rep: rep, err: err}
+		c.radarMu.Unlock()
+	}
+	return rep, err
+}
+
+func (c *Checker) cachedRadarScan(ctx context.Context, exchange string) (*domain.ForensicsScanReport, error) {
+	ttl := c.radarTTL()
+	key := strings.ToLower(strings.TrimSpace(exchange))
+	if key == "" {
+		key = "all"
+	}
+	now := c.now().UTC()
+	if ttl > 0 {
+		c.radarMu.Lock()
+		if c.radarScans != nil {
+			if e, ok := c.radarScans[key]; ok && now.Sub(e.at) < ttl {
+				c.radarMu.Unlock()
+				return e.rep, e.err
+			}
+		}
+		c.radarMu.Unlock()
+	}
+	rep, err := c.Radar.RadarScan(ctx, exchange)
+	if ttl > 0 {
+		c.radarMu.Lock()
+		if c.radarScans == nil {
+			c.radarScans = map[string]radarScanEntry{}
+		}
+		c.radarScans[key] = radarScanEntry{at: now, rep: rep, err: err}
+		c.radarMu.Unlock()
+	}
+	return rep, err
 }
 
 func sleepCtx(ctx context.Context, d time.Duration) error {

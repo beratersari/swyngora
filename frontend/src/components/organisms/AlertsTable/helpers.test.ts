@@ -14,5 +14,9 @@ describe('AlertsTable helpers', () => {
     expect(alertConditionLabel({ kind: 'liquidation_notional', condition: 'long', targetPrice: 20000000, rangePct: 5 })).toBe(
       'long ≥ 20000000 / 5m',
     );
+    expect(alertConditionLabel({ kind: 'setup_radar', condition: 'up', targetPrice: 70 })).toBe(
+      'setup ≥ 70 (up)',
+    );
+    expect(alertSymbolLabel({ kind: 'setup_radar', symbol: 'ALL' })).toBe('all coins');
   });
 });

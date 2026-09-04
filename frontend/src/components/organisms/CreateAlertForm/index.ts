@@ -1,2 +1,2 @@
 export { CreateAlertForm } from './CreateAlertForm';
-export type { CreateAlertFormProps } from './CreateAlertForm.types';
+export type { AlertKind, CreateAlertFormProps } from './CreateAlertForm.types';

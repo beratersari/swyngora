@@ -118,6 +118,7 @@ type DataPort interface {
 	CreateLiquidationFeedAlert(ctx context.Context, clientID, exchange string, minDownSeconds float64, mode string) (json.RawMessage, error)
 	CreateLiquidationCascadeAlert(ctx context.Context, clientID, exchange, symbol, minGrade, mode string) (json.RawMessage, error)
 	CreateLiquidationNotionalAlert(ctx context.Context, clientID, exchange, symbol, side string, notional float64, window, mode string) (json.RawMessage, error)
+	CreateSetupRadarAlert(ctx context.Context, clientID, exchange, symbol, lean string, minSimilarity float64, mode string) (json.RawMessage, error)
 	DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	GetAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error)
 	SetAlertWebhook(ctx context.Context, clientID, url string) (json.RawMessage, error)
@@ -2063,6 +2064,26 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.CreateLiquidationNotionalAlert(ctx, clientID, req.GetString("exchange", "all"), symbol, req.GetString("side", "both"), notional, req.GetString("window", "5m"), req.GetString("mode", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("create_setup_radar_alert",
+		mcp.WithDescription("Alert when a coin's current tape looks similar enough to the setup before that coin's own important past moves (Setup Radar / Forensics Now). minSimilarity is 40–100 (0 = 60). lean=any (default) or up/down for the usual after-path. symbol=BTCUSDT or all (any scanned top-volume coin). exchange=binance|bybit|all. Repeating: fires once when the match appears, stays quiet while still similar, re-arms when it clears. New coins while a market-wide alert is still hot do not re-fire."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("symbol", mcp.Description("Pair e.g. BTCUSDT, or all (default) for any scanned coin")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithNumber("minSimilarity", mcp.Description("Min closeness 40–100 (0 = 60)")),
+		mcp.WithString("lean", mcp.Description("any (default) | up | down")),
+		mcp.WithString("mode", mcp.Description("repeating (default) | one_time")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CreateSetupRadarAlert(ctx, clientID, req.GetString("exchange", "all"), req.GetString("symbol", "all"), req.GetString("lean", ""), req.GetFloat("minSimilarity", 0), req.GetString("mode", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

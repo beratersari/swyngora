@@ -696,6 +696,7 @@ func main() {
 		Market:       marketSvc,
 		Books:        marketSvc,
 		Liquidations: marketSvc,
+		Radar:        marketSvc,
 		Accounts:     accountSvc,
 		Interval:     cfg.AlertCheckInterval,
 		Logger:       logger,

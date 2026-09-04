@@ -1,7 +1,9 @@
 import { Skeleton, Table } from 'antd';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import type { ForensicsScanHit } from '@/libs/types/forensics.types';
+import { setupRadarAlertHref } from './helpers';
 import { Stack, TableWrap } from './ForensicsNowScan.styles';
 import type { ForensicsNowScanProps } from './ForensicsNowScan.types';
 
@@ -27,6 +29,9 @@ export function ForensicsNowScan({ scan, isLoading, onOpenSymbol }: ForensicsNow
           {scan.note}
         </Text>
       ) : null}
+      <Text variant="caption">
+        <Link to={setupRadarAlertHref('ALL', scan?.exchange)}>{t('scan.alertAny')}</Link>
+      </Text>
       {hits.length === 0 ? (
         <Text variant="caption" color="secondary">
           {t('scan.empty')}
@@ -64,6 +69,19 @@ export function ForensicsNowScan({ scan, isLoading, onOpenSymbol }: ForensicsNow
                 render: (_: unknown, row) => horizonCell(row, '4h'),
               },
               { title: t('scan.afterStory'), dataIndex: 'afterStory', key: 'afterStory' },
+              {
+                title: t('scan.alert'),
+                key: 'alert',
+                render: (_: unknown, row) =>
+                  row.symbol ? (
+                    <Link
+                      to={setupRadarAlertHref(row.symbol, row.exchange || scan?.exchange)}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t('scan.alert')}
+                    </Link>
+                  ) : null,
+              },
             ]}
           />
         </TableWrap>

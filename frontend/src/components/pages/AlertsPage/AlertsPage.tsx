@@ -9,6 +9,7 @@ import {
   CreateAlertForm,
   type CreatePriceAlertValues,
 } from '@/components/organisms/CreateAlertForm/CreateAlertForm';
+import type { AlertKind } from '@/components/organisms/CreateAlertForm/CreateAlertForm.types';
 import {
   rtkErrorMessage,
   useCreatePriceAlertMutation,
@@ -19,9 +20,25 @@ import {
 import { PageStack, Section } from './AlertsPage.styles';
 
 const EXCHANGES = new Set(['binance', 'coinbase', 'bybit', 'nasdaq', 'bist']);
+const RADAR_KINDS = new Set<AlertKind>([
+  'price',
+  'liquidation_feed',
+  'liquidation_cascade',
+  'liquidation_notional',
+  'setup_radar',
+]);
+const RADAR_EXCHANGES = new Set(['binance', 'bybit', 'all']);
 
-function parsePrefillExchange(raw: string | null): MarketExchange {
+function parsePrefillKind(raw: string | null): AlertKind {
   const v = (raw ?? '').trim().toLowerCase();
+  return RADAR_KINDS.has(v as AlertKind) ? (v as AlertKind) : 'price';
+}
+
+function parsePrefillExchange(raw: string | null, kind: AlertKind): MarketExchange | string {
+  const v = (raw ?? '').trim().toLowerCase();
+  if (kind === 'setup_radar' || kind.startsWith('liquidation')) {
+    return RADAR_EXCHANGES.has(v) ? v : 'all';
+  }
   return EXCHANGES.has(v) ? (v as MarketExchange) : 'binance';
 }
 
@@ -37,14 +54,16 @@ export function AlertsPage() {
   const [del, delState] = useDeletePriceAlertMutation();
   const [actionError, setActionError] = useState<string | null>(null);
 
+  const defaultKind = useMemo(() => parsePrefillKind(searchParams.get('kind')), [searchParams]);
   const defaultExchange = useMemo(
-    () => parsePrefillExchange(searchParams.get('exchange')),
-    [searchParams],
+    () => parsePrefillExchange(searchParams.get('exchange'), defaultKind),
+    [searchParams, defaultKind],
   );
-  const defaultSymbol = useMemo(
-    () => (searchParams.get('symbol') ?? '').trim().toUpperCase(),
-    [searchParams],
-  );
+  const defaultSymbol = useMemo(() => {
+    const raw = (searchParams.get('symbol') ?? '').trim().toUpperCase();
+    if (defaultKind === 'setup_radar' && (raw === '' || raw === 'ALL')) return '';
+    return raw;
+  }, [searchParams, defaultKind]);
 
   const items = list.data?.alerts ?? [];
 
@@ -54,9 +73,10 @@ export function AlertsPage() {
 
       <Section>
         <CreateAlertForm
-          key={`${defaultExchange}:${defaultSymbol}`}
+          key={`${defaultKind}:${defaultExchange}:${defaultSymbol}`}
           defaultExchange={defaultExchange}
           defaultSymbol={defaultSymbol}
+          defaultKind={defaultKind}
           isSubmitting={createState.isLoading}
           submitError={createState.isError ? createState.error : undefined}
           onSubmit={async (values: CreatePriceAlertValues) => {

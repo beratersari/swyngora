@@ -105,7 +105,7 @@ type createAlertBody struct {
 	ClientID    string  `json:"clientId"`
 	Exchange    string  `json:"exchange"`
 	Symbol      string  `json:"symbol"`
-	Kind        string  `json:"kind"` // price | imbalance | wall | liquidation_feed | liquidation_cascade | liquidation_notional
+	Kind        string  `json:"kind"` // price | imbalance | wall | liquidation_* | setup_radar
 	Condition   string  `json:"condition"`
 	TargetPrice float64 `json:"targetPrice"`
 	RangePct    float64 `json:"rangePct"`
@@ -125,7 +125,7 @@ func (h *AlertHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	kind := strings.ToLower(strings.TrimSpace(body.Kind))
-	if body.TargetPrice == 0 && kind != "wall" && kind != "liquidation_feed" && kind != "liquidation_cascade" && kind != "liquidation_notional" {
+	if body.TargetPrice == 0 && kind != "wall" && kind != "liquidation_feed" && kind != "liquidation_cascade" && kind != "liquidation_notional" && kind != "setup_radar" {
 		// Try query fallback only if body zero and query set (optional convenience).
 		if raw := r.URL.Query().Get("targetPrice"); raw != "" {
 			if f, err := strconv.ParseFloat(raw, 64); err == nil {

@@ -29,5 +29,7 @@ describe('ForensicsNowScan', () => {
     expect(screen.getByText(/kept rising/i)).toBeInTheDocument();
     await userEvent.click(screen.getByText('BTCUSDT'));
     expect(onOpen).toHaveBeenCalledWith('BTCUSDT');
+    const alertLink = screen.getByRole('link', { name: /create alert|uyarı oluştur/i });
+    expect(alertLink).toHaveAttribute('href', '/alerts?kind=setup_radar&symbol=BTCUSDT');
   });
 });

@@ -50,6 +50,7 @@ tape to the setup **before that coin's own** important past moves.
 Hits are ranked by closeness. Each row says what usually happened
 after those similar cases (`afterStory`, `lean`, `afterHorizons`).
 Default 12 coins, 3d lookback. Click a coin to open the event tape.
+**Create alert** on a row (or “any coin”) opens `/alerts?kind=setup_radar` so you get notified when that tape looks similar enough again (`kind=setup_radar`, MCP `create_setup_radar_alert` — see [`price-alerts.md`](price-alerts.md)).
 MCP: `scan_market_forensics`.
 
 Informational only — not financial advice.

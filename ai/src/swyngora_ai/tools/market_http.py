@@ -1259,6 +1259,24 @@ class LiquidationCascadeAlertInput(BaseModel):
     mode: str = Field(default="repeating", description="repeating (default) | one_time")
 
 
+class SetupRadarAlertInput(BaseModel):
+    client_id: str
+    symbol: str = Field(
+        default="all",
+        description="Pair e.g. BTCUSDT, or all for any scanned coin",
+    )
+    exchange: str = Field(default="all", description="binance | bybit | all")
+    min_similarity: float = Field(
+        default=60,
+        description="Min closeness 40–100 (0 = 60)",
+    )
+    lean: str = Field(
+        default="any",
+        description="any (default) | up | down — usual after-path",
+    )
+    mode: str = Field(default="repeating", description="repeating (default) | one_time")
+
+
 class OrderBookAlertInput(BaseModel):
     client_id: str
     symbol: str
@@ -3023,6 +3041,27 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "condition": side,
                 "targetPrice": notional,
                 "window": window,
+                "mode": mode,
+            },
+        )
+
+    def create_setup_radar_alert(
+        client_id: str,
+        symbol: str = "all",
+        exchange: str = "all",
+        min_similarity: float = 60.0,
+        lean: str = "any",
+        mode: str = "repeating",
+    ) -> str:
+        return http.post(
+            "/api/v1/alerts",
+            {
+                "clientId": client_id,
+                "kind": "setup_radar",
+                "exchange": exchange,
+                "symbol": symbol,
+                "condition": lean,
+                "targetPrice": min_similarity,
                 "mode": mode,
             },
         )
@@ -5040,6 +5079,18 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "the window drops and a new wave starts."
             ),
             args_schema=LiquidationNotionalAlertInput,
+        ),
+        StructuredTool.from_function(
+            create_setup_radar_alert,
+            name="create_setup_radar_alert",
+            description=(
+                "Alert when a coin's current tape looks similar enough to the setup "
+                "before that coin's own important past moves (Setup Radar). "
+                "min_similarity 40–100 (default 60). lean=any|up|down. "
+                "symbol=BTCUSDT or all. Fires once when the match appears and does "
+                "not re-fire until the tape no longer looks like those past setups."
+            ),
+            args_schema=SetupRadarAlertInput,
         ),
         StructuredTool.from_function(
             delete_price_alert,

@@ -2179,6 +2179,25 @@ func (b *Backend) CreateLiquidationNotionalAlert(ctx context.Context, clientID, 
 	return alertJSON(a)
 }
 
+func (b *Backend) CreateSetupRadarAlert(ctx context.Context, clientID, exchange, symbol, lean string, minSimilarity float64, mode string) (json.RawMessage, error) {
+	if b.Alerts == nil {
+		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
+	}
+	a, err := b.Alerts.Create(ctx, pricealert.CreateInput{
+		ClientID:    clientID,
+		Exchange:    exchange,
+		Symbol:      symbol,
+		Kind:        string(domain.AlertKindSetupRadar),
+		Condition:   lean,
+		TargetPrice: minSimilarity,
+		Mode:        mode,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return alertJSON(a)
+}
+
 func (b *Backend) DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	if b.Alerts == nil {
 		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)

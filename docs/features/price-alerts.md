@@ -53,6 +53,7 @@ PUT /api/v1/alerts/webhook
 | `liquidation_feed` | Binance / Bybit liquidation websocket down or stalled | `down` / `gap` / empty | Min down seconds (`0` = 300) | `repeating` |
 | `liquidation_cascade` | A coin (or market `symbol=all`) hits a cascade grade | `cascade` (default) / `extreme` / `elevated` | unused | `repeating` |
 | `liquidation_notional` | Long / short / total USDT liquidated in a window | `long` / `short` / `both` | USDT amount (e.g. 20000000) | `repeating` |
+| `setup_radar` | Current tape looks like the setup before that coin's own important past moves (Setup Radar / Forensics Now) | `any` (default) / `up` / `down` | Min similarity 40–100 (`0` = 60) | `repeating` |
 
 Book kinds are evaluated in the background from the same live local books as `GET /api/v1/market/orderbook` (Binance, Coinbase, Bybit). Repeating book alerts fire when the condition **appears**, stay quiet while it remains true, and re-arm after it clears so the next appearance can fire again.
 
@@ -115,9 +116,22 @@ POST /api/v1/alerts
 
 `liquidation_notional` sums Binance + Bybit when `exchange=all`. Repeating fires when the rolling window first crosses the dollar line, stays quiet while that wave stays above it, and re-arms when the window drops so the next wave can fire. `window` is `1m` / `5m` / `15m` / `1h` (default 5m).
 
+```json
+POST /api/v1/alerts
+{
+  "kind": "setup_radar",
+  "exchange": "all",
+  "symbol": "BTCUSDT",
+  "condition": "any",
+  "targetPrice": 60
+}
+```
+
+`setup_radar` uses the same Forensics Now compare: last window vs that coin's own past important-move before-windows (3d lookback). `symbol=all` watches the top-volume scan and fires when **any** coin crosses the floor; new coins while the radar is still hot do not re-fire until zero hits pass. `condition=up` / `down` keeps only cases whose similar past after-path usually rose or fell. The checker caches the scan for about 3 minutes so a 30s tick does not rescan 12 coins. Webhook type `setup_radar.triggered` includes `similarity`, `lean`, `afterStory`, and `symbols`. From Forensics Now, use **Create alert** on a row (or alert any coin).
+
 Creating a coin alert (`liquidation_notional` or `liquidation_cascade`) **subscribes** that pair on the live Bybit stream if it is not already in the automatic set. It also fills the lookback from each venue's own history (the alert window, or 6h for cascade) so a 5m alert does not wait 5 minutes for live prints. Live and history prints that share venue + symbol + side + time + price + qty count once. A missing history API still leaves the live subscribe in place.
 
-MCP: `create_orderbook_alert`, `create_liquidation_feed_alert`, `create_liquidation_cascade_alert`, `create_liquidation_notional_alert`. Informational only.
+MCP: `create_orderbook_alert`, `create_liquidation_feed_alert`, `create_liquidation_cascade_alert`, `create_liquidation_notional_alert`, `create_setup_radar_alert`. Informational only.
 
 ## Webhook security (SSRF)
 

@@ -22,7 +22,7 @@ type CreateInput struct {
 	TargetPrice float64
 	// Mode is one_time (default for price) or repeating (default for book).
 	Mode string
-	// Kind is price (default), imbalance, wall, liquidation_feed, or liquidation_cascade.
+	// Kind is price (default), imbalance, wall, liquidation_*, or setup_radar.
 	Kind string
 	// RangePct is the live-book analysis band (book kinds) or window minutes
 	// for liquidation_notional (1, 5, 15, 60).
@@ -62,7 +62,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 	}
 	kind, ok := domain.NormalizeAlertKind(in.Kind)
 	if !ok {
-		return nil, fmt.Errorf("%w: kind must be price, imbalance, wall, liquidation_feed, liquidation_cascade, or liquidation_notional", domain.ErrInvalidArgument)
+		return nil, fmt.Errorf("%w: kind must be price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional, or setup_radar", domain.ErrInvalidArgument)
 	}
 	ex, sym, err := normalizeExchangeSymbolForKind(kind, in.Exchange, in.Symbol)
 	if err != nil {
@@ -83,7 +83,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 	if !ok {
 		return nil, fmt.Errorf("%w: mode must be one_time or repeating", domain.ErrInvalidArgument)
 	}
-	if in.Mode == "" && (domain.IsBookAlert(kind) || domain.IsLiquidationAlert(kind)) {
+	if in.Mode == "" && (domain.IsBookAlert(kind) || domain.IsLiquidationAlert(kind) || domain.IsSetupRadarAlert(kind)) {
 		mode = domain.AlertModeRepeating
 	}
 	rangePct := 0.0
@@ -105,9 +105,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 		return nil, fmt.Errorf("%w: max %d alerts per client", domain.ErrInvalidArgument, domain.MaxPriceAlertsPerClient)
 	}
 	// Price repeating starts disarmed (avoid firing if already on the target side).
-	// Book and liquidation repeating start armed so the first appearance can fire.
+	// Book, liquidation, and setup-radar repeating start armed so the first appearance can fire.
 	armed := false
-	if mode == domain.AlertModeRepeating && (domain.IsBookAlert(kind) || domain.IsLiquidationAlert(kind)) {
+	if mode == domain.AlertModeRepeating && (domain.IsBookAlert(kind) || domain.IsLiquidationAlert(kind) || domain.IsSetupRadarAlert(kind)) {
 		armed = true
 	}
 	alert := domain.PriceAlert{
@@ -548,6 +548,8 @@ func buildAlertWebhookPayload(a *domain.PriceAlert, extra map[string]any) (strin
 		typ = "liquidation_cascade.triggered"
 	case domain.IsLiqNotionalAlert(a.Kind):
 		typ = "liquidation_notional.triggered"
+	case domain.IsSetupRadarAlert(a.Kind):
+		typ = "setup_radar.triggered"
 	}
 	body := map[string]any{
 		"type":        typ,
@@ -568,7 +570,7 @@ func buildAlertWebhookPayload(a *domain.PriceAlert, extra map[string]any) (strin
 		body["rangePct"] = a.RangePct
 		body["metric"] = a.TriggeredPrice
 	}
-	if domain.IsLiquidationAlert(a.Kind) {
+	if domain.IsLiquidationAlert(a.Kind) || domain.IsSetupRadarAlert(a.Kind) {
 		body["metric"] = a.TriggeredPrice
 	}
 	for k, v := range extra {
@@ -589,6 +591,20 @@ func normalizeClientID(id string) (string, error) {
 }
 
 func normalizeExchangeSymbolForKind(kind domain.AlertKind, exchange, symbol string) (domain.Exchange, string, error) {
+	if domain.IsSetupRadarAlert(kind) {
+		ex, err := domain.ParseLiquidationExchange(exchange)
+		if err != nil {
+			return "", "", err
+		}
+		sym, err := domain.ParseLiquidationLevelsSymbol(symbol)
+		if err != nil {
+			return "", "", err
+		}
+		if strings.EqualFold(sym, "all") {
+			return domain.Exchange(ex), domain.LiqAlertSymbolAll, nil
+		}
+		return domain.Exchange(ex), domain.NormalizeLiquidationSymbol(sym), nil
+	}
 	if !domain.IsLiquidationAlert(kind) {
 		return normalizeExchangeSymbol(exchange, symbol)
 	}

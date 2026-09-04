@@ -234,6 +234,21 @@ class _Transport(httpx.BaseTransport):
                     "combined": {"current": {"kind": "bid", "score": 72}},
                 },
             )
+        if request.url.path == "/api/v1/alerts" and request.method == "POST":
+            body = json.loads(request.content.decode()) if request.content else {}
+            return httpx.Response(
+                201,
+                json={
+                    "id": "a1",
+                    "kind": body.get("kind", "price"),
+                    "symbol": body.get("symbol", "ALL"),
+                    "condition": body.get("condition", "any"),
+                    "targetPrice": body.get("targetPrice", 60),
+                    "mode": "repeating",
+                    "status": "active",
+                    "armed": True,
+                },
+            )
         if request.url.path.endswith("/forensics/scan"):
             return httpx.Response(
                 200,
@@ -508,6 +523,15 @@ def test_market_tools_hit_api(monkeypatch):
     assert "scan_market_forensics" in by_name
     scan = json.loads(by_name["scan_market_forensics"].invoke({}))
     assert scan["hits"][0]["symbol"] == "BTCUSDT"
+
+    assert "create_setup_radar_alert" in by_name
+    radar = json.loads(
+        by_name["create_setup_radar_alert"].invoke(
+            {"client_id": "c1", "symbol": "BTCUSDT", "min_similarity": 70, "lean": "up"}
+        )
+    )
+    assert radar["kind"] == "setup_radar"
+    assert radar["targetPrice"] == 70
 
     assert "get_vwap" in by_name
     vwap = json.loads(by_name["get_vwap"].invoke({"symbol": "BTCUSDT", "window": "24h"}))

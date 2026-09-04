@@ -15,6 +15,11 @@ export function alertConditionLabel(row: PriceAlert): string {
     const win = row.rangePct && row.rangePct > 0 ? `${row.rangePct}m` : '5m';
     return `${side} ≥ ${row.targetPrice ?? 0} / ${win}`;
   }
+  if (kind === 'setup_radar') {
+    const min = row.targetPrice && row.targetPrice > 0 ? row.targetPrice : 60;
+    const lean = row.condition && row.condition !== '' ? row.condition : 'any';
+    return `setup ≥ ${min} (${lean})`;
+  }
   if (kind === 'imbalance' || kind === 'wall') {
     return `${kind} ${row.condition ?? ''} ${row.targetPrice ?? ''}`.trim();
   }

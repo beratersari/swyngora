@@ -2099,7 +2099,12 @@ export interface paths {
          *     kind=liquidation_notional: a coin's long/short/total notional in window (1m|5m|15m|1h,
          *     default 5m via window or rangePct minutes) reaches targetPrice USDT. condition=long|short|both.
          *     Repeating fires once when the wave crosses, stays quiet while that window stays above,
-         *     re-arms when it drops so a new wave can fire. Informational only.
+         *     re-arms when it drops so a new wave can fire.
+         *     kind=setup_radar: a coin's current tape looks close enough to the setup before that
+         *     coin's own important past moves. targetPrice is min similarity 40–100 (0 = 60).
+         *     condition=any (default) | up | down (after-path lean). symbol=BTCUSDT or all (any
+         *     scanned coin). exchange=binance|bybit|all. Repeating by default: one fire when the
+         *     match appears, quiet while still similar, re-arm when it clears. Informational only.
          */
         post: operations["createPriceAlert"];
         delete?: never;
@@ -5261,8 +5266,8 @@ export interface components {
             exchange?: string;
             symbol?: string;
             /** @enum {string} */
-            kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional";
-            /** @description price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both */
+            kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional" | "setup_radar";
+            /** @description price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both; setup_radar any|up|down */
             condition?: string;
             targetPrice?: number;
             /** @description Analysis band for imbalance/wall alerts */
@@ -9492,10 +9497,10 @@ export interface operations {
                      * @default price
                      * @enum {string}
                      */
-                    kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional";
-                    /** @description price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both */
+                    kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional" | "setup_radar";
+                    /** @description price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both; setup_radar any|up|down */
                     condition: string;
-                    /** @description Price target, |imbalance| threshold, wall min share, liquidation_feed min down seconds (0 = 300), or liquidation_notional USDT amount */
+                    /** @description Price target, |imbalance| threshold, wall min share, liquidation_feed min down seconds (0 = 300), liquidation_notional USDT amount, or setup_radar min similarity 40–100 (0 = 60) */
                     targetPrice?: number;
                     /** @description liquidation_notional lookback 1m|5m|15m|1h (default 5m) */
                     window?: string;

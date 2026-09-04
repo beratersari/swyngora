@@ -5,9 +5,9 @@ import { Text } from '@/components/atoms/Text';
 import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
 import { rtkErrorMessage, type MarketExchange } from '@/libs/api';
 import { Field, FieldRow, FormStack } from './CreateAlertForm.styles';
-import type { CreateAlertFormProps } from './CreateAlertForm.types';
+import type { AlertKind, CreateAlertFormProps } from './CreateAlertForm.types';
 
-export type AlertKind = 'price' | 'liquidation_feed' | 'liquidation_cascade' | 'liquidation_notional';
+export type { AlertKind } from './CreateAlertForm.types';
 
 export type CreatePriceAlertValues = {
   exchange: string;
@@ -26,6 +26,7 @@ export type CreatePriceAlertValues = {
 export function CreateAlertForm({
   defaultExchange = 'binance',
   defaultSymbol = '',
+  defaultKind = 'price',
   isSubmitting = false,
   submitError,
   onSubmit,
@@ -35,17 +36,23 @@ export function CreateAlertForm({
   onSubmit: (values: CreatePriceAlertValues) => Promise<void>;
 }) {
   const { t } = useTranslation(['alerts', 'common']);
-  const [kind, setKind] = useState<AlertKind>('price');
+  const [kind, setKind] = useState<AlertKind>(defaultKind);
   const [exchange, setExchange] = useState(String(defaultExchange));
   const [symbol, setSymbol] = useState(defaultSymbol);
-  const [condition, setCondition] = useState('above');
-  const [targetPrice, setTargetPrice] = useState<number | null>(null);
+  const [condition, setCondition] = useState(
+    defaultKind === 'setup_radar' ? 'any' : defaultKind === 'liquidation_cascade' ? 'cascade' : defaultKind === 'liquidation_notional' ? 'both' : 'above',
+  );
+  const [targetPrice, setTargetPrice] = useState<number | null>(defaultKind === 'setup_radar' ? 60 : null);
   const [window, setWindow] = useState('5m');
-  const [mode, setMode] = useState<'one_time' | 'repeating'>('one_time');
+  const [mode, setMode] = useState<'one_time' | 'repeating'>(
+    defaultKind === 'price' ? 'one_time' : 'repeating',
+  );
   const isFeed = kind === 'liquidation_feed';
   const isCascade = kind === 'liquidation_cascade';
   const isNotional = kind === 'liquidation_notional';
+  const isRadar = kind === 'setup_radar';
   const isLiq = isFeed || isCascade || isNotional;
+  const venueWide = isLiq || isRadar;
   const liqExchanges = ['binance', 'bybit', 'all'];
   const spotExchanges = ['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'];
 
@@ -71,12 +78,20 @@ export function CreateAlertForm({
     try {
       await onSubmit({
         kind,
-        exchange: isLiq ? exchange || 'all' : (exchange as MarketExchange),
-        symbol: isFeed ? 'ALL' : symbol.trim(),
-        condition: isFeed ? 'down' : isCascade ? condition || 'cascade' : isNotional ? condition || 'both' : condition,
-        targetPrice: isFeed ? targetPrice ?? 300 : isCascade ? 0 : (targetPrice ?? 0),
+        exchange: venueWide ? exchange || 'all' : (exchange as MarketExchange),
+        symbol: isFeed ? 'ALL' : isRadar ? symbol.trim() || 'ALL' : symbol.trim(),
+        condition: isFeed
+          ? 'down'
+          : isCascade
+            ? condition || 'cascade'
+            : isNotional
+              ? condition || 'both'
+              : isRadar
+                ? condition || 'any'
+                : condition,
+        targetPrice: isFeed ? targetPrice ?? 300 : isCascade ? 0 : isRadar ? targetPrice ?? 60 : (targetPrice ?? 0),
         window: isNotional ? window : undefined,
-        mode: isLiq ? 'repeating' : mode,
+        mode: venueWide ? 'repeating' : mode,
       });
       if (kind === 'price' || isNotional) setTargetPrice(null);
     } catch {
@@ -106,13 +121,18 @@ export function CreateAlertForm({
               { value: 'liquidation_feed', label: t('alerts:kinds.liquidation_feed', { defaultValue: 'Liquidation feed' }) },
               { value: 'liquidation_cascade', label: t('alerts:kinds.liquidation_cascade', { defaultValue: 'Liquidation cascade' }) },
               { value: 'liquidation_notional', label: t('alerts:kinds.liquidation_notional', { defaultValue: 'Liquidation notional' }) },
+              { value: 'setup_radar', label: t('alerts:kinds.setup_radar', { defaultValue: 'Setup Radar' }) },
             ]}
             onChange={(v) => {
               setKind(v);
-              if (v === 'liquidation_feed' || v === 'liquidation_cascade' || v === 'liquidation_notional') {
+              if (v === 'liquidation_feed' || v === 'liquidation_cascade' || v === 'liquidation_notional' || v === 'setup_radar') {
                 setMode('repeating');
                 if (v === 'liquidation_cascade') setCondition('cascade');
                 if (v === 'liquidation_notional') setCondition('both');
+                if (v === 'setup_radar') {
+                  setCondition('any');
+                  setTargetPrice(60);
+                }
                 if (!['binance', 'bybit', 'all'].includes(exchange)) setExchange('all');
               } else {
                 setCondition('above');
@@ -129,7 +149,7 @@ export function CreateAlertForm({
             value={exchange}
             aria-label={t('alerts:exchange')}
             style={{ minWidth: 120 }}
-            options={(isLiq ? liqExchanges : spotExchanges).map((e) => ({ value: e, label: e }))}
+            options={(venueWide ? liqExchanges : spotExchanges).map((e) => ({ value: e, label: e }))}
             onChange={setExchange}
           />
         </Field>
@@ -143,6 +163,7 @@ export function CreateAlertForm({
               value={symbol}
               onChange={setSymbol}
               aria-label={t('alerts:symbol')}
+              placeholder={isRadar ? t('alerts:symbolOrAll', { defaultValue: 'BTCUSDT or empty for all' }) : undefined}
             />
           </Field>
         )}
@@ -167,10 +188,16 @@ export function CreateAlertForm({
                         { value: 'long', label: t('alerts:conditions.long', { defaultValue: 'Longs' }) },
                         { value: 'short', label: t('alerts:conditions.short', { defaultValue: 'Shorts' }) },
                       ]
-                    : [
-                        { value: 'above', label: t('alerts:conditions.above', { defaultValue: 'Price above' }) },
-                        { value: 'below', label: t('alerts:conditions.below', { defaultValue: 'Price below' }) },
-                      ]
+                    : isRadar
+                      ? [
+                          { value: 'any', label: t('alerts:conditions.any', { defaultValue: 'Any after-path' }) },
+                          { value: 'up', label: t('alerts:conditions.up', { defaultValue: 'Usually rose after' }) },
+                          { value: 'down', label: t('alerts:conditions.down', { defaultValue: 'Usually fell after' }) },
+                        ]
+                      : [
+                          { value: 'above', label: t('alerts:conditions.above', { defaultValue: 'Price above' }) },
+                          { value: 'below', label: t('alerts:conditions.below', { defaultValue: 'Price below' }) },
+                        ]
               }
               onChange={(v) => setCondition(v)}
             />
@@ -183,18 +210,23 @@ export function CreateAlertForm({
                 ? t('alerts:minDownSeconds', { defaultValue: 'Down for (seconds)' })
                 : isNotional
                   ? t('alerts:notional', { defaultValue: 'USDT notional' })
-                  : t('alerts:threshold', { defaultValue: 'Target price' })}
+                  : isRadar
+                    ? t('alerts:minSimilarity', { defaultValue: 'Min similarity' })
+                    : t('alerts:threshold', { defaultValue: 'Target price' })}
             </Text>
             <InputNumber
-              value={isFeed ? (targetPrice ?? 300) : (targetPrice ?? undefined)}
+              value={isFeed ? (targetPrice ?? 300) : isRadar ? (targetPrice ?? 60) : (targetPrice ?? undefined)}
               aria-label={
                 isFeed
                   ? t('alerts:minDownSeconds', { defaultValue: 'Down for (seconds)' })
                   : isNotional
                     ? t('alerts:notional', { defaultValue: 'USDT notional' })
-                    : t('alerts:threshold', { defaultValue: 'Target price' })
+                    : isRadar
+                      ? t('alerts:minSimilarity', { defaultValue: 'Min similarity' })
+                      : t('alerts:threshold', { defaultValue: 'Target price' })
               }
-              min={isFeed ? 30 : 0}
+              min={isFeed ? 30 : isRadar ? 40 : 0}
+              max={isRadar ? 100 : undefined}
               style={{ minWidth: 160 }}
               onChange={(v) => setTargetPrice(typeof v === 'number' ? v : null)}
             />
@@ -219,7 +251,7 @@ export function CreateAlertForm({
             />
           </Field>
         ) : null}
-        {isLiq ? null : (
+        {venueWide ? null : (
           <Field>
             <Text variant="caption" color="secondary">
               {t('alerts:mode', { defaultValue: 'Mode' })}
@@ -253,7 +285,8 @@ export function CreateAlertForm({
             isSubmitting ||
             (kind === 'price' && (!symbol.trim() || targetPrice == null)) ||
             (isCascade && !symbol.trim()) ||
-            (isNotional && (!symbol.trim() || targetPrice == null || targetPrice <= 0))
+            (isNotional && (!symbol.trim() || targetPrice == null || targetPrice <= 0)) ||
+            (isRadar && targetPrice != null && (targetPrice < 40 || targetPrice > 100))
           }
           onClick={() => void submit()}
         >

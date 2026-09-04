@@ -1431,6 +1431,19 @@ func (c *APIClient) CreateLiquidationNotionalAlert(ctx context.Context, clientID
 	})
 }
 
+// CreateSetupRadarAlert alerts when a coin looks like a past pre-move setup.
+func (c *APIClient) CreateSetupRadarAlert(ctx context.Context, clientID, exchange, symbol, lean string, minSimilarity float64, mode string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/alerts", map[string]any{
+		"clientId":    clientID,
+		"exchange":    exchange,
+		"symbol":      symbol,
+		"kind":        "setup_radar",
+		"condition":   lean,
+		"targetPrice": minSimilarity,
+		"mode":        mode,
+	})
+}
+
 // DeletePriceAlert deletes an alert by id.
 func (c *APIClient) DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	q := url.Values{}

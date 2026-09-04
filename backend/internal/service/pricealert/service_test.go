@@ -612,6 +612,179 @@ func TestChecker_LiquidationCascadeNamesCoin(t *testing.T) {
 	}
 }
 
+func TestCreate_SetupRadarDefaultsRepeatingArmed(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	a, err := svc.Create(ctx, CreateInput{
+		ClientID: "sr", Kind: "setup_radar", Exchange: "all", Symbol: "BTCUSDT",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Kind != domain.AlertKindSetupRadar || a.Symbol != "BTCUSDT" || string(a.Exchange) != "all" {
+		t.Fatalf("%+v", a)
+	}
+	if a.Mode != domain.AlertModeRepeating || !a.Armed {
+		t.Fatalf("want repeating armed %+v", a)
+	}
+	all, err := svc.Create(ctx, CreateInput{
+		ClientID: "sr", Kind: "setup_radar", Symbol: "all", Condition: "up", TargetPrice: 70,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if all.Symbol != domain.LiqAlertSymbolAll || all.Condition != "up" || all.TargetPrice != 70 {
+		t.Fatalf("%+v", all)
+	}
+	if _, err := svc.Create(ctx, CreateInput{
+		ClientID: "sr", Kind: "setup_radar", Condition: "above", TargetPrice: 60,
+	}); !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("bad lean: %v", err)
+	}
+}
+
+type fakeRadar struct {
+	mu        sync.Mutex
+	coin      *domain.AroundSimilarReport
+	scan      *domain.ForensicsScanReport
+	coinCalls int
+	scanCalls int
+}
+
+func (f *fakeRadar) RadarCoin(context.Context, string, string) (*domain.AroundSimilarReport, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.coinCalls++
+	return f.coin, nil
+}
+
+func (f *fakeRadar) RadarScan(context.Context, string) (*domain.ForensicsScanReport, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.scanCalls++
+	return f.scan, nil
+}
+
+func radarSimilar(symbol string, sim float64, lean string) *domain.AroundSimilarReport {
+	up, down := 3, 0
+	if lean == domain.CVDDirDown {
+		up, down = 0, 3
+	}
+	return &domain.AroundSimilarReport{
+		Symbol: symbol, Exchange: "binance", Events: 3,
+		UpAfter: up, DownAfter: down,
+		Matches: []domain.AroundSimilarHit{{
+			Similarity: sim, Coverage: 90, AfterDirection: lean, AfterReturnPct: 2,
+			Move: domain.AroundMove{At: time.Date(2026, 8, 18, 12, 0, 0, 0, time.UTC)},
+		}},
+		AfterHorizons: []domain.AroundSimilarHorizonStat{
+			{Horizon: "1h", Up: up, Down: down, Sample: 3, Events: 3, MedianPct: 2},
+		},
+	}
+}
+
+func TestChecker_SetupRadarCoinNoRetrigger(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	a, err := svc.Create(ctx, CreateInput{
+		ClientID: "rd", Kind: "setup_radar", Exchange: "binance", Symbol: "BTCUSDT",
+		Condition: "any", TargetPrice: 60,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := &fakeRadar{coin: radarSimilar("BTCUSDT", 78, domain.CVDDirUp)}
+	c := &Checker{Alerts: svc, Radar: src, RadarTTL: -1, now: time.Now}
+	c.RunOnce(ctx)
+	got, _ := svc.Get(ctx, "rd", a.ID)
+	if got.Armed || got.TriggeredPrice != 78 {
+		t.Fatalf("first fire %+v", got)
+	}
+	c.RunOnce(ctx)
+	still, _ := svc.Get(ctx, "rd", a.ID)
+	if still.TriggeredAt == nil || got.TriggeredAt == nil || !still.TriggeredAt.Equal(*got.TriggeredAt) {
+		t.Fatalf("re-fired while still similar %+v vs %+v", still, got)
+	}
+	src.mu.Lock()
+	src.coin = &domain.AroundSimilarReport{Symbol: "BTCUSDT"}
+	src.mu.Unlock()
+	c.RunOnce(ctx)
+	armed, _ := svc.Get(ctx, "rd", a.ID)
+	if !armed.Armed {
+		t.Fatalf("re-arm after clear %+v", armed)
+	}
+	src.mu.Lock()
+	src.coin = radarSimilar("BTCUSDT", 81, domain.CVDDirUp)
+	src.mu.Unlock()
+	c.RunOnce(ctx)
+	again, _ := svc.Get(ctx, "rd", a.ID)
+	if again.Armed || again.TriggeredPrice != 81 {
+		t.Fatalf("second appearance %+v", again)
+	}
+}
+
+func TestChecker_SetupRadarScanStaysQuietWhileAnyHit(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	a, err := svc.Create(ctx, CreateInput{
+		ClientID: "rs", Kind: "setup_radar", Exchange: "all", Symbol: "all",
+		Condition: "any", TargetPrice: 60,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := &fakeRadar{scan: &domain.ForensicsScanReport{
+		Exchange: "all",
+		Hits: []domain.ForensicsScanHit{
+			{Symbol: "BTCUSDT", Exchange: "binance", Similarity: 82, Lean: domain.CVDDirUp, AfterStory: "rose"},
+		},
+	}}
+	c := &Checker{Alerts: svc, Radar: src, RadarTTL: -1, now: time.Now}
+	c.RunOnce(ctx)
+	got, _ := svc.Get(ctx, "rs", a.ID)
+	if got.Armed || got.TriggeredPrice != 82 {
+		t.Fatalf("first fire %+v", got)
+	}
+	src.mu.Lock()
+	src.scan.Hits = append(src.scan.Hits, domain.ForensicsScanHit{
+		Symbol: "ETHUSDT", Exchange: "binance", Similarity: 70, Lean: domain.CVDDirDown, AfterStory: "fell",
+	})
+	src.mu.Unlock()
+	c.RunOnce(ctx)
+	still, _ := svc.Get(ctx, "rs", a.ID)
+	if still.TriggeredAt == nil || got.TriggeredAt == nil || !still.TriggeredAt.Equal(*got.TriggeredAt) {
+		t.Fatalf("new coin while hot re-fired %+v vs %+v", still, got)
+	}
+	src.mu.Lock()
+	src.scan.Hits = nil
+	src.mu.Unlock()
+	c.RunOnce(ctx)
+	ok, _ := svc.Get(ctx, "rs", a.ID)
+	if !ok.Armed {
+		t.Fatalf("re-arm when no hits %+v", ok)
+	}
+}
+
+func TestChecker_SetupRadarScanCached(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{
+		ClientID: "rc", Kind: "setup_radar", Symbol: "all",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	src := &fakeRadar{scan: &domain.ForensicsScanReport{Hits: []domain.ForensicsScanHit{}}}
+	c := &Checker{Alerts: svc, Radar: src, RadarTTL: time.Hour, now: time.Now}
+	c.RunOnce(ctx)
+	c.RunOnce(ctx)
+	src.mu.Lock()
+	calls := src.scanCalls
+	src.mu.Unlock()
+	if calls != 1 {
+		t.Fatalf("cached scan calls=%d", calls)
+	}
+}
+
 func TestChecker_LiquidationNotionalNoRetriggerUntilNewWave(t *testing.T) {
 	svc, _ := newSvc(t)
 	ctx := context.Background()

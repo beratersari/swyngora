@@ -33,6 +33,8 @@
     "after1h": "1s sonra",
     "after4h": "4s sonra",
     "afterStory": "Benzer durumlarda sonra ne oldu",
+    "alert": "Uyarı oluştur",
+    "alertAny": "Herhangi bir coin geçmiş kuruluma benzeyince uyar",
     "leans": {
       "up": "Çoğunlukla yükseldi",
       "down": "Çoğunlukla düştü",
