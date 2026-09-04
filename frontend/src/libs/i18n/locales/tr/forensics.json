@@ -20,6 +20,26 @@
     "after": "Hareketten sonra",
     "similar": "Benzer hareketler ne yaptı"
   },
+  "view": {
+    "event": "Bir zaman",
+    "now": "Şimdi"
+  },
+  "scan": {
+    "lookback": "Geriye bakış",
+    "empty": "Şu anda kendi önemli hareket kurulumuna benzeyen coin yok.",
+    "loadFailed": "Güncel kurulumlar taranamadı",
+    "resource": "inceleme taraması",
+    "lean": "Sonrası eğilim",
+    "after1h": "1s sonra",
+    "after4h": "4s sonra",
+    "afterStory": "Benzer durumlarda sonra ne oldu",
+    "leans": {
+      "up": "Çoğunlukla yükseldi",
+      "down": "Çoğunlukla düştü",
+      "mixed": "Karışık",
+      "unknown": "Bilinmiyor"
+    }
+  },
   "phases": {
     "before": "Önce",
     "during": "Sırada",

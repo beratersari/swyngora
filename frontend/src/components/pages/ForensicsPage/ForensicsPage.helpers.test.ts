@@ -5,7 +5,9 @@ import {
   parseForensicsAt,
   parseForensicsDuring,
   parseForensicsExchange,
+  parseForensicsLookback,
   parseForensicsSymbol,
+  parseForensicsView,
   parseForensicsWindow,
   utcToDatetimeLocal,
 } from './ForensicsPage.helpers';
@@ -23,6 +25,10 @@ describe('ForensicsPage helpers', () => {
     expect(parseForensicsWindow('9h')).toBe('1h');
     expect(parseForensicsDuring('5m')).toBe('5m');
     expect(parseForensicsDuring('2h')).toBe('15m');
+    expect(parseForensicsView('now')).toBe('now');
+    expect(parseForensicsView('nope')).toBe('event');
+    expect(parseForensicsLookback('7d')).toBe('7d');
+    expect(parseForensicsLookback('9d')).toBe('3d');
   });
 
   it('defaults at to one hour ago rounded to 15 minutes', () => {

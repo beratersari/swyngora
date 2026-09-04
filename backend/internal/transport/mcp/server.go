@@ -72,6 +72,7 @@ type DataPort interface {
 	GetAroundPrecursors(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during string) (json.RawMessage, error)
 	GetAroundSimilar(ctx context.Context, exchange, symbol, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields, weights, minCoverage, horizons, at string) (json.RawMessage, error)
 	GetForensics(ctx context.Context, exchange, symbol, at, window, during, lookback, interval, direction string, minReturnPct float64, limit int, fields, weights, minCoverage, horizons string) (json.RawMessage, error)
+	ScanForensics(ctx context.Context, exchange, quote, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields, weights, minCoverage, horizons string) (json.RawMessage, error)
 	GetAbsorption(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLiquiditySweeps(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeSurge(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -1243,6 +1244,33 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			minCov = strconv.FormatFloat(v, 'f', -1, 64)
 		}
 		raw, err := api.GetForensics(ctx, req.GetString("exchange", "all"), symbol, at, req.GetString("window", ""), req.GetString("during", ""), req.GetString("lookback", ""), req.GetString("interval", ""), req.GetString("direction", ""), req.GetFloat("minReturnPct", 0), int(req.GetFloat("limit", 0)), req.GetString("fields", ""), req.GetString("weights", ""), minCov, req.GetString("horizons", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("scan_market_forensics",
+		mcp.WithDescription("Scan top-volume coins and find which ones currently look like the setup before their own important past moves. Returns ranked coins, how close the tape is, and what usually happened after those similar cases (afterStory, lean, afterHorizons). Default 12 coins, 3d lookback. Not financial advice."),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithString("quote", mcp.Description("Quote asset, default USDT")),
+		mcp.WithString("lookback", mcp.Description("4h | 12h | 24h | 3d | 7d (default 3d)")),
+		mcp.WithString("interval", mcp.Description("15m | 1h (default 15m)")),
+		mcp.WithString("direction", mcp.Description("up | down | both (default both)")),
+		mcp.WithNumber("minReturnPct", mcp.Description("Minimum |return| %% for past moves")),
+		mcp.WithNumber("limit", mcp.Description("How many top-volume coins to scan (default 12, max 20)")),
+		mcp.WithString("window", mcp.Description("Current/before window 15m|30m|1h|2h|4h (default 1h)")),
+		mcp.WithString("during", mcp.Description("Override past move window")),
+		mcp.WithString("fields", mcp.Description("Tape to compare: price,volume,takers,oi,book")),
+		mcp.WithString("weights", mcp.Description("Importance per field, e.g. book:3,oi:3,volume:1")),
+		mcp.WithNumber("minCoverage", mcp.Description("Minimum % of selected data that must be present (default 60)")),
+		mcp.WithString("horizons", mcp.Description("After-windows CSV, e.g. 15m,1h,4h")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		minCov := ""
+		if v := req.GetFloat("minCoverage", -1); v >= 0 {
+			minCov = strconv.FormatFloat(v, 'f', -1, 64)
+		}
+		raw, err := api.ScanForensics(ctx, req.GetString("exchange", "all"), req.GetString("quote", ""), req.GetString("lookback", ""), req.GetString("interval", ""), req.GetString("direction", ""), req.GetFloat("minReturnPct", 0), int(req.GetFloat("limit", 0)), req.GetString("window", ""), req.GetString("during", ""), req.GetString("fields", ""), req.GetString("weights", ""), minCov, req.GetString("horizons", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

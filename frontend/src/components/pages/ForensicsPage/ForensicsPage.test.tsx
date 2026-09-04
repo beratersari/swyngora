@@ -7,6 +7,32 @@ vi.mock('@/libs/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/libs/api')>();
   return {
     ...actual,
+    useScanMarketForensicsQuery: () => ({
+      data: {
+        summary: '1 of 4 scanned coin(s) currently look like a past pre-move setup.',
+        hits: [
+          {
+            symbol: 'ETHUSDT',
+            similarity: '77',
+            lean: 'up',
+            afterStory: 'When ETH looked like this before, price more often kept rising over the next 1h.',
+          },
+        ],
+      },
+      currentData: {
+        summary: '1 of 4 scanned coin(s) currently look like a past pre-move setup.',
+        hits: [
+          {
+            symbol: 'ETHUSDT',
+            similarity: '77',
+            lean: 'up',
+            afterStory: 'When ETH looked like this before, price more often kept rising over the next 1h.',
+          },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+    }),
     useGetMarketForensicsQuery: () => ({
       data: {
         symbol: 'BTCUSDT',
@@ -106,5 +132,14 @@ describe('ForensicsPage', () => {
     expect(screen.getByText(/less support under the market/i)).toBeInTheDocument();
     expect(screen.getByText(/similar past moves|benzer geçmiş hareketler/i)).toBeInTheDocument();
     expect(screen.getByText('+3.5')).toBeInTheDocument();
+  });
+
+  it('renders the now scan of similar current setups', async () => {
+    renderWithProviders(<ForensicsPage />, {
+      routerEntries: ['/forensics?view=now'],
+    });
+    expect(await screen.findByText(/1 of 4 scanned/i)).toBeInTheDocument();
+    expect(screen.getByText('ETHUSDT')).toBeInTheDocument();
+    expect(screen.getByText(/kept rising/i)).toBeInTheDocument();
   });
 });

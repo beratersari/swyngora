@@ -1346,6 +1346,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/forensics/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Coins whose current tape looks like past pre-move setups
+         * @description Scans top quote-volume coins and compares each coin's **current**
+         *     tape (last `window`) to the setup **before** that coin's own
+         *     important past moves. Returns coins that look similar, ranked by
+         *     closeness, plus what usually happened after those past cases
+         *     (`afterStory`, `afterHorizons`, `lean`). Default lookback **3d**,
+         *     default 12 coins (max 20). Informational only.
+         */
+        get: operations["scanMarketForensics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/vwap": {
         parameters: {
             query?: never;
@@ -6397,6 +6422,19 @@ export interface components {
             similar?: string;
             caution?: string;
         };
+        /** @description Coins whose current tape looks like past important-move setups */
+        MarketForensicsScan: {
+            exchange?: string;
+            quote?: string;
+            lookback?: string;
+            window?: string;
+            interval?: string;
+            scanned?: number;
+            compared?: number;
+            hits?: Record<string, never>[];
+            summary?: string;
+            note?: string;
+        };
         SpotMarket: {
             symbol?: string;
             lastPrice?: string;
@@ -8236,6 +8274,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketForensics"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    scanMarketForensics: {
+        parameters: {
+            query?: {
+                /** @description binance | bybit | all (default all; universe from Binance) */
+                exchange?: string;
+                /** @description Quote asset for the universe (default USDT) */
+                quote?: string;
+                /** @description 4h | 12h | 24h | 3d | 7d (default 3d) */
+                lookback?: string;
+                /** @description 15m | 1h (default 15m) */
+                interval?: string;
+                /** @description up | down | both (default both) */
+                direction?: string;
+                /** @description Minimum |return| percent for past moves */
+                minReturnPct?: number;
+                /** @description How many top-volume coins to scan (default 12, max 20) */
+                limit?: number;
+                /** @description Current/before window 15m | 30m | 1h | 2h | 4h (default 1h) */
+                window?: string;
+                /** @description Override past move window */
+                during?: string;
+                /** @description Tape to compare — price,volume,takers,oi,book (default all) */
+                fields?: string;
+                /** @description Importance per field — book:3,oi:3,volume:1 */
+                weights?: string;
+                /** @description Minimum percent of selected data that must be present (default 60) */
+                minCoverage?: number;
+                /** @description After-windows CSV (default 15m,1h,4h) */
+                horizons?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ranked coins that look like past pre-move setups */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketForensicsScan"];
                 };
             };
             400: components["responses"]["Error"];

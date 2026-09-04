@@ -802,6 +802,23 @@ func TestGetForensics_OK(t *testing.T) {
 	}
 }
 
+func TestScanForensics_OK(t *testing.T) {
+	h := NewMarketHandler(market.New(volumeProfileMarket{}, stubSupply{}))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/forensics/scan?exchange=binance&lookback=24h&limit=3&fields=volume", nil)
+	rr := httptest.NewRecorder()
+	h.ScanForensics(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body forensicsScanResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Summary == "" || body.Note == "" {
+		t.Fatalf("%+v", body)
+	}
+}
+
 func TestGetForensics_MissingAt(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/forensics?symbol=BTCUSDT", nil)

@@ -1,6 +1,8 @@
 export type ForensicsExchange = 'all' | 'binance' | 'bybit';
 export type ForensicsWindow = '15m' | '30m' | '1h' | '2h' | '4h';
 export type ForensicsDuring = '5m' | '15m' | '30m' | '1h';
+export type ForensicsView = 'event' | 'now';
+export type ForensicsLookback = '4h' | '12h' | '24h' | '3d' | '7d';
 export type ForensicsPhaseId = 'before' | 'during' | 'after';
 
 export type ForensicsPrice = {
@@ -160,6 +162,47 @@ export type ForensicsReport = {
   similar?: ForensicsSimilar | null;
   similarError?: string;
   why?: ForensicsWhy | null;
+  summary?: string;
+  note?: string;
+};
+
+export type ForensicsScanHorizon = {
+  horizon?: string;
+  sample?: number;
+  events?: number;
+  up?: number;
+  down?: number;
+  averagePct?: string;
+  medianPct?: string;
+};
+
+export type ForensicsScanHit = {
+  symbol?: string;
+  exchange?: string;
+  similarity?: string;
+  coverage?: string;
+  events?: number;
+  matches?: number;
+  upAfter?: number;
+  downAfter?: number;
+  medianAfterPct?: string;
+  afterHorizons?: ForensicsScanHorizon[];
+  closestAt?: string;
+  closestDirection?: string;
+  closestReturnPct?: string;
+  lean?: string;
+  afterStory?: string;
+  summary?: string;
+};
+
+export type ForensicsScan = {
+  exchange?: string;
+  quote?: string;
+  lookback?: string;
+  window?: string;
+  scanned?: number;
+  compared?: number;
+  hits?: ForensicsScanHit[];
   summary?: string;
   note?: string;
 };

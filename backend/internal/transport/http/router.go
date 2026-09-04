@@ -124,6 +124,7 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 	mux.HandleFunc("GET /api/v1/market/around/similar", mh.GetAroundSimilar)
 	mux.HandleFunc("GET /api/v1/market/around/moves", mh.GetAroundMoves)
 	mux.HandleFunc("GET /api/v1/market/around", mh.GetAround)
+	mux.HandleFunc("GET /api/v1/market/forensics/scan", mh.ScanForensics)
 	mux.HandleFunc("GET /api/v1/market/forensics", mh.GetForensics)
 	mux.HandleFunc("GET /api/v1/market/absorption", mh.GetAbsorption)
 	mux.HandleFunc("GET /api/v1/market/liquidity-sweeps", mh.GetLiquiditySweeps)

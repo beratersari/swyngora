@@ -77,6 +77,10 @@ export type MarketForensicsQuery = NonNullable<
   operations['getMarketForensics']['parameters']['query']
 >;
 export type MarketForensics = components['schemas']['MarketForensics'];
+export type MarketForensicsScanQuery = NonNullable<
+  operations['scanMarketForensics']['parameters']['query']
+>;
+export type MarketForensicsScan = components['schemas']['MarketForensicsScan'];
 
 export type MarketCvdVenue = {
   exchange?: string;

@@ -491,6 +491,17 @@ func (b *Backend) GetForensics(ctx context.Context, exchange, symbol, at, window
 	return mustJSON(got)
 }
 
+func (b *Backend) ScanForensics(ctx context.Context, exchange, quote, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields, weights, minCoverage, horizons string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.ScanForensics(ctx, exchange, quote, lookback, interval, direction, minReturnPct, limit, window, during, fields, weights, minCoverage, horizons)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) GetVWAP(ctx context.Context, exchange, symbol, window, startTime, endTime string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

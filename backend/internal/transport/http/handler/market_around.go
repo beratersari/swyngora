@@ -130,6 +130,22 @@ func (h *MarketHandler) GetForensics(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, forensicsToDTO(got))
 }
 
+// ScanForensics handles GET /api/v1/market/forensics/scan.
+func (h *MarketHandler) ScanForensics(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	minPct, limit, _, err := parseAroundSimilarQuery(q)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	got, err := h.svc.ScanForensics(r.Context(), q.Get("exchange"), q.Get("quote"), q.Get("lookback"), q.Get("interval"), q.Get("direction"), minPct, limit, q.Get("window"), q.Get("during"), q.Get("fields"), q.Get("weights"), q.Get("minCoverage"), q.Get("horizons"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, forensicsScanToDTO(got))
+}
+
 // GetAroundCompare handles GET /api/v1/market/around/compare.
 func (h *MarketHandler) GetAroundCompare(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -908,6 +924,73 @@ type forensicsResponse struct {
 	Why          *forensicsWhyDTO       `json:"why,omitempty"`
 	Summary      string                 `json:"summary"`
 	Note         string                 `json:"note"`
+}
+
+type forensicsScanHitDTO struct {
+	Symbol           string                    `json:"symbol"`
+	Exchange         string                    `json:"exchange"`
+	Similarity       string                    `json:"similarity"`
+	Coverage         string                    `json:"coverage"`
+	Events           int                       `json:"events"`
+	Matches          int                       `json:"matches"`
+	UpAfter          int                       `json:"upAfter"`
+	DownAfter        int                       `json:"downAfter"`
+	MedianAfterPct   string                    `json:"medianAfterPct"`
+	AfterHorizons    []aroundSimilarHorizonDTO `json:"afterHorizons,omitempty"`
+	ClosestAt        time.Time                 `json:"closestAt,omitempty"`
+	ClosestDirection string                    `json:"closestDirection,omitempty"`
+	ClosestReturnPct string                    `json:"closestReturnPct,omitempty"`
+	Lean             string                    `json:"lean"`
+	AfterStory       string                    `json:"afterStory"`
+	Summary          string                    `json:"summary"`
+}
+
+type forensicsScanResponse struct {
+	Exchange    string                `json:"exchange"`
+	Quote       string                `json:"quote"`
+	Lookback    string                `json:"lookback"`
+	Window      string                `json:"window"`
+	Interval    string                `json:"interval"`
+	Direction   string                `json:"direction"`
+	Fields      []string              `json:"fields,omitempty"`
+	MinCoverage string                `json:"minCoverage"`
+	Horizons    []string              `json:"horizons,omitempty"`
+	SymbolLimit int                   `json:"symbolLimit"`
+	Scanned     int                   `json:"scanned"`
+	Compared    int                   `json:"compared"`
+	AsOf        time.Time             `json:"asOf"`
+	Hits        []forensicsScanHitDTO `json:"hits"`
+	Summary     string                `json:"summary"`
+	Note        string                `json:"note"`
+}
+
+func forensicsScanToDTO(a *domain.ForensicsScanReport) forensicsScanResponse {
+	if a == nil {
+		return forensicsScanResponse{}
+	}
+	hits := make([]forensicsScanHitDTO, 0, len(a.Hits))
+	for _, h := range a.Hits {
+		row := forensicsScanHitDTO{
+			Symbol: h.Symbol, Exchange: h.Exchange,
+			Similarity: formatHistQty(h.Similarity), Coverage: formatHistQty(h.Coverage),
+			Events: h.Events, Matches: h.Matches, UpAfter: h.UpAfter, DownAfter: h.DownAfter,
+			MedianAfterPct:   domain.FormatSignedPct(h.MedianAfterPct),
+			AfterHorizons:    aroundSimilarHorizonsToDTO(h.AfterHorizons),
+			ClosestDirection: h.ClosestDirection, ClosestReturnPct: domain.FormatSignedPct(h.ClosestReturnPct),
+			Lean: h.Lean, AfterStory: h.AfterStory, Summary: h.Summary,
+		}
+		if !h.ClosestAt.IsZero() {
+			row.ClosestAt = h.ClosestAt.UTC()
+		}
+		hits = append(hits, row)
+	}
+	return forensicsScanResponse{
+		Exchange: a.Exchange, Quote: a.Quote, Lookback: a.Lookback, Window: a.Window,
+		Interval: a.Interval, Direction: a.Direction, Fields: append([]string(nil), a.Fields...),
+		MinCoverage: formatHistQty(a.MinCoverage), Horizons: append([]string(nil), a.Horizons...),
+		SymbolLimit: a.SymbolLimit, Scanned: a.Scanned, Compared: a.Compared,
+		AsOf: a.AsOf.UTC(), Hits: hits, Summary: a.Summary, Note: a.Note,
+	}
 }
 
 func forensicsWhyToDTO(w domain.ForensicsWhy) *forensicsWhyDTO {

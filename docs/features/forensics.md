@@ -39,6 +39,19 @@ raw metrics. Informational only.
 `/around/similar` compares the tape **before that time** instead of
 the current last window.
 
+## Current market vs past setups
+
+`GET /api/v1/market/forensics/scan`
+
+Web: `/forensics?view=now`
+
+Scans top quote-volume coins and compares each coin's **current**
+tape to the setup **before that coin's own** important past moves.
+Hits are ranked by closeness. Each row says what usually happened
+after those similar cases (`afterStory`, `lean`, `afterHorizons`).
+Default 12 coins, 3d lookback. Click a coin to open the event tape.
+MCP: `scan_market_forensics`.
+
 Informational only — not financial advice.
 
 ## Where the code lives
@@ -47,8 +60,8 @@ Informational only — not financial advice.
 |---|---|
 | Domain | `backend/internal/domain/around_forensics.go` |
 | Service | `backend/internal/service/market/around_forensics.go` |
-| HTTP | `GET /api/v1/market/forensics` |
-| MCP / AI | `get_market_forensics` |
+| HTTP | `GET /api/v1/market/forensics`, `GET /api/v1/market/forensics/scan` |
+| MCP / AI | `get_market_forensics`, `scan_market_forensics` |
 | Web | `/forensics` — `frontend/src/components/pages/ForensicsPage/` |
 
 ## How to verify
@@ -56,6 +69,7 @@ Informational only — not financial advice.
 ```bash
 cd backend && go test ./internal/domain/ ./internal/service/market/ ./internal/transport/http/handler/ -run 'Forensics|Around'
 curl "http://localhost:8080/api/v1/market/forensics?symbol=BTCUSDT&at=2026-08-20T14:00:00Z"
+curl "http://localhost:8080/api/v1/market/forensics/scan?limit=12&lookback=3d"
 ```
 
 Open `/forensics`, pick a symbol and time, confirm three phase cards

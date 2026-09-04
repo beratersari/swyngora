@@ -20,6 +20,26 @@
     "after": "After the move",
     "similar": "What similar moves did"
   },
+  "view": {
+    "event": "A time",
+    "now": "Now"
+  },
+  "scan": {
+    "lookback": "Lookback",
+    "empty": "No coins currently look like their own important-move setups.",
+    "loadFailed": "Could not scan current setups",
+    "resource": "forensics scan",
+    "lean": "After lean",
+    "after1h": "After 1h",
+    "after4h": "After 4h",
+    "afterStory": "What usually happened after",
+    "leans": {
+      "up": "Usually rose",
+      "down": "Usually fell",
+      "mixed": "Split",
+      "unknown": "Unknown"
+    }
+  },
   "phases": {
     "before": "Before",
     "during": "During",

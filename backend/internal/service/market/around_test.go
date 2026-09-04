@@ -323,6 +323,27 @@ func TestGetForensics_ReturnsTape(t *testing.T) {
 	}
 }
 
+func TestScanForensics_RanksCurrentSetups(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Minute)
+	at := now.Add(-2 * time.Hour)
+	var tape []domain.Candle
+	for _, hoursAgo := range []int{20, 8, 3} {
+		tape = append(tape, aroundTape(now.Add(-time.Duration(hoursAgo)*time.Hour))...)
+	}
+	tape = append(tape, aroundTape(at)...)
+	svc := New(&fakeMarket{candles: tape, ticker: &domain.Ticker24h{LastPrice: "105"}}, &fakeSupply{})
+	got, err := svc.ScanForensics(context.Background(), "binance", "USDT", "24h", "15m", "both", 1.5, 4, "1h", "15m", "volume", "", "0", "1h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Scanned == 0 || got.Summary == "" || got.Note == "" {
+		t.Fatalf("%+v", got)
+	}
+	if got.Quote != "USDT" {
+		t.Fatalf("quote %s", got.Quote)
+	}
+}
+
 func TestGetAroundSimilar_UsesSelectedAt(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Minute)
 	at := now.Add(-3 * time.Hour)

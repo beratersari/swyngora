@@ -234,6 +234,21 @@ class _Transport(httpx.BaseTransport):
                     "combined": {"current": {"kind": "bid", "score": 72}},
                 },
             )
+        if request.url.path.endswith("/forensics/scan"):
+            return httpx.Response(
+                200,
+                json={
+                    "summary": "1 of 4 scanned coin(s) currently look like a past pre-move setup.",
+                    "hits": [
+                        {
+                            "symbol": "BTCUSDT",
+                            "similarity": "82",
+                            "lean": "up",
+                            "afterStory": "When BTC looked like this before, price more often kept rising over the next 1h.",
+                        }
+                    ],
+                },
+            )
         if request.url.path.endswith("/forensics"):
             return httpx.Response(
                 200,
@@ -489,6 +504,10 @@ def test_market_tools_hit_api(monkeypatch):
     )
     assert forensic["tape"]["combined"]["phases"][1]["phase"] == "during"
     assert forensic["similar"]["matches"][0]["afterReturnPct"] == "+3.5"
+
+    assert "scan_market_forensics" in by_name
+    scan = json.loads(by_name["scan_market_forensics"].invoke({}))
+    assert scan["hits"][0]["symbol"] == "BTCUSDT"
 
     assert "get_vwap" in by_name
     vwap = json.loads(by_name["get_vwap"].invoke({"symbol": "BTCUSDT", "window": "24h"}))

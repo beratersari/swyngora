@@ -74,6 +74,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/around/precursors` | What often changed before those moves, including conditions that fire together |
 | `GET` | `/api/v1/market/around/similar` | Past important-move setups like the current tape (optional `at`); unique events; caller-picked after horizons |
 | `GET` | `/api/v1/market/forensics` | Around-the-move tape plus similar past setups for a chosen time |
+| `GET` | `/api/v1/market/forensics/scan` | Coins whose current tape looks like past pre-move setups, plus what usually happened after |
 | `GET` | `/api/v1/market/vwap` | Volume-weighted average price from a start time; last vs VWAP; Binance, Bybit, combined |
 | `GET` | `/api/v1/market/absorption` | Large market buys/sells vs price hold; which side is absorbing and how strong |
 | `GET` | `/api/v1/market/liquidity-sweeps` | Poke through a prior high/low that comes back; level, excursion, time, volume |

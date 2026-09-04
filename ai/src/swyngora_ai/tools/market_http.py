@@ -778,6 +778,28 @@ class ForensicsInput(BaseModel):
     )
 
 
+class ForensicsScanInput(BaseModel):
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all)",
+    )
+    quote: str = Field(default="USDT", description="Quote asset (default USDT)")
+    lookback: str = Field(
+        default="3d",
+        description="4h|12h|24h|3d|7d (default 3d)",
+    )
+    interval: str = Field(default="15m", description="15m|1h")
+    direction: str = Field(default="both", description="up|down|both")
+    min_return_pct: float = Field(default=0, description="Minimum |return| percent")
+    limit: int = Field(default=0, description="How many top-volume coins (default 12, max 20)")
+    window: str = Field(default="1h", description="Current/before window")
+    during: str = Field(default="", description="Override past move window")
+    fields: str = Field(default="", description="Tape to compare")
+    weights: str = Field(default="", description="Importance per field")
+    min_coverage: float = Field(default=-1, description="Minimum coverage percent")
+    horizons: str = Field(default="", description="After-windows CSV")
+
+
 class AroundCompareInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     from_time: str = Field(
@@ -2241,6 +2263,48 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if horizons:
             params["horizons"] = horizons
         return http.get("/api/v1/market/forensics", params)
+
+    def scan_market_forensics(
+        exchange: str = "all",
+        quote: str = "USDT",
+        lookback: str = "3d",
+        interval: str = "15m",
+        direction: str = "both",
+        min_return_pct: float = 0,
+        limit: int = 0,
+        window: str = "1h",
+        during: str = "",
+        fields: str = "",
+        weights: str = "",
+        min_coverage: float = -1,
+        horizons: str = "",
+    ) -> str:
+        params: dict[str, Any] = {"exchange": exchange}
+        if quote:
+            params["quote"] = quote
+        if lookback:
+            params["lookback"] = lookback
+        if interval:
+            params["interval"] = interval
+        if direction:
+            params["direction"] = direction
+        if min_return_pct:
+            params["minReturnPct"] = min_return_pct
+        if limit:
+            params["limit"] = limit
+        if window:
+            params["window"] = window
+        if during:
+            params["during"] = during
+        if fields:
+            params["fields"] = fields
+        if weights:
+            params["weights"] = weights
+        if min_coverage >= 0:
+            params["minCoverage"] = min_coverage
+        if horizons:
+            params["horizons"] = horizons
+        return http.get("/api/v1/market/forensics/scan", params)
 
     def get_vwap(
         symbol: str,
@@ -4548,6 +4612,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "similar-move search fails, tape is still returned."
             ),
             args_schema=ForensicsInput,
+        ),
+        StructuredTool.from_function(
+            scan_market_forensics,
+            name="scan_market_forensics",
+            description=(
+                "Scan top-volume coins and find which ones currently "
+                "look like the setup before their own important past "
+                "moves. Returns ranked coins, closeness, and what "
+                "usually happened after those similar cases."
+            ),
+            args_schema=ForensicsScanInput,
         ),
         StructuredTool.from_function(
             get_vwap,

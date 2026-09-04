@@ -2345,6 +2345,81 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/forensics/scan:
+    get:
+      summary: Coins whose current tape looks like past pre-move setups
+      description: |
+        Scans top quote-volume coins and compares each coin's **current**
+        tape (last `window`) to the setup **before** that coin's own
+        important past moves. Returns coins that look similar, ranked by
+        closeness, plus what usually happened after those past cases
+        (`afterStory`, `afterHorizons`, `lean`). Default lookback **3d**,
+        default 12 coins (max 20). Informational only.
+      operationId: scanMarketForensics
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all; universe from Binance)
+          schema: { type: string, default: all }
+        - name: quote
+          in: query
+          description: Quote asset for the universe (default USDT)
+          schema: { type: string, default: USDT }
+        - name: lookback
+          in: query
+          description: 4h | 12h | 24h | 3d | 7d (default 3d)
+          schema: { type: string, default: "3d" }
+        - name: interval
+          in: query
+          description: 15m | 1h (default 15m)
+          schema: { type: string, default: "15m" }
+        - name: direction
+          in: query
+          description: up | down | both (default both)
+          schema: { type: string, default: both }
+        - name: minReturnPct
+          in: query
+          description: Minimum |return| percent for past moves
+          schema: { type: number }
+        - name: limit
+          in: query
+          description: How many top-volume coins to scan (default 12, max 20)
+          schema: { type: integer, default: 12 }
+        - name: window
+          in: query
+          description: Current/before window 15m | 30m | 1h | 2h | 4h (default 1h)
+          schema: { type: string, default: "1h" }
+        - name: during
+          in: query
+          description: Override past move window
+          schema: { type: string }
+        - name: fields
+          in: query
+          description: Tape to compare — price,volume,takers,oi,book (default all)
+          schema: { type: string, example: "volume,book,oi" }
+        - name: weights
+          in: query
+          description: Importance per field — book:3,oi:3,volume:1
+          schema: { type: string }
+        - name: minCoverage
+          in: query
+          description: Minimum percent of selected data that must be present (default 60)
+          schema: { type: number, default: 60 }
+        - name: horizons
+          in: query
+          description: After-windows CSV (default 15m,1h,4h)
+          schema: { type: string, example: "15m,1h,4h" }
+      responses:
+        '200':
+          description: Ranked coins that look like past pre-move setups
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MarketForensicsScan' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/vwap:
     get:
       summary: Volume-weighted average price
@@ -10121,6 +10196,22 @@ components:
         after: { type: string, description: What happened after the move }
         similar: { type: string, description: How similar past setups resolved }
         caution: { type: string }
+    MarketForensicsScan:
+      type: object
+      description: Coins whose current tape looks like past important-move setups
+      properties:
+        exchange: { type: string }
+        quote: { type: string }
+        lookback: { type: string }
+        window: { type: string }
+        interval: { type: string }
+        scanned: { type: integer }
+        compared: { type: integer }
+        hits:
+          type: array
+          items: { type: object }
+        summary: { type: string }
+        note: { type: string }
     SpotMarket:
       type: object
       properties:

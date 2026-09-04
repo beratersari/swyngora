@@ -872,6 +872,51 @@ func (c *APIClient) GetForensics(ctx context.Context, exchange, symbol, at, wind
 	return c.get(ctx, "/api/v1/market/forensics", q)
 }
 
+// ScanForensics ranks coins whose current tape looks like past pre-move setups.
+func (c *APIClient) ScanForensics(ctx context.Context, exchange, quote, lookback, interval, direction string, minReturnPct float64, limit int, window, during, fields, weights, minCoverage, horizons string) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if quote != "" {
+		q.Set("quote", quote)
+	}
+	if lookback != "" {
+		q.Set("lookback", lookback)
+	}
+	if interval != "" {
+		q.Set("interval", interval)
+	}
+	if direction != "" {
+		q.Set("direction", direction)
+	}
+	if minReturnPct > 0 {
+		q.Set("minReturnPct", strconv.FormatFloat(minReturnPct, 'f', -1, 64))
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if window != "" {
+		q.Set("window", window)
+	}
+	if during != "" {
+		q.Set("during", during)
+	}
+	if fields != "" {
+		q.Set("fields", fields)
+	}
+	if weights != "" {
+		q.Set("weights", weights)
+	}
+	if minCoverage != "" {
+		q.Set("minCoverage", minCoverage)
+	}
+	if horizons != "" {
+		q.Set("horizons", horizons)
+	}
+	return c.get(ctx, "/api/v1/market/forensics/scan", q)
+}
+
 // GetVWAP returns volume-weighted average price from startTime (or window) to now.
 func (c *APIClient) GetVWAP(ctx context.Context, exchange, symbol, window, startTime, endTime string) (json.RawMessage, error) {
 	q := url.Values{}

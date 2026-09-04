@@ -1,13 +1,18 @@
 import {
   DEFAULT_FORENSICS_DURING,
   DEFAULT_FORENSICS_EXCHANGE,
+  DEFAULT_FORENSICS_LOOKBACK,
   DEFAULT_FORENSICS_SYMBOL,
+  DEFAULT_FORENSICS_VIEW,
   DEFAULT_FORENSICS_WINDOW,
   FORENSICS_DURINGS,
   FORENSICS_EXCHANGES,
+  FORENSICS_LOOKBACKS,
+  FORENSICS_VIEWS,
   FORENSICS_WINDOWS,
 } from './ForensicsPage.constants';
 import type { ForensicsDuring, ForensicsExchange, ForensicsWindow } from './ForensicsPage.types';
+import type { ForensicsLookback, ForensicsView } from '@/libs/types/forensics.types';
 
 export function parseForensicsSymbol(raw: string | null): string {
   const s = raw?.trim().toUpperCase() ?? '';
@@ -26,6 +31,20 @@ export function parseForensicsWindow(raw: string | null): ForensicsWindow {
   return (FORENSICS_WINDOWS as readonly string[]).includes(s)
     ? (s as ForensicsWindow)
     : DEFAULT_FORENSICS_WINDOW;
+}
+
+export function parseForensicsView(raw: string | null): ForensicsView {
+  const s = (raw ?? '').trim().toLowerCase();
+  return (FORENSICS_VIEWS as readonly string[]).includes(s)
+    ? (s as ForensicsView)
+    : DEFAULT_FORENSICS_VIEW;
+}
+
+export function parseForensicsLookback(raw: string | null): ForensicsLookback {
+  const s = (raw ?? '').trim();
+  return (FORENSICS_LOOKBACKS as readonly string[]).includes(s)
+    ? (s as ForensicsLookback)
+    : DEFAULT_FORENSICS_LOOKBACK;
 }
 
 export function parseForensicsDuring(raw: string | null): ForensicsDuring {
