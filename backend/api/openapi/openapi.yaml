@@ -10214,9 +10214,39 @@ components:
         compared: { type: integer }
         hits:
           type: array
-          items: { type: object }
+          items: { $ref: '#/components/schemas/MarketForensicsScanHit' }
         summary: { type: string }
         note: { type: string }
+    MarketForensicsScanHit:
+      type: object
+      description: One coin whose current tape looks like a past pre-move setup
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        similarity: { type: string, description: Overall closeness 0–100 }
+        coverage: { type: string }
+        events: { type: integer }
+        matches: { type: integer }
+        lean: { type: string, enum: [up, down, mixed, unknown] }
+        whySimilar: { type: string, description: Which tape pieces matched the closest past setup }
+        compared:
+          type: array
+          description: Closest twin scores for price, volume, takers, oi, book
+          items:
+            type: object
+            properties:
+              name: { type: string, enum: [price, volume, takers, oi, book] }
+              used: { type: boolean }
+              score: { type: string, description: 0–100 closeness when used }
+              weight: { type: string }
+        afterStory: { type: string }
+        afterHorizons:
+          type: array
+          items: { type: object }
+        closestAt: { type: string, format: date-time }
+        closestDirection: { type: string }
+        closestReturnPct: { type: string }
+        summary: { type: string }
     SpotMarket:
       type: object
       properties:

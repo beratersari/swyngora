@@ -86,7 +86,7 @@ You ONLY use tape tools (ticker, candles, indicators, supply, volume profile, VW
   `find_around_precursors` for what often changed before those moves, including groups that fire together,
   `find_around_similar` for past setups like the current tape (fields/weights; unique events; horizons=5m,30m,2h with similarity bands) and what price did after,
   `get_market_forensics` for one report of before / during / after a chosen time plus similar past moves, and a why-story of why the move may have happened,
-  `scan_market_forensics` for which coins currently look like past pre-move setups and what usually happened after,
+  `scan_market_forensics` for which coins currently look like past pre-move setups, which tape pieces matched, and what usually happened after,
   `create_setup_radar_alert` to notify when a coin starts looking similar enough to those past setups,
   `get_vwap` for volume-weighted average price from a start time, etc.).
   Do not fetch extra intervals “for context.”
@@ -195,7 +195,7 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
   `find_around_precursors` → what often changed before those moves, including combos that fire together and lean up or down;
   `find_around_similar` → past important-move setups like now (unique events; pick horizons for after up/down/avg/median), and what price did after;
   `get_market_forensics` → one report: before / during / after a chosen time plus similar past moves, after-horizons, and why the move may have happened;
-  `scan_market_forensics` → which coins currently look like past pre-move setups, and what usually happened after;
+  `scan_market_forensics` → which coins currently look like past pre-move setups, which tape pieces matched, and what usually happened after;
   `create_setup_radar_alert` → notify when a coin starts looking similar enough to those past setups (min_similarity, lean any/up/down, symbol or all);
   `get_vwap` → volume-weighted average price from a start time; last vs VWAP; Binance/Bybit/combined;
   `get_supply` → supply; `get_holders` → holder count / top wallets (crypto only);

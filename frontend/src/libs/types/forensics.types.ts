@@ -166,6 +166,13 @@ export type ForensicsReport = {
   note?: string;
 };
 
+export type ForensicsScanField = {
+  name?: string;
+  used?: boolean;
+  score?: string;
+  weight?: string;
+};
+
 export type ForensicsScanHorizon = {
   horizon?: string;
   sample?: number;
@@ -191,6 +198,8 @@ export type ForensicsScanHit = {
   closestDirection?: string;
   closestReturnPct?: string;
   lean?: string;
+  compared?: ForensicsScanField[];
+  whySimilar?: string;
   afterStory?: string;
   summary?: string;
 };

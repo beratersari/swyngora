@@ -1252,7 +1252,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("scan_market_forensics",
-		mcp.WithDescription("Scan top-volume coins and find which ones currently look like the setup before their own important past moves. Returns ranked coins, how close the tape is, and what usually happened after those similar cases (afterStory, lean, afterHorizons). Default 12 coins, 3d lookback. Not financial advice."),
+		mcp.WithDescription("Scan top-volume coins and find which ones currently look like the setup before their own important past moves. Returns ranked coins, how close the tape is, which pieces matched (whySimilar + compared scores for price, volume, takers, oi, book), and what usually happened after those similar cases (afterStory, lean, afterHorizons). Default 12 coins, 3d lookback. Not financial advice."),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 		mcp.WithString("quote", mcp.Description("Quote asset, default USDT")),
 		mcp.WithString("lookback", mcp.Description("4h | 12h | 24h | 3d | 7d (default 3d)")),

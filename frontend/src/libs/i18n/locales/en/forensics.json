@@ -33,8 +33,16 @@
     "after1h": "After 1h",
     "after4h": "After 4h",
     "afterStory": "What usually happened after",
+    "whySimilar": "Why it looks similar",
     "alert": "Create alert",
     "alertAny": "Alert when any coin looks like a past setup",
+    "fields": {
+      "price": "Price",
+      "volume": "Volume",
+      "takers": "Taker flow",
+      "oi": "Open interest",
+      "book": "Order book"
+    },
     "leans": {
       "up": "Usually rose",
       "down": "Usually fell",

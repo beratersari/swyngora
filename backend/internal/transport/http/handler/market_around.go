@@ -812,6 +812,21 @@ func aroundSimilarHorizonsToDTO(in []domain.AroundSimilarHorizonStat) []aroundSi
 	return out
 }
 
+func aroundSimilarFieldsToDTO(in []domain.AroundSimilarFieldScore) []aroundSimilarFieldDTO {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]aroundSimilarFieldDTO, 0, len(in))
+	for _, c := range in {
+		row := aroundSimilarFieldDTO{Name: c.Name, Used: c.Used, Weight: formatHistQty(c.Weight)}
+		if c.Used {
+			row.Score = formatHistQty(c.Score)
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
 func aroundSimilarWeightsToDTO(in []domain.AroundSimilarFieldScore) []aroundSimilarFieldDTO {
 	out := make([]aroundSimilarFieldDTO, 0, len(in))
 	for _, c := range in {
@@ -941,6 +956,8 @@ type forensicsScanHitDTO struct {
 	ClosestDirection string                    `json:"closestDirection,omitempty"`
 	ClosestReturnPct string                    `json:"closestReturnPct,omitempty"`
 	Lean             string                    `json:"lean"`
+	Compared         []aroundSimilarFieldDTO   `json:"compared,omitempty"`
+	WhySimilar       string                    `json:"whySimilar,omitempty"`
 	AfterStory       string                    `json:"afterStory"`
 	Summary          string                    `json:"summary"`
 }
@@ -977,7 +994,8 @@ func forensicsScanToDTO(a *domain.ForensicsScanReport) forensicsScanResponse {
 			MedianAfterPct:   domain.FormatSignedPct(h.MedianAfterPct),
 			AfterHorizons:    aroundSimilarHorizonsToDTO(h.AfterHorizons),
 			ClosestDirection: h.ClosestDirection, ClosestReturnPct: domain.FormatSignedPct(h.ClosestReturnPct),
-			Lean: h.Lean, AfterStory: h.AfterStory, Summary: h.Summary,
+			Lean: h.Lean, Compared: aroundSimilarFieldsToDTO(h.Compared), WhySimilar: h.WhySimilar,
+			AfterStory: h.AfterStory, Summary: h.Summary,
 		}
 		if !h.ClosestAt.IsZero() {
 			row.ClosestAt = h.ClosestAt.UTC()

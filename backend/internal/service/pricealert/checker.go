@@ -553,10 +553,22 @@ func (c *Checker) finishRadar(ctx context.Context, a domain.PriceAlert, met bool
 		"lean":       detail.Lean,
 		"matches":    detail.Matches,
 		"afterStory": detail.AfterStory,
+		"whySimilar": detail.WhySimilar,
 		"summary":    detail.Summary,
 	}
 	if len(detail.Symbols) > 0 {
 		extra["symbols"] = detail.Symbols
+	}
+	if len(detail.Compared) > 0 {
+		fields := make([]map[string]any, 0, len(detail.Compared))
+		for _, c := range detail.Compared {
+			row := map[string]any{"name": c.Name, "used": c.Used}
+			if c.Used {
+				row["score"] = c.Score
+			}
+			fields = append(fields, row)
+		}
+		extra["compared"] = fields
 	}
 	updated, fired, err := c.Alerts.ProcessObservationExtra(ctx, a, ev, metric, now, extra)
 	if err != nil {

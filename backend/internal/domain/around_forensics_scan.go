@@ -31,6 +31,8 @@ type ForensicsScanHit struct {
 	ClosestDirection string
 	ClosestReturnPct float64
 	Lean             string // up | down | mixed | unknown
+	Compared         []AroundSimilarFieldScore // closest twin: price, volume, takers, oi, book
+	WhySimilar       string
 	AfterStory       string
 	Summary          string
 }
@@ -91,6 +93,7 @@ func ForensicsScanHitFromSimilar(rep *AroundSimilarReport) (ForensicsScanHit, bo
 		ClosestAt:        top.Move.At,
 		ClosestDirection: top.AfterDirection,
 		ClosestReturnPct: top.AfterReturnPct,
+		Compared:         append([]AroundSimilarFieldScore(nil), top.Compared...),
 	}
 	if h.Events == 0 {
 		h.Events = len(rep.Matches)
@@ -100,9 +103,87 @@ func ForensicsScanHitFromSimilar(rep *AroundSimilarReport) (ForensicsScanHit, bo
 		up, down = hz.Up, hz.Down
 	}
 	h.Lean = ForensicsScanLean(up, down)
+	h.WhySimilar = ExplainForensicsScanWhy(h)
 	h.AfterStory = ExplainForensicsScanAfter(h)
 	h.Summary = ExplainForensicsScanHit(h)
 	return h, true
+}
+
+const (
+	forensicsScanFieldClose = 70.0
+	forensicsScanFieldSome  = 50.0
+)
+
+func prettyScanField(name string) string {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case AroundSimilarFieldPrice:
+		return "price"
+	case AroundSimilarFieldVolume:
+		return "volume"
+	case AroundSimilarFieldTakers:
+		return "taker flow"
+	case AroundSimilarFieldOI:
+		return "open interest"
+	case AroundSimilarFieldBook:
+		return "the order book"
+	default:
+		return name
+	}
+}
+
+func scanFieldWere(items []string, singular, plural string) string {
+	if len(items) == 1 {
+		return items[0] + " " + singular
+	}
+	return joinList(items) + " " + plural
+}
+
+// ExplainForensicsScanWhy says which tape pieces matched the closest past setup.
+func ExplainForensicsScanWhy(h ForensicsScanHit) string {
+	var close, some, far, missing []string
+	for _, c := range h.Compared {
+		label := prettyScanField(c.Name)
+		if label == "" {
+			continue
+		}
+		if !c.Used {
+			missing = append(missing, label)
+			continue
+		}
+		switch {
+		case c.Score+1e-9 >= forensicsScanFieldClose:
+			close = append(close, label)
+		case c.Score+1e-9 >= forensicsScanFieldSome:
+			some = append(some, label)
+		default:
+			far = append(far, label)
+		}
+	}
+	if len(close)+len(some)+len(far)+len(missing) == 0 {
+		return ""
+	}
+	var parts []string
+	switch {
+	case len(close) > 0:
+		parts = append(parts, "Closest past twin matched most on "+joinList(close)+".")
+		if len(some) > 0 {
+			parts = append(parts, scanFieldWere(some, "was only somewhat similar.", "were only somewhat similar."))
+		}
+		if len(far) > 0 {
+			parts = append(parts, scanFieldWere(far, "looked different.", "looked different."))
+		}
+	case len(some) > 0:
+		parts = append(parts, "Closest past twin was only somewhat similar on "+joinList(some)+".")
+		if len(far) > 0 {
+			parts = append(parts, scanFieldWere(far, "looked different.", "looked different."))
+		}
+	case len(far) > 0:
+		parts = append(parts, "None of the compared tape pieces were close — "+scanFieldWere(far, "looked different.", "looked different."))
+	}
+	if len(missing) > 0 {
+		parts = append(parts, scanFieldWere(missing, "could not be compared.", "could not be compared."))
+	}
+	return strings.TrimSpace(strings.Join(parts, " "))
 }
 
 // ForensicsScanLean is up / down / mixed / unknown from after counts.
@@ -161,6 +242,9 @@ func ExplainForensicsScanHit(h ForensicsScanHit) string {
 		name = h.Symbol
 	}
 	head := fmt.Sprintf("%s currently looks like a past pre-move setup.", name)
+	if why := strings.TrimSpace(h.WhySimilar); why != "" {
+		head += " " + why
+	}
 	if s := strings.TrimSpace(h.AfterStory); s != "" {
 		return head + " " + s
 	}

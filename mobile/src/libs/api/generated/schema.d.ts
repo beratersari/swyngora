@@ -6436,9 +6436,39 @@ export interface components {
             interval?: string;
             scanned?: number;
             compared?: number;
-            hits?: Record<string, never>[];
+            hits?: components["schemas"]["MarketForensicsScanHit"][];
             summary?: string;
             note?: string;
+        };
+        /** @description One coin whose current tape looks like a past pre-move setup */
+        MarketForensicsScanHit: {
+            symbol?: string;
+            exchange?: string;
+            /** @description Overall closeness 0–100 */
+            similarity?: string;
+            coverage?: string;
+            events?: number;
+            matches?: number;
+            /** @enum {string} */
+            lean?: "up" | "down" | "mixed" | "unknown";
+            /** @description Which tape pieces matched the closest past setup */
+            whySimilar?: string;
+            /** @description Closest twin scores for price, volume, takers, oi, book */
+            compared?: {
+                /** @enum {string} */
+                name?: "price" | "volume" | "takers" | "oi" | "book";
+                used?: boolean;
+                /** @description 0–100 closeness when used */
+                score?: string;
+                weight?: string;
+            }[];
+            afterStory?: string;
+            afterHorizons?: Record<string, never>[];
+            /** Format: date-time */
+            closestAt?: string;
+            closestDirection?: string;
+            closestReturnPct?: string;
+            summary?: string;
         };
         SpotMarket: {
             symbol?: string;

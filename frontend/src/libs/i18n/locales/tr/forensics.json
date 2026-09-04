@@ -33,8 +33,16 @@
     "after1h": "1s sonra",
     "after4h": "4s sonra",
     "afterStory": "Benzer durumlarda sonra ne oldu",
+    "whySimilar": "Neden benzer",
     "alert": "Uyarı oluştur",
     "alertAny": "Herhangi bir coin geçmiş kuruluma benzeyince uyar",
+    "fields": {
+      "price": "Fiyat",
+      "volume": "Hacim",
+      "takers": "Taker akışı",
+      "oi": "Açık pozisyon",
+      "book": "Emir defteri"
+    },
     "leans": {
       "up": "Çoğunlukla yükseldi",
       "down": "Çoğunlukla düştü",

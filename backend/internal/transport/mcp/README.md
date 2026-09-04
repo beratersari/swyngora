@@ -51,7 +51,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `find_around_precursors` | What often changed before those moves, including conditions that fire together and whether they lean up or down |
 | `find_around_similar` | Past important-move setups; matching-bar after horizons with similarity bands; optional `at` uses that time's before-tape |
 | `get_market_forensics` | Before / during / after tape plus similar past moves; `why` explains the move in plain language |
-| `scan_market_forensics` | Coins whose current tape looks like past pre-move setups, plus what usually happened after |
+| `scan_market_forensics` | Coins whose current tape looks like past pre-move setups, which tape pieces matched, plus what usually happened after |
 | `get_vwap` | Volume-weighted average price from a start time (or window) to now; last vs VWAP; Binance, Bybit, combined |
 | `get_absorption` | Large market buys/sells vs little price move; absorbing side + strength (15m/1h/4h/24h + current run) |
 | `get_liquidity_sweeps` | Poke through a prior high/low that comes back; level, excursion, reclaim time, volume |

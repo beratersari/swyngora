@@ -4658,8 +4658,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "Scan top-volume coins and find which ones currently "
                 "look like the setup before their own important past "
-                "moves. Returns ranked coins, closeness, and what "
-                "usually happened after those similar cases."
+                "moves. Returns ranked coins, closeness, whySimilar "
+                "(which of price/volume/takers/oi/book matched), and "
+                "what usually happened after those similar cases."
             ),
             args_schema=ForensicsScanInput,
         ),

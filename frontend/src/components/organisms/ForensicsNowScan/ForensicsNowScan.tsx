@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import type { ForensicsScanHit } from '@/libs/types/forensics.types';
-import { setupRadarAlertHref } from './helpers';
-import { Stack, TableWrap } from './ForensicsNowScan.styles';
+import { orderedScanFields, scanFieldScore, setupRadarAlertHref } from './helpers';
+import { FieldScores, Stack, TableWrap, WhyCell } from './ForensicsNowScan.styles';
 import type { ForensicsNowScanProps } from './ForensicsNowScan.types';
 
 function horizonCell(hit: ForensicsScanHit, id: string): string {
@@ -52,6 +52,27 @@ export function ForensicsNowScan({ scan, isLoading, onOpenSymbol }: ForensicsNow
             columns={[
               { title: t('symbol'), dataIndex: 'symbol', key: 'symbol' },
               { title: t('similarity'), dataIndex: 'similarity', key: 'similarity' },
+              {
+                title: t('scan.whySimilar'),
+                key: 'whySimilar',
+                render: (_: unknown, row) => {
+                  const fields = orderedScanFields(row.compared);
+                  return (
+                    <WhyCell>
+                      {row.whySimilar ? <Text variant="bodySm">{row.whySimilar}</Text> : null}
+                      {fields.length > 0 ? (
+                        <FieldScores>
+                          {fields.map((f) => (
+                            <Text key={f.name ?? 'field'} variant="caption" color="secondary">
+                              {t(`scan.fields.${f.name}`, { defaultValue: f.name })} {scanFieldScore(f)}
+                            </Text>
+                          ))}
+                        </FieldScores>
+                      ) : null}
+                    </WhyCell>
+                  );
+                },
+              },
               {
                 title: t('scan.lean'),
                 dataIndex: 'lean',

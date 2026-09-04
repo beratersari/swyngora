@@ -64,8 +64,10 @@ type SetupRadarAlertDetail struct {
 	Lean       string
 	Matches    int
 	AfterStory string
+	WhySimilar string
 	Summary    string
 	Symbols    []string
+	Compared   []AroundSimilarFieldScore
 }
 
 func setupRadarHitPasses(a PriceAlert, h ForensicsScanHit) bool {
@@ -88,7 +90,9 @@ func setupRadarDetailFromHit(a PriceAlert, h ForensicsScanHit) SetupRadarAlertDe
 		Lean:       h.Lean,
 		Matches:    h.Matches,
 		AfterStory: h.AfterStory,
+		WhySimilar: h.WhySimilar,
 		Summary:    h.Summary,
+		Compared:   append([]AroundSimilarFieldScore(nil), h.Compared...),
 	}
 	if d.Exchange == "" {
 		d.Exchange = string(a.Exchange)
