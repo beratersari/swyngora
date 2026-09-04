@@ -27,7 +27,7 @@ func cloneImport(j *domain.ImportJob) *domain.ImportJob {
 	if j.SectionCounts != nil {
 		cp.SectionCounts = make(map[domain.ExportSection]domain.ImportSectionCount, len(j.SectionCounts))
 		for k, v := range j.SectionCounts {
-			cp.SectionCounts[k] = v
+			cp.SectionCounts[k] = domain.CloneImportSectionCount(v)
 		}
 	}
 	if j.AddedCounts != nil {
@@ -198,7 +198,7 @@ func (m *Memory) UpdatePreviewStats(_ context.Context, id string, counts map[dom
 	}
 	j.SectionCounts = make(map[domain.ExportSection]domain.ImportSectionCount, len(counts))
 	for k, v := range counts {
-		j.SectionCounts[k] = v
+		j.SectionCounts[k] = domain.CloneImportSectionCount(v)
 	}
 	j.Totals = totals
 	j.PayloadPath = payloadPath

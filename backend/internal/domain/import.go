@@ -44,7 +44,12 @@ type ImportSectionCount struct {
 	Valid      int `json:"valid"`
 	Invalid    int `json:"invalid"`
 	WillAdd    int `json:"willAdd"`    // valid records that would be inserted under the chosen mode
-	Duplicates int `json:"duplicates"` // valid but already present (merge) or duplicates within file
+	WillUpdate int `json:"willUpdate"` // valid records that match existing data and would be overwritten
+	Duplicates int `json:"duplicates"` // valid but already present (merge skip) or duplicates within file
+	// AddNames / UpdateNames list custom-signal profile names in the preview
+	// (empty for other sections). Sorted for stable responses.
+	AddNames    []string `json:"addNames,omitempty"`
+	UpdateNames []string `json:"updateNames,omitempty"`
 }
 
 // ImportPreviewTotals aggregates section counts.
@@ -52,7 +57,19 @@ type ImportPreviewTotals struct {
 	Valid      int `json:"valid"`
 	Invalid    int `json:"invalid"`
 	WillAdd    int `json:"willAdd"`
+	WillUpdate int `json:"willUpdate"`
 	Duplicates int `json:"duplicates"`
+}
+
+// CloneImportSectionCount copies name slices so store clones cannot mutate the source.
+func CloneImportSectionCount(v ImportSectionCount) ImportSectionCount {
+	if len(v.AddNames) > 0 {
+		v.AddNames = append([]string(nil), v.AddNames...)
+	}
+	if len(v.UpdateNames) > 0 {
+		v.UpdateNames = append([]string(nil), v.UpdateNames...)
+	}
+	return v
 }
 
 // ImportJob tracks an upload, preview, and optional background apply.

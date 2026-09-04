@@ -1,9 +1,10 @@
 {
   "title": "Settings",
-  "subtitle": "API keys, data export, sharing, and paper recurring buys. Paper trading is not real money.",
+  "subtitle": "API keys, data export and import, sharing, and paper recurring buys. Paper trading is not real money.",
   "tabs": {
     "keys": "API keys",
     "export": "Export",
+    "import": "Import",
     "sharing": "Sharing",
     "recurring": "Recurring buys"
   },
@@ -30,6 +31,24 @@
     "download": "Download",
     "cancel": "Cancel",
     "loadFailed": "Could not load exports"
+  },
+  "import": {
+    "hint": "Restore a previous export. Preview first so you can see which custom signal mixes will be added as new and which will update a saved mix.",
+    "preview": "Preview",
+    "previewed": "Preview ready",
+    "previewFailed": "Could not preview this file",
+    "counts": "{{valid}} valid · {{willAdd}} new · {{willUpdate}} updates",
+    "profilesAdd": "Profiles that will be added",
+    "profilesUpdate": "Profiles that will be updated",
+    "none": "None",
+    "mode": "Mode",
+    "merge": "Merge (update matching names)",
+    "replace": "Replace all mixes",
+    "confirm": "Import",
+    "started": "Import queued",
+    "empty": "No import jobs yet.",
+    "cancel": "Cancel",
+    "loadFailed": "Could not load imports"
   },
   "sharing": {
     "watchlist": "Watchlist shares",

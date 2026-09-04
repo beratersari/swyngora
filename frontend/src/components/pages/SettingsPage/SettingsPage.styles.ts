@@ -19,3 +19,9 @@ export const FormRow = styled.div`
   gap: ${({ theme }) => theme.spacing[2]}px;
   align-items: flex-end;
 `;
+
+export const NameList = styled.ul`
+  margin: 0;
+  padding-left: ${({ theme }) => theme.spacing[4]}px;
+  color: ${({ theme }) => theme.semantic.text.primary};
+`;

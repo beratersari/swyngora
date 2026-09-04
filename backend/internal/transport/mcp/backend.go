@@ -4012,9 +4012,17 @@ func (b *Backend) CancelExport(ctx context.Context, clientID, id string) (json.R
 func importJobJSON(j *domain.ImportJob) (json.RawMessage, error) {
 	secs := map[string]any{}
 	for k, v := range j.SectionCounts {
-		secs[string(k)] = map[string]any{
-			"valid": v.Valid, "invalid": v.Invalid, "willAdd": v.WillAdd, "duplicates": v.Duplicates,
+		sec := map[string]any{
+			"valid": v.Valid, "invalid": v.Invalid, "willAdd": v.WillAdd,
+			"willUpdate": v.WillUpdate, "duplicates": v.Duplicates,
 		}
+		if len(v.AddNames) > 0 {
+			sec["addNames"] = v.AddNames
+		}
+		if len(v.UpdateNames) > 0 {
+			sec["updateNames"] = v.UpdateNames
+		}
+		secs[string(k)] = sec
 	}
 	added := map[string]int{}
 	for k, v := range j.AddedCounts {
@@ -4026,7 +4034,8 @@ func importJobJSON(j *domain.ImportJob) (json.RawMessage, error) {
 		"errorMessage": j.ErrorMessage, "sections": secs,
 		"totals": map[string]any{
 			"valid": j.Totals.Valid, "invalid": j.Totals.Invalid,
-			"willAdd": j.Totals.WillAdd, "duplicates": j.Totals.Duplicates,
+			"willAdd": j.Totals.WillAdd, "willUpdate": j.Totals.WillUpdate,
+			"duplicates": j.Totals.Duplicates,
 		},
 		"added": added, "fileName": j.FileName, "byteSize": j.ByteSize,
 		"createdAt": j.CreatedAt.UTC().Format(time.RFC3339Nano),

@@ -227,3 +227,20 @@ func TestCustomSignalCatalog(t *testing.T) {
 		t.Fatalf("hunt default %v", huntPct)
 	}
 }
+
+func TestClassifyCustomSignalProfiles(t *testing.T) {
+	t.Parallel()
+	existing := []CustomSignalProfile{{Name: "Hunt mix"}, {Name: "Trend"}}
+	incoming := []CustomSignalProfile{{Name: "hunt mix"}, {Name: "New mix"}, {Name: "Trend"}}
+	add, update := ClassifyCustomSignalProfiles(incoming, existing)
+	if len(add) != 1 || add[0] != "New mix" {
+		t.Fatalf("add=%v", add)
+	}
+	if len(update) != 2 || update[0] != "Trend" || update[1] != "hunt mix" {
+		t.Fatalf("update=%v", update)
+	}
+	add, update = ClassifyCustomSignalProfiles(nil, existing)
+	if len(add) != 0 || len(update) != 0 {
+		t.Fatalf("empty incoming add=%v update=%v", add, update)
+	}
+}

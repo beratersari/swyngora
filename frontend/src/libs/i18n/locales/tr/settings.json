@@ -1,9 +1,10 @@
 {
   "title": "Ayarlar",
-  "subtitle": "API anahtarları, dışa aktarma, paylaşım ve kâğıt düzenli alımlar. Kâğıt işlem gerçek para değildir.",
+  "subtitle": "API anahtarları, dışa/içe aktarma, paylaşım ve kâğıt düzenli alımlar. Kâğıt işlem gerçek para değildir.",
   "tabs": {
     "keys": "API anahtarları",
     "export": "Dışa aktar",
+    "import": "İçe aktar",
     "sharing": "Paylaşım",
     "recurring": "Düzenli alım"
   },
@@ -30,6 +31,24 @@
     "download": "İndir",
     "cancel": "İptal",
     "loadFailed": "Dışa aktarmalar yüklenemedi"
+  },
+  "import": {
+    "hint": "Önceki bir dışa aktarmayı geri yükleyin. Önizlemede hangi özel sinyal karışımlarının yeni ekleneceği ve hangilerinin güncelleneceği görünür.",
+    "preview": "Önizle",
+    "previewed": "Önizleme hazır",
+    "previewFailed": "Bu dosya önizlenemedi",
+    "counts": "{{valid}} geçerli · {{willAdd}} yeni · {{willUpdate}} güncelleme",
+    "profilesAdd": "Eklenecek profiller",
+    "profilesUpdate": "Güncellenecek profiller",
+    "none": "Yok",
+    "mode": "Mod",
+    "merge": "Birleştir (eşleşen adları güncelle)",
+    "replace": "Tüm karışımları değiştir",
+    "confirm": "İçe aktar",
+    "started": "İçe aktarma kuyruğa alındı",
+    "empty": "Henüz iş yok.",
+    "cancel": "İptal",
+    "loadFailed": "İçe aktarmalar yüklenemedi"
   },
   "sharing": {
     "watchlist": "İzleme listesi paylaşımları",

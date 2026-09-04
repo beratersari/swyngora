@@ -298,33 +298,25 @@ func (s *Service) computePreviewCounts(ctx context.Context, clientID string, par
 		}
 		counts[domain.ExportSectionPortfolios] = c
 	}
-	// Custom signal profiles (dedupe by name)
+	// Custom signal profiles: same-name mixes are updates (merge overwrites
+	// weights; replace recreates after purge). File-internal dupes stay in Duplicates.
 	{
 		c := domain.ImportSectionCount{
 			Valid:      len(parsed.Payload.CustomSignals),
 			Invalid:    parsed.Invalid[domain.ExportSectionCustomSignals],
 			Duplicates: parsed.FileDuplicates[domain.ExportSectionCustomSignals],
 		}
-		if mode == domain.ImportModeReplace {
-			c.WillAdd = c.Valid
-		} else {
-			existing := map[string]struct{}{}
-			if s.data.CustomSignals != nil {
-				list, err := s.data.CustomSignals.ListProfiles(ctx, clientID)
-				if err == nil {
-					for _, p := range list {
-						existing[strings.ToLower(p.Name)] = struct{}{}
-					}
-				}
+		var existing []domain.CustomSignalProfile
+		if s.data.CustomSignals != nil {
+			list, err := s.data.CustomSignals.ListProfiles(ctx, clientID)
+			if err != nil {
+				return nil, domain.ImportPreviewTotals{}, err
 			}
-			for _, p := range parsed.Payload.CustomSignals {
-				if _, ok := existing[strings.ToLower(p.Name)]; ok {
-					c.Duplicates++
-				} else {
-					c.WillAdd++
-				}
-			}
+			existing = list
 		}
+		c.AddNames, c.UpdateNames = domain.ClassifyCustomSignalProfiles(parsed.Payload.CustomSignals, existing)
+		c.WillAdd = len(c.AddNames)
+		c.WillUpdate = len(c.UpdateNames)
 		counts[domain.ExportSectionCustomSignals] = c
 	}
 	var totals domain.ImportPreviewTotals
@@ -332,6 +324,7 @@ func (s *Service) computePreviewCounts(ctx context.Context, clientID string, par
 		totals.Valid += c.Valid
 		totals.Invalid += c.Invalid
 		totals.WillAdd += c.WillAdd
+		totals.WillUpdate += c.WillUpdate
 		totals.Duplicates += c.Duplicates
 	}
 	return counts, totals, nil

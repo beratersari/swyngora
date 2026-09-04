@@ -34,6 +34,7 @@ export const baseApi = createApi({
     'Portfolio',
     'AccountAPIKey',
     'ExportJob',
+    'ImportJob',
     'RecurringBuy',
     'WatchlistShare',
     'ScannerRule',

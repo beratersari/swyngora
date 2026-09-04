@@ -3542,7 +3542,9 @@ export interface paths {
          * Upload an export file and get a restore preview
          * @description Accepts multipart form field `file` (or raw JSON/CSV body).
          *     Parses watchlist, shares, alerts, backtests, paper portfolios, and custom signal profiles; returns counts of valid, invalid,
-         *     willAdd (under merge), and duplicates. Does not apply data until confirm.
+         *     willAdd, willUpdate, and duplicates. customSignals includes addNames (new mixes) and updateNames
+         *     (same name already saved). Merge overwrites matching profile weights; replace recreates after purge.
+         *     Does not apply data until confirm.
          *     Ownership is always the uploading clientId (file clientId is ignored).
          */
         post: operations["previewImport"];
@@ -3597,7 +3599,8 @@ export interface paths {
         put?: never;
         /**
          * Start applying a previewed import
-         * @description mode=merge adds only missing records (no duplicate symbols/shares/ids).
+         * @description mode=merge adds only missing records (no duplicate symbols/shares/ids). Same-name custom
+         *     signal profiles are updated in place (weights + default flag), not skipped.
          *     mode=replace clears existing section data for the client then imports from the file.
          *     Only one pending/running import per client (409 otherwise). Runs in the background.
          */
@@ -6094,7 +6097,13 @@ export interface components {
             valid?: number;
             invalid?: number;
             willAdd?: number;
+            /** @description Valid records that match existing data and would be overwritten (custom signal profiles by name) */
+            willUpdate?: number;
             duplicates?: number;
+            /** @description Custom signal profile names that would be created as new */
+            addNames?: string[];
+            /** @description Custom signal profile names that already exist and would be updated */
+            updateNames?: string[];
         };
         Account: {
             clientId?: string;

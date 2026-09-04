@@ -2,7 +2,7 @@
 
 ## Problem / goal
 
-Users who exported watchlist, shares, alerts, backtests, paper portfolios, and custom signal profiles (JSON/CSV) should be able to **restore** that file. Before any write, the API shows how many records are valid, invalid, and would be added. Users choose **merge** (keep current data, skip duplicates) or **replace** (clear section data, then import). Large applies run in the background with progress and cancel.
+Users who exported watchlist, shares, alerts, backtests, paper portfolios, and custom signal profiles (JSON/CSV) should be able to **restore** that file. Before any write, the API shows how many records are valid, invalid, would be added, and (for custom signal profiles) **which named mixes would be added vs updated**. Users choose **merge** (keep current data, skip duplicates; same-name custom mixes are overwritten) or **replace** (clear section data, then import). Large applies run in the background with progress and cancel.
 
 ## Behavior
 
@@ -19,19 +19,23 @@ Users who exported watchlist, shares, alerts, backtests, paper portfolios, and c
 | `valid` | Rows that pass validation |
 | `invalid` | Rows that fail validation |
 | `willAdd` | Valid rows that would be inserted under the selected mode |
-| `duplicates` | Valid but already present (merge) or duplicate within the file |
+| `willUpdate` | Valid custom-signal profiles whose name already exists (merge overwrites; replace recreates after purge) |
+| `duplicates` | Valid but already present (merge skip for non-profile sections) or duplicate within the file |
+| `addNames` | Custom signal profile names that would be created as new (sorted) |
+| `updateNames` | Custom signal profile names that already exist and would be updated (sorted) |
 
 ### Modes
 
 | Mode | Watchlist | Shares | Alerts | Backtests | Portfolios | Custom signals |
 |------|-----------|--------|--------|-----------|------------|----------------|
-| **merge** | Upsert by exchange+symbol; count new only | Skip existing grantee | Skip existing id | Skip existing id | Skip book if id or name already exists | Skip if a mix with the same name already exists |
+| **merge** | Upsert by exchange+symbol; count new only | Skip existing grantee | Skip existing id | Skip existing id | Skip book if id or name already exists | Update if a mix with the same name already exists; add new names |
 | **replace** | `Set` full list from file | Delete all shares then create | Delete all alerts then create | Delete all backtests then create | Delete all owned books then recreate from file | Delete all mixes then create |
 
 - Ownership is always the **uploading** `clientId` (file `clientId` is ignored). The file's main paper book (`id` = original owner) is remapped to the importer. Extra books always get a new id so they cannot occupy another tenant’s first-book primary key (`id = clientId`), including unused UUID-shaped client ids. A UUID already used by another owner is reminted before insert.
 - Trade/order/lot/margin ids are rekeyed on apply so two clients can share one database.
 - Same symbol / share grantee / alert id / backtest id / custom-signal name is never created twice.
-- Custom signal profile ids are reminted (they are a global primary key). An imported `isDefault` mix becomes this client's Custom tab default.
+- Custom signal profile ids are reminted on create (they are a global primary key). Merge keeps the existing id and overwrites weights / `isDefault`. An imported `isDefault` mix becomes this client's Custom tab default.
+- Preview lists `addNames` and `updateNames` on the `customSignals` section so the client can show which mixes are new vs which will replace a saved mix.
 - One **pending/running** import per client (`409`); multiple previews allowed until confirm conflicts with an active apply.
 
 ### HTTP
@@ -53,6 +57,7 @@ Users who exported watchlist, shares, alerts, backtests, paper portfolios, and c
 | Service | `backend/internal/service/dataimport/` |
 | HTTP | `backend/internal/transport/http/handler/import.go` |
 | OpenAPI | `backend/api/openapi/openapi.yaml` |
+| Web | Settings → Import (`frontend/src/components/pages/SettingsPage/`) |
 | MCP | `preview_import`, `confirm_import`, `get_import`, `list_imports`, `cancel_import` |
 
 ## Config

@@ -252,20 +252,27 @@ func (s *Service) applyCustomSignals(ctx context.Context, clientID string, mode 
 			return 0, err
 		}
 	}
-	existing := map[string]struct{}{}
+	existingByName := map[string]domain.CustomSignalProfile{}
 	if mode == domain.ImportModeMerge {
 		list, err := s.data.CustomSignals.ListProfiles(ctx, clientID)
 		if err != nil {
 			return 0, err
 		}
 		for _, p := range list {
-			existing[strings.ToLower(p.Name)] = struct{}{}
+			existingByName[strings.ToLower(p.Name)] = p
 		}
 	}
 	n := 0
 	for _, p := range pl.CustomSignals {
 		key := strings.ToLower(p.Name)
-		if _, ok := existing[key]; ok {
+		if cur, ok := existingByName[key]; ok {
+			cur.Weights = p.Weights
+			cur.IsDefault = p.IsDefault
+			cur.UpdatedAt = time.Now().UTC()
+			if _, err := s.data.CustomSignals.UpdateProfile(ctx, cur); err != nil {
+				continue
+			}
+			n++
 			continue
 		}
 		if cnt, err := s.data.CustomSignals.CountProfiles(ctx, clientID); err == nil && cnt >= domain.MaxCustomSignalProfilesPerClient {
@@ -276,7 +283,7 @@ func (s *Service) applyCustomSignals(ctx context.Context, clientID string, mode 
 		if _, err := s.data.CustomSignals.CreateProfile(ctx, p); err != nil {
 			continue
 		}
-		existing[key] = struct{}{}
+		existingByName[key] = p
 		n++
 	}
 	return n, nil

@@ -13,6 +13,8 @@ libs/api/
 │   ├── marketApi.types.ts
 │   ├── portfolioApi.ts  # paper portfolio + performance history
 │   ├── aiApi.ts         # POST /api/v1/ai/chat (non-stream fallback)
+│   ├── exportApi.ts
+│   ├── importApi.ts     # preview / confirm user-data restore
 │   └── healthApi.ts
 ├── aiChatStream.ts      # POST /api/v1/ai/chat/stream NDJSON (not RTK)
 ├── generated/           # OpenAPI codegen output — DO NOT hand-edit

@@ -49,9 +49,10 @@ info:
     - User data export: download watchlist, shares, price-alert history, and backtest results as
       JSON or CSV. Large exports run in the background with progress and cancel; one active export
       per client; files are owner-only downloads and expire after a TTL.
-    - User data import: upload a prior JSON/CSV export, preview valid/invalid/willAdd counts, then
-      confirm with merge or replace mode. Dedupes symbols/shares/ids; large applies run in the
-      background with progress and cancel.
+    - User data import: upload a prior JSON/CSV export, preview valid/invalid/willAdd/willUpdate
+      counts (custom signal profiles list addNames vs updateNames), then confirm with merge or
+      replace mode. Dedupes symbols/shares/ids; same-name custom mixes are updated on merge;
+      large applies run in the background with progress and cancel.
     - Account close: close a clientId for 7 days (reopen allowed); product APIs and shared-list
       access stop; after grace, user data and jobs are purged.
   version: 0.1.0
@@ -6872,7 +6873,9 @@ paths:
       description: |
         Accepts multipart form field `file` (or raw JSON/CSV body).
         Parses watchlist, shares, alerts, backtests, paper portfolios, and custom signal profiles; returns counts of valid, invalid,
-        willAdd (under merge), and duplicates. Does not apply data until confirm.
+        willAdd, willUpdate, and duplicates. customSignals includes addNames (new mixes) and updateNames
+        (same name already saved). Merge overwrites matching profile weights; replace recreates after purge.
+        Does not apply data until confirm.
         Ownership is always the uploading clientId (file clientId is ignored).
       operationId: previewImport
       tags: [Import]
@@ -6964,7 +6967,8 @@ paths:
     post:
       summary: Start applying a previewed import
       description: |
-        mode=merge adds only missing records (no duplicate symbols/shares/ids).
+        mode=merge adds only missing records (no duplicate symbols/shares/ids). Same-name custom
+        signal profiles are updated in place (weights + default flag), not skipped.
         mode=replace clears existing section data for the client then imports from the file.
         Only one pending/running import per client (409 otherwise). Runs in the background.
       operationId: confirmImport
@@ -9734,7 +9738,18 @@ components:
         valid: { type: integer }
         invalid: { type: integer }
         willAdd: { type: integer }
+        willUpdate:
+          type: integer
+          description: Valid records that match existing data and would be overwritten (custom signal profiles by name)
         duplicates: { type: integer }
+        addNames:
+          type: array
+          items: { type: string }
+          description: Custom signal profile names that would be created as new
+        updateNames:
+          type: array
+          items: { type: string }
+          description: Custom signal profile names that already exist and would be updated
     Account:
       type: object
       properties:

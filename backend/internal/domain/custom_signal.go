@@ -117,6 +117,33 @@ type CustomSignalProfilePort interface {
 	PurgeProfiles(ctx context.Context, clientID string) error
 }
 
+// ClassifyCustomSignalProfiles splits file-deduped mixes into new names vs
+// names that already exist for the client (case-insensitive). Names are sorted.
+func ClassifyCustomSignalProfiles(incoming, existing []CustomSignalProfile) (addNames, updateNames []string) {
+	have := make(map[string]struct{}, len(existing))
+	for _, p := range existing {
+		key := strings.ToLower(strings.TrimSpace(p.Name))
+		if key == "" {
+			continue
+		}
+		have[key] = struct{}{}
+	}
+	for _, p := range incoming {
+		name := strings.TrimSpace(p.Name)
+		if name == "" {
+			continue
+		}
+		if _, ok := have[strings.ToLower(name)]; ok {
+			updateNames = append(updateNames, name)
+		} else {
+			addNames = append(addNames, name)
+		}
+	}
+	sort.Strings(addNames)
+	sort.Strings(updateNames)
+	return addNames, updateNames
+}
+
 // DuplicateCustomSignalProfileName appends " (copy)" and trims to the name cap.
 func DuplicateCustomSignalProfileName(name string) string {
 	name = strings.TrimSpace(name)

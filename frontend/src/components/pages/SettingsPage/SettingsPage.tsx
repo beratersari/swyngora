@@ -6,15 +6,19 @@ import { PageHeader } from '@/components/molecules/PageHeader';
 import {
   rtkErrorMessage,
   useCancelExportMutation,
+  useCancelImportMutation,
+  useConfirmImportMutation,
   useCreateAccountAPIKeyMutation,
   useCreateRecurringBuyMutation,
   useDeleteRecurringBuyMutation,
   useListAccountAPIKeysQuery,
   useListExportsQuery,
+  useListImportsQuery,
   useListPortfolioSharesQuery,
   useListRecurringBuysQuery,
   useListWatchlistSharesQuery,
   usePauseRecurringBuyMutation,
+  usePreviewImportMutation,
   useResumeRecurringBuyMutation,
   useRevokeAccountAPIKeyMutation,
   useRevokePortfolioShareMutation,
@@ -22,10 +26,16 @@ import {
   useSharePortfolioMutation,
   useShareWatchlistMutation,
   useStartExportMutation,
+  type ImportJob,
 } from '@/libs/api';
 import { setBrowserApiToken } from '@/libs/utils';
-import { createdKeySessionToken, currentClientId, exportDownloadHref } from './SettingsPage.helpers';
-import { FormRow, PageStack, Section } from './SettingsPage.styles';
+import {
+  createdKeySessionToken,
+  currentClientId,
+  customSignalImportPreview,
+  exportDownloadHref,
+} from './SettingsPage.helpers';
+import { FormRow, NameList, PageStack, Section } from './SettingsPage.styles';
 
 export function SettingsPage() {
   const { t } = useTranslation(['settings', 'common']);
@@ -41,6 +51,7 @@ export function SettingsPage() {
         items={[
           { key: 'keys', label: t('settings:tabs.keys'), children: <KeysPane /> },
           { key: 'export', label: t('settings:tabs.export'), children: <ExportPane /> },
+          { key: 'import', label: t('settings:tabs.import'), children: <ImportPane /> },
           { key: 'sharing', label: t('settings:tabs.sharing'), children: <SharingPane /> },
           { key: 'recurring', label: t('settings:tabs.recurring'), children: <RecurringPane /> },
         ]}
@@ -188,6 +199,140 @@ function ExportPane() {
                 </FormRow>
               );
             },
+          },
+        ]}
+      />
+    </Section>
+  );
+}
+
+function ImportPane() {
+  const { t } = useTranslation(['settings', 'common']);
+  const list = useListImportsQuery(undefined, { pollingInterval: 4000 });
+  const [preview, previewState] = usePreviewImportMutation();
+  const [confirm, confirmState] = useConfirmImportMutation();
+  const [cancel] = useCancelImportMutation();
+  const [file, setFile] = useState<File | null>(null);
+  const [job, setJob] = useState<ImportJob | null>(null);
+  const [mode, setMode] = useState<'merge' | 'replace'>('merge');
+  const profiles = customSignalImportPreview(job);
+
+  return (
+    <Section>
+      <Text variant="caption" color="secondary">
+        {t('settings:import.hint')}
+      </Text>
+      <FormRow>
+        <input
+          type="file"
+          accept=".json,.csv,application/json,text/csv"
+          data-testid="import-file"
+          onChange={(e) => {
+            setFile(e.target.files?.[0] ?? null);
+            setJob(null);
+          }}
+        />
+        <Button
+          type="primary"
+          disabled={!file}
+          loading={previewState.isLoading}
+          onClick={async () => {
+            if (!file) return;
+            const got = await preview({ file }).unwrap();
+            setJob(got);
+            void message.success(t('settings:import.previewed'));
+          }}
+        >
+          {t('settings:import.preview')}
+        </Button>
+      </FormRow>
+      {previewState.isError ? (
+        <Alert
+          type="error"
+          showIcon
+          message={t('settings:import.previewFailed')}
+          description={rtkErrorMessage(previewState.error)}
+        />
+      ) : null}
+      {job ? (
+        <>
+          <Text variant="bodySm" data-testid="import-preview-counts">
+            {t('settings:import.counts', {
+              valid: job.totals?.valid ?? 0,
+              willAdd: job.totals?.willAdd ?? 0,
+              willUpdate: job.totals?.willUpdate ?? 0,
+            })}
+          </Text>
+          <Text variant="label" color="primary">
+            {t('settings:import.profilesAdd')}
+          </Text>
+          <NameList data-testid="import-preview-add">
+            {profiles.addNames.length === 0 ? (
+              <li>{t('settings:import.none')}</li>
+            ) : (
+              profiles.addNames.map((name) => <li key={name}>{name}</li>)
+            )}
+          </NameList>
+          <Text variant="label" color="primary">
+            {t('settings:import.profilesUpdate')}
+          </Text>
+          <NameList data-testid="import-preview-update">
+            {profiles.updateNames.length === 0 ? (
+              <li>{t('settings:import.none')}</li>
+            ) : (
+              profiles.updateNames.map((name) => <li key={name}>{name}</li>)
+            )}
+          </NameList>
+          <Form
+            layout="inline"
+            onFinish={async () => {
+              if (!job.id) return;
+              await confirm({ id: job.id, mode }).unwrap();
+              void message.success(t('settings:import.started'));
+            }}
+          >
+            <Form.Item label={t('settings:import.mode')}>
+              <Select
+                style={{ minWidth: 140 }}
+                value={mode}
+                onChange={setMode}
+                options={[
+                  { value: 'merge', label: t('settings:import.merge') },
+                  { value: 'replace', label: t('settings:import.replace') },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item>
+              <Button htmlType="submit" type="primary" loading={confirmState.isLoading}>
+                {t('settings:import.confirm')}
+              </Button>
+            </Form.Item>
+          </Form>
+        </>
+      ) : null}
+      {list.isError ? (
+        <Alert type="error" showIcon message={t('settings:import.loadFailed')} description={rtkErrorMessage(list.error)} />
+      ) : null}
+      <Table
+        size="small"
+        rowKey={(r) => r.id ?? r.createdAt ?? ''}
+        pagination={false}
+        dataSource={list.data?.imports ?? []}
+        locale={{ emptyText: t('settings:import.empty') }}
+        columns={[
+          { title: 'id', dataIndex: 'id' },
+          { title: t('settings:import.mode'), dataIndex: 'mode' },
+          { title: 'status', dataIndex: 'status' },
+          { title: '%', dataIndex: 'progressPct' },
+          {
+            title: '',
+            key: 'act',
+            render: (_, row) =>
+              row.id && (row.status === 'previewed' || row.status === 'pending' || row.status === 'running') ? (
+                <Button size="small" onClick={() => void cancel({ id: row.id as string })}>
+                  {t('settings:import.cancel')}
+                </Button>
+              ) : null,
           },
         ]}
       />

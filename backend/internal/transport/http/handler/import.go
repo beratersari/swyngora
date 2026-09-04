@@ -23,10 +23,13 @@ func NewImportHandler(svc *dataimport.Service) *ImportHandler {
 }
 
 type importSectionCountDTO struct {
-	Valid      int `json:"valid"`
-	Invalid    int `json:"invalid"`
-	WillAdd    int `json:"willAdd"`
-	Duplicates int `json:"duplicates"`
+	Valid       int      `json:"valid"`
+	Invalid     int      `json:"invalid"`
+	WillAdd     int      `json:"willAdd"`
+	WillUpdate  int      `json:"willUpdate"`
+	Duplicates  int      `json:"duplicates"`
+	AddNames    []string `json:"addNames,omitempty"`
+	UpdateNames []string `json:"updateNames,omitempty"`
 }
 
 type importJobDTO struct {
@@ -56,7 +59,8 @@ func importToDTO(j *domain.ImportJob) importJobDTO {
 		ErrorMessage: j.ErrorMessage, FileName: j.FileName, ByteSize: j.ByteSize,
 		Totals: importSectionCountDTO{
 			Valid: j.Totals.Valid, Invalid: j.Totals.Invalid,
-			WillAdd: j.Totals.WillAdd, Duplicates: j.Totals.Duplicates,
+			WillAdd: j.Totals.WillAdd, WillUpdate: j.Totals.WillUpdate,
+			Duplicates: j.Totals.Duplicates,
 		},
 		CreatedAt: j.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
@@ -64,7 +68,8 @@ func importToDTO(j *domain.ImportJob) importJobDTO {
 		d.Sections = make(map[string]importSectionCountDTO, len(j.SectionCounts))
 		for k, v := range j.SectionCounts {
 			d.Sections[string(k)] = importSectionCountDTO{
-				Valid: v.Valid, Invalid: v.Invalid, WillAdd: v.WillAdd, Duplicates: v.Duplicates,
+				Valid: v.Valid, Invalid: v.Invalid, WillAdd: v.WillAdd, WillUpdate: v.WillUpdate,
+				Duplicates: v.Duplicates, AddNames: v.AddNames, UpdateNames: v.UpdateNames,
 			}
 		}
 	}

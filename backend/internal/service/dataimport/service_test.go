@@ -561,8 +561,11 @@ func TestImport_CustomSignalsMergeAndReplace(t *testing.T) {
 		t.Fatal(err)
 	}
 	sec := job.SectionCounts[domain.ExportSectionCustomSignals]
-	if sec.Valid != 1 || sec.Invalid != 1 || sec.Duplicates != 2 || sec.WillAdd != 0 {
+	if sec.Valid != 1 || sec.Invalid != 1 || sec.Duplicates != 1 || sec.WillAdd != 0 || sec.WillUpdate != 1 {
 		t.Fatalf("merge preview %+v", sec)
+	}
+	if len(sec.UpdateNames) != 1 || sec.UpdateNames[0] != "Hunt mix" || len(sec.AddNames) != 0 {
+		t.Fatalf("profile names add=%v update=%v", sec.AddNames, sec.UpdateNames)
 	}
 
 	if _, err := svc.Confirm(ctx, "user1", job.ID, "merge"); err != nil {
@@ -573,15 +576,19 @@ func TestImport_CustomSignalsMergeAndReplace(t *testing.T) {
 	}
 	list, err := store.ListProfiles(ctx, "user1")
 	if err != nil || len(list) != 1 || list[0].ID != "keep-me" {
-		t.Fatalf("merge must skip existing name %+v %v", list, err)
+		t.Fatalf("merge must keep existing id %+v %v", list, err)
+	}
+	if list[0].Weights.Pct[domain.CustomFactorHuntUp] != 60 || list[0].Weights.Pct[domain.CustomFactorRSIRecovery] != 40 {
+		t.Fatalf("merge must update weights %+v", list[0])
 	}
 
 	job2, err := svc.Preview(ctx, PreviewInput{ClientID: "user1", FileBytes: sampleCustomSignalJSON(), FormatHint: "json"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if job2.SectionCounts[domain.ExportSectionCustomSignals].Valid != 1 {
-		t.Fatalf("replace preview %+v", job2.SectionCounts[domain.ExportSectionCustomSignals])
+	sec2 := job2.SectionCounts[domain.ExportSectionCustomSignals]
+	if sec2.Valid != 1 || sec2.WillUpdate != 1 || sec2.WillAdd != 0 || sec2.UpdateNames[0] != "Hunt mix" {
+		t.Fatalf("replace preview %+v", sec2)
 	}
 	if _, err := svc.Confirm(ctx, "user1", job2.ID, "replace"); err != nil {
 		t.Fatal(err)
@@ -599,6 +606,87 @@ func TestImport_CustomSignalsMergeAndReplace(t *testing.T) {
 	}
 	if got.Name != "Hunt mix" || !got.IsDefault || got.Weights.Pct[domain.CustomFactorHuntUp] != 60 {
 		t.Fatalf("imported %+v", got)
+	}
+}
+
+func TestImport_CustomSignalsPreviewAddAndUpdate(t *testing.T) {
+	dir := t.TempDir()
+	store, err := scannerstore.Open(filepath.Join(dir, "scan.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	svc, err := New(importstore.NewMemory(), DataSources{CustomSignals: store}, Options{
+		FileDir: filepath.Join(dir, "imp"), FileTTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	now := time.Now().UTC()
+	w, err := domain.ParseCustomSignalWeightMap(map[string]float64{domain.CustomFactorHuntUp: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateProfile(ctx, domain.CustomSignalProfile{
+		ID: "keep-me", ClientID: "user1", Name: "Hunt mix", Weights: w, IsDefault: true,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	pl := map[string]any{
+		"clientId": "other",
+		"customSignals": []map[string]any{
+			{
+				"id": "old-1", "name": "Hunt mix", "isDefault": true,
+				"weights":   map[string]float64{domain.CustomFactorHuntUp: 100},
+				"createdAt": now.Format(time.RFC3339Nano), "updatedAt": now.Format(time.RFC3339Nano),
+			},
+			{
+				"id": "old-2", "name": "Trend mix", "isDefault": false,
+				"weights":   map[string]float64{domain.CustomFactorHuntUp: 100},
+				"createdAt": now.Format(time.RFC3339Nano), "updatedAt": now.Format(time.RFC3339Nano),
+			},
+		},
+	}
+	raw, _ := json.Marshal(pl)
+	job, err := svc.Preview(ctx, PreviewInput{ClientID: "user1", FileBytes: raw, FormatHint: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sec := job.SectionCounts[domain.ExportSectionCustomSignals]
+	if sec.Valid != 2 || sec.WillAdd != 1 || sec.WillUpdate != 1 {
+		t.Fatalf("counts %+v", sec)
+	}
+	if len(sec.AddNames) != 1 || sec.AddNames[0] != "Trend mix" {
+		t.Fatalf("addNames=%v", sec.AddNames)
+	}
+	if len(sec.UpdateNames) != 1 || sec.UpdateNames[0] != "Hunt mix" {
+		t.Fatalf("updateNames=%v", sec.UpdateNames)
+	}
+	if job.Totals.WillAdd != 1 || job.Totals.WillUpdate != 1 {
+		t.Fatalf("totals %+v", job.Totals)
+	}
+
+	if _, err := svc.Confirm(ctx, "user1", job.ID, "merge"); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := svc.ProcessPending(ctx); err != nil || n != 1 {
+		t.Fatalf("n=%d err=%v", n, err)
+	}
+	list, err := store.ListProfiles(ctx, "user1")
+	if err != nil || len(list) != 2 {
+		t.Fatalf("list %+v %v", list, err)
+	}
+	byName := map[string]domain.CustomSignalProfile{}
+	for _, p := range list {
+		byName[p.Name] = p
+	}
+	if byName["Hunt mix"].ID != "keep-me" {
+		t.Fatalf("updated id %s", byName["Hunt mix"].ID)
+	}
+	if byName["Trend mix"].ID == "" || byName["Trend mix"].ID == "old-2" {
+		t.Fatalf("new profile should be reminted %+v", byName["Trend mix"])
 	}
 }
 

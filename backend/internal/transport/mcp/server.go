@@ -3970,7 +3970,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("preview_import",
-		mcp.WithDescription("Preview restoring a prior JSON export of watchlist/shares/alerts/backtests/portfolios/customSignals. Returns valid/invalid/willAdd counts without applying. Pass export JSON as content. Then call confirm_import with mode merge|replace."),
+		mcp.WithDescription("Preview restoring a prior JSON export of watchlist/shares/alerts/backtests/portfolios/customSignals. Returns valid/invalid/willAdd/willUpdate counts without applying. customSignals includes addNames (new mixes) and updateNames (same name already saved — merge overwrites weights). Pass export JSON as content. Then call confirm_import with mode merge|replace."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Full export file text (JSON preferred)")),
 		mcp.WithString("format", mcp.Description("json (default) or csv")),

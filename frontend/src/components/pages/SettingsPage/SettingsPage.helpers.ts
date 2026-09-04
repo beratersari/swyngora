@@ -1,5 +1,24 @@
 import { env } from '@/config/env';
+import type { ImportJob } from '@/libs/api';
 import { getOrCreateClientId } from '@/libs/utils';
+
+export type CustomSignalImportPreview = {
+  addNames: string[];
+  updateNames: string[];
+  willAdd: number;
+  willUpdate: number;
+};
+
+/** Named custom-signal mixes from an import preview (new vs overwrite). */
+export function customSignalImportPreview(job?: ImportJob | null): CustomSignalImportPreview {
+  const sec = job?.sections?.customSignals;
+  return {
+    addNames: [...(sec?.addNames ?? [])],
+    updateNames: [...(sec?.updateNames ?? [])],
+    willAdd: sec?.willAdd ?? 0,
+    willUpdate: sec?.willUpdate ?? 0,
+  };
+}
 
 export function exportDownloadHref(downloadUrl?: string | null): string | null {
   if (!downloadUrl) return null;
