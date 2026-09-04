@@ -52,6 +52,9 @@ type ImportSectionCount struct {
 	AddNames    []string                `json:"addNames,omitempty"`
 	UpdateNames []string                `json:"updateNames,omitempty"`
 	Conflicts   []ImportProfileConflict `json:"conflicts,omitempty"`
+	// DeskCandidates is the preview snapshot of saved mixes whose names appear
+	// in the file. Confirm compares this to the live desk and rejects if it changed.
+	DeskCandidates []ImportProfileCandidate `json:"deskCandidates,omitempty"`
 }
 
 // ImportProfileIncoming is one file row in a same-name conflict group.
@@ -110,6 +113,9 @@ func CloneImportSectionCount(v ImportSectionCount) ImportSectionCount {
 			cp[i] = cloneImportProfileConflict(c)
 		}
 		v.Conflicts = cp
+	}
+	if len(v.DeskCandidates) > 0 {
+		v.DeskCandidates = append([]ImportProfileCandidate(nil), v.DeskCandidates...)
 	}
 	return v
 }

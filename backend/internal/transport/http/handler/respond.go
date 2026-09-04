@@ -84,6 +84,9 @@ func mapError(err error) (status int, code, message string) {
 		return http.StatusNotFound, "not_found", "resource not found"
 	case errors.Is(err, domain.ErrForbidden):
 		return http.StatusForbidden, "forbidden", publicForbidden(err)
+	case errors.Is(err, domain.ErrImportPreviewStale):
+		return http.StatusConflict, "import_preview_stale",
+			"custom signal profiles changed since preview; preview again"
 	case errors.Is(err, domain.ErrConflict), errors.Is(err, domain.ErrIdempotencyHit):
 		return http.StatusConflict, "conflict", publicConflict(err)
 	case errors.Is(err, domain.ErrRateLimited):

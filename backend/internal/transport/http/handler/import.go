@@ -31,7 +31,8 @@ type importSectionCountDTO struct {
 	Duplicates   int                            `json:"duplicates"`
 	AddNames     []string                       `json:"addNames,omitempty"`
 	UpdateNames  []string                       `json:"updateNames,omitempty"`
-	Conflicts    []domain.ImportProfileConflict `json:"conflicts,omitempty"`
+	Conflicts      []domain.ImportProfileConflict   `json:"conflicts,omitempty"`
+	DeskCandidates []domain.ImportProfileCandidate  `json:"deskCandidates,omitempty"`
 }
 
 type importJobDTO struct {
@@ -73,6 +74,7 @@ func importToDTO(j *domain.ImportJob) importJobDTO {
 				Valid: v.Valid, Invalid: v.Invalid, WillAdd: v.WillAdd, WillUpdate: v.WillUpdate,
 				WillConflict: v.WillConflict, Duplicates: v.Duplicates,
 				AddNames: v.AddNames, UpdateNames: v.UpdateNames, Conflicts: v.Conflicts,
+				DeskCandidates: v.DeskCandidates,
 			}
 		}
 	}

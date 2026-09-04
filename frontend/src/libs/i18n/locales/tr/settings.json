@@ -37,6 +37,7 @@
     "preview": "Önizle",
     "previewed": "Önizleme hazır",
     "previewFailed": "Bu dosya önizlenemedi",
+    "stalePreview": "Kayıtlı karışımlar bu önizlemeden sonra değişti. İçe aktarmadan önce dosyayı yeniden önizleyin.",
     "counts": "{{valid}} geçerli · {{willAdd}} yeni · {{willUpdate}} güncelleme · {{willConflict}} çakışma",
     "profilesAdd": "Eklenecek profiller",
     "profilesUpdate": "Güncellenecek profiller",

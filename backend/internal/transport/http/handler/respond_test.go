@@ -33,6 +33,7 @@ func TestWriteError_Mapping(t *testing.T) {
 		{context.Canceled, http.StatusBadRequest, "canceled", "canceled"},
 		{context.DeadlineExceeded, http.StatusGatewayTimeout, "timeout", "timed out"},
 		{fmt.Errorf("%w: idempotency key reused with a different request", domain.ErrConflict), http.StatusConflict, "conflict", "idempotency key reused"},
+		{fmt.Errorf("%w: custom signal profiles changed; preview again", domain.ErrImportPreviewStale), http.StatusConflict, "import_preview_stale", "preview again"},
 		{fmt.Errorf("%w", domain.ErrIdempotencyHit), http.StatusConflict, "conflict", "idempotency key already used"},
 	}
 	for _, tc := range cases {

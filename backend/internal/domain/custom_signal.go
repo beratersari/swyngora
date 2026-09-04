@@ -258,6 +258,75 @@ func ResolutionByName(res []CustomSignalResolution) map[string]CustomSignalResol
 	return out
 }
 
+// CustomSignalDeskSnapshot is saved mixes whose names appear in the import file.
+// Sorted by id so two snapshots compare stably.
+func CustomSignalDeskSnapshot(incoming, existing []CustomSignalProfile) []ImportProfileCandidate {
+	names := make(map[string]struct{}, len(incoming))
+	for _, p := range incoming {
+		key := strings.ToLower(strings.TrimSpace(p.Name))
+		if key == "" {
+			continue
+		}
+		names[key] = struct{}{}
+	}
+	var out []ImportProfileCandidate
+	for _, p := range existing {
+		key := strings.ToLower(strings.TrimSpace(p.Name))
+		if _, ok := names[key]; !ok {
+			continue
+		}
+		cand := ImportProfileCandidate{ID: p.ID, Name: p.Name, IsDefault: p.IsDefault}
+		if !p.UpdatedAt.IsZero() {
+			cand.UpdatedAt = p.UpdatedAt.UTC().Format(time.RFC3339Nano)
+		}
+		out = append(out, cand)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// CustomSignalDeskSnapshotEqual reports whether two desk snapshots match.
+func CustomSignalDeskSnapshotEqual(a, b []ImportProfileCandidate) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].ID != b[i].ID || a[i].Name != b[i].Name || a[i].IsDefault != b[i].IsDefault || a[i].UpdatedAt != b[i].UpdatedAt {
+			return false
+		}
+	}
+	return true
+}
+
+// CheckCustomSignalPreviewFresh rejects confirm when intersecting desk mixes
+// (conflict candidates or an implicit unique update target) or a selected
+// profile no longer match the preview snapshot.
+func CheckCustomSignalPreviewFresh(previewed ImportSectionCount, liveDesk []ImportProfileCandidate, resolutions []CustomSignalResolution) error {
+	if !CustomSignalDeskSnapshotEqual(previewed.DeskCandidates, liveDesk) {
+		return fmt.Errorf("%w: custom signal profiles changed; preview again", ErrImportPreviewStale)
+	}
+	liveByID := make(map[string]ImportProfileCandidate, len(liveDesk))
+	for _, c := range liveDesk {
+		liveByID[c.ID] = c
+	}
+	previewByID := make(map[string]ImportProfileCandidate, len(previewed.DeskCandidates))
+	for _, c := range previewed.DeskCandidates {
+		previewByID[c.ID] = c
+	}
+	for _, r := range resolutions {
+		id := strings.TrimSpace(r.ProfileID)
+		if id == "" {
+			continue
+		}
+		prev, ok := previewByID[id]
+		live, ok2 := liveByID[id]
+		if !ok || !ok2 || prev != live {
+			return fmt.Errorf("%w: selected profile changed; preview again", ErrImportPreviewStale)
+		}
+	}
+	return nil
+}
+
 // DuplicateCustomSignalProfileName appends " (copy)" and trims to the name cap.
 func DuplicateCustomSignalProfileName(name string) string {
 	name = strings.TrimSpace(name)

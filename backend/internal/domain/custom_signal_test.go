@@ -1,9 +1,11 @@
 package domain
 
 import (
+	"errors"
 	"math"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 )
 
@@ -292,5 +294,37 @@ func TestValidateCustomSignalResolutions(t *testing.T) {
 		{Name: "Unknown"},
 	}); err == nil {
 		t.Fatal("expected unknown name error")
+	}
+}
+
+func TestCheckCustomSignalPreviewFresh(t *testing.T) {
+	t.Parallel()
+	incoming := []CustomSignalProfile{{Name: "Hunt mix"}}
+	existing := []CustomSignalProfile{
+		{ID: "a", Name: "Hunt mix", UpdatedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{ID: "b", Name: "Hunt mix", UpdatedAt: time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)},
+	}
+	snap := CustomSignalDeskSnapshot(incoming, existing)
+	if len(snap) != 2 || snap[0].ID != "a" || snap[1].ID != "b" {
+		t.Fatalf("snap %+v", snap)
+	}
+	previewed := ImportSectionCount{DeskCandidates: snap}
+	if err := CheckCustomSignalPreviewFresh(previewed, snap, []CustomSignalResolution{{Name: "Hunt mix", ProfileID: "b"}}); err != nil {
+		t.Fatal(err)
+	}
+	// New saved mix with the same name.
+	live := CustomSignalDeskSnapshot(incoming, append(existing, CustomSignalProfile{ID: "c", Name: "Hunt mix"}))
+	if err := CheckCustomSignalPreviewFresh(previewed, live, nil); !errors.Is(err, ErrImportPreviewStale) {
+		t.Fatalf("new candidate: %v", err)
+	}
+	// Selected mix edited (updatedAt).
+	edited := []CustomSignalProfile{
+		existing[0],
+		{ID: "b", Name: "Hunt mix", UpdatedAt: time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)},
+	}
+	if err := CheckCustomSignalPreviewFresh(previewed, CustomSignalDeskSnapshot(incoming, edited), []CustomSignalResolution{
+		{Name: "Hunt mix", ProfileID: "b"},
+	}); !errors.Is(err, ErrImportPreviewStale) {
+		t.Fatalf("edited selected: %v", err)
 	}
 }

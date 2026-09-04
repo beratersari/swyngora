@@ -3604,6 +3604,8 @@ export interface paths {
          *     signal profiles with exactly one saved mix are updated in place. Names that match more than
          *     one file row or more than one saved mix are conflicts — pass customSignalResolutions
          *     (name + incomingIndex and/or profileId). Omitted conflicts are skipped.
+         *     If saved mixes that intersect the file changed after preview (conflict candidates or a
+         *     selected profile), confirm returns 409 import_preview_stale and does not start the job.
          *     mode=replace clears existing section data for the client then imports from the file.
          *     Only one pending/running import per client (409 otherwise). Runs in the background.
          */
@@ -6110,6 +6112,8 @@ export interface components {
             /** @description Custom signal profile names that already exist and would be updated */
             updateNames?: string[];
             conflicts?: components["schemas"]["ImportProfileConflict"][];
+            /** @description Preview snapshot of saved mixes whose names appear in the file (id, name, default, updatedAt) */
+            deskCandidates?: components["schemas"]["ImportProfileCandidate"][];
         };
         ImportProfileIncoming: {
             index?: number;
@@ -12616,7 +12620,15 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
+            /** @description Another import is running, or custom signal profiles changed since preview (code import_preview_stale) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
     cancelImport: {

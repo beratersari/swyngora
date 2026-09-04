@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { PageHeader } from '@/components/molecules/PageHeader';
 import {
+  getRtkErrorCode,
   rtkErrorMessage,
   useCancelExportMutation,
   useCancelImportMutation,
@@ -218,6 +219,7 @@ function ImportPane() {
   const [job, setJob] = useState<ImportJob | null>(null);
   const [mode, setMode] = useState<'merge' | 'replace'>('merge');
   const [picks, setPicks] = useState<Record<string, CustomSignalConflictPick>>({});
+  const [stale, setStale] = useState(false);
   const profiles = customSignalImportPreview(job);
 
   return (
@@ -234,6 +236,7 @@ function ImportPane() {
             setFile(e.target.files?.[0] ?? null);
             setJob(null);
             setPicks({});
+            setStale(false);
           }}
         />
         <Button
@@ -245,12 +248,16 @@ function ImportPane() {
             const got = await preview({ file }).unwrap();
             setJob(got);
             setPicks({});
+            setStale(false);
             void message.success(t('settings:import.previewed'));
           }}
         >
           {t('settings:import.preview')}
         </Button>
       </FormRow>
+      {stale ? (
+        <Alert type="warning" showIcon message={t('settings:import.stalePreview')} data-testid="import-stale" />
+      ) : null}
       {previewState.isError ? (
         <Alert
           type="error"
@@ -357,12 +364,23 @@ function ImportPane() {
             layout="inline"
             onFinish={async () => {
               if (!job.id) return;
-              await confirm({
-                id: job.id,
-                mode,
-                customSignalResolutions: customSignalResolutionsFromPicks(profiles.conflicts, picks),
-              }).unwrap();
-              void message.success(t('settings:import.started'));
+              try {
+                await confirm({
+                  id: job.id,
+                  mode,
+                  customSignalResolutions: customSignalResolutionsFromPicks(profiles.conflicts, picks),
+                }).unwrap();
+                setStale(false);
+                void message.success(t('settings:import.started'));
+              } catch (err) {
+                if (getRtkErrorCode(err) === 'import_preview_stale') {
+                  setStale(true);
+                  setJob(null);
+                  setPicks({});
+                  return;
+                }
+                void message.error(rtkErrorMessage(err));
+              }
             }}
           >
             <Form.Item label={t('settings:import.mode')}>

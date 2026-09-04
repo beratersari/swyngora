@@ -55,7 +55,11 @@ func (s *Service) runJob(ctx context.Context, job *domain.ImportJob) error {
 		return s.store.Finish(ctx, job.ID, domain.ImportCanceled, added, "", time.Now().UTC())
 	}
 	_ = s.store.UpdateProgress(ctx, job.ID, float64(len(steps))/float64(len(steps)+1)*100, string(domain.ExportSectionCustomSignals))
-	nCS, err := s.applyCustomSignals(ctx, job.ClientID, mode, pl, resolutions)
+	var previewedDesk []domain.ImportProfileCandidate
+	if cs, ok := job.SectionCounts[domain.ExportSectionCustomSignals]; ok {
+		previewedDesk = cs.DeskCandidates
+	}
+	nCS, err := s.applyCustomSignals(ctx, job.ClientID, mode, pl, resolutions, previewedDesk)
 	if err != nil {
 		return err
 	}
@@ -252,22 +256,23 @@ func (s *Service) applyBacktests(ctx context.Context, clientID string, mode doma
 	return n, nil
 }
 
-func (s *Service) applyCustomSignals(ctx context.Context, clientID string, mode domain.ImportMode, pl *payload, resolutions []domain.CustomSignalResolution) (int, error) {
+func (s *Service) applyCustomSignals(ctx context.Context, clientID string, mode domain.ImportMode, pl *payload, resolutions []domain.CustomSignalResolution, previewedDesk []domain.ImportProfileCandidate) (int, error) {
 	if s.data.CustomSignals == nil {
 		return 0, nil
+	}
+	existing, err := s.data.CustomSignals.ListProfiles(ctx, clientID)
+	if err != nil {
+		return 0, err
+	}
+	liveDesk := domain.CustomSignalDeskSnapshot(pl.CustomSignals, existing)
+	if err := domain.CheckCustomSignalPreviewFresh(domain.ImportSectionCount{DeskCandidates: previewedDesk}, liveDesk, resolutions); err != nil {
+		return 0, err
 	}
 	if mode == domain.ImportModeReplace {
 		if err := s.data.CustomSignals.PurgeProfiles(ctx, clientID); err != nil {
 			return 0, err
 		}
-	}
-	var existing []domain.CustomSignalProfile
-	if mode == domain.ImportModeMerge {
-		list, err := s.data.CustomSignals.ListProfiles(ctx, clientID)
-		if err != nil {
-			return 0, err
-		}
-		existing = list
+		existing = nil
 	}
 	class := domain.ClassifyCustomSignalImport(pl.CustomSignals, existing, mode == domain.ImportModeReplace)
 	byRes := domain.ResolutionByName(resolutions)

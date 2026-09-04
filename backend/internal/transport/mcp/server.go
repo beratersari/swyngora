@@ -3993,7 +3993,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("confirm_import",
-		mcp.WithDescription("Start applying a previewed import. mode=merge (skip duplicates) or replace (clear then import). For custom-signal name conflicts pass customSignalResolutions JSON [{name, incomingIndex, profileId}]. Omitted conflicts are not imported. One active apply per client."),
+		mcp.WithDescription("Start applying a previewed import. mode=merge (skip duplicates) or replace (clear then import). For custom-signal name conflicts pass customSignalResolutions JSON [{name, incomingIndex, profileId}]. Omitted conflicts are not imported. If saved mixes changed after preview, returns import_preview_stale — preview again. One active apply per client."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithString("importId", mcp.Required(), mcp.Description("Import job id from preview")),
 		mcp.WithString("mode", mcp.Required(), mcp.Description("merge or replace")),

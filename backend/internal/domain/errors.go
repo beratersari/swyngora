@@ -9,6 +9,8 @@ var (
 	ErrForbidden       = errors.New("forbidden")
 	// ErrConflict is a state conflict (e.g. export already running for this client).
 	ErrConflict = errors.New("conflict")
+	// ErrImportPreviewStale means desk mixes changed after preview; confirm must not start.
+	ErrImportPreviewStale = errors.New("import preview stale")
 	// ErrIdempotencyHit means this write collided with an existing idempotency key (replay).
 	ErrIdempotencyHit = errors.New("idempotency key already used")
 	// ErrRecurringPeriodDone means this plan period already filled; do not debit again.

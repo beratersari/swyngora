@@ -37,6 +37,7 @@
     "preview": "Preview",
     "previewed": "Preview ready",
     "previewFailed": "Could not preview this file",
+    "stalePreview": "Saved mixes changed after this preview. Preview the file again before importing.",
     "counts": "{{valid}} valid · {{willAdd}} new · {{willUpdate}} updates · {{willConflict}} conflicts",
     "profilesAdd": "Profiles that will be added",
     "profilesUpdate": "Profiles that will be updated",

@@ -318,6 +318,7 @@ func (s *Service) computePreviewCounts(ctx context.Context, clientID string, par
 		c.AddNames = class.AddNames
 		c.UpdateNames = class.UpdateNames
 		c.Conflicts = class.Conflicts
+		c.DeskCandidates = domain.CustomSignalDeskSnapshot(parsed.Payload.CustomSignals, existing)
 		c.WillAdd = len(c.AddNames)
 		c.WillUpdate = len(c.UpdateNames)
 		c.WillConflict = len(c.Conflicts)
@@ -385,10 +386,13 @@ func (s *Service) Confirm(ctx context.Context, clientID, id, mode string, resolu
 		counts[sec] = cc
 	}
 	totals.Invalid = job.Totals.Invalid
-	if cs, ok := counts[domain.ExportSectionCustomSignals]; ok {
-		if err := domain.ValidateCustomSignalResolutions(cs.Conflicts, resolutions); err != nil {
-			return nil, err
-		}
+	previewed := job.SectionCounts[domain.ExportSectionCustomSignals]
+	live := counts[domain.ExportSectionCustomSignals]
+	if err := domain.CheckCustomSignalPreviewFresh(previewed, live.DeskCandidates, resolutions); err != nil {
+		return nil, err
+	}
+	if err := domain.ValidateCustomSignalResolutions(previewed.Conflicts, resolutions); err != nil {
+		return nil, err
 	}
 	if err := s.writeResolutions(job, resolutions); err != nil {
 		return nil, err

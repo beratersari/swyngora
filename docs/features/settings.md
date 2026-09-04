@@ -12,6 +12,8 @@ buys existed as HTTP + MCP only. Users need a desk page.
 - Import preview lists custom signal mixes that will be **added**, **updated**,
   or **conflicted**. Same-name conflicts let the user pick which saved mix to
   update; no pick skips that name (`customSignalResolutions` on confirm).
+  If saved mixes change after preview, confirm is rejected (`import_preview_stale`)
+  and Settings asks the user to preview again.
 - Uses existing OpenAPI endpoints and the current `X-Client-Id`.
 - Creating a **read** key shows the secret once and does **not** write it
   to `swyngora.apiAuthToken` (read keys 403 paper mutations). A **trade**

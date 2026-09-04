@@ -701,6 +701,89 @@ func TestImport_CustomSignalsNameConflictPickTarget(t *testing.T) {
 	}
 }
 
+func TestImport_CustomSignalsStalePreviewRejectsConfirm(t *testing.T) {
+	dir := t.TempDir()
+	store, err := scannerstore.Open(filepath.Join(dir, "scan.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	svc, err := New(importstore.NewMemory(), DataSources{CustomSignals: store}, Options{
+		FileDir: filepath.Join(dir, "imp"), FileTTL: time.Hour,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	now := time.Now().UTC()
+	w, err := domain.ParseCustomSignalWeightMap(map[string]float64{domain.CustomFactorHuntUp: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"keep-a", "keep-b"} {
+		if _, err := store.CreateProfile(ctx, domain.CustomSignalProfile{
+			ID: id, ClientID: "user1", Name: "Hunt mix", Weights: w, CreatedAt: now, UpdatedAt: now,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pl := map[string]any{
+		"clientId": "other",
+		"customSignals": []map[string]any{
+			{
+				"id": "old-1", "name": "Hunt mix", "isDefault": true,
+				"weights":   map[string]float64{domain.CustomFactorRSIRecovery: 40, domain.CustomFactorHuntUp: 60},
+				"createdAt": now.Format(time.RFC3339Nano), "updatedAt": now.Format(time.RFC3339Nano),
+			},
+		},
+	}
+	raw, _ := json.Marshal(pl)
+	job, err := svc.Preview(ctx, PreviewInput{ClientID: "user1", FileBytes: raw, FormatHint: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	w2, err := domain.ParseCustomSignalWeightMap(map[string]float64{domain.CustomFactorHuntUp: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.GetProfile(ctx, "user1", "keep-b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got.Weights = w2
+	got.UpdatedAt = now.Add(time.Minute)
+	if _, err := store.UpdateProfile(ctx, *got); err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.Confirm(ctx, "user1", job.ID, "merge", []domain.CustomSignalResolution{
+		{Name: "Hunt mix", ProfileID: "keep-b"},
+	})
+	if !errors.Is(err, domain.ErrImportPreviewStale) {
+		t.Fatalf("edited selected: %v", err)
+	}
+	still, err := svc.Get(ctx, "user1", job.ID)
+	if err != nil || still.Status != domain.ImportPreviewed {
+		t.Fatalf("job must stay previewed %+v %v", still, err)
+	}
+
+	job2, err := svc.Preview(ctx, PreviewInput{ClientID: "user1", FileBytes: raw, FormatHint: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.CreateProfile(ctx, domain.CustomSignalProfile{
+		ID: "keep-c", ClientID: "user1", Name: "Hunt mix", Weights: w, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.Confirm(ctx, "user1", job2.ID, "merge", []domain.CustomSignalResolution{
+		{Name: "Hunt mix", ProfileID: "keep-b"},
+	})
+	if !errors.Is(err, domain.ErrImportPreviewStale) {
+		t.Fatalf("new candidate: %v", err)
+	}
+}
+
 func TestImport_CustomSignalsPreviewAddAndUpdate(t *testing.T) {
 	dir := t.TempDir()
 	store, err := scannerstore.Open(filepath.Join(dir, "scan.db"))

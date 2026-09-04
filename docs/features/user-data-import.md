@@ -39,6 +39,7 @@ Users who exported watchlist, shares, alerts, backtests, paper portfolios, and c
 - Custom signal profile ids are reminted on create (they are a global primary key). Merge keeps the existing id and overwrites weights / `isDefault`. An imported `isDefault` mix becomes this client's Custom tab default.
 - Preview lists `addNames`, `updateNames`, and `conflicts`. A name is a **conflict** when the file has more than one mix with that name, or the desk already has more than one saved mix with that name. Confirm with `customSignalResolutions` (`name` + `incomingIndex` and/or `profileId`). **No pick → that name is not imported.**
 - Settings → Import shows conflict radios so the user can choose which saved mix to update.
+- Confirm **re-reads saved mixes** and compares them to the preview snapshot (`deskCandidates`: id, name, default, `updatedAt`). If conflict candidates or a selected profile changed (created, deleted, renamed, or edited), confirm returns **409** `import_preview_stale` and does not start the job. Preview again. The apply worker repeats this check so a queued job cannot overwrite a mix that changed after confirm.
 - One **pending/running** import per client (`409`); multiple previews allowed until confirm conflicts with an active apply.
 
 ### HTTP
