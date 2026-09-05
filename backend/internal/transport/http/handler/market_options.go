@@ -32,24 +32,40 @@ type optionsATMDTO struct {
 }
 
 type optionsExpiryDTO struct {
-	Expiry          time.Time `json:"expiry"`
-	Label           string    `json:"label"`
-	DaysToExpiry    int       `json:"daysToExpiry"`
-	OpenInterest    string    `json:"openInterest"`
-	OpenInterestUsd string    `json:"openInterestUsd"`
-	Volume          string    `json:"volume"`
-	VolumeUsd       string    `json:"volumeUsd"`
-	CallOi          string    `json:"callOi"`
-	PutOi           string    `json:"putOi"`
-	CallVolume      string    `json:"callVolume"`
-	PutVolume       string    `json:"putVolume"`
-	PutCallOi       string    `json:"putCallOi,omitempty"`
-	SharePct        string    `json:"sharePct"`
-	ContractCount   int       `json:"contractCount"`
-	AtmIv           string    `json:"atmIv,omitempty"`
-	CallIv          string    `json:"callIv,omitempty"`
-	PutIv           string    `json:"putIv,omitempty"`
-	Skew            string    `json:"skew,omitempty"`
+	Expiry          time.Time                `json:"expiry"`
+	Label           string                   `json:"label"`
+	DaysToExpiry    int                      `json:"daysToExpiry"`
+	OpenInterest    string                   `json:"openInterest"`
+	OpenInterestUsd string                   `json:"openInterestUsd"`
+	Volume          string                   `json:"volume"`
+	VolumeUsd       string                   `json:"volumeUsd"`
+	CallOi          string                   `json:"callOi"`
+	PutOi           string                   `json:"putOi"`
+	CallVolume      string                   `json:"callVolume"`
+	PutVolume       string                   `json:"putVolume"`
+	PutCallOi       string                   `json:"putCallOi,omitempty"`
+	SharePct        string                   `json:"sharePct"`
+	ContractCount   int                      `json:"contractCount"`
+	AtmIv           string                   `json:"atmIv,omitempty"`
+	CallIv          string                   `json:"callIv,omitempty"`
+	PutIv           string                   `json:"putIv,omitempty"`
+	Skew            string                   `json:"skew,omitempty"`
+	ExpectedMoveAbs string                   `json:"expectedMoveAbs,omitempty"`
+	ExpectedMovePct string                   `json:"expectedMovePct,omitempty"`
+	ExpectedLow     string                   `json:"expectedLow,omitempty"`
+	ExpectedHigh    string                   `json:"expectedHigh,omitempty"`
+	MaxPain         string                   `json:"maxPain,omitempty"`
+	MaxPainPayout   string                   `json:"maxPainPayout,omitempty"`
+	Strikes         []optionsExpiryStrikeDTO `json:"strikes,omitempty"`
+}
+
+type optionsExpiryStrikeDTO struct {
+	Strike    string `json:"strike"`
+	CallOi    string `json:"callOi"`
+	PutOi     string `json:"putOi"`
+	Payout    string `json:"payout"`
+	IsMaxPain bool   `json:"isMaxPain,omitempty"`
+	BelowSpot bool   `json:"belowSpot,omitempty"`
 }
 
 type optionsVolPointDTO struct {
@@ -141,6 +157,26 @@ func optionsToDTO(a *domain.OptionsSnapshot) optionsResponse {
 		}
 		if e.HasSkew {
 			row.Skew = domain.FormatSignedQty(e.Skew)
+		}
+		if e.HasExpectedMove {
+			row.ExpectedMoveAbs = formatHistQty(e.ExpectedMoveAbs)
+			row.ExpectedMovePct = formatHistQty(e.ExpectedMovePct)
+			row.ExpectedLow = formatHistQty(e.ExpectedLow)
+			row.ExpectedHigh = formatHistQty(e.ExpectedHigh)
+		}
+		if e.HasMaxPain {
+			row.MaxPain = formatHistQty(e.MaxPain)
+			row.MaxPainPayout = formatHistQty(e.MaxPainPayout)
+		}
+		if len(e.Strikes) > 0 {
+			row.Strikes = make([]optionsExpiryStrikeDTO, 0, len(e.Strikes))
+			for _, s := range e.Strikes {
+				row.Strikes = append(row.Strikes, optionsExpiryStrikeDTO{
+					Strike: formatHistQty(s.Strike), CallOi: formatHistQty(s.CallOI),
+					PutOi: formatHistQty(s.PutOI), Payout: formatHistQty(s.Payout),
+					IsMaxPain: s.IsMaxPain, BelowSpot: s.BelowSpot,
+				})
+			}
 		}
 		expiries = append(expiries, row)
 	}

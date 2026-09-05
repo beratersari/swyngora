@@ -109,6 +109,44 @@ func TestBuildOptionsSnapshot(t *testing.T) {
 	if !snap.Expiries[0].HasSkew || snap.Expiries[0].Skew != 2 {
 		t.Fatalf("expiry vol=%+v", snap.Expiries[0])
 	}
+	if !snap.Expiries[0].HasExpectedMove || snap.Expiries[0].ExpectedMovePct <= 0 {
+		t.Fatalf("expected move=%+v", snap.Expiries[0])
+	}
+	if !snap.Expiries[0].HasMaxPain || snap.Expiries[0].MaxPain != 100000 {
+		t.Fatalf("max pain=%+v", snap.Expiries[0])
+	}
+}
+
+func TestOptionsExpectedMove(t *testing.T) {
+	t.Parallel()
+	abs, pct, low, high, ok := OptionsExpectedMove(100000, 50, 0.25)
+	if !ok || math.Abs(pct-25) > 1e-9 || math.Abs(abs-25000) > 1e-6 {
+		t.Fatalf("abs=%v pct=%v", abs, pct)
+	}
+	if low != 75000 || high != 125000 {
+		t.Fatalf("band %v %v", low, high)
+	}
+	if _, _, _, _, ok = OptionsExpectedMove(100000, 50, 0); ok {
+		t.Fatal("zero tenor")
+	}
+}
+
+func TestOptionsMaxPainTwoStrikes(t *testing.T) {
+	t.Parallel()
+	asOf := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+	exp := time.Date(2026, 3, 27, 8, 0, 0, 0, time.UTC)
+	snap := BuildOptionsSnapshot("BTC", []OptionQuote{
+		{Asset: "BTC", Expiry: exp, Strike: 90_000, Side: OptionSidePut, OpenInterest: 10, Underlying: 100000},
+		{Asset: "BTC", Expiry: exp, Strike: 110_000, Side: OptionSideCall, OpenInterest: 10, Underlying: 100000},
+		{Asset: "BTC", Expiry: exp, Strike: 100_000, Side: OptionSideCall, OpenInterest: 1, MarkIV: 50, Underlying: 100000},
+		{Asset: "BTC", Expiry: exp, Strike: 100_000, Side: OptionSidePut, OpenInterest: 1, MarkIV: 50, Underlying: 100000},
+	}, 100000, OptionsDVOL{}, asOf)
+	if !snap.Expiries[0].HasMaxPain || snap.Expiries[0].MaxPain != 100000 {
+		t.Fatalf("pain=%+v", snap.Expiries[0])
+	}
+	if len(snap.Expiries[0].Strikes) != 3 {
+		t.Fatalf("strikes=%d", len(snap.Expiries[0].Strikes))
+	}
 }
 
 func TestOptionsWingSkew(t *testing.T) {

@@ -54,6 +54,9 @@ func TestGetOptions_OK(t *testing.T) {
 	if body.Skew == nil || body.Skew.AtmSkew == "" || body.TermStructure[0].Skew == "" {
 		t.Fatalf("vol %+v", body)
 	}
+	if body.Expiries[0].ExpectedMovePct == "" || body.Expiries[0].MaxPain == "" {
+		t.Fatalf("expiry move/pain %+v", body.Expiries[0])
+	}
 }
 
 func TestGetOptions_BadAsset(t *testing.T) {

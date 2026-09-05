@@ -20,10 +20,23 @@
   },
   "expiry": {
     "title": "Vade dağılımı",
-    "legend": "Çubuk genişliği OI payı · yeşil = call · kırmızı = put",
+    "legend": "Vade seçin · çubuk genişliği OI payı · yeşil = call · kırmızı = put",
     "aria": "Vadeye göre açık pozisyon",
     "barTitle": "Açık pozisyonun %{{share}} kadarı",
     "empty": "Listelenmiş vade yok."
+  },
+  "detail": {
+    "move": "Beklenen hareket",
+    "moveAbs": "Vadeye kadar ±{{value}}",
+    "moveEmpty": "ATM IV gerekir",
+    "range": "İma aralık",
+    "rangeHint": "Vadeye {{days}} gün",
+    "maxPain": "En düşük ödeme",
+    "maxPainHint": "Spot {{spot}}",
+    "maxPainEmpty": "Strike gerekir",
+    "payoutLegend": "Fiyat o strikeda kapanırsa toplam call + put içsel değer. Vurgu en düşük ödeme.",
+    "painMark": "en düşük",
+    "empty": "Bir vade seçin."
   },
   "vol": {
     "title": "Volatilite yapısı",

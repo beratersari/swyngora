@@ -78,6 +78,7 @@ export type {
   MarketOpenInterest,
   MarketOptions,
   MarketOptionsExpiry,
+  MarketOptionsExpiryStrike,
   MarketOptionsATM,
   MarketOptionsVolPoint,
   MarketOptionsSkew,

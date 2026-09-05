@@ -22,7 +22,20 @@ vi.mock('@/libs/api', async (importOriginal) => {
           { label: '27 Mar 2026', atmIv: '51', callIv: '50', putIv: '52', skew: '2' },
         ],
         skew: { atmSkew: '2', lean: 'puts', termSlope: '-1' },
-        expiries: [{ label: '27 Mar 2026', sharePct: '80', openInterestUsd: '8000000', callOi: '8', putOi: '2' }],
+        expiries: [{
+          expiry: '2026-03-27T08:00:00Z',
+          label: '27 Mar 2026',
+          daysToExpiry: 26,
+          sharePct: '80',
+          openInterestUsd: '8000000',
+          callOi: '8',
+          putOi: '2',
+          expectedMovePct: '13.6',
+          expectedMoveAbs: '13600',
+          expectedLow: '86400',
+          expectedHigh: '113600',
+          maxPain: '100000',
+        }],
         note: 'Informational only.',
       },
       currentData: {
@@ -39,7 +52,20 @@ vi.mock('@/libs/api', async (importOriginal) => {
           { label: '27 Mar 2026', atmIv: '51', callIv: '50', putIv: '52', skew: '2' },
         ],
         skew: { atmSkew: '2', lean: 'puts', termSlope: '-1' },
-        expiries: [{ label: '27 Mar 2026', sharePct: '80', openInterestUsd: '8000000', callOi: '8', putOi: '2' }],
+        expiries: [{
+          expiry: '2026-03-27T08:00:00Z',
+          label: '27 Mar 2026',
+          daysToExpiry: 26,
+          sharePct: '80',
+          openInterestUsd: '8000000',
+          callOi: '8',
+          putOi: '2',
+          expectedMovePct: '13.6',
+          expectedMoveAbs: '13600',
+          expectedLow: '86400',
+          expectedHigh: '113600',
+          maxPain: '100000',
+        }],
         note: 'Informational only.',
       },
       isLoading: false,
@@ -56,5 +82,6 @@ describe('OptionsPage', () => {
     expect(screen.getByRole('heading', { name: /options/i })).toBeInTheDocument();
     expect(screen.getAllByText('27 Mar 2026').length).toBeGreaterThan(0);
     expect(screen.getByText(/volatility structure/i)).toBeInTheDocument();
+    expect(screen.getByText('±13.6%')).toBeInTheDocument();
   });
 });

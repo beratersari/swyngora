@@ -20,10 +20,23 @@
   },
   "expiry": {
     "title": "Expiry distribution",
-    "legend": "Bar width is share of OI · green = calls · red = puts",
+    "legend": "Click an expiry · bar width is share of OI · green = calls · red = puts",
     "aria": "Open interest by expiry",
     "barTitle": "{{share}}% of open interest",
     "empty": "No listed expiries."
+  },
+  "detail": {
+    "move": "Expected move",
+    "moveAbs": "±{{value}} by expiry",
+    "moveEmpty": "Needs ATM IV",
+    "range": "Implied range",
+    "rangeHint": "{{days}} days to expiry",
+    "maxPain": "Lowest payout",
+    "maxPainHint": "Spot {{spot}}",
+    "maxPainEmpty": "Needs listed strikes",
+    "payoutLegend": "Total call + put intrinsic if price expires at that strike. Highlight is the lowest.",
+    "painMark": "lowest",
+    "empty": "Select an expiry."
   },
   "vol": {
     "title": "Volatility structure",

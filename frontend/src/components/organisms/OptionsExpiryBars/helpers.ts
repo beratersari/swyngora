@@ -1,5 +1,11 @@
 import type { MarketOptionsExpiry } from '@/libs/api';
 
+export function expiryRowKey(row: MarketOptionsExpiry | undefined): string {
+  if (!row) return '';
+  if (row.expiry) return row.expiry.slice(0, 10);
+  return row.label ?? '';
+}
+
 export function expiryShare(row: MarketOptionsExpiry | undefined): number {
   const n = Number(row?.sharePct);
   if (!Number.isFinite(n) || n <= 0) return 0;

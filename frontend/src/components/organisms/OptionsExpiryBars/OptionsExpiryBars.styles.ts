@@ -7,11 +7,22 @@ export const Stack = styled.div`
   min-width: 0;
 `;
 
-export const Row = styled.div`
+export const Row = styled.button<{ $selected?: boolean }>`
   display: grid;
   grid-template-columns: 112px minmax(0, 1fr) 72px;
   gap: ${({ theme }) => theme.spacing[2]}px;
   align-items: center;
+  width: 100%;
+  margin: 0;
+  padding: 4px 6px;
+  border: 1px solid
+    ${({ theme, $selected }) =>
+      $selected ? theme.semantic.border.accent : 'transparent'};
+  border-radius: ${({ theme }) => theme.radii.sm}px;
+  background: ${({ theme, $selected }) =>
+    $selected ? theme.semantic.bg.accentSoft : 'transparent'};
+  cursor: pointer;
+  text-align: left;
 `;
 
 export const Track = styled.div`

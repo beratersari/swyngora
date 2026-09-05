@@ -96,6 +96,27 @@ type OptionsExpiryBucket struct {
 	HasCallIV       bool
 	HasPutIV        bool
 	HasSkew         bool
+	// 1-SD expected move from ATM IV until this expiry.
+	ExpectedMoveAbs float64
+	ExpectedMovePct float64
+	ExpectedLow     float64
+	ExpectedHigh    float64
+	HasExpectedMove bool
+	// Max pain: listed strike that minimizes call+put intrinsic payout.
+	MaxPain       float64
+	MaxPainPayout float64
+	HasMaxPain    bool
+	Strikes       []OptionsExpiryStrike
+}
+
+// OptionsExpiryStrike is call/put OI and total intrinsic if spot expires there.
+type OptionsExpiryStrike struct {
+	Strike    float64
+	CallOI    float64
+	PutOI     float64
+	Payout    float64 // USD intrinsic if spot = strike (coin OI × USD payoff)
+	IsMaxPain bool
+	BelowSpot bool
 }
 
 // OptionsVolPoint is ATM implied vol on one expiry (term structure / skew).
@@ -293,10 +314,8 @@ func BuildOptionsSnapshot(asset string, quotes []OptionQuote, index float64, dvo
 		out.HasDVOLChange = true
 	}
 
-	type expKey struct {
-		unix int64
-	}
 	buckets := map[int64]*OptionsExpiryBucket{}
+	strikeBooks := map[int64]map[float64]*optionsStrikeBook{}
 	for i := range quotes {
 		q := quotes[i]
 		if q.Asset != "" && q.Asset != asset {
@@ -366,6 +385,24 @@ func BuildOptionsSnapshot(asset string, quotes []OptionQuote, index float64, dvo
 			b.PutOI += q.OpenInterest
 			b.PutVolume += q.Volume
 		}
+		if q.Strike > 0 && q.OpenInterest > 0 {
+			book := strikeBooks[key]
+			if book == nil {
+				book = map[float64]*optionsStrikeBook{}
+				strikeBooks[key] = book
+			}
+			st := book[q.Strike]
+			if st == nil {
+				st = &optionsStrikeBook{strike: q.Strike}
+				book[q.Strike] = st
+			}
+			switch q.Side {
+			case OptionSideCall:
+				st.callOI += q.OpenInterest
+			case OptionSidePut:
+				st.putOI += q.OpenInterest
+			}
+		}
 	}
 
 	if out.CallOI > 0 {
@@ -412,6 +449,10 @@ func BuildOptionsSnapshot(asset string, quotes []OptionQuote, index float64, dvo
 		out.Expiries[i].HasCallIV = p.HasCall
 		out.Expiries[i].HasPutIV = p.HasPut
 		out.Expiries[i].HasSkew = p.HasSkew
+	}
+	for i := range out.Expiries {
+		attachExpectedMove(&out.Expiries[i], out.IndexPrice, asOf)
+		attachMaxPain(&out.Expiries[i], strikeBooks[out.Expiries[i].Expiry.Unix()], out.IndexPrice)
 	}
 	if atm := pickATMIVFromGroups(groups, out.IndexPrice); atm != nil {
 		out.ATM = atm
@@ -675,4 +716,95 @@ func optionsVolLean(skew float64) string {
 	default:
 		return OptionsLeanBalanced
 	}
+}
+
+type optionsStrikeBook struct {
+	strike float64
+	callOI float64
+	putOI  float64
+}
+
+// OptionsYearFraction is calendar time to expiry in years (365-day).
+func OptionsYearFraction(dte int, expiry, asOf time.Time) float64 {
+	if dte > 0 {
+		return float64(dte) / 365
+	}
+	rem := expiry.Sub(asOf.UTC())
+	if rem <= 0 {
+		return 0
+	}
+	return rem.Hours() / (365 * 24)
+}
+
+// OptionsExpectedMove is the 1-SD ATM move: spot × (IV/100) × √T.
+func OptionsExpectedMove(index, atmIVPct, yearFrac float64) (abs, pct, low, high float64, ok bool) {
+	if index <= 0 || atmIVPct <= 0 || yearFrac <= 0 {
+		return 0, 0, 0, 0, false
+	}
+	pct = atmIVPct * math.Sqrt(yearFrac)
+	abs = index * pct / 100
+	return abs, pct, index - abs, index + abs, true
+}
+
+func attachExpectedMove(b *OptionsExpiryBucket, index float64, asOf time.Time) {
+	if b == nil || !b.HasAtmIV {
+		return
+	}
+	yf := OptionsYearFraction(b.DaysToExpiry, b.Expiry, asOf)
+	abs, pct, low, high, ok := OptionsExpectedMove(index, b.AtmIV, yf)
+	if !ok {
+		return
+	}
+	b.ExpectedMoveAbs = abs
+	b.ExpectedMovePct = pct
+	b.ExpectedLow = low
+	b.ExpectedHigh = high
+	b.HasExpectedMove = true
+}
+
+func optionPayoutAt(spot float64, book []*optionsStrikeBook) float64 {
+	var p float64
+	for _, s := range book {
+		if spot > s.strike {
+			p += s.callOI * (spot - s.strike)
+		} else if spot < s.strike {
+			p += s.putOI * (s.strike - spot)
+		}
+	}
+	return p
+}
+
+func attachMaxPain(b *OptionsExpiryBucket, book map[float64]*optionsStrikeBook, index float64) {
+	if b == nil || len(book) == 0 {
+		return
+	}
+	list := make([]*optionsStrikeBook, 0, len(book))
+	for _, s := range book {
+		list = append(list, s)
+	}
+	sort.Slice(list, func(i, j int) bool { return list[i].strike < list[j].strike })
+	best := list[0].strike
+	bestPay := optionPayoutAt(best, list)
+	for _, s := range list[1:] {
+		pay := optionPayoutAt(s.strike, list)
+		if pay < bestPay {
+			best = s.strike
+			bestPay = pay
+		}
+	}
+	b.MaxPain = best
+	b.MaxPainPayout = bestPay
+	b.HasMaxPain = true
+	strikes := make([]OptionsExpiryStrike, 0, len(list))
+	for _, s := range list {
+		strikes = append(strikes, OptionsExpiryStrike{
+			Strike:    s.strike,
+			CallOI:    s.callOI,
+			PutOI:     s.putOI,
+			Payout:    optionPayoutAt(s.strike, list),
+			IsMaxPain: s.strike == best,
+			BelowSpot: index > 0 && s.strike < index,
+		})
+	}
+	b.Strikes = strikes
 }

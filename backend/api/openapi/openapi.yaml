@@ -1011,7 +1011,8 @@ paths:
         24h volume, put/call ratios, Deribit DVOL (30-day implied vol index),
         ATM implied vol near the 30-day tenor, IV term structure (ATM IV by
         expiry), call/put skew (ATM put IV minus call IV, plus ~5% OTM wing),
-        and open-interest by expiry.
+        open-interest by expiry, and per-expiry 1-SD expected move plus max
+        pain (strike that minimizes call+put intrinsic payout).
         `asset` accepts `BTC`, `ETH`, or a pair such as `BTCUSDT`.
         `exchange` is `deribit` (default). Cached ~30s. Informational only.
       operationId: getMarketOptions
@@ -8602,6 +8603,24 @@ components:
         callIv: { type: string }
         putIv: { type: string }
         skew: { type: string, description: Signed ATM put IV minus call IV (vol points) }
+        expectedMoveAbs: { type: string, description: 1-SD USD move from ATM IV until this expiry }
+        expectedMovePct: { type: string, description: 1-SD percent move }
+        expectedLow: { type: string }
+        expectedHigh: { type: string }
+        maxPain: { type: string, description: Strike that minimizes call+put intrinsic payout }
+        maxPainPayout: { type: string, description: USD intrinsic at max pain }
+        strikes:
+          type: array
+          items: { $ref: '#/components/schemas/MarketOptionsExpiryStrike' }
+    MarketOptionsExpiryStrike:
+      type: object
+      properties:
+        strike: { type: string }
+        callOi: { type: string }
+        putOi: { type: string }
+        payout: { type: string, description: USD intrinsic if spot expires at this strike }
+        isMaxPain: { type: boolean }
+        belowSpot: { type: boolean }
     MarketOptionsVolPoint:
       type: object
       description: ATM implied vol on one expiry

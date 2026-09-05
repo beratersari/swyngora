@@ -2,11 +2,16 @@ import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import { Text } from '@/components/atoms/Text';
 import { formatCompactAmount } from '@/libs/utils';
-import { callShare, expiryShare } from './helpers';
+import { callShare, expiryRowKey, expiryShare } from './helpers';
 import { CallSlice, Fill, PutSlice, Row, Stack, Track } from './OptionsExpiryBars.styles';
 import type { OptionsExpiryBarsProps } from './OptionsExpiryBars.types';
 
-export function OptionsExpiryBars({ expiries, isLoading }: OptionsExpiryBarsProps) {
+export function OptionsExpiryBars({
+  expiries,
+  selectedKey,
+  onSelect,
+  isLoading,
+}: OptionsExpiryBarsProps) {
   const { t } = useTranslation('options');
   const rows = expiries ?? [];
 
@@ -31,11 +36,18 @@ export function OptionsExpiryBars({ expiries, isLoading }: OptionsExpiryBarsProp
   return (
     <Stack role="list" aria-label={t('expiry.aria')}>
       {rows.map((row) => {
-        const key = row.expiry ?? row.label ?? '';
+        const key = expiryRowKey(row);
         const share = expiryShare(row);
         const calls = callShare(row);
+        const selected = selectedKey !== '' && key === selectedKey;
         return (
-          <Row key={key} role="listitem">
+          <Row
+            key={key}
+            type="button"
+            $selected={selected}
+            aria-pressed={selected}
+            onClick={() => onSelect?.(key)}
+          >
             <Text variant="caption" color="secondary">
               {row.label ?? '—'}
             </Text>

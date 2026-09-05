@@ -49,6 +49,7 @@ export type AssetProfileQuery = NonNullable<operations['getAssetProfile']['param
 export type MarketOpenInterest = components['schemas']['MarketOpenInterest'];
 export type MarketOptions = components['schemas']['MarketOptions'];
 export type MarketOptionsExpiry = components['schemas']['MarketOptionsExpiry'];
+export type MarketOptionsExpiryStrike = components['schemas']['MarketOptionsExpiryStrike'];
 export type MarketOptionsATM = components['schemas']['MarketOptionsATM'];
 export type MarketOptionsVolPoint = components['schemas']['MarketOptionsVolPoint'];
 export type MarketOptionsSkew = components['schemas']['MarketOptionsSkew'];

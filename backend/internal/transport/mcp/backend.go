@@ -219,6 +219,26 @@ func (b *Backend) GetOptions(ctx context.Context, exchange, asset string) (json.
 		if e.HasSkew {
 			row["skew"] = e.Skew
 		}
+		if e.HasExpectedMove {
+			row["expectedMoveAbs"] = e.ExpectedMoveAbs
+			row["expectedMovePct"] = e.ExpectedMovePct
+			row["expectedLow"] = e.ExpectedLow
+			row["expectedHigh"] = e.ExpectedHigh
+		}
+		if e.HasMaxPain {
+			row["maxPain"] = e.MaxPain
+			row["maxPainPayout"] = e.MaxPainPayout
+		}
+		if len(e.Strikes) > 0 {
+			strikes := make([]map[string]any, 0, len(e.Strikes))
+			for _, s := range e.Strikes {
+				strikes = append(strikes, map[string]any{
+					"strike": s.Strike, "callOi": s.CallOI, "putOi": s.PutOI,
+					"payout": s.Payout, "isMaxPain": s.IsMaxPain, "belowSpot": s.BelowSpot,
+				})
+			}
+			row["strikes"] = strikes
+		}
 		expiries = append(expiries, row)
 	}
 	term := make([]map[string]any, 0, len(got.TermStructure))
