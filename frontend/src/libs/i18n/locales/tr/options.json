@@ -1,6 +1,6 @@
 {
   "title": "Opsiyonlar",
-  "subtitle": "Deribit BTC ve ETH opsiyonları — açık pozisyon, hacim, put/call, ima vol, vade yapısı ve eğim.",
+  "subtitle": "Deribit BTC ve ETH opsiyonları — açık pozisyon, hacim, put/call, ima vol, ve spot veya vadeliyle ayrıştığı yerler.",
   "assetAria": "Opsiyon dayanak varlığı",
   "stats": {
     "oi": "Açık pozisyon",
@@ -58,6 +58,17 @@
       "calls": "Call daha pahalı",
       "puts": "Put daha pahalı",
       "balanced": "Dengeli"
+    }
+  },
+  "vs": {
+    "title": "Opsiyonlar diğer piyasaya karşı",
+    "subtitle": "Yalnızca ima vol veya put/call eğimi spot aralık veya vadeli konumla ayrışınca gösterilir",
+    "watch": "İzle",
+    "notable": "Belirgin",
+    "topic": {
+      "vol": "Vol",
+      "lean": "Eğim",
+      "pin": "Pin"
     }
   },
   "disclaimer": "Deribit inverse opsiyonlar. Yalnızca bilgi amaçlıdır — yatırım tavsiyesi değildir."

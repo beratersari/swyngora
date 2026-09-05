@@ -587,7 +587,10 @@ export interface paths {
          *     ATM implied vol near the 30-day tenor, IV term structure (ATM IV by
          *     expiry), call/put skew (ATM put IV minus call IV, plus ~5% OTM wing),
          *     open-interest by expiry, and per-expiry 1-SD expected move plus max
-         *     pain (strike that minimizes call+put intrinsic payout).
+         *     pain (strike that minimizes call+put intrinsic payout). When options
+         *     implied vol or put/call lean disagrees with live spot range or
+         *     futures funding / account long-short, `vsMarket.findings` lists those
+         *     disagreements only.
          *     `asset` accepts `BTC`, `ETH`, or a pair such as `BTCUSDT`.
          *     `exchange` is `deribit` (default). Cached ~30s. Informational only.
          */
@@ -4994,6 +4997,37 @@ export interface components {
             wingPutIv?: string;
             wingCallIv?: string;
         };
+        /** @description One place options IV or put/call lean disagrees with spot or futures */
+        MarketOptionsFinding: {
+            /** @enum {string} */
+            kind?: "iv_richer" | "iv_cheaper" | "iv_rising_spot_calm" | "iv_falling_spot_hot" | "puts_vs_futures_long" | "calls_vs_futures_short" | "expected_move_richer" | "expected_move_cheaper" | "spot_spent_expected_move" | "max_pain_away";
+            /** @enum {string} */
+            topic?: "vol" | "lean" | "pin";
+            /** @enum {string} */
+            severity?: "watch" | "notable";
+            title?: string;
+            detail?: string;
+            /** @description Options-side number (IV % */
+            options?: string;
+            /** @description Spot or futures number */
+            market?: string;
+        };
+        /** @description Options vs live spot range and futures positioning. findings is empty when they agree. */
+        MarketOptionsVsMarket: {
+            compared?: boolean;
+            spotLast?: string;
+            /** @description ATM IV or DVOL percent */
+            impliedIv?: string;
+            /** @description 24h high-low range annualized as percent */
+            realizedAnn?: string;
+            range24hPct?: string;
+            /** @description Decimal perpetual funding */
+            fundingRate?: string;
+            /** @description Futures account long share 0-100 */
+            longPct?: string;
+            summary?: string;
+            findings?: components["schemas"]["MarketOptionsFinding"][];
+        };
         /** @description Deribit BTC/ETH options overview */
         MarketOptions: {
             /** @enum {string} */
@@ -5033,6 +5067,7 @@ export interface components {
             listed?: number;
             withOi?: number;
             withIv?: number;
+            vsMarket?: components["schemas"]["MarketOptionsVsMarket"];
             note?: string;
         };
         /** @description Current futures open interest plus 5m/1h/4h/24h change */

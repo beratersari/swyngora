@@ -119,7 +119,30 @@ type optionsResponse struct {
 	Listed          int                  `json:"listed"`
 	WithOi          int                  `json:"withOi"`
 	WithIv          int                  `json:"withIv"`
+	VsMarket        *optionsVsMarketDTO  `json:"vsMarket,omitempty"`
 	Note            string               `json:"note"`
+}
+
+type optionsVsFindingDTO struct {
+	Kind     string `json:"kind"`
+	Topic    string `json:"topic"`
+	Severity string `json:"severity"`
+	Title    string `json:"title"`
+	Detail   string `json:"detail"`
+	Options  string `json:"options,omitempty"`
+	Market   string `json:"market,omitempty"`
+}
+
+type optionsVsMarketDTO struct {
+	Compared    bool                  `json:"compared"`
+	SpotLast    string                `json:"spotLast,omitempty"`
+	ImpliedIv   string                `json:"impliedIv,omitempty"`
+	RealizedAnn string                `json:"realizedAnn,omitempty"`
+	Range24hPct string                `json:"range24hPct,omitempty"`
+	FundingRate string                `json:"fundingRate,omitempty"`
+	LongPct     string                `json:"longPct,omitempty"`
+	Summary     string                `json:"summary,omitempty"`
+	Findings    []optionsVsFindingDTO `json:"findings"`
 }
 
 func optionsToDTO(a *domain.OptionsSnapshot) optionsResponse {
@@ -221,6 +244,7 @@ func optionsToDTO(a *domain.OptionsSnapshot) optionsResponse {
 		Listed:          a.Listed,
 		WithOi:          a.WithOI,
 		WithIv:          a.WithIV,
+		VsMarket:        optionsVsMarketToDTO(a.VsMarket),
 		Note:            a.Note,
 	}
 	if a.HasPutCallOI {
@@ -268,6 +292,47 @@ func optionsToDTO(a *domain.OptionsSnapshot) optionsResponse {
 			sk.WingCallIv = formatHistQty(a.Skew.WingCallIV)
 		}
 		out.Skew = sk
+	}
+	return out
+}
+
+func optionsVsMarketToDTO(v *domain.OptionsVsMarket) *optionsVsMarketDTO {
+	if v == nil || !v.Compared {
+		return nil
+	}
+	out := &optionsVsMarketDTO{
+		Compared: true,
+		Summary:  v.Summary,
+		Findings: make([]optionsVsFindingDTO, 0, len(v.Findings)),
+	}
+	if v.HasSpot && v.SpotLast > 0 {
+		out.SpotLast = formatHistQty(v.SpotLast)
+	}
+	if v.ImpliedIV > 0 {
+		out.ImpliedIv = formatHistQty(v.ImpliedIV)
+	}
+	if v.HasVol {
+		out.RealizedAnn = formatHistQty(v.RealizedAnn)
+	}
+	if v.Range24hPct > 0 {
+		out.Range24hPct = formatHistQty(v.Range24hPct)
+	}
+	if v.HasFunding {
+		out.FundingRate = formatHistQty(v.FundingRate)
+	}
+	if v.HasLongPct {
+		out.LongPct = formatHistQty(v.LongPct)
+	}
+	for _, f := range v.Findings {
+		row := optionsVsFindingDTO{
+			Kind: f.Kind, Topic: f.Topic, Severity: f.Severity,
+			Title: f.Title, Detail: f.Detail,
+		}
+		if f.HasNums {
+			row.Options = formatHistQty(f.Options)
+			row.Market = formatHistQty(f.Market)
+		}
+		out.Findings = append(out.Findings, row)
 	}
 	return out
 }

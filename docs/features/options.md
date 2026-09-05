@@ -32,11 +32,12 @@ This is **not** futures open interest (`/market/open-interest`).
 | `termStructure` | ATM / call / put mark IV and put−call skew on every live expiry |
 | `skew` | Headline ATM skew (put IV − call IV), term slope (back − front ATM), and ~5% OTM wing skew |
 | `expiries` | OI, volume, PCR, ATM IV, skew, 1-SD expected move, max pain, and strike payouts by expiry |
+| `vsMarket` | Best-effort compare vs live spot range and futures funding / account long-short. `findings` is **only** populated when implied vol or put/call lean disagrees |
 
 Open interest and volume are in the **base coin**. USD is `coin × underlying`
 (or Deribit `volume_usd` when present).
 
-Web: `/options` — BTC / ETH toggle, headline cards, term structure + skew, expiry bars. Selecting an expiry (`?expiry=`) shows the 1-SD expected move and max-pain strike.
+Web: `/options` — BTC / ETH toggle, headline cards, term structure + skew, expiry bars. Selecting an expiry (`?expiry=`) shows the 1-SD expected move and max-pain strike. A vs-market panel appears only when options IV or put/call lean disagrees with spot or futures.
 
 MCP: `get_options_overview`.
 
@@ -67,4 +68,5 @@ curl -s 'http://localhost:8080/api/v1/market/options?asset=BTC' | jq .
 - Term structure is ATM mark IV by expiry. Skew is ATM put IV minus ATM call IV (positive = puts richer). Wing skew uses the listed strike nearest 5% below / above spot on the 30-day tenor. Not 25-delta risk reversal (book summary has no delta).
 - Expected move is one standard deviation: `spot × (ATM IV / 100) × √(DTE/365)`. Not a guarantee.
 - Max pain evaluates listed strikes only: payout = Σ callOI × max(S−K, 0) + Σ putOI × max(K−S, 0) using coin OI. Inverse settlement is not modeled.
+- `vsMarket` uses Binance spot 24h high–low (annualized) vs ATM/DVOL, nearest-expiry expected move vs that range, PCR/skew lean vs futures account long% and funding, and max pain vs the Deribit index. Missing tape is skipped — the options snapshot still returns.
 - Informational only — not financial advice.

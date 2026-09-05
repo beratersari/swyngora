@@ -1012,7 +1012,10 @@ paths:
         ATM implied vol near the 30-day tenor, IV term structure (ATM IV by
         expiry), call/put skew (ATM put IV minus call IV, plus ~5% OTM wing),
         open-interest by expiry, and per-expiry 1-SD expected move plus max
-        pain (strike that minimizes call+put intrinsic payout).
+        pain (strike that minimizes call+put intrinsic payout). When options
+        implied vol or put/call lean disagrees with live spot range or
+        futures funding / account long-short, `vsMarket.findings` lists those
+        disagreements only.
         `asset` accepts `BTC`, `ETH`, or a pair such as `BTCUSDT`.
         `exchange` is `deribit` (default). Cached ~30s. Informational only.
       operationId: getMarketOptions
@@ -8649,6 +8652,44 @@ components:
         wingSkew: { type: string, description: ~5% OTM put IV minus ~5% OTM call IV }
         wingPutIv: { type: string }
         wingCallIv: { type: string }
+    MarketOptionsFinding:
+      type: object
+      description: One place options IV or put/call lean disagrees with spot or futures
+      properties:
+        kind:
+          type: string
+          enum:
+            - iv_richer
+            - iv_cheaper
+            - iv_rising_spot_calm
+            - iv_falling_spot_hot
+            - puts_vs_futures_long
+            - calls_vs_futures_short
+            - expected_move_richer
+            - expected_move_cheaper
+            - spot_spent_expected_move
+            - max_pain_away
+        topic: { type: string, enum: [vol, lean, pin] }
+        severity: { type: string, enum: [watch, notable] }
+        title: { type: string }
+        detail: { type: string }
+        options: { type: string, description: Options-side number (IV %, PCR, strike) }
+        market: { type: string, description: Spot or futures number }
+    MarketOptionsVsMarket:
+      type: object
+      description: Options vs live spot range and futures positioning. findings is empty when they agree.
+      properties:
+        compared: { type: boolean }
+        spotLast: { type: string }
+        impliedIv: { type: string, description: ATM IV or DVOL percent }
+        realizedAnn: { type: string, description: 24h high-low range annualized as percent }
+        range24hPct: { type: string }
+        fundingRate: { type: string, description: Decimal perpetual funding }
+        longPct: { type: string, description: Futures account long share 0-100 }
+        summary: { type: string }
+        findings:
+          type: array
+          items: { $ref: '#/components/schemas/MarketOptionsFinding' }
     MarketOptions:
       type: object
       description: Deribit BTC/ETH options overview
@@ -8681,6 +8722,7 @@ components:
         listed: { type: integer }
         withOi: { type: integer }
         withIv: { type: integer }
+        vsMarket: { $ref: '#/components/schemas/MarketOptionsVsMarket' }
         note: { type: string }
     MarketOpenInterest:
       type: object

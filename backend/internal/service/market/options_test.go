@@ -78,3 +78,47 @@ func TestGetOptions_MissingPort(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 }
+
+func TestGetOptions_AttachesVsMarketWhenTapeDisagrees(t *testing.T) {
+	exp := time.Now().UTC().Add(30 * 24 * time.Hour).Truncate(time.Hour)
+	now := time.Now().UTC()
+	mkt := &fakeMarket{ticker: &domain.Ticker24h{
+		Symbol: "BTCUSDT", LastPrice: "100000", HighPrice: "102000", LowPrice: "99000",
+	}}
+	fund := &fakeFunding{ser: &domain.FundingSeries{
+		Exchange: domain.ExchangeBinance,
+		Current:  domain.FundingPoint{Time: now, Rate: 0.00015, Predicted: true},
+	}}
+	ls := &fakeLS{ser: &domain.LongShortSeries{
+		Exchange: domain.ExchangeBinance,
+		Current:  domain.LongShortPoint{Time: now, LongShare: 0.64, ShortShare: 0.36, Ratio: 1.78},
+	}}
+	svc := New(mkt, nil).
+		WithOptionsChain(stubOptions{
+			index: 100000,
+			dvol:  domain.OptionsDVOL{Value: 70, HasChange: true, Change24h: 0.4},
+			quotes: []domain.OptionQuote{{
+				Asset: "BTC", Expiry: exp, Strike: 100000, Side: domain.OptionSideCall,
+				OpenInterest: 10, Volume: 1, MarkIV: 70, Underlying: 100000,
+			}, {
+				Asset: "BTC", Expiry: exp, Strike: 100000, Side: domain.OptionSidePut,
+				OpenInterest: 25, Volume: 2, MarkIV: 72, Underlying: 100000,
+			}},
+		}).
+		WithFundingRate(map[domain.Exchange]domain.FundingRatePort{domain.ExchangeBinance: fund}).
+		WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{domain.ExchangeBinance: ls})
+	got, err := svc.GetOptions(context.Background(), "", "BTC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.VsMarket == nil || !got.VsMarket.Compared || len(got.VsMarket.Findings) == 0 {
+		t.Fatalf("vsMarket=%+v", got.VsMarket)
+	}
+	kinds := map[string]bool{}
+	for _, f := range got.VsMarket.Findings {
+		kinds[f.Kind] = true
+	}
+	if !kinds[domain.OptionsFindingPutsVsLongs] {
+		t.Fatalf("want puts_vs_futures_long in %+v", got.VsMarket.Findings)
+	}
+}

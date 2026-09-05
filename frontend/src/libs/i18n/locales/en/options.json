@@ -1,6 +1,6 @@
 {
   "title": "Options",
-  "subtitle": "BTC and ETH listed options from Deribit — open interest, volume, put/call, implied vol, term structure, and skew.",
+  "subtitle": "BTC and ETH listed options from Deribit — open interest, volume, put/call, implied vol, and where that disagrees with spot or futures.",
   "assetAria": "Options underlying",
   "stats": {
     "oi": "Open interest",
@@ -58,6 +58,17 @@
       "calls": "Calls richer",
       "puts": "Puts richer",
       "balanced": "Balanced"
+    }
+  },
+  "vs": {
+    "title": "Options vs the rest of the market",
+    "subtitle": "Shown only when implied vol or put/call lean disagrees with spot range or futures positioning",
+    "watch": "Watch",
+    "notable": "Notable",
+    "topic": {
+      "vol": "Vol",
+      "lean": "Lean",
+      "pin": "Pin"
     }
   },
   "disclaimer": "Deribit inverse options. Informational only — not financial advice."

@@ -7,6 +7,7 @@ import { OptionsExpiryBars } from '@/components/organisms/OptionsExpiryBars';
 import { OptionsExpiryDetail } from '@/components/organisms/OptionsExpiryDetail';
 import { OptionsStatCards } from '@/components/organisms/OptionsStatCards';
 import { OptionsVolStructure } from '@/components/organisms/OptionsVolStructure';
+import { OptionsVsMarket } from '@/components/organisms/OptionsVsMarket';
 import { rtkErrorMessage, useGetMarketOptionsQuery } from '@/libs/api';
 import { useDocumentVisible } from '@/libs/hooks';
 import { rtkCurrent } from '@/libs/utils';
@@ -70,6 +71,20 @@ export function OptionsPage() {
       ) : null}
 
       <OptionsStatCards data={data} isLoading={query.isLoading} />
+
+      {data?.vsMarket?.findings?.length ? (
+        <Panel>
+          <Toolbar>
+            <Text variant="bodySm" color="primary">
+              {t('vs.title')}
+            </Text>
+            <Text variant="caption" color="secondary">
+              {t('vs.subtitle')}
+            </Text>
+          </Toolbar>
+          <OptionsVsMarket data={data} isLoading={query.isLoading} />
+        </Panel>
+      ) : null}
 
       <Panel>
         <Toolbar>

@@ -57,6 +57,9 @@ func TestGetOptions_OK(t *testing.T) {
 	if body.Expiries[0].ExpectedMovePct == "" || body.Expiries[0].MaxPain == "" {
 		t.Fatalf("expiry move/pain %+v", body.Expiries[0])
 	}
+	if body.VsMarket != nil && len(body.VsMarket.Findings) > 0 {
+		t.Fatalf("stub tape should not invent vs-market findings %+v", body.VsMarket)
+	}
 }
 
 func TestGetOptions_BadAsset(t *testing.T) {

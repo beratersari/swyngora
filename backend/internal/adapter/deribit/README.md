@@ -3,7 +3,8 @@
 Public REST client for **BTC and ETH options** (no API key).
 
 Used by `GET /api/v1/market/options` to build open interest, 24h volume,
-put/call ratio, DVOL / ATM implied vol, and expiry distribution.
+put/call ratio, DVOL / ATM implied vol, expiry distribution, and (in the
+service layer) a vs-spot/futures comparison.
 
 ## Endpoints
 

@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
 
 ### Added
+- **Options vs spot/futures:** `/options` and `GET /api/v1/market/options` `vsMarket` flag only when implied vol or put/call lean disagrees with the live spot range or futures funding / account long-short (`docs/features/options.md`)
 - **Options desk:** BTC/ETH listed options from Deribit public REST — open interest, 24h volume, put/call ratios, DVOL + ATM implied vol, IV term structure, call/put skew, expiry mix, 1-SD expected move, and max-pain strike. Web `/options`, `GET /api/v1/market/options`, MCP `get_options_overview` (`docs/features/options.md`)
 - **Setup Radar history:** saved hits and what price did after 15m / 1h / 4h, plus how often the lean matched. Web `/forensics?view=review`, `GET /api/v1/market/forensics/radar`, MCP `review_setup_radar` (`docs/features/forensics.md`)
 - **Setup Radar why-similar:** Forensics Now / scan hits name which tape pieces match the closest past setup (price, volume, taker flow, open interest, order book) plus a short `whySimilar` sentence (`GET /api/v1/market/forensics/scan`, web `/forensics?view=now`) (`docs/features/forensics.md`)

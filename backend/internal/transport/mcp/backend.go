@@ -272,6 +272,9 @@ func (b *Backend) GetOptions(ctx context.Context, exchange, asset string) (json.
 		"listed": got.Listed, "withOi": got.WithOI, "withIv": got.WithIV,
 		"termStructure": term, "expiries": expiries, "note": got.Note,
 	}
+	if vm := optionsVsMarketMap(got.VsMarket); vm != nil {
+		out["vsMarket"] = vm
+	}
 	if got.HasPutCallOI {
 		out["putCallOi"] = got.PutCallOI
 		out["lean"] = got.Lean
@@ -320,6 +323,47 @@ func (b *Backend) GetOptions(ctx context.Context, exchange, asset string) (json.
 		out["skew"] = sk
 	}
 	return mustJSON(out)
+}
+
+func optionsVsMarketMap(v *domain.OptionsVsMarket) map[string]any {
+	if v == nil || !v.Compared {
+		return nil
+	}
+	findings := make([]map[string]any, 0, len(v.Findings))
+	for _, f := range v.Findings {
+		row := map[string]any{
+			"kind": f.Kind, "topic": f.Topic, "severity": f.Severity,
+			"title": f.Title, "detail": f.Detail,
+		}
+		if f.HasNums {
+			row["options"] = f.Options
+			row["market"] = f.Market
+		}
+		findings = append(findings, row)
+	}
+	out := map[string]any{"compared": true, "findings": findings}
+	if v.Summary != "" {
+		out["summary"] = v.Summary
+	}
+	if v.HasSpot && v.SpotLast > 0 {
+		out["spotLast"] = v.SpotLast
+	}
+	if v.ImpliedIV > 0 {
+		out["impliedIv"] = v.ImpliedIV
+	}
+	if v.HasVol {
+		out["realizedAnn"] = v.RealizedAnn
+	}
+	if v.Range24hPct > 0 {
+		out["range24hPct"] = v.Range24hPct
+	}
+	if v.HasFunding {
+		out["fundingRate"] = v.FundingRate
+	}
+	if v.HasLongPct {
+		out["longPct"] = v.LongPct
+	}
+	return out
 }
 
 func (b *Backend) GetOpenInterest(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
