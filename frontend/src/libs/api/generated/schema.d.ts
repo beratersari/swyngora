@@ -584,7 +584,9 @@ export interface paths {
          * @description CoinGlass-style **options desk** for **BTC** and **ETH** from **Deribit**
          *     public REST (no API key). Returns listed inverse-option open interest,
          *     24h volume, put/call ratios, Deribit DVOL (30-day implied vol index),
-         *     ATM implied vol near the 30-day tenor, and open-interest by expiry.
+         *     ATM implied vol near the 30-day tenor, IV term structure (ATM IV by
+         *     expiry), call/put skew (ATM put IV minus call IV, plus ~5% OTM wing),
+         *     and open-interest by expiry.
          *     `asset` accepts `BTC`, `ETH`, or a pair such as `BTCUSDT`.
          *     `exchange` is `deribit` (default). Cached ~30s. Informational only.
          */
@@ -4929,6 +4931,47 @@ export interface components {
             /** @description Share of total open interest */
             sharePct?: string;
             contractCount?: number;
+            /** @description ATM mark IV percent on this expiry */
+            atmIv?: string;
+            callIv?: string;
+            putIv?: string;
+            /** @description Signed ATM put IV minus call IV (vol points) */
+            skew?: string;
+        };
+        /** @description ATM implied vol on one expiry */
+        MarketOptionsVolPoint: {
+            /** Format: date-time */
+            expiry?: string;
+            label?: string;
+            daysToExpiry?: number;
+            strike?: string;
+            atmIv?: string;
+            callIv?: string;
+            putIv?: string;
+            /** @description Signed ATM put IV minus call IV */
+            skew?: string;
+        };
+        /** @description Term slope and call/put vol difference */
+        MarketOptionsSkew: {
+            /** @description 30d ATM put IV minus call IV */
+            atmSkew?: string;
+            callIv?: string;
+            putIv?: string;
+            /**
+             * @description Which side is richer in IV
+             * @enum {string}
+             */
+            lean?: "calls" | "puts" | "balanced";
+            frontIv?: string;
+            backIv?: string;
+            /** @description Back ATM IV minus front ATM IV */
+            termSlope?: string;
+            frontDte?: number;
+            backDte?: number;
+            /** @description ~5% OTM put IV minus ~5% OTM call IV */
+            wingSkew?: string;
+            wingPutIv?: string;
+            wingCallIv?: string;
         };
         /** @description Deribit BTC/ETH options overview */
         MarketOptions: {
@@ -4963,6 +5006,8 @@ export interface components {
             /** @description Signed DVOL point change vs ~24h ago */
             dvolChange24h?: string;
             atm?: components["schemas"]["MarketOptionsATM"];
+            termStructure?: components["schemas"]["MarketOptionsVolPoint"][];
+            skew?: components["schemas"]["MarketOptionsSkew"];
             expiries?: components["schemas"]["MarketOptionsExpiry"][];
             listed?: number;
             withOi?: number;

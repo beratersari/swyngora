@@ -4333,8 +4333,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="get_options_overview",
             description=(
                 "BTC/ETH options desk from Deribit: listed open interest, 24h volume, "
-                "put/call ratios, DVOL (30-day implied vol), ATM IV near 30 days, and "
-                "open interest by expiry. asset is BTC or ETH. Not futures OI."
+                "put/call ratios, DVOL (30-day implied vol), ATM IV near 30 days, "
+                "IV term structure, call/put skew (put minus call), and open interest "
+                "by expiry. asset is BTC or ETH. Not futures OI."
             ),
             args_schema=OptionsOverviewInput,
         ),

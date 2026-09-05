@@ -90,6 +90,41 @@ func TestBuildOptionsSnapshot(t *testing.T) {
 	if snap.Listed != 3 || snap.WithOI != 3 || snap.WithIV != 3 {
 		t.Fatalf("coverage listed=%d oi=%d iv=%d", snap.Listed, snap.WithOI, snap.WithIV)
 	}
+	if len(snap.TermStructure) != 2 {
+		t.Fatalf("term=%d", len(snap.TermStructure))
+	}
+	if !snap.TermStructure[0].HasSkew || math.Abs(snap.TermStructure[0].Skew-2) > 1e-9 {
+		t.Fatalf("near skew=%+v", snap.TermStructure[0])
+	}
+	if snap.Skew == nil || !snap.Skew.HasAtmSkew || math.Abs(snap.Skew.AtmSkew-2) > 1e-9 {
+		t.Fatalf("skew=%+v", snap.Skew)
+	}
+	if snap.Skew.Lean != OptionsLeanPuts {
+		t.Fatalf("vol lean=%s", snap.Skew.Lean)
+	}
+	if !snap.Skew.HasTerm || math.Abs(snap.Skew.TermSlope-(-3)) > 1e-9 {
+		// near ATM 51, far only call 48
+		t.Fatalf("term slope=%+v", snap.Skew)
+	}
+	if !snap.Expiries[0].HasSkew || snap.Expiries[0].Skew != 2 {
+		t.Fatalf("expiry vol=%+v", snap.Expiries[0])
+	}
+}
+
+func TestOptionsWingSkew(t *testing.T) {
+	t.Parallel()
+	asOf := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+	exp := time.Date(2026, 3, 27, 8, 0, 0, 0, time.UTC)
+	quotes := []OptionQuote{
+		{Asset: "BTC", Expiry: exp, Strike: 100000, Side: OptionSideCall, MarkIV: 50, Underlying: 100000},
+		{Asset: "BTC", Expiry: exp, Strike: 100000, Side: OptionSidePut, MarkIV: 51, Underlying: 100000},
+		{Asset: "BTC", Expiry: exp, Strike: 95000, Side: OptionSidePut, MarkIV: 58, Underlying: 100000},
+		{Asset: "BTC", Expiry: exp, Strike: 105000, Side: OptionSideCall, MarkIV: 47, Underlying: 100000},
+	}
+	snap := BuildOptionsSnapshot("BTC", quotes, 100000, OptionsDVOL{}, asOf)
+	if snap.Skew == nil || !snap.Skew.HasWing || math.Abs(snap.Skew.WingSkew-11) > 1e-9 {
+		t.Fatalf("wing=%+v", snap.Skew)
+	}
 }
 
 func TestBuildOptionsSnapshot_PCRMissingWhenNoCalls(t *testing.T) {

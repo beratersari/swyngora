@@ -29,12 +29,14 @@ This is **not** futures open interest (`/market/open-interest`).
 | `dvol` | Deribit 30-day implied vol index (percent) |
 | `dvolChange24h` | DVOL point change vs ~24h ago |
 | `atm` | ATM IV on the expiry nearest 30 days (7–45 DTE preferred); call/put average when both exist |
-| `expiries` | OI, volume, PCR, and share of total OI by expiry (nearest first) |
+| `termStructure` | ATM / call / put mark IV and put−call skew on every live expiry |
+| `skew` | Headline ATM skew (put IV − call IV), term slope (back − front ATM), and ~5% OTM wing skew |
+| `expiries` | OI, volume, PCR, ATM IV, skew, and share of total OI by expiry (nearest first) |
 
 Open interest and volume are in the **base coin**. USD is `coin × underlying`
 (or Deribit `volume_usd` when present).
 
-Web: `/options` — BTC / ETH toggle, headline cards, expiry bars.
+Web: `/options` — BTC / ETH toggle, headline cards, **term structure + call/put skew**, expiry bars.
 
 MCP: `get_options_overview`.
 
@@ -62,4 +64,5 @@ curl -s 'http://localhost:8080/api/v1/market/options?asset=BTC' | jq .
 - Deribit only (dominant listed-options venue). Not Binance/Bybit/OKX options.
 - Not CoinGlass (paid). Not historical IV surfaces or greeks heatmaps.
 - ATM IV uses mark IV on listed strikes; DVOL is Deribit's published index.
+- Term structure is ATM mark IV by expiry. Skew is ATM put IV minus ATM call IV (positive = puts richer). Wing skew uses the listed strike nearest 5% below / above spot on the 30-day tenor. Not 25-delta risk reversal (book summary has no delta).
 - Informational only — not financial advice.

@@ -48,8 +48,11 @@ func TestGetOptions_OK(t *testing.T) {
 	if body.Asset != "BTC" || body.Exchange != "deribit" || body.OpenInterest == "" || body.Dvol == "" {
 		t.Fatalf("%+v", body)
 	}
-	if body.Atm == nil || len(body.Expiries) != 1 {
+	if body.Atm == nil || len(body.Expiries) != 1 || len(body.TermStructure) != 1 {
 		t.Fatalf("%+v", body)
+	}
+	if body.Skew == nil || body.Skew.AtmSkew == "" || body.TermStructure[0].Skew == "" {
+		t.Fatalf("vol %+v", body)
 	}
 }
 

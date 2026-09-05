@@ -45,7 +45,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/liquidations/overview` | Market-wide 1h/4h/12h/24h totals + coins ranked for a treemap |
 | `GET` | `/api/v1/market/holders` | Crypto holder count, concentration, and top wallets (CMC → Coin Metrics → GeckoTerminal → Ethplorer → Routescan → Tronscan; CryptoID fallback for UTXO coins like PIVX). Known addresses include a public `label` |
 | `GET` | `/api/v1/market/open-interest` | Current futures OI + 5m/1h/4h/24h change (Binance USD-M + Bybit linear); includes funding |
-| `GET` | `/api/v1/market/options` | BTC/ETH Deribit options: listed OI, 24h volume, put/call, DVOL + ATM IV, expiry mix |
+| `GET` | `/api/v1/market/options` | BTC/ETH Deribit options: listed OI, 24h volume, put/call, DVOL + ATM IV, term structure, call/put skew, expiry mix |
 | `GET` | `/api/v1/market/funding-rate` | Predicted next perpetual funding + recent settlements (Binance USD-M + Bybit linear) |
 | `GET` | `/api/v1/market/funding-arb` | Long cheaper-funding venue / short richer one; sized after-fee payout + spot-perp |
 | `GET` | `/api/v1/market/funding-arb/scan` | After-fee winners only (published settlements in the hold window) |

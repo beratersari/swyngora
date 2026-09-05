@@ -1009,7 +1009,9 @@ paths:
         CoinGlass-style **options desk** for **BTC** and **ETH** from **Deribit**
         public REST (no API key). Returns listed inverse-option open interest,
         24h volume, put/call ratios, Deribit DVOL (30-day implied vol index),
-        ATM implied vol near the 30-day tenor, and open-interest by expiry.
+        ATM implied vol near the 30-day tenor, IV term structure (ATM IV by
+        expiry), call/put skew (ATM put IV minus call IV, plus ~5% OTM wing),
+        and open-interest by expiry.
         `asset` accepts `BTC`, `ETH`, or a pair such as `BTCUSDT`.
         `exchange` is `deribit` (default). Cached ~30s. Informational only.
       operationId: getMarketOptions
@@ -8596,6 +8598,38 @@ components:
         putCallOi: { type: string, description: Put OI / call OI when calls exist }
         sharePct: { type: string, description: Share of total open interest }
         contractCount: { type: integer }
+        atmIv: { type: string, description: ATM mark IV percent on this expiry }
+        callIv: { type: string }
+        putIv: { type: string }
+        skew: { type: string, description: Signed ATM put IV minus call IV (vol points) }
+    MarketOptionsVolPoint:
+      type: object
+      description: ATM implied vol on one expiry
+      properties:
+        expiry: { type: string, format: date-time }
+        label: { type: string }
+        daysToExpiry: { type: integer }
+        strike: { type: string }
+        atmIv: { type: string }
+        callIv: { type: string }
+        putIv: { type: string }
+        skew: { type: string, description: Signed ATM put IV minus call IV }
+    MarketOptionsSkew:
+      type: object
+      description: Term slope and call/put vol difference
+      properties:
+        atmSkew: { type: string, description: 30d ATM put IV minus call IV }
+        callIv: { type: string }
+        putIv: { type: string }
+        lean: { type: string, enum: [calls, puts, balanced], description: Which side is richer in IV }
+        frontIv: { type: string }
+        backIv: { type: string }
+        termSlope: { type: string, description: Back ATM IV minus front ATM IV }
+        frontDte: { type: integer }
+        backDte: { type: integer }
+        wingSkew: { type: string, description: ~5% OTM put IV minus ~5% OTM call IV }
+        wingPutIv: { type: string }
+        wingCallIv: { type: string }
     MarketOptions:
       type: object
       description: Deribit BTC/ETH options overview
@@ -8618,6 +8652,10 @@ components:
         dvol: { type: string, description: Deribit 30-day implied vol index (percent) }
         dvolChange24h: { type: string, description: Signed DVOL point change vs ~24h ago }
         atm: { $ref: '#/components/schemas/MarketOptionsATM' }
+        termStructure:
+          type: array
+          items: { $ref: '#/components/schemas/MarketOptionsVolPoint' }
+        skew: { $ref: '#/components/schemas/MarketOptionsSkew' }
         expiries:
           type: array
           items: { $ref: '#/components/schemas/MarketOptionsExpiry' }

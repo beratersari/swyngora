@@ -1,6 +1,6 @@
 {
   "title": "Options",
-  "subtitle": "BTC and ETH listed options from Deribit — open interest, volume, put/call, implied vol, and expiry mix.",
+  "subtitle": "BTC and ETH listed options from Deribit — open interest, volume, put/call, implied vol, term structure, and skew.",
   "assetAria": "Options underlying",
   "stats": {
     "oi": "Open interest",
@@ -24,6 +24,28 @@
     "aria": "Open interest by expiry",
     "barTitle": "{{share}}% of open interest",
     "empty": "No listed expiries."
+  },
+  "vol": {
+    "title": "Volatility structure",
+    "subtitle": "ATM IV by expiry, and put minus call at the money",
+    "term": "Term slope",
+    "termHint": "{{front}}d → {{back}}d ATM",
+    "termEmpty": "Need two expiries",
+    "atmSkew": "ATM skew",
+    "skewHint": "Put IV − call IV",
+    "wing": "Wing skew",
+    "wingHint": "~5% OTM put − call",
+    "termTitle": "Term structure",
+    "termLegend": "ATM implied vol by expiry",
+    "skewTitle": "Call vs put IV",
+    "skewLegend": "Green = call · red = put · number is put − call",
+    "pairAria": "Call and put IV for {{label}}",
+    "empty": "No implied-vol points yet.",
+    "lean": {
+      "calls": "Calls richer",
+      "puts": "Puts richer",
+      "balanced": "Balanced"
+    }
   },
   "disclaimer": "Deribit inverse options. Informational only — not financial advice."
 }

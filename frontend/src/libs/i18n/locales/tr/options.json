@@ -1,6 +1,6 @@
 {
   "title": "Opsiyonlar",
-  "subtitle": "Deribit BTC ve ETH opsiyonları — açık pozisyon, hacim, put/call, ima edilen volatilite ve vade dağılımı.",
+  "subtitle": "Deribit BTC ve ETH opsiyonları — açık pozisyon, hacim, put/call, ima vol, vade yapısı ve eğim.",
   "assetAria": "Opsiyon dayanak varlığı",
   "stats": {
     "oi": "Açık pozisyon",
@@ -24,6 +24,28 @@
     "aria": "Vadeye göre açık pozisyon",
     "barTitle": "Açık pozisyonun %{{share}} kadarı",
     "empty": "Listelenmiş vade yok."
+  },
+  "vol": {
+    "title": "Volatilite yapısı",
+    "subtitle": "Vadeye göre ATM IV ve put eksi call",
+    "term": "Vade eğimi",
+    "termHint": "{{front}}g → {{back}}g ATM",
+    "termEmpty": "İki vade gerekir",
+    "atmSkew": "ATM eğim",
+    "skewHint": "Put IV − call IV",
+    "wing": "Kanat eğim",
+    "wingHint": "~%5 OTM put − call",
+    "termTitle": "Vade yapısı",
+    "termLegend": "Vadeye göre ATM ima vol",
+    "skewTitle": "Call vs put IV",
+    "skewLegend": "Yeşil = call · kırmızı = put · sayı put − call",
+    "pairAria": "{{label}} için call ve put IV",
+    "empty": "İma vol noktası yok.",
+    "lean": {
+      "calls": "Call daha pahalı",
+      "puts": "Put daha pahalı",
+      "balanced": "Dengeli"
+    }
   },
   "disclaimer": "Deribit inverse opsiyonlar. Yalnızca bilgi amaçlıdır — yatırım tavsiyesi değildir."
 }

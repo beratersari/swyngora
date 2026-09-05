@@ -5,6 +5,7 @@ import { Text } from '@/components/atoms/Text';
 import { PageHeader } from '@/components/molecules/PageHeader';
 import { OptionsExpiryBars } from '@/components/organisms/OptionsExpiryBars';
 import { OptionsStatCards } from '@/components/organisms/OptionsStatCards';
+import { OptionsVolStructure } from '@/components/organisms/OptionsVolStructure';
 import { rtkErrorMessage, useGetMarketOptionsQuery } from '@/libs/api';
 import { useDocumentVisible } from '@/libs/hooks';
 import { rtkCurrent } from '@/libs/utils';
@@ -53,6 +54,18 @@ export function OptionsPage() {
       ) : null}
 
       <OptionsStatCards data={data} isLoading={query.isLoading} />
+
+      <Panel>
+        <Toolbar>
+          <Text variant="bodySm" color="primary">
+            {t('vol.title')}
+          </Text>
+          <Text variant="caption" color="secondary">
+            {t('vol.subtitle')}
+          </Text>
+        </Toolbar>
+        <OptionsVolStructure data={data} isLoading={query.isLoading} />
+      </Panel>
 
       <Panel>
         <Toolbar>

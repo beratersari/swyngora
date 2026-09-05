@@ -207,16 +207,50 @@ func (b *Backend) GetOptions(ctx context.Context, exchange, asset string) (json.
 		if e.HasPutCallOI {
 			row["putCallOi"] = e.PutCallOI
 		}
+		if e.HasAtmIV {
+			row["atmIv"] = e.AtmIV
+		}
+		if e.HasCallIV {
+			row["callIv"] = e.CallIV
+		}
+		if e.HasPutIV {
+			row["putIv"] = e.PutIV
+		}
+		if e.HasSkew {
+			row["skew"] = e.Skew
+		}
 		expiries = append(expiries, row)
+	}
+	term := make([]map[string]any, 0, len(got.TermStructure))
+	for _, p := range got.TermStructure {
+		row := map[string]any{
+			"expiry": p.Expiry.UTC().Format(time.RFC3339), "label": p.Label, "daysToExpiry": p.DaysToExpiry,
+		}
+		if p.Strike > 0 {
+			row["strike"] = p.Strike
+		}
+		if p.HasAtm {
+			row["atmIv"] = p.AtmIV
+		}
+		if p.HasCall {
+			row["callIv"] = p.CallIV
+		}
+		if p.HasPut {
+			row["putIv"] = p.PutIV
+		}
+		if p.HasSkew {
+			row["skew"] = p.Skew
+		}
+		term = append(term, row)
 	}
 	out := map[string]any{
 		"asset": got.Asset, "exchange": got.Exchange, "indexPrice": got.IndexPrice,
-		"asOf": got.AsOf.UTC().Format(time.RFC3339Nano),
+		"asOf":         got.AsOf.UTC().Format(time.RFC3339Nano),
 		"openInterest": got.OpenInterest, "openInterestUsd": got.OpenInterestUSD,
 		"volume": got.Volume, "volumeUsd": got.VolumeUSD,
 		"callOi": got.CallOI, "putOi": got.PutOI, "callVolume": got.CallVolume, "putVolume": got.PutVolume,
 		"listed": got.Listed, "withOi": got.WithOI, "withIv": got.WithIV,
-		"expiries": expiries, "note": got.Note,
+		"termStructure": term, "expiries": expiries, "note": got.Note,
 	}
 	if got.HasPutCallOI {
 		out["putCallOi"] = got.PutCallOI
@@ -243,6 +277,27 @@ func (b *Backend) GetOptions(ctx context.Context, exchange, asset string) (json.
 			atm["putIv"] = got.ATM.PutIV
 		}
 		out["atm"] = atm
+	}
+	if got.Skew != nil {
+		sk := map[string]any{"lean": got.Skew.Lean}
+		if got.Skew.HasAtmSkew {
+			sk["atmSkew"] = got.Skew.AtmSkew
+			sk["callIv"] = got.Skew.CallIV
+			sk["putIv"] = got.Skew.PutIV
+		}
+		if got.Skew.HasTerm {
+			sk["frontIv"] = got.Skew.FrontIV
+			sk["backIv"] = got.Skew.BackIV
+			sk["termSlope"] = got.Skew.TermSlope
+			sk["frontDte"] = got.Skew.FrontDTE
+			sk["backDte"] = got.Skew.BackDTE
+		}
+		if got.Skew.HasWing {
+			sk["wingSkew"] = got.Skew.WingSkew
+			sk["wingPutIv"] = got.Skew.WingPutIV
+			sk["wingCallIv"] = got.Skew.WingCallIV
+		}
+		out["skew"] = sk
 	}
 	return mustJSON(out)
 }

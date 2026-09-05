@@ -18,6 +18,10 @@ vi.mock('@/libs/api', async (importOriginal) => {
         putCallOi: '0.4',
         lean: 'calls',
         dvol: '49.5',
+        termStructure: [
+          { label: '27 Mar 2026', atmIv: '51', callIv: '50', putIv: '52', skew: '2' },
+        ],
+        skew: { atmSkew: '2', lean: 'puts', termSlope: '-1' },
         expiries: [{ label: '27 Mar 2026', sharePct: '80', openInterestUsd: '8000000', callOi: '8', putOi: '2' }],
         note: 'Informational only.',
       },
@@ -31,6 +35,10 @@ vi.mock('@/libs/api', async (importOriginal) => {
         putCallOi: '0.4',
         lean: 'calls',
         dvol: '49.5',
+        termStructure: [
+          { label: '27 Mar 2026', atmIv: '51', callIv: '50', putIv: '52', skew: '2' },
+        ],
+        skew: { atmSkew: '2', lean: 'puts', termSlope: '-1' },
         expiries: [{ label: '27 Mar 2026', sharePct: '80', openInterestUsd: '8000000', callOi: '8', putOi: '2' }],
         note: 'Informational only.',
       },
@@ -46,6 +54,7 @@ describe('OptionsPage', () => {
   it('renders the options desk', () => {
     renderWithProviders(<OptionsPage />, { routerEntries: ['/options'] });
     expect(screen.getByRole('heading', { name: /options/i })).toBeInTheDocument();
-    expect(screen.getByText('27 Mar 2026')).toBeInTheDocument();
+    expect(screen.getAllByText('27 Mar 2026').length).toBeGreaterThan(0);
+    expect(screen.getByText(/volatility structure/i)).toBeInTheDocument();
   });
 });

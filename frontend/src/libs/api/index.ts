@@ -79,6 +79,8 @@ export type {
   MarketOptions,
   MarketOptionsExpiry,
   MarketOptionsATM,
+  MarketOptionsVolPoint,
+  MarketOptionsSkew,
   OptionsQuery,
   MarketLiquidations,
   MarketLiquidationOverview,
