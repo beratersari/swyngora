@@ -6,7 +6,15 @@ import os
 
 from typer.testing import CliRunner
 
-from swyngora_ai.cli import _status_text, app
+from swyngora_ai.cli import (
+    _status_text,
+    app,
+    attach_repl_readline,
+    load_history_lines,
+    persist_repl_readline,
+    readline_prompt,
+    write_history_lines,
+)
 from swyngora_ai.graph.orchestrator import ChatResult
 
 
@@ -116,3 +124,38 @@ def test_repl_reset_and_exit(monkeypatch) -> None:
     assert "not financial advice" in result.stdout.lower()
     assert "leave the session" in result.stdout
     assert "clear conversation memory" in result.stdout
+    assert "previous prompts" in result.stdout
+
+
+def test_load_history_lines_missing(tmp_path) -> None:
+    assert load_history_lines(tmp_path / "missing") == []
+
+
+def test_write_history_lines_creates_caps_and_skips_empty(tmp_path) -> None:
+    path = tmp_path / "nested" / "cli_history"
+    write_history_lines(
+        path, ["", "  first  ", "second"] + [f"n{i}" for i in range(10)], max_lines=3
+    )
+    assert path.is_file()
+    assert load_history_lines(path) == ["n7", "n8", "n9"]
+
+
+def test_attach_repl_readline_skips_when_not_a_tty(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr("swyngora_ai.cli.sys.stdin.isatty", lambda: False)
+    assert attach_repl_readline(tmp_path / "cli_history") is None
+    assert not (tmp_path / "cli_history").exists()
+
+
+def test_persist_repl_readline_none_is_noop() -> None:
+    persist_repl_readline(None)
+
+
+def test_readline_prompt_hides_ansi_from_width() -> None:
+    prompt = readline_prompt()
+    assert "you" in prompt
+    assert "›" in prompt
+    assert "\001" in prompt
+    assert "\002" in prompt
+    assert prompt.startswith("\001")
+    assert prompt.endswith(" ")
+    assert prompt.rstrip().endswith("\002")

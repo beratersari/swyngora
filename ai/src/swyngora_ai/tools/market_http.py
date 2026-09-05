@@ -2856,9 +2856,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             "weightVolumeBreakout": weight_volume_breakout,
             "weightHuntUp": weight_hunt_up,
         }
-        for key, val in weights.items():
-            if val is not None:
-                params[key] = val
+        params.update({key: val for key, val in weights.items() if val is not None})
         return http.get("/api/v1/swing/custom/scan", params)
 
     def get_watchlist(client_id: str, owner_client_id: str = "") -> str:
