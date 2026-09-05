@@ -16,7 +16,7 @@ _AI_ROOT = Path(__file__).resolve().parents[1]
 
 def test_langgraph_json_registers_swyngora() -> None:
     spec = json.loads((_AI_ROOT / "langgraph.json").read_text(encoding="utf-8"))
-    assert spec["graphs"]["swyngora"] == "./src/swyngora_ai/graph/chat_graph.py:graph"
+    assert spec["graphs"]["swyngora"] == "./chat_graph.py:graph"
     assert spec["env"] == ".env"
     assert spec["dependencies"] == ["."]
 
