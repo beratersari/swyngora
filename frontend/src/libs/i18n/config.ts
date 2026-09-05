@@ -20,6 +20,7 @@ export const I18N_NAMESPACES = [
   'heatmap',
   'liquidations',
   'forensics',
+  'options',
   'settings',
 ] as const;
 export type I18nNamespace = (typeof I18N_NAMESPACES)[number];

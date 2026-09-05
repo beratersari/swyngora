@@ -11,6 +11,8 @@ const (
 	ExchangeBybit    Exchange = "bybit"
 	ExchangeNasdaq   Exchange = "nasdaq"
 	ExchangeBist     Exchange = "bist"
+	// ExchangeDeribit is options-only (not a spot list venue).
+	ExchangeDeribit Exchange = "deribit"
 )
 
 // SupportedExchanges is the ordered list of venues exposed by the API.

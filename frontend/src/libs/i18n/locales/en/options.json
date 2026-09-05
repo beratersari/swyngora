@@ -1,0 +1,29 @@
+{
+  "title": "Options",
+  "subtitle": "BTC and ETH listed options from Deribit — open interest, volume, put/call, implied vol, and expiry mix.",
+  "assetAria": "Options underlying",
+  "stats": {
+    "oi": "Open interest",
+    "volume": "24h volume",
+    "pcr": "Put / call (OI)",
+    "pcrHint": "Puts ÷ calls",
+    "dvol": "Implied vol (DVOL)",
+    "dvolChange": "{{value}} vs 24h",
+    "atm": "ATM IV",
+    "atmDte": "{{days}}d tenor",
+    "ivHint": "Percent"
+  },
+  "lean": {
+    "calls": "More call OI",
+    "puts": "More put OI",
+    "balanced": "Balanced"
+  },
+  "expiry": {
+    "title": "Expiry distribution",
+    "legend": "Bar width is share of OI · green = calls · red = puts",
+    "aria": "Open interest by expiry",
+    "barTitle": "{{share}}% of open interest",
+    "empty": "No listed expiries."
+  },
+  "disclaimer": "Deribit inverse options. Informational only — not financial advice."
+}

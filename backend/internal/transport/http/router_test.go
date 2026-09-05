@@ -56,6 +56,24 @@ func (routerSupply) GetSupply(_ context.Context, asset string) (*domain.AssetSup
 	return &domain.AssetSupply{Asset: asset, Source: "test", AsOf: time.Unix(0, 0).UTC()}, nil
 }
 
+type routerOptions struct{}
+
+func (routerOptions) GetOptionQuotes(_ context.Context, asset string) ([]domain.OptionQuote, error) {
+	exp := time.Now().UTC().Add(30 * 24 * time.Hour).Truncate(time.Hour)
+	return []domain.OptionQuote{{
+		Asset: asset, Expiry: exp, Strike: 1, Side: domain.OptionSideCall,
+		OpenInterest: 1, Volume: 1, MarkIV: 50, Underlying: 1,
+	}}, nil
+}
+
+func (routerOptions) GetOptionsDVOL(context.Context, string) (domain.OptionsDVOL, error) {
+	return domain.OptionsDVOL{Value: 50}, nil
+}
+
+func (routerOptions) GetOptionsIndex(context.Context, string) (float64, error) {
+	return 1, nil
+}
+
 type routerHolders struct{}
 
 func (routerHolders) GetHolders(_ context.Context, asset string) (*domain.AssetHolders, error) {
@@ -113,7 +131,7 @@ func TestRSIHeatmap_HTTPIntegration(t *testing.T) {
 }
 
 func TestNewRouter_RoutesAndCORS(t *testing.T) {
-	svc := market.New(routerMarket{}, routerSupply{}).WithHolders(routerHolders{})
+	svc := market.New(routerMarket{}, routerSupply{}).WithHolders(routerHolders{}).WithOptionsChain(routerOptions{})
 	h := NewRouterWithOptions(svc, nil, RouterOptions{RateLimitRPS: 0, RateLimitBurst: 0})
 
 	paths := []struct {
@@ -162,6 +180,7 @@ func TestNewRouter_RoutesAndCORS(t *testing.T) {
 		{"/api/v1/market/liquidations?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/liquidations/overview", http.StatusOK, nil},
 		{"/api/v1/market/open-interest?symbol=BTCUSDT", http.StatusOK, nil},
+		{"/api/v1/market/options?asset=BTC", http.StatusOK, nil},
 		{"/api/v1/market/funding-rate?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/long-short-ratio?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/liquidation-hunt?symbol=BTCUSDT", http.StatusOK, nil},

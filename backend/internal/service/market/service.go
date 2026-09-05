@@ -65,6 +65,7 @@ type Service struct {
 	offVenue       domain.OffVenuePricePort
 	rsiHeat        *cache.TTL[*domain.RSIHeatmap]
 	rsiHeatSF      singleflight.Group
+	options        domain.OptionsChainPort
 }
 
 // FuturesHistoryReader is the durable futures archive (optional).
@@ -182,6 +183,14 @@ func (s *Service) WithBasis(ports map[domain.Exchange]domain.BasisPort) *Service
 		}
 	}
 	s.basis = cp
+	return s
+}
+
+// WithOptionsChain attaches Deribit (or another) listed-options port.
+func (s *Service) WithOptionsChain(p domain.OptionsChainPort) *Service {
+	if s != nil {
+		s.options = p
+	}
 	return s
 }
 

@@ -187,6 +187,66 @@ func (b *Backend) EstimateOrderBookImpact(ctx context.Context, exchange, symbol,
 	})
 }
 
+func (b *Backend) GetOptions(ctx context.Context, exchange, asset string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetOptions(ctx, exchange, asset)
+	if err != nil {
+		return nil, err
+	}
+	expiries := make([]map[string]any, 0, len(got.Expiries))
+	for _, e := range got.Expiries {
+		row := map[string]any{
+			"expiry": e.Expiry.UTC().Format(time.RFC3339), "label": e.Label, "daysToExpiry": e.DaysToExpiry,
+			"openInterest": e.OpenInterest, "openInterestUsd": e.OpenInterestUSD,
+			"volume": e.Volume, "volumeUsd": e.VolumeUSD,
+			"callOi": e.CallOI, "putOi": e.PutOI, "callVolume": e.CallVolume, "putVolume": e.PutVolume,
+			"sharePct": e.SharePct, "contractCount": e.ContractCount,
+		}
+		if e.HasPutCallOI {
+			row["putCallOi"] = e.PutCallOI
+		}
+		expiries = append(expiries, row)
+	}
+	out := map[string]any{
+		"asset": got.Asset, "exchange": got.Exchange, "indexPrice": got.IndexPrice,
+		"asOf": got.AsOf.UTC().Format(time.RFC3339Nano),
+		"openInterest": got.OpenInterest, "openInterestUsd": got.OpenInterestUSD,
+		"volume": got.Volume, "volumeUsd": got.VolumeUSD,
+		"callOi": got.CallOI, "putOi": got.PutOI, "callVolume": got.CallVolume, "putVolume": got.PutVolume,
+		"listed": got.Listed, "withOi": got.WithOI, "withIv": got.WithIV,
+		"expiries": expiries, "note": got.Note,
+	}
+	if got.HasPutCallOI {
+		out["putCallOi"] = got.PutCallOI
+		out["lean"] = got.Lean
+	}
+	if got.HasPutCallVol {
+		out["putCallVolume"] = got.PutCallVolume
+	}
+	if got.HasDVOL {
+		out["dvol"] = got.DVOL
+	}
+	if got.HasDVOLChange {
+		out["dvolChange24h"] = got.DVOLChange24h
+	}
+	if got.ATM != nil {
+		atm := map[string]any{
+			"iv": got.ATM.IV, "strike": got.ATM.Strike,
+			"expiry": got.ATM.Expiry.UTC().Format(time.RFC3339), "daysToExpiry": got.ATM.DaysToExpiry,
+		}
+		if got.ATM.HasCall {
+			atm["callIv"] = got.ATM.CallIV
+		}
+		if got.ATM.HasPut {
+			atm["putIv"] = got.ATM.PutIV
+		}
+		out["atm"] = atm
+	}
+	return mustJSON(out)
+}
+
 func (b *Backend) GetOpenInterest(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

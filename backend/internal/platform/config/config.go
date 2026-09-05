@@ -20,7 +20,9 @@ type Config struct {
 	BinanceWSURL           string
 	BinanceFuturesWSURL    string
 	BinanceFuturesBaseURL  string
+	DeribitBaseURL         string
 	OpenInterestCacheTTL   time.Duration
+	OptionsCacheTTL        time.Duration
 	OrderBookIdleTTL       time.Duration
 	OrderBookSyncTimeout   time.Duration
 	DelistRefreshEvery     time.Duration
@@ -203,7 +205,9 @@ func Load() Config {
 		BinanceWSURL:           getenv("BINANCE_WS_URL", "wss://stream.binance.com:9443"),
 		BinanceFuturesWSURL:    getenv("BINANCE_FUTURES_WS_URL", "wss://fstream.binance.com"),
 		BinanceFuturesBaseURL:  getenv("BINANCE_FUTURES_BASE_URL", "https://fapi.binance.com"),
+		DeribitBaseURL:         getenv("DERIBIT_BASE_URL", "https://www.deribit.com"),
 		OpenInterestCacheTTL:   positiveDurationEnv("OPEN_INTEREST_CACHE_TTL", 30*time.Second),
+		OptionsCacheTTL:        positiveDurationEnv("OPTIONS_CACHE_TTL", 30*time.Second),
 		OrderBookIdleTTL:       positiveDurationEnv("ORDERBOOK_IDLE_TTL", 90*time.Second),
 		OrderBookSyncTimeout:   positiveDurationEnv("ORDERBOOK_SYNC_TIMEOUT", 8*time.Second),
 		DelistRefreshEvery:     positiveDurationEnv("DELIST_REFRESH_EVERY", time.Hour),

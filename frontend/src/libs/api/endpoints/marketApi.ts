@@ -42,6 +42,10 @@ import type {
   AssetProfileQuery,
   HoldersQuery,
   MarketOpenInterest,
+  MarketOptions,
+  MarketOptionsExpiry,
+  MarketOptionsATM,
+  OptionsQuery,
   MarketLiquidations,
   MarketLiquidationOverview,
   MarketLiquidationLevels,
@@ -91,6 +95,10 @@ export type {
   AssetProfile,
   HoldersQuery,
   MarketOpenInterest,
+  MarketOptions,
+  MarketOptionsExpiry,
+  MarketOptionsATM,
+  OptionsQuery,
   MarketLiquidations,
   MarketLiquidationOverview,
   MarketLiquidationLevels,
@@ -260,6 +268,13 @@ export const marketApi = baseApi.injectEndpoints({
     getOpenInterest: build.query<MarketOpenInterest, OpenInterestQuery>({
       query: (arg) => ({
         url: '/api/v1/market/open-interest',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
+    getMarketOptions: build.query<MarketOptions, OptionsQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/options',
         params: compactParams({ ...(arg ?? {}) }),
       }),
     }),

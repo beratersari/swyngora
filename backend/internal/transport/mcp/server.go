@@ -43,6 +43,7 @@ type DataPort interface {
 	GetLiquidationCascade(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	ScanLiquidationCascades(ctx context.Context, exchange string) (json.RawMessage, error)
 	GetOpenInterest(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetOptions(ctx context.Context, exchange, asset string) (json.RawMessage, error)
 	GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFundingArb(ctx context.Context, symbol string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
 	ScanFundingArb(ctx context.Context, quote string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64, limit int) (json.RawMessage, error)
@@ -563,6 +564,22 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.ScanLiquidationCascades(ctx, req.GetString("exchange", "all"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_options_overview",
+		mcp.WithDescription("BTC/ETH options desk from Deribit: listed open interest, 24h volume, put/call ratios, DVOL (30-day implied vol), ATM IV near 30 days, and open interest by expiry. asset is BTC or ETH (BTCUSDT is accepted). Not Binance/Bybit futures OI. Informational only."),
+		mcp.WithString("asset", mcp.Required(), mcp.Description("BTC or ETH (or BTCUSDT / ETHUSDT)")),
+		mcp.WithString("exchange", mcp.Description("deribit (default)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		asset, err := req.RequireString("asset")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetOptions(ctx, req.GetString("exchange", "deribit"), asset)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

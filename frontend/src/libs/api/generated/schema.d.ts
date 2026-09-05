@@ -572,6 +572,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * BTC/ETH options overview (open interest, volume, PCR, IV, expiry)
+         * @description CoinGlass-style **options desk** for **BTC** and **ETH** from **Deribit**
+         *     public REST (no API key). Returns listed inverse-option open interest,
+         *     24h volume, put/call ratios, Deribit DVOL (30-day implied vol index),
+         *     ATM implied vol near the 30-day tenor, and open-interest by expiry.
+         *     `asset` accepts `BTC`, `ETH`, or a pair such as `BTCUSDT`.
+         *     `exchange` is `deribit` (default). Cached ~30s. Informational only.
+         */
+        get: operations["getMarketOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/funding-rate": {
         parameters: {
             query?: never;
@@ -4873,6 +4898,77 @@ export interface components {
             current?: components["schemas"]["OpenInterestLevel"];
             windows?: components["schemas"]["OpenInterestWindow"][];
         };
+        MarketOptionsATM: {
+            /** @description ATM implied vol percent (call/put average when both exist) */
+            iv?: string;
+            strike?: string;
+            /** Format: date-time */
+            expiry?: string;
+            daysToExpiry?: number;
+            callIv?: string;
+            putIv?: string;
+        };
+        MarketOptionsExpiry: {
+            /** Format: date-time */
+            expiry?: string;
+            /** @example 27 Mar 2026 */
+            label?: string;
+            daysToExpiry?: number;
+            /** @description Base-coin open interest */
+            openInterest?: string;
+            openInterestUsd?: string;
+            /** @description 24h base-coin volume */
+            volume?: string;
+            volumeUsd?: string;
+            callOi?: string;
+            putOi?: string;
+            callVolume?: string;
+            putVolume?: string;
+            /** @description Put OI / call OI when calls exist */
+            putCallOi?: string;
+            /** @description Share of total open interest */
+            sharePct?: string;
+            contractCount?: number;
+        };
+        /** @description Deribit BTC/ETH options overview */
+        MarketOptions: {
+            /** @enum {string} */
+            asset?: "BTC" | "ETH";
+            /** @example deribit */
+            exchange?: string;
+            indexPrice?: string;
+            /** Format: date-time */
+            asOf?: string;
+            /** @description Total base-coin open interest */
+            openInterest?: string;
+            openInterestUsd?: string;
+            /** @description 24h base-coin volume */
+            volume?: string;
+            volumeUsd?: string;
+            callOi?: string;
+            putOi?: string;
+            callVolume?: string;
+            putVolume?: string;
+            /** @description Put OI / call OI */
+            putCallOi?: string;
+            /** @description Put volume / call volume */
+            putCallVolume?: string;
+            /**
+             * @description PCR lean (puts ≥ 1.2
+             * @enum {string}
+             */
+            lean?: "calls" | "puts" | "balanced";
+            /** @description Deribit 30-day implied vol index (percent) */
+            dvol?: string;
+            /** @description Signed DVOL point change vs ~24h ago */
+            dvolChange24h?: string;
+            atm?: components["schemas"]["MarketOptionsATM"];
+            expiries?: components["schemas"]["MarketOptionsExpiry"][];
+            listed?: number;
+            withOi?: number;
+            withIv?: number;
+            note?: string;
+        };
         /** @description Current futures open interest plus 5m/1h/4h/24h change */
         MarketOpenInterest: {
             symbol?: string;
@@ -7342,6 +7438,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketOpenInterest"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketOptions: {
+        parameters: {
+            query?: {
+                /** @description BTC or ETH (or BTCUSDT / ETHUSDT) */
+                asset?: string;
+                /** @description Alias of asset (BTCUSDT → BTC) */
+                symbol?: string;
+                /** @description deribit (default) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Options overview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketOptions"];
                 };
             };
             400: components["responses"]["Error"];

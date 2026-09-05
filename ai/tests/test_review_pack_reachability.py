@@ -17,6 +17,7 @@ from swyngora_ai.tools.packs import BOOK_TOOLS, PACKS
 BOOK_FLOW_ANALYTICS = frozenset(
     {
         "get_open_interest",
+        "get_options_overview",
         "get_funding_rate",
         "get_funding_arb",
         "scan_funding_arb",

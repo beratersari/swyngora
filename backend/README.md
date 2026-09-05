@@ -11,7 +11,7 @@ Go HTTP API for market data across **Binance**, **Coinbase**, **Bybit** (crypto 
 | Application | `internal/service/market` | Validation + use-case orchestration |
 | Application | `internal/service/realtime` | WebSocket hub: price pump + portfolio event fan-out |
 | Domain | `internal/domain` | Entities, ports, sentinel errors |
-| Infrastructure | `internal/adapter/*` | Binance (market + supply), Coinbase, Bybit, **equities (Nasdaq screener + BIST TradingView scanner; Yahoo for candles)**, TTL cache, **SQLite watchlist** |
+| Infrastructure | `internal/adapter/*` | Binance (market + supply), Coinbase, Bybit, **Deribit (BTC/ETH options)**, **equities (Nasdaq screener + BIST TradingView scanner; Yahoo for candles)**, TTL cache, **SQLite watchlist** |
 | Platform | `internal/platform/config` | Env config |
 
 OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
@@ -45,6 +45,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/liquidations/overview` | Market-wide 1h/4h/12h/24h totals + coins ranked for a treemap |
 | `GET` | `/api/v1/market/holders` | Crypto holder count, concentration, and top wallets (CMC → Coin Metrics → GeckoTerminal → Ethplorer → Routescan → Tronscan; CryptoID fallback for UTXO coins like PIVX). Known addresses include a public `label` |
 | `GET` | `/api/v1/market/open-interest` | Current futures OI + 5m/1h/4h/24h change (Binance USD-M + Bybit linear); includes funding |
+| `GET` | `/api/v1/market/options` | BTC/ETH Deribit options: listed OI, 24h volume, put/call, DVOL + ATM IV, expiry mix |
 | `GET` | `/api/v1/market/funding-rate` | Predicted next perpetual funding + recent settlements (Binance USD-M + Bybit linear) |
 | `GET` | `/api/v1/market/funding-arb` | Long cheaper-funding venue / short richer one; sized after-fee payout + spot-perp |
 | `GET` | `/api/v1/market/funding-arb/scan` | After-fee winners only (published settlements in the hold window) |
@@ -292,6 +293,8 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `ORDERBOOK_CACHE_TTL` | `2s` | Reserved TTL for any leftover REST book cache (live books are not cached) |
 | `BINANCE_WS_URL` | `wss://stream.binance.com:9443` | Binance spot stream host for the live local book |
 | `BINANCE_FUTURES_BASE_URL` | `https://fapi.binance.com` | Binance USD-M REST (open interest) |
+| `DERIBIT_BASE_URL` | `https://www.deribit.com` | Deribit public REST (BTC/ETH options) |
+| `OPTIONS_CACHE_TTL` | `30s` | Options overview cache |
 | `BINANCE_FUTURES_WS_URL` | `wss://fstream.binance.com` | Binance USD-M stream for liquidations |
 | `OPEN_INTEREST_CACHE_TTL` | `30s` | Futures open-interest snapshot TTL |
 | `COINBASE_WS_URL` | `wss://ws-feed.exchange.coinbase.com` | Coinbase Exchange feed for the live local book |

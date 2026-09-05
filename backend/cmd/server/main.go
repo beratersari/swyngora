@@ -20,6 +20,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coingecko"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinmetrics"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cryptoid"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/deribit"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/deliststore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/equities"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/ethplorer"
@@ -103,6 +104,10 @@ func main() {
 
 	nasdaqClient := equities.NewNasdaq(equities.Options{HTTPClient: httpClient})
 	bistClient := equities.NewBist(equities.Options{HTTPClient: httpClient})
+	deribitClient := deribit.New(deribit.Options{
+		BaseURL:  cfg.DeribitBaseURL,
+		CacheTTL: cfg.OptionsCacheTTL,
+	})
 
 	stopCleanup := make(chan struct{})
 	go func() {
@@ -131,6 +136,7 @@ func main() {
 				delistSupplyCache.Cleanup()
 				nasdaqClient.Cleanup()
 				bistClient.Cleanup()
+				deribitClient.Cleanup()
 			case <-stopCleanup:
 				return
 			}
@@ -279,7 +285,7 @@ func main() {
 		domain.ExchangeBybit:   bybitClient,
 	}).WithWindowChanges(map[domain.Exchange]domain.WindowChangePort{
 		domain.ExchangeBinance: binanceClient,
-	})
+	}).WithOptionsChain(deribitClient)
 	bybitTrades := bybit.NewTradeHub(bybit.TradeHubOptions{
 		WSURL: cfg.BybitLinearWSURL,
 		Book:  bybitClient.TakerBook(),

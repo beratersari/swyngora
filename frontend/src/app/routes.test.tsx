@@ -24,6 +24,9 @@ vi.mock('@/components/pages/HeatmapPage', () => ({
 vi.mock('@/components/pages/LiquidationsPage', () => ({
   LiquidationsPage: () => <div data-testid="liquidations-page">Liquidations</div>,
 }));
+vi.mock('@/components/pages/OptionsPage', () => ({
+  OptionsPage: () => <div data-testid="options-page">Options</div>,
+}));
 vi.mock('@/components/pages/SettingsPage', () => ({
   SettingsPage: () => <div data-testid="settings-page">Settings</div>,
 }));
@@ -57,6 +60,8 @@ describe('AppRoutes', () => {
     expect(screen.getByTestId('heatmap-page')).toBeInTheDocument();
     renderWithProviders(<AppRoutes />, { routerEntries: ['/liquidations'] });
     expect(screen.getByTestId('liquidations-page')).toBeInTheDocument();
+    renderWithProviders(<AppRoutes />, { routerEntries: ['/options'] });
+    expect(screen.getByTestId('options-page')).toBeInTheDocument();
     renderWithProviders(<AppRoutes />, { routerEntries: ['/settings'] });
     expect(screen.getByTestId('settings-page')).toBeInTheDocument();
   });

@@ -86,6 +86,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.OpenInterestCacheTTL != 30*time.Second {
 		t.Fatalf("oi ttl=%v", cfg.OpenInterestCacheTTL)
 	}
+	if cfg.OptionsCacheTTL != 30*time.Second || cfg.DeribitBaseURL != "https://www.deribit.com" {
+		t.Fatalf("options ttl=%v deribit=%s", cfg.OptionsCacheTTL, cfg.DeribitBaseURL)
+	}
 	if cfg.SupplyRefreshHour != 3 || cfg.SupplyRefreshMinute != 0 {
 		t.Fatalf("refresh at %d:%d", cfg.SupplyRefreshHour, cfg.SupplyRefreshMinute)
 	}

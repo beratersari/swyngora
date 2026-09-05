@@ -77,6 +77,17 @@ class _Transport(httpx.BaseTransport):
                     ],
                 },
             )
+        if request.url.path.endswith("/options"):
+            return httpx.Response(
+                200,
+                json={
+                    "asset": "BTC",
+                    "exchange": "deribit",
+                    "openInterest": "350",
+                    "putCallOi": "0.4",
+                    "dvol": "49.5",
+                },
+            )
         if request.url.path.endswith("/open-interest"):
             return httpx.Response(
                 200,
@@ -427,6 +438,11 @@ def test_market_tools_hit_api(monkeypatch):
     heat = json.loads(by_name["get_orderbook_heatmap"].invoke({"symbol": "BTCUSDT"}))
     assert heat["symbol"] == "BTCUSDT"
     assert heat["windowSeconds"] == 600
+
+    assert "get_options_overview" in by_name
+    opt = json.loads(by_name["get_options_overview"].invoke({"asset": "BTC"}))
+    assert opt["asset"] == "BTC"
+    assert opt["dvol"] == "49.5"
 
     assert "get_open_interest" in by_name
     oi = json.loads(by_name["get_open_interest"].invoke({"symbol": "BTCUSDT"}))

@@ -81,3 +81,11 @@ type FundingRatePort interface {
 type LongShortRatioPort interface {
 	GetLongShortSeries(ctx context.Context, symbol string, limit int) (*LongShortSeries, error)
 }
+
+// OptionsChainPort loads listed option quotes plus the 30-day IV index (DVOL).
+// Implemented by the Deribit adapter.
+type OptionsChainPort interface {
+	GetOptionQuotes(ctx context.Context, asset string) ([]OptionQuote, error)
+	GetOptionsDVOL(ctx context.Context, asset string) (OptionsDVOL, error)
+	GetOptionsIndex(ctx context.Context, asset string) (float64, error)
+}

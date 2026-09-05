@@ -1002,6 +1002,46 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/options:
+    get:
+      summary: BTC/ETH options overview (open interest, volume, PCR, IV, expiry)
+      description: |
+        CoinGlass-style **options desk** for **BTC** and **ETH** from **Deribit**
+        public REST (no API key). Returns listed inverse-option open interest,
+        24h volume, put/call ratios, Deribit DVOL (30-day implied vol index),
+        ATM implied vol near the 30-day tenor, and open-interest by expiry.
+        `asset` accepts `BTC`, `ETH`, or a pair such as `BTCUSDT`.
+        `exchange` is `deribit` (default). Cached ~30s. Informational only.
+      operationId: getMarketOptions
+      tags: [Market]
+      parameters:
+        - name: asset
+          in: query
+          description: BTC or ETH (or BTCUSDT / ETHUSDT)
+          schema: { type: string, example: BTC }
+        - name: symbol
+          in: query
+          description: Alias of asset (BTCUSDT → BTC)
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: deribit (default)
+          schema: { type: string, default: deribit, example: deribit }
+      responses:
+        '200':
+          description: Options overview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketOptions'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/funding-rate:
     get:
       summary: Perpetual funding rate and recent history
@@ -8530,6 +8570,61 @@ components:
         windows:
           type: array
           items: { $ref: '#/components/schemas/OpenInterestWindow' }
+    MarketOptionsATM:
+      type: object
+      properties:
+        iv: { type: string, description: ATM implied vol percent (call/put average when both exist) }
+        strike: { type: string }
+        expiry: { type: string, format: date-time }
+        daysToExpiry: { type: integer }
+        callIv: { type: string }
+        putIv: { type: string }
+    MarketOptionsExpiry:
+      type: object
+      properties:
+        expiry: { type: string, format: date-time }
+        label: { type: string, example: 27 Mar 2026 }
+        daysToExpiry: { type: integer }
+        openInterest: { type: string, description: Base-coin open interest }
+        openInterestUsd: { type: string }
+        volume: { type: string, description: 24h base-coin volume }
+        volumeUsd: { type: string }
+        callOi: { type: string }
+        putOi: { type: string }
+        callVolume: { type: string }
+        putVolume: { type: string }
+        putCallOi: { type: string, description: Put OI / call OI when calls exist }
+        sharePct: { type: string, description: Share of total open interest }
+        contractCount: { type: integer }
+    MarketOptions:
+      type: object
+      description: Deribit BTC/ETH options overview
+      properties:
+        asset: { type: string, enum: [BTC, ETH] }
+        exchange: { type: string, example: deribit }
+        indexPrice: { type: string }
+        asOf: { type: string, format: date-time }
+        openInterest: { type: string, description: Total base-coin open interest }
+        openInterestUsd: { type: string }
+        volume: { type: string, description: 24h base-coin volume }
+        volumeUsd: { type: string }
+        callOi: { type: string }
+        putOi: { type: string }
+        callVolume: { type: string }
+        putVolume: { type: string }
+        putCallOi: { type: string, description: Put OI / call OI }
+        putCallVolume: { type: string, description: Put volume / call volume }
+        lean: { type: string, enum: [calls, puts, balanced], description: PCR lean (puts ≥ 1.2, calls ≤ 0.8) }
+        dvol: { type: string, description: Deribit 30-day implied vol index (percent) }
+        dvolChange24h: { type: string, description: Signed DVOL point change vs ~24h ago }
+        atm: { $ref: '#/components/schemas/MarketOptionsATM' }
+        expiries:
+          type: array
+          items: { $ref: '#/components/schemas/MarketOptionsExpiry' }
+        listed: { type: integer }
+        withOi: { type: integer }
+        withIv: { type: integer }
+        note: { type: string }
     MarketOpenInterest:
       type: object
       description: Current futures open interest plus 5m/1h/4h/24h change

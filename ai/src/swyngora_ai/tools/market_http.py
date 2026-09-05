@@ -544,6 +544,11 @@ class LiquidationOverviewInput(BaseModel):
     )
 
 
+class OptionsOverviewInput(BaseModel):
+    asset: str = Field(description="BTC or ETH (BTCUSDT / ETHUSDT accepted)")
+    exchange: str = Field(default="deribit", description="deribit (default)")
+
+
 class OpenInterestInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -2007,6 +2012,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         return http.get(
             "/api/v1/market/liquidations/overview",
             {"exchange": exchange, "window": window, "limit": limit},
+        )
+
+    def get_options_overview(asset: str, exchange: str = "deribit") -> str:
+        return http.get(
+            "/api/v1/market/options",
+            {"asset": asset, "exchange": exchange},
         )
 
     def get_open_interest(symbol: str, exchange: str = "all") -> str:
@@ -4316,6 +4327,16 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "and whether a wall persisted. window is lookback seconds (default 600)."
             ),
             args_schema=OrderBookHeatmapInput,
+        ),
+        StructuredTool.from_function(
+            get_options_overview,
+            name="get_options_overview",
+            description=(
+                "BTC/ETH options desk from Deribit: listed open interest, 24h volume, "
+                "put/call ratios, DVOL (30-day implied vol), ATM IV near 30 days, and "
+                "open interest by expiry. asset is BTC or ETH. Not futures OI."
+            ),
+            args_schema=OptionsOverviewInput,
         ),
         StructuredTool.from_function(
             get_open_interest,

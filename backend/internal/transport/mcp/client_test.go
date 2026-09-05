@@ -225,6 +225,32 @@ func TestAPIClient_GetFundingRate(t *testing.T) {
 	}
 }
 
+func TestAPIClient_GetOptions(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/market/options" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.URL.Query().Get("asset") != "BTC" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"asset": "BTC", "dvol": "49.5"})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	raw, err := c.GetOptions(context.Background(), "deribit", "BTC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["asset"] != "BTC" {
+		t.Fatalf("%v", m)
+	}
+}
+
 func TestAPIClient_GetOpenInterest(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/market/open-interest" {

@@ -301,6 +301,15 @@ func (c *APIClient) GetOrderBookHeatmap(ctx context.Context, exchange, symbol, g
 }
 
 // GetOpenInterest returns current futures open interest and windowed change.
+func (c *APIClient) GetOptions(ctx context.Context, exchange, asset string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("asset", asset)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/options", q)
+}
+
 func (c *APIClient) GetOpenInterest(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)
