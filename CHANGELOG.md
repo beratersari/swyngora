@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
 
 ### Added
+- **AI CLI prompt history:** interactive `swyngora-ai` Up/Down recalls previous prompts (`~/.swyngora/cli_history`, created automatically; not chat memory)
 - **Import preview freshness:** confirm compares saved custom-signal mixes to the preview snapshot (`deskCandidates`). If conflict candidates or a selected profile were created, deleted, renamed, or edited, confirm returns 409 `import_preview_stale` and does not start the job. Settings asks the user to preview again (`docs/features/user-data-import.md`)
 - **Import same-name profile conflicts:** preview lists `conflicts` when a custom-signal name appears more than once in the file or already exists on more than one saved mix. Confirm accepts `customSignalResolutions` (`name` + `incomingIndex` / `profileId`). No pick skips that name. Settings Import shows radios to choose which saved mix to update (`docs/features/user-data-import.md`)
 - **Import preview names for custom signal profiles:** `POST /api/v1/import/preview` lists `addNames` (new mixes) and `updateNames` (same name already saved) on the `customSignals` section, plus a `willUpdate` count. Merge overwrites matching profile weights in place instead of skipping the name. Settings **Import** tab shows those two lists before confirm (`docs/features/user-data-import.md`)

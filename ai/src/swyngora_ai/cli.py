@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import sys
 from enum import StrEnum
+from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
 import typer
@@ -24,6 +26,66 @@ app = typer.Typer(
 
 _console = Console()
 _err = Console(stderr=True)
+
+CLI_HISTORY_MAX = 500
+
+
+def default_history_path() -> Path:
+    """Per-user prompt history. Outside the repo; created on first REPL submit."""
+    return Path.home() / ".swyngora" / "cli_history"
+
+
+def load_history_lines(path: Path) -> list[str]:
+    if not path.is_file():
+        return []
+    text = path.read_text(encoding="utf-8", errors="replace")
+    return [line.strip() for line in text.splitlines() if line.strip()]
+
+
+def write_history_lines(path: Path, lines: list[str], *, max_lines: int = CLI_HISTORY_MAX) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    kept = [line.strip() for line in lines if line.strip()][-max_lines:]
+    path.write_text("\n".join(kept) + ("\n" if kept else ""), encoding="utf-8")
+
+
+def attach_repl_readline(path: Path | None = None) -> Path | None:
+    """Hook GNU readline for Up/Down when stdin is a TTY. Returns the history path."""
+    if not sys.stdin.isatty():
+        return None
+    try:
+        import readline
+    except ImportError:
+        return None
+    hist = path if path is not None else default_history_path()
+    for line in load_history_lines(hist):
+        readline.add_history(line)
+    readline.set_history_length(CLI_HISTORY_MAX)
+    return hist
+
+
+def readline_prompt() -> str:
+    """Same cyan 'you › ' as Typer, with ANSI wrapped so readline ignores their width.
+
+    Without \\001/\\002, Up-arrow overwrites the prompt (you see leftover 'm' + history).
+    """
+    # Last counted character must come after reset. If the trailing space stays
+    # inside the cyan region, readline paints the typed line cyan too.
+    return "\001\033[1;36m\002you\001\033[0m\033[36m\002 ›\001\033[0m\002 "
+
+
+def persist_repl_readline(path: Path | None) -> None:
+    if path is None:
+        return
+    try:
+        import readline
+    except ImportError:
+        return
+    n = readline.get_current_history_length()
+    lines = [readline.get_history_item(i) or "" for i in range(1, n + 1)]
+    try:
+        write_history_lines(path, lines)
+    except OSError:
+        pass
 
 
 class Provider(StrEnum):
@@ -129,32 +191,42 @@ def _print_banner() -> None:
     cmds.add_column()
     cmds.add_row("[bold]exit[/] / [bold]quit[/] / [bold]q[/]", "leave the session")
     cmds.add_row("[bold]reset[/]", "clear conversation memory")
+    cmds.add_row("[bold]↑[/] / [bold]↓[/]", "previous prompts")
     _console.print(Align.center(cmds))
     _console.print()
 
 
 def _repl(orch: Orchestrator, session_id: str) -> int:
     _print_banner()
+    hist = attach_repl_readline()
     you = typer.style("you", fg=typer.colors.CYAN, bold=True)
     suffix = typer.style(" › ", fg=typer.colors.CYAN)
-    while True:
-        try:
-            line = typer.prompt(you, prompt_suffix=suffix).strip()
-        except (typer.Abort, EOFError, KeyboardInterrupt):
-            _console.print()
-            return 0
-        if line.lower() in {"exit", "quit", "q"}:
-            return 0
-        if line.lower() == "reset":
-            from swyngora_ai.config import get_settings
+    try:
+        while True:
+            try:
+                if hist is not None:
+                    line = input(readline_prompt()).strip()
+                else:
+                    line = typer.prompt(you, prompt_suffix=suffix).strip()
+            except (typer.Abort, EOFError, KeyboardInterrupt):
+                _console.print()
+                return 0
+            if not line:
+                continue
+            if line.lower() in {"exit", "quit", "q"}:
+                return 0
+            if line.lower() == "reset":
+                from swyngora_ai.config import get_settings
 
-            orch.reset(session_id, client_id=get_settings().default_client_id)
-            _console.print("[dim]session cleared[/]")
-            continue
-        try:
-            _print_result(_chat(orch, line, session_id))
-        except Exception as e:  # noqa: BLE001
-            _print_error(e)
+                orch.reset(session_id, client_id=get_settings().default_client_id)
+                _console.print("[dim]session cleared[/]")
+                continue
+            try:
+                _print_result(_chat(orch, line, session_id))
+            except Exception as e:  # noqa: BLE001
+                _print_error(e)
+    finally:
+        persist_repl_readline(hist)
 
 
 @app.command()
