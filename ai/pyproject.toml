@@ -24,7 +24,12 @@ swyngora-ai = "swyngora_ai.cli:main"
 swyngora-ai-serve = "swyngora_ai.serve:main"
 
 [dependency-groups]
-dev = ["pytest>=8.0.0", "ruff>=0.16.5", "ty>=0.0.77"]
+dev = [
+    "langgraph-cli[inmem]>=0.4.31",
+    "pytest>=8.0.0",
+    "ruff>=0.16.5",
+    "ty>=0.0.77",
+]
 
 [build-system]
 requires = ["uv_build>=0.12.8,<0.13"]

@@ -26,6 +26,7 @@ pytest -q
 ruff check . && ruff format --check .
 ty check
 swyngora-ai "your question"
+uv run langgraph dev           # local Agent Chat UI: :2024 + graph id swyngora
 ```
 
 Package manager is **uv** (not pip). `uv sync` reads `pyproject.toml` / `uv.lock` and creates `ai/.venv`. Activate that venv, then run `pytest`, `ruff`, `ty`, and `swyngora-ai` as usual. Recreate a stale pip venv with `rm -rf .venv && uv sync`.

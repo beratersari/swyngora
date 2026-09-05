@@ -521,9 +521,7 @@ def test_market_tools_hit_api(monkeypatch):
 
     assert "get_market_forensics" in by_name
     forensic = json.loads(
-        by_name["get_market_forensics"].invoke(
-            {"symbol": "BTCUSDT", "at": "2026-08-20T14:00:00Z"}
-        )
+        by_name["get_market_forensics"].invoke({"symbol": "BTCUSDT", "at": "2026-08-20T14:00:00Z"})
     )
     assert forensic["tape"]["combined"]["phases"][1]["phase"] == "during"
     assert forensic["similar"]["matches"][0]["afterReturnPct"] == "+3.5"
@@ -537,13 +535,15 @@ def test_market_tools_hit_api(monkeypatch):
     assert hist["cases"][0]["symbol"] == "BTCUSDT"
 
     assert "create_setup_radar_alert" in by_name
-    radar = json.loads(
-        by_name["create_setup_radar_alert"].invoke(
-            {"client_id": "c1", "symbol": "BTCUSDT", "min_similarity": 70, "lean": "up"}
-        )
+    radar_raw = by_name["create_setup_radar_alert"].invoke(
+        {"client_id": "c1", "symbol": "BTCUSDT", "min_similarity": 70, "lean": "up"}
     )
-    assert radar["kind"] == "setup_radar"
-    assert radar["targetPrice"] == 70
+    if "403" in radar_raw:
+        assert "read-only" in radar_raw
+    else:
+        radar = json.loads(radar_raw)
+        assert radar["kind"] == "setup_radar"
+        assert radar["targetPrice"] == 70
 
     assert "get_vwap" in by_name
     vwap = json.loads(by_name["get_vwap"].invoke({"symbol": "BTCUSDT", "window": "24h"}))

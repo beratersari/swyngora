@@ -70,6 +70,11 @@ export SWYNGORA_API_URL=http://localhost:8080
 # Restart swyngora-ai (CLI) and swyngora-ai-serve (:8090). Mobile Ask / web /ai
 # go through serve, not the CLI.
 swyngora-ai "BTC RSI on binance 1h and recent news"
+
+# Local desk only — Agent Chat UI (does not replace CLI / web /ai / mobile):
+# uv run langgraph dev
+# https://agentchat.vercel.app → URL http://127.0.0.1:2024  graph swyngora
+# LangSmith key in the UI form: empty. Traces still use ai/.env LANGSMITH_*.
 ```
 
 ## Tests
