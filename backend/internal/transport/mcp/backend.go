@@ -278,6 +278,9 @@ func (b *Backend) GetOptions(ctx context.Context, exchange, asset string) (json.
 	if hist := optionsHistoryMap(got.History); hist != nil {
 		out["history"] = hist
 	}
+	if mv := optionsMovesMap(got.Moves); mv != nil {
+		out["moves"] = mv
+	}
 	if got.HasPutCallOI {
 		out["putCallOi"] = got.PutCallOI
 		out["lean"] = got.Lean
@@ -416,6 +419,30 @@ func optionsHistoryMap(h *domain.OptionsHistory) map[string]any {
 	}
 	if h.Note != "" {
 		out["note"] = h.Note
+	}
+	return out
+}
+
+func optionsMovesMap(m *domain.OptionsMoves) map[string]any {
+	if m == nil || len(m.Findings) == 0 {
+		return nil
+	}
+	findings := make([]map[string]any, 0, len(m.Findings))
+	for _, f := range m.Findings {
+		row := map[string]any{
+			"kind": f.Kind, "topic": f.Topic, "window": f.Window, "severity": f.Severity,
+			"title": f.Title, "detail": f.Detail,
+		}
+		if f.HasNums {
+			row["current"] = f.Current
+			row["typical"] = f.Typical
+			row["ratio"] = f.Ratio
+		}
+		findings = append(findings, row)
+	}
+	out := map[string]any{"findings": findings}
+	if m.Summary != "" {
+		out["summary"] = m.Summary
 	}
 	return out
 }

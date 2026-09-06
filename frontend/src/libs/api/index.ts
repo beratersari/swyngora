@@ -87,6 +87,8 @@ export type {
   MarketOptionsHistory,
   MarketOptionsHistoryWindow,
   MarketOptionsHistoryPoint,
+  MarketOptionsMove,
+  MarketOptionsMoves,
   OptionsQuery,
   MarketLiquidations,
   MarketLiquidationOverview,

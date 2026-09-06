@@ -35,11 +35,12 @@ This is **not** futures open interest (`/market/open-interest`).
 | `expiries` | OI, volume, PCR, ATM IV, skew, 1-SD expected move, max pain, and strike payouts by expiry |
 | `vsMarket` | Best-effort compare vs live spot range and futures funding / account long-short. `findings` is **only** populated when implied vol or put/call lean disagrees |
 | `history` | 1h / 4h / 24h / 7d change plus a chart series for open interest, put/call, and DVOL |
+| `moves` | Unusual short-window OI / put-call / IV vs that series' own typical. Empty when nothing stands out |
 
 Open interest and volume are in the **base coin**. USD is `coin × underlying`
 (or Deribit `volume_usd` when present).
 
-Web: `/options` — BTC / ETH toggle, headline cards, **over-time** chart (OI / put-call / IV for 12h, 48h, 7d), term structure + skew, expiry bars. Selecting an expiry (`?expiry=`) shows the 1-SD expected move and max-pain strike. A vs-market panel appears only when options IV or put/call lean disagrees with spot or futures.
+Web: `/options` — BTC / ETH toggle, headline cards, **important moves** (only when OI / put-call / IV jumps much more than typical), **over-time** chart (OI / put-call / IV for 12h, 48h, 7d), term structure + skew, expiry bars. Selecting an expiry (`?expiry=`) shows the 1-SD expected move and max-pain strike. A vs-market panel appears only when options IV or put/call lean disagrees with spot or futures.
 
 MCP: `get_options_overview`.
 
@@ -47,7 +48,7 @@ MCP: `get_options_overview`.
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/options.go`, `options_history.go` |
+| Domain | `backend/internal/domain/options.go`, `options_history.go`, `options_moves.go` |
 | Adapter | `backend/internal/adapter/deribit`, `backend/internal/adapter/optionsstore` |
 | Service | `GetOptions` |
 | HTTP | `GET /api/v1/market/options` |
@@ -72,4 +73,5 @@ curl -s 'http://localhost:8080/api/v1/market/options?asset=BTC' | jq .
 - Max pain evaluates listed strikes only: payout = Σ callOI × max(S−K, 0) + Σ putOI × max(K−S, 0) using coin OI. Inverse settlement is not modeled.
 - `vsMarket` uses Binance spot 24h high–low (annualized) vs ATM/DVOL, nearest-expiry expected move vs that range, PCR/skew lean vs futures account long% and funding, and max pain vs the Deribit index. Missing tape is skipped — the options snapshot still returns.
 - `history` DVOL series comes from Deribit `get_volatility_index_data` (hourly). Open interest and put/call are sampled every 5 minutes into `data/options.db` while the backend runs — they start empty on a fresh process.
+- `moves` compares the latest 1h / 4h / 24h change to the median of prior same-length windows. A finding fires only when the move is at least a floor (e.g. 5% OI / 0.10 PCR / 1.5 DVOL pts in 1h) **and** at least 2× typical. One finding per series (hottest window).
 - Informational only — not financial advice.

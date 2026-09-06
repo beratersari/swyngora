@@ -166,6 +166,9 @@ func BuildOptionsHistory(snap *OptionsSnapshot, samples []OptionsSample, dvol []
 		win.Complete = win.OI.Complete || win.PutCall.Complete || win.DVOL.Complete || win.AtmIV.Complete
 		out.Windows = append(out.Windows, win)
 	}
+	if snap != nil {
+		snap.Moves = DetectOptionsMoves(merged, now)
+	}
 	if len(out.Points) == 0 && !anyOptionsWindowComplete(out.Windows) {
 		return nil
 	}

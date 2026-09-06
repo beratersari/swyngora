@@ -590,7 +590,9 @@ export interface paths {
          *     pain (strike that minimizes call+put intrinsic payout). `history` is
          *     1h/4h/24h/7d change plus a chart series for open interest, put/call,
          *     and implied vol (DVOL from Deribit; OI/PCR sampled while the desk
-         *     runs). When options implied vol or put/call lean disagrees with live
+         *     runs). `moves` lists only unusual short-window OI, put/call, or IV
+         *     changes versus that series' own typical. When options implied vol or
+         *     put/call lean disagrees with live
          *     spot range or futures funding / account long-short, `vsMarket.findings`
          *     lists those disagreements only.
          *     `asset` accepts `BTC`, `ETH`, or a pair such as `BTCUSDT`.
@@ -5071,7 +5073,32 @@ export interface components {
             withIv?: number;
             vsMarket?: components["schemas"]["MarketOptionsVsMarket"];
             history?: components["schemas"]["MarketOptionsHistory"];
+            moves?: components["schemas"]["MarketOptionsMoves"];
             note?: string;
+        };
+        /** @description One unusual short-window change in OI, put/call, or implied vol */
+        MarketOptionsMove: {
+            /** @enum {string} */
+            kind?: "oi_jump" | "oi_drop" | "pcr_jump" | "pcr_drop" | "iv_jump" | "iv_drop";
+            /** @enum {string} */
+            topic?: "oi" | "lean" | "vol";
+            /** @enum {string} */
+            window?: "1h" | "4h" | "24h";
+            /** @enum {string} */
+            severity?: "watch" | "notable";
+            title?: string;
+            detail?: string;
+            /** @description Signed change (percent, PCR points, or vol points) */
+            current?: string;
+            /** @description Median absolute same-length move */
+            typical?: string;
+            /** @description |current| / typical */
+            ratio?: string;
+        };
+        /** @description Unusual options moves versus that series' own typical. findings is omitted when nothing stands out. */
+        MarketOptionsMoves: {
+            summary?: string;
+            findings?: components["schemas"]["MarketOptionsMove"][];
         };
         MarketOptionsHistoryChange: {
             /** @enum {string} */

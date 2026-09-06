@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
 
 ### Added
+- **Options unusual moves:** `/options` and `GET /api/v1/market/options` `moves` flags only when open interest, put/call, or implied vol changes much more than that series' own typical in 1h / 4h / 24h (`docs/features/options.md`)
 - **Options over time:** `/options` and `GET /api/v1/market/options` `history` shows 1h/4h/24h/7d change plus a chart of open interest, put/call, and DVOL (`docs/features/options.md`)
 - **Options vs spot/futures:** `/options` and `GET /api/v1/market/options` `vsMarket` flag only when implied vol or put/call lean disagrees with the live spot range or futures funding / account long-short (`docs/features/options.md`)
 - **Options desk:** BTC/ETH listed options from Deribit public REST — open interest, 24h volume, put/call ratios, DVOL + ATM implied vol, IV term structure, call/put skew, expiry mix, 1-SD expected move, and max-pain strike. Web `/options`, `GET /api/v1/market/options`, MCP `get_options_overview` (`docs/features/options.md`)

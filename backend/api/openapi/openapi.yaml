@@ -1015,7 +1015,9 @@ paths:
         pain (strike that minimizes call+put intrinsic payout). `history` is
         1h/4h/24h/7d change plus a chart series for open interest, put/call,
         and implied vol (DVOL from Deribit; OI/PCR sampled while the desk
-        runs). When options implied vol or put/call lean disagrees with live
+        runs). `moves` lists only unusual short-window OI, put/call, or IV
+        changes versus that series' own typical. When options implied vol or
+        put/call lean disagrees with live
         spot range or futures funding / account long-short, `vsMarket.findings`
         lists those disagreements only.
         `asset` accepts `BTC`, `ETH`, or a pair such as `BTCUSDT`.
@@ -8726,7 +8728,31 @@ components:
         withIv: { type: integer }
         vsMarket: { $ref: '#/components/schemas/MarketOptionsVsMarket' }
         history: { $ref: '#/components/schemas/MarketOptionsHistory' }
+        moves: { $ref: '#/components/schemas/MarketOptionsMoves' }
         note: { type: string }
+    MarketOptionsMove:
+      type: object
+      description: One unusual short-window change in OI, put/call, or implied vol
+      properties:
+        kind:
+          type: string
+          enum: [oi_jump, oi_drop, pcr_jump, pcr_drop, iv_jump, iv_drop]
+        topic: { type: string, enum: [oi, lean, vol] }
+        window: { type: string, enum: [1h, 4h, 24h] }
+        severity: { type: string, enum: [watch, notable] }
+        title: { type: string }
+        detail: { type: string }
+        current: { type: string, description: Signed change (percent, PCR points, or vol points) }
+        typical: { type: string, description: Median absolute same-length move }
+        ratio: { type: string, description: |current| / typical }
+    MarketOptionsMoves:
+      type: object
+      description: Unusual options moves versus that series' own typical. findings is omitted when nothing stands out.
+      properties:
+        summary: { type: string }
+        findings:
+          type: array
+          items: { $ref: '#/components/schemas/MarketOptionsMove' }
     MarketOptionsHistoryChange:
       type: object
       properties:

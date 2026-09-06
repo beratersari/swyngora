@@ -121,7 +121,25 @@ type optionsResponse struct {
 	WithIv          int                  `json:"withIv"`
 	VsMarket        *optionsVsMarketDTO  `json:"vsMarket,omitempty"`
 	History         *optionsHistoryDTO   `json:"history,omitempty"`
+	Moves           *optionsMovesDTO     `json:"moves,omitempty"`
 	Note            string               `json:"note"`
+}
+
+type optionsMoveDTO struct {
+	Kind     string `json:"kind"`
+	Topic    string `json:"topic"`
+	Window   string `json:"window"`
+	Severity string `json:"severity"`
+	Title    string `json:"title"`
+	Detail   string `json:"detail"`
+	Current  string `json:"current,omitempty"`
+	Typical  string `json:"typical,omitempty"`
+	Ratio    string `json:"ratio,omitempty"`
+}
+
+type optionsMovesDTO struct {
+	Summary  string           `json:"summary,omitempty"`
+	Findings []optionsMoveDTO `json:"findings"`
 }
 
 type optionsHistoryChangeDTO struct {
@@ -283,6 +301,7 @@ func optionsToDTO(a *domain.OptionsSnapshot) optionsResponse {
 		WithIv:          a.WithIV,
 		VsMarket:        optionsVsMarketToDTO(a.VsMarket),
 		History:         optionsHistoryToDTO(a.History),
+		Moves:           optionsMovesToDTO(a.Moves),
 		Note:            a.Note,
 	}
 	if a.HasPutCallOI {
@@ -437,6 +456,29 @@ func snapshotChangeToOptionsDTO(c domain.SnapshotChange) optionsHistoryChangeDTO
 		out.Past = formatHistQty(c.Past)
 		out.Change = domain.FormatSignedQty(c.Change)
 		out.ChangePct = domain.FormatSignedQty(c.ChangePct)
+	}
+	return out
+}
+
+func optionsMovesToDTO(m *domain.OptionsMoves) *optionsMovesDTO {
+	if m == nil || len(m.Findings) == 0 {
+		return nil
+	}
+	out := &optionsMovesDTO{
+		Summary:  m.Summary,
+		Findings: make([]optionsMoveDTO, 0, len(m.Findings)),
+	}
+	for _, f := range m.Findings {
+		row := optionsMoveDTO{
+			Kind: f.Kind, Topic: f.Topic, Window: f.Window, Severity: f.Severity,
+			Title: f.Title, Detail: f.Detail,
+		}
+		if f.HasNums {
+			row.Current = domain.FormatSignedQty(f.Current)
+			row.Typical = formatHistQty(f.Typical)
+			row.Ratio = formatHistQty(f.Ratio)
+		}
+		out.Findings = append(out.Findings, row)
 	}
 	return out
 }

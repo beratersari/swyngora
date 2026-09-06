@@ -36,6 +36,14 @@ vi.mock('@/libs/api', async (importOriginal) => {
           expectedHigh: '113600',
           maxPain: '100000',
         }],
+        moves: {
+          findings: [{
+            kind: 'oi_jump',
+            topic: 'oi',
+            window: '1h',
+            title: 'Open interest jumped 14% in 1h — well above typical',
+          }],
+        },
         vsMarket: {
           compared: true,
           findings: [{
@@ -74,6 +82,14 @@ vi.mock('@/libs/api', async (importOriginal) => {
           expectedHigh: '113600',
           maxPain: '100000',
         }],
+        moves: {
+          findings: [{
+            kind: 'oi_jump',
+            topic: 'oi',
+            window: '1h',
+            title: 'Open interest jumped 14% in 1h — well above typical',
+          }],
+        },
         vsMarket: {
           compared: true,
           findings: [{
@@ -99,6 +115,8 @@ describe('OptionsPage', () => {
     expect(screen.getAllByText('27 Mar 2026').length).toBeGreaterThan(0);
     expect(screen.getByText(/volatility structure/i)).toBeInTheDocument();
     expect(screen.getByText('±13.6%')).toBeInTheDocument();
+    expect(screen.getByText(/important options moves/i)).toBeInTheDocument();
+    expect(screen.getByText(/open interest jumped 14%/i)).toBeInTheDocument();
     expect(screen.getByText(/over time/i)).toBeInTheDocument();
     expect(screen.getByText(/options vs the rest of the market/i)).toBeInTheDocument();
     expect(screen.getByText(/lean put while futures accounts are long/i)).toBeInTheDocument();

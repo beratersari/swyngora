@@ -61,6 +61,22 @@
       "balanced": "Dengeli"
     }
   },
+  "moves": {
+    "title": "Önemli opsiyon hareketleri",
+    "subtitle": "Yalnızca açık pozisyon, put/call veya ima vol kısa sürede alışılmadık ölçüde değişince gösterilir",
+    "watch": "İzle",
+    "notable": "Belirgin",
+    "topic": {
+      "oi": "OI",
+      "lean": "Put/call",
+      "vol": "Vol"
+    },
+    "window": {
+      "1h": "1 saat",
+      "4h": "4 saat",
+      "24h": "24 saat"
+    }
+  },
   "history": {
     "title": "Zaman içinde",
     "subtitle": "Açık pozisyon, put/call ve ima vol son saat ve günlerde nasıl değişti",

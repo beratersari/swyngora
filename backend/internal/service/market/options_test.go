@@ -173,3 +173,43 @@ func TestGetOptions_AttachesHistory(t *testing.T) {
 		t.Fatalf("24h window %+v", h24)
 	}
 }
+
+func TestGetOptions_AttachesUnusualMoves(t *testing.T) {
+	exp := time.Now().UTC().Add(30 * 24 * time.Hour).Truncate(time.Hour)
+	store := &optionsstore.Memory{}
+	now := time.Now().UTC().Truncate(time.Hour)
+	for i := 12; i >= 1; i-- {
+		_, _ = store.InsertSample(context.Background(), domain.OptionsSample{
+			Asset: "BTC", SampledAt: now.Add(-time.Duration(i) * time.Hour),
+			OpenInterest: 100, OpenInterestUSD: 100, HasPutCallOI: true, PutCallOI: 1,
+			HasDVOL: true, DVOL: 50,
+		})
+	}
+	svc := New(nil, nil).WithOptionsChain(stubOptions{
+		index: 100000,
+		dvol:  domain.OptionsDVOL{Value: 50, HasChange: true, Change24h: 0},
+		quotes: []domain.OptionQuote{{
+			Asset: "BTC", Expiry: exp, Strike: 100000, Side: domain.OptionSideCall,
+			OpenInterest: 60, Volume: 1, MarkIV: 50, Underlying: 100000,
+		}, {
+			Asset: "BTC", Expiry: exp, Strike: 100000, Side: domain.OptionSidePut,
+			OpenInterest: 60, Volume: 1, MarkIV: 50, Underlying: 100000,
+		}},
+	}).WithOptionsHistory(store)
+	got, err := svc.GetOptions(context.Background(), "", "BTC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Moves == nil || len(got.Moves.Findings) == 0 {
+		t.Fatalf("moves=%+v", got.Moves)
+	}
+	found := false
+	for _, f := range got.Moves.Findings {
+		if f.Kind == domain.OptionsMoveOIJump {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("want oi_jump in %+v", got.Moves.Findings)
+	}
+}

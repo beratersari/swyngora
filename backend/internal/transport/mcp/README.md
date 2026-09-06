@@ -22,7 +22,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_liquidation_cascade` | Short-burst long/short cascade vs typical (1m/5m/15m); `episodes` = start, duration, long/short notional, price; combined when both venues fire together |
 | `scan_liquidation_cascades` | Market cascade plus coins currently bursting; `both` when the same side fires on both venues |
 | `get_open_interest` | Current futures OI plus 5m/1h/4h/24h change (Binance USD-M + Bybit linear); includes `funding` |
-| `get_options_overview` | BTC/ETH Deribit options: OI, 24h volume, put/call, DVOL + ATM IV, term structure, call/put skew, expiry mix, expected move, max pain; `history` over hours/days; `vsMarket` when IV or put/call disagrees with spot/futures |
+| `get_options_overview` | BTC/ETH Deribit options: OI, 24h volume, put/call, DVOL + ATM IV, term structure, call/put skew, expiry mix, expected move, max pain; `history` over hours/days; `moves` when OI/PCR/IV jumps vs typical; `vsMarket` when IV or put/call disagrees with spot/futures |
 | `get_funding_rate` | Predicted next perpetual funding plus recent settlements (Binance USD-M + Bybit linear) |
 | `get_funding_arb` | Long cheaper-funding venue / short richer venue; sized after-fee payout + spot-perp gap |
 | `scan_funding_arb` | Rank liquid USDT coins that beat fees on published settlements |

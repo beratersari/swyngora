@@ -61,6 +61,22 @@
       "balanced": "Balanced"
     }
   },
+  "moves": {
+    "title": "Important options moves",
+    "subtitle": "Shown only when open interest, put/call, or implied vol changes much more than usual in a short time",
+    "watch": "Watch",
+    "notable": "Notable",
+    "topic": {
+      "oi": "OI",
+      "lean": "Put/call",
+      "vol": "Vol"
+    },
+    "window": {
+      "1h": "1 hour",
+      "4h": "4 hours",
+      "24h": "24 hours"
+    }
+  },
   "history": {
     "title": "Over time",
     "subtitle": "How open interest, put/call, and implied vol moved in the last hours and days",
