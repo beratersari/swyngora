@@ -45,7 +45,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/liquidations/overview` | Market-wide 1h/4h/12h/24h totals + coins ranked for a treemap |
 | `GET` | `/api/v1/market/holders` | Crypto holder count, concentration, and top wallets (CMC → Coin Metrics → GeckoTerminal → Ethplorer → Routescan → Tronscan; CryptoID fallback for UTXO coins like PIVX). Known addresses include a public `label` |
 | `GET` | `/api/v1/market/open-interest` | Current futures OI + 5m/1h/4h/24h change (Binance USD-M + Bybit linear); includes funding |
-| `GET` | `/api/v1/market/options` | BTC/ETH Deribit options: listed OI, 24h volume, put/call, DVOL + ATM IV, term structure, call/put skew, expiry mix, expected move, max pain; `vsMarket` when IV or put/call disagrees with spot/futures |
+| `GET` | `/api/v1/market/options` | BTC/ETH Deribit options: listed OI, 24h volume, put/call, DVOL + ATM IV, term structure, call/put skew, expiry mix, expected move, max pain; `history` over hours/days; `vsMarket` when IV or put/call disagrees with spot/futures |
 | `GET` | `/api/v1/market/funding-rate` | Predicted next perpetual funding + recent settlements (Binance USD-M + Bybit linear) |
 | `GET` | `/api/v1/market/funding-arb` | Long cheaper-funding venue / short richer one; sized after-fee payout + spot-perp |
 | `GET` | `/api/v1/market/funding-arb/scan` | After-fee winners only (published settlements in the hold window) |
@@ -295,6 +295,9 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `BINANCE_FUTURES_BASE_URL` | `https://fapi.binance.com` | Binance USD-M REST (open interest) |
 | `DERIBIT_BASE_URL` | `https://www.deribit.com` | Deribit public REST (BTC/ETH options) |
 | `OPTIONS_CACHE_TTL` | `30s` | Options overview cache |
+| `OPTIONS_HISTORY_DB_PATH` | `data/options.db` | Sampled options OI / put-call / IV |
+| `OPTIONS_HISTORY_INTERVAL` | `5m` | How often BTC/ETH desk prints are stored |
+| `OPTIONS_HISTORY_RETENTION` | `14d` | How long those samples are kept |
 | `BINANCE_FUTURES_WS_URL` | `wss://fstream.binance.com` | Binance USD-M stream for liquidations |
 | `OPEN_INTEREST_CACHE_TTL` | `30s` | Futures open-interest snapshot TTL |
 | `COINBASE_WS_URL` | `wss://ws-feed.exchange.coinbase.com` | Coinbase Exchange feed for the live local book |

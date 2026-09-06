@@ -275,6 +275,9 @@ func (b *Backend) GetOptions(ctx context.Context, exchange, asset string) (json.
 	if vm := optionsVsMarketMap(got.VsMarket); vm != nil {
 		out["vsMarket"] = vm
 	}
+	if hist := optionsHistoryMap(got.History); hist != nil {
+		out["history"] = hist
+	}
 	if got.HasPutCallOI {
 		out["putCallOi"] = got.PutCallOI
 		out["lean"] = got.Lean
@@ -364,6 +367,65 @@ func optionsVsMarketMap(v *domain.OptionsVsMarket) map[string]any {
 		out["longPct"] = v.LongPct
 	}
 	return out
+}
+
+func optionsHistoryMap(h *domain.OptionsHistory) map[string]any {
+	if h == nil {
+		return nil
+	}
+	windows := make([]map[string]any, 0, len(h.Windows))
+	for _, w := range h.Windows {
+		row := map[string]any{"window": w.Window, "complete": w.Complete}
+		if w.OI.Complete {
+			row["oi"] = optionsHistoryChangeMap(w.OI)
+		}
+		if w.PutCall.Complete {
+			row["putCall"] = optionsHistoryChangeMap(w.PutCall)
+		}
+		if w.DVOL.Complete {
+			row["dvol"] = optionsHistoryChangeMap(w.DVOL)
+		}
+		if w.AtmIV.Complete {
+			row["atmIv"] = optionsHistoryChangeMap(w.AtmIV)
+		}
+		windows = append(windows, row)
+	}
+	points := make([]map[string]any, 0, len(h.Points))
+	for _, p := range h.Points {
+		row := map[string]any{"time": p.Time.UTC().Format(time.RFC3339)}
+		if p.HasOI {
+			row["openInterest"] = p.OpenInterest
+			if p.OpenInterestUSD > 0 {
+				row["openInterestUsd"] = p.OpenInterestUSD
+			}
+		}
+		if p.HasPutCallOI {
+			row["putCallOi"] = p.PutCallOI
+		}
+		if p.HasDVOL {
+			row["dvol"] = p.DVOL
+		}
+		if p.HasAtmIV {
+			row["atmIv"] = p.AtmIV
+		}
+		points = append(points, row)
+	}
+	out := map[string]any{
+		"windows": windows, "points": points,
+		"from": h.From.UTC().Format(time.RFC3339), "to": h.To.UTC().Format(time.RFC3339),
+	}
+	if h.Note != "" {
+		out["note"] = h.Note
+	}
+	return out
+}
+
+func optionsHistoryChangeMap(c domain.SnapshotChange) map[string]any {
+	return map[string]any{
+		"window": c.Window, "current": c.Current, "past": c.Past,
+		"change": c.Change, "changePct": c.ChangePct,
+		"direction": c.Direction, "complete": c.Complete,
+	}
 }
 
 func (b *Backend) GetOpenInterest(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {

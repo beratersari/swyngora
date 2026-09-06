@@ -1012,10 +1012,12 @@ paths:
         ATM implied vol near the 30-day tenor, IV term structure (ATM IV by
         expiry), call/put skew (ATM put IV minus call IV, plus ~5% OTM wing),
         open-interest by expiry, and per-expiry 1-SD expected move plus max
-        pain (strike that minimizes call+put intrinsic payout). When options
-        implied vol or put/call lean disagrees with live spot range or
-        futures funding / account long-short, `vsMarket.findings` lists those
-        disagreements only.
+        pain (strike that minimizes call+put intrinsic payout). `history` is
+        1h/4h/24h/7d change plus a chart series for open interest, put/call,
+        and implied vol (DVOL from Deribit; OI/PCR sampled while the desk
+        runs). When options implied vol or put/call lean disagrees with live
+        spot range or futures funding / account long-short, `vsMarket.findings`
+        lists those disagreements only.
         `asset` accepts `BTC`, `ETH`, or a pair such as `BTCUSDT`.
         `exchange` is `deribit` (default). Cached ~30s. Informational only.
       operationId: getMarketOptions
@@ -8723,6 +8725,48 @@ components:
         withOi: { type: integer }
         withIv: { type: integer }
         vsMarket: { $ref: '#/components/schemas/MarketOptionsVsMarket' }
+        history: { $ref: '#/components/schemas/MarketOptionsHistory' }
+        note: { type: string }
+    MarketOptionsHistoryChange:
+      type: object
+      properties:
+        window: { type: string, enum: [1h, 4h, 24h, 7d] }
+        current: { type: string }
+        past: { type: string }
+        change: { type: string }
+        changePct: { type: string }
+        direction: { type: string, enum: [up, down, flat] }
+        complete: { type: boolean }
+    MarketOptionsHistoryWindow:
+      type: object
+      properties:
+        window: { type: string, enum: [1h, 4h, 24h, 7d] }
+        oi: { $ref: '#/components/schemas/MarketOptionsHistoryChange' }
+        putCall: { $ref: '#/components/schemas/MarketOptionsHistoryChange' }
+        dvol: { $ref: '#/components/schemas/MarketOptionsHistoryChange' }
+        atmIv: { $ref: '#/components/schemas/MarketOptionsHistoryChange' }
+        complete: { type: boolean }
+    MarketOptionsHistoryPoint:
+      type: object
+      properties:
+        time: { type: string, format: date-time }
+        openInterest: { type: string }
+        openInterestUsd: { type: string }
+        putCallOi: { type: string }
+        dvol: { type: string }
+        atmIv: { type: string }
+    MarketOptionsHistory:
+      type: object
+      description: How listed OI, put/call, and implied vol moved over the last hours and days
+      properties:
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/MarketOptionsHistoryWindow' }
+        points:
+          type: array
+          items: { $ref: '#/components/schemas/MarketOptionsHistoryPoint' }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
         note: { type: string }
     MarketOpenInterest:
       type: object

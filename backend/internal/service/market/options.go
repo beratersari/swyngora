@@ -50,10 +50,101 @@ func (s *Service) GetOptions(ctx context.Context, exchange, asset string) (*doma
 	wg.Wait()
 	snap := domain.BuildOptionsSnapshot(asset, quotes, index, dvol, time.Now().UTC())
 	snap.Exchange = ex
+	s.persistOptionsSample(ctx, snap)
+	s.attachOptionsHistory(ctx, snap)
 	if tape := s.optionsMarketTape(ctx, asset); tape.Usable() {
 		snap.VsMarket = domain.CompareOptionsToMarket(snap, tape)
 	}
 	return snap, nil
+}
+
+func (s *Service) persistOptionsSample(ctx context.Context, snap *domain.OptionsSnapshot) {
+	if s == nil || s.optionsHist == nil || snap == nil {
+		return
+	}
+	rec, ok := domain.OptionsSampleFromSnapshot(snap)
+	if !ok {
+		return
+	}
+	_, _ = s.optionsHist.InsertSample(ctx, rec)
+}
+
+func (s *Service) attachOptionsHistory(ctx context.Context, snap *domain.OptionsSnapshot) {
+	if s == nil || snap == nil {
+		return
+	}
+	now := snap.AsOf.UTC()
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	from := now.Add(-domain.OptionsHistoryLookback)
+	var samples []domain.OptionsSample
+	if s.optionsHist != nil {
+		if got, err := s.optionsHist.ListSamples(ctx, snap.Asset, from, now.Add(time.Minute), domain.OptionsHistoryListLimit); err == nil {
+			samples = got
+		}
+	}
+	var dvol []domain.OptionsDVOLPoint
+	if p, ok := s.options.(domain.OptionsDVOLHistoryPort); ok && p != nil {
+		if got, err := p.GetOptionsDVOLHistory(ctx, snap.Asset, from, now); err == nil {
+			dvol = got
+		}
+	}
+	snap.History = domain.BuildOptionsHistory(snap, samples, dvol, now)
+}
+
+// SampleOptionsHistory records BTC and ETH desk prints and purges stale rows.
+func (s *Service) SampleOptionsHistory(ctx context.Context) (inserted int, err error) {
+	if s == nil || s.options == nil {
+		return 0, fmt.Errorf("%w: options source not configured", domain.ErrUpstream)
+	}
+	var last error
+	for _, asset := range []string{domain.OptionsAssetBTC, domain.OptionsAssetETH} {
+		if ctx.Err() != nil {
+			return inserted, ctx.Err()
+		}
+		quotes, qerr := s.options.GetOptionQuotes(ctx, asset)
+		if qerr != nil {
+			last = qerr
+			continue
+		}
+		var dvol domain.OptionsDVOL
+		var index float64
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			got, err := s.options.GetOptionsDVOL(ctx, asset)
+			if err == nil {
+				dvol = got
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			got, err := s.options.GetOptionsIndex(ctx, asset)
+			if err == nil {
+				index = got
+			}
+		}()
+		wg.Wait()
+		snap := domain.BuildOptionsSnapshot(asset, quotes, index, dvol, time.Now().UTC())
+		if rec, ok := domain.OptionsSampleFromSnapshot(snap); ok && s.optionsHist != nil {
+			if ins, ierr := s.optionsHist.InsertSample(ctx, rec); ierr != nil {
+				last = ierr
+			} else if ins {
+				inserted++
+			}
+		}
+	}
+	return inserted, last
+}
+
+// PurgeOptionsHistory drops samples older than cutoff.
+func (s *Service) PurgeOptionsHistory(ctx context.Context, cutoff time.Time) (int, error) {
+	if s == nil || s.optionsHist == nil {
+		return 0, nil
+	}
+	return s.optionsHist.PurgeOlderThan(ctx, cutoff)
 }
 
 func (s *Service) optionsMarketTape(ctx context.Context, asset string) domain.OptionsMarketTape {

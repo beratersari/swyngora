@@ -120,7 +120,44 @@ type optionsResponse struct {
 	WithOi          int                  `json:"withOi"`
 	WithIv          int                  `json:"withIv"`
 	VsMarket        *optionsVsMarketDTO  `json:"vsMarket,omitempty"`
+	History         *optionsHistoryDTO   `json:"history,omitempty"`
 	Note            string               `json:"note"`
+}
+
+type optionsHistoryChangeDTO struct {
+	Window    string `json:"window"`
+	Current   string `json:"current,omitempty"`
+	Past      string `json:"past,omitempty"`
+	Change    string `json:"change,omitempty"`
+	ChangePct string `json:"changePct,omitempty"`
+	Direction string `json:"direction,omitempty"`
+	Complete  bool   `json:"complete,omitempty"`
+}
+
+type optionsHistoryWindowDTO struct {
+	Window   string                   `json:"window"`
+	Oi       *optionsHistoryChangeDTO `json:"oi,omitempty"`
+	PutCall  *optionsHistoryChangeDTO `json:"putCall,omitempty"`
+	Dvol     *optionsHistoryChangeDTO `json:"dvol,omitempty"`
+	AtmIv    *optionsHistoryChangeDTO `json:"atmIv,omitempty"`
+	Complete bool                     `json:"complete,omitempty"`
+}
+
+type optionsHistoryPointDTO struct {
+	Time            time.Time `json:"time"`
+	OpenInterest    string    `json:"openInterest,omitempty"`
+	OpenInterestUsd string    `json:"openInterestUsd,omitempty"`
+	PutCallOi       string    `json:"putCallOi,omitempty"`
+	Dvol            string    `json:"dvol,omitempty"`
+	AtmIv           string    `json:"atmIv,omitempty"`
+}
+
+type optionsHistoryDTO struct {
+	Windows []optionsHistoryWindowDTO `json:"windows"`
+	Points  []optionsHistoryPointDTO  `json:"points"`
+	From    time.Time                 `json:"from"`
+	To      time.Time                 `json:"to"`
+	Note    string                    `json:"note,omitempty"`
 }
 
 type optionsVsFindingDTO struct {
@@ -245,6 +282,7 @@ func optionsToDTO(a *domain.OptionsSnapshot) optionsResponse {
 		WithOi:          a.WithOI,
 		WithIv:          a.WithIV,
 		VsMarket:        optionsVsMarketToDTO(a.VsMarket),
+		History:         optionsHistoryToDTO(a.History),
 		Note:            a.Note,
 	}
 	if a.HasPutCallOI {
@@ -333,6 +371,72 @@ func optionsVsMarketToDTO(v *domain.OptionsVsMarket) *optionsVsMarketDTO {
 			row.Market = formatHistQty(f.Market)
 		}
 		out.Findings = append(out.Findings, row)
+	}
+	return out
+}
+
+func optionsHistoryToDTO(h *domain.OptionsHistory) *optionsHistoryDTO {
+	if h == nil {
+		return nil
+	}
+	out := &optionsHistoryDTO{
+		Windows: make([]optionsHistoryWindowDTO, 0, len(h.Windows)),
+		Points:  make([]optionsHistoryPointDTO, 0, len(h.Points)),
+		From:    h.From.UTC(),
+		To:      h.To.UTC(),
+		Note:    h.Note,
+	}
+	for _, w := range h.Windows {
+		row := optionsHistoryWindowDTO{Window: w.Window, Complete: w.Complete}
+		if w.OI.Complete {
+			c := snapshotChangeToOptionsDTO(w.OI)
+			row.Oi = &c
+		}
+		if w.PutCall.Complete {
+			c := snapshotChangeToOptionsDTO(w.PutCall)
+			row.PutCall = &c
+		}
+		if w.DVOL.Complete {
+			c := snapshotChangeToOptionsDTO(w.DVOL)
+			row.Dvol = &c
+		}
+		if w.AtmIV.Complete {
+			c := snapshotChangeToOptionsDTO(w.AtmIV)
+			row.AtmIv = &c
+		}
+		out.Windows = append(out.Windows, row)
+	}
+	for _, p := range h.Points {
+		row := optionsHistoryPointDTO{Time: p.Time.UTC()}
+		if p.HasOI {
+			row.OpenInterest = formatHistQty(p.OpenInterest)
+			if p.OpenInterestUSD > 0 {
+				row.OpenInterestUsd = formatHistQty(p.OpenInterestUSD)
+			}
+		}
+		if p.HasPutCallOI {
+			row.PutCallOi = formatHistQty(p.PutCallOI)
+		}
+		if p.HasDVOL {
+			row.Dvol = formatHistQty(p.DVOL)
+		}
+		if p.HasAtmIV {
+			row.AtmIv = formatHistQty(p.AtmIV)
+		}
+		out.Points = append(out.Points, row)
+	}
+	return out
+}
+
+func snapshotChangeToOptionsDTO(c domain.SnapshotChange) optionsHistoryChangeDTO {
+	out := optionsHistoryChangeDTO{
+		Window: c.Window, Direction: c.Direction, Complete: c.Complete,
+		Current: formatHistQty(c.Current),
+	}
+	if c.Complete {
+		out.Past = formatHistQty(c.Past)
+		out.Change = domain.FormatSignedQty(c.Change)
+		out.ChangePct = domain.FormatSignedQty(c.ChangePct)
 	}
 	return out
 }

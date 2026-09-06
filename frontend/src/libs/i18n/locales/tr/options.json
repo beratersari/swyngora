@@ -4,6 +4,7 @@
   "assetAria": "Opsiyon dayanak varlığı",
   "stats": {
     "oi": "Açık pozisyon",
+    "change24h": "24s {{value}}",
     "volume": "24s hacim",
     "pcr": "Put / call (OI)",
     "pcrHint": "Put ÷ call",
@@ -58,6 +59,33 @@
       "calls": "Call daha pahalı",
       "puts": "Put daha pahalı",
       "balanced": "Dengeli"
+    }
+  },
+  "history": {
+    "title": "Zaman içinde",
+    "subtitle": "Açık pozisyon, put/call ve ima vol son saat ve günlerde nasıl değişti",
+    "empty": "Henüz geçmiş yok. İma vol Deribit’ten gelir; açık pozisyon ve put/call masa çalıştıktan sonra birikir.",
+    "collecting": "Toplanıyor",
+    "collectingSeries": "Bu seri henüz toplanıyor. Masa birkaç saat çalıştıktan sonra bakın.",
+    "emptyIv": "İma vol geçmişi yok.",
+    "hint": "OI ve put/call bu sunucu çalışırken örneklenir. İma vol ayrıca Deribit DVOL geçmişini kullanır.",
+    "metricAria": "Opsiyon geçmiş serisi",
+    "rangeAria": "Opsiyon geçmiş aralığı",
+    "window": {
+      "1h": "1 saat",
+      "4h": "4 saat",
+      "24h": "24 saat",
+      "7d": "7 gün"
+    },
+    "metric": {
+      "oi": "Açık pozisyon",
+      "pcr": "Put / call",
+      "iv": "İma vol"
+    },
+    "range": {
+      "12h": "12s",
+      "48h": "48s",
+      "7d": "7g"
     }
   },
   "vs": {

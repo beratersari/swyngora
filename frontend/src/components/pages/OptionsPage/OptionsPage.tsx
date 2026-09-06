@@ -5,6 +5,7 @@ import { Text } from '@/components/atoms/Text';
 import { PageHeader } from '@/components/molecules/PageHeader';
 import { OptionsExpiryBars } from '@/components/organisms/OptionsExpiryBars';
 import { OptionsExpiryDetail } from '@/components/organisms/OptionsExpiryDetail';
+import { OptionsHistory } from '@/components/organisms/OptionsHistory';
 import { OptionsStatCards } from '@/components/organisms/OptionsStatCards';
 import { OptionsVolStructure } from '@/components/organisms/OptionsVolStructure';
 import { OptionsVsMarket } from '@/components/organisms/OptionsVsMarket';
@@ -71,6 +72,18 @@ export function OptionsPage() {
       ) : null}
 
       <OptionsStatCards data={data} isLoading={query.isLoading} />
+
+      <Panel>
+        <Toolbar>
+          <Text variant="bodySm" color="primary">
+            {t('history.title')}
+          </Text>
+          <Text variant="caption" color="secondary">
+            {t('history.subtitle')}
+          </Text>
+        </Toolbar>
+        <OptionsHistory data={data} isLoading={query.isLoading} />
+      </Panel>
 
       {data?.vsMarket?.findings?.length ? (
         <Panel>

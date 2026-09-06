@@ -99,6 +99,7 @@ describe('OptionsPage', () => {
     expect(screen.getAllByText('27 Mar 2026').length).toBeGreaterThan(0);
     expect(screen.getByText(/volatility structure/i)).toBeInTheDocument();
     expect(screen.getByText('±13.6%')).toBeInTheDocument();
+    expect(screen.getByText(/over time/i)).toBeInTheDocument();
     expect(screen.getByText(/options vs the rest of the market/i)).toBeInTheDocument();
     expect(screen.getByText(/lean put while futures accounts are long/i)).toBeInTheDocument();
   });

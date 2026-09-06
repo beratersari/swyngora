@@ -33,7 +33,7 @@ export function OptionsStatCards({ data, isLoading }: OptionsStatCardsProps) {
           {vals.oiUsd}
         </Text>
         <Text variant="caption" color="secondary">
-          {vals.oiCoin}
+          {vals.oiChange24h ? t('stats.change24h', { value: vals.oiChange24h }) : vals.oiCoin}
         </Text>
       </Card>
       <Card>
@@ -59,7 +59,11 @@ export function OptionsStatCards({ data, isLoading }: OptionsStatCardsProps) {
           {vals.pcr}
         </Text>
         <Text variant="caption" color="secondary">
-          {vals.lean ? t(`lean.${vals.lean}` as 'lean.balanced') : t('stats.pcrHint')}
+          {vals.pcrChange24h
+            ? t('stats.change24h', { value: vals.pcrChange24h })
+            : vals.lean
+              ? t(`lean.${vals.lean}` as 'lean.balanced')
+              : t('stats.pcrHint')}
         </Text>
       </Card>
       <Card>

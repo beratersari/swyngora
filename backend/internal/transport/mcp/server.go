@@ -571,7 +571,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_options_overview",
-		mcp.WithDescription("BTC/ETH options desk from Deribit: listed open interest, 24h volume, put/call ratios, DVOL (30-day implied vol), ATM IV near 30 days, IV term structure, call/put skew, expiry OI, per-expiry 1-SD expected move plus max pain, and vsMarket findings when implied vol or put/call lean disagrees with live spot range or futures funding / account long-short. asset is BTC or ETH (BTCUSDT is accepted). Not Binance/Bybit futures OI. Informational only."),
+		mcp.WithDescription("BTC/ETH options desk from Deribit: listed open interest, 24h volume, put/call ratios, DVOL (30-day implied vol), ATM IV near 30 days, IV term structure, call/put skew, expiry OI, per-expiry 1-SD expected move plus max pain, history (1h/4h/24h/7d change + series for OI, put/call, DVOL), and vsMarket findings when implied vol or put/call lean disagrees with live spot range or futures funding / account long-short. asset is BTC or ETH (BTCUSDT is accepted). Not Binance/Bybit futures OI. Informational only."),
 		mcp.WithString("asset", mcp.Required(), mcp.Description("BTC or ETH (or BTCUSDT / ETHUSDT)")),
 		mcp.WithString("exchange", mcp.Description("deribit (default)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

@@ -4,6 +4,7 @@
   "assetAria": "Options underlying",
   "stats": {
     "oi": "Open interest",
+    "change24h": "{{value}} vs 24h",
     "volume": "24h volume",
     "pcr": "Put / call (OI)",
     "pcrHint": "Puts ÷ calls",
@@ -58,6 +59,33 @@
       "calls": "Calls richer",
       "puts": "Puts richer",
       "balanced": "Balanced"
+    }
+  },
+  "history": {
+    "title": "Over time",
+    "subtitle": "How open interest, put/call, and implied vol moved in the last hours and days",
+    "empty": "No history yet. Implied vol fills from Deribit; open interest and put/call appear after the desk has been running.",
+    "collecting": "Collecting",
+    "collectingSeries": "Still collecting this series. Check back after the desk has been running for a few hours.",
+    "emptyIv": "No implied-vol history yet.",
+    "hint": "OI and put/call are sampled while this backend runs. Implied vol also uses Deribit DVOL history.",
+    "metricAria": "Options history series",
+    "rangeAria": "Options history range",
+    "window": {
+      "1h": "1 hour",
+      "4h": "4 hours",
+      "24h": "24 hours",
+      "7d": "7 days"
+    },
+    "metric": {
+      "oi": "Open interest",
+      "pcr": "Put / call",
+      "iv": "Implied vol"
+    },
+    "range": {
+      "12h": "12h",
+      "48h": "48h",
+      "7d": "7d"
     }
   },
   "vs": {

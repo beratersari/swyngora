@@ -185,6 +185,7 @@ type OptionsSnapshot struct {
 	WithOI          int
 	WithIV          int
 	VsMarket        *OptionsVsMarket
+	History         *OptionsHistory
 	Note            string
 }
 

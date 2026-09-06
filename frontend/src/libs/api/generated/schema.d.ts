@@ -587,10 +587,12 @@ export interface paths {
          *     ATM implied vol near the 30-day tenor, IV term structure (ATM IV by
          *     expiry), call/put skew (ATM put IV minus call IV, plus ~5% OTM wing),
          *     open-interest by expiry, and per-expiry 1-SD expected move plus max
-         *     pain (strike that minimizes call+put intrinsic payout). When options
-         *     implied vol or put/call lean disagrees with live spot range or
-         *     futures funding / account long-short, `vsMarket.findings` lists those
-         *     disagreements only.
+         *     pain (strike that minimizes call+put intrinsic payout). `history` is
+         *     1h/4h/24h/7d change plus a chart series for open interest, put/call,
+         *     and implied vol (DVOL from Deribit; OI/PCR sampled while the desk
+         *     runs). When options implied vol or put/call lean disagrees with live
+         *     spot range or futures funding / account long-short, `vsMarket.findings`
+         *     lists those disagreements only.
          *     `asset` accepts `BTC`, `ETH`, or a pair such as `BTCUSDT`.
          *     `exchange` is `deribit` (default). Cached ~30s. Informational only.
          */
@@ -5068,6 +5070,46 @@ export interface components {
             withOi?: number;
             withIv?: number;
             vsMarket?: components["schemas"]["MarketOptionsVsMarket"];
+            history?: components["schemas"]["MarketOptionsHistory"];
+            note?: string;
+        };
+        MarketOptionsHistoryChange: {
+            /** @enum {string} */
+            window?: "1h" | "4h" | "24h" | "7d";
+            current?: string;
+            past?: string;
+            change?: string;
+            changePct?: string;
+            /** @enum {string} */
+            direction?: "up" | "down" | "flat";
+            complete?: boolean;
+        };
+        MarketOptionsHistoryWindow: {
+            /** @enum {string} */
+            window?: "1h" | "4h" | "24h" | "7d";
+            oi?: components["schemas"]["MarketOptionsHistoryChange"];
+            putCall?: components["schemas"]["MarketOptionsHistoryChange"];
+            dvol?: components["schemas"]["MarketOptionsHistoryChange"];
+            atmIv?: components["schemas"]["MarketOptionsHistoryChange"];
+            complete?: boolean;
+        };
+        MarketOptionsHistoryPoint: {
+            /** Format: date-time */
+            time?: string;
+            openInterest?: string;
+            openInterestUsd?: string;
+            putCallOi?: string;
+            dvol?: string;
+            atmIv?: string;
+        };
+        /** @description How listed OI, put/call, and implied vol moved over the last hours and days */
+        MarketOptionsHistory: {
+            windows?: components["schemas"]["MarketOptionsHistoryWindow"][];
+            points?: components["schemas"]["MarketOptionsHistoryPoint"][];
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
             note?: string;
         };
         /** @description Current futures open interest plus 5m/1h/4h/24h change */

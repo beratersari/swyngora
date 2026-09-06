@@ -31,6 +31,7 @@ type Client struct {
 	httpClient *http.Client
 	quotes     *cache.TTL[[]domain.OptionQuote]
 	dvol       *cache.TTL[domain.OptionsDVOL]
+	dvolHist   *cache.TTL[[]domain.OptionsDVOLPoint]
 	index      *cache.TTL[float64]
 	sf         singleflight.Group
 }
@@ -65,6 +66,7 @@ func New(opts Options) *Client {
 		httpClient: hc,
 		quotes:     cache.New[[]domain.OptionQuote](ttl),
 		dvol:       cache.New[domain.OptionsDVOL](ttl),
+		dvolHist:   cache.New[[]domain.OptionsDVOLPoint](5 * time.Minute),
 		index:      cache.New[float64](ttl),
 	}
 }
@@ -76,6 +78,7 @@ func (c *Client) Cleanup() {
 	}
 	c.quotes.Cleanup()
 	c.dvol.Cleanup()
+	c.dvolHist.Cleanup()
 	c.index.Cleanup()
 }
 
@@ -271,6 +274,69 @@ func (c *Client) fetchDVOL(ctx context.Context, asset string) (domain.OptionsDVO
 		// Deribit ticker price_change is percent of the index, not points.
 		out.Change24h = val * (*tick.Stats.PriceChange) / 100
 		out.HasChange = true
+	}
+	return out, nil
+}
+
+// GetOptionsDVOLHistory returns hourly DVOL closes from Deribit public REST.
+func (c *Client) GetOptionsDVOLHistory(ctx context.Context, asset string, from, to time.Time) ([]domain.OptionsDVOLPoint, error) {
+	if c == nil {
+		return nil, fmt.Errorf("%w: deribit client not configured", domain.ErrUpstream)
+	}
+	asset, err := domain.ParseOptionsAsset(asset)
+	if err != nil {
+		return nil, err
+	}
+	if to.IsZero() {
+		to = time.Now().UTC()
+	}
+	if from.IsZero() || to.Sub(from) > 8*24*time.Hour {
+		from = to.Add(-domain.OptionsHistoryLookback)
+	}
+	key := "h:" + asset
+	if hit, ok := c.dvolHist.Get(key); ok {
+		return hit, nil
+	}
+	v, err, _ := c.sf.Do(key, func() (any, error) {
+		if hit, ok := c.dvolHist.Get(key); ok {
+			return hit, nil
+		}
+		rows, err := c.fetchDVOLHistory(ctx, asset, from, to)
+		if err != nil {
+			return nil, err
+		}
+		c.dvolHist.Set(key, rows)
+		return rows, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return v.([]domain.OptionsDVOLPoint), nil
+}
+
+func (c *Client) fetchDVOLHistory(ctx context.Context, asset string, from, to time.Time) ([]domain.OptionsDVOLPoint, error) {
+	q := url.Values{}
+	q.Set("currency", asset)
+	q.Set("resolution", "3600")
+	q.Set("start_timestamp", fmt.Sprintf("%d", from.UTC().UnixMilli()))
+	q.Set("end_timestamp", fmt.Sprintf("%d", to.UTC().UnixMilli()))
+	body, err := c.get(ctx, dvolHistPath, q)
+	if err != nil {
+		return nil, err
+	}
+	var hist volIndexResult
+	if err := json.Unmarshal(body, &hist); err != nil {
+		return nil, fmt.Errorf("%w: deribit dvol history json: %v", domain.ErrUpstream, err)
+	}
+	out := make([]domain.OptionsDVOLPoint, 0, len(hist.Data))
+	for _, row := range hist.Data {
+		if len(row) < 5 || row[4] <= 0 {
+			continue
+		}
+		out = append(out, domain.OptionsDVOLPoint{
+			Time:  time.UnixMilli(int64(row[0])).UTC(),
+			Value: row[4],
+		})
 	}
 	return out, nil
 }

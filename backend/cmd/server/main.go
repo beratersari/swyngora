@@ -20,8 +20,8 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coingecko"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/coinmetrics"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cryptoid"
-	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/deribit"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/deliststore"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/deribit"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/equities"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/ethplorer"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/exportstore"
@@ -31,6 +31,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/geckoterminal"
 	holderresolve "gitlab.com/trace-analysis/swyngora/backend/internal/adapter/holders"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/importstore"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/optionsstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/pricediffstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/radarstore"
@@ -286,6 +287,18 @@ func main() {
 	}).WithWindowChanges(map[domain.Exchange]domain.WindowChangePort{
 		domain.ExchangeBinance: binanceClient,
 	}).WithOptionsChain(deribitClient)
+	optionsHistStore, err := optionsstore.Open(cfg.OptionsHistoryDBPath)
+	if err != nil {
+		logger.Error("options history sqlite open failed", "path", cfg.OptionsHistoryDBPath, "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := optionsHistStore.Close(); err != nil {
+			logger.Error("options history sqlite close", "err", err)
+		}
+	}()
+	marketSvc = marketSvc.WithOptionsHistory(optionsHistStore)
+	logger.Info("options history store ready", "driver", "sqlite", "path", optionsHistStore.Path())
 	bybitTrades := bybit.NewTradeHub(bybit.TradeHubOptions{
 		WSURL: cfg.BybitLinearWSURL,
 		Book:  bybitClient.TakerBook(),
@@ -534,6 +547,12 @@ func main() {
 		Hist:     bookHist,
 		Interval: cfg.OrderBookHistoryInterval,
 		Retain:   cfg.OrderBookHistoryRetention,
+		Logger:   logger,
+	}).Start(ctx)
+	go (&market.OptionsHistoryWorker{
+		Svc:      marketSvc,
+		Interval: cfg.OptionsHistoryInterval,
+		Retain:   cfg.OptionsHistoryRetention,
 		Logger:   logger,
 	}).Start(ctx)
 

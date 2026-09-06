@@ -12,36 +12,42 @@ import (
 
 // Config holds process configuration from the environment.
 type Config struct {
-	HTTPAddr               string
-	BinanceBaseURL         string
-	BinanceProductBaseURL  string
-	CMCBaseURL             string
-	BinanceAPIKey          string
-	BinanceWSURL           string
-	BinanceFuturesWSURL    string
-	BinanceFuturesBaseURL  string
-	DeribitBaseURL         string
-	OpenInterestCacheTTL   time.Duration
-	OptionsCacheTTL        time.Duration
-	OrderBookIdleTTL       time.Duration
-	OrderBookSyncTimeout   time.Duration
-	DelistRefreshEvery     time.Duration
-	DelistRefreshOnStartup bool
-	CoinbaseBaseURL        string
-	CoinbaseExchangeURL    string
-	CoinbaseWSURL          string
-	BybitBaseURL           string
-	BybitWSURL             string
-	BybitLinearWSURL       string
-	HTTPClientTimeout      time.Duration
-	CandleCacheTTL         time.Duration
-	CandleCacheMaxEntries  int
-	TickerCacheTTL         time.Duration
-	OrderBookCacheTTL      time.Duration
-	SupplyCacheTTL         time.Duration
-	HoldersCacheTTL        time.Duration
-	CacheCleanupEvery      time.Duration
-	SpotMarketCacheTTL     time.Duration
+	HTTPAddr              string
+	BinanceBaseURL        string
+	BinanceProductBaseURL string
+	CMCBaseURL            string
+	BinanceAPIKey         string
+	BinanceWSURL          string
+	BinanceFuturesWSURL   string
+	BinanceFuturesBaseURL string
+	DeribitBaseURL        string
+	OpenInterestCacheTTL  time.Duration
+	OptionsCacheTTL       time.Duration
+	// OptionsHistoryDBPath is the SQLite file for sampled options OI / put-call / IV.
+	OptionsHistoryDBPath string
+	// OptionsHistoryInterval is how often BTC/ETH desk prints are stored.
+	OptionsHistoryInterval time.Duration
+	// OptionsHistoryRetention is how long those samples are kept.
+	OptionsHistoryRetention time.Duration
+	OrderBookIdleTTL        time.Duration
+	OrderBookSyncTimeout    time.Duration
+	DelistRefreshEvery      time.Duration
+	DelistRefreshOnStartup  bool
+	CoinbaseBaseURL         string
+	CoinbaseExchangeURL     string
+	CoinbaseWSURL           string
+	BybitBaseURL            string
+	BybitWSURL              string
+	BybitLinearWSURL        string
+	HTTPClientTimeout       time.Duration
+	CandleCacheTTL          time.Duration
+	CandleCacheMaxEntries   int
+	TickerCacheTTL          time.Duration
+	OrderBookCacheTTL       time.Duration
+	SupplyCacheTTL          time.Duration
+	HoldersCacheTTL         time.Duration
+	CacheCleanupEvery       time.Duration
+	SpotMarketCacheTTL      time.Duration
 
 	// Daily supply snapshot refresh (Binance product catalog). User requests read cache only.
 	SupplyRefreshHour      int
@@ -197,32 +203,35 @@ func Load() Config {
 	loc := loadLocation(getenv("SUPPLY_REFRESH_TZ", "UTC"))
 	return Config{
 		// Loopback by default so empty API_AUTH_TOKEN open mode is not LAN-wide.
-		HTTPAddr:               getenv("HTTP_ADDR", "127.0.0.1:8080"),
-		BinanceBaseURL:         getenv("BINANCE_BASE_URL", "https://api.binance.com"),
-		BinanceProductBaseURL:  getenv("BINANCE_PRODUCT_BASE_URL", "https://www.binance.com"),
-		CMCBaseURL:             getenv("CMC_BASE_URL", "https://api.coinmarketcap.com"),
-		BinanceAPIKey:          strings.TrimSpace(os.Getenv("BINANCE_API_KEY")),
-		BinanceWSURL:           getenv("BINANCE_WS_URL", "wss://stream.binance.com:9443"),
-		BinanceFuturesWSURL:    getenv("BINANCE_FUTURES_WS_URL", "wss://fstream.binance.com"),
-		BinanceFuturesBaseURL:  getenv("BINANCE_FUTURES_BASE_URL", "https://fapi.binance.com"),
-		DeribitBaseURL:         getenv("DERIBIT_BASE_URL", "https://www.deribit.com"),
-		OpenInterestCacheTTL:   positiveDurationEnv("OPEN_INTEREST_CACHE_TTL", 30*time.Second),
-		OptionsCacheTTL:        positiveDurationEnv("OPTIONS_CACHE_TTL", 30*time.Second),
-		OrderBookIdleTTL:       positiveDurationEnv("ORDERBOOK_IDLE_TTL", 90*time.Second),
-		OrderBookSyncTimeout:   positiveDurationEnv("ORDERBOOK_SYNC_TIMEOUT", 8*time.Second),
-		DelistRefreshEvery:     positiveDurationEnv("DELIST_REFRESH_EVERY", time.Hour),
-		DelistRefreshOnStartup: boolEnv("DELIST_REFRESH_ON_STARTUP", true),
-		CoinbaseBaseURL:        getenv("COINBASE_BASE_URL", "https://api.coinbase.com"),
-		CoinbaseExchangeURL:    getenv("COINBASE_EXCHANGE_URL", "https://api.exchange.coinbase.com"),
-		CoinbaseWSURL:          getenv("COINBASE_WS_URL", "wss://ws-feed.exchange.coinbase.com"),
-		BybitBaseURL:           getenv("BYBIT_BASE_URL", "https://api.bybit.com"),
-		BybitWSURL:             getenv("BYBIT_WS_URL", "wss://stream.bybit.com/v5/public/spot"),
-		BybitLinearWSURL:       getenv("BYBIT_LINEAR_WS_URL", "wss://stream.bybit.com/v5/public/linear"),
-		HTTPClientTimeout:      positiveDurationEnv("HTTP_CLIENT_TIMEOUT", 15*time.Second),
-		CandleCacheTTL:         positiveDurationEnv("CANDLE_CACHE_TTL", 30*time.Second),
-		CandleCacheMaxEntries:  positiveIntEnv("CANDLE_CACHE_MAX_ENTRIES", 512),
-		TickerCacheTTL:         positiveDurationEnv("TICKER_CACHE_TTL", 15*time.Second),
-		OrderBookCacheTTL:      positiveDurationEnv("ORDERBOOK_CACHE_TTL", 2*time.Second),
+		HTTPAddr:                getenv("HTTP_ADDR", "127.0.0.1:8080"),
+		BinanceBaseURL:          getenv("BINANCE_BASE_URL", "https://api.binance.com"),
+		BinanceProductBaseURL:   getenv("BINANCE_PRODUCT_BASE_URL", "https://www.binance.com"),
+		CMCBaseURL:              getenv("CMC_BASE_URL", "https://api.coinmarketcap.com"),
+		BinanceAPIKey:           strings.TrimSpace(os.Getenv("BINANCE_API_KEY")),
+		BinanceWSURL:            getenv("BINANCE_WS_URL", "wss://stream.binance.com:9443"),
+		BinanceFuturesWSURL:     getenv("BINANCE_FUTURES_WS_URL", "wss://fstream.binance.com"),
+		BinanceFuturesBaseURL:   getenv("BINANCE_FUTURES_BASE_URL", "https://fapi.binance.com"),
+		DeribitBaseURL:          getenv("DERIBIT_BASE_URL", "https://www.deribit.com"),
+		OpenInterestCacheTTL:    positiveDurationEnv("OPEN_INTEREST_CACHE_TTL", 30*time.Second),
+		OptionsCacheTTL:         positiveDurationEnv("OPTIONS_CACHE_TTL", 30*time.Second),
+		OptionsHistoryDBPath:    getenv("OPTIONS_HISTORY_DB_PATH", "data/options.db"),
+		OptionsHistoryInterval:  positiveDurationEnv("OPTIONS_HISTORY_INTERVAL", 5*time.Minute),
+		OptionsHistoryRetention: positiveDurationEnv("OPTIONS_HISTORY_RETENTION", 14*24*time.Hour),
+		OrderBookIdleTTL:        positiveDurationEnv("ORDERBOOK_IDLE_TTL", 90*time.Second),
+		OrderBookSyncTimeout:    positiveDurationEnv("ORDERBOOK_SYNC_TIMEOUT", 8*time.Second),
+		DelistRefreshEvery:      positiveDurationEnv("DELIST_REFRESH_EVERY", time.Hour),
+		DelistRefreshOnStartup:  boolEnv("DELIST_REFRESH_ON_STARTUP", true),
+		CoinbaseBaseURL:         getenv("COINBASE_BASE_URL", "https://api.coinbase.com"),
+		CoinbaseExchangeURL:     getenv("COINBASE_EXCHANGE_URL", "https://api.exchange.coinbase.com"),
+		CoinbaseWSURL:           getenv("COINBASE_WS_URL", "wss://ws-feed.exchange.coinbase.com"),
+		BybitBaseURL:            getenv("BYBIT_BASE_URL", "https://api.bybit.com"),
+		BybitWSURL:              getenv("BYBIT_WS_URL", "wss://stream.bybit.com/v5/public/spot"),
+		BybitLinearWSURL:        getenv("BYBIT_LINEAR_WS_URL", "wss://stream.bybit.com/v5/public/linear"),
+		HTTPClientTimeout:       positiveDurationEnv("HTTP_CLIENT_TIMEOUT", 15*time.Second),
+		CandleCacheTTL:          positiveDurationEnv("CANDLE_CACHE_TTL", 30*time.Second),
+		CandleCacheMaxEntries:   positiveIntEnv("CANDLE_CACHE_MAX_ENTRIES", 512),
+		TickerCacheTTL:          positiveDurationEnv("TICKER_CACHE_TTL", 15*time.Second),
+		OrderBookCacheTTL:       positiveDurationEnv("ORDERBOOK_CACHE_TTL", 2*time.Second),
 		// Safety TTL so supply/mcap cannot stay forever after failed refreshes.
 		// Successful daily ReplaceAll resets expiry. 0 = never expire (opt-in).
 		SupplyCacheTTL:     durationEnvAllowZero("SUPPLY_CACHE_TTL", 48*time.Hour),
@@ -287,9 +296,9 @@ func Load() Config {
 		FundingArbDBPath:        getenv("FUNDING_ARB_DB_PATH", "data/fundingarb.db"),
 		FundingArbCheckInterval: positiveDurationEnv("FUNDING_ARB_CHECK_INTERVAL", 30*time.Second),
 
-		RadarDBPath:        getenv("RADAR_DB_PATH", "data/radar.db"),
-		RadarScanInterval:  positiveDurationEnv("RADAR_SCAN_INTERVAL", 15*time.Minute),
-		RadarFillInterval:  positiveDurationEnv("RADAR_FILL_INTERVAL", time.Minute),
+		RadarDBPath:       getenv("RADAR_DB_PATH", "data/radar.db"),
+		RadarScanInterval: positiveDurationEnv("RADAR_SCAN_INTERVAL", 15*time.Minute),
+		RadarFillInterval: positiveDurationEnv("RADAR_FILL_INTERVAL", time.Minute),
 
 		ExportDBPath:         getenv("EXPORT_DB_PATH", "data/export.db"),
 		ExportFileDir:        getenv("EXPORT_FILE_DIR", "data/exports"),

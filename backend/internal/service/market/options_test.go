@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/optionsstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
@@ -35,6 +36,19 @@ func (s stubOptions) GetOptionsDVOL(context.Context, string) (domain.OptionsDVOL
 
 func (s stubOptions) GetOptionsIndex(context.Context, string) (float64, error) {
 	return s.index, nil
+}
+
+func (s stubOptions) GetOptionsDVOLHistory(_ context.Context, _ string, from, to time.Time) ([]domain.OptionsDVOLPoint, error) {
+	if to.IsZero() {
+		to = time.Now().UTC()
+	}
+	if from.IsZero() {
+		from = to.Add(-24 * time.Hour)
+	}
+	return []domain.OptionsDVOLPoint{
+		{Time: from, Value: s.dvol.Value + 2},
+		{Time: to, Value: s.dvol.Value},
+	}, nil
 }
 
 func TestGetOptions(t *testing.T) {
@@ -120,5 +134,42 @@ func TestGetOptions_AttachesVsMarketWhenTapeDisagrees(t *testing.T) {
 	}
 	if !kinds[domain.OptionsFindingPutsVsLongs] {
 		t.Fatalf("want puts_vs_futures_long in %+v", got.VsMarket.Findings)
+	}
+}
+
+func TestGetOptions_AttachesHistory(t *testing.T) {
+	exp := time.Now().UTC().Add(30 * 24 * time.Hour).Truncate(time.Hour)
+	store := &optionsstore.Memory{}
+	past := time.Now().UTC().Add(-25 * time.Hour).Truncate(5 * time.Minute)
+	_, _ = store.InsertSample(context.Background(), domain.OptionsSample{
+		Asset: "BTC", SampledAt: past, OpenInterest: 20, OpenInterestUSD: 2e6,
+		HasPutCallOI: true, PutCallOI: 0.8, HasDVOL: true, DVOL: 40,
+	})
+	svc := New(nil, nil).WithOptionsChain(stubOptions{
+		index: 100000,
+		dvol:  domain.OptionsDVOL{Value: 49, HasChange: true, Change24h: -1},
+		quotes: []domain.OptionQuote{{
+			Asset: "BTC", Expiry: exp, Strike: 100000, Side: domain.OptionSideCall,
+			OpenInterest: 10, Volume: 1, MarkIV: 50, Underlying: 100000,
+		}, {
+			Asset: "BTC", Expiry: exp, Strike: 100000, Side: domain.OptionSidePut,
+			OpenInterest: 20, Volume: 2, MarkIV: 52, Underlying: 100000,
+		}},
+	}).WithOptionsHistory(store)
+	got, err := svc.GetOptions(context.Background(), "", "BTC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.History == nil || len(got.History.Points) < 2 {
+		t.Fatalf("history=%+v", got.History)
+	}
+	var h24 *domain.OptionsHistoryWindow
+	for i := range got.History.Windows {
+		if got.History.Windows[i].Window == domain.OptionsHistoryWindow24h {
+			h24 = &got.History.Windows[i]
+		}
+	}
+	if h24 == nil || !h24.OI.Complete || !h24.PutCall.Complete {
+		t.Fatalf("24h window %+v", h24)
 	}
 }

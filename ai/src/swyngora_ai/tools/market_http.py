@@ -4335,9 +4335,11 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "BTC/ETH options desk from Deribit: listed open interest, 24h volume, "
                 "put/call ratios, DVOL (30-day implied vol), ATM IV near 30 days, "
                 "IV term structure, call/put skew (put minus call), expiry mix, "
-                "1-SD expected move and max pain per expiry. vsMarket.findings lists "
-                "only when implied vol or put/call lean disagrees with live spot range "
-                "or futures funding / account long-short. asset is BTC or ETH. "
+                "1-SD expected move and max pain per expiry. history is 1h/4h/24h/7d "
+                "change plus a series for open interest, put/call, and DVOL. "
+                "vsMarket.findings lists only when implied vol or put/call lean "
+                "disagrees with live spot range or futures funding / account long-short. "
+                "asset is BTC or ETH. "
                 "Not futures OI."
             ),
             args_schema=OptionsOverviewInput,

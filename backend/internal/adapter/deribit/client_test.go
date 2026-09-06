@@ -102,6 +102,10 @@ func TestGetOptionsDVOLAndIndex(t *testing.T) {
 	if err != nil || px != 98765.4 {
 		t.Fatalf("index %v %v", px, err)
 	}
+	hist, err := c.GetOptionsDVOLHistory(context.Background(), "BTC", time.Time{}, time.Time{})
+	if err != nil || len(hist) != 2 || hist[1].Value != 51 {
+		t.Fatalf("hist %+v %v", hist, err)
+	}
 }
 
 func TestGetOptionQuotes_UpstreamError(t *testing.T) {

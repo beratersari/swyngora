@@ -66,6 +66,7 @@ type Service struct {
 	rsiHeat        *cache.TTL[*domain.RSIHeatmap]
 	rsiHeatSF      singleflight.Group
 	options        domain.OptionsChainPort
+	optionsHist    domain.OptionsHistoryStore
 }
 
 // FuturesHistoryReader is the durable futures archive (optional).
@@ -190,6 +191,14 @@ func (s *Service) WithBasis(ports map[domain.Exchange]domain.BasisPort) *Service
 func (s *Service) WithOptionsChain(p domain.OptionsChainPort) *Service {
 	if s != nil {
 		s.options = p
+	}
+	return s
+}
+
+// WithOptionsHistory attaches the durable options OI / put-call sample store.
+func (s *Service) WithOptionsHistory(store domain.OptionsHistoryStore) *Service {
+	if s != nil {
+		s.optionsHist = store
 	}
 	return s
 }
