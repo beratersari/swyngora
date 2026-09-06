@@ -41,6 +41,7 @@ coverage/
 
 # Python AI (uv — commit ai/uv.lock; do not commit the venv)
 ai/.venv/
+ai/.langgraph_api/
 ai/dist/
 ai/**/__pycache__/
 *.egg-info/

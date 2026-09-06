@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "swyngora": "./chat_graph.py:graph"
+  },
+  "env": ".env"
+}

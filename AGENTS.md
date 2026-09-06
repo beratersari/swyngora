@@ -708,6 +708,7 @@ pytest -q
 ruff check . && ruff format --check .
 ty check
 # swyngora-ai "What is BTC RSI on binance?"   # needs Ollama or XAI_API_KEY + API up
+# uv run langgraph dev   # local Agent Chat UI (:2024, graph swyngora)
 
 # Backend (implemented) — from backend/
 go test ./...

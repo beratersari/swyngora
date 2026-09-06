@@ -453,6 +453,11 @@ class Orchestrator:
             reset_bound_client_id(bind_tok)
             reset_progress(token)
 
+    @property
+    def graph(self) -> Any:
+        """Compiled create_agent graph (CLI, serve, and langgraph dev)."""
+        return self._graph
+
     def reset(self, session_id: str = "default", client_id: str = "") -> None:
         cid = (client_id or "").strip() or (self.settings.default_client_id or "").strip()
         public_session = (session_id or "default").strip() or "default"

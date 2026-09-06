@@ -71,6 +71,14 @@ python -m swyngora_ai.serve --host 127.0.0.1 --port 8090
 # https://docs.langchain.com/langsmith/trace-with-langchain if needed.
 # Restart swyngora-ai and swyngora-ai-serve. Open project Swyngora.
 # Mobile Ask / web /ai use the serve process, not the CLI.
+
+# Debug chat (Agent Chat UI) — local desk only; does not replace CLI / web / mobile
+# uv sync already installs the dev group (langgraph-cli)
+uv run langgraph dev
+# Then https://agentchat.vercel.app
+#   Deployment URL: http://127.0.0.1:2024
+#   Graph ID: swyngora
+#   LangSmith key in the form: leave empty (local). Traces still use LANGSMITH_* in .env.
 ```
 
 ## Environment
