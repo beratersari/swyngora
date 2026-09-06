@@ -811,20 +811,13 @@ func aroundPhaseSimilarity(a, b AroundPhase, want AroundSimilarFields, w AroundS
 		cands = append(cands, c)
 	}
 	if want.Options && w.of(AroundSimilarFieldOptions) > 0 {
-		aHas := a.Options != nil && a.Options.Complete
-		bHas := b.Options != nil && b.Options.Complete
+		aHas := optionsComparable(a.Options)
+		bHas := optionsComparable(b.Options)
 		if aHas || bHas {
 			c := cand{name: AroundSimilarFieldOptions, weight: w.of(AroundSimilarFieldOptions)}
 			if aHas && bHas {
 				c.have = true
-				c.score = closenessAbs(a.Options.OIChangePct, b.Options.OIChangePct, 8)
-				if a.Options.HasPutCall && b.Options.HasPutCall {
-					c.score = (c.score + closenessAbs(a.Options.PutCallDelta, b.Options.PutCallDelta, 0.25)) / 2
-				}
-				if a.Options.Unusual != b.Options.Unusual {
-					c.score *= 0.6
-				}
-				c.match = sameDir(a.Options.OIDirection, b.Options.OIDirection) && a.Options.Unusual == b.Options.Unusual
+				c.score, c.match = optionsSimilarity(a.Options, b.Options)
 			}
 			cands = append(cands, c)
 		}

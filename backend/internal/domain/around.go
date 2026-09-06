@@ -619,7 +619,14 @@ func ExplainAroundPhase(p AroundPhase) string {
 	}
 	if o := p.Options; o != nil && o.Complete {
 		if o.Unusual {
-			head += "; unusual options"
+			switch o.Started {
+			case AroundOptionsStartedBefore:
+				head += "; unusual options before the move"
+			case AroundOptionsStartedDuring:
+				head += "; unusual options during the move"
+			default:
+				head += "; unusual options"
+			}
 			if o.HasOI {
 				head += fmt.Sprintf(" (listed OI %s%%)", FormatSignedPct(o.OIChangePct))
 			}

@@ -158,6 +158,33 @@ func TestGetAround_AttachesOptions(t *testing.T) {
 	if !before.Options.Unusual {
 		t.Fatalf("expected unusual options %+v", before.Options)
 	}
+	if before.Options.Started != domain.AroundOptionsStartedBefore {
+		t.Fatalf("started %q", before.Options.Started)
+	}
+}
+
+func TestGetAround_OneSidedOptionsNotAChange(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Minute)
+	at := now.Add(-2 * time.Hour)
+	shift := at.Sub(time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC))
+	tape := aroundTape(time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC))
+	for i := range tape {
+		tape[i].OpenTime = tape[i].OpenTime.Add(shift)
+		tape[i].CloseTime = tape[i].CloseTime.Add(shift)
+	}
+	svc := New(&fakeMarket{candles: tape, ticker: &domain.Ticker24h{LastPrice: "105"}}, &fakeSupply{})
+	svc.WithOptionsHistory(stubAroundOptions{samples: []domain.OptionsSample{
+		{Asset: "BTC", SampledAt: at.Add(-2 * time.Minute), OpenInterest: 120, PutCallOI: 1.3, HasPutCallOI: true},
+	}})
+	got, err := svc.GetAround(context.Background(), "binance", "BTCUSDT", "1h", "15m", at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ph := range got.Venues[0].Phases {
+		if ph.Options != nil && ph.Options.HasOI {
+			t.Fatalf("one sample must not invent an OI change %+v", ph.Options)
+		}
+	}
 }
 
 func TestGetAround_BadSymbol(t *testing.T) {

@@ -392,6 +392,7 @@ type aroundOptionsDTO struct {
 	AtmIvDelta   string           `json:"atmIvDelta,omitempty"`
 	Moves        []optionsMoveDTO `json:"moves,omitempty"`
 	Unusual      bool             `json:"unusual,omitempty"`
+	Started      string           `json:"started,omitempty"`
 	Summary      string           `json:"summary,omitempty"`
 	Complete     bool             `json:"complete"`
 }
@@ -569,7 +570,7 @@ func aroundOptionsToDTO(o *domain.AroundOptions) *aroundOptionsDTO {
 		return nil
 	}
 	out := &aroundOptionsDTO{
-		Asset: o.Asset, Unusual: o.Unusual, Summary: o.Summary, Complete: o.Complete,
+		Asset: o.Asset, Unusual: o.Unusual, Started: o.Started, Summary: o.Summary, Complete: o.Complete,
 		OiDirection: o.OIDirection, LeanFrom: o.LeanFrom, LeanTo: o.LeanTo,
 	}
 	if o.HasOI {

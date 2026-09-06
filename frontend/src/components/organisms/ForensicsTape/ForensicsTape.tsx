@@ -24,8 +24,10 @@ function dash(v: string | undefined): string {
 function optionsTapeValue(phase?: ForensicsPhase): string {
   const o = phase?.options;
   if (!o?.complete) return '—';
+  const when =
+    o.started === 'before' ? 'before the move' : o.started === 'during' ? 'during the move' : '';
   const bits = [
-    o.unusual ? 'unusual' : '',
+    o.unusual ? (when ? `unusual ${when}` : 'unusual') : '',
     [o.oiChangePct, o.oiDirection].filter(Boolean).join(' '),
     o.leanTo ? `lean ${o.leanTo}` : '',
     o.dvolDelta ? `IV ${o.dvolDelta}` : '',

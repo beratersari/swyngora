@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI tenant bind fails closed:** overlapping chats no longer inherit another session's `clientId` / `can_trade` or progress callback when ContextVars are missing.
 - **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
 
+### Fixed
+- **Forensics options history:** a missing start or end sample no longer invents an OI / put-call / IV jump from zero; opposite options prints are not treated as similar; unusual prints say whether they started before the price move or during it (`docs/features/forensics.md`)
+
 ### Added
 - **Forensics options tape:** BTC/ETH listed options (OI, put/call, implied vol, unusual prints) attach to around / forensics before-during-after windows, the why-story, similar-move scores, and precursors when those samples exist (`docs/features/forensics.md`)
 - **Options unusual moves:** `/options` and `GET /api/v1/market/options` `moves` flags only when open interest, put/call, or implied vol changes much more than that series' own typical in 1h / 4h / 24h (`docs/features/options.md`)

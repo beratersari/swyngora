@@ -72,6 +72,7 @@ export type ForensicsOptions = {
   leanTo?: string;
   dvolDelta?: string;
   unusual?: boolean;
+  started?: 'before' | 'during' | string;
   summary?: string;
   moves?: ForensicsOptionsMove[];
   complete?: boolean;

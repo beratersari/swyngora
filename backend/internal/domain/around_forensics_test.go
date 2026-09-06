@@ -87,8 +87,9 @@ func TestExplainForensicsWhy_UnusualOptionsBefore(t *testing.T) {
 	r := forensicsWhyFixture()
 	before, _ := AroundPhaseByID(*r.Tape.Combined, AroundPhaseBefore)
 	before.Options = &AroundOptions{
-		Complete: true, Unusual: true, HasOI: true, OIDirection: CVDDirUp, OIChangePct: 9,
-		HasDVOL: true, DVOLDelta: 3.2, Summary: "Unusual options print — listed open interest up +9.00%.",
+		Complete: true, Unusual: true, Started: AroundOptionsStartedBefore,
+		HasOI: true, OIDirection: CVDDirUp, OIChangePct: 9,
+		HasDVOL: true, DVOLDelta: 3.2, Summary: "Unusual options before the price move — listed open interest up +9.00%.",
 	}
 	for i := range r.Tape.Combined.Phases {
 		if r.Tape.Combined.Phases[i].Phase == AroundPhaseBefore {
@@ -101,6 +102,24 @@ func TestExplainForensicsWhy_UnusualOptionsBefore(t *testing.T) {
 	}
 	if !strings.Contains(why.Before, "options were already unusual") {
 		t.Fatalf("before %q", why.Before)
+	}
+}
+
+func TestExplainForensicsWhy_OptionsStartedDuring(t *testing.T) {
+	r := forensicsWhyFixture()
+	during, _ := AroundPhaseByID(*r.Tape.Combined, AroundPhaseDuring)
+	during.Options = &AroundOptions{
+		Complete: true, Unusual: true, Started: AroundOptionsStartedDuring,
+		HasOI: true, OIDirection: CVDDirUp, OIChangePct: 11,
+	}
+	for i := range r.Tape.Combined.Phases {
+		if r.Tape.Combined.Phases[i].Phase == AroundPhaseDuring {
+			r.Tape.Combined.Phases[i] = during
+		}
+	}
+	why := ExplainForensicsWhy(r)
+	if !strings.Contains(why.Headline, "only became unusual") && !strings.Contains(why.During, "only became unusual") {
+		t.Fatalf("headline %q during %q", why.Headline, why.During)
 	}
 }
 

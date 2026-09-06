@@ -33,7 +33,14 @@ describe('ForensicsTape', () => {
             {
               phase: 'before',
               complete: true,
-              options: { complete: true, unusual: true, oiChangePct: '+8.00%', oiDirection: 'up', leanTo: 'puts' },
+              options: {
+                complete: true,
+                unusual: true,
+                started: 'before',
+                oiChangePct: '+8.00%',
+                oiDirection: 'up',
+                leanTo: 'puts',
+              },
             },
             { phase: 'during', complete: true },
             { phase: 'after', complete: true },

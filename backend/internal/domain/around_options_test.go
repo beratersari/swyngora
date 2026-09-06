@@ -37,6 +37,41 @@ func TestOptionsAcrossWindow_Missing(t *testing.T) {
 	}
 }
 
+func TestOptionsAcrossWindow_OneSidedDoesNotInventChange(t *testing.T) {
+	to := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	from := to.Add(-time.Hour)
+	// Only an end print — a missing start must not look like OI jumped from 0.
+	points := []OptionsHistoryPoint{
+		{Time: to.Add(-2 * time.Minute), OpenInterest: 120, HasOI: true, PutCallOI: 1.3, HasPutCallOI: true, DVOL: 48, HasDVOL: true},
+	}
+	if got := OptionsAcrossWindow(OptionsAssetBTC, points, from, to); got != nil {
+		t.Fatalf("expected no change from a single sample, got %+v", got)
+	}
+}
+
+func TestMarkAroundOptionsTiming_BeforeVsDuring(t *testing.T) {
+	before := &AroundOptions{Complete: true, Unusual: true, HasOI: true, OIDirection: CVDDirUp, OIChangePct: 12}
+	during := &AroundOptions{Complete: true, Unusual: true, HasOI: true, OIDirection: CVDDirUp, OIChangePct: 3}
+	MarkAroundOptionsTiming(before, during)
+	if before.Started != AroundOptionsStartedBefore || during.Started != AroundOptionsStartedBefore {
+		t.Fatalf("continued print: before=%q during=%q", before.Started, during.Started)
+	}
+
+	fresh := &AroundOptions{Complete: true, Unusual: true, HasOI: true, OIDirection: CVDDirDown, OIChangePct: -10}
+	quiet := &AroundOptions{Complete: true, Unusual: false, HasOI: true, OIDirection: CVDDirFlat}
+	MarkAroundOptionsTiming(quiet, fresh)
+	if fresh.Started != AroundOptionsStartedDuring {
+		t.Fatalf("fresh during %q", fresh.Started)
+	}
+
+	pre := &AroundOptions{Complete: true, Unusual: true, HasOI: true, OIDirection: CVDDirUp, OIChangePct: 9}
+	flip := &AroundOptions{Complete: true, Unusual: true, HasPutCall: true, LeanTo: OptionsLeanPuts, PutCallDelta: 0.3}
+	MarkAroundOptionsTiming(pre, flip)
+	if pre.Started != AroundOptionsStartedBefore || flip.Started != AroundOptionsStartedDuring {
+		t.Fatalf("new print during: before=%q during=%q", pre.Started, flip.Started)
+	}
+}
+
 func TestOptionsHistoryUntil(t *testing.T) {
 	t0 := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	in := []OptionsHistoryPoint{

@@ -284,8 +284,11 @@ func forensicsHeadlineSetup(before, during AroundPhase) string {
 	if !before.Complete {
 		return ""
 	}
-	if o := before.Options; o != nil && o.Complete && o.Unusual {
+	if o := before.Options; o != nil && o.Unusual && o.Started != AroundOptionsStartedDuring {
 		return "Listed options were already unusual (open interest, put/call, or implied vol) before the price push."
+	}
+	if o := during.Options; o != nil && o.Unusual && o.Started == AroundOptionsStartedDuring {
+		return "Listed options only became unusual while price was already moving."
 	}
 	if before.Book != nil && before.Book.Complete && before.Book.BidNotionalDelta < 0 && during.Complete && during.Price.Direction == CVDDirUp {
 		return "Bids had already thinned, so there was less support under the market."
@@ -421,9 +424,14 @@ func forensicsOptionsStory(p AroundPhase, before bool) string {
 	}
 	var bits []string
 	if o.Unusual {
-		if before {
+		switch {
+		case o.Started == AroundOptionsStartedDuring:
+			bits = append(bits, "Listed options only became unusual while price was already moving — this print started with the spot impulse, not ahead of it")
+		case before:
 			bits = append(bits, "Listed options were already unusual before the move — that kind of open-interest, put/call, or implied-vol jump sometimes shows up ahead of a spot impulse")
-		} else {
+		case o.Started == AroundOptionsStartedBefore:
+			bits = append(bits, "The options print had already started before the price move and was still running")
+		default:
 			bits = append(bits, "Listed options stayed unusual while price was moving")
 		}
 	}

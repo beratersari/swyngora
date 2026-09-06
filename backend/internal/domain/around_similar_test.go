@@ -205,6 +205,31 @@ func TestAroundPhaseSimilarity_Options(t *testing.T) {
 	}
 }
 
+func TestAroundPhaseSimilarity_OppositeOptionsNotAMatch(t *testing.T) {
+	a := similarPhase(2, 3, -100, CVDDirUp)
+	b := similarPhase(2, 3, -100, CVDDirUp)
+	a.Options = &AroundOptions{Complete: true, HasOI: true, OIChangePct: 8, OIDirection: CVDDirUp, Unusual: true, Started: AroundOptionsStartedBefore}
+	b.Options = &AroundOptions{Complete: true, HasOI: true, OIChangePct: -8, OIDirection: CVDDirDown, Unusual: true, Started: AroundOptionsStartedBefore}
+	sc := aroundPhaseSimilarity(a, b, AroundSimilarFields{Options: true}, AroundSimilarWeights{Options: 2})
+	if sc.Similarity >= 40 {
+		t.Fatalf("opposite OI should not look similar %+v", sc)
+	}
+	if len(sc.Matches) > 0 {
+		t.Fatalf("should not match opposite options %+v", sc.Matches)
+	}
+}
+
+func TestAroundPhaseSimilarity_IncompleteOptionsOmitted(t *testing.T) {
+	a := similarPhase(2, 3, -100, CVDDirUp)
+	b := similarPhase(2, 3, -100, CVDDirUp)
+	a.Options = &AroundOptions{Unusual: true, Started: AroundOptionsStartedBefore} // lookback flag, no two-point tape
+	b.Options = &AroundOptions{Unusual: true, Started: AroundOptionsStartedBefore}
+	sc := aroundPhaseSimilarity(a, b, AroundSimilarFields{Options: true}, AroundSimilarWeights{Options: 2})
+	if len(sc.Used) != 0 || sc.Coverage != 0 {
+		t.Fatalf("flags without a pair must not score %+v", sc)
+	}
+}
+
 func TestFinishAroundSimilar_CountsAfter(t *testing.T) {
 	r := AroundSimilarReport{
 		Symbol: "BTCUSDT",

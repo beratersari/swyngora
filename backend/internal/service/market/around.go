@@ -323,18 +323,23 @@ func (s *Service) attachAroundOptions(ctx context.Context, symbol string, plan d
 		if ven == nil || ven.Error != "" {
 			return
 		}
-		var extra []domain.AroundEvent
 		for i := range ven.Phases {
 			ph := &ven.Phases[i]
 			if !ph.To.After(ph.From) {
 				continue
 			}
-			got := domain.OptionsAcrossWindow(asset, points, ph.From, ph.To)
-			if got == nil {
+			if got := domain.OptionsAcrossWindow(asset, points, ph.From, ph.To); got != nil {
+				ph.Options = got
+			}
+		}
+		domain.FinalizeAroundOptions(ven.Phases, points)
+		var extra []domain.AroundEvent
+		for i := range ven.Phases {
+			ph := &ven.Phases[i]
+			if ph.Options == nil {
 				continue
 			}
-			ph.Options = got
-			if evs := domain.AroundOptionsToEvents(*got, ph.Phase, ph.To); len(evs) > 0 {
+			if evs := domain.AroundOptionsToEvents(*ph.Options, ph.Phase, ph.To); len(evs) > 0 {
 				ph.Events = append(ph.Events, evs...)
 				extra = append(extra, evs...)
 			}
