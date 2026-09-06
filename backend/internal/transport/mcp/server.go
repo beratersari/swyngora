@@ -1148,7 +1148,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_around",
-		mcp.WithDescription("What happened around a chosen time for a coin: before, during, and after that move on one tape. Price, volume, buy/sell, VWAP, volume vs typical, volume-profile POC, liquidity sweeps, and stored book/futures history when available. window is the lookback/lookforward (default 1h). during is the move starting at `at` (default 15m). Not financial advice."),
+		mcp.WithDescription("What happened around a chosen time for a coin: before, during, and after that move on one tape. Price, volume, buy/sell, VWAP, volume vs typical, volume-profile POC, liquidity sweeps, stored book/futures history, and listed BTC/ETH options (OI, put/call, IV, unusual prints) when those archives have samples. window is the lookback/lookforward (default 1h). during is the move starting at `at` (default 15m). Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("at", mcp.Required(), mcp.Description("Event time (RFC3339 or unix ms). Start of the during window.")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
@@ -1217,7 +1217,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("find_around_similar",
-		mcp.WithDescription("Compare the current market tape to the setup before past important moves. Each past match uses only tape available before that move (dataFrom–dataTo). fields selects price,volume,takers,oi,book. Only overlapping price-move ranges count as one event. horizons is a CSV of after-windows (default 15m,1h,4h; e.g. 5m,30m,2h) measured on matching candle size. Each horizon reports avg, median, up, down, sample, and the same stats for similarity 40-60, 60-80, 80-100. Default lookback 7d. Not financial advice."),
+		mcp.WithDescription("Compare the current market tape to the setup before past important moves. Each past match uses only tape available before that move (dataFrom–dataTo). fields selects price,volume,takers,oi,book,options. Only overlapping price-move ranges count as one event. horizons is a CSV of after-windows (default 15m,1h,4h; e.g. 5m,30m,2h) measured on matching candle size. Each horizon reports avg, median, up, down, sample, and the same stats for similarity 40-60, 60-80, 80-100. Default lookback 7d. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 		mcp.WithString("lookback", mcp.Description("4h | 12h | 24h | 3d | 7d (default 7d)")),
@@ -1227,8 +1227,8 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("limit", mcp.Description("How many nearest cases (default 5, max 10)")),
 		mcp.WithString("window", mcp.Description("Current/before window 15m|30m|1h|2h|4h (default 1h)")),
 		mcp.WithString("during", mcp.Description("Override past move window")),
-		mcp.WithString("fields", mcp.Description("Which tape to compare: price,volume,takers,oi,book (default all). Example: volume,book,oi")),
-		mcp.WithString("weights", mcp.Description("Importance per field, e.g. book:3,oi:3,volume:1 (defaults: book and oi 3, takers 1.5, volume and price 1)")),
+		mcp.WithString("fields", mcp.Description("Which tape to compare: price,volume,takers,oi,book,options (default all). Example: volume,book,oi")),
+		mcp.WithString("weights", mcp.Description("Importance per field, e.g. book:3,oi:3,volume:1 (defaults: book and oi 3, options 2, takers 1.5, volume and price 1)")),
 		mcp.WithNumber("minCoverage", mcp.Description("Minimum % of selected data that must be present (default 60). Below that goes to skipped, not matches.")),
 		mcp.WithString("horizons", mcp.Description("After-windows CSV, e.g. 5m,30m,2h (default 15m,1h,4h). Matching candle size. Each reports avg, median, up, down, sample, and similarity bands.")),
 		mcp.WithString("at", mcp.Description("Optional event time (RFC3339 or unix ms). When set, compares the tape before this time instead of the current last window.")),
@@ -1249,7 +1249,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_market_forensics",
-		mcp.WithDescription("Market forensics for a coin and a chosen time: what happened before, during, and after that move (price, volume, takers, VWAP, vs typical, POC, sweeps, stored book/futures), plus past important-move setups that looked like the before-window and how price moved after those. why is a plain-language read of why the move may have happened (not a metric dump). at is required. Same window/during as get_around. Same similar knobs as find_around_similar. If similar-move search fails, tape is still returned. Not financial advice."),
+		mcp.WithDescription("Market forensics for a coin and a chosen time: what happened before, during, and after that move (price, volume, takers, VWAP, vs typical, POC, sweeps, stored book/futures, and listed BTC/ETH options when sampled), plus past important-move setups that looked like the before-window and how price moved after those. why is a plain-language read of why the move may have happened (not a metric dump). Unusual options prints in the before-window are called out. at is required. Same window/during as get_around. Same similar knobs as find_around_similar. If similar-move search fails, tape is still returned. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("at", mcp.Required(), mcp.Description("Event time (RFC3339 or unix ms). Start of the during window.")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
@@ -1260,7 +1260,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("direction", mcp.Description("up | down | both (default both)")),
 		mcp.WithNumber("minReturnPct", mcp.Description("Minimum |return| %% for past moves")),
 		mcp.WithNumber("limit", mcp.Description("How many nearest cases (default 5, max 10)")),
-		mcp.WithString("fields", mcp.Description("Which tape to compare: price,volume,takers,oi,book (default all)")),
+		mcp.WithString("fields", mcp.Description("Which tape to compare: price,volume,takers,oi,book,options (default all)")),
 		mcp.WithString("weights", mcp.Description("Importance per field, e.g. book:3,oi:3,volume:1")),
 		mcp.WithNumber("minCoverage", mcp.Description("Minimum % of selected data that must be present (default 60)")),
 		mcp.WithString("horizons", mcp.Description("After-windows CSV, e.g. 15m,1h,4h")),
@@ -1285,7 +1285,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("scan_market_forensics",
-		mcp.WithDescription("Scan top-volume coins and find which ones currently look like the setup before their own important past moves. Returns ranked coins, how close the tape is, which pieces matched (whySimilar + compared scores for price, volume, takers, oi, book), and what usually happened after those similar cases (afterStory, lean, afterHorizons). Default 12 coins, 3d lookback. Not financial advice."),
+		mcp.WithDescription("Scan top-volume coins and find which ones currently look like the setup before their own important past moves. Returns ranked coins, how close the tape is, which pieces matched (whySimilar + compared scores for price, volume, takers, oi, book, options), and what usually happened after those similar cases (afterStory, lean, afterHorizons). Default 12 coins, 3d lookback. Not financial advice."),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 		mcp.WithString("quote", mcp.Description("Quote asset, default USDT")),
 		mcp.WithString("lookback", mcp.Description("4h | 12h | 24h | 3d | 7d (default 3d)")),

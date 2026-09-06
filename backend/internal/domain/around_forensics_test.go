@@ -83,6 +83,27 @@ func TestExplainForensicsWhy_SimilarError(t *testing.T) {
 	}
 }
 
+func TestExplainForensicsWhy_UnusualOptionsBefore(t *testing.T) {
+	r := forensicsWhyFixture()
+	before, _ := AroundPhaseByID(*r.Tape.Combined, AroundPhaseBefore)
+	before.Options = &AroundOptions{
+		Complete: true, Unusual: true, HasOI: true, OIDirection: CVDDirUp, OIChangePct: 9,
+		HasDVOL: true, DVOLDelta: 3.2, Summary: "Unusual options print — listed open interest up +9.00%.",
+	}
+	for i := range r.Tape.Combined.Phases {
+		if r.Tape.Combined.Phases[i].Phase == AroundPhaseBefore {
+			r.Tape.Combined.Phases[i] = before
+		}
+	}
+	why := ExplainForensicsWhy(r)
+	if !strings.Contains(why.Headline, "options were already unusual") {
+		t.Fatalf("headline %q", why.Headline)
+	}
+	if !strings.Contains(why.Before, "options were already unusual") {
+		t.Fatalf("before %q", why.Before)
+	}
+}
+
 func TestExplainForensicsWhy_EmptyTape(t *testing.T) {
 	why := ExplainForensicsWhy(ForensicsReport{Symbol: "ETHUSDT"})
 	if !strings.Contains(why.Headline, "not enough tape") {

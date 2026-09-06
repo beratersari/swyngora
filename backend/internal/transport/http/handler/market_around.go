@@ -372,6 +372,30 @@ type aroundFuturesDTO struct {
 	Complete    bool   `json:"complete"`
 }
 
+type aroundOptionsDTO struct {
+	Asset        string           `json:"asset"`
+	OiFrom       string           `json:"oiFrom,omitempty"`
+	OiTo         string           `json:"oiTo,omitempty"`
+	OiChange     string           `json:"oiChange,omitempty"`
+	OiChangePct  string           `json:"oiChangePct,omitempty"`
+	OiDirection  string           `json:"oiDirection,omitempty"`
+	PutCallFrom  string           `json:"putCallFrom,omitempty"`
+	PutCallTo    string           `json:"putCallTo,omitempty"`
+	PutCallDelta string           `json:"putCallDelta,omitempty"`
+	LeanFrom     string           `json:"leanFrom,omitempty"`
+	LeanTo       string           `json:"leanTo,omitempty"`
+	DvolFrom     string           `json:"dvolFrom,omitempty"`
+	DvolTo       string           `json:"dvolTo,omitempty"`
+	DvolDelta    string           `json:"dvolDelta,omitempty"`
+	AtmIvFrom    string           `json:"atmIvFrom,omitempty"`
+	AtmIvTo      string           `json:"atmIvTo,omitempty"`
+	AtmIvDelta   string           `json:"atmIvDelta,omitempty"`
+	Moves        []optionsMoveDTO `json:"moves,omitempty"`
+	Unusual      bool             `json:"unusual,omitempty"`
+	Summary      string           `json:"summary,omitempty"`
+	Complete     bool             `json:"complete"`
+}
+
 type aroundEventDTO struct {
 	Kind    string    `json:"kind"`
 	Phase   string    `json:"phase,omitempty"`
@@ -393,6 +417,7 @@ type aroundPhaseDTO struct {
 	Profile  *aroundProfileDTO `json:"profile,omitempty"`
 	Book     *aroundBookDTO    `json:"book,omitempty"`
 	Futures  *aroundFuturesDTO `json:"futures,omitempty"`
+	Options  *aroundOptionsDTO `json:"options,omitempty"`
 	Events   []aroundEventDTO  `json:"events,omitempty"`
 	Summary  string            `json:"summary"`
 	Complete bool              `json:"complete"`
@@ -533,6 +558,44 @@ func aroundPhaseToDTO(p domain.AroundPhase) aroundPhaseDTO {
 			Complete: p.Futures.Complete,
 		}
 	}
+	if p.Options != nil {
+		out.Options = aroundOptionsToDTO(p.Options)
+	}
+	return out
+}
+
+func aroundOptionsToDTO(o *domain.AroundOptions) *aroundOptionsDTO {
+	if o == nil {
+		return nil
+	}
+	out := &aroundOptionsDTO{
+		Asset: o.Asset, Unusual: o.Unusual, Summary: o.Summary, Complete: o.Complete,
+		OiDirection: o.OIDirection, LeanFrom: o.LeanFrom, LeanTo: o.LeanTo,
+	}
+	if o.HasOI {
+		out.OiFrom = formatHistQty(o.OIFrom)
+		out.OiTo = formatHistQty(o.OITo)
+		out.OiChange = domain.FormatSignedQty(o.OIChange)
+		out.OiChangePct = domain.FormatSignedPct(o.OIChangePct)
+	}
+	if o.HasPutCall {
+		out.PutCallFrom = formatHistQty(o.PutCallFrom)
+		out.PutCallTo = formatHistQty(o.PutCallTo)
+		out.PutCallDelta = domain.FormatSignedQty(o.PutCallDelta)
+	}
+	if o.HasDVOL {
+		out.DvolFrom = formatHistQty(o.DVOLFrom)
+		out.DvolTo = formatHistQty(o.DVOLTo)
+		out.DvolDelta = domain.FormatSignedQty(o.DVOLDelta)
+	}
+	if o.HasAtmIV {
+		out.AtmIvFrom = formatHistQty(o.AtmIVFrom)
+		out.AtmIvTo = formatHistQty(o.AtmIVTo)
+		out.AtmIvDelta = domain.FormatSignedQty(o.AtmIVDelta)
+	}
+	if len(o.Moves) > 0 {
+		out.Moves = optionsMovesToDTO(&domain.OptionsMoves{Findings: o.Moves}).Findings
+	}
 	return out
 }
 
@@ -556,7 +619,7 @@ func aroundEventsToDTO(in []domain.AroundEvent) []aroundEventDTO {
 
 func formatAroundNum(metric string, v float64) string {
 	switch metric {
-	case "price", "oi":
+	case "price", "oi", "options_oi":
 		return domain.FormatSignedPct(v)
 	case "delta":
 		return domain.FormatSignedQty(v)

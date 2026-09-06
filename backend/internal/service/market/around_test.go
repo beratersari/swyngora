@@ -125,6 +125,41 @@ func TestGetAround_AttachesBookAndFutures(t *testing.T) {
 	}
 }
 
+func TestGetAround_AttachesOptions(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Minute)
+	at := now.Add(-2 * time.Hour)
+	shift := at.Sub(time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC))
+	tape := aroundTape(time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC))
+	for i := range tape {
+		tape[i].OpenTime = tape[i].OpenTime.Add(shift)
+		tape[i].CloseTime = tape[i].CloseTime.Add(shift)
+	}
+	svc := New(&fakeMarket{candles: tape, ticker: &domain.Ticker24h{LastPrice: "105"}}, &fakeSupply{})
+	svc.WithOptionsHistory(stubAroundOptions{samples: []domain.OptionsSample{
+		{Asset: "BTC", SampledAt: at.Add(-time.Hour), OpenInterest: 100, PutCallOI: 0.9, HasPutCallOI: true, DVOL: 40, HasDVOL: true},
+		{Asset: "BTC", SampledAt: at.Add(-5 * time.Minute), OpenInterest: 120, PutCallOI: 1.25, HasPutCallOI: true, DVOL: 45, HasDVOL: true},
+	}})
+	got, err := svc.GetAround(context.Background(), "binance", "BTCUSDT", "1h", "15m", at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var before *domain.AroundPhase
+	for i := range got.Venues[0].Phases {
+		if got.Venues[0].Phases[i].Phase == domain.AroundPhaseBefore {
+			before = &got.Venues[0].Phases[i]
+		}
+	}
+	if before == nil || before.Options == nil || !before.Options.Complete {
+		t.Fatalf("options %+v", before)
+	}
+	if before.Options.OIFrom != 100 || before.Options.OITo != 120 {
+		t.Fatalf("oi %+v", before.Options)
+	}
+	if !before.Options.Unusual {
+		t.Fatalf("expected unusual options %+v", before.Options)
+	}
+}
+
 func TestGetAround_BadSymbol(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{})
 	if _, err := svc.GetAround(context.Background(), "all", "  ", "1h", "15m", time.Now().UTC().Add(-time.Hour)); !errors.Is(err, domain.ErrInvalidArgument) {
@@ -410,4 +445,30 @@ func (s stubAroundFut) History(_ context.Context, q domain.FuturesHistoryQuery) 
 		}
 	}
 	return out, nil
+}
+
+type stubAroundOptions struct {
+	samples []domain.OptionsSample
+}
+
+func (s stubAroundOptions) InsertSample(context.Context, domain.OptionsSample) (bool, error) {
+	return false, nil
+}
+
+func (s stubAroundOptions) ListSamples(_ context.Context, asset string, from, to time.Time, _ int) ([]domain.OptionsSample, error) {
+	var out []domain.OptionsSample
+	for _, rec := range s.samples {
+		if rec.Asset != asset {
+			continue
+		}
+		if rec.SampledAt.Before(from) || rec.SampledAt.After(to) {
+			continue
+		}
+		out = append(out, rec)
+	}
+	return out, nil
+}
+
+func (s stubAroundOptions) PurgeOlderThan(context.Context, time.Time) (int, error) {
+	return 0, nil
 }

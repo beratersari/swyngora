@@ -30,8 +30,8 @@ type ForensicsScanHit struct {
 	ClosestAt        time.Time
 	ClosestDirection string
 	ClosestReturnPct float64
-	Lean             string // up | down | mixed | unknown
-	Compared         []AroundSimilarFieldScore // closest twin: price, volume, takers, oi, book
+	Lean             string                    // up | down | mixed | unknown
+	Compared         []AroundSimilarFieldScore // closest twin: price, volume, takers, oi, book, options
 	WhySimilar       string
 	AfterStory       string
 	Summary          string
@@ -126,6 +126,8 @@ func prettyScanField(name string) string {
 		return "open interest"
 	case AroundSimilarFieldBook:
 		return "the order book"
+	case AroundSimilarFieldOptions:
+		return "listed options"
 	default:
 		return name
 	}

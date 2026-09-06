@@ -179,6 +179,30 @@ func TestParseAroundSimilarFields(t *testing.T) {
 	if _, err := ParseAroundSimilarFields("rsi"); err == nil {
 		t.Fatal("expected error")
 	}
+	opt, err := ParseAroundSimilarFields("options")
+	if err != nil || !opt.Options || opt.Price {
+		t.Fatalf("options field %+v %v", opt, err)
+	}
+}
+
+func TestAroundPhaseSimilarity_Options(t *testing.T) {
+	a := similarPhase(2, 3, -100, CVDDirUp)
+	b := similarPhase(2, 3, -100, CVDDirUp)
+	a.Options = &AroundOptions{Complete: true, HasOI: true, OIChangePct: 8, OIDirection: CVDDirUp, Unusual: true}
+	b.Options = &AroundOptions{Complete: true, HasOI: true, OIChangePct: 7.5, OIDirection: CVDDirUp, Unusual: true}
+	fields := AroundSimilarFields{Options: true}
+	w := AroundSimilarWeights{Options: 2}
+	sc := aroundPhaseSimilarity(a, b, fields, w)
+	if sc.Similarity < 70 || len(sc.Used) == 0 {
+		t.Fatalf("expected close options match %+v", sc)
+	}
+	b.Options.Unusual = false
+	b.Options.OIDirection = CVDDirDown
+	b.Options.OIChangePct = -8
+	far := aroundPhaseSimilarity(a, b, fields, w)
+	if far.Similarity >= sc.Similarity {
+		t.Fatalf("expected lower score when options disagree %+v vs %+v", far, sc)
+	}
 }
 
 func TestFinishAroundSimilar_CountsAfter(t *testing.T) {

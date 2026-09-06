@@ -54,6 +54,29 @@ export type ForensicsFutures = {
   complete?: boolean;
 };
 
+export type ForensicsOptionsMove = {
+  kind?: string;
+  topic?: string;
+  window?: string;
+  title?: string;
+  detail?: string;
+};
+
+export type ForensicsOptions = {
+  asset?: string;
+  oiChangePct?: string;
+  oiDirection?: string;
+  putCallFrom?: string;
+  putCallTo?: string;
+  leanFrom?: string;
+  leanTo?: string;
+  dvolDelta?: string;
+  unusual?: boolean;
+  summary?: string;
+  moves?: ForensicsOptionsMove[];
+  complete?: boolean;
+};
+
 export type ForensicsEvent = {
   kind?: string;
   phase?: string;
@@ -74,6 +97,7 @@ export type ForensicsPhase = {
   profile?: ForensicsProfile | null;
   book?: ForensicsBook | null;
   futures?: ForensicsFutures | null;
+  options?: ForensicsOptions | null;
   events?: ForensicsEvent[];
   summary?: string;
   complete?: boolean;

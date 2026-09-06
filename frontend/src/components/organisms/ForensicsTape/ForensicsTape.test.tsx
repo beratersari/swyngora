@@ -23,4 +23,25 @@ describe('ForensicsTape', () => {
     expect(screen.getAllByText('107').length).toBeGreaterThan(0);
     expect(screen.getByText('faded')).toBeInTheDocument();
   });
+
+  it('shows unusual options on a phase', () => {
+    renderWithProviders(
+      <ForensicsTape
+        venue={{
+          exchange: 'combined',
+          phases: [
+            {
+              phase: 'before',
+              complete: true,
+              options: { complete: true, unusual: true, oiChangePct: '+8.00%', oiDirection: 'up', leanTo: 'puts' },
+            },
+            { phase: 'during', complete: true },
+            { phase: 'after', complete: true },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByText(/unusual/i)).toBeInTheDocument();
+    expect(screen.getByText(/\+8\.00%/)).toBeInTheDocument();
+  });
 });

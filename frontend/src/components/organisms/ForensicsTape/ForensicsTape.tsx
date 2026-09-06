@@ -21,6 +21,19 @@ function dash(v: string | undefined): string {
   return v && v.trim() ? v : '—';
 }
 
+function optionsTapeValue(phase?: ForensicsPhase): string {
+  const o = phase?.options;
+  if (!o?.complete) return '—';
+  const bits = [
+    o.unusual ? 'unusual' : '',
+    [o.oiChangePct, o.oiDirection].filter(Boolean).join(' '),
+    o.leanTo ? `lean ${o.leanTo}` : '',
+    o.dvolDelta ? `IV ${o.dvolDelta}` : '',
+    o.summary ?? '',
+  ].filter((s) => s && s.trim());
+  return bits[0] ? bits.slice(0, 3).join(' · ') : '—';
+}
+
 function PhaseMetrics({ phase }: { phase?: ForensicsPhase }) {
   const { t } = useTranslation('forensics');
   const rows: { label: string; value: string }[] = [
@@ -58,6 +71,10 @@ function PhaseMetrics({ phase }: { phase?: ForensicsPhase }) {
         phase?.futures?.longLiq || phase?.futures?.shortLiq
           ? `L ${dash(phase.futures.longLiq)} / S ${dash(phase.futures.shortLiq)}`
           : '—',
+    },
+    {
+      label: t('options'),
+      value: optionsTapeValue(phase),
     },
   ];
   return (

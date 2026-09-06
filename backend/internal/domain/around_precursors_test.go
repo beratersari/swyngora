@@ -149,6 +149,29 @@ func hasAllMetrics(in []string, want ...string) bool {
 	return true
 }
 
+func TestSummarizeAroundPrecursors_UnusualOptions(t *testing.T) {
+	var moves []AroundMoveHit
+	for i := 0; i < 4; i++ {
+		moves = append(moves, precursorHit(CVDDirUp, AroundPhase{
+			Price: AroundPrice{Direction: CVDDirFlat},
+			Options: &AroundOptions{
+				Complete: true, Unusual: true, HasOI: true, OIDirection: CVDDirUp, OIChangePct: 8,
+			},
+		}))
+	}
+	got := SummarizeAroundPrecursors(moves)
+	var unusual *AroundPrecursorPattern
+	for i := range got.Patterns {
+		if got.Patterns[i].Metric == "options_unusual" {
+			unusual = &got.Patterns[i]
+			break
+		}
+	}
+	if unusual == nil || unusual.Hits != 4 {
+		t.Fatalf("expected options_unusual %+v", got.Patterns)
+	}
+}
+
 func TestSummarizeAroundPrecursors_NeedsSamples(t *testing.T) {
 	got := SummarizeAroundPrecursors([]AroundMoveHit{
 		{AroundMove: AroundMove{Direction: CVDDirUp}},

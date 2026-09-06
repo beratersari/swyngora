@@ -35,6 +35,7 @@ const (
 
 	AroundEventSweep      = "sweep"
 	AroundEventAbsorption = "absorption"
+	AroundEventOptions    = "options"
 )
 
 // AroundWindows are accepted before/after lookbacks.
@@ -190,6 +191,7 @@ type AroundPhase struct {
 	Profile  *AroundProfile
 	Book     *AroundBook
 	Futures  *AroundFutures
+	Options  *AroundOptions
 	Events   []AroundEvent
 	Summary  string
 	Complete bool
@@ -520,6 +522,14 @@ func CompareAroundPhases(phases []AroundPhase) []AroundChange {
 			Path: path, Summary: aroundOIChangeSummary(before, during, after, path),
 		})
 	}
+	if bo, dopt, ao := phaseOptions(before), phaseOptions(during), phaseOptions(after); bo || dopt || ao {
+		path := aroundOptionsOIPath(before, during, after)
+		out = append(out, AroundChange{
+			Metric: "options_oi",
+			Before: optionsOIChange(before), During: optionsOIChange(during), After: optionsOIChange(after),
+			Path: path, Summary: aroundOptionsOIChangeSummary(before, during, after, path),
+		})
+	}
 	return out
 }
 
@@ -606,6 +616,16 @@ func ExplainAroundPhase(p AroundPhase) string {
 	}
 	if f := p.Futures; f != nil && f.Complete {
 		head += fmt.Sprintf(", OI %s%%", FormatSignedPct(f.OIChangePct))
+	}
+	if o := p.Options; o != nil && o.Complete {
+		if o.Unusual {
+			head += "; unusual options"
+			if o.HasOI {
+				head += fmt.Sprintf(" (listed OI %s%%)", FormatSignedPct(o.OIChangePct))
+			}
+		} else if o.HasOI {
+			head += fmt.Sprintf(", listed OI %s%%", FormatSignedPct(o.OIChangePct))
+		}
 	}
 	for _, ev := range p.Events {
 		if ev.Kind == AroundEventSweep {
@@ -1044,6 +1064,10 @@ func combineAroundPhases(id string, parts []AroundPhase, from, to time.Time) Aro
 		}
 		if p.Futures != nil && p.Futures.Complete {
 			futs = append(futs, *p.Futures)
+		}
+		if out.Options == nil && p.Options != nil && p.Options.Complete {
+			o := *p.Options
+			out.Options = &o
 		}
 		out.Events = append(out.Events, p.Events...)
 	}
