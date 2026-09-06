@@ -25,9 +25,18 @@ function optionsTapeValue(phase?: ForensicsPhase): string {
   const o = phase?.options;
   if (!o?.complete) return '—';
   const when =
-    o.started === 'before' ? 'before the move' : o.started === 'during' ? 'during the move' : '';
+    o.started === 'before'
+      ? o.lead
+        ? `${o.lead} before the move`
+        : 'before the move'
+      : o.started === 'during'
+        ? 'during the move'
+        : '';
+  const cluster =
+    o.together && o.together >= 3 ? '3 series together' : o.together === 2 ? '2 series together' : '';
   const bits = [
     o.unusual ? (when ? `unusual ${when}` : 'unusual') : '',
+    cluster,
     [o.oiChangePct, o.oiDirection].filter(Boolean).join(' '),
     o.leanTo ? `lean ${o.leanTo}` : '',
     o.dvolDelta ? `IV ${o.dvolDelta}` : '',

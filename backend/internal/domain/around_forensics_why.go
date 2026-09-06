@@ -285,7 +285,17 @@ func forensicsHeadlineSetup(before, during AroundPhase) string {
 		return ""
 	}
 	if o := before.Options; o != nil && o.Unusual && o.Started != AroundOptionsStartedDuring {
-		return "Listed options were already unusual (open interest, put/call, or implied vol) before the price push."
+		s := "Listed options were already unusual before the price push."
+		if o.LeadLabel != "" {
+			s = "Listed options were already unusual " + o.LeadLabel + " before the price push."
+		}
+		if o.Together >= 3 {
+			return strings.TrimSuffix(s, ".") + " Open interest, put/call, and implied vol all moved together — a stronger print than a single series."
+		}
+		if o.Together == 2 {
+			return strings.TrimSuffix(s, ".") + " Two options series moved together — more important than a one-off print."
+		}
+		return s
 	}
 	if o := during.Options; o != nil && o.Unusual && o.Started == AroundOptionsStartedDuring {
 		return "Listed options only became unusual while price was already moving."
@@ -428,7 +438,17 @@ func forensicsOptionsStory(p AroundPhase, before bool) string {
 		case o.Started == AroundOptionsStartedDuring:
 			bits = append(bits, "Listed options only became unusual while price was already moving — this print started with the spot impulse, not ahead of it")
 		case before:
-			bits = append(bits, "Listed options were already unusual before the move — that kind of open-interest, put/call, or implied-vol jump sometimes shows up ahead of a spot impulse")
+			lead := "Listed options were already unusual before the move"
+			if o.LeadLabel != "" {
+				lead = "Listed options were already unusual " + o.LeadLabel + " before the move"
+			}
+			if o.Together >= 3 {
+				bits = append(bits, lead+" — open interest, put/call, and implied vol all moved together, which is a stronger options print than a single series")
+			} else if o.Together == 2 {
+				bits = append(bits, lead+" — two options series moved together, more important than a one-off print")
+			} else {
+				bits = append(bits, lead+" — that kind of open-interest, put/call, or implied-vol jump sometimes shows up ahead of a spot impulse")
+			}
 		case o.Started == AroundOptionsStartedBefore:
 			bits = append(bits, "The options print had already started before the price move and was still running")
 		default:

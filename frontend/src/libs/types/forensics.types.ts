@@ -73,6 +73,11 @@ export type ForensicsOptions = {
   dvolDelta?: string;
   unusual?: boolean;
   started?: 'before' | 'during' | string;
+  startedAt?: string;
+  lead?: string;
+  leadLabel?: string;
+  together?: number;
+  weight?: string;
   summary?: string;
   moves?: ForensicsOptionsMove[];
   complete?: boolean;

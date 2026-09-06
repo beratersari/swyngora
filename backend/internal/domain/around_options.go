@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 )
@@ -15,8 +16,14 @@ const (
 	AroundOptionsStartedBefore = "before"
 	AroundOptionsStartedDuring = "during"
 
+	AroundOptionsWeightSingle  = "single"
+	AroundOptionsWeightPair    = "pair"
+	AroundOptionsWeightCluster = "cluster"
+
 	// AroundOptionsLookbackPad is extra history so unusual-move typicals can form.
 	AroundOptionsLookbackPad = 48 * time.Hour
+
+	optionsLeadWindow = time.Hour
 )
 
 // AroundOptions is listed BTC/ETH options across one around-the-move phase.
@@ -46,6 +53,11 @@ type AroundOptions struct {
 	Moves        []OptionsMove
 	Unusual      bool
 	Started      string // before | during — when the unusual print began vs the price event
+	StartedAt    time.Time
+	Lead         time.Duration // how long before the price event the print began
+	LeadLabel    string        // "about 45 minutes"
+	Together     int           // unusual series count (OI / put-call / IV)
+	Weight       string        // single | pair | cluster
 	Summary      string
 	Complete     bool
 }
@@ -172,6 +184,20 @@ func FinalizeAroundOptions(phases []AroundPhase, points []OptionsHistoryPoint) {
 		dOpt = during.Options
 	}
 	MarkAroundOptionsTiming(bOpt, dOpt)
+	at := time.Time{}
+	if before != nil {
+		at = before.To
+	}
+	if bOpt != nil {
+		MeasureAroundOptionsLead(bOpt, points, at)
+		fillAroundOptionsWeight(bOpt)
+	}
+	if dOpt != nil {
+		if dOpt.Started == AroundOptionsStartedBefore && !at.IsZero() {
+			MeasureAroundOptionsLead(dOpt, points, at)
+		}
+		fillAroundOptionsWeight(dOpt)
+	}
 	for i := range phases {
 		if phases[i].Options == nil {
 			continue
@@ -218,6 +244,201 @@ func MarkAroundOptionsTiming(before, during *AroundOptions) {
 		return
 	}
 	during.Started = AroundOptionsStartedDuring
+}
+
+// MeasureAroundOptionsLead finds how long before `at` the unusual print began.
+func MeasureAroundOptionsLead(o *AroundOptions, points []OptionsHistoryPoint, at time.Time) {
+	if o == nil || at.IsZero() || o.Started == AroundOptionsStartedDuring {
+		return
+	}
+	var earliest time.Time
+	for _, topic := range optionsUnusualTopics(*o) {
+		start, ok := optionsTopicBurstStart(points, at, topic)
+		if !ok || !start.Before(at) {
+			continue
+		}
+		if earliest.IsZero() || start.Before(earliest) {
+			earliest = start
+		}
+	}
+	if earliest.IsZero() {
+		return
+	}
+	lead := at.UTC().Sub(earliest.UTC())
+	if lead < time.Minute {
+		return
+	}
+	o.StartedAt = earliest.UTC()
+	o.Lead = lead
+	o.LeadLabel = formatOptionsLead(lead)
+}
+
+func optionsUnusualTopics(o AroundOptions) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(topic string) {
+		if topic == "" || seen[topic] {
+			return
+		}
+		seen[topic] = true
+		out = append(out, topic)
+	}
+	if o.HasOI && absFloat(o.OIChangePct) >= aroundOptionsOIFloor {
+		add(OptionsMoveTopicOI)
+	}
+	if o.HasPutCall && absFloat(o.PutCallDelta) >= aroundOptionsPCRFloor {
+		add(OptionsMoveTopicLean)
+	}
+	if (o.HasDVOL && absFloat(o.DVOLDelta) >= aroundOptionsDVOLFloor) || (o.HasAtmIV && absFloat(o.AtmIVDelta) >= aroundOptionsDVOLFloor) {
+		add(OptionsMoveTopicVol)
+	}
+	for _, m := range o.Moves {
+		add(m.Topic)
+	}
+	if o.Unusual && len(out) == 0 {
+		add(OptionsMoveTopicOI)
+	}
+	return out
+}
+
+func fillAroundOptionsWeight(o *AroundOptions) {
+	if o == nil {
+		return
+	}
+	n := len(optionsUnusualTopics(*o))
+	if n == 0 && o.Unusual {
+		n = 1
+	}
+	o.Together = n
+	switch {
+	case n >= 3:
+		o.Weight = AroundOptionsWeightCluster
+	case n == 2:
+		o.Weight = AroundOptionsWeightPair
+	case n == 1:
+		o.Weight = AroundOptionsWeightSingle
+	default:
+		o.Weight = ""
+	}
+}
+
+func optionsTopicBurstStart(points []OptionsHistoryPoint, at time.Time, topic string) (time.Time, bool) {
+	pts := OptionsHistoryUntil(points, at)
+	if len(pts) < 2 {
+		return time.Time{}, false
+	}
+	floor := optionsTopicFloor(topic)
+	if floor <= 0 {
+		return time.Time{}, false
+	}
+	var burst time.Time
+	in := false
+	for i := range pts {
+		past := optionsHistoryAtOrBefore(pts, pts[i].Time.Add(-optionsLeadWindow), optionsLeadWindow+aroundOptionsSlack)
+		if past.Time.IsZero() {
+			continue
+		}
+		ch, ok := optionsSeriesChange(past, pts[i], topic)
+		if !ok {
+			continue
+		}
+		if math.Abs(ch) >= floor {
+			if !in {
+				burst = pts[i].Time
+				in = true
+			}
+			continue
+		}
+		if in && pts[i].Time.Before(at.Add(-2*time.Minute)) {
+			in = false
+			burst = time.Time{}
+		}
+	}
+	if !in || burst.IsZero() || !burst.Before(at) {
+		return time.Time{}, false
+	}
+	return burst.UTC(), true
+}
+
+func optionsTopicFloor(topic string) float64 {
+	switch topic {
+	case OptionsMoveTopicOI:
+		return aroundOptionsOIFloor
+	case OptionsMoveTopicLean:
+		return aroundOptionsPCRFloor
+	case OptionsMoveTopicVol:
+		return aroundOptionsDVOLFloor
+	default:
+		return 0
+	}
+}
+
+func optionsSeriesChange(from, to OptionsHistoryPoint, topic string) (float64, bool) {
+	switch topic {
+	case OptionsMoveTopicOI:
+		if !from.HasOI || !to.HasOI || from.OpenInterest <= 0 {
+			return 0, false
+		}
+		return (to.OpenInterest - from.OpenInterest) / from.OpenInterest * 100, true
+	case OptionsMoveTopicLean:
+		if !from.HasPutCallOI || !to.HasPutCallOI {
+			return 0, false
+		}
+		return to.PutCallOI - from.PutCallOI, true
+	case OptionsMoveTopicVol:
+		if from.HasDVOL && to.HasDVOL {
+			return to.DVOL - from.DVOL, true
+		}
+		if from.HasAtmIV && to.HasAtmIV {
+			return to.AtmIV - from.AtmIV, true
+		}
+		return 0, false
+	default:
+		return 0, false
+	}
+}
+
+func formatOptionsLead(d time.Duration) string {
+	if d < 90*time.Second {
+		return "about a minute"
+	}
+	if d < 90*time.Minute {
+		m := int(d.Round(time.Minute) / time.Minute)
+		if m <= 1 {
+			return "about a minute"
+		}
+		return fmt.Sprintf("about %d minutes", m)
+	}
+	h := d.Hours()
+	if h < 1.75 {
+		return "about an hour"
+	}
+	if h < 36 {
+		return fmt.Sprintf("about %.0f hours", math.Round(h))
+	}
+	return fmt.Sprintf("about %.0f days", math.Round(h/24))
+}
+
+// FormatOptionsLeadShort is 45m / 2h / 1d for the API wire.
+func FormatOptionsLeadShort(d time.Duration) string {
+	if d < 90*time.Second {
+		return "1m"
+	}
+	if d < 90*time.Minute {
+		m := int(d.Round(time.Minute) / time.Minute)
+		if m < 1 {
+			m = 1
+		}
+		return fmt.Sprintf("%dm", m)
+	}
+	h := int(math.Round(d.Hours()))
+	if h < 1 {
+		h = 1
+	}
+	if h < 36 {
+		return fmt.Sprintf("%dh", h)
+	}
+	return fmt.Sprintf("%dd", int(math.Round(d.Hours()/24)))
 }
 
 func optionsPrintContinued(before, during *AroundOptions) bool {
@@ -277,6 +498,9 @@ func optionsSimilarity(a, b *AroundOptions) (score float64, match bool) {
 	if a.Unusual != b.Unusual {
 		score *= 0.6
 	}
+	if (a.Together >= 2) != (b.Together >= 2) {
+		score *= 0.75
+	}
 	oiSame := !a.HasOI || !b.HasOI || sameDir(a.OIDirection, b.OIDirection) || (a.OIDirection == CVDDirFlat && b.OIDirection == CVDDirFlat)
 	whenSame := a.Started == "" || b.Started == "" || a.Started == b.Started
 	match = score >= 0.65 && oiSame && whenSame && a.Unusual == b.Unusual
@@ -315,33 +539,50 @@ func explainAroundOptions(o AroundOptions) string {
 		bits = append(bits, fmt.Sprintf("ATM IV %s %.1f pts", changeDir(o.AtmIVDelta), o.AtmIVDelta))
 	}
 	if len(bits) == 0 {
-		if o.Unusual && o.Started == AroundOptionsStartedBefore {
-			return "Listed options were already unusual before the price move."
-		}
-		if o.Unusual && o.Started == AroundOptionsStartedDuring {
-			return "Listed options became unusual during the price move."
+		if o.Unusual {
+			return unusualOptionsLeadSentence(o) + "."
 		}
 		return "Listed options were mostly steady in this window."
 	}
 	head := "Listed options: " + strings.Join(bits, "; ") + "."
-	if o.Unusual && o.Started == AroundOptionsStartedBefore {
-		return "Unusual options before the price move — " + strings.TrimPrefix(head, "Listed options: ")
-	}
-	if o.Unusual && o.Started == AroundOptionsStartedDuring {
-		return "Unusual options during the price move — " + strings.TrimPrefix(head, "Listed options: ")
-	}
 	if o.Unusual {
-		return "Unusual options print — " + strings.TrimPrefix(head, "Listed options: ")
+		return unusualOptionsLeadSentence(o) + " — " + strings.TrimPrefix(head, "Listed options: ")
 	}
 	return head
 }
 
+func unusualOptionsLeadSentence(o AroundOptions) string {
+	when := "Listed options were unusual"
+	switch o.Started {
+	case AroundOptionsStartedBefore:
+		when = "Listed options were already unusual before the price move"
+		if o.LeadLabel != "" {
+			when = "Listed options were already unusual " + o.LeadLabel + " before the price move"
+		}
+	case AroundOptionsStartedDuring:
+		when = "Listed options became unusual during the price move"
+	}
+	switch o.Weight {
+	case AroundOptionsWeightCluster:
+		return when + ", and open interest, put/call, and implied vol all moved together"
+	case AroundOptionsWeightPair:
+		return when + ", and two options series moved together"
+	default:
+		return when
+	}
+}
+
 // AroundOptionsToEvents turns unusual options prints into tape events.
 func AroundOptionsToEvents(o AroundOptions, phase string, at time.Time) []AroundEvent {
-	if !o.Complete || !o.Unusual {
+	if !o.Unusual {
 		return nil
 	}
 	title := unusualOptionsTitle(o)
+	score := optionsEventScore(o)
+	when := at.UTC()
+	if !o.StartedAt.IsZero() {
+		when = o.StartedAt
+	}
 	if len(o.Moves) > 0 {
 		out := make([]AroundEvent, 0, len(o.Moves))
 		for _, m := range o.Moves {
@@ -351,7 +592,8 @@ func AroundOptionsToEvents(o AroundOptions, phase string, at time.Time) []Around
 				Side:    firstNonEmpty(o.Started, m.Topic),
 				Title:   title,
 				Summary: firstNonEmpty(m.Detail, m.Title),
-				At:      at.UTC(),
+				At:      when,
+				Score:   score,
 			})
 		}
 		return out
@@ -362,19 +604,40 @@ func AroundOptionsToEvents(o AroundOptions, phase string, at time.Time) []Around
 		Side:    o.Started,
 		Title:   title,
 		Summary: firstNonEmpty(o.Summary, "Listed options moved unusually."),
-		At:      at.UTC(),
+		At:      when,
+		Score:   score,
 	}}
 }
 
 func unusualOptionsTitle(o AroundOptions) string {
-	switch o.Started {
-	case AroundOptionsStartedBefore:
-		return "Unusual options before the move"
-	case AroundOptionsStartedDuring:
+	lead := ""
+	if o.Started == AroundOptionsStartedBefore && o.Lead >= time.Minute {
+		lead = " (" + FormatOptionsLeadShort(o.Lead) + " earlier)"
+	}
+	switch {
+	case o.Weight == AroundOptionsWeightCluster && o.Started == AroundOptionsStartedBefore:
+		return "Clustered unusual options before the move" + lead
+	case o.Weight == AroundOptionsWeightCluster && o.Started == AroundOptionsStartedDuring:
+		return "Clustered unusual options during the move"
+	case o.Weight == AroundOptionsWeightPair && o.Started == AroundOptionsStartedBefore:
+		return "Two unusual options series before the move" + lead
+	case o.Weight == AroundOptionsWeightPair && o.Started == AroundOptionsStartedDuring:
+		return "Two unusual options series during the move"
+	case o.Started == AroundOptionsStartedBefore:
+		return "Unusual options before the move" + lead
+	case o.Started == AroundOptionsStartedDuring:
 		return "Unusual options during the move"
 	default:
 		return "Unusual options"
 	}
+}
+
+func optionsEventScore(o AroundOptions) int {
+	n := o.Together
+	if n <= 0 {
+		n = 1
+	}
+	return n * 30
 }
 
 func phaseOptions(p AroundPhase) bool {

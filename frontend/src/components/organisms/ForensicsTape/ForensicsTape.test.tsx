@@ -37,6 +37,8 @@ describe('ForensicsTape', () => {
                 complete: true,
                 unusual: true,
                 started: 'before',
+                lead: '40m',
+                together: 2,
                 oiChangePct: '+8.00%',
                 oiDirection: 'up',
                 leanTo: 'puts',

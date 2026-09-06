@@ -622,10 +622,16 @@ func ExplainAroundPhase(p AroundPhase) string {
 			switch o.Started {
 			case AroundOptionsStartedBefore:
 				head += "; unusual options before the move"
+				if o.LeadLabel != "" {
+					head += " (" + o.LeadLabel + " earlier)"
+				}
 			case AroundOptionsStartedDuring:
 				head += "; unusual options during the move"
 			default:
 				head += "; unusual options"
+			}
+			if o.Together >= 2 {
+				head += fmt.Sprintf(", %d series together", o.Together)
 			}
 			if o.HasOI {
 				head += fmt.Sprintf(" (listed OI %s%%)", FormatSignedPct(o.OIChangePct))

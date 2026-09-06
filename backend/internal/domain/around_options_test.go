@@ -72,6 +72,52 @@ func TestMarkAroundOptionsTiming_BeforeVsDuring(t *testing.T) {
 	}
 }
 
+func TestMeasureAroundOptionsLead_ReportsHowMuchEarlier(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	var points []OptionsHistoryPoint
+	for i := 24; i >= 0; i-- {
+		t0 := at.Add(-time.Duration(i) * 5 * time.Minute)
+		oi := 100.0
+		if !t0.Before(at.Add(-40 * time.Minute)) {
+			oi = 120
+		}
+		points = append(points, OptionsHistoryPoint{Time: t0, OpenInterest: oi, HasOI: true})
+	}
+	o := &AroundOptions{
+		Complete: true, Unusual: true, Started: AroundOptionsStartedBefore,
+		HasOI: true, OIChangePct: 20, OIDirection: CVDDirUp,
+	}
+	MeasureAroundOptionsLead(o, points, at)
+	if o.Lead < 30*time.Minute || o.Lead > 50*time.Minute {
+		t.Fatalf("lead %s label %q", o.Lead, o.LeadLabel)
+	}
+	if !strings.Contains(o.LeadLabel, "40 minutes") && !strings.Contains(o.LeadLabel, "35 minutes") && !strings.Contains(o.LeadLabel, "45 minutes") {
+		t.Fatalf("lead label %q", o.LeadLabel)
+	}
+}
+
+func TestFillAroundOptionsWeight_ClusterBeatsSingle(t *testing.T) {
+	one := AroundOptions{Complete: true, Unusual: true, HasOI: true, OIChangePct: 12, OIDirection: CVDDirUp}
+	fillAroundOptionsWeight(&one)
+	if one.Together != 1 || one.Weight != AroundOptionsWeightSingle {
+		t.Fatalf("single %+v", one)
+	}
+	three := AroundOptions{
+		Complete: true, Unusual: true,
+		HasOI: true, OIChangePct: 12, OIDirection: CVDDirUp,
+		HasPutCall: true, PutCallDelta: 0.2, LeanTo: OptionsLeanPuts,
+		HasDVOL: true, DVOLDelta: 4,
+	}
+	fillAroundOptionsWeight(&three)
+	if three.Together != 3 || three.Weight != AroundOptionsWeightCluster {
+		t.Fatalf("cluster %+v", three)
+	}
+	s := unusualOptionsLeadSentence(three)
+	if !strings.Contains(s, "all moved together") {
+		t.Fatalf("sentence %q", s)
+	}
+}
+
 func TestOptionsHistoryUntil(t *testing.T) {
 	t0 := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	in := []OptionsHistoryPoint{

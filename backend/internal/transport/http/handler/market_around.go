@@ -393,6 +393,11 @@ type aroundOptionsDTO struct {
 	Moves        []optionsMoveDTO `json:"moves,omitempty"`
 	Unusual      bool             `json:"unusual,omitempty"`
 	Started      string           `json:"started,omitempty"`
+	StartedAt    *time.Time       `json:"startedAt,omitempty"`
+	Lead         string           `json:"lead,omitempty"`
+	LeadLabel    string           `json:"leadLabel,omitempty"`
+	Together     int              `json:"together,omitempty"`
+	Weight       string           `json:"weight,omitempty"`
 	Summary      string           `json:"summary,omitempty"`
 	Complete     bool             `json:"complete"`
 }
@@ -572,6 +577,14 @@ func aroundOptionsToDTO(o *domain.AroundOptions) *aroundOptionsDTO {
 	out := &aroundOptionsDTO{
 		Asset: o.Asset, Unusual: o.Unusual, Started: o.Started, Summary: o.Summary, Complete: o.Complete,
 		OiDirection: o.OIDirection, LeanFrom: o.LeanFrom, LeanTo: o.LeanTo,
+		LeadLabel: o.LeadLabel, Together: o.Together, Weight: o.Weight,
+	}
+	if !o.StartedAt.IsZero() {
+		t := o.StartedAt.UTC()
+		out.StartedAt = &t
+	}
+	if o.Lead >= time.Minute {
+		out.Lead = domain.FormatOptionsLeadShort(o.Lead)
 	}
 	if o.HasOI {
 		out.OiFrom = formatHistQty(o.OIFrom)

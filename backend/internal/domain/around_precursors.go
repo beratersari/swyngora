@@ -101,6 +101,7 @@ var precursorMetricLabels = map[string]string{
 	"options_puts":    "options put/call leaned puts",
 	"options_calls":   "options put/call leaned calls",
 	"options_unusual": "listed options were already unusual",
+	"options_cluster": "several options series moved together",
 }
 
 var precursorExclusive = [][]string{
@@ -329,6 +330,7 @@ func flagsFromBefore(side string, before AroundPhase) precursorFlags {
 		set("options_puts", o.HasPutCall, lean == OptionsLeanPuts, o.PutCallTo)
 		set("options_calls", o.HasPutCall, lean == OptionsLeanCalls, o.PutCallTo)
 		set("options_unusual", true, o.Unusual, 0)
+		set("options_cluster", true, o.Together >= 2, float64(o.Together))
 	}
 	return fl
 }

@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Forensics options history:** a missing start or end sample no longer invents an OI / put-call / IV jump from zero; opposite options prints are not treated as similar; unusual prints say whether they started before the price move or during it (`docs/features/forensics.md`)
 
 ### Added
+- **Forensics options lead and cluster:** if an unusual options print started before the price move, the tape says how much earlier; OI + put/call + IV moving together is marked more important than a single series (`docs/features/forensics.md`)
 - **Forensics options tape:** BTC/ETH listed options (OI, put/call, implied vol, unusual prints) attach to around / forensics before-during-after windows, the why-story, similar-move scores, and precursors when those samples exist (`docs/features/forensics.md`)
 - **Options unusual moves:** `/options` and `GET /api/v1/market/options` `moves` flags only when open interest, put/call, or implied vol changes much more than that series' own typical in 1h / 4h / 24h (`docs/features/options.md`)
 - **Options over time:** `/options` and `GET /api/v1/market/options` `history` shows 1h/4h/24h/7d change plus a chart of open interest, put/call, and DVOL (`docs/features/options.md`)

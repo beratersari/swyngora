@@ -41,10 +41,13 @@ On BTC and ETH, each phase can include stored Deribit desk samples
 (`options`): listed open interest, put/call lean, DVOL/ATM IV, and
 `unusual` when that series jumped in **this** window. `started` is
 `before` when the print was already underway at the price event, or
-`during` when it only appeared once price was moving. A missing start
-or end sample is omitted — it is not treated as a jump from zero.
-Opposite options moves are not scored as similar. Other coins omit
-the block.
+`during` when it only appeared once price was moving. If it started
+before, `lead` / `leadLabel` say how much earlier (e.g. 45m).
+`together` is how many of OI / put-call / IV moved at once; two or
+three series together is treated as more important than a single
+print (`weight` `pair` / `cluster`). A missing start or end sample
+is omitted — it is not treated as a jump from zero. Opposite options
+moves are not scored as similar. Other coins omit the block.
 
 `/around*` endpoints stay as they are. Optional `at` on
 `/around/similar` compares the tape **before that time** instead of

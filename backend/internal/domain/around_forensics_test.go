@@ -3,6 +3,7 @@ package domain
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestExplainForensics_Empty(t *testing.T) {
@@ -89,7 +90,9 @@ func TestExplainForensicsWhy_UnusualOptionsBefore(t *testing.T) {
 	before.Options = &AroundOptions{
 		Complete: true, Unusual: true, Started: AroundOptionsStartedBefore,
 		HasOI: true, OIDirection: CVDDirUp, OIChangePct: 9,
-		HasDVOL: true, DVOLDelta: 3.2, Summary: "Unusual options before the price move — listed open interest up +9.00%.",
+		HasDVOL: true, DVOLDelta: 3.2, Together: 2, Weight: AroundOptionsWeightPair,
+		Lead: 40 * time.Minute, LeadLabel: "about 40 minutes",
+		Summary: "Listed options were already unusual about 40 minutes before the price move.",
 	}
 	for i := range r.Tape.Combined.Phases {
 		if r.Tape.Combined.Phases[i].Phase == AroundPhaseBefore {
@@ -97,10 +100,10 @@ func TestExplainForensicsWhy_UnusualOptionsBefore(t *testing.T) {
 		}
 	}
 	why := ExplainForensicsWhy(r)
-	if !strings.Contains(why.Headline, "options were already unusual") {
+	if !strings.Contains(why.Headline, "about 40 minutes") {
 		t.Fatalf("headline %q", why.Headline)
 	}
-	if !strings.Contains(why.Before, "options were already unusual") {
+	if !strings.Contains(why.Before, "about 40 minutes") || !strings.Contains(why.Before, "two options series") {
 		t.Fatalf("before %q", why.Before)
 	}
 }
