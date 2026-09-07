@@ -293,7 +293,10 @@ func forensicsHeadlineSetup(before, during AroundPhase) string {
 			return strings.TrimSuffix(s, ".") + " Open interest, put/call, and implied vol all moved together — a stronger print than a single series."
 		}
 		if o.Together == 2 {
-			return strings.TrimSuffix(s, ".") + " Two options series moved together — more important than a one-off print."
+			s = strings.TrimSuffix(s, ".") + " Two options series moved together — more important than a one-off print."
+		}
+		if o.AfterSummary != "" {
+			return strings.TrimSuffix(s, ".") + " " + o.AfterSummary
 		}
 		return s
 	}
@@ -471,6 +474,9 @@ func forensicsOptionsStory(p AroundPhase, before bool) string {
 		bits = append(bits, fmt.Sprintf("implied vol rose %.1f points", o.DVOLDelta))
 	} else if o.HasDVOL && o.DVOLDelta <= -aroundOptionsDVOLFloor {
 		bits = append(bits, fmt.Sprintf("implied vol cooled %.1f points", -o.DVOLDelta))
+	}
+	if o.AfterSummary != "" {
+		bits = append(bits, strings.TrimSuffix(o.AfterSummary, "."))
 	}
 	if len(bits) == 0 {
 		return ""

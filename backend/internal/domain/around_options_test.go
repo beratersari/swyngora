@@ -96,6 +96,51 @@ func TestMeasureAroundOptionsLead_ReportsHowMuchEarlier(t *testing.T) {
 	}
 }
 
+func TestMeasureAroundOptionsLead_FourHourMoveUsesFourHourStart(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	var points []OptionsHistoryPoint
+	// Slow 4h grind: ~3.6% per hour, 15% over 4h. 1h never hits the 5% floor.
+	for i := 48; i >= 0; i-- {
+		t0 := at.Add(-time.Duration(i) * 5 * time.Minute)
+		elapsed := at.Sub(t0)
+		oi := 100.0
+		if elapsed <= 4*time.Hour {
+			oi = 100 + 15*(1-float64(elapsed)/float64(4*time.Hour))
+		}
+		points = append(points, OptionsHistoryPoint{Time: t0, OpenInterest: oi, HasOI: true})
+	}
+	o := &AroundOptions{
+		Complete: true, Unusual: true, Started: AroundOptionsStartedBefore,
+		HasOI: true, OIChangePct: 15, OIDirection: CVDDirUp,
+	}
+	MeasureAroundOptionsLead(o, points, at)
+	if o.LeadWindow != OptionsHistoryWindow4h {
+		t.Fatalf("window %q lead %s", o.LeadWindow, o.Lead)
+	}
+	if o.Lead < 3*time.Hour || o.Lead > 5*time.Hour {
+		t.Fatalf("4h move lead %s label %q", o.Lead, o.LeadLabel)
+	}
+}
+
+func TestMarkAroundOptionsAfter_ContinuedAndReversed(t *testing.T) {
+	before := &AroundOptions{Complete: true, Unusual: true, HasOI: true, OIDirection: CVDDirUp, OIChangePct: 12}
+	kept := &AroundOptions{Complete: true, HasOI: true, OIDirection: CVDDirUp, OIChangePct: 6}
+	MarkAroundOptionsAfter(before, kept)
+	if kept.After != AroundOptionsAfterContinued {
+		t.Fatalf("continued %q %q", kept.After, kept.AfterSummary)
+	}
+	turned := &AroundOptions{Complete: true, HasOI: true, OIDirection: CVDDirDown, OIChangePct: -8}
+	MarkAroundOptionsAfter(before, turned)
+	if turned.After != AroundOptionsAfterReversed || !strings.Contains(turned.AfterSummary, "turned the other way") {
+		t.Fatalf("reversed %q %q", turned.After, turned.AfterSummary)
+	}
+	quiet := &AroundOptions{Complete: true, HasOI: true, OIDirection: CVDDirFlat, OIChangePct: 0.2}
+	MarkAroundOptionsAfter(before, quiet)
+	if quiet.After != AroundOptionsAfterFaded {
+		t.Fatalf("faded %q", quiet.After)
+	}
+}
+
 func TestFillAroundOptionsWeight_ClusterBeatsSingle(t *testing.T) {
 	one := AroundOptions{Complete: true, Unusual: true, HasOI: true, OIChangePct: 12, OIDirection: CVDDirUp}
 	fillAroundOptionsWeight(&one)

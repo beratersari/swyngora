@@ -76,8 +76,11 @@ export type ForensicsOptions = {
   startedAt?: string;
   lead?: string;
   leadLabel?: string;
+  leadWindow?: string;
   together?: number;
   weight?: string;
+  after?: string;
+  afterSummary?: string;
   summary?: string;
   moves?: ForensicsOptionsMove[];
   complete?: boolean;

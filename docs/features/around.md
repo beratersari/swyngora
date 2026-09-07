@@ -28,7 +28,7 @@ Each phase includes:
 - absorption on the window when the score is at least moderate
 - stored spot-book compare (when order-book history has samples)
 - stored futures: open interest, funding, long %, liquidations (when the archive has samples)
-- listed BTC/ETH options: open interest, put/call, implied vol, and unusual prints (two samples required; `started` is before vs during the price move; `lead` is how much earlier; clustered series count as more important)
+- listed BTC/ETH options: open interest, put/call, implied vol, and unusual prints (two samples required; `started` is before vs during; `lead` uses the 1h/4h/24h scale of the move; `after` is kept going / turned / went quiet)
 
 Liquidity sweeps whose poke sits in the span are attached as events.
 `changes` compares the three windows (continued / reversed / faded).

@@ -20,6 +20,11 @@ const (
 	AroundOptionsWeightPair    = "pair"
 	AroundOptionsWeightCluster = "cluster"
 
+	AroundOptionsAfterContinued = "continued"
+	AroundOptionsAfterReversed  = "reversed"
+	AroundOptionsAfterFaded     = "faded"
+	AroundOptionsAfterMixed     = "mixed"
+
 	// AroundOptionsLookbackPad is extra history so unusual-move typicals can form.
 	AroundOptionsLookbackPad = 48 * time.Hour
 
@@ -56,8 +61,11 @@ type AroundOptions struct {
 	StartedAt    time.Time
 	Lead         time.Duration // how long before the price event the print began
 	LeadLabel    string        // "about 45 minutes"
+	LeadWindow   string        // 1h | 4h | 24h — scale used to find the start
 	Together     int           // unusual series count (OI / put-call / IV)
 	Weight       string        // single | pair | cluster
+	After        string        // continued | reversed | faded | mixed — vs the price event
+	AfterSummary string
 	Summary      string
 	Complete     bool
 }
@@ -184,6 +192,7 @@ func FinalizeAroundOptions(phases []AroundPhase, points []OptionsHistoryPoint) {
 		dOpt = during.Options
 	}
 	MarkAroundOptionsTiming(bOpt, dOpt)
+	MarkAroundOptionsAfter(bOpt, dOpt)
 	at := time.Time{}
 	if before != nil {
 		at = before.To
@@ -246,19 +255,119 @@ func MarkAroundOptionsTiming(before, during *AroundOptions) {
 	during.Started = AroundOptionsStartedDuring
 }
 
+// MarkAroundOptionsAfter says whether options kept going the same way
+// after the price event, turned the other way, or went quiet.
+func MarkAroundOptionsAfter(before, during *AroundOptions) {
+	if before == nil || during == nil || !before.Unusual || !during.Complete {
+		return
+	}
+	var votes []string
+	if before.HasOI && during.HasOI && before.OIDirection != "" && before.OIDirection != CVDDirFlat {
+		votes = append(votes, optionsAfterVote(before.OIDirection, during.OIDirection, during.OIChangePct, aroundOptionsOIFloor))
+	}
+	if before.HasPutCall && during.HasPutCall && before.LeanTo != "" && before.LeanTo != OptionsLeanBalanced {
+		beforeDir := optionsLeanDir(before.PutCallDelta, before.LeanTo)
+		duringDir := optionsLeanDir(during.PutCallDelta, during.LeanTo)
+		votes = append(votes, optionsAfterVote(beforeDir, duringDir, during.PutCallDelta, aroundOptionsPCRFloor))
+	}
+	if before.HasDVOL && during.HasDVOL && changeDir(before.DVOLDelta) != CVDDirFlat {
+		votes = append(votes, optionsAfterVote(changeDir(before.DVOLDelta), changeDir(during.DVOLDelta), during.DVOLDelta, aroundOptionsDVOLFloor))
+	} else if before.HasAtmIV && during.HasAtmIV && changeDir(before.AtmIVDelta) != CVDDirFlat {
+		votes = append(votes, optionsAfterVote(changeDir(before.AtmIVDelta), changeDir(during.AtmIVDelta), during.AtmIVDelta, aroundOptionsDVOLFloor))
+	}
+	if len(votes) == 0 {
+		return
+	}
+	after := tallyOptionsAfter(votes)
+	summary := optionsAfterSummary(after)
+	before.After = after
+	before.AfterSummary = summary
+	during.After = after
+	during.AfterSummary = summary
+}
+
+func optionsLeanDir(delta float64, lean string) string {
+	if d := changeDir(delta); d != CVDDirFlat {
+		return d
+	}
+	switch lean {
+	case OptionsLeanPuts:
+		return CVDDirUp
+	case OptionsLeanCalls:
+		return CVDDirDown
+	default:
+		return CVDDirFlat
+	}
+}
+
+func optionsAfterVote(beforeDir, duringDir string, duringMag, floor float64) string {
+	if duringDir == "" || duringDir == CVDDirFlat || absFloat(duringMag) < floor/2 {
+		return AroundOptionsAfterFaded
+	}
+	if beforeDir == duringDir {
+		return AroundOptionsAfterContinued
+	}
+	if beforeDir != "" && beforeDir != CVDDirFlat && beforeDir != duringDir {
+		return AroundOptionsAfterReversed
+	}
+	return AroundOptionsAfterFaded
+}
+
+func tallyOptionsAfter(votes []string) string {
+	var cont, rev, fade int
+	for _, v := range votes {
+		switch v {
+		case AroundOptionsAfterContinued:
+			cont++
+		case AroundOptionsAfterReversed:
+			rev++
+		default:
+			fade++
+		}
+	}
+	switch {
+	case cont > 0 && rev > 0:
+		return AroundOptionsAfterMixed
+	case rev > 0 && rev >= cont && rev >= fade:
+		return AroundOptionsAfterReversed
+	case cont > 0 && cont >= fade:
+		return AroundOptionsAfterContinued
+	default:
+		return AroundOptionsAfterFaded
+	}
+}
+
+func optionsAfterSummary(after string) string {
+	switch after {
+	case AroundOptionsAfterContinued:
+		return "After price started, options kept moving the same way."
+	case AroundOptionsAfterReversed:
+		return "After price started, options turned the other way."
+	case AroundOptionsAfterMixed:
+		return "After price started, options were mixed — some series kept going and some turned."
+	case AroundOptionsAfterFaded:
+		return "After price started, options went quiet."
+	default:
+		return ""
+	}
+}
+
 // MeasureAroundOptionsLead finds how long before `at` the unusual print began.
+// A 4h or 24h unusual move uses that window to find the start, not only 1h.
 func MeasureAroundOptionsLead(o *AroundOptions, points []OptionsHistoryPoint, at time.Time) {
 	if o == nil || at.IsZero() || o.Started == AroundOptionsStartedDuring {
 		return
 	}
 	var earliest time.Time
+	window := ""
 	for _, topic := range optionsUnusualTopics(*o) {
-		start, ok := optionsTopicBurstStart(points, at, topic)
+		start, id, ok := optionsTopicLeadStart(points, at, topic, o.Moves)
 		if !ok || !start.Before(at) {
 			continue
 		}
 		if earliest.IsZero() || start.Before(earliest) {
 			earliest = start
+			window = id
 		}
 	}
 	if earliest.IsZero() {
@@ -271,6 +380,7 @@ func MeasureAroundOptionsLead(o *AroundOptions, points []OptionsHistoryPoint, at
 	o.StartedAt = earliest.UTC()
 	o.Lead = lead
 	o.LeadLabel = formatOptionsLead(lead)
+	o.LeadWindow = window
 }
 
 func optionsUnusualTopics(o AroundOptions) []string {
@@ -322,19 +432,119 @@ func fillAroundOptionsWeight(o *AroundOptions) {
 	}
 }
 
-func optionsTopicBurstStart(points []OptionsHistoryPoint, at time.Time, topic string) (time.Time, bool) {
+type optionsLeadScale struct {
+	ID    string
+	Dur   time.Duration
+	Floor float64
+	Ch    float64
+}
+
+func optionsTopicLeadStart(points []OptionsHistoryPoint, at time.Time, topic string, moves []OptionsMove) (time.Time, string, bool) {
+	scale, ok := pickOptionsLeadScale(points, at, topic, moves)
+	if !ok {
+		start, found := optionsTopicBurstStart(points, at, topic, optionsLeadWindow, optionsTopicFloor(topic))
+		return start, OptionsHistoryWindow1h, found
+	}
+	if scale.Dur <= optionsLeadWindow+time.Minute {
+		start, found := optionsTopicBurstStart(points, at, topic, scale.Dur, scale.Floor)
+		return start, scale.ID, found
+	}
+	start := at.Add(-scale.Dur)
+	if start.Before(at) {
+		return start.UTC(), scale.ID, true
+	}
+	return time.Time{}, "", false
+}
+
+func pickOptionsLeadScale(points []OptionsHistoryPoint, at time.Time, topic string, moves []OptionsMove) (optionsLeadScale, bool) {
+	var cs []optionsLeadScale
+	for _, w := range optionsMoveWindows {
+		floor := optionsTopicFloorAt(topic, w.ID)
+		if floor <= 0 {
+			continue
+		}
+		ch, ok := optionsScaleChange(points, at, topic, w.Dur)
+		if !ok || math.Abs(ch) < floor {
+			continue
+		}
+		cs = append(cs, optionsLeadScale{ID: w.ID, Dur: w.Dur, Floor: floor, Ch: ch})
+	}
+	if len(cs) == 0 {
+		return optionsLeadScale{}, false
+	}
+	for _, m := range moves {
+		if m.Topic != topic || m.Window == "" {
+			continue
+		}
+		for _, c := range cs {
+			if c.ID == m.Window {
+				return c, true
+			}
+		}
+	}
+	chosen := cs[0]
+	for _, c := range cs {
+		if c.Dur > chosen.Dur {
+			chosen = c
+		}
+	}
+	for {
+		var next *optionsLeadScale
+		for i := range cs {
+			c := &cs[i]
+			if c.Dur < chosen.Dur && math.Abs(c.Ch) >= 0.6*math.Abs(chosen.Ch) {
+				if next == nil || c.Dur > next.Dur {
+					next = c
+				}
+			}
+		}
+		if next == nil {
+			break
+		}
+		chosen = *next
+	}
+	return chosen, true
+}
+
+func optionsScaleChange(points []OptionsHistoryPoint, at time.Time, topic string, dur time.Duration) (float64, bool) {
+	end := optionsHistoryAtOrBefore(points, at, dur)
+	start := optionsHistoryAtOrBefore(points, at.Add(-dur), dur+aroundOptionsSlack)
+	if start.Time.IsZero() || end.Time.IsZero() {
+		return 0, false
+	}
+	return optionsSeriesChange(start, end, topic)
+}
+
+func optionsTopicFloorAt(topic, windowID string) float64 {
+	for _, ser := range optionsMoveSeries {
+		if ser.topic != topic {
+			continue
+		}
+		if v := ser.floor[windowID]; v > 0 {
+			return v
+		}
+	}
+	return optionsTopicFloor(topic)
+}
+
+func optionsTopicBurstStart(points []OptionsHistoryPoint, at time.Time, topic string, window time.Duration, floor float64) (time.Time, bool) {
 	pts := OptionsHistoryUntil(points, at)
 	if len(pts) < 2 {
 		return time.Time{}, false
 	}
-	floor := optionsTopicFloor(topic)
+	if window <= 0 {
+		window = optionsLeadWindow
+	}
+	if floor <= 0 {
+		floor = optionsTopicFloor(topic)
+	}
 	if floor <= 0 {
 		return time.Time{}, false
 	}
 	var burst time.Time
 	in := false
 	for i := range pts {
-		past := optionsHistoryAtOrBefore(pts, pts[i].Time.Add(-optionsLeadWindow), optionsLeadWindow+aroundOptionsSlack)
+		past := optionsHistoryAtOrBefore(pts, pts[i].Time.Add(-window), window+aroundOptionsSlack)
 		if past.Time.IsZero() {
 			continue
 		}
@@ -546,7 +756,11 @@ func explainAroundOptions(o AroundOptions) string {
 	}
 	head := "Listed options: " + strings.Join(bits, "; ") + "."
 	if o.Unusual {
-		return unusualOptionsLeadSentence(o) + " — " + strings.TrimPrefix(head, "Listed options: ")
+		s := unusualOptionsLeadSentence(o) + " — " + strings.TrimPrefix(head, "Listed options: ")
+		if o.AfterSummary != "" {
+			s = strings.TrimSuffix(s, ".") + " " + o.AfterSummary
+		}
+		return s
 	}
 	return head
 }
@@ -556,7 +770,9 @@ func unusualOptionsLeadSentence(o AroundOptions) string {
 	switch o.Started {
 	case AroundOptionsStartedBefore:
 		when = "Listed options were already unusual before the price move"
-		if o.LeadLabel != "" {
+		if o.LeadLabel != "" && (o.LeadWindow == OptionsHistoryWindow4h || o.LeadWindow == OptionsHistoryWindow24h) {
+			when = fmt.Sprintf("Listed options were already unusual — a %s move that started %s before the price move", o.LeadWindow, o.LeadLabel)
+		} else if o.LeadLabel != "" {
 			when = "Listed options were already unusual " + o.LeadLabel + " before the price move"
 		}
 	case AroundOptionsStartedDuring:
@@ -564,12 +780,11 @@ func unusualOptionsLeadSentence(o AroundOptions) string {
 	}
 	switch o.Weight {
 	case AroundOptionsWeightCluster:
-		return when + ", and open interest, put/call, and implied vol all moved together"
+		when += ", and open interest, put/call, and implied vol all moved together"
 	case AroundOptionsWeightPair:
-		return when + ", and two options series moved together"
-	default:
-		return when
+		when += ", and two options series moved together"
 	}
+	return when
 }
 
 // AroundOptionsToEvents turns unusual options prints into tape events.

@@ -42,10 +42,13 @@ On BTC and ETH, each phase can include stored Deribit desk samples
 `unusual` when that series jumped in **this** window. `started` is
 `before` when the print was already underway at the price event, or
 `during` when it only appeared once price was moving. If it started
-before, `lead` / `leadLabel` say how much earlier (e.g. 45m).
-`together` is how many of OI / put-call / IV moved at once; two or
-three series together is treated as more important than a single
-print (`weight` `pair` / `cluster`). A missing start or end sample
+before, `lead` / `leadLabel` say how much earlier. A 4h or 24h
+unusual move uses that window to find the start, not only 1h.
+`after` says whether options kept going the same way once price
+started, turned the other way, or went quiet. `together` is how
+many of OI / put-call / IV moved at once; two or three series
+together is treated as more important than a single print
+(`weight` `pair` / `cluster`). A missing start or end sample
 is omitted — it is not treated as a jump from zero. Opposite options
 moves are not scored as similar. Other coins omit the block.
 

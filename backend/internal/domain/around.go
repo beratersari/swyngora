@@ -633,6 +633,11 @@ func ExplainAroundPhase(p AroundPhase) string {
 			if o.Together >= 2 {
 				head += fmt.Sprintf(", %d series together", o.Together)
 			}
+			if o.After == AroundOptionsAfterReversed {
+				head += "; options turned after price started"
+			} else if o.After == AroundOptionsAfterContinued {
+				head += "; options kept going after price started"
+			}
 			if o.HasOI {
 				head += fmt.Sprintf(" (listed OI %s%%)", FormatSignedPct(o.OIChangePct))
 			}
