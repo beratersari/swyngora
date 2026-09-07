@@ -2020,7 +2020,7 @@ paths:
         The taker bar at the price start is not pre-price tape.
         Continued / faded / reversed also need a continuous pre-price
         taker path at the tape's bar size (no hole longer than one missing
-        1m or 5m bar).
+        1m or 5m bar, and tape after the start print).
         Informational only.
       operationId: getMarketAround
       tags: [Market]

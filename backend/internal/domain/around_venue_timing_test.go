@@ -568,6 +568,11 @@ func TestMarkAroundTakerUntil_FiveMinuteBarsUseBarSteps(t *testing.T) {
 	if got := MarkAroundTakerUntil(skip, at.Add(-15*time.Minute), TakerSideBuy, at, Interval5m); got != AroundVenueUntilContinued {
 		t.Fatalf("one missing 5m bar should still classify: %q", got)
 	}
+	// A single 11:55 bar is only the start — not enough to say continued.
+	onlyStart := []AroundBar{bar(-20, false), bar(-5, true), bar(0, true)}
+	if got := MarkAroundTakerUntil(onlyStart, at.Add(-5*time.Minute), TakerSideBuy, at, Interval5m); got != "" {
+		t.Fatalf("one 5m start bar must not be continued/faded/reversed, got %q", got)
+	}
 }
 
 func TestFindAroundTakerRunStart_FindsLean(t *testing.T) {

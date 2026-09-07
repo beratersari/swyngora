@@ -431,9 +431,10 @@ func MarkAroundOIUntil(snaps []FuturesSnapshot, start time.Time, dir string, unt
 // start until the price move, or spiked and then faded / flipped. Empty
 // when the pre-price tape is not continuous enough to know the path —
 // a last bar near price is not enough if there is a long hole after the
-// start. Continuity is in bar steps (one missing 1m or 5m bar), not a
-// fixed clock. The bar at `until` is the first bar of the move, not
-// pre-price tape.
+// start, and one start bar is not enough to say the flow kept going.
+// Continuity is in bar steps (one missing 1m or 5m bar), not a fixed
+// clock. The bar at `until` is the first bar of the move, not pre-price
+// tape.
 func MarkAroundTakerUntil(bars []AroundBar, start time.Time, dir string, until time.Time, interval CandleInterval) string {
 	if start.IsZero() || until.IsZero() || !until.After(start) || (dir != TakerSideBuy && dir != TakerSideSell) {
 		return ""
@@ -501,7 +502,9 @@ func aroundTakerTailWindow(step time.Duration) time.Duration {
 
 // aroundTakerPathContinuous is true when known taker bars cover start
 // through the last bar before price with no hole longer than one missing
-// bar at `step`. The price-start bar is not part of this path.
+// bar at `step`. One bar is only the start print — there must be later
+// pre-price tape so the flow can be said to have kept going. The
+// price-start bar is not part of this path.
 func aroundTakerPathContinuous(bars []AroundBar, start, until time.Time, step time.Duration) bool {
 	if start.IsZero() || until.IsZero() || !until.After(start) || step <= 0 {
 		return false
@@ -513,10 +516,14 @@ func aroundTakerPathContinuous(bars []AroundBar, start, until time.Time, step ti
 		}
 		known = append(known, b.Time.UTC())
 	}
-	if len(known) == 0 {
+	if len(known) < 2 {
 		return false
 	}
 	sort.Slice(known, func(i, j int) bool { return known[i].Before(known[j]) })
+	last := known[len(known)-1]
+	if !last.After(start) || last.Sub(start) < step {
+		return false
+	}
 	maxMid := 2 * step
 	if known[0].Sub(start) > step {
 		return false
@@ -526,7 +533,7 @@ func aroundTakerPathContinuous(bars []AroundBar, start, until time.Time, step ti
 			return false
 		}
 	}
-	return until.Sub(known[len(known)-1]) <= step
+	return until.Sub(last) <= step
 }
 
 // aroundVenueUntilFreshEnough is true when last is after the start print

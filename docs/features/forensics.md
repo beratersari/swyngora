@@ -62,8 +62,9 @@ tape does not say continued, faded, or reversed. The taker bar at the
 price start is the first minute of the move, not pre-price tape.
 Continued / faded / reversed also need a continuous pre-price taker
 path at the tape's bar size (1m, 5m, …): no hole longer than one
-missing bar, and the last bar before price must exist. A last print
-near 12:00 does not fill a multi-bar gap after the start. If one venue printed first,
+missing bar, the last bar before price must exist, and there must be
+tape after the start print — one bar only shows the flow started.
+A last print near 12:00 does not fill a multi-bar gap after the start. If one venue printed first,
 `beforeFollow` uses that venue's real start (for example 12:05), not
 the during-window close (12:15).
 `together` is how

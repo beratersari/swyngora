@@ -45,7 +45,8 @@ OI sample or taker bar is much earlier than the price start, the path
 is omitted (not continued / faded / reversed). The taker bar at the
 price start is not pre-price tape. Continued / faded / reversed also
 need a continuous pre-price taker path at the tape's bar size (no hole
-longer than one missing 1m or 5m bar).
+longer than one missing 1m or 5m bar, and tape after the start print —
+one bar only shows the flow started).
 `at` is RFC3339 or unix milliseconds,
 and must be within the last 30 days. If the look-forward is still in
 the future, `after` (and sometimes `during`) is clipped to now.
