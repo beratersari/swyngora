@@ -30,6 +30,7 @@ export type CustomMixPreviewRow = {
   factors: CustomMixPreviewFactor[];
   largestChange: CustomMixPreviewFactor | null;
   huntMissing: boolean;
+  tapeMissing: boolean;
   price?: number;
 };
 

@@ -5715,6 +5715,8 @@ export interface components {
             custom?: components["schemas"]["CustomSignalScore"];
             scoreCompare?: components["schemas"]["CustomSignalCompare"];
             huntDetail?: string;
+            forensicsDetail?: string;
+            similarDetail?: string;
         };
         CustomSignalScan: {
             profileId?: string;
@@ -9426,6 +9428,10 @@ export interface operations {
                 weightVolumeBreakout?: number;
                 /** @description Combined liquidation-hunt up score (long-side). 0 = omitted. */
                 weightHuntUp?: number;
+                /** @description Current-tape forensics match vs past pre-move setups (supports or goes against a long). 0 = omitted. */
+                weightForensics?: number;
+                /** @description What usually happened after similar past setups (supports or goes against a long). 0 = omitted. */
+                weightSimilarSetup?: number;
             };
             header?: {
                 "X-Client-Id"?: string;

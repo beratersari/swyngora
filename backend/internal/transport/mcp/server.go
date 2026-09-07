@@ -3794,7 +3794,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("list_custom_signal_factors",
-		mcp.WithDescription("List mixable custom-signal factors (swing patterns + optional liquidation-hunt up) and built-in percents."),
+		mcp.WithDescription("List mixable custom-signal factors (swing patterns + optional hunt_up, forensics, similar_setup) and built-in percents. Tape factors score whether forensics/similar setups support a long or go against it."),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.ListCustomSignalFactors(ctx)
 		if err != nil {
@@ -3941,7 +3941,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("scan_custom_signals",
-		mcp.WithDescription("Scan the watchlist with a custom factor mix (swing patterns + optional hunt_up). Optional weight* must sum to 100. Missing hunt adds 0. scoreCompare is default vs applied. Informational only."),
+		mcp.WithDescription("Scan the watchlist with a custom factor mix (swing patterns + optional hunt_up, forensics, similar_setup). Optional weight* must sum to 100. Missing optional factors add 0. Forensics and similar setups score whether the tape supports a long custom signal or goes against it. scoreCompare is default vs applied. Informational only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("profileId", mcp.Description("Saved mix id; ignored when any weight* is set")),
 		mcp.WithString("exchange", mcp.Description("Optional venue filter")),
@@ -3955,6 +3955,8 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("weightAccumulation", mcp.Description("Custom mix % for BB squeeze / dry-up")),
 		mcp.WithNumber("weightVolumeBreakout", mcp.Description("Custom mix % for volume breakout")),
 		mcp.WithNumber("weightHuntUp", mcp.Description("Custom mix % for liquidation-hunt up score")),
+		mcp.WithNumber("weightForensics", mcp.Description("Custom mix % for forensics tape (supports or goes against a long)")),
+		mcp.WithNumber("weightSimilarSetup", mcp.Description("Custom mix % for similar-setup after-path (supports or goes against a long)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {

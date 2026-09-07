@@ -7,7 +7,7 @@ import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import { rtkErrorMessage } from '@/libs/api';
 import { formatPrice, formatSymbolDisplay } from '@/libs/utils';
 import { CUSTOM_SIGNAL_BUILT_IN_ID, CUSTOM_SIGNAL_FACTORS } from './constants';
-import { customWeightTotal, customWeightsValid, draftNeedsHunt, previewCustomMix } from './helpers';
+import { customWeightTotal, customWeightsValid, draftNeedsHunt, draftNeedsTape, previewCustomMix } from './helpers';
 import {
   ActionRow,
   Card,
@@ -59,6 +59,8 @@ export function SignalsCustomPanel({
   const ok = customWeightsValid(draft);
   const huntOn = draftNeedsHunt(draft);
   const huntNeedsReload = huntOn && preview.some((row) => row.huntMissing);
+  const tapeOn = draftNeedsTape(draft);
+  const tapeNeedsReload = tapeOn && preview.some((row) => row.tapeMissing);
   const selected = profiles.find((p) => p.id === selectedId);
   const builtIn = selectedId === CUSTOM_SIGNAL_BUILT_IN_ID;
 
@@ -133,6 +135,9 @@ export function SignalsCustomPanel({
         </Text>
         {huntNeedsReload ? (
           <Alert type="info" showIcon message={t('signals:custom.huntReload')} />
+        ) : null}
+        {tapeNeedsReload ? (
+          <Alert type="info" showIcon message={t('signals:custom.tapeReload')} />
         ) : null}
         {saveError ? (
           <Alert type="error" showIcon message={rtkErrorMessage(saveError, { resource: t('signals:resource') })} />

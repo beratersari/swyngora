@@ -23,6 +23,8 @@ const (
 	CustomFactorAccumulation   = "accumulation"
 	CustomFactorVolumeBreakout = "volume_breakout"
 	CustomFactorHuntUp         = "hunt_up"
+	CustomFactorForensics      = "forensics"
+	CustomFactorSimilarSetup   = "similar_setup"
 
 	CustomFactorUsed     = "used"
 	CustomFactorMissing  = "missing"
@@ -36,11 +38,12 @@ const (
 	MaxCustomSignalProfileNameLen    = 80
 )
 
-// CustomSignalFactorIDs is the mix in display order (swing first, hunt last).
+// CustomSignalFactorIDs is the mix in display order (swing, hunt, tape).
 var CustomSignalFactorIDs = []string{
 	CustomFactorEMACrossover, CustomFactorEMATrend, CustomFactorSupertrend,
 	CustomFactorRSIRecovery, CustomFactorMACD, CustomFactorADX,
 	CustomFactorAccumulation, CustomFactorVolumeBreakout, CustomFactorHuntUp,
+	CustomFactorForensics, CustomFactorSimilarSetup,
 }
 
 // CustomSignalSwingFactorIDs are the engine pattern names (no hunt).
@@ -61,6 +64,8 @@ var CustomSignalQueryKeys = map[string]string{
 	CustomFactorAccumulation:   "weightAccumulation",
 	CustomFactorVolumeBreakout: "weightVolumeBreakout",
 	CustomFactorHuntUp:         "weightHuntUp",
+	CustomFactorForensics:      "weightForensics",
+	CustomFactorSimilarSetup:   "weightSimilarSetup",
 }
 
 var customSignalFactorLabel = map[string]string{
@@ -73,9 +78,11 @@ var customSignalFactorLabel = map[string]string{
 	CustomFactorAccumulation:   "BB squeeze / dry-up",
 	CustomFactorVolumeBreakout: "Volume breakout",
 	CustomFactorHuntUp:         "Liquidation hunt (up)",
+	CustomFactorForensics:      "Forensics tape",
+	CustomFactorSimilarSetup:   "Similar setups",
 }
 
-// defaultCustomSignalPct matches swingWeights (sums to 100). Hunt is off.
+// defaultCustomSignalPct matches swingWeights (sums to 100). Hunt and tape are off.
 var defaultCustomSignalPct = map[string]float64{
 	CustomFactorEMACrossover:   16,
 	CustomFactorEMATrend:       12,
@@ -86,6 +93,8 @@ var defaultCustomSignalPct = map[string]float64{
 	CustomFactorAccumulation:   10,
 	CustomFactorVolumeBreakout: 12,
 	CustomFactorHuntUp:         0,
+	CustomFactorForensics:      0,
+	CustomFactorSimilarSetup:   0,
 }
 
 // CustomSignalWeights is the requested mix. Percents stay as given.
@@ -468,7 +477,9 @@ type CustomSignalItem struct {
 	Engine     *SwingDecision      `json:"engine,omitempty"`
 	Custom     CustomSignalScore   `json:"custom"`
 	Compare    CustomSignalCompare `json:"scoreCompare"`
-	HuntDetail string              `json:"huntDetail,omitempty"`
+	HuntDetail      string              `json:"huntDetail,omitempty"`
+	ForensicsDetail string              `json:"forensicsDetail,omitempty"`
+	SimilarDetail   string              `json:"similarDetail,omitempty"`
 }
 
 // CustomSignalFactorLabel is the desk label for a factor id.
@@ -479,12 +490,16 @@ func CustomSignalFactorLabel(id string) string {
 	return id
 }
 
-// CustomSignalFactorGroup is "swing" or "hunt".
+// CustomSignalFactorGroup is "swing", "hunt", or "tape".
 func CustomSignalFactorGroup(id string) string {
-	if id == CustomFactorHuntUp {
+	switch id {
+	case CustomFactorHuntUp:
 		return "hunt"
+	case CustomFactorForensics, CustomFactorSimilarSetup:
+		return "tape"
+	default:
+		return "swing"
 	}
-	return "swing"
 }
 
 // CustomSignalCatalog lists mixable factors and built-in percents.
@@ -582,6 +597,21 @@ func (w CustomSignalWeights) NeedsHunt() bool {
 	return w.pctOf(CustomFactorHuntUp) > 0
 }
 
+// NeedsForensics reports whether the mix assigns weight to the forensics tape.
+func (w CustomSignalWeights) NeedsForensics() bool {
+	return w.pctOf(CustomFactorForensics) > 0
+}
+
+// NeedsSimilarSetup reports whether the mix assigns weight to similar setups.
+func (w CustomSignalWeights) NeedsSimilarSetup() bool {
+	return w.pctOf(CustomFactorSimilarSetup) > 0
+}
+
+// NeedsTape reports whether the mix needs a similar/forensics load.
+func (w CustomSignalWeights) NeedsTape() bool {
+	return w.NeedsForensics() || w.NeedsSimilarSetup()
+}
+
 // NormalizeCustomSignalProfileName trims and checks length.
 func NormalizeCustomSignalProfileName(name string) (string, error) {
 	name = strings.TrimSpace(name)
@@ -621,6 +651,12 @@ func BuildCustomSignalRaws(patterns []SwingPattern, hunt *CustomSignalRaw) map[s
 		out[CustomFactorHuntUp] = CustomSignalRaw{
 			Score: 50, Status: CustomFactorMissing, Detail: "hunt not loaded",
 		}
+	}
+	out[CustomFactorForensics] = CustomSignalRaw{
+		Score: 50, Status: CustomFactorMissing, Detail: "forensics not loaded",
+	}
+	out[CustomFactorSimilarSetup] = CustomSignalRaw{
+		Score: 50, Status: CustomFactorMissing, Detail: "similar setup not loaded",
 	}
 	return out
 }

@@ -23,6 +23,31 @@ describe('custom signal helpers', () => {
     const draft = defaultCustomWeightDraft();
     expect(customWeightsValid(draft)).toBe(true);
     expect(weightsFromDraft(draft).hunt_up).toBe(0);
+    expect(weightsFromDraft(draft).forensics).toBe(0);
+    expect(weightsFromDraft(draft).similar_setup).toBe(0);
+  });
+
+  it('marks similar setups against a long as used when weighted', () => {
+    const draft = defaultCustomWeightDraft().map((row) =>
+      row.id === 'similar_setup'
+        ? { ...row, enabled: true, pct: 100 }
+        : { ...row, enabled: false, pct: 0 },
+    );
+    const rows = previewCustomMix(
+      [
+        item({
+          symbol: 'SOLUSDT',
+          custom: {
+            score: 20,
+            factors: [{ id: 'similar_setup', score: 20, status: 'used', detail: 'goes against a long custom signal' }],
+          },
+        }),
+      ],
+      draft,
+    );
+    expect(rows[0]?.factors.find((f) => f.id === 'similar_setup')?.appliedPct).toBe(100);
+    expect(rows[0]?.factors.find((f) => f.id === 'similar_setup')?.appliedEffect).toBeLessThan(0);
+    expect(rows[0]?.tapeMissing).toBe(false);
   });
 
   it('previews score change and names the largest mover', () => {

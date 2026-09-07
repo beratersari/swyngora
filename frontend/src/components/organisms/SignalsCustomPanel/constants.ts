@@ -8,6 +8,8 @@ export const CUSTOM_SIGNAL_FACTORS = [
   { id: 'accumulation', query: 'weightAccumulation', group: 'swing', defaultPct: 10 },
   { id: 'volume_breakout', query: 'weightVolumeBreakout', group: 'swing', defaultPct: 12 },
   { id: 'hunt_up', query: 'weightHuntUp', group: 'hunt', defaultPct: 0 },
+  { id: 'forensics', query: 'weightForensics', group: 'tape', defaultPct: 0 },
+  { id: 'similar_setup', query: 'weightSimilarSetup', group: 'tape', defaultPct: 0 },
 ] as const;
 
 export type CustomSignalFactorId = (typeof CUSTOM_SIGNAL_FACTORS)[number]['id'];

@@ -4952,7 +4952,7 @@ func (b *Backend) ListCustomSignalFactors(context.Context) (json.RawMessage, err
 	}
 	return mustJSON(map[string]any{
 		"factors": b.Swing.ListFactors(),
-		"note":    "Built-in percents match the swing engine. Hunt is off until you give it weight.",
+		"note":    "Built-in percents match the swing engine. Hunt, forensics, and similar setups are off until you give them weight.",
 	})
 }
 

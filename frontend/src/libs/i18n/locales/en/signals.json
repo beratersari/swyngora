@@ -157,6 +157,7 @@
     "missing": "missing",
     "idle": "not present",
     "huntReload": "Hunt is on but this scan has no hunt data yet. Apply the mix to load liquidation hunt.",
+    "tapeReload": "Forensics or similar setups are on but this scan has no tape data yet. Apply the mix to load them.",
     "factors": {
       "ema_crossover": "EMA 9/21 cross",
       "ema_trend_bias": "EMA 50/200 pullback",
@@ -166,7 +167,9 @@
       "adx_trend_strength": "ADX trend",
       "accumulation": "BB squeeze / dry-up",
       "volume_breakout": "Volume breakout",
-      "hunt_up": "Liquidation hunt (up)"
+      "hunt_up": "Liquidation hunt (up)",
+      "forensics": "Forensics tape",
+      "similar_setup": "Similar setups"
     }
   }
 }

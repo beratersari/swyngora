@@ -259,6 +259,7 @@ func (s *Service) ScanCustom(ctx context.Context, in CustomScanInput) (*CustomSc
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 6)
 	needHunt := w.NeedsHunt()
+	needTape := w.NeedsTape()
 	for _, it := range items {
 		it := it
 		wg.Add(1)
@@ -270,7 +271,7 @@ func (s *Service) ScanCustom(ctx context.Context, in CustomScanInput) (*CustomSc
 			case <-ctx.Done():
 				return
 			}
-			row, err := s.scoreOne(ctx, it.Exchange, it.Symbol, w, needHunt)
+			row, err := s.scoreOne(ctx, it.Exchange, it.Symbol, w, needHunt, needTape)
 			if err != nil {
 				return
 			}
@@ -293,7 +294,7 @@ func (s *Service) ScanCustom(ctx context.Context, in CustomScanInput) (*CustomSc
 	}, nil
 }
 
-func (s *Service) scoreOne(ctx context.Context, ex domain.Exchange, symbol string, w domain.CustomSignalWeights, needHunt bool) (domain.CustomSignalItem, error) {
+func (s *Service) scoreOne(ctx context.Context, ex domain.Exchange, symbol string, w domain.CustomSignalWeights, needHunt, needTape bool) (domain.CustomSignalItem, error) {
 	dec, err := s.analyzeResolved(ctx, ex, symbol)
 	if err != nil {
 		return domain.CustomSignalItem{}, err
@@ -306,20 +307,47 @@ func (s *Service) scoreOne(ctx context.Context, ex domain.Exchange, symbol strin
 		huntDetail = raw.Detail
 	}
 	raws := domain.BuildCustomSignalRaws(dec.Patterns, hunt)
+	var forensicsDetail, similarDetail string
+	if needTape {
+		sim := s.loadSimilarReport(ctx, ex, symbol)
+		if w.NeedsForensics() {
+			raw := domain.ForensicsFactorRaw(sim)
+			raws[domain.CustomFactorForensics] = raw
+			forensicsDetail = raw.Detail
+		}
+		if w.NeedsSimilarSetup() {
+			raw := domain.SimilarSetupFactorRaw(sim)
+			raws[domain.CustomFactorSimilarSetup] = raw
+			similarDetail = raw.Detail
+		}
+	}
 	custom := domain.ScoreCustomSignal(raws, w)
 	cmp := domain.CompareCustomSignal(raws, w)
 	domain.AlignCustomDefaultToEngine(&cmp, dec.SwingScore)
 	return domain.CustomSignalItem{
-		Exchange:   ex,
-		Symbol:     symbol,
-		Interval:   dec.Interval,
-		Price:      dec.Price,
-		BarTime:    dec.BarTime,
-		Engine:     dec,
-		Custom:     custom,
-		Compare:    cmp,
-		HuntDetail: huntDetail,
+		Exchange:        ex,
+		Symbol:          symbol,
+		Interval:        dec.Interval,
+		Price:           dec.Price,
+		BarTime:         dec.BarTime,
+		Engine:          dec,
+		Custom:          custom,
+		Compare:         cmp,
+		HuntDetail:      huntDetail,
+		ForensicsDetail: forensicsDetail,
+		SimilarDetail:   similarDetail,
 	}, nil
+}
+
+func (s *Service) loadSimilarReport(ctx context.Context, ex domain.Exchange, symbol string) *domain.AroundSimilarReport {
+	if s == nil || s.market == nil {
+		return nil
+	}
+	rep, err := s.market.GetAroundSimilar(ctx, string(ex), symbol, "", "", "", 0, 0, "", "", "", "", "", "", time.Time{})
+	if err != nil {
+		return nil
+	}
+	return rep
 }
 
 func (s *Service) loadHuntRaw(ctx context.Context, symbol string) domain.CustomSignalRaw {

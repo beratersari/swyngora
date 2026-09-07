@@ -38,6 +38,10 @@ export function draftNeedsHunt(draft: CustomWeightDraftRow[]): boolean {
   return Boolean(row?.enabled && row.pct > 0);
 }
 
+export function draftNeedsTape(draft: CustomWeightDraftRow[]): boolean {
+  return draft.some((d) => (d.id === 'forensics' || d.id === 'similar_setup') && d.enabled && d.pct > 0);
+}
+
 function round1(v: number): number {
   return Math.round(v * 10) / 10;
 }
@@ -138,6 +142,9 @@ export function previewCustomMix(items: CustomSignalItem[], draft: CustomWeightD
       };
     });
     const hunt = factors.find((f) => f.id === 'hunt_up');
+    const tapeMissing = factors.some(
+      (f) => (f.id === 'forensics' || f.id === 'similar_setup') && f.appliedPct > 0 && f.status === 'missing',
+    );
     return {
       exchange: item.exchange ?? '',
       symbol: item.symbol ?? '',
@@ -157,6 +164,7 @@ export function previewCustomMix(items: CustomSignalItem[], draft: CustomWeightD
       factors,
       largestChange: largestCustomFactorChange(factors),
       huntMissing: Boolean(hunt && hunt.appliedPct > 0 && hunt.status === 'missing'),
+      tapeMissing,
     };
   }).sort((a, b) => b.appliedScore - a.appliedScore || a.symbol.localeCompare(b.symbol));
 }

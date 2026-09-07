@@ -81,14 +81,14 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_indicators` | RSI/EMA |
 | `analyze_swing` | 4h+1d swing engine (quality gates, ATR stop/TP) |
 | `scan_swing_setups` | Watchlist swing scan |
-| `list_custom_signal_factors` | Mixable swing patterns + hunt_up and built-in percents |
+| `list_custom_signal_factors` | Mixable swing patterns + hunt_up / forensics / similar_setup and built-in percents |
 | `list_custom_signal_profiles` | Saved custom-signal mixes |
 | `create_custom_signal_profile` | Save a named mix (weights sum to 100) |
 | `update_custom_signal_profile` | Edit a saved mix |
 | `duplicate_custom_signal_profile` | Copy a saved mix |
 | `set_default_custom_signal_profile` | Mix the Custom tab opens with |
 | `delete_custom_signal_profile` | Delete a saved mix |
-| `scan_custom_signals` | Watchlist scored with a custom mix (`profileId` or weight*) |
+| `scan_custom_signals` | Watchlist scored with a custom mix (`profileId` or weight*; optional forensics / similar_setup support or go against a long) |
 | `detect_pump_events` | Pump/dump events on one symbol (threshold, interval, lookback) |
 | `scan_pump_events` | Scan top-volume symbols for recent pumps (`maxTotalEvents` caps total events; response includes resolved defaults) |
 | `get_watchlist` | Read watchlist (optional `ownerClientId` for shared lists) |

@@ -228,6 +228,18 @@ func TestCustomSignalCatalog(t *testing.T) {
 	if huntPct != 0 {
 		t.Fatalf("hunt default %v", huntPct)
 	}
+	var tape int
+	for _, r := range cat {
+		if r.ID == CustomFactorForensics || r.ID == CustomFactorSimilarSetup {
+			if r.Group != "tape" || r.DefaultPct != 0 {
+				t.Fatalf("%+v", r)
+			}
+			tape++
+		}
+	}
+	if tape != 2 {
+		t.Fatalf("expected two tape factors, got %d", tape)
+	}
 }
 
 func TestClassifyCustomSignalImport(t *testing.T) {

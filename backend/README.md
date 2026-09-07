@@ -160,7 +160,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/scanner/backtests/{id}` | Backtest progress/summary |
 | `POST` | `/api/v1/scanner/backtests/{id}/cancel` | Cancel backtest |
 | `GET` | `/api/v1/scanner/backtests/{id}/signals` | Backtest signals + 1/5/20d returns |
-| `GET` | `/api/v1/swing/custom/factors` | Mixable swing + hunt factors and built-in percents |
+| `GET` | `/api/v1/swing/custom/factors` | Mixable swing + hunt + forensics/similar factors and built-in percents |
 | `GET`/`POST` | `/api/v1/swing/custom/profiles` | List / save a named custom mix (weights sum to 100) |
 | `GET`/`PATCH`/`DELETE` | `/api/v1/swing/custom/profiles/{id}` | Get / update / delete a saved mix |
 | `GET` | `/api/v1/swing/custom/scan` | Watchlist scored with a mix (`profileId` or `weight*`) |

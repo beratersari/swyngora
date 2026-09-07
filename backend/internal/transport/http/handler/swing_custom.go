@@ -30,7 +30,9 @@ type customSignalItemDTO struct {
 	Engine     *swingDecisionDTO          `json:"engine,omitempty"`
 	Custom     domain.CustomSignalScore   `json:"custom"`
 	Compare    domain.CustomSignalCompare `json:"scoreCompare"`
-	HuntDetail string                     `json:"huntDetail,omitempty"`
+	HuntDetail      string                     `json:"huntDetail,omitempty"`
+	ForensicsDetail string                     `json:"forensicsDetail,omitempty"`
+	SimilarDetail   string                     `json:"similarDetail,omitempty"`
 }
 
 func customProfileToDTO(p *domain.CustomSignalProfile) customSignalProfileDTO {
@@ -57,6 +59,7 @@ func customItemToDTO(it domain.CustomSignalItem) customSignalItemDTO {
 	out := customSignalItemDTO{
 		Exchange: string(it.Exchange), Symbol: it.Symbol, Interval: it.Interval,
 		Price: it.Price, Custom: it.Custom, Compare: it.Compare, HuntDetail: it.HuntDetail,
+		ForensicsDetail: it.ForensicsDetail, SimilarDetail: it.SimilarDetail,
 	}
 	if !it.BarTime.IsZero() {
 		out.BarTime = it.BarTime.UTC().Format(time.RFC3339Nano)
@@ -76,7 +79,7 @@ func (h *SwingHandler) ListCustomFactors(w http.ResponseWriter, r *http.Request)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"factors": h.svc.ListFactors(),
-		"note":    "Built-in percents match the swing engine. Hunt is off until you give it weight. Mix must sum to 100.",
+		"note":    "Built-in percents match the swing engine. Hunt, forensics, and similar setups are off until you give them weight. Mix must sum to 100.",
 	})
 }
 

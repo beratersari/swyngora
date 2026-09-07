@@ -3113,7 +3113,7 @@ paths:
   /api/v1/swing/custom/factors:
     get:
       summary: List custom-signal factors
-      description: Swing-engine pattern ids plus optional liquidation-hunt up score. Built-in percents match the engine; hunt defaults to 0.
+      description: Swing-engine pattern ids plus optional hunt_up, forensics, and similar_setup. Built-in percents match the engine; hunt and tape factors default to 0.
       operationId: listCustomSignalFactors
       tags: [Scanner]
       responses:
@@ -3300,8 +3300,10 @@ paths:
       summary: Scan the watchlist with a custom signal mix
       description: |
         Scores watchlist coins with the selected factor weights (must sum to 100).
-        Default mix matches the swing engine (hunt off). Inline weight* overrides
-        a saved profileId. Missing hunt keeps its percent and adds 0 (neutral 50).
+        Default mix matches the swing engine (hunt / forensics / similar off).
+        Inline weight* overrides a saved profileId. Missing optional factors keep
+        their percent and add 0. Forensics and similar setups score whether the
+        current tape / after-path supports a long custom signal or goes against it.
         scoreCompare is default vs applied with per-factor effect. Informational only.
       operationId: scanCustomSignals
       tags: [Scanner]
@@ -3348,6 +3350,14 @@ paths:
         - name: weightHuntUp
           in: query
           description: Combined liquidation-hunt up score (long-side). 0 = omitted.
+          schema: { type: number }
+        - name: weightForensics
+          in: query
+          description: Current-tape forensics match vs past pre-move setups (supports or goes against a long). 0 = omitted.
+          schema: { type: number }
+        - name: weightSimilarSetup
+          in: query
+          description: What usually happened after similar past setups (supports or goes against a long). 0 = omitted.
           schema: { type: number }
       responses:
         '200':
@@ -9470,6 +9480,8 @@ components:
         scoreCompare:
           $ref: '#/components/schemas/CustomSignalCompare'
         huntDetail: { type: string }
+        forensicsDetail: { type: string }
+        similarDetail: { type: string }
     CustomSignalScan:
       type: object
       properties:

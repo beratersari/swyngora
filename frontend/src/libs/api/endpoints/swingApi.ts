@@ -25,6 +25,8 @@ export type ScanCustomSignalsArg = {
   weightAccumulation?: number;
   weightVolumeBreakout?: number;
   weightHuntUp?: number;
+  weightForensics?: number;
+  weightSimilarSetup?: number;
 };
 
 export const swingApi = baseApi.injectEndpoints({
@@ -109,6 +111,8 @@ export const swingApi = baseApi.injectEndpoints({
           weightAccumulation: arg?.weightAccumulation,
           weightVolumeBreakout: arg?.weightVolumeBreakout,
           weightHuntUp: arg?.weightHuntUp,
+          weightForensics: arg?.weightForensics,
+          weightSimilarSetup: arg?.weightSimilarSetup,
         },
       }),
       providesTags: ['CustomSignalScan'],

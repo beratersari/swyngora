@@ -157,6 +157,7 @@
     "missing": "eksik",
     "idle": "yok",
     "huntReload": "Av açık ama bu taramada av verisi yok. Likidasyon avını yüklemek için karışımı uygulayın.",
+    "tapeReload": "Adli veya benzer kurulumlar açık ama bu taramada bant verisi yok. Yüklemek için karışımı uygulayın.",
     "factors": {
       "ema_crossover": "EMA 9/21 kesişimi",
       "ema_trend_bias": "EMA 50/200 geri çekilme",
@@ -166,7 +167,9 @@
       "adx_trend_strength": "ADX trend",
       "accumulation": "BB sıkışması",
       "volume_breakout": "Hacim kırılması",
-      "hunt_up": "Likidasyon avı (yukarı)"
+      "hunt_up": "Likidasyon avı (yukarı)",
+      "forensics": "Adli bant",
+      "similar_setup": "Benzer kurulumlar"
     }
   }
 }
