@@ -218,6 +218,20 @@ func TestExplainAroundReport_PrefersCombined(t *testing.T) {
 	}
 }
 
+func TestFuturesAcrossSamples_NeedsBothOIPrints(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	from := &FuturesSnapshot{SampledAt: at.Add(-time.Hour), Value: 1000}
+	got := FuturesAcrossSamples(from, nil, nil, nil, nil, nil, nil)
+	if got != nil && got.HasOI {
+		t.Fatalf("one-sided OI must not be used as a change %+v", got)
+	}
+	to := &FuturesSnapshot{SampledAt: at, Value: 1100}
+	both := FuturesAcrossSamples(from, to, nil, nil, nil, nil, nil)
+	if both == nil || !both.HasOI || both.OIChangePct < 9 {
+		t.Fatalf("%+v", both)
+	}
+}
+
 func TestLatestFuturesSnapshotAtOrBefore_NeverUsesLaterSample(t *testing.T) {
 	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
 	rows := []FuturesSnapshot{

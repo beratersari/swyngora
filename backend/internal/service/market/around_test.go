@@ -93,7 +93,7 @@ func TestGetAround_AttachesBookAndFutures(t *testing.T) {
 	svc := New(&fakeMarket{candles: tape, ticker: &domain.Ticker24h{LastPrice: "105"}}, &fakeSupply{})
 	svc.WithBookHistory(stubAroundBook{
 		from: domain.BookHistorySnapshot{Symbol: "BTCUSDT", Exchange: domain.ExchangeBinance, SampledAt: at.Add(-time.Minute), Mid: 100, BidNotional: 5000, AskNotional: 4000},
-		to:   domain.BookHistorySnapshot{Symbol: "BTCUSDT", Exchange: domain.ExchangeBinance, SampledAt: at.Add(10 * time.Minute), Mid: 107, BidNotional: 2000, AskNotional: 6000},
+		to:   domain.BookHistorySnapshot{Symbol: "BTCUSDT", Exchange: domain.ExchangeBinance, SampledAt: at.Add(14 * time.Minute), Mid: 107, BidNotional: 2000, AskNotional: 6000},
 	})
 	svc.SetFuturesHistory(stubAroundFut{
 		snaps: []domain.FuturesSnapshot{
@@ -445,6 +445,11 @@ func (s stubAroundBook) SnapshotAt(_ context.Context, _, _ string, at time.Time)
 	if best == nil {
 		return nil, domain.ErrNotFound
 	}
+	marked, ok := domain.NearestBookSnapshot([]domain.BookHistorySnapshot{*best}, at, domain.DefaultBookHistorySlack)
+	if ok {
+		return &marked, nil
+	}
+	best.Complete = false
 	return best, nil
 }
 func (s stubAroundBook) List(context.Context, domain.BookHistoryQuery) ([]domain.BookHistorySnapshot, error) {

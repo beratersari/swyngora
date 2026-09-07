@@ -237,11 +237,11 @@ func (s *Service) attachAroundBook(ctx context.Context, ex domain.Exchange, symb
 			continue
 		}
 		fromSnap, err := s.bookHist.SnapshotAt(ctx, string(ex), symbol, ph.From)
-		if err != nil || fromSnap == nil || fromSnap.SampledAt.After(ph.To) {
+		if err != nil || fromSnap == nil || !fromSnap.Complete || fromSnap.SampledAt.After(ph.To) {
 			continue
 		}
 		toSnap, err := s.bookHist.SnapshotAt(ctx, string(ex), symbol, ph.To)
-		if err != nil || toSnap == nil || toSnap.SampledAt.After(ph.To) {
+		if err != nil || toSnap == nil || !toSnap.Complete || toSnap.SampledAt.After(ph.To) {
 			continue
 		}
 		diff := domain.CompareBookHistory(*fromSnap, *toSnap)
@@ -279,12 +279,12 @@ func (s *Service) attachAroundFutures(ctx context.Context, ex domain.Exchange, s
 			phaseLiqs = append(phaseLiqs, e)
 		}
 		got := domain.FuturesAcrossSamples(
-			domain.LatestFuturesSnapshotAtOrBefore(oi, ph.From),
-			domain.LatestFuturesSnapshotAtOrBefore(oi, ph.To),
-			domain.LatestFuturesSnapshotAtOrBefore(fund, ph.From),
-			domain.LatestFuturesSnapshotAtOrBefore(fund, ph.To),
-			domain.LatestFuturesSnapshotAtOrBefore(ls, ph.From),
-			domain.LatestFuturesSnapshotAtOrBefore(ls, ph.To),
+			domain.FreshFuturesSnapshotAtOrBefore(oi, ph.From, domain.AroundTapeFreshSlack),
+			domain.FreshFuturesSnapshotAtOrBefore(oi, ph.To, domain.AroundTapeFreshSlack),
+			domain.FreshFuturesSnapshotAtOrBefore(fund, ph.From, domain.AroundTapeFreshSlack),
+			domain.FreshFuturesSnapshotAtOrBefore(fund, ph.To, domain.AroundTapeFreshSlack),
+			domain.FreshFuturesSnapshotAtOrBefore(ls, ph.From, domain.AroundTapeFreshSlack),
+			domain.FreshFuturesSnapshotAtOrBefore(ls, ph.To, domain.AroundTapeFreshSlack),
 			phaseLiqs,
 		)
 		if got != nil {

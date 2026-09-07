@@ -757,6 +757,16 @@ type aroundSimilarScore struct {
 	Matches    []string
 }
 
+func futuresOIComparable(f *AroundFutures) bool {
+	if f == nil || !f.Complete {
+		return false
+	}
+	if f.HasOI {
+		return true
+	}
+	return f.OIFrom > 0 && f.OITo > 0
+}
+
 func aroundPhaseSimilarity(a, b AroundPhase, want AroundSimilarFields, w AroundSimilarWeights) aroundSimilarScore {
 	type cand struct {
 		name   string
@@ -792,7 +802,7 @@ func aroundPhaseSimilarity(a, b AroundPhase, want AroundSimilarFields, w AroundS
 	}
 	if want.OI && w.of(AroundSimilarFieldOI) > 0 {
 		c := cand{name: AroundSimilarFieldOI, weight: w.of(AroundSimilarFieldOI)}
-		if a.Futures != nil && a.Futures.Complete && b.Futures != nil && b.Futures.Complete {
+		if futuresOIComparable(a.Futures) && futuresOIComparable(b.Futures) {
 			c.have = true
 			c.score = closenessAbs(a.Futures.OIChangePct, b.Futures.OIChangePct, 6)
 			c.match = sameDir(a.Futures.OIDirection, b.Futures.OIDirection)

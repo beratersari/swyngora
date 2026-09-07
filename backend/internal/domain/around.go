@@ -28,6 +28,10 @@ const (
 	MaxAroundLookback   = 30 * 24 * time.Hour
 	AroundTypicalPriors = 8
 
+	// AroundTapeFreshSlack is how close a stored OI/funding print must be to
+	// a phase clock before we treat it as current evidence.
+	AroundTapeFreshSlack = 8 * time.Minute
+
 	AroundPathContinued = "continued"
 	AroundPathReversed  = "reversed"
 	AroundPathFaded     = "faded"
@@ -159,6 +163,7 @@ type AroundFutures struct {
 	OIChange    float64
 	OIChangePct float64
 	OIDirection string
+	HasOI       bool // both ends have a fresh OI print
 	FundingFrom float64
 	FundingTo   float64
 	LongPctFrom float64
@@ -1209,9 +1214,12 @@ func combineAroundFutures(in []AroundFutures) AroundFutures {
 	out := AroundFutures{Complete: true}
 	var oiN, fundN, lsN float64
 	for _, f := range in {
-		if f.OIFrom > 0 || f.OITo > 0 {
+		if f.HasOI || f.OIFrom > 0 || f.OITo > 0 {
 			out.OIFrom += f.OIFrom
 			out.OITo += f.OITo
+			if f.HasOI {
+				out.HasOI = true
+			}
 			oiN++
 		}
 		if f.FundingFrom != 0 || f.FundingTo != 0 {
@@ -1294,19 +1302,16 @@ func BookFromDiff(d BookHistoryDiff) *AroundBook {
 // FuturesAcrossSamples is OI / funding / long% at two times plus liquidations in the window.
 func FuturesAcrossSamples(fromOI, toOI, fromFund, toFund, fromLS, toLS *FuturesSnapshot, liqs []LiquidationEvent) *AroundFutures {
 	out := AroundFutures{}
-	if fromOI != nil {
+	if fromOI != nil && toOI != nil {
 		out.OIFrom = futuresOIValue(*fromOI)
-	}
-	if toOI != nil {
 		out.OITo = futuresOIValue(*toOI)
-	}
-	if out.OIFrom > 0 || out.OITo > 0 {
-		out.OIChange = out.OITo - out.OIFrom
-		if out.OIFrom > 0 {
+		if out.OIFrom > 0 && out.OITo > 0 {
+			out.HasOI = true
+			out.OIChange = out.OITo - out.OIFrom
 			out.OIChangePct = out.OIChange / out.OIFrom * 100
+			out.OIDirection = changeDir(out.OIChangePct)
+			out.Complete = true
 		}
-		out.OIDirection = changeDir(out.OIChangePct)
-		out.Complete = true
 	}
 	if fromFund != nil {
 		out.FundingFrom = fromFund.FundingRate
@@ -1377,6 +1382,25 @@ func NearestFuturesSnapshot(rows []FuturesSnapshot, at time.Time, slack time.Dur
 		return before
 	}
 	return after
+}
+
+// aroundSampleFresh is true when sampled is at or before at and not older than slack.
+func aroundSampleFresh(sampled, at time.Time, slack time.Duration) bool {
+	if sampled.IsZero() || at.IsZero() {
+		return false
+	}
+	age := at.UTC().Sub(sampled.UTC())
+	return age >= 0 && age <= slack
+}
+
+// FreshFuturesSnapshotAtOrBefore is the newest sample at or before at that is
+// still within slack. Older prints are not used as if they were current.
+func FreshFuturesSnapshotAtOrBefore(rows []FuturesSnapshot, at time.Time, slack time.Duration) *FuturesSnapshot {
+	s := LatestFuturesSnapshotAtOrBefore(rows, at)
+	if s == nil || !aroundSampleFresh(s.SampledAt, at, slack) {
+		return nil
+	}
+	return s
 }
 
 // LatestFuturesSnapshotAtOrBefore is the newest sample at or before at.

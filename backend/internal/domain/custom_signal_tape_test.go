@@ -4,6 +4,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNeedsTape_OffByDefault(t *testing.T) {
@@ -86,6 +87,77 @@ func TestSimilarSetupFactorRaw_UsesSignalHorizonNotOneHour(t *testing.T) {
 	oneH := SimilarSetupFactorRaw(rep, AroundSimilarHorizon1h)
 	if oneH.Status != CustomFactorUsed || oneH.Score <= 50 {
 		t.Fatalf("1h support %+v", oneH)
+	}
+}
+
+func TestCustomTapeQuality_MissingTapeIsNotFullEvidence(t *testing.T) {
+	t.Parallel()
+	full := &AroundSimilarReport{
+		Matches: []AroundSimilarHit{{
+			Similarity: 80, Coverage: 100,
+			Used: []string{"price", "volume", "takers", "oi", "book"},
+			Compared: []AroundSimilarFieldScore{
+				{Name: AroundSimilarFieldTakers, Used: true, Weight: 1.5},
+				{Name: AroundSimilarFieldOI, Used: true, Weight: 3},
+				{Name: AroundSimilarFieldBook, Used: true, Weight: 3},
+			},
+		}},
+		AfterHorizons: []AroundSimilarHorizonStat{{Horizon: "4h", Sample: 5, Up: 5, Down: 0}},
+	}
+	thin := &AroundSimilarReport{
+		Matches: []AroundSimilarHit{{
+			Similarity: 80, Coverage: 62,
+			Missing: []string{AroundSimilarFieldTakers, AroundSimilarFieldOI},
+			Compared: []AroundSimilarFieldScore{
+				{Name: AroundSimilarFieldTakers, Used: false, Weight: 1.5},
+				{Name: AroundSimilarFieldOI, Used: false, Weight: 3},
+				{Name: AroundSimilarFieldBook, Used: true, Weight: 3},
+			},
+		}},
+		AfterHorizons: []AroundSimilarHorizonStat{{Horizon: "4h", Sample: 5, Up: 5, Down: 0}},
+	}
+	a := SimilarSetupFactorRaw(full, AroundSimilarHorizon4h)
+	b := SimilarSetupFactorRaw(thin, AroundSimilarHorizon4h)
+	if a.Status != CustomFactorUsed || b.Status != CustomFactorUsed {
+		t.Fatalf("a=%+v b=%+v", a, b)
+	}
+	if b.Score >= a.Score {
+		t.Fatalf("thin tape should be weaker evidence: full=%.1f thin=%.1f", a.Score, b.Score)
+	}
+	if !strings.Contains(b.Detail, "missing") {
+		t.Fatalf("detail %q", b.Detail)
+	}
+	gone := &AroundSimilarReport{
+		Matches: []AroundSimilarHit{{
+			Similarity: 80, Coverage: 40,
+			Missing: []string{AroundSimilarFieldTakers, AroundSimilarFieldOI, AroundSimilarFieldBook, AroundSimilarFieldOptions},
+			Compared: []AroundSimilarFieldScore{
+				{Name: AroundSimilarFieldTakers, Used: false, Weight: 1.5},
+				{Name: AroundSimilarFieldOI, Used: false, Weight: 3},
+				{Name: AroundSimilarFieldBook, Used: false, Weight: 3},
+				{Name: AroundSimilarFieldOptions, Used: false, Weight: 2},
+			},
+		}},
+		AfterHorizons: []AroundSimilarHorizonStat{{Horizon: "4h", Sample: 5, Up: 5, Down: 0}},
+	}
+	if got := SimilarSetupFactorRaw(gone, AroundSimilarHorizon4h); got.Status != CustomFactorMissing {
+		t.Fatalf("mostly missing tape must not be used: %+v", got)
+	}
+}
+
+func TestFreshFuturesSnapshotAtOrBefore_DropsStale(t *testing.T) {
+	t.Parallel()
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	rows := []FuturesSnapshot{
+		{SampledAt: at.Add(-40 * time.Minute), Value: 1000},
+	}
+	if got := FreshFuturesSnapshotAtOrBefore(rows, at, AroundTapeFreshSlack); got != nil {
+		t.Fatalf("stale %+v", got)
+	}
+	rows = append(rows, FuturesSnapshot{SampledAt: at.Add(-3 * time.Minute), Value: 1100})
+	got := FreshFuturesSnapshotAtOrBefore(rows, at, AroundTapeFreshSlack)
+	if got == nil || got.Value != 1100 {
+		t.Fatalf("%+v", got)
 	}
 }
 

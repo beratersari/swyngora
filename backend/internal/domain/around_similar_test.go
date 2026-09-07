@@ -14,7 +14,7 @@ func similarPhase(volRatio, oiPct, bidDelta float64, dir string) AroundPhase {
 		Price:    AroundPrice{Direction: CVDDirFlat, ChangePct: 0.1},
 		Flow:     AroundFlow{TypicalKnown: true, VolumeRatio: volRatio, VolumeGrade: VolumeSurgeElevated},
 		Book:     &AroundBook{BidNotionalDelta: bidDelta, AskNotionalDelta: 100, Complete: true},
-		Futures:  &AroundFutures{OIDirection: dir, OIChangePct: oiPct, Complete: true},
+		Futures:  &AroundFutures{OIDirection: dir, OIChangePct: oiPct, HasOI: true, Complete: true},
 	}
 }
 
@@ -88,6 +88,15 @@ func TestAroundPhaseSimilarity_ThinDataCannotScoreHigh(t *testing.T) {
 	}
 	if !foundPrice {
 		t.Fatalf("price should be listed as used %+v", sc.Compared)
+	}
+}
+
+func TestAroundPhaseSimilarity_FundingOnlyFuturesIsNotOI(t *testing.T) {
+	a := AroundPhase{Complete: true, Futures: &AroundFutures{Complete: true, FundingFrom: 0.01, FundingTo: 0.02}}
+	b := AroundPhase{Complete: true, Futures: &AroundFutures{Complete: true, FundingFrom: 0.01, FundingTo: 0.02}}
+	sc := aroundPhaseSimilarity(a, b, AroundSimilarFields{OI: true}, AroundSimilarWeights{OI: 3})
+	if len(sc.Missing) != 1 || sc.Missing[0] != AroundSimilarFieldOI {
+		t.Fatalf("funding-only futures must not count as OI %+v", sc)
 	}
 }
 

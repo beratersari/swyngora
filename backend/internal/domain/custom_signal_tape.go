@@ -40,10 +40,17 @@ func SimilarSetupFactorRaw(rep *AroundSimilarReport, horizon string) CustomSigna
 	if total < customTapeMinAfter {
 		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: "not enough similar after-tape"}
 	}
+	qual, qnote, ok := customTapeQuality(rep)
+	if !ok {
+		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: qnote}
+	}
 	lean := ForensicsScanLean(up, down)
-	score, detail, ok := tapeLeanScore(lean, up, down, when, 1)
+	score, detail, ok := tapeLeanScore(lean, up, down, when, qual)
 	if !ok {
 		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: "similar after-path is mixed"}
+	}
+	if qnote != "" {
+		detail = qnote + ". " + detail
 	}
 	return CustomSignalRaw{Score: score, Status: CustomFactorUsed, Detail: detail}
 }
@@ -65,6 +72,10 @@ func ForensicsFactorRaw(rep *AroundSimilarReport, horizon string) CustomSignalRa
 	if lean != CVDDirUp && lean != CVDDirDown {
 		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: "forensics after-path is mixed"}
 	}
+	qual, qnote, ok := customTapeQuality(rep)
+	if !ok {
+		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: qnote}
+	}
 	sim := hit.Similarity / 100
 	if sim <= 0 {
 		sim = 0.4
@@ -72,12 +83,83 @@ func ForensicsFactorRaw(rep *AroundSimilarReport, horizon string) CustomSignalRa
 	if sim > 1 {
 		sim = 1
 	}
-	score, detail, ok := tapeLeanScore(lean, up, down, when, sim)
+	score, detail, ok := tapeLeanScore(lean, up, down, when, sim*qual)
 	if !ok {
 		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: "forensics after-path is mixed"}
 	}
 	detail = fmt.Sprintf("Current tape is %.0f similar to a past pre-move setup. %s", hit.Similarity, detail)
+	if qnote != "" {
+		detail = qnote + ". " + detail
+	}
 	return CustomSignalRaw{Score: score, Status: CustomFactorUsed, Detail: detail}
+}
+
+// customTapeQuality uses existing similar coverage / missing fields so stale
+// or absent OI, takers, book, or options are not treated as full evidence.
+func customTapeQuality(rep *AroundSimilarReport) (strength float64, note string, ok bool) {
+	if rep == nil || len(rep.Matches) == 0 {
+		return 0, "no similar past setups", false
+	}
+	hit := rep.Matches[0]
+	if len(hit.Compared) == 0 && hit.Coverage <= 0 {
+		return 1, "", true
+	}
+	cov := hit.Coverage
+	if cov <= 0 && len(hit.Compared) > 0 {
+		var selected, used float64
+		for _, c := range hit.Compared {
+			selected += c.Weight
+			if c.Used {
+				used += c.Weight
+			}
+		}
+		if selected > 0 {
+			cov = 100 * used / selected
+		}
+	}
+	if cov > 0 && cov < DefaultAroundSimilarMinCoverage {
+		return 0, "closest setup lacked enough selected data", false
+	}
+	missing := make([]string, 0, 4)
+	seen := map[string]bool{}
+	for _, name := range hit.Missing {
+		if !customTapeField(name) || seen[name] {
+			continue
+		}
+		seen[name] = true
+		missing = append(missing, name)
+	}
+	for _, c := range hit.Compared {
+		if c.Used || !customTapeField(c.Name) || seen[c.Name] {
+			continue
+		}
+		seen[c.Name] = true
+		missing = append(missing, c.Name)
+	}
+	if len(missing) >= 3 {
+		return 0, "too much tape missing (" + joinList(missing) + ")", false
+	}
+	strength = 1
+	if cov > 0 {
+		strength = cov / 100
+	}
+	if len(missing) > 0 {
+		strength *= 1 - 0.2*float64(len(missing))
+		note = "missing " + joinList(missing)
+	}
+	if strength <= 0 {
+		return 0, note, false
+	}
+	return strength, note, true
+}
+
+func customTapeField(name string) bool {
+	switch name {
+	case AroundSimilarFieldTakers, AroundSimilarFieldOI, AroundSimilarFieldBook, AroundSimilarFieldOptions:
+		return true
+	default:
+		return false
+	}
 }
 
 // similarAfterCounts uses the signal-range horizon only. It does not fall
