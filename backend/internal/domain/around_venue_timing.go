@@ -430,19 +430,22 @@ func MarkAroundOIUntil(snaps []FuturesSnapshot, start time.Time, dir string, unt
 // start until the price move, or spiked and then faded / flipped. Empty
 // when the last known bar is the start print, is too far before price, or
 // the last minutes before price have no tape — do not guess the path.
+// The bar at `until` is the first minute of the price move, not pre-price
+// tape: 11:52 then a hole until 12:00 is unknown, even if 12:00 still buys.
 func MarkAroundTakerUntil(bars []AroundBar, start time.Time, dir string, until time.Time) string {
 	if start.IsZero() || until.IsZero() || !until.After(start) || (dir != TakerSideBuy && dir != TakerSideSell) {
 		return ""
 	}
 	last, ok := lastAroundKnownTakerBar(bars, until)
-	if !ok || !aroundVenueUntilFreshEnough(last.Time, start, until) {
+	if !ok || !last.Time.Before(until) || !aroundVenueUntilFreshEnough(last.Time, start, until) {
 		return ""
 	}
 	tailFrom := until.Add(-aroundVenueTakerTail)
 	if tailFrom.Before(start) {
 		tailFrom = start
 	}
-	tailBars := aroundBarsThrough(bars, tailFrom, until)
+	// [tailFrom, until) — never the price-start bar.
+	tailBars := FilterAroundBars(bars, tailFrom, until)
 	if !aroundTakerBarsKnown(tailBars) {
 		return ""
 	}
@@ -473,7 +476,7 @@ func lastAroundKnownTakerBar(bars []AroundBar, until time.Time) (AroundBar, bool
 	var out AroundBar
 	ok := false
 	for _, b := range bars {
-		if !b.BuySellKnown || b.Time.IsZero() || b.Time.After(until) {
+		if !b.BuySellKnown || b.Time.IsZero() || !b.Time.Before(until) {
 			continue
 		}
 		if !ok || b.Time.After(out.Time) {
@@ -482,20 +485,6 @@ func lastAroundKnownTakerBar(bars []AroundBar, until time.Time) (AroundBar, bool
 		}
 	}
 	return out, ok
-}
-
-func aroundBarsThrough(bars []AroundBar, from, to time.Time) []AroundBar {
-	if len(bars) == 0 || to.Before(from) {
-		return nil
-	}
-	out := make([]AroundBar, 0, len(bars))
-	for _, b := range bars {
-		if b.Time.Before(from) || b.Time.After(to) {
-			continue
-		}
-		out = append(out, b)
-	}
-	return out
 }
 
 func aroundTakerBarsKnown(bars []AroundBar) bool {

@@ -2017,6 +2017,7 @@ paths:
         takers is the leader only if that OI or taker print kept going until
         price. If the last OI sample or taker bar is much earlier than the
         price start, the path is omitted (not continued / faded / reversed).
+        The taker bar at the price start is not pre-price tape.
         Informational only.
       operationId: getMarketAround
       tags: [Market]

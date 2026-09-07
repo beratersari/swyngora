@@ -472,6 +472,38 @@ func TestMarkAroundTakerUntil_StaleEndIsUnknown(t *testing.T) {
 	}
 }
 
+func TestMarkAroundTakerUntil_PriceStartBarIsNotPrePrice(t *testing.T) {
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	// 11:52 lean, then a hole, then the 12:00 bar still buying.
+	// The 12:00 bar is the first minute of the move — not pre-price tape.
+	var gap []AroundBar
+	for _, i := range []int{-20, -15, -8, 0, 1} {
+		t0 := at.Add(time.Duration(i) * time.Minute)
+		b := AroundBar{Time: t0, Open: 100, Close: 100, High: 100, Low: 100, Volume: 10, BuySellKnown: true, BuyVolume: 5, SellVolume: 5}
+		if i >= -8 {
+			b.BuyVolume, b.SellVolume = 8, 2
+		}
+		gap = append(gap, b)
+	}
+	if got := MarkAroundTakerUntil(gap, at.Add(-8*time.Minute), TakerSideBuy, at); got != "" {
+		t.Fatalf("12:00 bar must not fill an 11:53–11:59 hole, got %q", got)
+	}
+	var held []AroundBar
+	for i := -15; i <= 1; i++ {
+		t0 := at.Add(time.Duration(i) * time.Minute)
+		b := AroundBar{Time: t0, Open: 100, Close: 100, High: 100, Low: 100, Volume: 10, BuySellKnown: true}
+		if i >= -8 {
+			b.BuyVolume, b.SellVolume = 8, 2
+		} else {
+			b.BuyVolume, b.SellVolume = 5, 5
+		}
+		held = append(held, b)
+	}
+	if got := MarkAroundTakerUntil(held, at.Add(-8*time.Minute), TakerSideBuy, at); got != AroundVenueUntilContinued {
+		t.Fatalf("pre-price tail should still classify without the 12:00 bar: %q", got)
+	}
+}
+
 func TestFindAroundTakerRunStart_FindsLean(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	plan := aroundTestPlan(at)

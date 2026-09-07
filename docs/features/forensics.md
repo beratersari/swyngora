@@ -58,7 +58,10 @@ when it **kept going until price**; a spike that faded or reversed is
 labeled that way and is not the leader. If the last OI sample or
 taker bar is much earlier than the price start (or is only the start
 print), the path in between is unknown — `until` is omitted, and the
-tape does not say continued, faded, or reversed. If one venue printed first,
+tape does not say continued, faded, or reversed. The taker bar at the
+price start is the first minute of the move, not pre-price tape: an
+11:52 lean with no bars until 12:00 is unknown even if 12:00 still
+buys. If one venue printed first,
 `beforeFollow` uses that venue's real start (for example 12:05), not
 the during-window close (12:15).
 `together` is how
