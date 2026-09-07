@@ -27,7 +27,7 @@ func ExplainForensicsWhy(r ForensicsReport) ForensicsWhy {
 
 	out := ForensicsWhy{
 		Before:  explainForensicsBefore(name, before, during),
-		During:  explainForensicsDuring(name, before, during),
+		During:  explainForensicsDuring(name, before, during, r.Tape),
 		After:   explainForensicsAfter(name, during, after, venue.Changes),
 		Similar: explainForensicsSimilar(name, r.Similar, r.SimilarError),
 		Caution: forensicsWhyCaution,
@@ -105,7 +105,7 @@ func explainForensicsBefore(name string, before, during AroundPhase) string {
 	return strings.Join(s, " ")
 }
 
-func explainForensicsDuring(name string, before, during AroundPhase) string {
+func explainForensicsDuring(name string, before, during AroundPhase, tape *AroundReport) string {
 	if !during.Complete {
 		return "The move window itself is incomplete (it may still be running), so the during-read is partial."
 	}
@@ -127,6 +127,9 @@ func explainForensicsDuring(name string, before, during AroundPhase) string {
 	}
 	if e := forensicsEventStory(during, false); e != "" {
 		s = append(s, e)
+	}
+	if tape != nil && tape.VenueTiming != nil && tape.VenueTiming.Summary != "" {
+		s = append(s, tape.VenueTiming.Summary)
 	}
 	if during.Flow.VWAP > 0 && during.Flow.VsVWAP == VolumeProfileVsAbove {
 		s = append(s, "Price finished the window above VWAP, so the average participant was still underwater if they faded the move.")

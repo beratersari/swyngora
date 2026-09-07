@@ -442,18 +442,87 @@ type optionsLeadScale struct {
 func optionsTopicLeadStart(points []OptionsHistoryPoint, at time.Time, topic string, moves []OptionsMove) (time.Time, string, bool) {
 	scale, ok := pickOptionsLeadScale(points, at, topic, moves)
 	if !ok {
-		start, found := optionsTopicBurstStart(points, at, topic, optionsLeadWindow, optionsTopicFloor(topic))
+		scale = optionsLeadScale{ID: OptionsHistoryWindow1h, Dur: optionsLeadWindow, Floor: optionsTopicFloor(topic)}
+		if ch, cok := optionsScaleChange(points, at, topic, scale.Dur); cok {
+			scale.Ch = ch
+		}
+	}
+	start, found := optionsTopicActualStart(points, at, topic, scale)
+	if !found {
+		start, found = optionsTopicBurstStart(points, at, topic, optionsLeadWindow, optionsTopicFloor(topic))
 		return start, OptionsHistoryWindow1h, found
 	}
-	if scale.Dur <= optionsLeadWindow+time.Minute {
-		start, found := optionsTopicBurstStart(points, at, topic, scale.Dur, scale.Floor)
-		return start, scale.ID, found
+	return start, scale.ID, true
+}
+
+// optionsTopicActualStart walks backward from `at` in steps of the unusual
+// scale. The start is the last time the series was still moving that way —
+// not the full 4h/24h window length.
+func optionsTopicActualStart(points []OptionsHistoryPoint, at time.Time, topic string, scale optionsLeadScale) (time.Time, bool) {
+	if scale.Dur <= 0 {
+		scale.Dur = optionsLeadWindow
 	}
-	start := at.Add(-scale.Dur)
-	if start.Before(at) {
-		return start.UTC(), scale.ID, true
+	total := scale.Ch
+	if total == 0 {
+		if ch, ok := optionsScaleChange(points, at, topic, scale.Dur); ok {
+			total = ch
+		}
 	}
-	return time.Time{}, "", false
+	if total == 0 {
+		return time.Time{}, false
+	}
+	dir := 1.0
+	if total < 0 {
+		dir = -1
+	}
+	step := optionsLeadStep(scale.Dur)
+	uniform := math.Abs(total) * float64(step) / float64(scale.Dur)
+	noise := uniform * 0.25
+	if noise < optionsTopicNoiseFloor(topic) {
+		noise = optionsTopicNoiseFloor(topic)
+	}
+	start := at.UTC()
+	for t := at.UTC(); ; {
+		prev := t.Add(-step)
+		ch, ok := optionsScaleChange(points, t, topic, step)
+		if !ok {
+			break
+		}
+		if math.Abs(ch) <= noise || (ch < 0 && dir > 0) || (ch > 0 && dir < 0) {
+			break
+		}
+		start = prev
+		t = prev
+		if at.Sub(t) > 36*time.Hour {
+			break
+		}
+	}
+	if !start.Before(at) {
+		return time.Time{}, false
+	}
+	return start, true
+}
+
+func optionsLeadStep(scale time.Duration) time.Duration {
+	switch {
+	case scale >= 24*time.Hour:
+		return 4 * time.Hour
+	case scale >= 4*time.Hour:
+		return time.Hour
+	default:
+		return 15 * time.Minute
+	}
+}
+
+func optionsTopicNoiseFloor(topic string) float64 {
+	switch topic {
+	case OptionsMoveTopicLean:
+		return 0.02
+	case OptionsMoveTopicVol:
+		return 0.25
+	default:
+		return 0.4
+	}
 }
 
 func pickOptionsLeadScale(points []OptionsHistoryPoint, at time.Time, topic string, moves []OptionsMove) (optionsLeadScale, bool) {
@@ -472,16 +541,7 @@ func pickOptionsLeadScale(points []OptionsHistoryPoint, at time.Time, topic stri
 	if len(cs) == 0 {
 		return optionsLeadScale{}, false
 	}
-	for _, m := range moves {
-		if m.Topic != topic || m.Window == "" {
-			continue
-		}
-		for _, c := range cs {
-			if c.ID == m.Window {
-				return c, true
-			}
-		}
-	}
+	_ = moves
 	chosen := cs[0]
 	for _, c := range cs {
 		if c.Dur > chosen.Dur {

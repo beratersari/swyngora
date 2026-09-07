@@ -454,19 +454,29 @@ type aroundVenueDTO struct {
 }
 
 type aroundResponse struct {
-	Symbol   string           `json:"symbol"`
-	Exchange string           `json:"exchange"`
-	At       time.Time        `json:"at"`
-	Window   string           `json:"window"`
-	During   string           `json:"during"`
-	From     time.Time        `json:"from"`
-	To       time.Time        `json:"to"`
-	AsOf     time.Time        `json:"asOf"`
-	Clipped  bool             `json:"clipped"`
-	Venues   []aroundVenueDTO `json:"venues"`
-	Combined *aroundVenueDTO  `json:"combined,omitempty"`
-	Summary  string           `json:"summary"`
-	Note     string           `json:"note"`
+	Symbol      string                `json:"symbol"`
+	Exchange    string                `json:"exchange"`
+	At          time.Time             `json:"at"`
+	Window      string                `json:"window"`
+	During      string                `json:"during"`
+	From        time.Time             `json:"from"`
+	To          time.Time             `json:"to"`
+	AsOf        time.Time             `json:"asOf"`
+	Clipped     bool                  `json:"clipped"`
+	Venues      []aroundVenueDTO      `json:"venues"`
+	Combined    *aroundVenueDTO       `json:"combined,omitempty"`
+	VenueTiming *aroundVenueTimingDTO `json:"venueTiming,omitempty"`
+	Summary     string                `json:"summary"`
+	Note        string                `json:"note"`
+}
+
+type aroundVenueTimingDTO struct {
+	Agreement    string     `json:"agreement"`
+	BinanceStart *time.Time `json:"binanceStart,omitempty"`
+	BybitStart   *time.Time `json:"bybitStart,omitempty"`
+	Lead         string     `json:"lead,omitempty"`
+	LeadLabel    string     `json:"leadLabel,omitempty"`
+	Summary      string     `json:"summary,omitempty"`
 }
 
 func aroundToDTO(a *domain.AroundReport) aroundResponse {
@@ -486,6 +496,30 @@ func aroundToDTO(a *domain.AroundReport) aroundResponse {
 	if a.Combined != nil {
 		c := aroundVenueToDTO(*a.Combined)
 		out.Combined = &c
+	}
+	if a.VenueTiming != nil {
+		out.VenueTiming = aroundVenueTimingToDTO(a.VenueTiming)
+	}
+	return out
+}
+
+func aroundVenueTimingToDTO(v *domain.AroundVenueTiming) *aroundVenueTimingDTO {
+	if v == nil {
+		return nil
+	}
+	out := &aroundVenueTimingDTO{
+		Agreement: v.Agreement, LeadLabel: v.LeadLabel, Summary: v.Summary,
+	}
+	if !v.BinanceStart.IsZero() {
+		t := v.BinanceStart.UTC()
+		out.BinanceStart = &t
+	}
+	if !v.BybitStart.IsZero() {
+		t := v.BybitStart.UTC()
+		out.BybitStart = &t
+	}
+	if v.Lead >= time.Minute {
+		out.Lead = domain.FormatOptionsLeadShort(v.Lead)
 	}
 	return out
 }

@@ -53,4 +53,14 @@ describe('ForensicsTape', () => {
     expect(screen.getByText(/unusual/i)).toBeInTheDocument();
     expect(screen.getByText(/\+8\.00%/)).toBeInTheDocument();
   });
+
+  it('shows which venue started the price move first', () => {
+    renderWithProviders(
+      <ForensicsTape
+        venue={{ exchange: 'combined', phases: [{ phase: 'during', complete: true }] }}
+        venueTiming={{ agreement: 'binance_earlier', summary: 'Binance started the price move about 8 minutes before Bybit.' }}
+      />,
+    );
+    expect(screen.getByText(/binance started the price move/i)).toBeInTheDocument();
+  });
 });

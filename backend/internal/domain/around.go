@@ -210,31 +210,33 @@ type AroundChange struct {
 
 // AroundVenue is one exchange's (or combined) around-the-move read.
 type AroundVenue struct {
-	Exchange Exchange
-	Symbol   string
-	Interval string
-	Phases   []AroundPhase
-	Changes  []AroundChange
-	Events   []AroundEvent
-	Summary  string
-	Error    string
+	Exchange  Exchange
+	Symbol    string
+	Interval  string
+	Phases    []AroundPhase
+	Changes   []AroundChange
+	Events    []AroundEvent
+	MoveStart time.Time
+	Summary   string
+	Error     string
 }
 
 // AroundReport is the API result.
 type AroundReport struct {
-	Symbol   string
-	Exchange string
-	At       time.Time
-	Window   string
-	During   string
-	From     time.Time
-	To       time.Time
-	AsOf     time.Time
-	Clipped  bool
-	Venues   []AroundVenue
-	Combined *AroundVenue
-	Summary  string
-	Note     string
+	Symbol      string
+	Exchange    string
+	At          time.Time
+	Window      string
+	During      string
+	From        time.Time
+	To          time.Time
+	AsOf        time.Time
+	Clipped     bool
+	Venues      []AroundVenue
+	Combined    *AroundVenue
+	VenueTiming *AroundVenueTiming
+	Summary     string
+	Note        string
 }
 
 // ParseAroundWindow accepts 15m / 30m / 1h / 2h / 4h (empty = 1h).
@@ -445,6 +447,7 @@ func BuildAroundVenue(ex Exchange, symbol string, bars []AroundBar, plan AroundP
 		out.Events = append(out.Events, ph.Events...)
 	}
 	out.Changes = CompareAroundPhases(out.Phases)
+	out.MoveStart = FindAroundPriceRunStart(bars, plan)
 	out.Summary = ExplainAroundVenue(out)
 	return out
 }
@@ -707,20 +710,32 @@ func ExplainAroundVenue(v AroundVenue) string {
 
 // ExplainAroundReport prefers combined, then the first complete venue.
 func ExplainAroundReport(r AroundReport) string {
+	head := ""
 	if r.Combined != nil && r.Combined.Summary != "" && r.Combined.Error == "" {
-		return "Combined: " + r.Combined.Summary
-	}
-	for _, v := range r.Venues {
-		if v.Summary != "" && v.Error == "" {
-			return string(v.Exchange) + ": " + v.Summary
+		head = "Combined: " + r.Combined.Summary
+	} else {
+		for _, v := range r.Venues {
+			if v.Summary != "" && v.Error == "" {
+				head = string(v.Exchange) + ": " + v.Summary
+				break
+			}
 		}
 	}
-	for _, v := range r.Venues {
-		if v.Summary != "" {
-			return v.Summary
+	if head == "" {
+		for _, v := range r.Venues {
+			if v.Summary != "" {
+				head = v.Summary
+				break
+			}
 		}
 	}
-	return "No tape around that time."
+	if head == "" {
+		head = "No tape around that time."
+	}
+	if r.VenueTiming != nil && r.VenueTiming.Summary != "" {
+		head += " " + r.VenueTiming.Summary
+	}
+	return head
 }
 
 func aroundPriceOf(bars []AroundBar) AroundPrice {

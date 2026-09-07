@@ -116,7 +116,7 @@ function PhaseMetrics({ phase }: { phase?: ForensicsPhase }) {
   );
 }
 
-export function ForensicsTape({ venue, isLoading }: ForensicsTapeProps) {
+export function ForensicsTape({ venue, venueTiming, isLoading }: ForensicsTapeProps) {
   const { t } = useTranslation('forensics');
   if (isLoading) {
     return <Skeleton active paragraph={{ rows: 8 }} />;
@@ -127,6 +127,11 @@ export function ForensicsTape({ venue, isLoading }: ForensicsTapeProps) {
       {venue.summary ? (
         <Text variant="bodySm" color="secondary">
           {venue.summary}
+        </Text>
+      ) : null}
+      {venueTiming?.summary ? (
+        <Text variant="bodySm" color="secondary">
+          {venueTiming.summary}
         </Text>
       ) : null}
       {venue.error ? (

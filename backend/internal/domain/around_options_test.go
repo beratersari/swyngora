@@ -122,6 +122,29 @@ func TestMeasureAroundOptionsLead_FourHourMoveUsesFourHourStart(t *testing.T) {
 	}
 }
 
+func TestMeasureAroundOptionsLead_TwoHourMoveIsNotFourHours(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	var points []OptionsHistoryPoint
+	// Flat for 2h, then +10% over the last 2h. 4h change is unusual; the start is not 4h.
+	for i := 48; i >= 0; i-- {
+		t0 := at.Add(-time.Duration(i) * 5 * time.Minute)
+		elapsed := at.Sub(t0)
+		oi := 100.0
+		if elapsed <= 2*time.Hour {
+			oi = 100 + 10*(1-float64(elapsed)/float64(2*time.Hour))
+		}
+		points = append(points, OptionsHistoryPoint{Time: t0, OpenInterest: oi, HasOI: true})
+	}
+	o := &AroundOptions{
+		Complete: true, Unusual: true, Started: AroundOptionsStartedBefore,
+		HasOI: true, OIChangePct: 10, OIDirection: CVDDirUp,
+	}
+	MeasureAroundOptionsLead(o, points, at)
+	if o.Lead < 90*time.Minute || o.Lead > 150*time.Minute {
+		t.Fatalf("2h move should not be dated as 4h: lead %s window %q", o.Lead, o.LeadWindow)
+	}
+}
+
 func TestMarkAroundOptionsAfter_ContinuedAndReversed(t *testing.T) {
 	before := &AroundOptions{Complete: true, Unusual: true, HasOI: true, OIDirection: CVDDirUp, OIChangePct: 12}
 	kept := &AroundOptions{Complete: true, HasOI: true, OIDirection: CVDDirUp, OIChangePct: 6}

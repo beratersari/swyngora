@@ -133,6 +133,15 @@ export type ForensicsVenue = {
   error?: string;
 };
 
+export type ForensicsVenueTiming = {
+  agreement?: string;
+  binanceStart?: string;
+  bybitStart?: string;
+  lead?: string;
+  leadLabel?: string;
+  summary?: string;
+};
+
 export type ForensicsTape = {
   symbol?: string;
   exchange?: string;
@@ -141,6 +150,7 @@ export type ForensicsTape = {
   during?: string;
   venues?: ForensicsVenue[];
   combined?: ForensicsVenue | null;
+  venueTiming?: ForensicsVenueTiming | null;
   summary?: string;
 };
 

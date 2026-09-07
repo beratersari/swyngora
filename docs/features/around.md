@@ -34,7 +34,9 @@ Liquidity sweeps whose poke sits in the span are attached as events.
 `changes` compares the three windows (continued / reversed / faded).
 
 `exchange=all` (default) returns Binance and Bybit separately plus
-`combined` (volume-weighted). `at` is RFC3339 or unix milliseconds,
+`combined` (volume-weighted). `venueTiming` says whether those two
+venues started the during-move together or which printed first.
+`at` is RFC3339 or unix milliseconds,
 and must be within the last 30 days. If the look-forward is still in
 the future, `after` (and sometimes `during`) is clipped to now.
 

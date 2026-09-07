@@ -65,6 +65,7 @@ func (s *Service) GetAround(ctx context.Context, exchange, symbol, window, durin
 	})
 	if ex == "all" && len(out.Venues) > 0 {
 		out.Combined = domain.CombineAroundVenues(symbol, out.Venues, plan, interval)
+		out.VenueTiming = domain.CompareAroundVenueTiming(out.Venues)
 	}
 	s.attachAroundOptions(ctx, symbol, plan, out)
 	out.Summary = domain.ExplainAroundReport(*out)
