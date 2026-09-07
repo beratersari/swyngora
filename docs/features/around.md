@@ -40,7 +40,9 @@ the other followed later or the move stayed on one venue, and whether
 OI or taker flow had already changed before the laggard's real start
 (not the during-window close). The first signal across price, OI, and
 takers is the leader only when that OI or taker print kept going until
-price — a spike that faded is not treated as a precursor.
+price — a spike that faded is not treated as a precursor. If the last
+OI sample or taker bar is much earlier than the price start, the path
+is omitted (not continued / faded / reversed).
 `at` is RFC3339 or unix milliseconds,
 and must be within the last 30 days. If the look-forward is still in
 the future, `after` (and sometimes `during`) is clipped to now.

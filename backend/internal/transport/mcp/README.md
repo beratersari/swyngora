@@ -46,12 +46,12 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_taker_flow` | Aggressive futures buy vs sell volume (5m/1h/4h) per venue + combined |
 | `get_cvd` | Spot and futures CVD versus price; 15m/1h/4h/24h change; venue split, spot-vs-futures split, divergence duration |
 | `get_volume_profile` | Volume by price (POC + 70% value area, buy/sell); Binance and Bybit separately plus combined; `window` or `startTime`/`endTime` |
-| `get_around` | What happened around a time: before / during / after (price, volume, VWAP, vs typical, POC, sweeps, stored book/futures, BTC/ETH options when sampled; venueTiming says who printed first, whether the other followed, and whether OI or takers had already changed before the laggard's real start) |
+| `get_around` | What happened around a time: before / during / after (price, volume, VWAP, vs typical, POC, sweeps, stored book/futures, BTC/ETH options when sampled; venueTiming says who printed first, whether the other followed, and whether OI or takers had already changed before the laggard's real start; last OI/taker print much earlier than price omits continued/faded/reversed) |
 | `compare_around` | Compare two times for the same coin: how the two moves differed (price, volume, book, OI, sweeps) |
 | `find_around_moves` | Find strong up/down legs and show what happened during each (around tape) |
 | `find_around_precursors` | What often changed before those moves, including conditions that fire together and whether they lean up or down |
 | `find_around_similar` | Past important-move setups; matching-bar after horizons with similarity bands; optional `at` uses that time's before-tape |
-| `get_market_forensics` | Before / during / after tape plus similar past moves; `why` explains the move in plain language; unusual BTC/ETH options prints in the before-window are called out (lead is the real start, not the 4h/24h window open) |
+| `get_market_forensics` | Before / during / after tape plus similar past moves; `why` explains the move in plain language; unusual BTC/ETH options prints in the before-window are called out (lead is the real start, not the 4h/24h window open); last OI/taker print much earlier than price omits continued/faded/reversed |
 | `scan_market_forensics` | Coins whose current tape looks like past pre-move setups, which tape pieces matched, plus what usually happened after |
 | `review_setup_radar` | Saved Setup Radar hits and whether price later matched the lean |
 | `get_vwap` | Volume-weighted average price from a start time (or window) to now; last vs VWAP; Binance, Bybit, combined |

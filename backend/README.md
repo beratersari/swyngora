@@ -390,7 +390,7 @@ Unit tests mock upstream HTTP; they do not call live Binance. `e2e_findings_test
 
 | Layer | Package | Tests |
 |---|---|---|
-| Domain | `internal/domain` | `candle_test.go`, `errors_test.go`, `ports_test.go`, `ticker_test.go`, `supply_test.go`, `open_interest_test.go`, `volume_profile_test.go`, `absorption_test.go`, `liquidity_sweep_test.go`, `volume_surge_test.go`, `vwap_test.go`, `around_test.go`, `around_compare_test.go`, `around_moves_test.go`, `around_precursors_test.go`, `around_similar_test.go`, `around_options_test.go`, `around_forensics_test.go`, `pricediff_quote_test.go`, `funding_arb_test.go`, `liquidation_test.go`, `liquidation_history_test.go` |
+| Domain | `internal/domain` | `candle_test.go`, `errors_test.go`, `ports_test.go`, `ticker_test.go`, `supply_test.go`, `open_interest_test.go`, `volume_profile_test.go`, `absorption_test.go`, `liquidity_sweep_test.go`, `volume_surge_test.go`, `vwap_test.go`, `around_test.go`, `around_compare_test.go`, `around_moves_test.go`, `around_precursors_test.go`, `around_similar_test.go`, `around_options_test.go`, `around_forensics_test.go`, `around_venue_timing_test.go`, `pricediff_quote_test.go`, `funding_arb_test.go`, `liquidation_test.go`, `liquidation_history_test.go` |
 | Application | `internal/service/market` | `service_test.go`, `volumeprofile_test.go`, `absorption_test.go`, `sweep_test.go`, `volumesurge_test.go`, `vwap_test.go`, `around_test.go`, `funding_arb_test.go` (fakes for ports) |
 | Application | `internal/service/futureshist` | `sink_test.go`, `backfill_test.go` (reconnect history fill, no cross-venue) |
 | Application | `internal/service/fundingarb` | `service_test.go` (create, min-profit notify, re-arm) |

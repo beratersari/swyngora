@@ -2015,7 +2015,8 @@ paths:
         taker flow had already changed before the laggard's real start (not
         the during-window close). The first signal across price, OI, and
         takers is the leader only if that OI or taker print kept going until
-        price.
+        price. If the last OI sample or taker bar is much earlier than the
+        price start, the path is omitted (not continued / faded / reversed).
         Informational only.
       operationId: getMarketAround
       tags: [Market]
@@ -2335,7 +2336,9 @@ paths:
         fails, `tape` is still returned and `similarError` explains why.
         `why` is a plain-language read of why the move may have happened
         (before / during / after plus similar past cases), not a metric
-        dump. Informational only.
+        dump. Same `venueTiming` path rule as `/around`: last OI/taker
+        print much earlier than price omits continued / faded / reversed.
+        Informational only.
       operationId: getMarketForensics
       tags: [Market]
       parameters:

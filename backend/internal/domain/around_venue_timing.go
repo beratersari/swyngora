@@ -32,6 +32,11 @@ const (
 	aroundVenueMinMove    = 0.20
 	aroundVenueOIMin      = 0.30
 	aroundVenueTakerTail  = 5 * time.Minute
+	// aroundVenueUntilFresh is how close the last OI sample or known taker
+	// bar must be to the price start before we will say continued / faded /
+	// reversed. Wider than one futures-history tick (5m) so a current print
+	// still counts; a longer hole means the path to price is unknown.
+	aroundVenueUntilFresh = 8 * time.Minute
 )
 
 // AroundVenueTiming compares when Binance and Bybit started the price move.
@@ -357,7 +362,9 @@ func AroundVenueUntilPrice(moveStart time.Time, plan AroundPlan) time.Time {
 }
 
 // MarkAroundOIUntil says whether OI kept moving the same way from start
-// until the price move, or spiked and then faded / reversed.
+// until the price move, or spiked and then faded / reversed. Empty when
+// the last sample is the start print or is too far before price — the
+// path in between is unknown, so do not guess continued / faded / reversed.
 func MarkAroundOIUntil(snaps []FuturesSnapshot, start time.Time, dir string, until time.Time) string {
 	if start.IsZero() || until.IsZero() || !until.After(start) || (dir != CVDDirUp && dir != CVDDirDown) {
 		return ""
@@ -368,6 +375,9 @@ func MarkAroundOIUntil(snaps []FuturesSnapshot, start time.Time, dir string, unt
 	}
 	end := LatestFuturesSnapshotAtOrBefore(snaps, until)
 	if pre == nil || end == nil {
+		return ""
+	}
+	if !aroundVenueUntilFreshEnough(end.SampledAt, start, until) {
 		return ""
 	}
 	preV := futuresOIValue(*pre)
@@ -417,31 +427,84 @@ func MarkAroundOIUntil(snaps []FuturesSnapshot, start time.Time, dir string, unt
 }
 
 // MarkAroundTakerUntil says whether takers kept leaning the same way from
-// start until the price move, or spiked and then faded / flipped.
+// start until the price move, or spiked and then faded / flipped. Empty
+// when the last known bar is the start print, is too far before price, or
+// the last minutes before price have no tape — do not guess the path.
 func MarkAroundTakerUntil(bars []AroundBar, start time.Time, dir string, until time.Time) string {
 	if start.IsZero() || until.IsZero() || !until.After(start) || (dir != TakerSideBuy && dir != TakerSideSell) {
+		return ""
+	}
+	last, ok := lastAroundKnownTakerBar(bars, until)
+	if !ok || !aroundVenueUntilFreshEnough(last.Time, start, until) {
 		return ""
 	}
 	tailFrom := until.Add(-aroundVenueTakerTail)
 	if tailFrom.Before(start) {
 		tailFrom = start
 	}
-	tail := aroundFlowOf(FilterAroundBars(bars, tailFrom, until))
+	tailBars := aroundBarsThrough(bars, tailFrom, until)
+	if !aroundTakerBarsKnown(tailBars) {
+		return ""
+	}
+	tail := aroundFlowOf(tailBars)
 	if aroundTakerLeaned(tail) {
 		if tail.Dominant == dir {
 			return AroundVenueUntilContinued
 		}
 		return AroundVenueUntilReversed
 	}
-	head := aroundFlowOf(FilterAroundBars(bars, start, tailFrom))
-	if aroundTakerLeaned(head) && head.Dominant == dir {
-		return AroundVenueUntilFaded
-	}
-	whole := aroundFlowOf(FilterAroundBars(bars, start, until))
-	if aroundTakerLeaned(whole) && whole.Dominant == dir {
-		return AroundVenueUntilFaded
-	}
 	return AroundVenueUntilFaded
+}
+
+// aroundVenueUntilFreshEnough is true when last is after the start print
+// and close enough to until that the path to price is still known.
+func aroundVenueUntilFreshEnough(last, start, until time.Time) bool {
+	if last.IsZero() || start.IsZero() || until.IsZero() {
+		return false
+	}
+	if !last.After(start) {
+		return false
+	}
+	age := until.Sub(last)
+	return age >= 0 && age <= aroundVenueUntilFresh
+}
+
+func lastAroundKnownTakerBar(bars []AroundBar, until time.Time) (AroundBar, bool) {
+	var out AroundBar
+	ok := false
+	for _, b := range bars {
+		if !b.BuySellKnown || b.Time.IsZero() || b.Time.After(until) {
+			continue
+		}
+		if !ok || b.Time.After(out.Time) {
+			out = b
+			ok = true
+		}
+	}
+	return out, ok
+}
+
+func aroundBarsThrough(bars []AroundBar, from, to time.Time) []AroundBar {
+	if len(bars) == 0 || to.Before(from) {
+		return nil
+	}
+	out := make([]AroundBar, 0, len(bars))
+	for _, b := range bars {
+		if b.Time.Before(from) || b.Time.After(to) {
+			continue
+		}
+		out = append(out, b)
+	}
+	return out
+}
+
+func aroundTakerBarsKnown(bars []AroundBar) bool {
+	for _, b := range bars {
+		if b.BuySellKnown {
+			return true
+		}
+	}
+	return false
 }
 
 func aroundVenueHeldToPrice(until string) bool {

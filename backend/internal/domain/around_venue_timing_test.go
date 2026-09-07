@@ -323,6 +323,40 @@ func TestCompareAroundVenueTiming_FadedOIIsNotAPrecursor(t *testing.T) {
 	}
 }
 
+func TestCompareAroundVenueTiming_UnknownUntilIsNotLabeled(t *testing.T) {
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	bn := AroundVenue{
+		Exchange: ExchangeBinance, MoveStart: at,
+		Phases: []AroundPhase{{
+			Phase: AroundPhaseDuring, Complete: true, From: at, To: at.Add(15 * time.Minute),
+			Price: AroundPrice{ChangePct: 1.4, Direction: CVDDirUp},
+		}},
+	}
+	by := AroundVenue{
+		Exchange: ExchangeBybit, MoveStart: at.Add(8 * time.Minute),
+		OIStart: at.Add(-16 * time.Minute), OIDir: CVDDirUp,
+		TakerStart: at.Add(-16 * time.Minute), TakerDir: TakerSideBuy,
+		Phases: []AroundPhase{{
+			Phase: AroundPhaseDuring, Complete: true, From: at, To: at.Add(15 * time.Minute),
+			Price: AroundPrice{ChangePct: 1.1, Direction: CVDDirUp},
+		}},
+	}
+	got := CompareAroundVenueTiming([]AroundVenue{bn, by})
+	if got == nil || got.Agreement != AroundVenueBinanceEarlier {
+		t.Fatalf("%+v", got)
+	}
+	if got.Leader != string(ExchangeBinance) || got.LeaderMetric != AroundVenueMetricPrice {
+		t.Fatalf("unknown path must not be the leader, got leader=%q metric=%q", got.Leader, got.LeaderMetric)
+	}
+	if strings.Contains(got.Summary, "kept going") || strings.Contains(got.Summary, "faded before price") ||
+		strings.Contains(got.Summary, "turned the other way") {
+		t.Fatalf("unknown path must not say continued/faded/reversed: %q", got.Summary)
+	}
+	if !strings.Contains(got.Summary, "open interest") || !strings.Contains(got.Summary, "takers") {
+		t.Fatalf("start should still be mentioned: %q", got.Summary)
+	}
+}
+
 func TestMarkAroundOIUntil_ContinuedVsFaded(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	held := []FuturesSnapshot{
@@ -344,6 +378,35 @@ func TestMarkAroundOIUntil_ContinuedVsFaded(t *testing.T) {
 	}
 	if got := MarkAroundOIUntil(spike, at.Add(-8*time.Minute), CVDDirUp, at); got != AroundVenueUntilFaded {
 		t.Fatalf("spike %q", got)
+	}
+	recent := []FuturesSnapshot{
+		{SampledAt: at.Add(-20 * time.Minute), Value: 1000},
+		{SampledAt: at.Add(-10 * time.Minute), Value: 1000},
+		{SampledAt: at.Add(-8 * time.Minute), Value: 1012},
+		{SampledAt: at.Add(-6 * time.Minute), Value: 1022},
+	}
+	if got := MarkAroundOIUntil(recent, at.Add(-8*time.Minute), CVDDirUp, at); got != AroundVenueUntilContinued {
+		t.Fatalf("recent last print still known %q", got)
+	}
+}
+
+func TestMarkAroundOIUntil_StaleEndIsUnknown(t *testing.T) {
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	stale := []FuturesSnapshot{
+		{SampledAt: at.Add(-25 * time.Minute), Value: 1000},
+		{SampledAt: at.Add(-20 * time.Minute), Value: 1000},
+		{SampledAt: at.Add(-18 * time.Minute), Value: 1024},
+		{SampledAt: at.Add(-15 * time.Minute), Value: 1002},
+	}
+	if got := MarkAroundOIUntil(stale, at.Add(-18*time.Minute), CVDDirUp, at); got != "" {
+		t.Fatalf("stale last print must not be faded/continued/reversed, got %q", got)
+	}
+	onlyStart := []FuturesSnapshot{
+		{SampledAt: at.Add(-20 * time.Minute), Value: 1000},
+		{SampledAt: at.Add(-8 * time.Minute), Value: 1020},
+	}
+	if got := MarkAroundOIUntil(onlyStart, at.Add(-8*time.Minute), CVDDirUp, at); got != "" {
+		t.Fatalf("start print alone must not guess the path, got %q", got)
 	}
 }
 
@@ -376,6 +439,36 @@ func TestMarkAroundTakerUntil_ContinuedVsFaded(t *testing.T) {
 	}
 	if got := MarkAroundTakerUntil(spike, at.Add(-8*time.Minute), TakerSideBuy, at); got != AroundVenueUntilFaded {
 		t.Fatalf("spike %q", got)
+	}
+}
+
+func TestMarkAroundTakerUntil_StaleEndIsUnknown(t *testing.T) {
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	var stale []AroundBar
+	for i := -20; i <= -12; i++ {
+		t0 := at.Add(time.Duration(i) * time.Minute)
+		b := AroundBar{Time: t0, Open: 100, Close: 100, High: 100, Low: 100, Volume: 10, BuySellKnown: true}
+		if i >= -16 {
+			b.BuyVolume, b.SellVolume = 8, 2
+		} else {
+			b.BuyVolume, b.SellVolume = 5, 5
+		}
+		stale = append(stale, b)
+	}
+	if got := MarkAroundTakerUntil(stale, at.Add(-16*time.Minute), TakerSideBuy, at); got != "" {
+		t.Fatalf("stale last print must not be faded/continued/reversed, got %q", got)
+	}
+	var onlyStart []AroundBar
+	for i := -15; i <= -8; i++ {
+		t0 := at.Add(time.Duration(i) * time.Minute)
+		b := AroundBar{Time: t0, Open: 100, Close: 100, High: 100, Low: 100, Volume: 10, BuySellKnown: true, BuyVolume: 5, SellVolume: 5}
+		if i == -8 {
+			b.BuyVolume, b.SellVolume = 9, 1
+		}
+		onlyStart = append(onlyStart, b)
+	}
+	if got := MarkAroundTakerUntil(onlyStart, at.Add(-8*time.Minute), TakerSideBuy, at); got != "" {
+		t.Fatalf("start bar alone must not guess the path, got %q", got)
 	}
 }
 
