@@ -3303,7 +3303,8 @@ paths:
         Default mix matches the swing engine (hunt / forensics / similar off).
         Inline weight* overrides a saved profileId. Missing optional factors keep
         their percent and add 0. Forensics and similar setups score whether the
-        current tape / after-path supports a long custom signal or goes against it.
+        current tape / after-path supports a long custom signal or goes against it,
+        using the same range as the swing bar (4h signal → 4h after-path).
         scoreCompare is default vs applied with per-factor effect. Informational only.
       operationId: scanCustomSignals
       tags: [Scanner]

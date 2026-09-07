@@ -3941,7 +3941,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("scan_custom_signals",
-		mcp.WithDescription("Scan the watchlist with a custom factor mix (swing patterns + optional hunt_up, forensics, similar_setup). Optional weight* must sum to 100. Missing optional factors add 0. Forensics and similar setups score whether the tape supports a long custom signal or goes against it. scoreCompare is default vs applied. Informational only."),
+		mcp.WithDescription("Scan the watchlist with a custom factor mix (swing patterns + optional hunt_up, forensics, similar_setup). Optional weight* must sum to 100. Missing optional factors add 0. Forensics and similar setups score whether the tape supports a long custom signal or goes against it, using the same range as the swing bar (4h signal → 4h after-path). scoreCompare is default vs applied. Informational only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("profileId", mcp.Description("Saved mix id; ignored when any weight* is set")),
 		mcp.WithString("exchange", mcp.Description("Optional venue filter")),

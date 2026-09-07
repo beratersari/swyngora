@@ -309,14 +309,15 @@ func (s *Service) scoreOne(ctx context.Context, ex domain.Exchange, symbol strin
 	raws := domain.BuildCustomSignalRaws(dec.Patterns, hunt)
 	var forensicsDetail, similarDetail string
 	if needTape {
-		sim := s.loadSimilarReport(ctx, ex, symbol)
+		q := domain.CustomSignalTapeQueryFor(dec.Interval)
+		sim := s.loadSimilarReport(ctx, ex, symbol, q)
 		if w.NeedsForensics() {
-			raw := domain.ForensicsFactorRaw(sim)
+			raw := domain.ForensicsFactorRaw(sim, q.Horizon)
 			raws[domain.CustomFactorForensics] = raw
 			forensicsDetail = raw.Detail
 		}
 		if w.NeedsSimilarSetup() {
-			raw := domain.SimilarSetupFactorRaw(sim)
+			raw := domain.SimilarSetupFactorRaw(sim, q.Horizon)
 			raws[domain.CustomFactorSimilarSetup] = raw
 			similarDetail = raw.Detail
 		}
@@ -339,11 +340,12 @@ func (s *Service) scoreOne(ctx context.Context, ex domain.Exchange, symbol strin
 	}, nil
 }
 
-func (s *Service) loadSimilarReport(ctx context.Context, ex domain.Exchange, symbol string) *domain.AroundSimilarReport {
+func (s *Service) loadSimilarReport(ctx context.Context, ex domain.Exchange, symbol string, q domain.CustomSignalTapeQuery) *domain.AroundSimilarReport {
 	if s == nil || s.market == nil {
 		return nil
 	}
-	rep, err := s.market.GetAroundSimilar(ctx, string(ex), symbol, "", "", "", 0, 0, "", "", "", "", "", "", time.Time{})
+	// Same range as the swing bar: 4h signal → 4h tape + 4h after-path.
+	rep, err := s.market.GetAroundSimilar(ctx, string(ex), symbol, "", q.MoveInterval, "", 0, 0, q.Window, "", "", "", "", q.Horizon, time.Time{})
 	if err != nil {
 		return nil
 	}

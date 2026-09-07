@@ -3,18 +3,39 @@ package domain
 import (
 	"fmt"
 	"math"
+	"strings"
 )
 
 const customTapeMinAfter = 2
 
+// CustomSignalTapeQuery is the similar/forensics window that matches a swing bar.
+type CustomSignalTapeQuery struct {
+	Window       string // current tape length (same range as the signal)
+	MoveInterval string // past-move bar size (15m or 1h)
+	Horizon      string // after-path to score (same range as the signal)
+}
+
+// CustomSignalTapeQueryFor picks tape windows from the swing primary interval.
+// A 4h swing uses a 4h current tape and 4h after-path — not the 1h forensics default.
+func CustomSignalTapeQueryFor(interval string) CustomSignalTapeQuery {
+	switch CandleInterval(strings.ToLower(strings.TrimSpace(interval))) {
+	case Interval1m, Interval3m, Interval5m, Interval15m:
+		return CustomSignalTapeQuery{Window: "15m", MoveInterval: "15m", Horizon: AroundSimilarHorizon15m}
+	case Interval30m, Interval1h:
+		return CustomSignalTapeQuery{Window: "1h", MoveInterval: "1h", Horizon: AroundSimilarHorizon1h}
+	default:
+		return CustomSignalTapeQuery{Window: "4h", MoveInterval: "1h", Horizon: AroundSimilarHorizon4h}
+	}
+}
+
 // SimilarSetupFactorRaw maps similar-past after-paths onto a long custom signal.
 // Up lean supports the long mix; down lean goes against it. Mixed or thin
-// after-tape is omitted (not scored as 50).
-func SimilarSetupFactorRaw(rep *AroundSimilarReport) CustomSignalRaw {
+// after-tape is omitted (not scored as 50). horizon must match the signal range.
+func SimilarSetupFactorRaw(rep *AroundSimilarReport, horizon string) CustomSignalRaw {
 	if rep == nil || len(rep.Matches) == 0 {
 		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: "no similar past setups"}
 	}
-	up, down, when := similarAfterCounts(rep)
+	up, down, when := similarAfterCounts(rep, horizon)
 	total := up + down
 	if total < customTapeMinAfter {
 		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: "not enough similar after-tape"}
@@ -29,18 +50,15 @@ func SimilarSetupFactorRaw(rep *AroundSimilarReport) CustomSignalRaw {
 
 // ForensicsFactorRaw maps the current tape's match to past pre-move setups
 // onto a long custom signal. Similarity scales how hard the lean counts.
-// Mixed or unmatched tape is omitted.
-func ForensicsFactorRaw(rep *AroundSimilarReport) CustomSignalRaw {
+// Mixed or unmatched tape is omitted. After-path uses horizon, not the 1h desk default.
+func ForensicsFactorRaw(rep *AroundSimilarReport, horizon string) CustomSignalRaw {
 	hit, ok := ForensicsScanHitFromSimilar(rep)
 	if !ok {
 		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: "current tape does not match a past pre-move setup"}
 	}
-	up, down, when := similarAfterCounts(rep)
+	up, down, when := similarAfterCounts(rep, horizon)
 	total := up + down
-	lean := hit.Lean
-	if lean == "" {
-		lean = ForensicsScanLean(up, down)
-	}
+	lean := ForensicsScanLean(up, down)
 	if total < customTapeMinAfter && lean != CVDDirUp && lean != CVDDirDown {
 		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: "forensics after-path is unknown"}
 	}
@@ -62,16 +80,25 @@ func ForensicsFactorRaw(rep *AroundSimilarReport) CustomSignalRaw {
 	return CustomSignalRaw{Score: score, Status: CustomFactorUsed, Detail: detail}
 }
 
-func similarAfterCounts(rep *AroundSimilarReport) (up, down int, when string) {
+// similarAfterCounts uses the signal-range horizon only. It does not fall
+// back to the forensics 1h desk pick.
+func similarAfterCounts(rep *AroundSimilarReport, horizon string) (up, down int, when string) {
+	want := strings.ToLower(strings.TrimSpace(horizon))
+	if want == "" {
+		want = AroundSimilarHorizon4h
+	}
 	if rep == nil {
-		return 0, 0, ""
+		return 0, 0, want
 	}
-	up, down = rep.UpAfter, rep.DownAfter
-	if hz := pickForensicsWhyHorizon(rep.AfterHorizons); hz.Sample > 0 || hz.Events > 0 {
-		up, down = hz.Up, hz.Down
-		when = hz.Horizon
+	for _, hz := range rep.AfterHorizons {
+		if strings.ToLower(hz.Horizon) != want {
+			continue
+		}
+		if hz.Sample > 0 || hz.Events > 0 {
+			return hz.Up, hz.Down, hz.Horizon
+		}
 	}
-	return up, down, when
+	return 0, 0, want
 }
 
 // tapeLeanScore is 50 ± up to 45 from after-path lean. strength 0–1 scales
