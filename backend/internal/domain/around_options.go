@@ -61,7 +61,7 @@ type AroundOptions struct {
 	StartedAt    time.Time
 	Lead         time.Duration // how long before the price event the print began
 	LeadLabel    string        // "about 45 minutes"
-	LeadWindow   string        // 1h | 4h | 24h — scale used to find the start
+	LeadWindow   string        // 1h | 4h | 24h — unusual-flag lookback; start may be later
 	Together     int           // unusual series count (OI / put-call / IV)
 	Weight       string        // single | pair | cluster
 	After        string        // continued | reversed | faded | mixed — vs the price event
@@ -353,7 +353,8 @@ func optionsAfterSummary(after string) string {
 }
 
 // MeasureAroundOptionsLead finds how long before `at` the unusual print began.
-// A 4h or 24h unusual move uses that window to find the start, not only 1h.
+// A 4h or 24h unusual flag is only the lookback — the start is the first
+// sample that left the quiet baseline, which may be later in that window.
 func MeasureAroundOptionsLead(o *AroundOptions, points []OptionsHistoryPoint, at time.Time) {
 	if o == nil || at.IsZero() || o.Started == AroundOptionsStartedDuring {
 		return
@@ -455,18 +456,30 @@ func optionsTopicLeadStart(points []OptionsHistoryPoint, at time.Time, topic str
 	return start, scale.ID, true
 }
 
-// optionsTopicActualStart walks backward from `at` in steps of the unusual
-// scale. The start is the last time the series was still moving that way —
-// not the full 4h/24h window length.
+// optionsTopicActualStart is the first sample that left the quiet baseline
+// inside the unusual window. A 4h/24h flag is not treated as the start.
 func optionsTopicActualStart(points []OptionsHistoryPoint, at time.Time, topic string, scale optionsLeadScale) (time.Time, bool) {
 	if scale.Dur <= 0 {
 		scale.Dur = optionsLeadWindow
 	}
+	at = at.UTC()
+	from := at.Add(-scale.Dur)
+	pts := OptionsHistoryUntil(points, at)
+	if len(pts) < 2 {
+		return time.Time{}, false
+	}
+	base := optionsHistoryAtOrBefore(pts, from, scale.Dur+aroundOptionsSlack)
+	end := optionsHistoryAtOrBefore(pts, at, scale.Dur)
+	if base.Time.IsZero() || end.Time.IsZero() {
+		return time.Time{}, false
+	}
 	total := scale.Ch
 	if total == 0 {
-		if ch, ok := optionsScaleChange(points, at, topic, scale.Dur); ok {
-			total = ch
+		ch, ok := optionsSeriesChange(base, end, topic)
+		if !ok {
+			return time.Time{}, false
 		}
+		total = ch
 	}
 	if total == 0 {
 		return time.Time{}, false
@@ -475,53 +488,80 @@ func optionsTopicActualStart(points []OptionsHistoryPoint, at time.Time, topic s
 	if total < 0 {
 		dir = -1
 	}
-	step := optionsLeadStep(scale.Dur)
-	uniform := math.Abs(total) * float64(step) / float64(scale.Dur)
-	noise := uniform * 0.25
-	if noise < optionsTopicNoiseFloor(topic) {
-		noise = optionsTopicNoiseFloor(topic)
+	depart := optionsTopicDepart(topic, total)
+	quiet := depart * 0.35
+	if min := optionsTopicQuietLevel(topic); quiet < min {
+		quiet = min
 	}
-	start := at.UTC()
-	for t := at.UTC(); ; {
-		prev := t.Add(-step)
-		ch, ok := optionsScaleChange(points, t, topic, step)
+
+	var firstIdx = -1
+	left := false
+	for i := range pts {
+		if pts[i].Time.Before(from) {
+			continue
+		}
+		ch, ok := optionsSeriesChange(base, pts[i], topic)
+		if !ok {
+			continue
+		}
+		if optionsSameDir(ch, dir) && math.Abs(ch) >= depart {
+			if !left {
+				firstIdx = i
+				left = true
+			}
+			continue
+		}
+		if left && (!optionsSameDir(ch, dir) || math.Abs(ch) < depart*0.4) {
+			left = false
+			firstIdx = -1
+		}
+	}
+	if !left || firstIdx < 0 || !pts[firstIdx].Time.Before(at) {
+		return time.Time{}, false
+	}
+
+	start := pts[firstIdx].Time
+	for j := firstIdx - 1; j >= 0; j-- {
+		if pts[j].Time.Before(from) {
+			break
+		}
+		ch, ok := optionsSeriesChange(base, pts[j], topic)
 		if !ok {
 			break
 		}
-		if math.Abs(ch) <= noise || (ch < 0 && dir > 0) || (ch > 0 && dir < 0) {
+		if !optionsSameDir(ch, dir) || math.Abs(ch) < quiet {
+			start = pts[j+1].Time
 			break
 		}
-		start = prev
-		t = prev
-		if at.Sub(t) > 36*time.Hour {
-			break
-		}
+		start = pts[j].Time
 	}
 	if !start.Before(at) {
 		return time.Time{}, false
 	}
-	return start, true
+	return start.UTC(), true
 }
 
-func optionsLeadStep(scale time.Duration) time.Duration {
-	switch {
-	case scale >= 24*time.Hour:
-		return 4 * time.Hour
-	case scale >= 4*time.Hour:
-		return time.Hour
-	default:
-		return 15 * time.Minute
+func optionsSameDir(ch, dir float64) bool {
+	return (ch > 0 && dir > 0) || (ch < 0 && dir < 0)
+}
+
+func optionsTopicDepart(topic string, total float64) float64 {
+	d := math.Abs(total) * 0.18
+	min := optionsTopicQuietLevel(topic) * 2
+	if d < min {
+		d = min
 	}
+	return d
 }
 
-func optionsTopicNoiseFloor(topic string) float64 {
+func optionsTopicQuietLevel(topic string) float64 {
 	switch topic {
 	case OptionsMoveTopicLean:
-		return 0.02
+		return 0.015
 	case OptionsMoveTopicVol:
-		return 0.25
+		return 0.15
 	default:
-		return 0.4
+		return 0.5
 	}
 }
 
@@ -547,21 +587,6 @@ func pickOptionsLeadScale(points []OptionsHistoryPoint, at time.Time, topic stri
 		if c.Dur > chosen.Dur {
 			chosen = c
 		}
-	}
-	for {
-		var next *optionsLeadScale
-		for i := range cs {
-			c := &cs[i]
-			if c.Dur < chosen.Dur && math.Abs(c.Ch) >= 0.6*math.Abs(chosen.Ch) {
-				if next == nil || c.Dur > next.Dur {
-					next = c
-				}
-			}
-		}
-		if next == nil {
-			break
-		}
-		chosen = *next
 	}
 	return chosen, true
 }
@@ -830,9 +855,7 @@ func unusualOptionsLeadSentence(o AroundOptions) string {
 	switch o.Started {
 	case AroundOptionsStartedBefore:
 		when = "Listed options were already unusual before the price move"
-		if o.LeadLabel != "" && (o.LeadWindow == OptionsHistoryWindow4h || o.LeadWindow == OptionsHistoryWindow24h) {
-			when = fmt.Sprintf("Listed options were already unusual — a %s move that started %s before the price move", o.LeadWindow, o.LeadLabel)
-		} else if o.LeadLabel != "" {
+		if o.LeadLabel != "" {
 			when = "Listed options were already unusual " + o.LeadLabel + " before the price move"
 		}
 	case AroundOptionsStartedDuring:

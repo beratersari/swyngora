@@ -2007,9 +2007,12 @@ paths:
         Stored order-book and futures history (OI, funding, long/short,
         liquidations) are included when those archives have a sample.
         BTC/ETH listed options (OI, put/call, implied vol, unusual prints)
-        attach when the options archive has samples.
+        attach when the options archive has samples. Options `lead` is the
+        real start inside a 1h/4h/24h unusual lookback, not the window open.
         `exchange=all` (default) returns Binance and Bybit separately plus
-        `combined`. Informational only.
+        `combined`. `venueTiming` says which venue printed first and whether
+        the other followed or the move stayed on one venue.
+        Informational only.
       operationId: getMarketAround
       tags: [Market]
       parameters:

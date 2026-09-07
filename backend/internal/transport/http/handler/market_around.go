@@ -472,6 +472,7 @@ type aroundResponse struct {
 
 type aroundVenueTimingDTO struct {
 	Agreement    string     `json:"agreement"`
+	Follow       string     `json:"follow,omitempty"`
 	BinanceStart *time.Time `json:"binanceStart,omitempty"`
 	BybitStart   *time.Time `json:"bybitStart,omitempty"`
 	Lead         string     `json:"lead,omitempty"`
@@ -508,7 +509,7 @@ func aroundVenueTimingToDTO(v *domain.AroundVenueTiming) *aroundVenueTimingDTO {
 		return nil
 	}
 	out := &aroundVenueTimingDTO{
-		Agreement: v.Agreement, LeadLabel: v.LeadLabel, Summary: v.Summary,
+		Agreement: v.Agreement, Follow: v.Follow, LeadLabel: v.LeadLabel, Summary: v.Summary,
 	}
 	if !v.BinanceStart.IsZero() {
 		t := v.BinanceStart.UTC()

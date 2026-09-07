@@ -42,12 +42,15 @@ On BTC and ETH, each phase can include stored Deribit desk samples
 `unusual` when that series jumped in **this** window. `started` is
 `before` when the print was already underway at the price event, or
 `during` when it only appeared once price was moving. If it started
-before, `lead` / `leadLabel` say how much earlier. A 4h or 24h unusual move still walks the tape for the real start —
-it does not assume the print began at the start of that window.
+before, `lead` / `leadLabel` say how much earlier. A 4h or 24h unusual
+flag is only the lookback — the start is the first sample that left
+the quiet baseline, which may be later in that window.
 `after` says whether options kept going the same way once price
 started, turned the other way, or went quiet. When both venues
-are present, `venueTiming` says whether Binance and Bybit started
-the price move together or which one printed first. `together` is how
+are present, `venueTiming` says whether they started together, which
+one printed first, and whether the other followed later or the move
+stayed on one venue. A venue that did not actually move is not given
+a start time. `together` is how
 many of OI / put-call / IV moved at once; two or three series
 together is treated as more important than a single print
 (`weight` `pair` / `cluster`). A missing start or end sample

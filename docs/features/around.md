@@ -28,14 +28,15 @@ Each phase includes:
 - absorption on the window when the score is at least moderate
 - stored spot-book compare (when order-book history has samples)
 - stored futures: open interest, funding, long %, liquidations (when the archive has samples)
-- listed BTC/ETH options: open interest, put/call, implied vol, and unusual prints (two samples required; `started` is before vs during; `lead` uses the 1h/4h/24h scale of the move; `after` is kept going / turned / went quiet)
+- listed BTC/ETH options: open interest, put/call, implied vol, and unusual prints (two samples required; `started` is before vs during; `lead` is the real start inside the 1h/4h/24h unusual lookback, not the window open; `after` is kept going / turned / went quiet)
 
 Liquidity sweeps whose poke sits in the span are attached as events.
 `changes` compares the three windows (continued / reversed / faded).
 
 `exchange=all` (default) returns Binance and Bybit separately plus
 `combined` (volume-weighted). `venueTiming` says whether those two
-venues started the during-move together or which printed first.
+venues started the during-move together, which printed first, and
+whether the other followed later or the move stayed on one venue.
 `at` is RFC3339 or unix milliseconds,
 and must be within the last 30 days. If the look-forward is still in
 the future, `after` (and sometimes `during`) is clipped to now.

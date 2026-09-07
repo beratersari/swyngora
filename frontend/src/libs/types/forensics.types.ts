@@ -135,6 +135,7 @@ export type ForensicsVenue = {
 
 export type ForensicsVenueTiming = {
   agreement?: string;
+  follow?: string;
   binanceStart?: string;
   bybitStart?: string;
   lead?: string;

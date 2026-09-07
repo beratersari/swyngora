@@ -145,6 +145,29 @@ func TestMeasureAroundOptionsLead_TwoHourMoveIsNotFourHours(t *testing.T) {
 	}
 }
 
+func TestMeasureAroundOptionsLead_TwentyFourHourFlagIsNotTheStart(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	var points []OptionsHistoryPoint
+	// Flat for 18h, then +15% over the last 6h. 24h change is unusual; the start is not 24h.
+	for i := 288; i >= 0; i-- {
+		t0 := at.Add(-time.Duration(i) * 5 * time.Minute)
+		elapsed := at.Sub(t0)
+		oi := 100.0
+		if elapsed <= 6*time.Hour {
+			oi = 100 + 15*(1-float64(elapsed)/float64(6*time.Hour))
+		}
+		points = append(points, OptionsHistoryPoint{Time: t0, OpenInterest: oi, HasOI: true})
+	}
+	o := &AroundOptions{
+		Complete: true, Unusual: true, Started: AroundOptionsStartedBefore,
+		HasOI: true, OIChangePct: 15, OIDirection: CVDDirUp,
+	}
+	MeasureAroundOptionsLead(o, points, at)
+	if o.Lead < 5*time.Hour || o.Lead > 7*time.Hour {
+		t.Fatalf("6h start inside a 24h flag: lead %s window %q", o.Lead, o.LeadWindow)
+	}
+}
+
 func TestMarkAroundOptionsAfter_ContinuedAndReversed(t *testing.T) {
 	before := &AroundOptions{Complete: true, Unusual: true, HasOI: true, OIDirection: CVDDirUp, OIChangePct: 12}
 	kept := &AroundOptions{Complete: true, HasOI: true, OIDirection: CVDDirUp, OIChangePct: 6}
