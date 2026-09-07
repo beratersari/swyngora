@@ -35,8 +35,10 @@ Liquidity sweeps whose poke sits in the span are attached as events.
 
 `exchange=all` (default) returns Binance and Bybit separately plus
 `combined` (volume-weighted). `venueTiming` says whether those two
-venues started the during-move together, which printed first, and
-whether the other followed later or the move stayed on one venue.
+venues started the during-move together, which printed first (first
+start is the leader), whether the other followed later or the move
+stayed on one venue, and whether OI or taker flow had already changed
+before the laggard printed.
 `at` is RFC3339 or unix milliseconds,
 and must be within the last 30 days. If the look-forward is still in
 the future, `after` (and sometimes `during`) is clipped to now.

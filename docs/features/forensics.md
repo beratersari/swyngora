@@ -48,9 +48,12 @@ the quiet baseline, which may be later in that window.
 `after` says whether options kept going the same way once price
 started, turned the other way, or went quiet. When both venues
 are present, `venueTiming` says whether they started together, which
-one printed first, and whether the other followed later or the move
-stayed on one venue. A venue that did not actually move is not given
-a start time. `together` is how
+one printed first (the first start is the leader, not the larger move),
+and whether the other followed later or the move stayed on one venue.
+A venue that did not actually move is not given a start time. If one
+venue printed first, `beforeFollow` / the summary also say whether
+open interest or taker flow had already changed — on the leader and
+on the laggard — before the second venue's price printed. `together` is how
 many of OI / put-call / IV moved at once; two or three series
 together is treated as more important than a single print
 (`weight` `pair` / `cluster`). A missing start or end sample

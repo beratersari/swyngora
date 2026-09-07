@@ -61,12 +61,15 @@ describe('ForensicsTape', () => {
         venueTiming={{
           agreement: 'binance_earlier',
           follow: 'followed',
-          summary: 'Binance started the price move about 8 minutes before Bybit. Bybit followed later.',
+          leader: 'binance',
+          summary:
+            'Binance started the price move about 8 minutes before Bybit. Bybit followed later. Before Bybit printed, Binance open interest rose and Binance takers were buying.',
         }}
       />,
     );
     expect(screen.getByText(/binance started the price move/i)).toBeInTheDocument();
     expect(screen.getByText(/bybit followed later/i)).toBeInTheDocument();
+    expect(screen.getByText(/open interest rose/i)).toBeInTheDocument();
   });
 
   it('says when the move stayed on Binance', () => {

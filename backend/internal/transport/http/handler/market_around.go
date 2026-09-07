@@ -471,13 +471,23 @@ type aroundResponse struct {
 }
 
 type aroundVenueTimingDTO struct {
-	Agreement    string     `json:"agreement"`
-	Follow       string     `json:"follow,omitempty"`
-	BinanceStart *time.Time `json:"binanceStart,omitempty"`
-	BybitStart   *time.Time `json:"bybitStart,omitempty"`
-	Lead         string     `json:"lead,omitempty"`
-	LeadLabel    string     `json:"leadLabel,omitempty"`
-	Summary      string     `json:"summary,omitempty"`
+	Agreement    string                    `json:"agreement"`
+	Follow       string                    `json:"follow,omitempty"`
+	Leader       string                    `json:"leader,omitempty"`
+	BinanceStart *time.Time                `json:"binanceStart,omitempty"`
+	BybitStart   *time.Time                `json:"bybitStart,omitempty"`
+	Lead         string                    `json:"lead,omitempty"`
+	LeadLabel    string                    `json:"leadLabel,omitempty"`
+	Before       []aroundVenueBeforeBitDTO `json:"beforeFollow,omitempty"`
+	Summary      string                    `json:"summary,omitempty"`
+}
+
+type aroundVenueBeforeBitDTO struct {
+	Metric    string `json:"metric"`
+	Venue     string `json:"venue"`
+	Direction string `json:"direction,omitempty"`
+	Phase     string `json:"phase,omitempty"`
+	Summary   string `json:"summary,omitempty"`
 }
 
 func aroundToDTO(a *domain.AroundReport) aroundResponse {
@@ -509,7 +519,15 @@ func aroundVenueTimingToDTO(v *domain.AroundVenueTiming) *aroundVenueTimingDTO {
 		return nil
 	}
 	out := &aroundVenueTimingDTO{
-		Agreement: v.Agreement, Follow: v.Follow, LeadLabel: v.LeadLabel, Summary: v.Summary,
+		Agreement: v.Agreement, Follow: v.Follow, Leader: v.Leader, LeadLabel: v.LeadLabel, Summary: v.Summary,
+	}
+	if len(v.Before) > 0 {
+		out.Before = make([]aroundVenueBeforeBitDTO, 0, len(v.Before))
+		for _, b := range v.Before {
+			out.Before = append(out.Before, aroundVenueBeforeBitDTO{
+				Metric: b.Metric, Venue: b.Venue, Direction: b.Direction, Phase: b.Phase, Summary: b.Summary,
+			})
+		}
 	}
 	if !v.BinanceStart.IsZero() {
 		t := v.BinanceStart.UTC()

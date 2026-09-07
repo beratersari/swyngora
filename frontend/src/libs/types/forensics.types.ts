@@ -133,13 +133,23 @@ export type ForensicsVenue = {
   error?: string;
 };
 
+export type ForensicsVenueBeforeBit = {
+  metric?: string;
+  venue?: string;
+  direction?: string;
+  phase?: string;
+  summary?: string;
+};
+
 export type ForensicsVenueTiming = {
   agreement?: string;
   follow?: string;
+  leader?: string;
   binanceStart?: string;
   bybitStart?: string;
   lead?: string;
   leadLabel?: string;
+  beforeFollow?: ForensicsVenueBeforeBit[];
   summary?: string;
 };
 
