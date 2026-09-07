@@ -455,7 +455,7 @@ func BuildAroundVenue(ex Exchange, symbol string, bars []AroundBar, plan AroundP
 	out.Changes = CompareAroundPhases(out.Phases)
 	out.MoveStart = FindAroundPriceRunStart(bars, plan)
 	out.TakerStart, out.TakerDir = FindAroundTakerRunStart(bars, plan)
-	out.TakerUntil = MarkAroundTakerUntil(bars, out.TakerStart, out.TakerDir, AroundVenueUntilPrice(out.MoveStart, plan))
+	out.TakerUntil = MarkAroundTakerUntil(bars, out.TakerStart, out.TakerDir, AroundVenueUntilPrice(out.MoveStart, plan), interval)
 	out.Summary = ExplainAroundVenue(out)
 	return out
 }

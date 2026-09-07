@@ -423,7 +423,7 @@ func TestMarkAroundTakerUntil_ContinuedVsFaded(t *testing.T) {
 		}
 		held = append(held, b)
 	}
-	if got := MarkAroundTakerUntil(held, at.Add(-8*time.Minute), TakerSideBuy, at); got != AroundVenueUntilContinued {
+	if got := MarkAroundTakerUntil(held, at.Add(-8*time.Minute), TakerSideBuy, at, Interval1m); got != AroundVenueUntilContinued {
 		t.Fatalf("held %q", got)
 	}
 	var spike []AroundBar
@@ -437,7 +437,7 @@ func TestMarkAroundTakerUntil_ContinuedVsFaded(t *testing.T) {
 		}
 		spike = append(spike, b)
 	}
-	if got := MarkAroundTakerUntil(spike, at.Add(-8*time.Minute), TakerSideBuy, at); got != AroundVenueUntilFaded {
+	if got := MarkAroundTakerUntil(spike, at.Add(-8*time.Minute), TakerSideBuy, at, Interval1m); got != AroundVenueUntilFaded {
 		t.Fatalf("spike %q", got)
 	}
 }
@@ -455,7 +455,7 @@ func TestMarkAroundTakerUntil_StaleEndIsUnknown(t *testing.T) {
 		}
 		stale = append(stale, b)
 	}
-	if got := MarkAroundTakerUntil(stale, at.Add(-16*time.Minute), TakerSideBuy, at); got != "" {
+	if got := MarkAroundTakerUntil(stale, at.Add(-16*time.Minute), TakerSideBuy, at, Interval1m); got != "" {
 		t.Fatalf("stale last print must not be faded/continued/reversed, got %q", got)
 	}
 	var onlyStart []AroundBar
@@ -467,7 +467,7 @@ func TestMarkAroundTakerUntil_StaleEndIsUnknown(t *testing.T) {
 		}
 		onlyStart = append(onlyStart, b)
 	}
-	if got := MarkAroundTakerUntil(onlyStart, at.Add(-8*time.Minute), TakerSideBuy, at); got != "" {
+	if got := MarkAroundTakerUntil(onlyStart, at.Add(-8*time.Minute), TakerSideBuy, at, Interval1m); got != "" {
 		t.Fatalf("start bar alone must not guess the path, got %q", got)
 	}
 }
@@ -485,7 +485,7 @@ func TestMarkAroundTakerUntil_PriceStartBarIsNotPrePrice(t *testing.T) {
 		}
 		gap = append(gap, b)
 	}
-	if got := MarkAroundTakerUntil(gap, at.Add(-8*time.Minute), TakerSideBuy, at); got != "" {
+	if got := MarkAroundTakerUntil(gap, at.Add(-8*time.Minute), TakerSideBuy, at, Interval1m); got != "" {
 		t.Fatalf("12:00 bar must not fill an 11:53–11:59 hole, got %q", got)
 	}
 	var held []AroundBar
@@ -499,7 +499,7 @@ func TestMarkAroundTakerUntil_PriceStartBarIsNotPrePrice(t *testing.T) {
 		}
 		held = append(held, b)
 	}
-	if got := MarkAroundTakerUntil(held, at.Add(-8*time.Minute), TakerSideBuy, at); got != AroundVenueUntilContinued {
+	if got := MarkAroundTakerUntil(held, at.Add(-8*time.Minute), TakerSideBuy, at, Interval1m); got != AroundVenueUntilContinued {
 		t.Fatalf("pre-price tail should still classify without the 12:00 bar: %q", got)
 	}
 }
@@ -517,7 +517,7 @@ func TestMarkAroundTakerUntil_MidPathGapIsUnknown(t *testing.T) {
 		}
 		gap = append(gap, b)
 	}
-	if got := MarkAroundTakerUntil(gap, at.Add(-8*time.Minute), TakerSideBuy, at); got != "" {
+	if got := MarkAroundTakerUntil(gap, at.Add(-8*time.Minute), TakerSideBuy, at, Interval1m); got != "" {
 		t.Fatalf("mid-path hole must not be continued/faded/reversed, got %q", got)
 	}
 	// One missing 1m bar is still continuous enough.
@@ -535,8 +535,38 @@ func TestMarkAroundTakerUntil_MidPathGapIsUnknown(t *testing.T) {
 		}
 		skip = append(skip, b)
 	}
-	if got := MarkAroundTakerUntil(skip, at.Add(-8*time.Minute), TakerSideBuy, at); got != AroundVenueUntilContinued {
+	if got := MarkAroundTakerUntil(skip, at.Add(-8*time.Minute), TakerSideBuy, at, Interval1m); got != AroundVenueUntilContinued {
 		t.Fatalf("one missing 1m bar should still classify: %q", got)
+	}
+}
+
+func TestMarkAroundTakerUntil_FiveMinuteBarsUseBarSteps(t *testing.T) {
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	bar := func(min int, buy bool) AroundBar {
+		b := AroundBar{
+			Time: at.Add(time.Duration(min) * time.Minute),
+			Open: 100, Close: 100, High: 100, Low: 100, Volume: 10, BuySellKnown: true,
+			BuyVolume: 5, SellVolume: 5,
+		}
+		if buy {
+			b.BuyVolume, b.SellVolume = 8, 2
+		}
+		return b
+	}
+	// Normal 5m tape: 11:40, 11:45, 11:50, 11:55. A 5m step is not a hole.
+	held := []AroundBar{bar(-20, false), bar(-15, false), bar(-10, true), bar(-5, true), bar(0, true)}
+	if got := MarkAroundTakerUntil(held, at.Add(-10*time.Minute), TakerSideBuy, at, Interval5m); got != AroundVenueUntilContinued {
+		t.Fatalf("5m steps must not look like missing data: %q", got)
+	}
+	// Missing the last 5m bar before price (11:55) — path to 12:00 is unknown.
+	stale := []AroundBar{bar(-20, false), bar(-15, false), bar(-10, true), bar(0, true)}
+	if got := MarkAroundTakerUntil(stale, at.Add(-10*time.Minute), TakerSideBuy, at, Interval5m); got != "" {
+		t.Fatalf("missing last 5m bar before price must be unknown, got %q", got)
+	}
+	// One missing 5m bar in the middle is still one skipped step.
+	skip := []AroundBar{bar(-20, false), bar(-15, true), bar(-5, true), bar(0, true)}
+	if got := MarkAroundTakerUntil(skip, at.Add(-15*time.Minute), TakerSideBuy, at, Interval5m); got != AroundVenueUntilContinued {
+		t.Fatalf("one missing 5m bar should still classify: %q", got)
 	}
 }
 

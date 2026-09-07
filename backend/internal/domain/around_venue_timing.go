@@ -32,11 +32,7 @@ const (
 	aroundVenueSameWindow = 2 * time.Minute
 	aroundVenueMinMove    = 0.20
 	aroundVenueOIMin      = 0.30
-	aroundVenueTakerTail  = 5 * time.Minute
-	// aroundVenueTakerMaxGap is the largest hole allowed between known
-	// pre-price taker bars (one missing 1m candle). A longer gap means
-	// the path to price is unknown.
-	aroundVenueTakerMaxGap = 2 * time.Minute
+	aroundVenueTakerTail = 5 * time.Minute
 	// aroundVenueUntilFresh is how close the last OI sample must be to
 	// the price start before we will say continued / faded / reversed.
 	// Wider than one futures-history tick (5m) so a current print still
@@ -435,16 +431,18 @@ func MarkAroundOIUntil(snaps []FuturesSnapshot, start time.Time, dir string, unt
 // start until the price move, or spiked and then faded / flipped. Empty
 // when the pre-price tape is not continuous enough to know the path —
 // a last bar near price is not enough if there is a long hole after the
-// start. The bar at `until` is the first minute of the move, not pre-price
-// tape.
-func MarkAroundTakerUntil(bars []AroundBar, start time.Time, dir string, until time.Time) string {
+// start. Continuity is in bar steps (one missing 1m or 5m bar), not a
+// fixed clock. The bar at `until` is the first bar of the move, not
+// pre-price tape.
+func MarkAroundTakerUntil(bars []AroundBar, start time.Time, dir string, until time.Time, interval CandleInterval) string {
 	if start.IsZero() || until.IsZero() || !until.After(start) || (dir != TakerSideBuy && dir != TakerSideSell) {
 		return ""
 	}
-	if !aroundTakerPathContinuous(bars, start, until) {
+	step := aroundTakerBarStep(bars, interval)
+	if step <= 0 || !aroundTakerPathContinuous(bars, start, until, step) {
 		return ""
 	}
-	tailFrom := until.Add(-aroundVenueTakerTail)
+	tailFrom := until.Add(-aroundTakerTailWindow(step))
 	if tailFrom.Before(start) {
 		tailFrom = start
 	}
@@ -463,11 +461,49 @@ func MarkAroundTakerUntil(bars []AroundBar, start time.Time, dir string, until t
 	return AroundVenueUntilFaded
 }
 
+// aroundTakerBarStep is the tape's bar length. Prefer the venue interval;
+// if that is missing, use the smallest positive gap between known bars.
+func aroundTakerBarStep(bars []AroundBar, interval CandleInterval) time.Duration {
+	if d := IntervalDuration(interval); d > 0 {
+		return d
+	}
+	var times []time.Time
+	for _, b := range bars {
+		if !b.BuySellKnown || b.Time.IsZero() {
+			continue
+		}
+		times = append(times, b.Time.UTC())
+	}
+	if len(times) < 2 {
+		return 0
+	}
+	sort.Slice(times, func(i, j int) bool { return times[i].Before(times[j]) })
+	var step time.Duration
+	for i := 1; i < len(times); i++ {
+		d := times[i].Sub(times[i-1])
+		if d > 0 && (step == 0 || d < step) {
+			step = d
+		}
+	}
+	return step
+}
+
+func aroundTakerTailWindow(step time.Duration) time.Duration {
+	if step <= 0 {
+		return aroundVenueTakerTail
+	}
+	w := 2 * step
+	if w < aroundVenueTakerTail {
+		return aroundVenueTakerTail
+	}
+	return w
+}
+
 // aroundTakerPathContinuous is true when known taker bars cover start
-// through the last minute before price with no hole longer than
-// aroundVenueTakerMaxGap. The price-start bar is not part of this path.
-func aroundTakerPathContinuous(bars []AroundBar, start, until time.Time) bool {
-	if start.IsZero() || until.IsZero() || !until.After(start) {
+// through the last bar before price with no hole longer than one missing
+// bar at `step`. The price-start bar is not part of this path.
+func aroundTakerPathContinuous(bars []AroundBar, start, until time.Time, step time.Duration) bool {
+	if start.IsZero() || until.IsZero() || !until.After(start) || step <= 0 {
 		return false
 	}
 	var known []time.Time
@@ -477,19 +513,20 @@ func aroundTakerPathContinuous(bars []AroundBar, start, until time.Time) bool {
 		}
 		known = append(known, b.Time.UTC())
 	}
-	if len(known) < 2 {
+	if len(known) == 0 {
 		return false
 	}
 	sort.Slice(known, func(i, j int) bool { return known[i].Before(known[j]) })
-	if known[0].Sub(start) > aroundVenueTakerMaxGap {
+	maxMid := 2 * step
+	if known[0].Sub(start) > step {
 		return false
 	}
 	for i := 1; i < len(known); i++ {
-		if known[i].Sub(known[i-1]) > aroundVenueTakerMaxGap {
+		if known[i].Sub(known[i-1]) > maxMid {
 			return false
 		}
 	}
-	return until.Sub(known[len(known)-1]) <= aroundVenueTakerMaxGap
+	return until.Sub(known[len(known)-1]) <= step
 }
 
 // aroundVenueUntilFreshEnough is true when last is after the start print
