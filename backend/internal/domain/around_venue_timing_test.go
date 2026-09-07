@@ -504,6 +504,42 @@ func TestMarkAroundTakerUntil_PriceStartBarIsNotPrePrice(t *testing.T) {
 	}
 }
 
+func TestMarkAroundTakerUntil_MidPathGapIsUnknown(t *testing.T) {
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	// 11:52–11:53 then a hole, then 11:58–11:59 still buying.
+	// Last bars are close to price, but the path is not continuous.
+	var gap []AroundBar
+	for _, i := range []int{-20, -15, -8, -7, -2, -1} {
+		t0 := at.Add(time.Duration(i) * time.Minute)
+		b := AroundBar{Time: t0, Open: 100, Close: 100, High: 100, Low: 100, Volume: 10, BuySellKnown: true, BuyVolume: 5, SellVolume: 5}
+		if i >= -8 {
+			b.BuyVolume, b.SellVolume = 8, 2
+		}
+		gap = append(gap, b)
+	}
+	if got := MarkAroundTakerUntil(gap, at.Add(-8*time.Minute), TakerSideBuy, at); got != "" {
+		t.Fatalf("mid-path hole must not be continued/faded/reversed, got %q", got)
+	}
+	// One missing 1m bar is still continuous enough.
+	var skip []AroundBar
+	for i := -15; i < 0; i++ {
+		if i == -5 {
+			continue
+		}
+		t0 := at.Add(time.Duration(i) * time.Minute)
+		b := AroundBar{Time: t0, Open: 100, Close: 100, High: 100, Low: 100, Volume: 10, BuySellKnown: true}
+		if i >= -8 {
+			b.BuyVolume, b.SellVolume = 8, 2
+		} else {
+			b.BuyVolume, b.SellVolume = 5, 5
+		}
+		skip = append(skip, b)
+	}
+	if got := MarkAroundTakerUntil(skip, at.Add(-8*time.Minute), TakerSideBuy, at); got != AroundVenueUntilContinued {
+		t.Fatalf("one missing 1m bar should still classify: %q", got)
+	}
+}
+
 func TestFindAroundTakerRunStart_FindsLean(t *testing.T) {
 	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
 	plan := aroundTestPlan(at)

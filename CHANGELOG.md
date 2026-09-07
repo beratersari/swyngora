@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
 
 ### Fixed
+- **Forensics taker continuity:** continued / faded / reversed need a continuous pre-price taker path (no hole longer than one missing 1m bar). A last bar near price does not fill a gap after the start (`docs/features/forensics.md`, `docs/features/around.md`)
 - **Forensics taker path:** the bar at the price start is not pre-price tape — 11:52 then a hole until 12:00 is unknown even if 12:00 still buys; continued / faded / reversed need known bars in the minutes before price (`docs/features/forensics.md`, `docs/features/around.md`)
 - **Forensics precursor path:** OI and taker flow no longer say continued / faded / reversed when the last sample is much earlier than the price start (or is only the start print) — the path in between is unknown (`docs/features/forensics.md`, `docs/features/around.md`)
 - **Forensics options lead start:** a 4h or 24h unusual flag is no longer treated as the start of the print — lead walks samples from the quiet baseline so a late move inside that window is dated when it actually left quiet (`docs/features/forensics.md`)
