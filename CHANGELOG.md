@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Forensics options lead start:** a 4h or 24h unusual flag is no longer treated as the start of the print — lead walks samples from the quiet baseline so a late move inside that window is dated when it actually left quiet (`docs/features/forensics.md`)
-- **Forensics venue timing:** Bybit is not marked as starting earlier when it did not actually move; the first signal across price, OI, and takers is the leader (not the larger move, and not price alone); if Binance prints first, `venueTiming` says whether Bybit followed later or the move stayed on Binance, and whether OI or taker flow had already changed before the laggard's real start — not the during-window close (`docs/features/forensics.md`)
+- **Forensics venue timing:** Bybit is not marked as starting earlier when it did not actually move; the first signal across price, OI, and takers is the leader (not the larger move, and not price alone) only when that OI or taker print kept going until price — a spike that faded is labeled and is not treated as a precursor; if Binance prints first, `venueTiming` says whether Bybit followed later or the move stayed on Binance, and whether OI or taker flow had already changed before the laggard's real start — not the during-window close (`docs/features/forensics.md`)
 - **Forensics options history:** a missing start or end sample no longer invents an OI / put-call / IV jump from zero; opposite options prints are not treated as similar; unusual prints say whether they started before the price move or during it (`docs/features/forensics.md`)
 
 ### Added

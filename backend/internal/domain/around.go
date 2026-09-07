@@ -219,8 +219,10 @@ type AroundVenue struct {
 	MoveStart  time.Time
 	OIStart    time.Time
 	OIDir      string
+	OIUntil    string
 	TakerStart time.Time
 	TakerDir   string
+	TakerUntil string
 	Summary    string
 	Error      string
 }
@@ -453,6 +455,7 @@ func BuildAroundVenue(ex Exchange, symbol string, bars []AroundBar, plan AroundP
 	out.Changes = CompareAroundPhases(out.Phases)
 	out.MoveStart = FindAroundPriceRunStart(bars, plan)
 	out.TakerStart, out.TakerDir = FindAroundTakerRunStart(bars, plan)
+	out.TakerUntil = MarkAroundTakerUntil(bars, out.TakerStart, out.TakerDir, AroundVenueUntilPrice(out.MoveStart, plan))
 	out.Summary = ExplainAroundVenue(out)
 	return out
 }

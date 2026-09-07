@@ -493,6 +493,7 @@ type aroundVenueBeforeBitDTO struct {
 	Direction string     `json:"direction,omitempty"`
 	Phase     string     `json:"phase,omitempty"`
 	At        *time.Time `json:"at,omitempty"`
+	Until     string     `json:"until,omitempty"`
 	Summary   string     `json:"summary,omitempty"`
 }
 
@@ -532,7 +533,8 @@ func aroundVenueTimingToDTO(v *domain.AroundVenueTiming) *aroundVenueTimingDTO {
 		out.Before = make([]aroundVenueBeforeBitDTO, 0, len(v.Before))
 		for _, b := range v.Before {
 			bit := aroundVenueBeforeBitDTO{
-				Metric: b.Metric, Venue: b.Venue, Direction: b.Direction, Phase: b.Phase, Summary: b.Summary,
+				Metric: b.Metric, Venue: b.Venue, Direction: b.Direction, Phase: b.Phase,
+				Until: b.Until, Summary: b.Summary,
 			}
 			if !b.At.IsZero() {
 				t := b.At.UTC()

@@ -2014,7 +2014,8 @@ paths:
         other followed or the move stayed on one venue, and whether OI or
         taker flow had already changed before the laggard's real start (not
         the during-window close). The first signal across price, OI, and
-        takers is the leader.
+        takers is the leader only if that OI or taker print kept going until
+        price.
         Informational only.
       operationId: getMarketAround
       tags: [Market]

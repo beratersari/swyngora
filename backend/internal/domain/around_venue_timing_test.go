@@ -270,7 +270,7 @@ func TestCompareAroundVenueTiming_EarlierBybitOIIsNotPriceOnlyLeader(t *testing.
 	}
 	by := AroundVenue{
 		Exchange: ExchangeBybit, MoveStart: at.Add(8 * time.Minute),
-		OIStart: at.Add(-6 * time.Minute), OIDir: CVDDirUp,
+		OIStart: at.Add(-6 * time.Minute), OIDir: CVDDirUp, OIUntil: AroundVenueUntilContinued,
 		Phases: []AroundPhase{{
 			Phase: AroundPhaseDuring, Complete: true, From: at, To: at.Add(15 * time.Minute),
 			Price: AroundPrice{ChangePct: 1.1, Direction: CVDDirUp},
@@ -285,6 +285,97 @@ func TestCompareAroundVenueTiming_EarlierBybitOIIsNotPriceOnlyLeader(t *testing.
 	}
 	if !strings.Contains(got.Summary, "Bybit open interest") || !strings.Contains(got.Summary, "before Binance price") {
 		t.Fatalf("summary %q", got.Summary)
+	}
+	if !strings.Contains(got.Summary, "kept going") {
+		t.Fatalf("held precursor should say it kept going: %q", got.Summary)
+	}
+}
+
+func TestCompareAroundVenueTiming_FadedOIIsNotAPrecursor(t *testing.T) {
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	bn := AroundVenue{
+		Exchange: ExchangeBinance, MoveStart: at,
+		Phases: []AroundPhase{{
+			Phase: AroundPhaseDuring, Complete: true, From: at, To: at.Add(15 * time.Minute),
+			Price: AroundPrice{ChangePct: 1.4, Direction: CVDDirUp},
+		}},
+	}
+	by := AroundVenue{
+		Exchange: ExchangeBybit, MoveStart: at.Add(8 * time.Minute),
+		OIStart: at.Add(-6 * time.Minute), OIDir: CVDDirUp, OIUntil: AroundVenueUntilFaded,
+		Phases: []AroundPhase{{
+			Phase: AroundPhaseDuring, Complete: true, From: at, To: at.Add(15 * time.Minute),
+			Price: AroundPrice{ChangePct: 1.1, Direction: CVDDirUp},
+		}},
+	}
+	got := CompareAroundVenueTiming([]AroundVenue{bn, by})
+	if got == nil || got.Agreement != AroundVenueBinanceEarlier {
+		t.Fatalf("%+v", got)
+	}
+	if got.Leader != string(ExchangeBinance) || got.LeaderMetric != AroundVenueMetricPrice {
+		t.Fatalf("faded OI must not be the leader, got leader=%q metric=%q", got.Leader, got.LeaderMetric)
+	}
+	if strings.Contains(got.Summary, "before Binance price and kept going") {
+		t.Fatalf("faded spike must not be called a precursor: %q", got.Summary)
+	}
+	if !strings.Contains(got.Summary, "faded before price") {
+		t.Fatalf("summary should say the OI faded: %q", got.Summary)
+	}
+}
+
+func TestMarkAroundOIUntil_ContinuedVsFaded(t *testing.T) {
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	held := []FuturesSnapshot{
+		{SampledAt: at.Add(-20 * time.Minute), Value: 1000},
+		{SampledAt: at.Add(-10 * time.Minute), Value: 1000},
+		{SampledAt: at.Add(-8 * time.Minute), Value: 1012},
+		{SampledAt: at.Add(-4 * time.Minute), Value: 1020},
+		{SampledAt: at, Value: 1024},
+	}
+	if got := MarkAroundOIUntil(held, at.Add(-8*time.Minute), CVDDirUp, at); got != AroundVenueUntilContinued {
+		t.Fatalf("held %q", got)
+	}
+	spike := []FuturesSnapshot{
+		{SampledAt: at.Add(-20 * time.Minute), Value: 1000},
+		{SampledAt: at.Add(-10 * time.Minute), Value: 1000},
+		{SampledAt: at.Add(-8 * time.Minute), Value: 1025},
+		{SampledAt: at.Add(-4 * time.Minute), Value: 1002},
+		{SampledAt: at, Value: 1001},
+	}
+	if got := MarkAroundOIUntil(spike, at.Add(-8*time.Minute), CVDDirUp, at); got != AroundVenueUntilFaded {
+		t.Fatalf("spike %q", got)
+	}
+}
+
+func TestMarkAroundTakerUntil_ContinuedVsFaded(t *testing.T) {
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	var held []AroundBar
+	for i := -15; i < 0; i++ {
+		t0 := at.Add(time.Duration(i) * time.Minute)
+		b := AroundBar{Time: t0, Open: 100, Close: 100, High: 100, Low: 100, Volume: 10, BuySellKnown: true}
+		if i >= -8 {
+			b.BuyVolume, b.SellVolume = 8, 2
+		} else {
+			b.BuyVolume, b.SellVolume = 5, 5
+		}
+		held = append(held, b)
+	}
+	if got := MarkAroundTakerUntil(held, at.Add(-8*time.Minute), TakerSideBuy, at); got != AroundVenueUntilContinued {
+		t.Fatalf("held %q", got)
+	}
+	var spike []AroundBar
+	for i := -15; i < 0; i++ {
+		t0 := at.Add(time.Duration(i) * time.Minute)
+		b := AroundBar{Time: t0, Open: 100, Close: 100, High: 100, Low: 100, Volume: 10, BuySellKnown: true}
+		if i >= -8 && i <= -6 {
+			b.BuyVolume, b.SellVolume = 9, 1
+		} else {
+			b.BuyVolume, b.SellVolume = 5, 5
+		}
+		spike = append(spike, b)
+	}
+	if got := MarkAroundTakerUntil(spike, at.Add(-8*time.Minute), TakerSideBuy, at); got != AroundVenueUntilFaded {
+		t.Fatalf("spike %q", got)
 	}
 }
 

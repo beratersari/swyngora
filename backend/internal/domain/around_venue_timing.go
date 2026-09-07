@@ -23,10 +23,15 @@ const (
 	AroundVenueMetricOI     = "oi"
 	AroundVenueMetricTakers = "takers"
 
+	AroundVenueUntilContinued = "continued"
+	AroundVenueUntilFaded     = "faded"
+	AroundVenueUntilReversed  = "reversed"
+
 	aroundVenueLookback   = 30 * time.Minute
 	aroundVenueSameWindow = 2 * time.Minute
 	aroundVenueMinMove    = 0.20
 	aroundVenueOIMin      = 0.30
+	aroundVenueTakerTail  = 5 * time.Minute
 )
 
 // AroundVenueTiming compares when Binance and Bybit started the price move.
@@ -54,6 +59,7 @@ type AroundVenueBeforeBit struct {
 	Direction string
 	Phase     string
 	At        time.Time
+	Until     string
 	Summary   string
 }
 
@@ -337,6 +343,111 @@ func aroundOIMoved(s aroundOISpan) bool {
 	return math.Abs(s.pct) >= aroundVenueOIMin
 }
 
+// AroundVenueUntilPrice is when the price move of interest starts: this
+// venue's own print if it printed before `at`, otherwise the event time.
+func AroundVenueUntilPrice(moveStart time.Time, plan AroundPlan) time.Time {
+	until := plan.DuringFrom
+	if !moveStart.IsZero() && moveStart.Before(until) {
+		return moveStart.UTC()
+	}
+	if until.IsZero() {
+		return moveStart.UTC()
+	}
+	return until.UTC()
+}
+
+// MarkAroundOIUntil says whether OI kept moving the same way from start
+// until the price move, or spiked and then faded / reversed.
+func MarkAroundOIUntil(snaps []FuturesSnapshot, start time.Time, dir string, until time.Time) string {
+	if start.IsZero() || until.IsZero() || !until.After(start) || (dir != CVDDirUp && dir != CVDDirDown) {
+		return ""
+	}
+	pre := LatestFuturesSnapshotAtOrBefore(snaps, start.Add(-time.Millisecond))
+	if pre == nil {
+		pre = LatestFuturesSnapshotAtOrBefore(snaps, start)
+	}
+	end := LatestFuturesSnapshotAtOrBefore(snaps, until)
+	if pre == nil || end == nil {
+		return ""
+	}
+	preV := futuresOIValue(*pre)
+	endV := futuresOIValue(*end)
+	if preV <= 0 {
+		return ""
+	}
+	endCh := (endV - preV) / preV * 100
+	peak := 0.0
+	for i := range snaps {
+		s := snaps[i]
+		if s.SampledAt.IsZero() || s.SampledAt.Before(start) || s.SampledAt.After(until) {
+			continue
+		}
+		v := futuresOIValue(s)
+		if v <= 0 {
+			continue
+		}
+		ch := (v - preV) / preV * 100
+		if dir == CVDDirUp && ch > peak {
+			peak = ch
+		}
+		if dir == CVDDirDown && -ch > peak {
+			peak = -ch
+		}
+	}
+	if peak < math.Abs(endCh) {
+		peak = math.Abs(endCh)
+	}
+	hold := math.Max(aroundVenueOIMin, 0.4*peak)
+	if dir == CVDDirUp {
+		if endCh <= -aroundVenueOIMin {
+			return AroundVenueUntilReversed
+		}
+		if endCh >= hold {
+			return AroundVenueUntilContinued
+		}
+		return AroundVenueUntilFaded
+	}
+	if endCh >= aroundVenueOIMin {
+		return AroundVenueUntilReversed
+	}
+	if endCh <= -hold {
+		return AroundVenueUntilContinued
+	}
+	return AroundVenueUntilFaded
+}
+
+// MarkAroundTakerUntil says whether takers kept leaning the same way from
+// start until the price move, or spiked and then faded / flipped.
+func MarkAroundTakerUntil(bars []AroundBar, start time.Time, dir string, until time.Time) string {
+	if start.IsZero() || until.IsZero() || !until.After(start) || (dir != TakerSideBuy && dir != TakerSideSell) {
+		return ""
+	}
+	tailFrom := until.Add(-aroundVenueTakerTail)
+	if tailFrom.Before(start) {
+		tailFrom = start
+	}
+	tail := aroundFlowOf(FilterAroundBars(bars, tailFrom, until))
+	if aroundTakerLeaned(tail) {
+		if tail.Dominant == dir {
+			return AroundVenueUntilContinued
+		}
+		return AroundVenueUntilReversed
+	}
+	head := aroundFlowOf(FilterAroundBars(bars, start, tailFrom))
+	if aroundTakerLeaned(head) && head.Dominant == dir {
+		return AroundVenueUntilFaded
+	}
+	whole := aroundFlowOf(FilterAroundBars(bars, start, until))
+	if aroundTakerLeaned(whole) && whole.Dominant == dir {
+		return AroundVenueUntilFaded
+	}
+	return AroundVenueUntilFaded
+}
+
+func aroundVenueHeldToPrice(until string) bool {
+	return until == AroundVenueUntilContinued
+}
+
 // CompareAroundVenueTiming says whether Binance and Bybit started together,
 // one printed first and the other followed, or the move stayed on one venue.
 // The first signal (price, OI, or takers) is the leader — not only price,
@@ -565,11 +676,12 @@ func aroundStartOIBit(v AroundVenue) AroundVenueBeforeBit {
 	if v.OIDir == CVDDirDown {
 		word = "fell"
 	}
+	head := fmt.Sprintf("%s open interest %s from %s UTC",
+		aroundExchangeLabel(v.Exchange), word, v.OIStart.UTC().Format("15:04"))
 	return AroundVenueBeforeBit{
 		Metric: AroundVenueMetricOI, Venue: string(v.Exchange), Direction: v.OIDir,
-		At: v.OIStart.UTC(),
-		Summary: fmt.Sprintf("%s open interest %s from %s UTC",
-			aroundExchangeLabel(v.Exchange), word, v.OIStart.UTC().Format("15:04")),
+		At: v.OIStart.UTC(), Until: v.OIUntil,
+		Summary: aroundVenueUntilPhrase(head, v.OIUntil),
 	}
 }
 
@@ -578,11 +690,25 @@ func aroundStartTakerBit(v AroundVenue) AroundVenueBeforeBit {
 	if v.TakerDir == TakerSideSell {
 		word = "were selling"
 	}
+	head := fmt.Sprintf("%s takers %s from %s UTC",
+		aroundExchangeLabel(v.Exchange), word, v.TakerStart.UTC().Format("15:04"))
 	return AroundVenueBeforeBit{
 		Metric: AroundVenueMetricTakers, Venue: string(v.Exchange), Direction: v.TakerDir,
-		At: v.TakerStart.UTC(),
-		Summary: fmt.Sprintf("%s takers %s from %s UTC",
-			aroundExchangeLabel(v.Exchange), word, v.TakerStart.UTC().Format("15:04")),
+		At: v.TakerStart.UTC(), Until: v.TakerUntil,
+		Summary: aroundVenueUntilPhrase(head, v.TakerUntil),
+	}
+}
+
+func aroundVenueUntilPhrase(head, until string) string {
+	switch until {
+	case AroundVenueUntilContinued:
+		return head + " and kept going until price"
+	case AroundVenueUntilFaded:
+		return head + " then faded before price"
+	case AroundVenueUntilReversed:
+		return head + " then turned the other way before price"
+	default:
+		return head
 	}
 }
 
@@ -642,10 +768,10 @@ func aroundVenueClocks(v AroundVenue) []aroundVenueClock {
 	if !v.MoveStart.IsZero() {
 		out = append(out, aroundVenueClock{venue: ex, metric: AroundVenueMetricPrice, at: v.MoveStart.UTC()})
 	}
-	if !v.OIStart.IsZero() {
+	if !v.OIStart.IsZero() && aroundVenueHeldToPrice(v.OIUntil) {
 		out = append(out, aroundVenueClock{venue: ex, metric: AroundVenueMetricOI, at: v.OIStart.UTC()})
 	}
-	if !v.TakerStart.IsZero() {
+	if !v.TakerStart.IsZero() && aroundVenueHeldToPrice(v.TakerUntil) {
 		out = append(out, aroundVenueClock{venue: ex, metric: AroundVenueMetricTakers, at: v.TakerStart.UTC()})
 	}
 	return out
@@ -690,14 +816,14 @@ func aroundVenueFirstSignalSentence(bn, by AroundVenue, priceLead time.Time) str
 		}
 	}
 	if priceLead.IsZero() || !at.Before(priceLead) {
-		return fmt.Sprintf("%s %s from %s UTC.", label, what, at.UTC().Format("15:04"))
+		return fmt.Sprintf("%s %s from %s UTC and kept going.", label, what, at.UTC().Format("15:04"))
 	}
 	lead := formatOptionsLead(priceLead.Sub(at))
 	priceVenue := aroundExchangeLabel(ExchangeBinance)
 	if !by.MoveStart.IsZero() && by.MoveStart.Equal(priceLead) && (bn.MoveStart.IsZero() || !bn.MoveStart.Equal(priceLead)) {
 		priceVenue = aroundExchangeLabel(ExchangeBybit)
 	}
-	return fmt.Sprintf("%s %s %s before %s price.", label, what, lead, priceVenue)
+	return fmt.Sprintf("%s %s %s before %s price and kept going.", label, what, lead, priceVenue)
 }
 
 func appendAroundVenueFirstSignal(out *AroundVenueTiming, bn, by AroundVenue, priceLead time.Time) {

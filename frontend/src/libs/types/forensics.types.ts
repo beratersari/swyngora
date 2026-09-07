@@ -139,6 +139,7 @@ export type ForensicsVenueBeforeBit = {
   direction?: string;
   phase?: string;
   at?: string;
+  until?: string;
   summary?: string;
 };
 

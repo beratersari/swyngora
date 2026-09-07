@@ -53,8 +53,11 @@ stayed on one venue. A venue that did not actually move is not given
 a start time. The first signal across price, open interest, and taker
 flow is the `leader` (`leaderMetric` is `price` / `oi` / `takers`) —
 price-only can be misleading if the other venue's OI or takers moved
-earlier. If one venue printed first, `beforeFollow` uses that venue's
-real start (for example 12:05), not the during-window close (12:15).
+earlier. An earlier OI or taker print is only treated as a precursor
+when it **kept going until price**; a spike that faded or reversed is
+labeled that way and is not the leader. If one venue printed first,
+`beforeFollow` uses that venue's real start (for example 12:05), not
+the during-window close (12:15).
 `together` is how
 many of OI / put-call / IV moved at once; two or three series
 together is treated as more important than a single print
