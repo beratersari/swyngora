@@ -471,23 +471,29 @@ type aroundResponse struct {
 }
 
 type aroundVenueTimingDTO struct {
-	Agreement    string                    `json:"agreement"`
-	Follow       string                    `json:"follow,omitempty"`
-	Leader       string                    `json:"leader,omitempty"`
-	BinanceStart *time.Time                `json:"binanceStart,omitempty"`
-	BybitStart   *time.Time                `json:"bybitStart,omitempty"`
-	Lead         string                    `json:"lead,omitempty"`
-	LeadLabel    string                    `json:"leadLabel,omitempty"`
-	Before       []aroundVenueBeforeBitDTO `json:"beforeFollow,omitempty"`
-	Summary      string                    `json:"summary,omitempty"`
+	Agreement         string                    `json:"agreement"`
+	Follow            string                    `json:"follow,omitempty"`
+	Leader            string                    `json:"leader,omitempty"`
+	LeaderMetric      string                    `json:"leaderMetric,omitempty"`
+	BinanceStart      *time.Time                `json:"binanceStart,omitempty"`
+	BybitStart        *time.Time                `json:"bybitStart,omitempty"`
+	BinanceOIStart    *time.Time                `json:"binanceOiStart,omitempty"`
+	BybitOIStart      *time.Time                `json:"bybitOiStart,omitempty"`
+	BinanceTakerStart *time.Time                `json:"binanceTakerStart,omitempty"`
+	BybitTakerStart   *time.Time                `json:"bybitTakerStart,omitempty"`
+	Lead              string                    `json:"lead,omitempty"`
+	LeadLabel         string                    `json:"leadLabel,omitempty"`
+	Before            []aroundVenueBeforeBitDTO `json:"beforeFollow,omitempty"`
+	Summary           string                    `json:"summary,omitempty"`
 }
 
 type aroundVenueBeforeBitDTO struct {
-	Metric    string `json:"metric"`
-	Venue     string `json:"venue"`
-	Direction string `json:"direction,omitempty"`
-	Phase     string `json:"phase,omitempty"`
-	Summary   string `json:"summary,omitempty"`
+	Metric    string     `json:"metric"`
+	Venue     string     `json:"venue"`
+	Direction string     `json:"direction,omitempty"`
+	Phase     string     `json:"phase,omitempty"`
+	At        *time.Time `json:"at,omitempty"`
+	Summary   string     `json:"summary,omitempty"`
 }
 
 func aroundToDTO(a *domain.AroundReport) aroundResponse {
@@ -519,14 +525,20 @@ func aroundVenueTimingToDTO(v *domain.AroundVenueTiming) *aroundVenueTimingDTO {
 		return nil
 	}
 	out := &aroundVenueTimingDTO{
-		Agreement: v.Agreement, Follow: v.Follow, Leader: v.Leader, LeadLabel: v.LeadLabel, Summary: v.Summary,
+		Agreement: v.Agreement, Follow: v.Follow, Leader: v.Leader, LeaderMetric: v.LeaderMetric,
+		LeadLabel: v.LeadLabel, Summary: v.Summary,
 	}
 	if len(v.Before) > 0 {
 		out.Before = make([]aroundVenueBeforeBitDTO, 0, len(v.Before))
 		for _, b := range v.Before {
-			out.Before = append(out.Before, aroundVenueBeforeBitDTO{
+			bit := aroundVenueBeforeBitDTO{
 				Metric: b.Metric, Venue: b.Venue, Direction: b.Direction, Phase: b.Phase, Summary: b.Summary,
-			})
+			}
+			if !b.At.IsZero() {
+				t := b.At.UTC()
+				bit.At = &t
+			}
+			out.Before = append(out.Before, bit)
 		}
 	}
 	if !v.BinanceStart.IsZero() {
@@ -536,6 +548,22 @@ func aroundVenueTimingToDTO(v *domain.AroundVenueTiming) *aroundVenueTimingDTO {
 	if !v.BybitStart.IsZero() {
 		t := v.BybitStart.UTC()
 		out.BybitStart = &t
+	}
+	if !v.BinanceOIStart.IsZero() {
+		t := v.BinanceOIStart.UTC()
+		out.BinanceOIStart = &t
+	}
+	if !v.BybitOIStart.IsZero() {
+		t := v.BybitOIStart.UTC()
+		out.BybitOIStart = &t
+	}
+	if !v.BinanceTakerStart.IsZero() {
+		t := v.BinanceTakerStart.UTC()
+		out.BinanceTakerStart = &t
+	}
+	if !v.BybitTakerStart.IsZero() {
+		t := v.BybitTakerStart.UTC()
+		out.BybitTakerStart = &t
 	}
 	if v.Lead >= time.Minute {
 		out.Lead = domain.FormatOptionsLeadShort(v.Lead)

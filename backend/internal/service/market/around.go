@@ -292,6 +292,7 @@ func (s *Service) attachAroundFutures(ctx context.Context, ex domain.Exchange, s
 			ph.Summary = domain.ExplainAroundPhase(*ph)
 		}
 	}
+	ven.OIStart, ven.OIDir = domain.FindAroundOIRunStart(oi, plan)
 }
 
 func (s *Service) attachAroundOptions(ctx context.Context, symbol string, plan domain.AroundPlan, out *domain.AroundReport) {

@@ -210,15 +210,19 @@ type AroundChange struct {
 
 // AroundVenue is one exchange's (or combined) around-the-move read.
 type AroundVenue struct {
-	Exchange  Exchange
-	Symbol    string
-	Interval  string
-	Phases    []AroundPhase
-	Changes   []AroundChange
-	Events    []AroundEvent
-	MoveStart time.Time
-	Summary   string
-	Error     string
+	Exchange   Exchange
+	Symbol     string
+	Interval   string
+	Phases     []AroundPhase
+	Changes    []AroundChange
+	Events     []AroundEvent
+	MoveStart  time.Time
+	OIStart    time.Time
+	OIDir      string
+	TakerStart time.Time
+	TakerDir   string
+	Summary    string
+	Error      string
 }
 
 // AroundReport is the API result.
@@ -448,6 +452,7 @@ func BuildAroundVenue(ex Exchange, symbol string, bars []AroundBar, plan AroundP
 	}
 	out.Changes = CompareAroundPhases(out.Phases)
 	out.MoveStart = FindAroundPriceRunStart(bars, plan)
+	out.TakerStart, out.TakerDir = FindAroundTakerRunStart(bars, plan)
 	out.Summary = ExplainAroundVenue(out)
 	return out
 }

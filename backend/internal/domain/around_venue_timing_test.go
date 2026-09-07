@@ -213,3 +213,122 @@ func TestCompareAroundVenueTiming_BybitFollowsLater(t *testing.T) {
 		t.Fatalf("summary %q", got.Summary)
 	}
 }
+
+func TestCompareAroundVenueTiming_DoesNotUseWindowEndAsBeforeCutoff(t *testing.T) {
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	byStart := at.Add(5 * time.Minute)
+	bn := AroundVenue{
+		Exchange: ExchangeBinance, MoveStart: at,
+		Phases: []AroundPhase{
+			{
+				Phase: AroundPhaseBefore, Complete: true,
+				From: at.Add(-time.Hour), To: at,
+				Futures: &AroundFutures{Complete: true, OIDirection: CVDDirUp, OIChangePct: 1.1},
+			},
+			{
+				Phase: AroundPhaseDuring, Complete: true,
+				From: at, To: at.Add(15 * time.Minute),
+				Price:   AroundPrice{ChangePct: 1.6, Direction: CVDDirUp},
+				Flow:    AroundFlow{BuySellKnown: true, Dominant: TakerSideBuy, BuyShare: 0.64},
+				Futures: &AroundFutures{Complete: true, OIDirection: CVDDirUp, OIChangePct: 2.4},
+			},
+		},
+	}
+	by := AroundVenue{
+		Exchange: ExchangeBybit, MoveStart: byStart,
+		Phases: []AroundPhase{{
+			Phase: AroundPhaseDuring, Complete: true,
+			From: at, To: at.Add(15 * time.Minute),
+			Price:   AroundPrice{ChangePct: 1.2, Direction: CVDDirUp},
+			Flow:    AroundFlow{BuySellKnown: true, Dominant: TakerSideBuy, BuyShare: 0.6},
+			Futures: &AroundFutures{Complete: true, OIDirection: CVDDirUp, OIChangePct: 1.5},
+		}},
+	}
+	got := CompareAroundVenueTiming([]AroundVenue{bn, by})
+	if got == nil || got.Agreement != AroundVenueBinanceEarlier {
+		t.Fatalf("%+v", got)
+	}
+	if !strings.Contains(got.Summary, "12:05") {
+		t.Fatalf("cutoff should be Bybit start 12:05, not 12:15: %q", got.Summary)
+	}
+	if strings.Contains(got.Summary, "takers") {
+		t.Fatalf("during takers run to 12:15 and must not count as before 12:05: %q", got.Summary)
+	}
+	if !strings.Contains(got.Summary, "open interest") {
+		t.Fatalf("before-window OI ends at 12:00 and should count: %q", got.Summary)
+	}
+}
+
+func TestCompareAroundVenueTiming_EarlierBybitOIIsNotPriceOnlyLeader(t *testing.T) {
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	bn := AroundVenue{
+		Exchange: ExchangeBinance, MoveStart: at,
+		Phases: []AroundPhase{{
+			Phase: AroundPhaseDuring, Complete: true, From: at, To: at.Add(15 * time.Minute),
+			Price: AroundPrice{ChangePct: 1.4, Direction: CVDDirUp},
+		}},
+	}
+	by := AroundVenue{
+		Exchange: ExchangeBybit, MoveStart: at.Add(8 * time.Minute),
+		OIStart: at.Add(-6 * time.Minute), OIDir: CVDDirUp,
+		Phases: []AroundPhase{{
+			Phase: AroundPhaseDuring, Complete: true, From: at, To: at.Add(15 * time.Minute),
+			Price: AroundPrice{ChangePct: 1.1, Direction: CVDDirUp},
+		}},
+	}
+	got := CompareAroundVenueTiming([]AroundVenue{bn, by})
+	if got == nil || got.Agreement != AroundVenueBinanceEarlier {
+		t.Fatalf("%+v", got)
+	}
+	if got.Leader != string(ExchangeBybit) || got.LeaderMetric != AroundVenueMetricOI {
+		t.Fatalf("first signal should be Bybit OI, got leader=%q metric=%q", got.Leader, got.LeaderMetric)
+	}
+	if !strings.Contains(got.Summary, "Bybit open interest") || !strings.Contains(got.Summary, "before Binance price") {
+		t.Fatalf("summary %q", got.Summary)
+	}
+}
+
+func TestFindAroundTakerRunStart_FindsLean(t *testing.T) {
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	plan := aroundTestPlan(at)
+	var bars []AroundBar
+	for i := -20; i < 15; i++ {
+		t0 := at.Add(time.Duration(i) * time.Minute)
+		b := AroundBar{Time: t0, Open: 100, Close: 100, High: 100, Low: 100, Volume: 10, BuySellKnown: true}
+		if i >= 4 {
+			b.BuyVolume, b.SellVolume = 8, 2
+		} else {
+			b.BuyVolume, b.SellVolume = 5, 5
+		}
+		bars = append(bars, b)
+	}
+	got, dir := FindAroundTakerRunStart(bars, plan)
+	if dir != TakerSideBuy {
+		t.Fatalf("dir %q", dir)
+	}
+	if got.Before(at.Add(3*time.Minute)) || got.After(at.Add(6*time.Minute)) {
+		t.Fatalf("taker start %s", got)
+	}
+}
+
+func TestFindAroundOIRunStart_FindsFirstSample(t *testing.T) {
+	at := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	plan := aroundTestPlan(at)
+	var snaps []FuturesSnapshot
+	for i := -20; i <= 15; i++ {
+		oi := 1000.0
+		if i >= 3 {
+			oi = 1000 + float64(i-2)*4
+		}
+		snaps = append(snaps, FuturesSnapshot{
+			Metric: FuturesMetricOpenInterest, SampledAt: at.Add(time.Duration(i) * time.Minute), Value: oi,
+		})
+	}
+	got, dir := FindAroundOIRunStart(snaps, plan)
+	if dir != CVDDirUp {
+		t.Fatalf("dir %q", dir)
+	}
+	if got.Before(at.Add(2*time.Minute)) || got.After(at.Add(8*time.Minute)) {
+		t.Fatalf("oi start %s", got)
+	}
+}

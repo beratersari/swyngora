@@ -138,6 +138,7 @@ export type ForensicsVenueBeforeBit = {
   venue?: string;
   direction?: string;
   phase?: string;
+  at?: string;
   summary?: string;
 };
 
@@ -145,8 +146,13 @@ export type ForensicsVenueTiming = {
   agreement?: string;
   follow?: string;
   leader?: string;
+  leaderMetric?: string;
   binanceStart?: string;
   bybitStart?: string;
+  binanceOiStart?: string;
+  bybitOiStart?: string;
+  binanceTakerStart?: string;
+  bybitTakerStart?: string;
   lead?: string;
   leadLabel?: string;
   beforeFollow?: ForensicsVenueBeforeBit[];
