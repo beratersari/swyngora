@@ -33,9 +33,10 @@ func TestSimilarSetupFactorRaw_SupportAndAgainst(t *testing.T) {
 		t.Fatalf("empty %+v", got)
 	}
 	up := &AroundSimilarReport{
-		Matches: []AroundSimilarHit{{Similarity: 80}},
-		UpAfter: 5, DownAfter: 1,
-		AfterHorizons: []AroundSimilarHorizonStat{{Horizon: "1h", Sample: 6, Up: 5, Down: 1}},
+		Matches: []AroundSimilarHit{
+			hitAfter(AroundSimilarHorizon1h, CVDDirUp, AroundSimilarHit{Similarity: 80}),
+			hitAfter(AroundSimilarHorizon1h, CVDDirUp, AroundSimilarHit{Similarity: 78}),
+		},
 	}
 	got := SimilarSetupFactorRaw(up, AroundSimilarHorizon1h)
 	if got.Status != CustomFactorUsed || got.Score <= 50 {
@@ -45,9 +46,10 @@ func TestSimilarSetupFactorRaw_SupportAndAgainst(t *testing.T) {
 		t.Fatalf("detail %q", got.Detail)
 	}
 	down := &AroundSimilarReport{
-		Matches: []AroundSimilarHit{{Similarity: 80}},
-		UpAfter: 1, DownAfter: 5,
-		AfterHorizons: []AroundSimilarHorizonStat{{Horizon: "1h", Sample: 6, Up: 1, Down: 5}},
+		Matches: []AroundSimilarHit{
+			hitAfter(AroundSimilarHorizon1h, CVDDirDown, AroundSimilarHit{Similarity: 80}),
+			hitAfter(AroundSimilarHorizon1h, CVDDirDown, AroundSimilarHit{Similarity: 78}),
+		},
 	}
 	got = SimilarSetupFactorRaw(down, AroundSimilarHorizon1h)
 	if got.Status != CustomFactorUsed || got.Score >= 50 {
@@ -57,9 +59,10 @@ func TestSimilarSetupFactorRaw_SupportAndAgainst(t *testing.T) {
 		t.Fatalf("detail %q", got.Detail)
 	}
 	mixed := &AroundSimilarReport{
-		Matches: []AroundSimilarHit{{Similarity: 70}},
-		UpAfter: 3, DownAfter: 3,
-		AfterHorizons: []AroundSimilarHorizonStat{{Horizon: "1h", Sample: 6, Up: 3, Down: 3}},
+		Matches: []AroundSimilarHit{
+			hitAfter(AroundSimilarHorizon1h, CVDDirUp, AroundSimilarHit{Similarity: 70}),
+			hitAfter(AroundSimilarHorizon1h, CVDDirDown, AroundSimilarHit{Similarity: 70}),
+		},
 	}
 	if got = SimilarSetupFactorRaw(mixed, AroundSimilarHorizon1h); got.Status != CustomFactorMissing {
 		t.Fatalf("mixed %+v", got)
@@ -68,14 +71,14 @@ func TestSimilarSetupFactorRaw_SupportAndAgainst(t *testing.T) {
 
 func TestSimilarSetupFactorRaw_UsesSignalHorizonNotOneHour(t *testing.T) {
 	t.Parallel()
-	rep := &AroundSimilarReport{
-		Matches: []AroundSimilarHit{{Similarity: 80}},
-		UpAfter: 5, DownAfter: 0,
-		AfterHorizons: []AroundSimilarHorizonStat{
-			{Horizon: "1h", Sample: 6, Up: 5, Down: 0},
-			{Horizon: "4h", Sample: 6, Up: 1, Down: 5},
+	both := AroundSimilarHit{
+		Similarity: 80,
+		HorizonAfter: []AroundSimilarHorizonAfter{
+			{Horizon: AroundSimilarHorizon1h, Dir: CVDDirUp, Pct: 2},
+			{Horizon: AroundSimilarHorizon4h, Dir: CVDDirDown, Pct: -3},
 		},
 	}
+	rep := &AroundSimilarReport{Matches: []AroundSimilarHit{both, both}}
 	// 4h swing must use the 4h after-path (against), not the 1h rise.
 	got := SimilarSetupFactorRaw(rep, AroundSimilarHorizon4h)
 	if got.Status != CustomFactorUsed || got.Score >= 50 {
@@ -92,30 +95,10 @@ func TestSimilarSetupFactorRaw_UsesSignalHorizonNotOneHour(t *testing.T) {
 
 func TestCustomTapeQuality_MissingTapeIsNotFullEvidence(t *testing.T) {
 	t.Parallel()
-	full := &AroundSimilarReport{
-		Matches: []AroundSimilarHit{{
-			Similarity: 80, Coverage: 100,
-			Used: []string{"price", "volume", "takers", "oi", "book"},
-			Compared: []AroundSimilarFieldScore{
-				{Name: AroundSimilarFieldTakers, Used: true, Weight: 1.5},
-				{Name: AroundSimilarFieldOI, Used: true, Weight: 3},
-				{Name: AroundSimilarFieldBook, Used: true, Weight: 3},
-			},
-		}},
-		AfterHorizons: []AroundSimilarHorizonStat{{Horizon: "4h", Sample: 5, Up: 5, Down: 0}},
-	}
-	thin := &AroundSimilarReport{
-		Matches: []AroundSimilarHit{{
-			Similarity: 80, Coverage: 62,
-			Missing: []string{AroundSimilarFieldTakers, AroundSimilarFieldOI},
-			Compared: []AroundSimilarFieldScore{
-				{Name: AroundSimilarFieldTakers, Used: false, Weight: 1.5},
-				{Name: AroundSimilarFieldOI, Used: false, Weight: 3},
-				{Name: AroundSimilarFieldBook, Used: true, Weight: 3},
-			},
-		}},
-		AfterHorizons: []AroundSimilarHorizonStat{{Horizon: "4h", Sample: 5, Up: 5, Down: 0}},
-	}
+	fullHit := hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(80))
+	full := &AroundSimilarReport{Matches: []AroundSimilarHit{fullHit, fullHit}}
+	thinHit := hitAfter(AroundSimilarHorizon4h, CVDDirUp, partialTapeHit(80))
+	thin := &AroundSimilarReport{Matches: []AroundSimilarHit{thinHit, thinHit}}
 	a := SimilarSetupFactorRaw(full, AroundSimilarHorizon4h)
 	b := SimilarSetupFactorRaw(thin, AroundSimilarHorizon4h)
 	if a.Status != CustomFactorUsed || b.Status != CustomFactorUsed {
@@ -124,24 +107,18 @@ func TestCustomTapeQuality_MissingTapeIsNotFullEvidence(t *testing.T) {
 	if b.Score >= a.Score {
 		t.Fatalf("thin tape should be weaker evidence: full=%.1f thin=%.1f", a.Score, b.Score)
 	}
-	if !strings.Contains(b.Detail, "missing") {
-		t.Fatalf("detail %q", b.Detail)
+	if !strings.Contains(a.Detail, "Used 2 of 2 setups") {
+		t.Fatalf("full detail %q", a.Detail)
 	}
 	gone := &AroundSimilarReport{
-		Matches: []AroundSimilarHit{{
-			Similarity: 80, Coverage: 40,
-			Missing: []string{AroundSimilarFieldTakers, AroundSimilarFieldOI, AroundSimilarFieldBook, AroundSimilarFieldOptions},
-			Compared: []AroundSimilarFieldScore{
-				{Name: AroundSimilarFieldTakers, Used: false, Weight: 1.5},
-				{Name: AroundSimilarFieldOI, Used: false, Weight: 3},
-				{Name: AroundSimilarFieldBook, Used: false, Weight: 3},
-				{Name: AroundSimilarFieldOptions, Used: false, Weight: 2},
-			},
-		}},
-		AfterHorizons: []AroundSimilarHorizonStat{{Horizon: "4h", Sample: 5, Up: 5, Down: 0}},
+		Matches: []AroundSimilarHit{hitAfter(AroundSimilarHorizon4h, CVDDirUp, missingTapeHit(80))},
 	}
-	if got := SimilarSetupFactorRaw(gone, AroundSimilarHorizon4h); got.Status != CustomFactorMissing {
+	got := SimilarSetupFactorRaw(gone, AroundSimilarHorizon4h)
+	if got.Status != CustomFactorMissing {
 		t.Fatalf("mostly missing tape must not be used: %+v", got)
+	}
+	if !strings.Contains(got.Detail, "Used 0 of 1 setups; 1 had missing tape") {
+		t.Fatalf("gone detail %q", got.Detail)
 	}
 }
 
@@ -179,14 +156,10 @@ func TestForensicsFactorRaw_ScalesWithSimilarity(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 	strong := &AroundSimilarReport{
-		Matches: []AroundSimilarHit{{Similarity: 90, AfterDirection: CVDDirUp}},
-		UpAfter: 4, DownAfter: 0, Events: 4,
-		AfterHorizons: []AroundSimilarHorizonStat{{Horizon: "1h", Sample: 4, Up: 4, Down: 0}},
+		Matches: []AroundSimilarHit{hitAfter(AroundSimilarHorizon1h, CVDDirUp, AroundSimilarHit{Similarity: 90, AfterDirection: CVDDirUp})},
 	}
 	weak := &AroundSimilarReport{
-		Matches: []AroundSimilarHit{{Similarity: 45, AfterDirection: CVDDirUp}},
-		UpAfter: 4, DownAfter: 0, Events: 4,
-		AfterHorizons: []AroundSimilarHorizonStat{{Horizon: "1h", Sample: 4, Up: 4, Down: 0}},
+		Matches: []AroundSimilarHit{hitAfter(AroundSimilarHorizon1h, CVDDirUp, AroundSimilarHit{Similarity: 45, AfterDirection: CVDDirUp})},
 	}
 	a := ForensicsFactorRaw(strong, AroundSimilarHorizon1h)
 	b := ForensicsFactorRaw(weak, AroundSimilarHorizon1h)
@@ -207,9 +180,10 @@ func TestScoreCustomSignal_TapeAgainstPullsDown(t *testing.T) {
 		{Name: CustomFactorEMACrossover, Score: 90, Description: "cross"},
 	}, nil)
 	raws[CustomFactorSimilarSetup] = SimilarSetupFactorRaw(&AroundSimilarReport{
-		Matches: []AroundSimilarHit{{Similarity: 80}},
-		UpAfter: 0, DownAfter: 5,
-		AfterHorizons: []AroundSimilarHorizonStat{{Horizon: "4h", Sample: 5, Up: 0, Down: 5}},
+		Matches: []AroundSimilarHit{
+			hitAfter(AroundSimilarHorizon4h, CVDDirDown, AroundSimilarHit{Similarity: 80}),
+			hitAfter(AroundSimilarHorizon4h, CVDDirDown, AroundSimilarHit{Similarity: 78}),
+		},
 	}, AroundSimilarHorizon4h)
 	w := CustomSignalWeights{Source: CustomSignalMixCustom, Pct: map[string]float64{
 		CustomFactorEMACrossover: 50,
@@ -227,6 +201,100 @@ func TestScoreCustomSignal_TapeAgainstPullsDown(t *testing.T) {
 	}
 	if sim.Status != CustomFactorUsed || sim.Effect >= 0 {
 		t.Fatalf("similar %+v", sim)
+	}
+}
+
+func TestClassifyCustomTapeMatches_DropsThinFromAfterPath(t *testing.T) {
+	t.Parallel()
+	complete := hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(82))
+	thin := hitAfter(AroundSimilarHorizon4h, CVDDirDown, missingTapeHit(80))
+	rep := &AroundSimilarReport{
+		Matches: []AroundSimilarHit{complete, complete, complete, thin, thin},
+	}
+	usable, stats, _ := ClassifyCustomTapeMatches(rep.Matches)
+	if stats.Setups != 5 || stats.Used != 3 || stats.Thin != 2 {
+		t.Fatalf("stats %+v", stats)
+	}
+	if len(usable) != 3 {
+		t.Fatalf("usable %d", len(usable))
+	}
+	up, down, when := similarAfterCountsFromHits(usable, AroundSimilarHorizon4h)
+	if up != 3 || down != 0 || when != AroundSimilarHorizon4h {
+		t.Fatalf("after from usable only: up=%d down=%d when=%s", up, down, when)
+	}
+	// Report-wide mix would be 3 up / 2 down → mixed. Complete setups rose.
+	got := SimilarSetupFactorRaw(rep, AroundSimilarHorizon4h)
+	if got.Status != CustomFactorUsed || got.Score <= 50 {
+		t.Fatalf("complete setups support a long: %+v", got)
+	}
+	if !strings.Contains(got.Detail, "Used 3 of 5 setups; 2 had missing tape") {
+		t.Fatalf("detail %q", got.Detail)
+	}
+	if !strings.Contains(got.Detail, "supports") {
+		t.Fatalf("detail should use complete after-path: %q", got.Detail)
+	}
+}
+
+func TestForensicsFactorRaw_UsesEveryCompleteSetup(t *testing.T) {
+	t.Parallel()
+	complete := hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(90))
+	thin := hitAfter(AroundSimilarHorizon4h, CVDDirDown, missingTapeHit(88))
+	rep := &AroundSimilarReport{
+		Matches: []AroundSimilarHit{thin, complete, complete, complete, thin},
+	}
+	got := ForensicsFactorRaw(rep, AroundSimilarHorizon4h)
+	if got.Status != CustomFactorUsed || got.Score <= 50 {
+		t.Fatalf("must not follow the thin first hit: %+v", got)
+	}
+	if !strings.Contains(got.Detail, "Used 3 of 5 setups; 2 had missing tape") {
+		t.Fatalf("detail %q", got.Detail)
+	}
+}
+
+func hitAfter(horizon, dir string, extra AroundSimilarHit) AroundSimilarHit {
+	extra.HorizonAfter = append(append([]AroundSimilarHorizonAfter(nil), extra.HorizonAfter...), AroundSimilarHorizonAfter{
+		Horizon: horizon, Dir: dir, Pct: 2,
+	})
+	if dir == CVDDirDown {
+		extra.HorizonAfter[len(extra.HorizonAfter)-1].Pct = -2
+	}
+	return extra
+}
+
+func completeTapeHit(sim float64) AroundSimilarHit {
+	return AroundSimilarHit{
+		Similarity: sim, Coverage: 100,
+		Used: []string{"price", "volume", "takers", "oi", "book"},
+		Compared: []AroundSimilarFieldScore{
+			{Name: AroundSimilarFieldTakers, Used: true, Weight: 1.5},
+			{Name: AroundSimilarFieldOI, Used: true, Weight: 3},
+			{Name: AroundSimilarFieldBook, Used: true, Weight: 3},
+		},
+	}
+}
+
+func partialTapeHit(sim float64) AroundSimilarHit {
+	return AroundSimilarHit{
+		Similarity: sim, Coverage: 62,
+		Missing: []string{AroundSimilarFieldTakers, AroundSimilarFieldOI},
+		Compared: []AroundSimilarFieldScore{
+			{Name: AroundSimilarFieldTakers, Used: false, Weight: 1.5},
+			{Name: AroundSimilarFieldOI, Used: false, Weight: 3},
+			{Name: AroundSimilarFieldBook, Used: true, Weight: 3},
+		},
+	}
+}
+
+func missingTapeHit(sim float64) AroundSimilarHit {
+	return AroundSimilarHit{
+		Similarity: sim, Coverage: 40,
+		Missing: []string{AroundSimilarFieldTakers, AroundSimilarFieldOI, AroundSimilarFieldBook, AroundSimilarFieldOptions},
+		Compared: []AroundSimilarFieldScore{
+			{Name: AroundSimilarFieldTakers, Used: false, Weight: 1.5},
+			{Name: AroundSimilarFieldOI, Used: false, Weight: 3},
+			{Name: AroundSimilarFieldBook, Used: false, Weight: 3},
+			{Name: AroundSimilarFieldOptions, Used: false, Weight: 2},
+		},
 	}
 }
 

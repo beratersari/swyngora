@@ -308,9 +308,13 @@ func (s *Service) scoreOne(ctx context.Context, ex domain.Exchange, symbol strin
 	}
 	raws := domain.BuildCustomSignalRaws(dec.Patterns, hunt)
 	var forensicsDetail, similarDetail string
+	var tapeStats domain.CustomSignalTapeStats
 	if needTape {
 		q := domain.CustomSignalTapeQueryFor(dec.Interval)
 		sim := s.loadSimilarReport(ctx, ex, symbol, q)
+		if sim != nil {
+			_, tapeStats, _ = domain.ClassifyCustomTapeMatches(sim.Matches)
+		}
 		if w.NeedsForensics() {
 			raw := domain.ForensicsFactorRaw(sim, q.Horizon)
 			raws[domain.CustomFactorForensics] = raw
@@ -337,6 +341,9 @@ func (s *Service) scoreOne(ctx context.Context, ex domain.Exchange, symbol strin
 		HuntDetail:      huntDetail,
 		ForensicsDetail: forensicsDetail,
 		SimilarDetail:   similarDetail,
+		TapeSetups:      tapeStats.Setups,
+		TapeUsed:        tapeStats.Used,
+		TapeThin:        tapeStats.Thin,
 	}, nil
 }
 

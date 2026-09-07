@@ -480,6 +480,9 @@ type CustomSignalItem struct {
 	HuntDetail      string              `json:"huntDetail,omitempty"`
 	ForensicsDetail string              `json:"forensicsDetail,omitempty"`
 	SimilarDetail   string              `json:"similarDetail,omitempty"`
+	TapeSetups      int                 `json:"tapeSetups,omitempty"`
+	TapeUsed        int                 `json:"tapeUsed,omitempty"`
+	TapeThin        int                 `json:"tapeThin,omitempty"`
 }
 
 // CustomSignalFactorLabel is the desk label for a factor id.

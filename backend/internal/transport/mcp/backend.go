@@ -5058,6 +5058,17 @@ func (b *Backend) ScanCustomSignals(ctx context.Context, clientID, profileID, ex
 		if it.HuntDetail != "" {
 			row["huntDetail"] = it.HuntDetail
 		}
+		if it.ForensicsDetail != "" {
+			row["forensicsDetail"] = it.ForensicsDetail
+		}
+		if it.SimilarDetail != "" {
+			row["similarDetail"] = it.SimilarDetail
+		}
+		if it.TapeSetups > 0 {
+			row["tapeSetups"] = it.TapeSetups
+			row["tapeUsed"] = it.TapeUsed
+			row["tapeThin"] = it.TapeThin
+		}
 		if it.Engine != nil {
 			row["engine"] = swingDecisionMap(it.Engine)
 		}

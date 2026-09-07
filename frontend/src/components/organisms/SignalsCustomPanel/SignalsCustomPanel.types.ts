@@ -31,6 +31,9 @@ export type CustomMixPreviewRow = {
   largestChange: CustomMixPreviewFactor | null;
   huntMissing: boolean;
   tapeMissing: boolean;
+  tapeSetups?: number;
+  tapeUsed?: number;
+  tapeThin?: number;
   price?: number;
 };
 

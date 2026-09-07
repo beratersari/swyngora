@@ -5717,6 +5717,12 @@ export interface components {
             huntDetail?: string;
             forensicsDetail?: string;
             similarDetail?: string;
+            /** Similar past setups considered */
+            tapeSetups?: number;
+            /** Setups complete enough to count as evidence */
+            tapeUsed?: number;
+            /** Setups omitted because OI, takers, book, or options were missing */
+            tapeThin?: number;
         };
         CustomSignalScan: {
             profileId?: string;

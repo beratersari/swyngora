@@ -165,6 +165,9 @@ export function previewCustomMix(items: CustomSignalItem[], draft: CustomWeightD
       largestChange: largestCustomFactorChange(factors),
       huntMissing: Boolean(hunt && hunt.appliedPct > 0 && hunt.status === 'missing'),
       tapeMissing,
+      tapeSetups: item.tapeSetups,
+      tapeUsed: item.tapeUsed,
+      tapeThin: item.tapeThin,
     };
   }).sort((a, b) => b.appliedScore - a.appliedScore || a.symbol.localeCompare(b.symbol));
 }

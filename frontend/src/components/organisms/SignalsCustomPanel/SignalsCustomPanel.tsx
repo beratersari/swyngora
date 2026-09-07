@@ -212,6 +212,20 @@ export function SignalsCustomPanel({
                   })}
                 </Text>
               ) : null}
+              {(row.tapeSetups ?? 0) > 0 ? (
+                <Text variant="caption" color="secondary" data-testid="signals-custom-tape-stats">
+                  {(row.tapeThin ?? 0) > 0
+                    ? t('signals:custom.tapeStatsThin', {
+                        used: row.tapeUsed ?? 0,
+                        setups: row.tapeSetups,
+                        thin: row.tapeThin,
+                      })
+                    : t('signals:custom.tapeStats', {
+                        used: row.tapeUsed ?? 0,
+                        setups: row.tapeSetups,
+                      })}
+                </Text>
+              ) : null}
               <FactorBreakdown>
                 {row.factors
                   .filter((f) => f.appliedPct > 0 || f.defaultPct > 0)

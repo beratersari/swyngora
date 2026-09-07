@@ -50,6 +50,17 @@ describe('custom signal helpers', () => {
     expect(rows[0]?.tapeMissing).toBe(false);
   });
 
+  it('passes through how many similar setups were used vs missing tape', () => {
+    const draft = defaultCustomWeightDraft();
+    const rows = previewCustomMix(
+      [item({ symbol: 'BTCUSDT', tapeSetups: 5, tapeUsed: 3, tapeThin: 2 })],
+      draft,
+    );
+    expect(rows[0]?.tapeSetups).toBe(5);
+    expect(rows[0]?.tapeUsed).toBe(3);
+    expect(rows[0]?.tapeThin).toBe(2);
+  });
+
   it('previews score change and names the largest mover', () => {
     const draft = defaultCustomWeightDraft().map((row) =>
       row.id === 'hunt_up'

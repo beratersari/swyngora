@@ -158,6 +158,8 @@
     "idle": "yok",
     "huntReload": "Av açık ama bu taramada av verisi yok. Likidasyon avını yüklemek için karışımı uygulayın.",
     "tapeReload": "Adli veya benzer kurulumlar açık ama bu taramada bant verisi yok. Yüklemek için karışımı uygulayın.",
+    "tapeStats": "Kullanılan {{used}} / {{setups}} benzer kurulum",
+    "tapeStatsThin": "Kullanılan {{used}} / {{setups}} benzer kurulum; {{thin}} tanesinde eksik bant vardı",
     "factors": {
       "ema_crossover": "EMA 9/21 kesişimi",
       "ema_trend_bias": "EMA 50/200 geri çekilme",

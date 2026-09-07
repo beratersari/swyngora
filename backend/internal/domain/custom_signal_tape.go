@@ -28,55 +28,116 @@ func CustomSignalTapeQueryFor(interval string) CustomSignalTapeQuery {
 	}
 }
 
+// CustomSignalTapeStats is how many similar setups were complete enough to use.
+type CustomSignalTapeStats struct {
+	Setups int // considered
+	Used   int // complete enough to count as evidence
+	Thin   int // had missing OI / takers / book / options
+}
+
+// ClassifyCustomTapeMatches splits setups into usable evidence vs thin tape.
+func ClassifyCustomTapeMatches(matches []AroundSimilarHit) (usable []AroundSimilarHit, stats CustomSignalTapeStats, strength float64) {
+	stats.Setups = len(matches)
+	var mass float64
+	for _, m := range matches {
+		q, _, ok := customTapeHitQuality(m)
+		if !ok {
+			stats.Thin++
+			continue
+		}
+		usable = append(usable, m)
+		mass += q
+	}
+	stats.Used = len(usable)
+	if stats.Used > 0 {
+		strength = mass / float64(stats.Used)
+	}
+	return usable, stats, strength
+}
+
+func tapeStatsNote(s CustomSignalTapeStats) string {
+	if s.Setups <= 0 {
+		return ""
+	}
+	if s.Thin <= 0 {
+		return fmt.Sprintf("Used %d of %d setups", s.Used, s.Setups)
+	}
+	return fmt.Sprintf("Used %d of %d setups; %d had missing tape", s.Used, s.Setups, s.Thin)
+}
+
 // SimilarSetupFactorRaw maps similar-past after-paths onto a long custom signal.
-// Up lean supports the long mix; down lean goes against it. Mixed or thin
-// after-tape is omitted (not scored as 50). horizon must match the signal range.
+// Only complete setups count as evidence. horizon must match the signal range.
 func SimilarSetupFactorRaw(rep *AroundSimilarReport, horizon string) CustomSignalRaw {
 	if rep == nil || len(rep.Matches) == 0 {
 		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: "no similar past setups"}
 	}
-	up, down, when := similarAfterCounts(rep, horizon)
+	usable, stats, qual := ClassifyCustomTapeMatches(rep.Matches)
+	note := tapeStatsNote(stats)
+	if stats.Used == 0 {
+		detail := "no complete similar setups"
+		if note != "" {
+			detail = note + " — " + detail
+		}
+		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: detail}
+	}
+	up, down, when := similarAfterCountsFromHits(usable, horizon)
 	total := up + down
 	if total < customTapeMinAfter {
-		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: "not enough similar after-tape"}
-	}
-	qual, qnote, ok := customTapeQuality(rep)
-	if !ok {
-		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: qnote}
+		detail := "not enough similar after-tape"
+		if note != "" {
+			detail = note + ". " + detail
+		}
+		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: detail}
 	}
 	lean := ForensicsScanLean(up, down)
 	score, detail, ok := tapeLeanScore(lean, up, down, when, qual)
 	if !ok {
-		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: "similar after-path is mixed"}
+		detail = "similar after-path is mixed"
+		if note != "" {
+			detail = note + ". " + detail
+		}
+		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: detail}
 	}
-	if qnote != "" {
-		detail = qnote + ". " + detail
+	if note != "" {
+		detail = note + ". " + detail
 	}
 	return CustomSignalRaw{Score: score, Status: CustomFactorUsed, Detail: detail}
 }
 
 // ForensicsFactorRaw maps the current tape's match to past pre-move setups
-// onto a long custom signal. Similarity scales how hard the lean counts.
-// Mixed or unmatched tape is omitted. After-path uses horizon, not the 1h desk default.
+// onto a long custom signal. After-path and quality use every complete setup,
+// not only the first hit.
 func ForensicsFactorRaw(rep *AroundSimilarReport, horizon string) CustomSignalRaw {
-	hit, ok := ForensicsScanHitFromSimilar(rep)
-	if !ok {
+	if rep == nil || len(rep.Matches) == 0 {
 		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: "current tape does not match a past pre-move setup"}
 	}
-	up, down, when := similarAfterCounts(rep, horizon)
+	usable, stats, qual := ClassifyCustomTapeMatches(rep.Matches)
+	note := tapeStatsNote(stats)
+	if stats.Used == 0 {
+		detail := "no complete similar setups"
+		if note != "" {
+			detail = note + " — " + detail
+		}
+		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: detail}
+	}
+	up, down, when := similarAfterCountsFromHits(usable, horizon)
 	total := up + down
 	lean := ForensicsScanLean(up, down)
 	if total < customTapeMinAfter && lean != CVDDirUp && lean != CVDDirDown {
-		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: "forensics after-path is unknown"}
+		detail := "forensics after-path is unknown"
+		if note != "" {
+			detail = note + ". " + detail
+		}
+		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: detail}
 	}
 	if lean != CVDDirUp && lean != CVDDirDown {
-		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: "forensics after-path is mixed"}
+		detail := "forensics after-path is mixed"
+		if note != "" {
+			detail = note + ". " + detail
+		}
+		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: detail}
 	}
-	qual, qnote, ok := customTapeQuality(rep)
-	if !ok {
-		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: qnote}
-	}
-	sim := hit.Similarity / 100
+	sim := usable[0].Similarity / 100
 	if sim <= 0 {
 		sim = 0.4
 	}
@@ -85,22 +146,22 @@ func ForensicsFactorRaw(rep *AroundSimilarReport, horizon string) CustomSignalRa
 	}
 	score, detail, ok := tapeLeanScore(lean, up, down, when, sim*qual)
 	if !ok {
-		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: "forensics after-path is mixed"}
+		detail = "forensics after-path is mixed"
+		if note != "" {
+			detail = note + ". " + detail
+		}
+		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: detail}
 	}
-	detail = fmt.Sprintf("Current tape is %.0f similar to a past pre-move setup. %s", hit.Similarity, detail)
-	if qnote != "" {
-		detail = qnote + ". " + detail
+	detail = fmt.Sprintf("Current tape is %.0f similar to a past pre-move setup. %s", usable[0].Similarity, detail)
+	if note != "" {
+		detail = note + ". " + detail
 	}
 	return CustomSignalRaw{Score: score, Status: CustomFactorUsed, Detail: detail}
 }
 
-// customTapeQuality uses existing similar coverage / missing fields so stale
-// or absent OI, takers, book, or options are not treated as full evidence.
-func customTapeQuality(rep *AroundSimilarReport) (strength float64, note string, ok bool) {
-	if rep == nil || len(rep.Matches) == 0 {
-		return 0, "no similar past setups", false
-	}
-	hit := rep.Matches[0]
+// customTapeHitQuality uses existing similar coverage / missing fields so
+// stale or absent OI, takers, book, or options are not treated as full evidence.
+func customTapeHitQuality(hit AroundSimilarHit) (strength float64, note string, ok bool) {
 	if len(hit.Compared) == 0 && hit.Coverage <= 0 {
 		return 1, "", true
 	}
@@ -118,7 +179,7 @@ func customTapeQuality(rep *AroundSimilarReport) (strength float64, note string,
 		}
 	}
 	if cov > 0 && cov < DefaultAroundSimilarMinCoverage {
-		return 0, "closest setup lacked enough selected data", false
+		return 0, "setup lacked enough selected data", false
 	}
 	missing := make([]string, 0, 4)
 	seen := map[string]bool{}
@@ -162,25 +223,27 @@ func customTapeField(name string) bool {
 	}
 }
 
-// similarAfterCounts uses the signal-range horizon only. It does not fall
-// back to the forensics 1h desk pick.
-func similarAfterCounts(rep *AroundSimilarReport, horizon string) (up, down int, when string) {
+// similarAfterCountsFromHits uses the signal-range horizon on complete
+// setups only. It does not fall back to the report-wide AfterHorizons mix
+// (that mix still includes thin tape).
+func similarAfterCountsFromHits(hits []AroundSimilarHit, horizon string) (up, down int, when string) {
 	want := strings.ToLower(strings.TrimSpace(horizon))
 	if want == "" {
 		want = AroundSimilarHorizon4h
 	}
-	if rep == nil {
-		return 0, 0, want
-	}
-	for _, hz := range rep.AfterHorizons {
-		if strings.ToLower(hz.Horizon) != want {
+	for _, m := range hits {
+		dir, _, ok := aroundSimilarHorizonAfter(m, want)
+		if !ok {
 			continue
 		}
-		if hz.Sample > 0 || hz.Events > 0 {
-			return hz.Up, hz.Down, hz.Horizon
+		switch dir {
+		case CVDDirUp:
+			up++
+		case CVDDirDown:
+			down++
 		}
 	}
-	return 0, 0, want
+	return up, down, want
 }
 
 // tapeLeanScore is 50 ± up to 45 from after-path lean. strength 0–1 scales

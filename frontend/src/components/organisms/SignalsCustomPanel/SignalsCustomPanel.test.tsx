@@ -24,6 +24,9 @@ describe('SignalsCustomPanel', () => {
               factors: [{ id: 'ema_crossover', score: 90, status: 'used', requestedPct: 16, sharePct: 16, effect: 6.4 }],
             },
             scoreCompare: { default: { score: 56 }, applied: { score: 62 }, delta: { score: 6 } },
+            tapeSetups: 5,
+            tapeUsed: 3,
+            tapeThin: 2,
           },
         ]}
         onSelectProfile={vi.fn()}
@@ -40,6 +43,9 @@ describe('SignalsCustomPanel', () => {
     );
     expect(screen.getByTestId('signals-custom-total')).toBeInTheDocument();
     expect(screen.getByText(/ETH/i)).toBeInTheDocument();
+    expect(screen.getByTestId('signals-custom-tape-stats')).toHaveTextContent(
+      /Used 3 of 5 similar setups; 2 had missing tape|Kullanılan 3 \/ 5 benzer kurulum; 2 tanesinde eksik bant vardı/,
+    );
     await user.click(screen.getByRole('button', { name: /apply mix|karışımı uygula/i }));
     expect(onApply).toHaveBeenCalled();
   });

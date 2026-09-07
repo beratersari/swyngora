@@ -9483,6 +9483,9 @@ components:
         huntDetail: { type: string }
         forensicsDetail: { type: string }
         similarDetail: { type: string }
+        tapeSetups: { type: integer, description: Similar past setups considered }
+        tapeUsed: { type: integer, description: Setups complete enough to count as evidence }
+        tapeThin: { type: integer, description: Setups omitted because OI, takers, book, or options were missing }
     CustomSignalScan:
       type: object
       properties:

@@ -129,7 +129,15 @@ type AroundSimilarHit struct {
 	DataTo         time.Time   // end of tape used for the comparison (at move start)
 	AfterReturnPct float64
 	AfterDirection string
+	HorizonAfter   []AroundSimilarHorizonAfter
 	Summary        string
+}
+
+// AroundSimilarHorizonAfter is one setup's later price at a named horizon.
+type AroundSimilarHorizonAfter struct {
+	Horizon string
+	Pct     float64
+	Dir     string
 }
 
 // AroundSimilarReport ranks past setups against the current market.
@@ -962,13 +970,36 @@ func SummarizeAroundSimilarHorizons(matches []AroundSimilarHit, bars []AroundBar
 	if len(horizons) == 0 {
 		horizons = DefaultAroundSimilarHorizons()
 	}
-	matches = collapseAroundSimilarHits(matches)
 	bars = sortAroundBars(bars)
 	barDur := aroundBarDuration(bars)
 	iv := AroundSimilarBarIntervalFor(horizons)
 	if barDur > 0 {
 		iv = aroundBarIntervalID(barDur)
 	}
+	// Annotate every incoming hit so callers can drop thin setups later.
+	for i := range matches {
+		m := &matches[i]
+		m.HorizonAfter = m.HorizonAfter[:0]
+		start := m.Move.At
+		if start.IsZero() {
+			continue
+		}
+		startPx := aroundStartPrice(bars, start, m.Move.Open)
+		if startPx <= 0 {
+			continue
+		}
+		for _, h := range horizons {
+			endPx, ok := aroundCloseByHorizon(bars, start, h.Dur, barDur, asOf)
+			if !ok {
+				continue
+			}
+			pct := (endPx - startPx) / startPx * 100
+			m.HorizonAfter = append(m.HorizonAfter, AroundSimilarHorizonAfter{
+				Horizon: h.ID, Pct: pct, Dir: changeDir(pct),
+			})
+		}
+	}
+	collapsed := collapseAroundSimilarHits(matches)
 	bands := DefaultAroundSimilarBands()
 	out := make([]AroundSimilarHorizonStat, 0, len(horizons))
 	for _, h := range horizons {
@@ -976,27 +1007,27 @@ func SummarizeAroundSimilarHorizons(matches []AroundSimilarHit, bars []AroundBar
 		if iv != "" {
 			st.Interval = iv
 		}
-		rows := make([]aroundHorizonReturn, 0, len(matches))
-		for _, m := range matches {
-			start := m.Move.At
-			if start.IsZero() {
-				continue
+		rows := make([]aroundHorizonReturn, 0, len(collapsed))
+		for _, m := range collapsed {
+			if dir, pct, ok := aroundSimilarHorizonAfter(m, h.ID); ok {
+				_ = dir
+				rows = append(rows, aroundHorizonReturn{pct: pct, sim: m.Similarity})
 			}
-			startPx := aroundStartPrice(bars, start, m.Move.Open)
-			if startPx <= 0 {
-				continue
-			}
-			endPx, ok := aroundCloseByHorizon(bars, start, h.Dur, barDur, asOf)
-			if !ok {
-				continue
-			}
-			pct := (endPx - startPx) / startPx * 100
-			rows = append(rows, aroundHorizonReturn{pct: pct, sim: m.Similarity})
 		}
 		fillAroundSimilarHorizonStat(&st, rows, bands)
 		out = append(out, st)
 	}
 	return out
+}
+
+func aroundSimilarHorizonAfter(m AroundSimilarHit, horizon string) (dir string, pct float64, ok bool) {
+	want := strings.ToLower(strings.TrimSpace(horizon))
+	for _, h := range m.HorizonAfter {
+		if strings.ToLower(h.Horizon) == want {
+			return h.Dir, h.Pct, true
+		}
+	}
+	return "", 0, false
 }
 
 func fillAroundSimilarHorizonStat(st *AroundSimilarHorizonStat, rows []aroundHorizonReturn, bands []AroundSimilarScoreBand) {
