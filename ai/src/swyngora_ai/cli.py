@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
@@ -28,6 +30,7 @@ _console = Console()
 _err = Console(stderr=True)
 
 CLI_HISTORY_MAX = 500
+REPL_COMMANDS: tuple[str, ...] = ("exit", "quit", "q", "reset")
 
 
 def default_history_path() -> Path:
@@ -48,8 +51,295 @@ def write_history_lines(path: Path, lines: list[str], *, max_lines: int = CLI_HI
     path.write_text("\n".join(kept) + ("\n" if kept else ""), encoding="utf-8")
 
 
+def _command_matches(buffer: str) -> list[str]:
+    if " " in buffer:
+        return []
+    lower = buffer.lower()
+    hits = [cmd for cmd in REPL_COMMANDS if cmd.startswith(lower)]
+    if buffer and buffer in hits:
+        longer = [cmd for cmd in hits if cmd != buffer]
+        if longer:
+            return longer
+    return hits
+
+
+@dataclass
+class ReplCompleteState:
+    """Frozen prefix + newest-first unique history hits for one prefix cycle."""
+
+    prefix: str | None = None
+    matches: list[str] = field(default_factory=list)
+    index: int = 0
+
+    def reset(self) -> None:
+        self.prefix = None
+        self.matches = []
+        self.index = 0
+
+
+_REPL_CYCLE = ReplCompleteState()
+_CTRL_N = 14  # get_completion_type() when Ctrl+N invoked complete
+_CTRL_P = 16
+
+
+def reset_repl_cycle() -> None:
+    """Clear cycle state (call at the start of each REPL prompt)."""
+    _REPL_CYCLE.reset()
+
+
+def _without_prefix_stubs(lines: Sequence[str]) -> list[str]:
+    """Drop fragments that are only a prefix of a longer saved prompt.
+
+    libedit's default delimiters include ``/``, so a URL line can be saved as
+    ``... (https:/`` plus the real prompt. Those two then prefix-cycle forever.
+    """
+    items = list(lines)
+    return [
+        line
+        for line in items
+        if not any(other != line and other.startswith(line) for other in items)
+    ]
+
+
+def history_cycle_matches(buffer: str, history: Sequence[str]) -> list[str]:
+    """Newest-first unique history lines that start with ``buffer`` and are longer."""
+    if not buffer:
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for line in reversed(history):
+        if not line or line in seen:
+            continue
+        if line.startswith(buffer) and line != buffer:
+            out.append(line)
+            seen.add(line)
+    return _without_prefix_stubs(out)
+
+
+def full_history_matches(history: Sequence[str]) -> list[str]:
+    """Newest-first unique history lines (empty-line Ctrl+P / Ctrl+N)."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for line in reversed(history):
+        if not line or line in seen:
+            continue
+        out.append(line)
+        seen.add(line)
+    return _without_prefix_stubs(out)
+
+
+def _nav_line(buffer: str) -> str:
+    """Drop the trailing space readline appends after a unique complete."""
+    return buffer.rstrip()
+
+
+def ring_step_history(buffer: str, history: Sequence[str], *, reverse: bool = False) -> str | None:
+    """Next distinct history line. Never empty — libedit ignores ``""`` completions.
+
+    Newest-first ring: older wraps oldest → newest; newer wraps newest → oldest.
+    """
+    hits = full_history_matches(history)
+    if not hits:
+        return None
+    buf = _nav_line(buffer)
+    if not buf:
+        return hits[-1] if reverse else hits[0]
+    if buf not in hits:
+        return None
+    if len(hits) == 1:
+        return hits[0]
+    i = hits.index(buf)
+    return hits[(i + (-1 if reverse else 1)) % len(hits)]
+
+
+def advance_repl_cycle(
+    buffer: str,
+    history: Sequence[str],
+    state: ReplCompleteState,
+    *,
+    reverse: bool = False,
+    apply_commands: bool = True,
+) -> str | None:
+    """Prefix-cycle fill. One candidate so libedit does not dump a match list.
+
+    ``reverse`` (Ctrl+N) walks newer matches; Tab / Ctrl+P walk older.
+    Session commands apply only when ``apply_commands`` (Tab).
+    """
+    buffer = _nav_line(buffer)
+    if apply_commands:
+        commands = _command_matches(buffer)
+        if len(commands) == 1:
+            state.reset()
+            return commands[0]
+
+    if (
+        state.matches
+        and 0 <= state.index < len(state.matches)
+        and state.prefix is not None
+        and buffer == state.matches[state.index]
+        and buffer.startswith(state.prefix)
+    ):
+        if len(state.matches) == 1:
+            return buffer
+        step = -1 if reverse else 1
+        state.index = (state.index + step) % len(state.matches)
+        return state.matches[state.index]
+
+    state.prefix = buffer
+    state.matches = history_cycle_matches(buffer, history)
+    state.index = 0
+    if not state.matches:
+        state.reset()
+        return None
+    return state.matches[0]
+
+
+def advance_repl_nav(
+    buffer: str,
+    history: Sequence[str],
+    state: ReplCompleteState,
+    *,
+    source: str,
+) -> str | None:
+    """Tab / Ctrl+P / Ctrl+N. ``source`` is ``tab``, ``older``, or ``newer``."""
+    buffer = _nav_line(buffer)
+    # libedit reports Ctrl+P as Tab. An empty complete must still walk history.
+    if buffer == "" and source == "tab":
+        source = "older"
+    reverse = source == "newer"
+
+    if buffer == "":
+        return ring_step_history("", history, reverse=reverse)
+
+    found = advance_repl_cycle(
+        buffer,
+        history,
+        state,
+        reverse=reverse,
+        apply_commands=source == "tab",
+    )
+    if found is not None and found != buffer:
+        return found
+    if found in REPL_COMMANDS:
+        return found
+    # Unique / already-filled history line: ring to a *different* prompt.
+    # libedit ignores "" and ignores a complete equal to the current line.
+    return ring_step_history(buffer, history, reverse=reverse)
+
+
+def complete_repl(buffer: str, history: Sequence[str]) -> list[str]:
+    """First-Tab candidates (fresh cycle). Used by tests and as the public matcher."""
+    found = advance_repl_nav(buffer, history, ReplCompleteState(), source="tab")
+    return [found] if found else []
+
+
+def _readline_history_lines(readline: Any) -> list[str]:
+    n = int(readline.get_current_history_length())
+    return [readline.get_history_item(i) or "" for i in range(1, n + 1)]
+
+
+def _readline_uses_libedit(readline: Any) -> bool:
+    """CPython on this machine is often built against libedit, not GNU readline."""
+    backend = str(getattr(readline, "backend", "") or "").lower()
+    doc = str(getattr(readline, "__doc__", "") or "").lower()
+    return backend in {"editline", "libedit"} or "libedit" in doc
+
+
+def _disable_completion_append(readline: Any) -> None:
+    """Stop readline from adding a space after a unique match (breaks the next Ctrl+P)."""
+    setter = getattr(readline, "set_completion_append_character", None)
+    if callable(setter):
+        setter("")
+        return
+    try:
+        import ctypes
+
+        char = ctypes.c_char.in_dll(ctypes.CDLL(None), "rl_completion_append_character")
+        char.value = b"\0"
+    except (OSError, ValueError, AttributeError, TypeError):
+        return
+
+
+def _bind_tab_complete(readline: Any) -> None:
+    """GNU ``tab: complete`` is a no-op on libedit — Tab then inserts spaces."""
+    if _readline_uses_libedit(readline):
+        readline.parse_and_bind("bind ^I rl_complete")
+    else:
+        readline.parse_and_bind("tab: complete")
+
+
+def _bind_cycle_nav_keys(readline: Any) -> None:
+    """Ctrl+P / Ctrl+N always call our completer (empty = history, else prefix)."""
+    if _readline_uses_libedit(readline):
+        readline.parse_and_bind("bind ^P rl_complete")
+        readline.parse_and_bind("bind ^N rl_complete")
+    else:
+        readline.parse_and_bind(r'"\C-p": complete')
+        readline.parse_and_bind(r'"\C-n": complete')
+
+
+def _completion_source(readline: Any) -> str:
+    """Map the invoking key to ``tab``, ``older`` (Ctrl+P), or ``newer`` (Ctrl+N)."""
+    getter = getattr(readline, "get_completion_type", None)
+    if not callable(getter):
+        return "tab"
+    try:
+        kind = int(getter())
+    except (TypeError, ValueError):
+        return "tab"
+    if kind == _CTRL_N:
+        return "newer"
+    if kind == _CTRL_P:
+        return "older"
+    return "tab"
+
+
+def _completion_wants_reverse(readline: Any) -> bool:
+    return _completion_source(readline) == "newer"
+
+
+def _bind_repl_completer(readline: Any) -> None:
+    """Fill a unique match. Do not print the stock match list (it wrecks the prompt)."""
+    matches: list[str] = []
+
+    def completer(text: str, state: int) -> str | None:
+        nonlocal matches
+        if state == 0:
+            try:
+                buf = str(readline.get_line_buffer())
+            except (AttributeError, TypeError):
+                buf = text
+            source = _completion_source(readline)
+            hist = _readline_history_lines(readline)
+            line = buf if buf != "" else text
+            found = advance_repl_nav(line, hist, _REPL_CYCLE, source=source)
+            cur = _nav_line(line)
+            if found is not None and found == cur:
+                found = ring_step_history(cur, hist, reverse=source == "newer")
+                if found == cur:
+                    found = None
+            matches = [found] if found is not None else []
+        if 0 <= state < len(matches):
+            return matches[state]
+        return None
+
+    def _hide_match_list(_substitution: str, _found: list[str], _longest: int) -> None:
+        return None
+
+    readline.set_completer(completer)
+    # libedit treats set_completer_delims("") as "reset to default", and the
+    # default includes ``/``, so URL prompts complete as ``https:/`` stubs.
+    readline.set_completer_delims("\n")
+    _disable_completion_append(readline)
+    hook = getattr(readline, "set_completion_display_matches_hook", None)
+    if callable(hook):
+        hook(_hide_match_list)
+    _bind_tab_complete(readline)
+    _bind_cycle_nav_keys(readline)
+
+
 def attach_repl_readline(path: Path | None = None) -> Path | None:
-    """Hook GNU readline for Up/Down when stdin is a TTY. Returns the history path."""
+    """Hook GNU readline for Up/Down and Tab when stdin is a TTY."""
     if not sys.stdin.isatty():
         return None
     try:
@@ -60,6 +350,8 @@ def attach_repl_readline(path: Path | None = None) -> Path | None:
     for line in load_history_lines(hist):
         readline.add_history(line)
     readline.set_history_length(CLI_HISTORY_MAX)
+    reset_repl_cycle()
+    _bind_repl_completer(readline)
     return hist
 
 
@@ -80,8 +372,7 @@ def persist_repl_readline(path: Path | None) -> None:
         import readline
     except ImportError:
         return
-    n = readline.get_current_history_length()
-    lines = [readline.get_history_item(i) or "" for i in range(1, n + 1)]
+    lines = _readline_history_lines(readline)
     try:
         write_history_lines(path, lines)
     except OSError:
@@ -192,6 +483,9 @@ def _print_banner() -> None:
     cmds.add_row("[bold]exit[/] / [bold]quit[/] / [bold]q[/]", "leave the session")
     cmds.add_row("[bold]reset[/]", "clear conversation memory")
     cmds.add_row("[bold]↑[/] / [bold]↓[/]", "previous prompts")
+    cmds.add_row("[bold]Tab[/]", "commands; cycle previous prompts")
+    cmds.add_row("[bold]Ctrl+P[/]", "older prompt matching typed text; all history if empty")
+    cmds.add_row("[bold]Ctrl+N[/]", "newer prompt matching typed text; all history if empty")
     _console.print(Align.center(cmds))
     _console.print()
 
@@ -205,6 +499,7 @@ def _repl(orch: Orchestrator, session_id: str) -> int:
         while True:
             try:
                 if hist is not None:
+                    reset_repl_cycle()
                     line = input(readline_prompt()).strip()
                 else:
                     line = typer.prompt(you, prompt_suffix=suffix).strip()

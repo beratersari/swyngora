@@ -50,7 +50,9 @@ Python 3.11+ (pinned in `.python-version`). Recreate an old pip venv with `rm -r
 ## Run
 
 ```bash
-# REPL (↑ / ↓ recalls previous prompts; stored in ~/.swyngora/cli_history)
+# REPL (↑ / ↓ previous prompts; Tab completes commands and cycles matching
+# prompts; Ctrl+P / Ctrl+N cycle the typed prefix, or full history if empty;
+# stored in ~/.swyngora/cli_history)
 export AI_LLM_PROVIDER=ollama
 export SWYNGORA_API_URL=http://localhost:8080
 swyngora-ai
