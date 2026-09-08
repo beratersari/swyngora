@@ -32,12 +32,10 @@ func TestSimilarSetupFactorRaw_SupportAndAgainst(t *testing.T) {
 	if got := SimilarSetupFactorRaw(empty, AroundSimilarHorizon4h); got.Status != CustomFactorMissing {
 		t.Fatalf("empty %+v", got)
 	}
-	up := &AroundSimilarReport{
-		Matches: []AroundSimilarHit{
-			hitAfter(AroundSimilarHorizon1h, CVDDirUp, AroundSimilarHit{Similarity: 80}),
-			hitAfter(AroundSimilarHorizon1h, CVDDirUp, AroundSimilarHit{Similarity: 78}),
-		},
-	}
+	up := freshTapeReport([]AroundSimilarHit{
+		hitAfter(AroundSimilarHorizon1h, CVDDirUp, AroundSimilarHit{Similarity: 80}),
+		hitAfter(AroundSimilarHorizon1h, CVDDirUp, AroundSimilarHit{Similarity: 78}),
+	})
 	got := SimilarSetupFactorRaw(up, AroundSimilarHorizon1h)
 	if got.Status != CustomFactorUsed || got.Score <= 50 {
 		t.Fatalf("support %+v", got)
@@ -45,12 +43,10 @@ func TestSimilarSetupFactorRaw_SupportAndAgainst(t *testing.T) {
 	if !strings.Contains(got.Detail, "supports") {
 		t.Fatalf("detail %q", got.Detail)
 	}
-	down := &AroundSimilarReport{
-		Matches: []AroundSimilarHit{
-			hitAfter(AroundSimilarHorizon1h, CVDDirDown, AroundSimilarHit{Similarity: 80}),
-			hitAfter(AroundSimilarHorizon1h, CVDDirDown, AroundSimilarHit{Similarity: 78}),
-		},
-	}
+	down := freshTapeReport([]AroundSimilarHit{
+		hitAfter(AroundSimilarHorizon1h, CVDDirDown, AroundSimilarHit{Similarity: 80}),
+		hitAfter(AroundSimilarHorizon1h, CVDDirDown, AroundSimilarHit{Similarity: 78}),
+	})
 	got = SimilarSetupFactorRaw(down, AroundSimilarHorizon1h)
 	if got.Status != CustomFactorUsed || got.Score >= 50 {
 		t.Fatalf("against %+v", got)
@@ -78,7 +74,7 @@ func TestSimilarSetupFactorRaw_UsesSignalHorizonNotOneHour(t *testing.T) {
 			{Horizon: AroundSimilarHorizon4h, Dir: CVDDirDown, Pct: -3},
 		},
 	}
-	rep := &AroundSimilarReport{Matches: []AroundSimilarHit{both, both}}
+	rep := freshTapeReport([]AroundSimilarHit{both, both})
 	// 4h swing must use the 4h after-path (against), not the 1h rise.
 	got := SimilarSetupFactorRaw(rep, AroundSimilarHorizon4h)
 	if got.Status != CustomFactorUsed || got.Score >= 50 {
@@ -96,7 +92,7 @@ func TestSimilarSetupFactorRaw_UsesSignalHorizonNotOneHour(t *testing.T) {
 func TestCustomTapeQuality_MissingTapeIsNotFullEvidence(t *testing.T) {
 	t.Parallel()
 	fullHit := hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(80))
-	full := &AroundSimilarReport{Matches: []AroundSimilarHit{fullHit, fullHit}}
+	full := freshTapeReport([]AroundSimilarHit{fullHit, fullHit})
 	a := SimilarSetupFactorRaw(full, AroundSimilarHorizon4h)
 	if a.Status != CustomFactorUsed {
 		t.Fatalf("full %+v", a)
@@ -180,6 +176,9 @@ func TestCustomSignalTapeFreshFrom_AgesAndStale(t *testing.T) {
 	if empty.OI.Age != "missing" || empty.Takers.Age != "missing" || empty.Book.Age != "missing" || empty.Options.Age != "missing" {
 		t.Fatalf("empty %+v", empty)
 	}
+	if tapeSeriesPresent(empty) != 0 || tapeFreshQuality(empty) != 0 || tapeFactorFreshness(empty) != CustomFreshnessMissing {
+		t.Fatalf("empty current tape must not look fresh: present=%d q=%.2f %s", tapeSeriesPresent(empty), tapeFreshQuality(empty), tapeFactorFreshness(empty))
+	}
 }
 
 func TestFreshFuturesSnapshotAtOrBefore_DropsStale(t *testing.T) {
@@ -215,12 +214,8 @@ func TestForensicsFactorRaw_ScalesWithSimilarity(t *testing.T) {
 	if got := ForensicsFactorRaw(nil, AroundSimilarHorizon4h); got.Status != CustomFactorMissing {
 		t.Fatalf("%+v", got)
 	}
-	strong := &AroundSimilarReport{
-		Matches: []AroundSimilarHit{hitAfter(AroundSimilarHorizon1h, CVDDirUp, AroundSimilarHit{Similarity: 90, AfterDirection: CVDDirUp})},
-	}
-	weak := &AroundSimilarReport{
-		Matches: []AroundSimilarHit{hitAfter(AroundSimilarHorizon1h, CVDDirUp, AroundSimilarHit{Similarity: 45, AfterDirection: CVDDirUp})},
-	}
+	strong := freshTapeReport([]AroundSimilarHit{hitAfter(AroundSimilarHorizon1h, CVDDirUp, AroundSimilarHit{Similarity: 90, AfterDirection: CVDDirUp})})
+	weak := freshTapeReport([]AroundSimilarHit{hitAfter(AroundSimilarHorizon1h, CVDDirUp, AroundSimilarHit{Similarity: 45, AfterDirection: CVDDirUp})})
 	a := ForensicsFactorRaw(strong, AroundSimilarHorizon1h)
 	b := ForensicsFactorRaw(weak, AroundSimilarHorizon1h)
 	if a.Status != CustomFactorUsed || b.Status != CustomFactorUsed {
@@ -239,12 +234,10 @@ func TestScoreCustomSignal_TapeAgainstPullsDown(t *testing.T) {
 	raws := BuildCustomSignalRaws([]SwingPattern{
 		{Name: CustomFactorEMACrossover, Score: 90, Description: "cross"},
 	}, nil)
-	raws[CustomFactorSimilarSetup] = SimilarSetupFactorRaw(&AroundSimilarReport{
-		Matches: []AroundSimilarHit{
-			hitAfter(AroundSimilarHorizon4h, CVDDirDown, AroundSimilarHit{Similarity: 80}),
-			hitAfter(AroundSimilarHorizon4h, CVDDirDown, AroundSimilarHit{Similarity: 78}),
-		},
-	}, AroundSimilarHorizon4h)
+	raws[CustomFactorSimilarSetup] = SimilarSetupFactorRaw(freshTapeReport([]AroundSimilarHit{
+		hitAfter(AroundSimilarHorizon4h, CVDDirDown, AroundSimilarHit{Similarity: 80}),
+		hitAfter(AroundSimilarHorizon4h, CVDDirDown, AroundSimilarHit{Similarity: 78}),
+	}), AroundSimilarHorizon4h)
 	w := CustomSignalWeights{Source: CustomSignalMixCustom, Pct: map[string]float64{
 		CustomFactorEMACrossover: 50,
 		CustomFactorSimilarSetup: 50,
@@ -268,9 +261,7 @@ func TestClassifyCustomTapeMatches_DropsThinFromAfterPath(t *testing.T) {
 	t.Parallel()
 	complete := hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(82))
 	thin := hitAfter(AroundSimilarHorizon4h, CVDDirDown, missingTapeHit(80))
-	rep := &AroundSimilarReport{
-		Matches: []AroundSimilarHit{complete, complete, complete, thin, thin},
-	}
+	rep := freshTapeReport([]AroundSimilarHit{complete, complete, complete, thin, thin})
 	usable, stats, _ := ClassifyCustomTapeMatches(rep.Matches)
 	if stats.Setups != 5 || stats.Used != 3 || stats.Thin != 2 {
 		t.Fatalf("stats %+v", stats)
@@ -299,9 +290,7 @@ func TestForensicsFactorRaw_UsesEveryCompleteSetup(t *testing.T) {
 	t.Parallel()
 	complete := hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(90))
 	thin := hitAfter(AroundSimilarHorizon4h, CVDDirDown, missingTapeHit(88))
-	rep := &AroundSimilarReport{
-		Matches: []AroundSimilarHit{thin, complete, complete, complete, thin},
-	}
+	rep := freshTapeReport([]AroundSimilarHit{thin, complete, complete, complete, thin})
 	got := ForensicsFactorRaw(rep, AroundSimilarHorizon4h)
 	if got.Status != CustomFactorUsed || got.Score <= 50 {
 		t.Fatalf("must not follow the thin first hit: %+v", got)
@@ -309,6 +298,20 @@ func TestForensicsFactorRaw_UsesEveryCompleteSetup(t *testing.T) {
 	if !strings.Contains(got.Detail, "Used 3 of 5 setups; 2 had missing tape") {
 		t.Fatalf("detail %q", got.Detail)
 	}
+}
+
+func freshCurrentPhase(asOf time.Time) AroundPhase {
+	return AroundPhase{
+		Flow:    AroundFlow{LastBar: asOf.Add(-time.Minute)},
+		Futures: &AroundFutures{HasOI: true, OIToAt: asOf.Add(-time.Minute)},
+		Book:    &AroundBook{Complete: true, SampledTo: asOf.Add(-time.Minute)},
+		Options: &AroundOptions{Complete: true, SampledTo: asOf.Add(-time.Minute)},
+	}
+}
+
+func freshTapeReport(matches []AroundSimilarHit) *AroundSimilarReport {
+	asOf := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
+	return &AroundSimilarReport{Matches: matches, AsOf: asOf, Current: freshCurrentPhase(asOf)}
 }
 
 func hitAfter(horizon, dir string, extra AroundSimilarHit) AroundSimilarHit {
@@ -517,6 +520,55 @@ func TestScoreCustomSignal_EvidenceCountsOldAndMissing(t *testing.T) {
 	}
 	if sim.Freshness != CustomFreshnessOld {
 		t.Fatalf("similar freshness %+v", sim)
+	}
+}
+
+func TestSimilarSetupFactorRaw_MissingCurrentTapeIsMissing(t *testing.T) {
+	t.Parallel()
+	got := SimilarSetupFactorRaw(&AroundSimilarReport{
+		Matches: []AroundSimilarHit{
+			hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(82)),
+			hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(80)),
+		},
+	}, AroundSimilarHorizon4h)
+	if got.Status != CustomFactorMissing || got.Freshness != CustomFreshnessMissing {
+		t.Fatalf("no current tape must be missing, not fresh: %+v", got)
+	}
+	if got.Quality != 0 {
+		t.Fatalf("quality %+v", got)
+	}
+	if !strings.Contains(got.Detail, "current tape is missing") {
+		t.Fatalf("detail %q", got.Detail)
+	}
+}
+
+func TestSimilarSetupFactorRaw_PartialCurrentTapeCutsQuality(t *testing.T) {
+	t.Parallel()
+	asOf := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
+	got := SimilarSetupFactorRaw(&AroundSimilarReport{
+		Matches: []AroundSimilarHit{
+			hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(82)),
+			hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(80)),
+		},
+		AsOf: asOf,
+		Current: AroundPhase{
+			Futures: &AroundFutures{HasOI: true, OIToAt: asOf.Add(-time.Minute)},
+		},
+	}, AroundSimilarHorizon4h)
+	if got.Status != CustomFactorUsed {
+		t.Fatalf("%+v", got)
+	}
+	if got.Quality >= 0.5 || got.Quality <= 0 {
+		t.Fatalf("OI-only current tape must not look full: %+v", got)
+	}
+	if math.Abs(got.Quality-0.25) > 0.01 {
+		t.Fatalf("want 1/4 coverage, got %+v", got)
+	}
+	if got.Freshness != CustomFreshnessFresh {
+		t.Fatalf("present OI is still fresh: %+v", got)
+	}
+	if !strings.Contains(got.Detail, "1 of 4 series") {
+		t.Fatalf("detail %q", got.Detail)
 	}
 }
 

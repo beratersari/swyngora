@@ -102,11 +102,7 @@ func SimilarSetupFactorRaw(rep *AroundSimilarReport, horizon string) CustomSigna
 	if note != "" {
 		detail = note + ". " + detail
 	}
-	fresh := CustomSignalTapeFreshFrom(rep)
-	return CustomSignalRaw{
-		Score: score, Status: CustomFactorUsed, Detail: detail,
-		Quality: tapeFactorQuality(stats, fresh), Freshness: tapeFactorFreshness(fresh),
-	}
+	return finishTapeFactorRaw(score, detail, stats, rep)
 }
 
 // ForensicsFactorRaw maps the current tape's match to past pre-move setups
@@ -161,25 +157,56 @@ func ForensicsFactorRaw(rep *AroundSimilarReport, horizon string) CustomSignalRa
 	if note != "" {
 		detail = note + ". " + detail
 	}
+	return finishTapeFactorRaw(score, detail, stats, rep)
+}
+
+func finishTapeFactorRaw(score float64, detail string, stats CustomSignalTapeStats, rep *AroundSimilarReport) CustomSignalRaw {
 	fresh := CustomSignalTapeFreshFrom(rep)
+	if tapeSeriesPresent(fresh) == 0 {
+		miss := "current tape is missing"
+		if note := tapeStatsNote(stats); note != "" {
+			miss = note + " — " + miss
+		}
+		return CustomSignalRaw{
+			Score: 50, Status: CustomFactorMissing, Detail: miss,
+			Freshness: CustomFreshnessMissing,
+		}
+	}
+	if n := tapeSeriesPresent(fresh); n < 4 {
+		detail = strings.TrimSpace(detail + fmt.Sprintf(". Current tape has %d of 4 series", n))
+	}
 	return CustomSignalRaw{
 		Score: score, Status: CustomFactorUsed, Detail: detail,
 		Quality: tapeFactorQuality(stats, fresh), Freshness: tapeFactorFreshness(fresh),
 	}
 }
 
-// tapeFactorQuality is 0–1 from complete-setup share and current-tape freshness.
+// tapeFactorQuality is 0–1 from complete-setup share times current-tape coverage.
+// Each of OI / takers / book / options is a quarter. Missing series add 0.
 func tapeFactorQuality(stats CustomSignalTapeStats, fresh CustomSignalTapeFresh) float64 {
 	if stats.Used <= 0 || stats.Setups <= 0 {
 		return 0
 	}
 	share := float64(stats.Used) / float64(stats.Setups)
-	return clamp01(share * (0.5 + 0.5*tapeFreshQuality(fresh)))
+	return clamp01(share * tapeFreshQuality(fresh))
 }
 
-// tapeFactorFreshness is old when any current OI / taker / book / options
-// print is stale. Missing series do not make the whole factor old.
+func tapeSeriesPresent(f CustomSignalTapeFresh) int {
+	n := 0
+	for _, a := range []CustomSignalTapeAge{f.OI, f.Takers, f.Book, f.Options} {
+		if a.Age != "" && a.Age != "missing" {
+			n++
+		}
+	}
+	return n
+}
+
+// tapeFactorFreshness is missing when no current series exist, old when any
+// present print is stale, and fresh only when at least one series is current.
 func tapeFactorFreshness(fresh CustomSignalTapeFresh) string {
+	if tapeSeriesPresent(fresh) == 0 {
+		return CustomFreshnessMissing
+	}
 	if fresh.OI.Stale || fresh.Takers.Stale || fresh.Book.Stale || fresh.Options.Stale {
 		return CustomFreshnessOld
 	}
@@ -189,20 +216,15 @@ func tapeFactorFreshness(fresh CustomSignalTapeFresh) string {
 func tapeFreshQuality(f CustomSignalTapeFresh) float64 {
 	rows := []CustomSignalTapeAge{f.OI, f.Takers, f.Book, f.Options}
 	var acc float64
-	present := 0
 	for _, a := range rows {
 		if a.Age == "" || a.Age == "missing" {
 			continue
 		}
-		present++
 		if a.Stale {
 			acc += 0.4
 		} else {
 			acc += 1
 		}
-	}
-	if present == 0 {
-		return 1
 	}
 	return acc / 4
 }
