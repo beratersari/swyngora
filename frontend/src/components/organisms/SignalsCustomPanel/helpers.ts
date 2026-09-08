@@ -168,6 +168,13 @@ export function previewCustomMix(items: CustomSignalItem[], draft: CustomWeightD
       tapeSetups: item.tapeSetups,
       tapeUsed: item.tapeUsed,
       tapeThin: item.tapeThin,
+      tapeFreshNote: item.tapeFresh?.note,
+      tapeFreshStale: Boolean(
+        item.tapeFresh?.oi?.stale ||
+          item.tapeFresh?.takers?.stale ||
+          item.tapeFresh?.book?.stale ||
+          item.tapeFresh?.options?.stale,
+      ),
     };
   }).sort((a, b) => b.appliedScore - a.appliedScore || a.symbol.localeCompare(b.symbol));
 }

@@ -9484,8 +9484,30 @@ components:
         forensicsDetail: { type: string }
         similarDetail: { type: string }
         tapeSetups: { type: integer, description: Similar past setups considered }
-        tapeUsed: { type: integer, description: Setups complete enough to count as evidence }
-        tapeThin: { type: integer, description: Setups omitted because OI, takers, book, or options were missing }
+        tapeUsed: { type: integer, description: Setups with every selected OI / taker / book / options field present }
+        tapeThin: { type: integer, description: Setups omitted because at least one selected tape field was missing }
+        tapeFresh:
+          $ref: '#/components/schemas/CustomSignalTapeFresh'
+    CustomSignalTapeAge:
+      type: object
+      properties:
+        field: { type: string }
+        age: { type: string, description: Human age (2m) or missing }
+        ageSec: { type: integer }
+        at: { type: string, format: date-time }
+        stale: { type: boolean, description: Older than that series' freshness slack }
+    CustomSignalTapeFresh:
+      type: object
+      properties:
+        oi:
+          $ref: '#/components/schemas/CustomSignalTapeAge'
+        takers:
+          $ref: '#/components/schemas/CustomSignalTapeAge'
+        book:
+          $ref: '#/components/schemas/CustomSignalTapeAge'
+        options:
+          $ref: '#/components/schemas/CustomSignalTapeAge'
+        note: { type: string }
     CustomSignalScan:
       type: object
       properties:

@@ -97,18 +97,21 @@ func TestCustomTapeQuality_MissingTapeIsNotFullEvidence(t *testing.T) {
 	t.Parallel()
 	fullHit := hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(80))
 	full := &AroundSimilarReport{Matches: []AroundSimilarHit{fullHit, fullHit}}
-	thinHit := hitAfter(AroundSimilarHorizon4h, CVDDirUp, partialTapeHit(80))
-	thin := &AroundSimilarReport{Matches: []AroundSimilarHit{thinHit, thinHit}}
 	a := SimilarSetupFactorRaw(full, AroundSimilarHorizon4h)
-	b := SimilarSetupFactorRaw(thin, AroundSimilarHorizon4h)
-	if a.Status != CustomFactorUsed || b.Status != CustomFactorUsed {
-		t.Fatalf("a=%+v b=%+v", a, b)
-	}
-	if b.Score >= a.Score {
-		t.Fatalf("thin tape should be weaker evidence: full=%.1f thin=%.1f", a.Score, b.Score)
+	if a.Status != CustomFactorUsed {
+		t.Fatalf("full %+v", a)
 	}
 	if !strings.Contains(a.Detail, "Used 2 of 2 setups") {
 		t.Fatalf("full detail %q", a.Detail)
+	}
+	thinHit := hitAfter(AroundSimilarHorizon4h, CVDDirUp, partialTapeHit(80))
+	thin := &AroundSimilarReport{Matches: []AroundSimilarHit{thinHit, thinHit}}
+	b := SimilarSetupFactorRaw(thin, AroundSimilarHorizon4h)
+	if b.Status != CustomFactorMissing {
+		t.Fatalf("one missing tape field must not be used: %+v", b)
+	}
+	if !strings.Contains(b.Detail, "Used 0 of 2 setups; 2 had missing tape") {
+		t.Fatalf("thin detail %q", b.Detail)
 	}
 	gone := &AroundSimilarReport{
 		Matches: []AroundSimilarHit{hitAfter(AroundSimilarHorizon4h, CVDDirUp, missingTapeHit(80))},
@@ -119,6 +122,63 @@ func TestCustomTapeQuality_MissingTapeIsNotFullEvidence(t *testing.T) {
 	}
 	if !strings.Contains(got.Detail, "Used 0 of 1 setups; 1 had missing tape") {
 		t.Fatalf("gone detail %q", got.Detail)
+	}
+}
+
+func TestClassifyCustomTapeMatches_OneMissingFieldIsThin(t *testing.T) {
+	t.Parallel()
+	complete := hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(82))
+	oneMissing := hitAfter(AroundSimilarHorizon4h, CVDDirDown, AroundSimilarHit{
+		Similarity: 80, Coverage: 90,
+		Missing: []string{AroundSimilarFieldOptions},
+		Compared: []AroundSimilarFieldScore{
+			{Name: AroundSimilarFieldTakers, Used: true, Weight: 1.5},
+			{Name: AroundSimilarFieldOI, Used: true, Weight: 3},
+			{Name: AroundSimilarFieldBook, Used: true, Weight: 3},
+			{Name: AroundSimilarFieldOptions, Used: false, Weight: 2},
+		},
+	})
+	usable, stats, _ := ClassifyCustomTapeMatches([]AroundSimilarHit{complete, complete, oneMissing})
+	if stats.Setups != 3 || stats.Used != 2 || stats.Thin != 1 {
+		t.Fatalf("stats %+v", stats)
+	}
+	if len(usable) != 2 {
+		t.Fatalf("usable %d", len(usable))
+	}
+}
+
+func TestCustomSignalTapeFreshFrom_AgesAndStale(t *testing.T) {
+	t.Parallel()
+	asOf := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
+	rep := &AroundSimilarReport{
+		AsOf: asOf,
+		Current: AroundPhase{
+			To:      asOf,
+			Flow:    AroundFlow{BuySellKnown: true, LastBar: asOf.Add(-90 * time.Second)},
+			Book:    &AroundBook{Complete: true, SampledTo: asOf.Add(-2 * time.Minute)},
+			Futures: &AroundFutures{HasOI: true, OIToAt: asOf.Add(-6 * time.Minute)},
+			Options: &AroundOptions{Complete: true, SampledTo: asOf.Add(-40 * time.Minute)},
+		},
+	}
+	got := CustomSignalTapeFreshFrom(rep)
+	if got.Takers.Age != "1m" || got.Takers.Stale {
+		t.Fatalf("takers %+v", got.Takers)
+	}
+	if got.Book.Age != "2m" || got.Book.Stale {
+		t.Fatalf("book %+v", got.Book)
+	}
+	if got.OI.Age != "6m" || got.OI.Stale {
+		t.Fatalf("oi %+v", got.OI)
+	}
+	if got.Options.Age != "40m" || !got.Options.Stale {
+		t.Fatalf("old options must be marked stale: %+v", got.Options)
+	}
+	if !strings.Contains(got.Note, "options 40m ago (old)") || !strings.Contains(got.Note, "oi 6m ago") {
+		t.Fatalf("note %q", got.Note)
+	}
+	empty := CustomSignalTapeFreshFrom(&AroundSimilarReport{AsOf: asOf})
+	if empty.OI.Age != "missing" || empty.Takers.Age != "missing" || empty.Book.Age != "missing" || empty.Options.Age != "missing" {
+		t.Fatalf("empty %+v", empty)
 	}
 }
 

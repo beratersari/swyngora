@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 )
 
 const customTapeMinAfter = 2
@@ -159,11 +160,137 @@ func ForensicsFactorRaw(rep *AroundSimilarReport, horizon string) CustomSignalRa
 	return CustomSignalRaw{Score: score, Status: CustomFactorUsed, Detail: detail}
 }
 
-// customTapeHitQuality uses existing similar coverage / missing fields so
-// stale or absent OI, takers, book, or options are not treated as full evidence.
+// CustomSignalTapeAge is how old one current-tape series is vs the scan clock.
+type CustomSignalTapeAge struct {
+	Field  string `json:"field"`
+	Age    string `json:"age"`
+	AgeSec int    `json:"ageSec,omitempty"`
+	At     string `json:"at,omitempty"`
+	Stale  bool   `json:"stale,omitempty"`
+}
+
+// CustomSignalTapeFresh is OI / taker / book / options age on the current tape.
+type CustomSignalTapeFresh struct {
+	OI      CustomSignalTapeAge `json:"oi"`
+	Takers  CustomSignalTapeAge `json:"takers"`
+	Book    CustomSignalTapeAge `json:"book"`
+	Options CustomSignalTapeAge `json:"options"`
+	Note    string              `json:"note,omitempty"`
+}
+
+// CustomSignalTapeFreshFrom reports how old the current tape prints are.
+// Missing series say "missing". A print older than its slack is marked stale
+// so old OI / takers / book / options cannot silently support the signal.
+func CustomSignalTapeFreshFrom(rep *AroundSimilarReport) CustomSignalTapeFresh {
+	if rep == nil {
+		return CustomSignalTapeFresh{}
+	}
+	asOf := rep.AsOf
+	if asOf.IsZero() {
+		asOf = time.Now().UTC()
+	}
+	cur := rep.Current
+	out := CustomSignalTapeFresh{
+		Takers:  tapeAgeOf(AroundSimilarFieldTakers, takerSampleAt(cur), asOf, AroundTapeFreshSlack),
+		OI:      tapeAgeOf(AroundSimilarFieldOI, oiSampleAt(cur), asOf, AroundTapeFreshSlack),
+		Book:    tapeAgeOf(AroundSimilarFieldBook, bookSampleAt(cur), asOf, DefaultBookHistorySlack),
+		Options: tapeAgeOf(AroundSimilarFieldOptions, optionsSampleAt(cur), asOf, aroundOptionsSlack),
+	}
+	out.Note = formatTapeFreshNote(out)
+	return out
+}
+
+func takerSampleAt(p AroundPhase) time.Time {
+	if !p.Flow.LastBar.IsZero() {
+		return p.Flow.LastBar
+	}
+	if p.Flow.BuySellKnown {
+		return p.To
+	}
+	return time.Time{}
+}
+
+func oiSampleAt(p AroundPhase) time.Time {
+	if p.Futures != nil && p.Futures.HasOI {
+		return p.Futures.OIToAt
+	}
+	return time.Time{}
+}
+
+func bookSampleAt(p AroundPhase) time.Time {
+	if p.Book != nil && p.Book.Complete {
+		return p.Book.SampledTo
+	}
+	return time.Time{}
+}
+
+func optionsSampleAt(p AroundPhase) time.Time {
+	if p.Options != nil && p.Options.Complete {
+		return p.Options.SampledTo
+	}
+	return time.Time{}
+}
+
+func tapeAgeOf(field string, sampled, asOf time.Time, slack time.Duration) CustomSignalTapeAge {
+	out := CustomSignalTapeAge{Field: field, Age: "missing"}
+	if sampled.IsZero() {
+		return out
+	}
+	sampled = sampled.UTC()
+	asOf = asOf.UTC()
+	age := asOf.Sub(sampled)
+	if age < 0 {
+		age = 0
+	}
+	out.Age = formatTapeAge(age)
+	out.AgeSec = int(age / time.Second)
+	out.At = sampled.Format(time.RFC3339)
+	if slack > 0 && age > slack {
+		out.Stale = true
+	}
+	return out
+}
+
+func formatTapeAge(d time.Duration) string {
+	if d < time.Minute {
+		sec := int(d / time.Second)
+		if sec < 1 {
+			sec = 0
+		}
+		return fmt.Sprintf("%ds", sec)
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm", int(d/time.Minute))
+	}
+	return fmt.Sprintf("%dh", int(d/time.Hour))
+}
+
+func formatTapeFreshNote(f CustomSignalTapeFresh) string {
+	parts := make([]string, 0, 4)
+	for _, a := range []CustomSignalTapeAge{f.OI, f.Takers, f.Book, f.Options} {
+		label := a.Field
+		if a.Age == "missing" || a.Age == "" {
+			parts = append(parts, label+" missing")
+			continue
+		}
+		bit := label + " " + a.Age + " ago"
+		if a.Stale {
+			bit += " (old)"
+		}
+		parts = append(parts, bit)
+	}
+	return strings.Join(parts, "; ")
+}
+
+// customTapeHitQuality rejects a setup when any selected OI / taker / book /
+// options field is missing. Those setups are not used as evidence.
 func customTapeHitQuality(hit AroundSimilarHit) (strength float64, note string, ok bool) {
-	if len(hit.Compared) == 0 && hit.Coverage <= 0 {
+	if len(hit.Compared) == 0 && hit.Coverage <= 0 && len(hit.Missing) == 0 {
 		return 1, "", true
+	}
+	missing := customTapeMissing(hit)
+	if len(missing) > 0 {
+		return 0, "missing " + joinList(missing), false
 	}
 	cov := hit.Coverage
 	if cov <= 0 && len(hit.Compared) > 0 {
@@ -181,37 +308,35 @@ func customTapeHitQuality(hit AroundSimilarHit) (strength float64, note string, 
 	if cov > 0 && cov < DefaultAroundSimilarMinCoverage {
 		return 0, "setup lacked enough selected data", false
 	}
-	missing := make([]string, 0, 4)
-	seen := map[string]bool{}
-	for _, name := range hit.Missing {
-		if !customTapeField(name) || seen[name] {
-			continue
-		}
-		seen[name] = true
-		missing = append(missing, name)
-	}
-	for _, c := range hit.Compared {
-		if c.Used || !customTapeField(c.Name) || seen[c.Name] {
-			continue
-		}
-		seen[c.Name] = true
-		missing = append(missing, c.Name)
-	}
-	if len(missing) >= 3 {
-		return 0, "too much tape missing (" + joinList(missing) + ")", false
-	}
 	strength = 1
 	if cov > 0 {
 		strength = cov / 100
 	}
-	if len(missing) > 0 {
-		strength *= 1 - 0.2*float64(len(missing))
-		note = "missing " + joinList(missing)
-	}
 	if strength <= 0 {
-		return 0, note, false
+		return 0, "setup lacked enough selected data", false
 	}
-	return strength, note, true
+	return strength, "", true
+}
+
+func customTapeMissing(hit AroundSimilarHit) []string {
+	seen := map[string]bool{}
+	var missing []string
+	add := func(name string) {
+		if !customTapeField(name) || seen[name] {
+			return
+		}
+		seen[name] = true
+		missing = append(missing, name)
+	}
+	for _, name := range hit.Missing {
+		add(name)
+	}
+	for _, c := range hit.Compared {
+		if !c.Used {
+			add(c.Name)
+		}
+	}
+	return missing
 }
 
 func customTapeField(name string) bool {

@@ -5719,10 +5719,28 @@ export interface components {
             similarDetail?: string;
             /** Similar past setups considered */
             tapeSetups?: number;
-            /** Setups complete enough to count as evidence */
+            /** Setups with every selected OI / taker / book / options field present */
             tapeUsed?: number;
-            /** Setups omitted because OI, takers, book, or options were missing */
+            /** Setups omitted because at least one selected tape field was missing */
             tapeThin?: number;
+            tapeFresh?: components["schemas"]["CustomSignalTapeFresh"];
+        };
+        CustomSignalTapeAge: {
+            field?: string;
+            /** Human age (2m) or missing */
+            age?: string;
+            ageSec?: number;
+            /** Format: date-time */
+            at?: string;
+            /** Older than that series' freshness slack */
+            stale?: boolean;
+        };
+        CustomSignalTapeFresh: {
+            oi?: components["schemas"]["CustomSignalTapeAge"];
+            takers?: components["schemas"]["CustomSignalTapeAge"];
+            book?: components["schemas"]["CustomSignalTapeAge"];
+            options?: components["schemas"]["CustomSignalTapeAge"];
+            note?: string;
         };
         CustomSignalScan: {
             profileId?: string;

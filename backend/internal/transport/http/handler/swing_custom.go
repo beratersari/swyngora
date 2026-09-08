@@ -22,20 +22,21 @@ type customSignalProfileDTO struct {
 }
 
 type customSignalItemDTO struct {
-	Exchange        string                     `json:"exchange"`
-	Symbol          string                     `json:"symbol"`
-	Interval        string                     `json:"interval"`
-	Price           float64                    `json:"price"`
-	BarTime         string                     `json:"barTime,omitempty"`
-	Engine          *swingDecisionDTO          `json:"engine,omitempty"`
-	Custom          domain.CustomSignalScore   `json:"custom"`
-	Compare         domain.CustomSignalCompare `json:"scoreCompare"`
-	HuntDetail      string                     `json:"huntDetail,omitempty"`
-	ForensicsDetail string                     `json:"forensicsDetail,omitempty"`
-	SimilarDetail   string                     `json:"similarDetail,omitempty"`
-	TapeSetups      int                        `json:"tapeSetups,omitempty"`
-	TapeUsed        int                        `json:"tapeUsed,omitempty"`
-	TapeThin        int                        `json:"tapeThin,omitempty"`
+	Exchange        string                        `json:"exchange"`
+	Symbol          string                        `json:"symbol"`
+	Interval        string                        `json:"interval"`
+	Price           float64                       `json:"price"`
+	BarTime         string                        `json:"barTime,omitempty"`
+	Engine          *swingDecisionDTO             `json:"engine,omitempty"`
+	Custom          domain.CustomSignalScore      `json:"custom"`
+	Compare         domain.CustomSignalCompare    `json:"scoreCompare"`
+	HuntDetail      string                        `json:"huntDetail,omitempty"`
+	ForensicsDetail string                        `json:"forensicsDetail,omitempty"`
+	SimilarDetail   string                        `json:"similarDetail,omitempty"`
+	TapeSetups      int                           `json:"tapeSetups,omitempty"`
+	TapeUsed        int                           `json:"tapeUsed,omitempty"`
+	TapeThin        int                           `json:"tapeThin,omitempty"`
+	TapeFresh       *domain.CustomSignalTapeFresh `json:"tapeFresh,omitempty"`
 }
 
 func customProfileToDTO(p *domain.CustomSignalProfile) customSignalProfileDTO {
@@ -64,6 +65,7 @@ func customItemToDTO(it domain.CustomSignalItem) customSignalItemDTO {
 		Price: it.Price, Custom: it.Custom, Compare: it.Compare, HuntDetail: it.HuntDetail,
 		ForensicsDetail: it.ForensicsDetail, SimilarDetail: it.SimilarDetail,
 		TapeSetups: it.TapeSetups, TapeUsed: it.TapeUsed, TapeThin: it.TapeThin,
+		TapeFresh: it.TapeFresh,
 	}
 	if !it.BarTime.IsZero() {
 		out.BarTime = it.BarTime.UTC().Format(time.RFC3339Nano)

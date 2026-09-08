@@ -53,12 +53,22 @@ describe('custom signal helpers', () => {
   it('passes through how many similar setups were used vs missing tape', () => {
     const draft = defaultCustomWeightDraft();
     const rows = previewCustomMix(
-      [item({ symbol: 'BTCUSDT', tapeSetups: 5, tapeUsed: 3, tapeThin: 2 })],
+      [
+        item({
+          symbol: 'BTCUSDT',
+          tapeSetups: 5,
+          tapeUsed: 3,
+          tapeThin: 2,
+          tapeFresh: { note: 'oi 6m ago; options 40m ago (old)', options: { stale: true } },
+        }),
+      ],
       draft,
     );
     expect(rows[0]?.tapeSetups).toBe(5);
     expect(rows[0]?.tapeUsed).toBe(3);
     expect(rows[0]?.tapeThin).toBe(2);
+    expect(rows[0]?.tapeFreshNote).toBe('oi 6m ago; options 40m ago (old)');
+    expect(rows[0]?.tapeFreshStale).toBe(true);
   });
 
   it('previews score change and names the largest mover', () => {

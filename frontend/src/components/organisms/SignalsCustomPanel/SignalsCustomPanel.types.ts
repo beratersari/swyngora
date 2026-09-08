@@ -34,6 +34,8 @@ export type CustomMixPreviewRow = {
   tapeSetups?: number;
   tapeUsed?: number;
   tapeThin?: number;
+  tapeFreshNote?: string;
+  tapeFreshStale?: boolean;
   price?: number;
 };
 

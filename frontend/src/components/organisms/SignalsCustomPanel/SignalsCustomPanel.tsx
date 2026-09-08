@@ -226,6 +226,15 @@ export function SignalsCustomPanel({
                       })}
                 </Text>
               ) : null}
+              {row.tapeFreshNote ? (
+                <Text
+                  variant="caption"
+                  color={row.tapeFreshStale ? 'error' : 'secondary'}
+                  data-testid="signals-custom-tape-fresh"
+                >
+                  {row.tapeFreshNote}
+                </Text>
+              ) : null}
               <FactorBreakdown>
                 {row.factors
                   .filter((f) => f.appliedPct > 0 || f.defaultPct > 0)

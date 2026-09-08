@@ -469,20 +469,21 @@ type CustomSignalCompare struct {
 
 // CustomSignalItem is one watchlist row after the custom mix.
 type CustomSignalItem struct {
-	Exchange   Exchange            `json:"exchange"`
-	Symbol     string              `json:"symbol"`
-	Interval   string              `json:"interval"`
-	Price      float64             `json:"price"`
-	BarTime    time.Time           `json:"barTime"`
-	Engine     *SwingDecision      `json:"engine,omitempty"`
-	Custom     CustomSignalScore   `json:"custom"`
-	Compare    CustomSignalCompare `json:"scoreCompare"`
-	HuntDetail      string              `json:"huntDetail,omitempty"`
-	ForensicsDetail string              `json:"forensicsDetail,omitempty"`
-	SimilarDetail   string              `json:"similarDetail,omitempty"`
-	TapeSetups      int                 `json:"tapeSetups,omitempty"`
-	TapeUsed        int                 `json:"tapeUsed,omitempty"`
-	TapeThin        int                 `json:"tapeThin,omitempty"`
+	Exchange        Exchange               `json:"exchange"`
+	Symbol          string                 `json:"symbol"`
+	Interval        string                 `json:"interval"`
+	Price           float64                `json:"price"`
+	BarTime         time.Time              `json:"barTime"`
+	Engine          *SwingDecision         `json:"engine,omitempty"`
+	Custom          CustomSignalScore      `json:"custom"`
+	Compare         CustomSignalCompare    `json:"scoreCompare"`
+	HuntDetail      string                 `json:"huntDetail,omitempty"`
+	ForensicsDetail string                 `json:"forensicsDetail,omitempty"`
+	SimilarDetail   string                 `json:"similarDetail,omitempty"`
+	TapeSetups      int                    `json:"tapeSetups,omitempty"`
+	TapeUsed        int                    `json:"tapeUsed,omitempty"`
+	TapeThin        int                    `json:"tapeThin,omitempty"`
+	TapeFresh       *CustomSignalTapeFresh `json:"tapeFresh,omitempty"`
 }
 
 // CustomSignalFactorLabel is the desk label for a factor id.

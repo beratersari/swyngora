@@ -130,6 +130,7 @@ type AroundFlow struct {
 	VolumeGrade   string
 	TypicalSample int
 	TypicalKnown  bool
+	LastBar       time.Time `json:"lastBar,omitempty"` // last taker-known bar in this phase
 }
 
 // AroundProfile is the compact volume-profile read of one phase (no bins).
@@ -154,6 +155,7 @@ type AroundBook struct {
 	WallsRemoved     int
 	Summary          string
 	Complete         bool
+	SampledTo        time.Time `json:"sampledTo,omitempty"` // last book snapshot used for this phase
 }
 
 // AroundFutures is OI / funding / long% / liquidations across a phase.
@@ -163,7 +165,8 @@ type AroundFutures struct {
 	OIChange    float64
 	OIChangePct float64
 	OIDirection string
-	HasOI       bool // both ends have a fresh OI print
+	HasOI       bool      // both ends have a fresh OI print
+	OIToAt      time.Time `json:"oiToAt,omitempty"`
 	FundingFrom float64
 	FundingTo   float64
 	LongPctFrom float64
@@ -794,6 +797,9 @@ func aroundFlowOf(bars []AroundBar) AroundFlow {
 		out.SellVolume += b.SellVolume
 		if b.BuySellKnown {
 			out.BuySellKnown = true
+			if !b.Time.IsZero() {
+				out.LastBar = b.Time
+			}
 		}
 		tp := TypicalPrice(b.High, b.Low, b.Close)
 		if tp > 0 && b.Volume > 0 {
@@ -1091,6 +1097,9 @@ func combineAroundPhases(id string, parts []AroundPhase, from, to time.Time) Aro
 		sell += p.Flow.SellVolume
 		if p.Flow.BuySellKnown {
 			known = true
+			if p.Flow.LastBar.After(out.Flow.LastBar) {
+				out.Flow.LastBar = p.Flow.LastBar
+			}
 		}
 		if p.Flow.VWAP > 0 && p.Flow.Volume > 0 {
 			pv += p.Flow.VWAP * p.Flow.Volume
@@ -1135,9 +1144,11 @@ func combineAroundPhases(id string, parts []AroundPhase, from, to time.Time) Aro
 		out.Price.RangePct = out.Price.Range / open * 100
 	}
 	out.Price.Direction = changeDir(out.Price.ChangePct)
+	lastBar := out.Flow.LastBar
 	out.Flow = AroundFlow{
 		Volume: vol, BuyVolume: buy, SellVolume: sell, Delta: buy - sell,
 		BuySellKnown: known, Dominant: TakerSideEven, VsVWAP: VolumeProfileVsUnknown,
+		LastBar: lastBar,
 	}
 	if buy+sell > 0 {
 		out.Flow.BuyShare = buy / (buy + sell)
@@ -1196,6 +1207,9 @@ func combineAroundBooks(in []AroundBook) AroundBook {
 		out.ImbalanceDelta += b.ImbalanceDelta
 		out.WallsAdded += b.WallsAdded
 		out.WallsRemoved += b.WallsRemoved
+		if b.SampledTo.After(out.SampledTo) {
+			out.SampledTo = b.SampledTo
+		}
 	}
 	n := float64(len(in))
 	if n > 0 {
@@ -1219,6 +1233,9 @@ func combineAroundFutures(in []AroundFutures) AroundFutures {
 			out.OITo += f.OITo
 			if f.HasOI {
 				out.HasOI = true
+			}
+			if f.OIToAt.After(out.OIToAt) {
+				out.OIToAt = f.OIToAt
 			}
 			oiN++
 		}
@@ -1295,7 +1312,7 @@ func BookFromDiff(d BookHistoryDiff) *AroundBook {
 		BidNotionalDelta: d.BidNotionalDelta, AskNotionalDelta: d.AskNotionalDelta,
 		ImbalanceDelta: d.ImbalanceDelta,
 		WallsAdded:     len(d.WallsAdded), WallsRemoved: len(d.WallsRemoved),
-		Summary: d.Summary, Complete: true,
+		Summary: d.Summary, Complete: true, SampledTo: d.To.SampledAt.UTC(),
 	}
 }
 
@@ -1311,6 +1328,9 @@ func FuturesAcrossSamples(fromOI, toOI, fromFund, toFund, fromLS, toLS *FuturesS
 			out.OIChangePct = out.OIChange / out.OIFrom * 100
 			out.OIDirection = changeDir(out.OIChangePct)
 			out.Complete = true
+			if !toOI.SampledAt.IsZero() {
+				out.OIToAt = toOI.SampledAt.UTC()
+			}
 		}
 	}
 	if fromFund != nil {

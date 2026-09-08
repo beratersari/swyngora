@@ -5069,6 +5069,9 @@ func (b *Backend) ScanCustomSignals(ctx context.Context, clientID, profileID, ex
 			row["tapeUsed"] = it.TapeUsed
 			row["tapeThin"] = it.TapeThin
 		}
+		if it.TapeFresh != nil && it.TapeFresh.Note != "" {
+			row["tapeFresh"] = it.TapeFresh
+		}
 		if it.Engine != nil {
 			row["engine"] = swingDecisionMap(it.Engine)
 		}

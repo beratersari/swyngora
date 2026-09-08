@@ -68,6 +68,7 @@ type AroundOptions struct {
 	AfterSummary string
 	Summary      string
 	Complete     bool
+	SampledTo    time.Time `json:"sampledTo,omitempty"` // last options sample used for this phase
 }
 
 // OptionsHistoryUntil keeps samples at or before at (inclusive).
@@ -139,6 +140,9 @@ func OptionsAcrossWindow(asset string, points []OptionsHistoryPoint, from, to ti
 	}
 	if !out.Complete {
 		return nil
+	}
+	if !end.Time.IsZero() {
+		out.SampledTo = end.Time.UTC()
 	}
 	out.Unusual = optionsWindowLooksUnusual(out)
 	out.Summary = explainAroundOptions(out)

@@ -27,6 +27,7 @@ describe('SignalsCustomPanel', () => {
             tapeSetups: 5,
             tapeUsed: 3,
             tapeThin: 2,
+            tapeFresh: { note: 'oi 6m ago; takers 1m ago; book 2m ago; options 40m ago (old)' },
           },
         ]}
         onSelectProfile={vi.fn()}
@@ -46,6 +47,7 @@ describe('SignalsCustomPanel', () => {
     expect(screen.getByTestId('signals-custom-tape-stats')).toHaveTextContent(
       /Used 3 of 5 similar setups; 2 had missing tape|Kullanılan 3 \/ 5 benzer kurulum; 2 tanesinde eksik bant vardı/,
     );
+    expect(screen.getByTestId('signals-custom-tape-fresh')).toHaveTextContent(/oi 6m ago/);
     await user.click(screen.getByRole('button', { name: /apply mix|karışımı uygula/i }));
     expect(onApply).toHaveBeenCalled();
   });
