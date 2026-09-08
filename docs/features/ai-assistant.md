@@ -55,8 +55,9 @@ User → Orchestrator (create_agent)
 cd backend && go run ./cmd/server
 
 # AI CLI (separate process — needs LLM). REPL: ↑ / ↓ previous prompts;
-# Tab completes commands and cycles matching prompts; Ctrl+P / Ctrl+N
-# cycle the typed prefix, or full history if the line is empty
+# Tab / Ctrl+F complete commands and cycle matching prompts; Ctrl+P / Ctrl+N
+# cycle the typed prefix (every matching history line plus matching commands
+# such as reset), or full history if the line is empty
 # (~/.swyngora/cli_history).
 cd ai && uv sync && source .venv/bin/activate
 export AI_LLM_PROVIDER=ollama   # or grok + XAI_API_KEY

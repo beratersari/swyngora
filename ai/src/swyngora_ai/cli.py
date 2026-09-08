@@ -70,14 +70,17 @@ class ReplCompleteState:
     prefix: str | None = None
     matches: list[str] = field(default_factory=list)
     index: int = 0
+    full_walk: bool = False
 
     def reset(self) -> None:
         self.prefix = None
         self.matches = []
         self.index = 0
+        self.full_walk = False
 
 
 _REPL_CYCLE = ReplCompleteState()
+_CTRL_F = 6  # same complete path as Tab
 _CTRL_N = 14  # get_completion_type() when Ctrl+N invoked complete
 _CTRL_P = 16
 
@@ -101,19 +104,68 @@ def _without_prefix_stubs(lines: Sequence[str]) -> list[str]:
     ]
 
 
+def _starts_with(line: str, prefix: str) -> bool:
+    """Prefix match for history. Case-insensitive so ``c`` hits ``Can you…``."""
+    return line.lower().startswith(prefix.lower())
+
+
+def _line_key(line: str) -> str:
+    """Collapse tabs/spaces so ``re\\tq`` and ``re   q`` are the same prompt."""
+    return " ".join(line.split()).lower()
+
+
+def _same_line(left: str, right: str) -> bool:
+    return left == right or _line_key(left) == _line_key(right)
+
+
+def _match_index(buffer: str, matches: Sequence[str]) -> int | None:
+    for i, line in enumerate(matches):
+        if _same_line(buffer, line):
+            return i
+    return None
+
+
 def history_cycle_matches(buffer: str, history: Sequence[str]) -> list[str]:
     """Newest-first unique history lines that start with ``buffer`` and are longer."""
     if not buffer:
         return []
     seen: set[str] = set()
     out: list[str] = []
+    lower = buffer.lower()
     for line in reversed(history):
         if not line or line in seen:
             continue
-        if line.startswith(buffer) and line != buffer:
+        if _starts_with(line, buffer) and line.lower() != lower:
             out.append(line)
             seen.add(line)
     return _without_prefix_stubs(out)
+
+
+def _prefix_cycle_matches(buffer: str, history: Sequence[str]) -> list[str]:
+    """History prefix hits, then matching session commands not already listed.
+
+    ``re`` must still reach ``reset`` when history also has a leftover ``re\\tq``
+    stub (old Tab-inserted spaces). Commands stay after history so ``q`` still
+    opens on ``Question…`` rather than jumping to ``quit``.
+    """
+    hits = history_cycle_matches(buffer, history)
+    for cmd in _command_matches(buffer):
+        if cmd not in hits:
+            hits.append(cmd)
+    return hits
+
+
+def _inferred_cycle_prefix(buffer: str, history: Sequence[str]) -> str | None:
+    """Recover the typed token after libedit turns a history tab into spaces."""
+    if not buffer or (" " not in buffer and "\t" not in buffer):
+        return None
+    key = _line_key(buffer)
+    if not any(_line_key(line) == key for line in history if line):
+        return None
+    parts = buffer.split()
+    if len(parts) < 2:
+        return None
+    return parts[0]
 
 
 def full_history_matches(history: Sequence[str]) -> list[str]:
@@ -144,11 +196,11 @@ def ring_step_history(buffer: str, history: Sequence[str], *, reverse: bool = Fa
     buf = _nav_line(buffer)
     if not buf:
         return hits[-1] if reverse else hits[0]
-    if buf not in hits:
+    i = _match_index(buf, hits)
+    if i is None:
         return None
     if len(hits) == 1:
         return hits[0]
-    i = hits.index(buf)
     return hits[(i + (-1 if reverse else 1)) % len(hits)]
 
 
@@ -166,31 +218,49 @@ def advance_repl_cycle(
     Session commands apply only when ``apply_commands`` (Tab).
     """
     buffer = _nav_line(buffer)
-    if apply_commands:
+    hist_hits = _prefix_cycle_matches(buffer, history) if buffer else []
+    # Unique command with no history prefix (Tab / Ctrl+F on ``re`` → reset).
+    # Ctrl+P on libedit is often reported as Tab; history hits already include
+    # matching commands *after* saved prompts, so ``q`` still opens on
+    # ``Question…`` rather than jumping to ``quit``.
+    if apply_commands and not hist_hits:
         commands = _command_matches(buffer)
         if len(commands) == 1:
             state.reset()
             return commands[0]
 
-    if (
-        state.matches
-        and 0 <= state.index < len(state.matches)
-        and state.prefix is not None
-        and buffer == state.matches[state.index]
-        and buffer.startswith(state.prefix)
-    ):
-        if len(state.matches) == 1:
-            return buffer
-        step = -1 if reverse else 1
-        state.index = (state.index + step) % len(state.matches)
-        return state.matches[state.index]
+    if state.matches and state.prefix is not None and _starts_with(buffer, state.prefix):
+        idx = _match_index(buffer, state.matches)
+        if idx is not None:
+            if len(state.matches) == 1:
+                return state.matches[0]
+            step = -1 if reverse else 1
+            state.index = (idx + step) % len(state.matches)
+            return state.matches[state.index]
 
-    state.prefix = buffer
-    state.matches = history_cycle_matches(buffer, history)
-    state.index = 0
-    if not state.matches:
-        state.reset()
+    if not hist_hits:
+        # Empty-line Ctrl+P is a full-history ring — do not treat the filled
+        # prompt as a new first-word prefix (``oldest unique prompt``).
+        if not state.full_walk:
+            inferred = _inferred_cycle_prefix(buffer, history)
+            if inferred:
+                hist_hits = _prefix_cycle_matches(inferred, history)
+                idx = _match_index(buffer, hist_hits) if hist_hits else None
+                if hist_hits and idx is not None:
+                    state.prefix = inferred
+                    state.matches = hist_hits
+                    if len(hist_hits) == 1:
+                        state.index = 0
+                        return hist_hits[0]
+                    step = -1 if reverse else 1
+                    state.index = (idx + step) % len(hist_hits)
+                    return hist_hits[state.index]
+            state.reset()
         return None
+    state.full_walk = False
+    state.prefix = buffer
+    state.matches = hist_hits
+    state.index = 0
     return state.matches[0]
 
 
@@ -209,6 +279,9 @@ def advance_repl_nav(
     reverse = source == "newer"
 
     if buffer == "":
+        state.full_walk = True
+        state.prefix = None
+        state.matches = []
         return ring_step_history("", history, reverse=reverse)
 
     found = advance_repl_cycle(
@@ -219,12 +292,16 @@ def advance_repl_nav(
         apply_commands=source == "tab",
     )
     if found is not None and found != buffer:
+        state.full_walk = False
         return found
     if found in REPL_COMMANDS:
+        state.full_walk = False
         return found
-    # Unique / already-filled history line: ring to a *different* prompt.
-    # libedit ignores "" and ignores a complete equal to the current line.
-    return ring_step_history(buffer, history, reverse=reverse)
+    # Empty-line walk may continue from the filled prompt. A typed prefix
+    # (``q``, ``C``) never jumps to unrelated history like ``Hi``.
+    if state.full_walk:
+        return ring_step_history(buffer, history, reverse=reverse)
+    return found
 
 
 def complete_repl(buffer: str, history: Sequence[str]) -> list[str]:
@@ -261,11 +338,16 @@ def _disable_completion_append(readline: Any) -> None:
 
 
 def _bind_tab_complete(readline: Any) -> None:
-    """GNU ``tab: complete`` is a no-op on libedit — Tab then inserts spaces."""
+    """GNU ``tab: complete`` is a no-op on libedit — Tab then inserts spaces.
+
+    Ctrl+F uses the same completer (user habit). That replaces forward-char.
+    """
     if _readline_uses_libedit(readline):
         readline.parse_and_bind("bind ^I rl_complete")
+        readline.parse_and_bind("bind ^F rl_complete")
     else:
         readline.parse_and_bind("tab: complete")
+        readline.parse_and_bind(r'"\C-f": complete')
 
 
 def _bind_cycle_nav_keys(readline: Any) -> None:
@@ -291,6 +373,7 @@ def _completion_source(readline: Any) -> str:
         return "newer"
     if kind == _CTRL_P:
         return "older"
+    # Tab (9) and Ctrl+F (6) share the command-first complete path.
     return "tab"
 
 
@@ -313,11 +396,6 @@ def _bind_repl_completer(readline: Any) -> None:
             hist = _readline_history_lines(readline)
             line = buf if buf != "" else text
             found = advance_repl_nav(line, hist, _REPL_CYCLE, source=source)
-            cur = _nav_line(line)
-            if found is not None and found == cur:
-                found = ring_step_history(cur, hist, reverse=source == "newer")
-                if found == cur:
-                    found = None
             matches = [found] if found is not None else []
         if 0 <= state < len(matches):
             return matches[state]
@@ -483,7 +561,7 @@ def _print_banner() -> None:
     cmds.add_row("[bold]exit[/] / [bold]quit[/] / [bold]q[/]", "leave the session")
     cmds.add_row("[bold]reset[/]", "clear conversation memory")
     cmds.add_row("[bold]↑[/] / [bold]↓[/]", "previous prompts")
-    cmds.add_row("[bold]Tab[/]", "commands; cycle previous prompts")
+    cmds.add_row("[bold]Tab[/] / [bold]Ctrl+F[/]", "commands; cycle previous prompts")
     cmds.add_row("[bold]Ctrl+P[/]", "older prompt matching typed text; all history if empty")
     cmds.add_row("[bold]Ctrl+N[/]", "newer prompt matching typed text; all history if empty")
     _console.print(Align.center(cmds))

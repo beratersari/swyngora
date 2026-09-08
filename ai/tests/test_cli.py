@@ -8,6 +8,7 @@ import sys
 from typer.testing import CliRunner
 
 from swyngora_ai.cli import (
+    _CTRL_F,
     _CTRL_N,
     _CTRL_P,
     ReplCompleteState,
@@ -141,6 +142,7 @@ def test_repl_reset_and_exit(monkeypatch) -> None:
     assert "clear conversation memory" in result.stdout
     assert "previous prompts" in result.stdout
     assert "cycle previous prompts" in result.stdout
+    assert "Ctrl+F" in result.stdout
     assert "older prompt matching typed text" in result.stdout
     assert "newer prompt matching typed text" in result.stdout
     assert "all history if empty" in result.stdout
@@ -193,7 +195,7 @@ def test_complete_repl_history_prefix_after_typed_text() -> None:
     assert complete_repl("What is BTC", hist) == ["What is BTC RSI"]
     assert complete_repl("What is", hist) == ["What is BTC RSI"]
     assert complete_repl("re", hist) == ["reset"]
-    assert complete_repl("re", ["review the book", "reset later"]) == ["reset"]
+    assert complete_repl("re", ["review the book", "reset later"]) == ["reset later"]
 
 
 def test_complete_repl_ambiguous_history_uses_most_recent() -> None:
@@ -239,19 +241,64 @@ def test_advance_repl_cycle_resets_when_the_line_is_edited() -> None:
     assert advance_repl_cycle("Ho", hist, state) == "How is ETH"
 
 
-def test_advance_repl_cycle_command_wins_and_clears_history_cycle() -> None:
-    hist = ["review the book"]
+def test_advance_repl_cycle_command_wins_when_no_history_prefix() -> None:
     state = ReplCompleteState()
     assert advance_repl_cycle("H", ["Hi"], state) == "Hi"
-    assert advance_repl_cycle("re", hist, state) == "reset"
-    assert state.matches == []
+    assert advance_repl_cycle("re", ["Hi"], ReplCompleteState()) == "reset"
 
 
 def test_ctrl_p_on_command_prefix_uses_history_not_reset() -> None:
     hist = ["review the book"]
     state = ReplCompleteState()
     assert advance_repl_nav("re", hist, state, source="older") == "review the book"
-    assert advance_repl_nav("re", hist, ReplCompleteState(), source="tab") == "reset"
+    assert advance_repl_nav("re", hist, ReplCompleteState(), source="tab") == "review the book"
+    assert advance_repl_nav("re", ["Hi"], ReplCompleteState(), source="tab") == "reset"
+
+
+def test_q_prefix_stays_on_q_history_not_quit_or_hi() -> None:
+    hist = ["quit", "q", "Question about BTC", "Hi"]
+    assert history_cycle_matches("q", hist) == ["Question about BTC", "quit"]
+    state = ReplCompleteState()
+    assert advance_repl_nav("q", hist, state, source="tab") == "Question about BTC"
+    assert advance_repl_nav("Question about BTC", hist, state, source="older") == "quit"
+    assert advance_repl_nav("quit", hist, state, source="older") == "Question about BTC"
+    assert complete_repl("q", ["Hi"]) == ["quit"]
+
+
+def test_re_prefix_cycles_reset_and_other_re_lines() -> None:
+    hist = ["reset", "Hi", "re   q"]
+    assert history_cycle_matches("re", hist) == ["re   q", "reset"]
+    state = ReplCompleteState()
+    assert advance_repl_nav("re", hist, state, source="older") == "re   q"
+    assert advance_repl_nav("re   q", hist, state, source="older") == "reset"
+    assert advance_repl_nav("reset", hist, state, source="older") == "re   q"
+
+
+def test_re_prefix_cycles_tab_stub_and_reset() -> None:
+    # Old Tab-before-bind leftover: history stores ``re\\tq``, the line looks like
+    # ``re   q``. That must not freeze the cycle or skip ``reset``.
+    hist = ["reset", "Hi", "re\tq"]
+    assert history_cycle_matches("re", hist) == ["re\tq", "reset"]
+    state = ReplCompleteState()
+    assert advance_repl_nav("re", hist, state, source="older") == "re\tq"
+    assert advance_repl_nav("re   q", hist, state, source="older") == "reset"
+    assert advance_repl_nav("reset", hist, state, source="older") == "re\tq"
+    assert advance_repl_nav("re\tq", hist, state, source="newer") == "reset"
+
+
+def test_re_prefix_adds_reset_command_when_only_stub_in_history() -> None:
+    hist = ["re\tq"]
+    state = ReplCompleteState()
+    assert advance_repl_nav("re", hist, state, source="older") == "re\tq"
+    assert advance_repl_nav("re   q", hist, state, source="older") == "reset"
+    assert advance_repl_nav("reset", hist, state, source="older") == "re\tq"
+
+
+def test_re_prefix_recovers_if_cycle_state_was_lost() -> None:
+    hist = ["reset", "re\tq"]
+    state = ReplCompleteState()
+    assert advance_repl_nav("re   q", hist, state, source="older") == "reset"
+    assert advance_repl_nav("reset", hist, state, source="older") == "re\tq"
 
 
 def test_empty_ctrl_p_walks_full_history_as_a_ring() -> None:
@@ -281,7 +328,28 @@ def test_url_prefix_stub_is_not_a_cycle_stop() -> None:
     assert history_cycle_matches("Can you explain these docs (https:/", hist) == [full]
     state = ReplCompleteState()
     assert advance_repl_nav(stub, hist, state, source="older") == full
-    assert advance_repl_nav(full, hist, state, source="older") == "Hi"
+    # Typed-prefix cycle stays on the Can… set; does not jump to Hi.
+    assert advance_repl_nav(full, hist, state, source="older") == full
+
+
+def test_prefix_c_is_case_insensitive_and_does_not_walk_full_history() -> None:
+    hist = ["Hi", "What is BTC", "Can you explain these docs"]
+    assert history_cycle_matches("c", hist) == ["Can you explain these docs"]
+    assert history_cycle_matches("C", hist) == ["Can you explain these docs"]
+    assert history_cycle_matches("W", hist) == ["What is BTC"]
+    state = ReplCompleteState()
+    assert advance_repl_nav("C", hist, state, source="tab") == "Can you explain these docs"
+    assert advance_repl_nav("Can you explain these docs", hist, state, source="older") == (
+        "Can you explain these docs"
+    )
+    state = ReplCompleteState()
+    assert advance_repl_nav("c", hist, state, source="older") == "Can you explain these docs"
+    assert advance_repl_nav("Can you explain these docs", hist, state, source="tab") == (
+        "Can you explain these docs"
+    )
+    assert advance_repl_nav("Can you explain these docs", hist, state, source="older") == (
+        "Can you explain these docs"
+    )
 
 
 def test_trailing_space_still_walks_full_history() -> None:
@@ -296,6 +364,8 @@ def test_trailing_space_still_walks_full_history() -> None:
 def test_exact_history_line_ctrl_p_leaves_the_oldest_item() -> None:
     hist = ["oldest unique prompt", "newest"]
     state = ReplCompleteState()
+    assert advance_repl_nav("", hist, state, source="older") == "newest"
+    assert advance_repl_nav("newest", hist, state, source="older") == "oldest unique prompt"
     assert advance_repl_nav("oldest unique prompt", hist, state, source="older") == "newest"
 
 
@@ -363,8 +433,9 @@ def test_attach_repl_readline_binds_tab_completer(monkeypatch, tmp_path) -> None
 
     assert attach_repl_readline(path) == path
     assert fake.delims == "\n"
-    assert fake.binds[:3] == [
+    assert fake.binds[:4] == [
         "tab: complete",
+        r'"\C-f": complete',
         r'"\C-p": complete',
         r'"\C-n": complete',
     ]
@@ -412,8 +483,8 @@ def test_bind_tab_complete_uses_libedit_syntax() -> None:
     assert _readline_uses_libedit(edit) is True
     _bind_tab_complete(gnu)
     _bind_tab_complete(edit)
-    assert gnu.binds == ["tab: complete"]
-    assert edit.binds == ["bind ^I rl_complete"]
+    assert gnu.binds == ["tab: complete", r'"\C-f": complete']
+    assert edit.binds == ["bind ^I rl_complete", "bind ^F rl_complete"]
 
 
 def test_bind_cycle_nav_keys_always_complete() -> None:
@@ -447,6 +518,7 @@ def test_completion_source_maps_invoking_key() -> None:
             return self.kind
 
     assert _completion_source(_Rl(9)) == "tab"
+    assert _completion_source(_Rl(_CTRL_F)) == "tab"
     assert _completion_source(_Rl(_CTRL_P)) == "older"
     assert _completion_source(_Rl(_CTRL_N)) == "newer"
     assert _completion_wants_reverse(_Rl(_CTRL_N)) is True

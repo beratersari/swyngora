@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
 
 ### Fixed
+- **AI CLI prefix cycle:** typing `re` then Ctrl+P / Ctrl+N / Ctrl+F walks every `re…` history line **and** `reset`, including leftovers like `re   q` from an old Tab insert — it no longer sticks on the first match
 - **Forensics taker start vs path:** one taker bar only shows the flow started — continued / faded / reversed need later pre-price tape at the same bar size (`docs/features/forensics.md`, `docs/features/around.md`)
 - **Forensics taker continuity:** continued / faded / reversed need a continuous pre-price taker path in **bar steps** (one missing 1m or 5m bar is ok; a normal 5m gap is not a hole). A last bar near price does not fill a multi-bar gap after the start (`docs/features/forensics.md`, `docs/features/around.md`)
 - **Forensics taker path:** the bar at the price start is not pre-price tape — 11:52 then a hole until 12:00 is unknown even if 12:00 still buys; continued / faded / reversed need known bars in the minutes before price (`docs/features/forensics.md`, `docs/features/around.md`)
@@ -23,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Forensics options history:** a missing start or end sample no longer invents an OI / put-call / IV jump from zero; opposite options prints are not treated as similar; unusual prints say whether they started before the price move or during it (`docs/features/forensics.md`)
 
 ### Added
-- **AI CLI Tab complete:** interactive `swyngora-ai` Tab completes `exit` / `quit` / `q` / `reset` and cycles matching previous prompts; Ctrl+P / Ctrl+N cycle the typed prefix (no Tab required), or walk full history on an empty line (`~/.swyngora/cli_history`; not filenames)
+- **AI CLI Tab complete:** interactive `swyngora-ai` Tab / Ctrl+F complete `exit` / `quit` / `q` / `reset` and cycle matching previous prompts; Ctrl+P / Ctrl+N cycle the typed prefix (no Tab required), or walk full history on an empty line (`~/.swyngora/cli_history`; not filenames)
 - **Forensics options lead and cluster:** if an unusual options print started before the price move, the tape says how much earlier by walking samples from the quiet baseline (a 4h or 24h unusual flag is not the start); OI + put/call + IV moving together is marked more important than a single series; `after` says whether options kept going or turned once price started; `venueTiming` says who printed first (first start is the leader), whether the other followed, and whether OI or taker flow had already changed (`docs/features/forensics.md`)
 - **Forensics options tape:** BTC/ETH listed options (OI, put/call, implied vol, unusual prints) attach to around / forensics before-during-after windows, the why-story, similar-move scores, and precursors when those samples exist (`docs/features/forensics.md`)
 - **Options unusual moves:** `/options` and `GET /api/v1/market/options` `moves` flags only when open interest, put/call, or implied vol changes much more than that series' own typical in 1h / 4h / 24h (`docs/features/options.md`)
