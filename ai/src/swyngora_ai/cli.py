@@ -360,6 +360,19 @@ def _bind_cycle_nav_keys(readline: Any) -> None:
         readline.parse_and_bind(r'"\C-n": complete')
 
 
+def _bind_clear_line(readline: Any) -> None:
+    """Ctrl+U wipes the whole prompt. Native kill — not an empty completer.
+
+    libedit's default ^U is kill-to-end (a no-op at the usual caret). GNU's
+    default is kill-to-start (mid-line leftovers). ``em-kill-line`` /
+    ``kill-whole-line`` clear everything; Ctrl+Y yanks it back.
+    """
+    if _readline_uses_libedit(readline):
+        readline.parse_and_bind("bind ^U em-kill-line")
+    else:
+        readline.parse_and_bind(r'"\C-u": kill-whole-line')
+
+
 def _completion_source(readline: Any) -> str:
     """Map the invoking key to ``tab``, ``older`` (Ctrl+P), or ``newer`` (Ctrl+N)."""
     getter = getattr(readline, "get_completion_type", None)
@@ -414,6 +427,7 @@ def _bind_repl_completer(readline: Any) -> None:
         hook(_hide_match_list)
     _bind_tab_complete(readline)
     _bind_cycle_nav_keys(readline)
+    _bind_clear_line(readline)
 
 
 def attach_repl_readline(path: Path | None = None) -> Path | None:
@@ -564,6 +578,7 @@ def _print_banner() -> None:
     cmds.add_row("[bold]Tab[/] / [bold]Ctrl+F[/]", "commands; cycle previous prompts")
     cmds.add_row("[bold]Ctrl+P[/]", "older prompt matching typed text; all history if empty")
     cmds.add_row("[bold]Ctrl+N[/]", "newer prompt matching typed text; all history if empty")
+    cmds.add_row("[bold]Ctrl+U[/]", "clear the line (Ctrl+Y restores it)")
     _console.print(Align.center(cmds))
     _console.print()
 

@@ -12,6 +12,7 @@ from swyngora_ai.cli import (
     _CTRL_N,
     _CTRL_P,
     ReplCompleteState,
+    _bind_clear_line,
     _bind_cycle_nav_keys,
     _bind_tab_complete,
     _completion_source,
@@ -146,6 +147,8 @@ def test_repl_reset_and_exit(monkeypatch) -> None:
     assert "older prompt matching typed text" in result.stdout
     assert "newer prompt matching typed text" in result.stdout
     assert "all history if empty" in result.stdout
+    assert "Ctrl+U" in result.stdout
+    assert "clear the line" in result.stdout
 
 
 def test_load_history_lines_missing(tmp_path) -> None:
@@ -433,11 +436,12 @@ def test_attach_repl_readline_binds_tab_completer(monkeypatch, tmp_path) -> None
 
     assert attach_repl_readline(path) == path
     assert fake.delims == "\n"
-    assert fake.binds[:4] == [
+    assert fake.binds[:5] == [
         "tab: complete",
         r'"\C-f": complete',
         r'"\C-p": complete',
         r'"\C-n": complete',
+        r'"\C-u": kill-whole-line',
     ]
     assert fake.completer is not None
     assert fake.display_hook is not None
@@ -507,6 +511,28 @@ def test_bind_cycle_nav_keys_always_complete() -> None:
     _bind_cycle_nav_keys(edit)
     assert gnu.binds == [r'"\C-p": complete', r'"\C-n": complete']
     assert edit.binds == ["bind ^P rl_complete", "bind ^N rl_complete"]
+
+
+def test_bind_clear_line_wipes_whole_prompt() -> None:
+    class _Gnu:
+        __doc__ = "GNU readline."
+        binds: list[str] = []
+
+        def parse_and_bind(self, cmd: str) -> None:
+            self.binds.append(cmd)
+
+    class _Edit:
+        __doc__ = "libedit readline."
+        binds: list[str] = []
+
+        def parse_and_bind(self, cmd: str) -> None:
+            self.binds.append(cmd)
+
+    gnu, edit = _Gnu(), _Edit()
+    _bind_clear_line(gnu)
+    _bind_clear_line(edit)
+    assert gnu.binds == [r'"\C-u": kill-whole-line']
+    assert edit.binds == ["bind ^U em-kill-line"]
 
 
 def test_completion_source_maps_invoking_key() -> None:

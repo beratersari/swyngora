@@ -57,7 +57,8 @@ cd backend && go run ./cmd/server
 # AI CLI (separate process — needs LLM). REPL: ↑ / ↓ previous prompts;
 # Tab / Ctrl+F complete commands and cycle matching prompts; Ctrl+P / Ctrl+N
 # cycle the typed prefix (every matching history line plus matching commands
-# such as reset), or full history if the line is empty
+# such as reset), or full history if the line is empty; Ctrl+U clears the
+# line (Ctrl+Y restores it)
 # (~/.swyngora/cli_history).
 cd ai && uv sync && source .venv/bin/activate
 export AI_LLM_PROVIDER=ollama   # or grok + XAI_API_KEY
