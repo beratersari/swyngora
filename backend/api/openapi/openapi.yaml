@@ -9442,12 +9442,17 @@ components:
         status: { type: string, enum: [used, missing, disabled, idle] }
         detail: { type: string }
         quality: { type: number, description: 0–100 evidence for this factor }
+        freshness: { type: string, enum: [fresh, old, missing], description: Current-tape age for this weighted factor; omitted when disabled or idle }
     CustomSignalEvidence:
       type: object
       properties:
-        score: { type: number, description: 0–100 how complete the mix data is }
+        score: { type: number, description: 0–100 data quality of the mix — not completeness. High quality can still have old or missing factors. }
         label: { type: string, enum: [strong, fair, weak] }
         detail: { type: string }
+        fresh: { type: integer, description: Weighted factors with current, usable data }
+        old: { type: integer, description: Weighted factors whose current tape is stale }
+        missing: { type: integer, description: Weighted factors with no data }
+        idle: { type: integer, description: Weighted factors whose pattern did not fire }
     CustomSignalScore:
       type: object
       properties:

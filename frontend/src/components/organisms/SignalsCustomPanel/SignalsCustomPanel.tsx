@@ -210,9 +210,24 @@ export function SignalsCustomPanel({
                   {t(`signals:custom.evidence.${row.evidenceLabel}`, { score: row.evidenceScore ?? 0 })}
                 </Text>
               ) : null}
-              {row.evidenceDetail ? (
-                <Text variant="caption" color={row.evidenceLabel === 'weak' ? 'error' : 'secondary'}>
-                  {row.evidenceDetail}
+              {row.evidenceFresh != null ? (
+                <Text
+                  variant="caption"
+                  color={row.evidenceMissing || row.evidenceOld ? 'error' : 'secondary'}
+                  data-testid="signals-custom-evidence-counts"
+                >
+                  {row.evidenceIdle
+                    ? t('signals:custom.evidenceCountsIdle', {
+                        fresh: row.evidenceFresh ?? 0,
+                        old: row.evidenceOld ?? 0,
+                        missing: row.evidenceMissing ?? 0,
+                        idle: row.evidenceIdle,
+                      })
+                    : t('signals:custom.evidenceCounts', {
+                        fresh: row.evidenceFresh ?? 0,
+                        old: row.evidenceOld ?? 0,
+                        missing: row.evidenceMissing ?? 0,
+                      })}
                 </Text>
               ) : null}
               <Text variant="bodySm" color="secondary">

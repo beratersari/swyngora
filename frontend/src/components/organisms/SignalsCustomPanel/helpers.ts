@@ -65,27 +65,66 @@ export function customEvidenceLabel(score: number): 'strong' | 'fair' | 'weak' {
 
 export function previewEvidence(
   factors: CustomMixPreviewFactor[],
-): { score: number; label: 'strong' | 'fair' | 'weak'; detail?: string } {
+): {
+  score: number;
+  label: 'strong' | 'fair' | 'weak';
+  detail: string;
+  fresh: number;
+  old: number;
+  missing: number;
+  idle: number;
+} {
   let mass = 0;
   let acc = 0;
+  let fresh = 0;
+  let old = 0;
+  let missingN = 0;
+  let idle = 0;
   const missing: string[] = [];
   for (const factor of factors) {
     if (factor.appliedPct <= 0) continue;
     mass += factor.appliedPct;
     if (factor.status === 'missing') {
       acc += 0;
+      missingN += 1;
       missing.push(factor.id);
       continue;
     }
     if (factor.status === 'idle') {
       acc += 0.2 * factor.appliedPct;
+      idle += 1;
       continue;
+    }
+    if (factor.freshness === 'old') {
+      old += 1;
+    } else {
+      fresh += 1;
     }
     const q = Number.isFinite(factor.quality) ? Math.min(1, Math.max(0, (factor.quality ?? 100) / 100)) : 1;
     acc += q * factor.appliedPct;
   }
   const score = mass > 0 ? round1(Math.max(0, Math.min(100, (acc / mass) * 100))) : 0;
-  return { score, label: customEvidenceLabel(score), detail: missing.length ? `missing ${missing.join(', ')}` : undefined };
+  const label = customEvidenceLabel(score);
+  let counts = `${fresh} fresh, ${old} old, ${missingN} missing`;
+  if (idle > 0) counts += `, ${idle} not present`;
+  const bits = [counts];
+  if (missing.length) bits.push(`missing ${missing.join(', ')}`);
+  for (const factor of factors) {
+    if (factor.status !== 'used' || (factor.id !== 'forensics' && factor.id !== 'similar_setup')) continue;
+    const note = tapeStatsPrefix(factor.detail);
+    if (note) {
+      bits.push(note);
+      break;
+    }
+  }
+  return { score, label, detail: `Evidence is ${label} (${Math.round(score)}) — ${bits.join('; ')}`, fresh, old, missing: missingN, idle };
+}
+
+function tapeStatsPrefix(detail?: string): string {
+  const text = (detail ?? '').trim();
+  if (!text.startsWith('Used ')) return '';
+  const cut = text.indexOf('. ');
+  return cut > 0 ? text.slice(0, cut) : text;
 }
 
 function pctOf(draft: CustomWeightDraftRow[], id: CustomSignalFactorId): number {
@@ -171,6 +210,7 @@ export function previewCustomMix(items: CustomSignalItem[], draft: CustomWeightD
         deltaEffect: round1((assembledApp.effects.get(factor.id) ?? 0) - (assembledDef.effects.get(factor.id) ?? 0)),
         detail: src?.detail,
         quality: src?.quality,
+        freshness: src?.freshness,
       };
     });
     const hunt = factors.find((f) => f.id === 'hunt_up');
@@ -210,7 +250,11 @@ export function previewCustomMix(items: CustomSignalItem[], draft: CustomWeightD
       ),
       evidenceScore: evidence.score,
       evidenceLabel: evidence.label,
-      evidenceDetail: item.custom?.evidence?.detail ?? evidence.detail,
+      evidenceDetail: evidence.detail,
+      evidenceFresh: evidence.fresh,
+      evidenceOld: evidence.old,
+      evidenceMissing: evidence.missing,
+      evidenceIdle: evidence.idle,
     };
   }).sort((a, b) => b.appliedScore - a.appliedScore || a.symbol.localeCompare(b.symbol));
 }

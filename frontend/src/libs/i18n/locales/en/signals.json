@@ -165,6 +165,8 @@
       "fair": "Fair evidence ({{score}})",
       "weak": "Weak evidence ({{score}})"
     },
+    "evidenceCounts": "{{fresh}} fresh, {{old}} old, {{missing}} missing",
+    "evidenceCountsIdle": "{{fresh}} fresh, {{old}} old, {{missing}} missing, {{idle}} not present",
     "factors": {
       "ema_crossover": "EMA 9/21 cross",
       "ema_trend_bias": "EMA 50/200 pullback",

@@ -18,6 +18,7 @@ export type CustomMixPreviewFactor = {
   deltaEffect: number;
   detail?: string;
   quality?: number;
+  freshness?: 'fresh' | 'old' | 'missing';
 };
 
 export type CustomMixPreviewRow = {
@@ -40,6 +41,10 @@ export type CustomMixPreviewRow = {
   evidenceScore?: number;
   evidenceLabel?: 'strong' | 'fair' | 'weak';
   evidenceDetail?: string;
+  evidenceFresh?: number;
+  evidenceOld?: number;
+  evidenceMissing?: number;
+  evidenceIdle?: number;
   price?: number;
 };
 

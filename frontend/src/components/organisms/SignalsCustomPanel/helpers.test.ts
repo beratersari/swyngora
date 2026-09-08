@@ -112,6 +112,25 @@ describe('custom signal helpers', () => {
     ]);
     expect(ev.label).not.toBe('strong');
     expect(ev.score).toBe(58);
+    expect(ev.fresh).toBe(2);
+    expect(ev.old).toBe(0);
+    expect(ev.missing).toBe(0);
+    expect(ev.detail).not.toMatch(/complete data/);
+  });
+
+  it('does not call high quality complete data and counts old vs missing factors', () => {
+    const ev = previewEvidence([
+      { id: 'ema_crossover', score: 90, status: 'used', defaultPct: 0, appliedPct: 20, defaultEffect: 0, appliedEffect: 0, deltaEffect: 0, quality: 100, freshness: 'fresh' },
+      { id: 'similar_setup', score: 80, status: 'used', defaultPct: 0, appliedPct: 50, defaultEffect: 0, appliedEffect: 0, deltaEffect: 0, quality: 80, freshness: 'old', detail: 'Used 4 of 5 setups. supports a long' },
+      { id: 'forensics', score: 50, status: 'missing', defaultPct: 0, appliedPct: 30, defaultEffect: 0, appliedEffect: 0, deltaEffect: 0 },
+    ]);
+    expect(ev.score).toBeGreaterThanOrEqual(50);
+    expect(ev.detail).not.toMatch(/complete data/);
+    expect(ev.fresh).toBe(1);
+    expect(ev.old).toBe(1);
+    expect(ev.missing).toBe(1);
+    expect(ev.detail).toMatch(/1 fresh, 1 old, 1 missing/);
+    expect(ev.detail).toMatch(/Used 4 of 5 setups/);
   });
 
   it('previews score change and names the largest mover', () => {

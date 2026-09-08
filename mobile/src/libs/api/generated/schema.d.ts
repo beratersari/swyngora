@@ -5685,13 +5685,26 @@ export interface components {
             detail?: string;
             /** 0–100 evidence for this factor */
             quality?: number;
+            /**
+             * Current-tape age for this weighted factor; omitted when disabled or idle
+             * @enum {string}
+             */
+            freshness?: "fresh" | "old" | "missing";
         };
         CustomSignalEvidence: {
-            /** 0–100 how complete the mix data is */
+            /** 0–100 data quality of the mix — not completeness. High quality can still have old or missing factors. */
             score?: number;
             /** @enum {string} */
             label?: "strong" | "fair" | "weak";
             detail?: string;
+            /** Weighted factors with current, usable data */
+            fresh?: number;
+            /** Weighted factors whose current tape is stale */
+            old?: number;
+            /** Weighted factors with no data */
+            missing?: number;
+            /** Weighted factors whose pattern did not fire */
+            idle?: number;
         };
         CustomSignalScore: {
             score?: number;

@@ -424,6 +424,100 @@ func TestScoreCustomSignal_MissingWeightedFactorWeakensEvidence(t *testing.T) {
 	if !strings.Contains(got.Evidence.Detail, "missing") {
 		t.Fatalf("detail %q", got.Evidence.Detail)
 	}
+	if got.Evidence.Fresh != 1 || got.Evidence.Old != 0 || got.Evidence.Missing != 1 {
+		t.Fatalf("counts fresh=%d old=%d missing=%d", got.Evidence.Fresh, got.Evidence.Old, got.Evidence.Missing)
+	}
+}
+
+func TestScoreCustomSignal_HighQualityIsNotCompleteData(t *testing.T) {
+	t.Parallel()
+	asOf := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
+	freshCurrent := AroundPhase{
+		Flow:    AroundFlow{LastBar: asOf.Add(-time.Minute)},
+		Futures: &AroundFutures{HasOI: true, OIToAt: asOf.Add(-time.Minute)},
+		Book:    &AroundBook{Complete: true, SampledTo: asOf.Add(-time.Minute)},
+		Options: &AroundOptions{Complete: true, SampledTo: asOf.Add(-time.Minute)},
+	}
+	raws := BuildCustomSignalRaws([]SwingPattern{
+		{Name: CustomFactorEMACrossover, Score: 90, Description: "cross"},
+	}, nil)
+	raws[CustomFactorSimilarSetup] = SimilarSetupFactorRaw(&AroundSimilarReport{
+		Matches: []AroundSimilarHit{
+			hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(82)),
+			hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(80)),
+			hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(78)),
+			hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(76)),
+			hitAfter(AroundSimilarHorizon4h, CVDDirDown, missingTapeHit(70)),
+		},
+		AsOf:    asOf,
+		Current: freshCurrent,
+	}, AroundSimilarHorizon4h)
+	if raws[CustomFactorSimilarSetup].Quality < 0.75 || raws[CustomFactorSimilarSetup].Quality >= 1 {
+		t.Fatalf("want high but incomplete quality %+v", raws[CustomFactorSimilarSetup])
+	}
+	got := ScoreCustomSignal(raws, CustomSignalWeights{Source: CustomSignalMixCustom, Pct: map[string]float64{
+		CustomFactorEMACrossover: 20,
+		CustomFactorSimilarSetup: 80,
+	}})
+	if got.Evidence.Score < 75 {
+		t.Fatalf("quality can still be high: %+v", got.Evidence)
+	}
+	if strings.Contains(got.Evidence.Detail, "complete data") {
+		t.Fatalf("high quality is not complete data: %q", got.Evidence.Detail)
+	}
+	if !strings.Contains(got.Evidence.Detail, "Used 4 of 5") {
+		t.Fatalf("must still name incomplete setups: %q", got.Evidence.Detail)
+	}
+	if got.Evidence.Fresh != 2 || got.Evidence.Old != 0 || got.Evidence.Missing != 0 {
+		t.Fatalf("counts %+v", got.Evidence)
+	}
+	if !strings.Contains(got.Evidence.Detail, "2 fresh, 0 old, 0 missing") {
+		t.Fatalf("detail %q", got.Evidence.Detail)
+	}
+}
+
+func TestScoreCustomSignal_EvidenceCountsOldAndMissing(t *testing.T) {
+	t.Parallel()
+	asOf := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
+	raws := BuildCustomSignalRaws([]SwingPattern{
+		{Name: CustomFactorEMACrossover, Score: 90, Description: "cross"},
+	}, nil)
+	raws[CustomFactorSimilarSetup] = SimilarSetupFactorRaw(&AroundSimilarReport{
+		Matches: []AroundSimilarHit{
+			hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(82)),
+			hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(80)),
+		},
+		AsOf: asOf,
+		Current: AroundPhase{
+			Flow:    AroundFlow{LastBar: asOf.Add(-time.Minute)},
+			Futures: &AroundFutures{HasOI: true, OIToAt: asOf.Add(-time.Minute)},
+			Book:    &AroundBook{Complete: true, SampledTo: asOf.Add(-time.Minute)},
+			Options: &AroundOptions{Complete: true, SampledTo: asOf.Add(-40 * time.Minute)},
+		},
+	}, AroundSimilarHorizon4h)
+	if raws[CustomFactorSimilarSetup].Freshness != CustomFreshnessOld {
+		t.Fatalf("stale options should mark similar old: %+v", raws[CustomFactorSimilarSetup])
+	}
+	got := ScoreCustomSignal(raws, CustomSignalWeights{Source: CustomSignalMixCustom, Pct: map[string]float64{
+		CustomFactorEMACrossover: 40,
+		CustomFactorSimilarSetup: 30,
+		CustomFactorForensics:    30,
+	}})
+	if got.Evidence.Fresh != 1 || got.Evidence.Old != 1 || got.Evidence.Missing != 1 {
+		t.Fatalf("counts %+v", got.Evidence)
+	}
+	if !strings.Contains(got.Evidence.Detail, "1 fresh, 1 old, 1 missing") {
+		t.Fatalf("detail %q", got.Evidence.Detail)
+	}
+	var sim CustomSignalFactor
+	for _, f := range got.Factors {
+		if f.ID == CustomFactorSimilarSetup {
+			sim = f
+		}
+	}
+	if sim.Freshness != CustomFreshnessOld {
+		t.Fatalf("similar freshness %+v", sim)
+	}
 }
 
 func TestScoreCustomSignal_DisabledTapeDoesNotLoad(t *testing.T) {

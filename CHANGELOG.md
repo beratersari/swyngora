@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
 
 ### Fixed
+- **Custom signal evidence completeness:** a high evidence score (e.g. 80) is no longer described as complete data. Overall evidence now lists how many weighted factors are fresh, old, or missing (`docs/features/swing-engine.md`)
 - **Forensics taker start vs path:** one taker bar only shows the flow started — continued / faded / reversed need later pre-price tape at the same bar size (`docs/features/forensics.md`, `docs/features/around.md`)
 - **Forensics taker continuity:** continued / faded / reversed need a continuous pre-price taker path in **bar steps** (one missing 1m or 5m bar is ok; a normal 5m gap is not a hole). A last bar near price does not fill a multi-bar gap after the start (`docs/features/forensics.md`, `docs/features/around.md`)
 - **Forensics taker path:** the bar at the price start is not pre-price tape — 11:52 then a hole until 12:00 is unknown even if 12:00 still buys; continued / faded / reversed need known bars in the minutes before price (`docs/features/forensics.md`, `docs/features/around.md`)

@@ -102,7 +102,11 @@ func SimilarSetupFactorRaw(rep *AroundSimilarReport, horizon string) CustomSigna
 	if note != "" {
 		detail = note + ". " + detail
 	}
-	return CustomSignalRaw{Score: score, Status: CustomFactorUsed, Detail: detail, Quality: tapeFactorQuality(stats, CustomSignalTapeFreshFrom(rep))}
+	fresh := CustomSignalTapeFreshFrom(rep)
+	return CustomSignalRaw{
+		Score: score, Status: CustomFactorUsed, Detail: detail,
+		Quality: tapeFactorQuality(stats, fresh), Freshness: tapeFactorFreshness(fresh),
+	}
 }
 
 // ForensicsFactorRaw maps the current tape's match to past pre-move setups
@@ -157,7 +161,11 @@ func ForensicsFactorRaw(rep *AroundSimilarReport, horizon string) CustomSignalRa
 	if note != "" {
 		detail = note + ". " + detail
 	}
-	return CustomSignalRaw{Score: score, Status: CustomFactorUsed, Detail: detail, Quality: tapeFactorQuality(stats, CustomSignalTapeFreshFrom(rep))}
+	fresh := CustomSignalTapeFreshFrom(rep)
+	return CustomSignalRaw{
+		Score: score, Status: CustomFactorUsed, Detail: detail,
+		Quality: tapeFactorQuality(stats, fresh), Freshness: tapeFactorFreshness(fresh),
+	}
 }
 
 // tapeFactorQuality is 0–1 from complete-setup share and current-tape freshness.
@@ -167,6 +175,15 @@ func tapeFactorQuality(stats CustomSignalTapeStats, fresh CustomSignalTapeFresh)
 	}
 	share := float64(stats.Used) / float64(stats.Setups)
 	return clamp01(share * (0.5 + 0.5*tapeFreshQuality(fresh)))
+}
+
+// tapeFactorFreshness is old when any current OI / taker / book / options
+// print is stale. Missing series do not make the whole factor old.
+func tapeFactorFreshness(fresh CustomSignalTapeFresh) string {
+	if fresh.OI.Stale || fresh.Takers.Stale || fresh.Book.Stale || fresh.Options.Stale {
+		return CustomFreshnessOld
+	}
+	return CustomFreshnessFresh
 }
 
 func tapeFreshQuality(f CustomSignalTapeFresh) float64 {

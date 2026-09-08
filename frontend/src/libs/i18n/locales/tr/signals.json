@@ -165,6 +165,8 @@
       "fair": "Orta kanıt ({{score}})",
       "weak": "Zayıf kanıt ({{score}})"
     },
+    "evidenceCounts": "{{fresh}} taze, {{old}} eski, {{missing}} eksik",
+    "evidenceCountsIdle": "{{fresh}} taze, {{old}} eski, {{missing}} eksik, {{idle}} yok",
     "factors": {
       "ema_crossover": "EMA 9/21 kesişimi",
       "ema_trend_bias": "EMA 50/200 geri çekilme",

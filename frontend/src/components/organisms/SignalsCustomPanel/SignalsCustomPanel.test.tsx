@@ -13,7 +13,11 @@ describe('SignalsCustomPanel', () => {
       <SignalsCustomPanel
         profiles={[]}
         selectedId=""
-        draft={defaultCustomWeightDraft()}
+        draft={defaultCustomWeightDraft().map((row) =>
+          row.id === 'ema_crossover'
+            ? { ...row, enabled: true, pct: 100 }
+            : { ...row, enabled: false, pct: 0 },
+        )}
         items={[
           {
             exchange: 'binance',
@@ -21,8 +25,8 @@ describe('SignalsCustomPanel', () => {
             custom: {
               score: 62,
               grade: 'B',
-              evidence: { score: 40, label: 'weak', detail: 'Evidence is weak (40) — Used 3 of 5 setups' },
-              factors: [{ id: 'ema_crossover', score: 90, status: 'used', requestedPct: 16, sharePct: 16, effect: 6.4, quality: 100 }],
+              evidence: { score: 40, label: 'weak', detail: 'Evidence is weak (40) — 1 fresh, 0 old, 0 missing; Used 3 of 5 setups', fresh: 1, old: 0, missing: 0 },
+              factors: [{ id: 'ema_crossover', score: 90, status: 'used', requestedPct: 16, sharePct: 16, effect: 6.4, quality: 100, freshness: 'fresh' }],
             },
             scoreCompare: { default: { score: 56 }, applied: { score: 62 }, delta: { score: 6 } },
             tapeSetups: 5,
@@ -50,6 +54,9 @@ describe('SignalsCustomPanel', () => {
     );
     expect(screen.getByTestId('signals-custom-tape-fresh')).toHaveTextContent(/oi 6m ago/);
     expect(screen.getByTestId('signals-custom-evidence')).toBeInTheDocument();
+    expect(screen.getByTestId('signals-custom-evidence-counts')).toHaveTextContent(
+      /1 fresh, 0 old, 0 missing|1 taze, 0 eski, 0 eksik/,
+    );
     await user.click(screen.getByRole('button', { name: /apply mix|karışımı uygula/i }));
     expect(onApply).toHaveBeenCalled();
   });

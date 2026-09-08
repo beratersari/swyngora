@@ -35,6 +35,10 @@ const (
 	CustomEvidenceFair   = "fair"
 	CustomEvidenceWeak   = "weak"
 
+	CustomFreshnessFresh   = "fresh"
+	CustomFreshnessOld     = "old"
+	CustomFreshnessMissing = "missing"
+
 	customEvidenceIdleQuality = 0.2
 
 	CustomSignalMixDefault = "default"
@@ -375,10 +379,11 @@ type CustomSignalCatalogRow struct {
 
 // CustomSignalRaw is one factor's 0–100 input before the mix.
 type CustomSignalRaw struct {
-	Score   float64
-	Status  string
-	Detail  string
-	Quality float64 // 0–1 evidence for this factor when used; 0 means full if used
+	Score     float64
+	Status    string
+	Detail    string
+	Quality   float64 // 0–1 evidence for this factor when used; 0 means full if used
+	Freshness string  // fresh | old | missing; empty used factors are treated as fresh
 }
 
 // CustomSignalWeightRow is one factor in the requested or used mix.
@@ -414,14 +419,20 @@ type CustomSignalFactor struct {
 	Status       string  `json:"status"`
 	Detail       string  `json:"detail,omitempty"`
 	Quality      float64 `json:"quality,omitempty"`
+	Freshness    string  `json:"freshness,omitempty"` // fresh | old | missing
 }
 
 // CustomSignalEvidence is how trustworthy the custom score is, separate from
-// the 0–100 lean. Weak data can still produce a high score.
+// the 0–100 lean. Weak data can still produce a high score. Score is quality,
+// not completeness — high quality can still have old or missing factors.
 type CustomSignalEvidence struct {
-	Score  float64 `json:"score"`
-	Label  string  `json:"label"`
-	Detail string  `json:"detail"`
+	Score   float64 `json:"score"`
+	Label   string  `json:"label"`
+	Detail  string  `json:"detail"`
+	Fresh   int     `json:"fresh"`
+	Old     int     `json:"old"`
+	Missing int     `json:"missing"`
+	Idle    int     `json:"idle,omitempty"`
 }
 
 // CustomSignalScore is the 0–100 custom mix for one symbol.
@@ -737,20 +748,24 @@ func ScoreCustomSignal(raws map[string]CustomSignalRaw, w CustomSignalWeights) C
 			ID: id, Label: CustomSignalFactorLabel(id),
 			Score: round1(src.Score), RequestedPct: round1(pct),
 			SharePct: round1(pct), Detail: src.Detail,
+			Freshness: factorFreshness(src.Status, src.Freshness),
 		}
 		switch {
 		case pct <= 0:
 			f.Status = CustomFactorDisabled
+			f.Freshness = ""
 			row.Status = CustomFactorDisabled
 			disabled = append(disabled, id)
 		case src.Status == CustomFactorMissing || src.Status == "":
 			f.Status = CustomFactorMissing
+			f.Freshness = CustomFreshnessMissing
 			row.Status = CustomFactorMissing
 			row.Detail = src.Detail
 			missing = append(missing, id)
 			evMass += pct
 		case src.Status == CustomFactorIdle || src.Score <= 0:
 			f.Status = CustomFactorIdle
+			f.Freshness = ""
 			row.Status = CustomFactorIdle
 			row.Detail = src.Detail
 			if row.Detail == "" {
@@ -764,6 +779,7 @@ func ScoreCustomSignal(raws map[string]CustomSignalRaw, w CustomSignalWeights) C
 			row.Status = CustomFactorUsed
 			row.Detail = src.Detail
 			f.Status = CustomFactorUsed
+			f.Freshness = factorFreshness(CustomFactorUsed, src.Freshness)
 			q := rawEvidenceQuality(src)
 			f.Quality = round1(q * 100)
 			evMass += pct
@@ -844,23 +860,62 @@ func customEvidenceLabel(score float64) string {
 	return CustomEvidenceWeak
 }
 
+func factorFreshness(status, raw string) string {
+	switch status {
+	case CustomFactorMissing, "":
+		return CustomFreshnessMissing
+	case CustomFactorUsed:
+		if raw == CustomFreshnessOld {
+			return CustomFreshnessOld
+		}
+		return CustomFreshnessFresh
+	default:
+		return ""
+	}
+}
+
+func countEvidenceBuckets(factors []CustomSignalFactor) (fresh, old, missing, idle int) {
+	for _, f := range factors {
+		if f.RequestedPct <= 0 || f.Status == CustomFactorDisabled {
+			continue
+		}
+		switch f.Status {
+		case CustomFactorMissing:
+			missing++
+		case CustomFactorIdle:
+			idle++
+		case CustomFactorUsed:
+			if f.Freshness == CustomFreshnessOld {
+				old++
+			} else {
+				fresh++
+			}
+		}
+	}
+	return
+}
+
 func finishCustomEvidence(mass, acc float64, missing []string, factors []CustomSignalFactor) CustomSignalEvidence {
 	score := 0.0
 	if mass > 0 {
 		score = acc / mass * 100
 	}
 	score = clampScore(score)
-	label := customEvidenceLabel(score)
-	return CustomSignalEvidence{
-		Score:  score,
-		Label:  label,
-		Detail: customEvidenceDetail(label, score, missing, factors),
+	freshN, oldN, missN, idleN := countEvidenceBuckets(factors)
+	ev := CustomSignalEvidence{
+		Score: score, Label: customEvidenceLabel(score),
+		Fresh: freshN, Old: oldN, Missing: missN, Idle: idleN,
 	}
+	ev.Detail = customEvidenceDetail(ev, missing, factors)
+	return ev
 }
 
-func customEvidenceDetail(label string, score float64, missing []string, factors []CustomSignalFactor) string {
-	head := fmt.Sprintf("Evidence is %s (%.0f)", label, score)
-	var bits []string
+func customEvidenceDetail(ev CustomSignalEvidence, missing []string, factors []CustomSignalFactor) string {
+	head := fmt.Sprintf("Evidence is %s (%.0f)", ev.Label, ev.Score)
+	bits := []string{fmt.Sprintf("%d fresh, %d old, %d missing", ev.Fresh, ev.Old, ev.Missing)}
+	if ev.Idle > 0 {
+		bits[0] += fmt.Sprintf(", %d not present", ev.Idle)
+	}
 	if len(missing) > 0 {
 		names := make([]string, 0, len(missing))
 		for _, id := range missing {
@@ -869,7 +924,7 @@ func customEvidenceDetail(label string, score float64, missing []string, factors
 		bits = append(bits, "missing "+joinList(names))
 	}
 	for _, f := range factors {
-		if f.Status != CustomFactorUsed || f.Quality >= 75 {
+		if f.Status != CustomFactorUsed {
 			continue
 		}
 		if CustomSignalFactorGroup(f.ID) != "tape" {
@@ -879,12 +934,6 @@ func customEvidenceDetail(label string, score float64, missing []string, factors
 			bits = append(bits, note)
 			break
 		}
-	}
-	if len(bits) == 0 {
-		if score >= 75 {
-			return head + " — factors in this mix have complete data"
-		}
-		return head
 	}
 	return head + " — " + strings.Join(bits, "; ")
 }
