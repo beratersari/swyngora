@@ -708,11 +708,11 @@ class AroundSimilarInput(BaseModel):
     )
     fields: str = Field(
         default="",
-        description="Tape to compare: price,volume,takers,oi,book (default all). Example: volume,book,oi",
+        description="Tape to compare: price,volume,takers,oi,book,options (default all). Example: volume,book,oi",
     )
     weights: str = Field(
         default="",
-        description="Importance per field, e.g. book:3,oi:3,volume:1 (defaults: book and oi 3, takers 1.5, volume and price 1)",
+        description="Importance per field, e.g. book:3,oi:3,volume:1 (defaults: book and oi 3, options 2, takers 1.5, volume and price 1)",
     )
     min_coverage: float = Field(
         default=-1,
@@ -767,7 +767,7 @@ class ForensicsInput(BaseModel):
     )
     fields: str = Field(
         default="",
-        description="Tape to compare: price,volume,takers,oi,book (default all)",
+        description="Tape to compare: price,volume,takers,oi,book,options (default all)",
     )
     weights: str = Field(
         default="",
@@ -4619,7 +4619,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "What happened around a chosen time for a coin: before, "
                 "during, and after that move. Price, volume, buy/sell, VWAP, "
                 "volume vs typical, volume-profile POC, liquidity sweeps, "
-                "and stored book/futures history when available. `at` is "
+                "stored book/futures history, and listed BTC/ETH options "
+                "(OI, put/call, IV, unusual prints) when sampled. `at` is "
                 "required. window is the lookback/lookforward (default 1h). "
                 "during is the move starting at at (default 15m)."
             ),
@@ -4664,9 +4665,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="find_around_similar",
             description=(
                 "Compare the current market to the setup before past "
-                "important moves. fields selects price,volume,takers,oi,book "
+                "important moves. fields selects price,volume,takers,oi,book,options "
                 "(e.g. volume,book,oi). weights sets importance "
-                "(default book and oi 3, takers 1.5, volume and price 1). "
+                "(default book and oi 3, options 2, takers 1.5, volume and price 1). "
                 "min_coverage (default 60) sends thin cases to skipped. "
                 "Uncompared fields have no score. Each past match "
                 "uses only tape available before that move "
@@ -4689,7 +4690,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Market forensics for a coin and a chosen time: what "
                 "happened before, during, and after that move (price, "
                 "volume, takers, VWAP, vs typical, POC, sweeps, stored "
-                "book/futures), plus past important-move setups that "
+                "book/futures, and listed BTC/ETH options when sampled), plus past important-move setups that "
                 "looked like the before-window and how price moved after "
                 "those. why is a plain-language read of why the move "
                 "may have happened (not a metric dump). at is required. "
@@ -4706,7 +4707,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Scan top-volume coins and find which ones currently "
                 "look like the setup before their own important past "
                 "moves. Returns ranked coins, closeness, whySimilar "
-                "(which of price/volume/takers/oi/book matched), and "
+                "(which of price/volume/takers/oi/book/options matched), and "
                 "what usually happened after those similar cases."
             ),
             args_schema=ForensicsScanInput,

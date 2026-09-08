@@ -94,12 +94,23 @@ var precursorMetricLabels = map[string]string{
 	"ask_pulled":      "ask liquidity was pulled",
 	"sweep":           "a liquidity sweep printed",
 	"absorption":      "absorption printed",
+	"options_oi_up":   "listed options open interest was rising",
+	"options_oi_down": "listed options open interest was falling",
+	"options_iv_up":   "options implied vol was rising",
+	"options_iv_down": "options implied vol was falling",
+	"options_puts":    "options put/call leaned puts",
+	"options_calls":   "options put/call leaned calls",
+	"options_unusual": "listed options were already unusual",
+	"options_cluster": "several options series moved together",
 }
 
 var precursorExclusive = [][]string{
 	{"price_quiet", "price_up", "price_down"},
 	{"takers_buy", "takers_sell"},
 	{"oi_up", "oi_down"},
+	{"options_oi_up", "options_oi_down"},
+	{"options_iv_up", "options_iv_down"},
+	{"options_puts", "options_calls"},
 }
 
 // SummarizeAroundPrecursors compares the before-windows of scanned moves
@@ -301,6 +312,26 @@ func flagsFromBefore(side string, before AroundPhase) precursorFlags {
 	ab := countAroundKind(before.Events, AroundEventAbsorption)
 	set("sweep", true, sw > 0, float64(sw))
 	set("absorption", true, ab > 0, float64(ab))
+	if o := before.Options; o != nil && o.Complete {
+		set("options_oi_up", o.HasOI, o.OIDirection == CVDDirUp, o.OIChangePct)
+		set("options_oi_down", o.HasOI, o.OIDirection == CVDDirDown, o.OIChangePct)
+		ivUp := (o.HasDVOL && o.DVOLDelta > 0) || (o.HasAtmIV && o.AtmIVDelta > 0)
+		ivDown := (o.HasDVOL && o.DVOLDelta < 0) || (o.HasAtmIV && o.AtmIVDelta < 0)
+		ivVal := o.DVOLDelta
+		if !o.HasDVOL {
+			ivVal = o.AtmIVDelta
+		}
+		set("options_iv_up", o.HasDVOL || o.HasAtmIV, ivUp, ivVal)
+		set("options_iv_down", o.HasDVOL || o.HasAtmIV, ivDown, ivVal)
+		lean := o.LeanTo
+		if lean == "" {
+			lean = o.LeanFrom
+		}
+		set("options_puts", o.HasPutCall, lean == OptionsLeanPuts, o.PutCallTo)
+		set("options_calls", o.HasPutCall, lean == OptionsLeanCalls, o.PutCallTo)
+		set("options_unusual", true, o.Unusual, 0)
+		set("options_cluster", true, o.Together >= 2, float64(o.Together))
+	}
 	return fl
 }
 

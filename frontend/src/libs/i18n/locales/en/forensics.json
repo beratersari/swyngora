@@ -42,7 +42,8 @@
       "volume": "Volume",
       "takers": "Taker flow",
       "oi": "Open interest",
-      "book": "Order book"
+      "book": "Order book",
+      "options": "Options"
     },
     "leans": {
       "up": "Usually rose",
@@ -78,6 +79,7 @@
   "oi": "Open interest",
   "funding": "Funding",
   "liquidations": "Liquidations",
+  "options": "Options",
   "events": "Events",
   "changes": "What changed",
   "metric": "Metric",

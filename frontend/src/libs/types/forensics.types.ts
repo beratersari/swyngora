@@ -54,6 +54,38 @@ export type ForensicsFutures = {
   complete?: boolean;
 };
 
+export type ForensicsOptionsMove = {
+  kind?: string;
+  topic?: string;
+  window?: string;
+  title?: string;
+  detail?: string;
+};
+
+export type ForensicsOptions = {
+  asset?: string;
+  oiChangePct?: string;
+  oiDirection?: string;
+  putCallFrom?: string;
+  putCallTo?: string;
+  leanFrom?: string;
+  leanTo?: string;
+  dvolDelta?: string;
+  unusual?: boolean;
+  started?: 'before' | 'during' | string;
+  startedAt?: string;
+  lead?: string;
+  leadLabel?: string;
+  leadWindow?: string;
+  together?: number;
+  weight?: string;
+  after?: string;
+  afterSummary?: string;
+  summary?: string;
+  moves?: ForensicsOptionsMove[];
+  complete?: boolean;
+};
+
 export type ForensicsEvent = {
   kind?: string;
   phase?: string;
@@ -74,6 +106,7 @@ export type ForensicsPhase = {
   profile?: ForensicsProfile | null;
   book?: ForensicsBook | null;
   futures?: ForensicsFutures | null;
+  options?: ForensicsOptions | null;
   events?: ForensicsEvent[];
   summary?: string;
   complete?: boolean;
@@ -100,6 +133,33 @@ export type ForensicsVenue = {
   error?: string;
 };
 
+export type ForensicsVenueBeforeBit = {
+  metric?: string;
+  venue?: string;
+  direction?: string;
+  phase?: string;
+  at?: string;
+  until?: string;
+  summary?: string;
+};
+
+export type ForensicsVenueTiming = {
+  agreement?: string;
+  follow?: string;
+  leader?: string;
+  leaderMetric?: string;
+  binanceStart?: string;
+  bybitStart?: string;
+  binanceOiStart?: string;
+  bybitOiStart?: string;
+  binanceTakerStart?: string;
+  bybitTakerStart?: string;
+  lead?: string;
+  leadLabel?: string;
+  beforeFollow?: ForensicsVenueBeforeBit[];
+  summary?: string;
+};
+
 export type ForensicsTape = {
   symbol?: string;
   exchange?: string;
@@ -108,6 +168,7 @@ export type ForensicsTape = {
   during?: string;
   venues?: ForensicsVenue[];
   combined?: ForensicsVenue | null;
+  venueTiming?: ForensicsVenueTiming | null;
   summary?: string;
 };
 

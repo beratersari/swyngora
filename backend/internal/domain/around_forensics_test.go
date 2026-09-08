@@ -3,6 +3,7 @@ package domain
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestExplainForensics_Empty(t *testing.T) {
@@ -80,6 +81,48 @@ func TestExplainForensicsWhy_SimilarError(t *testing.T) {
 	why := ExplainForensicsWhy(r)
 	if !strings.Contains(why.Similar, "could not be loaded") {
 		t.Fatalf("similar %q", why.Similar)
+	}
+}
+
+func TestExplainForensicsWhy_UnusualOptionsBefore(t *testing.T) {
+	r := forensicsWhyFixture()
+	before, _ := AroundPhaseByID(*r.Tape.Combined, AroundPhaseBefore)
+	before.Options = &AroundOptions{
+		Complete: true, Unusual: true, Started: AroundOptionsStartedBefore,
+		HasOI: true, OIDirection: CVDDirUp, OIChangePct: 9,
+		HasDVOL: true, DVOLDelta: 3.2, Together: 2, Weight: AroundOptionsWeightPair,
+		Lead: 40 * time.Minute, LeadLabel: "about 40 minutes",
+		Summary: "Listed options were already unusual about 40 minutes before the price move.",
+	}
+	for i := range r.Tape.Combined.Phases {
+		if r.Tape.Combined.Phases[i].Phase == AroundPhaseBefore {
+			r.Tape.Combined.Phases[i] = before
+		}
+	}
+	why := ExplainForensicsWhy(r)
+	if !strings.Contains(why.Headline, "about 40 minutes") {
+		t.Fatalf("headline %q", why.Headline)
+	}
+	if !strings.Contains(why.Before, "about 40 minutes") || !strings.Contains(why.Before, "two options series") {
+		t.Fatalf("before %q", why.Before)
+	}
+}
+
+func TestExplainForensicsWhy_OptionsStartedDuring(t *testing.T) {
+	r := forensicsWhyFixture()
+	during, _ := AroundPhaseByID(*r.Tape.Combined, AroundPhaseDuring)
+	during.Options = &AroundOptions{
+		Complete: true, Unusual: true, Started: AroundOptionsStartedDuring,
+		HasOI: true, OIDirection: CVDDirUp, OIChangePct: 11,
+	}
+	for i := range r.Tape.Combined.Phases {
+		if r.Tape.Combined.Phases[i].Phase == AroundPhaseDuring {
+			r.Tape.Combined.Phases[i] = during
+		}
+	}
+	why := ExplainForensicsWhy(r)
+	if !strings.Contains(why.Headline, "only became unusual") && !strings.Contains(why.During, "only became unusual") {
+		t.Fatalf("headline %q during %q", why.Headline, why.During)
 	}
 }
 

@@ -17,11 +17,12 @@ const (
 	MaxAroundSimilarHorizons        = 8
 	MaxAroundSimilarHorizon         = 24 * time.Hour
 
-	AroundSimilarFieldPrice  = "price"
-	AroundSimilarFieldVolume = "volume"
-	AroundSimilarFieldTakers = "takers"
-	AroundSimilarFieldOI     = "oi"
-	AroundSimilarFieldBook   = "book"
+	AroundSimilarFieldPrice   = "price"
+	AroundSimilarFieldVolume  = "volume"
+	AroundSimilarFieldTakers  = "takers"
+	AroundSimilarFieldOI      = "oi"
+	AroundSimilarFieldBook    = "book"
+	AroundSimilarFieldOptions = "options"
 
 	AroundSimilarHorizon15m = "15m"
 	AroundSimilarHorizon1h  = "1h"
@@ -45,20 +46,22 @@ func DefaultAroundSimilarHorizons() []AroundSimilarHorizon {
 
 // AroundSimilarFields is which tape pieces to compare.
 type AroundSimilarFields struct {
-	Price  bool
-	Volume bool
-	Takers bool
-	OI     bool
-	Book   bool
+	Price   bool
+	Volume  bool
+	Takers  bool
+	OI      bool
+	Book    bool
+	Options bool
 }
 
 // AroundSimilarWeights is how much each selected field counts.
 type AroundSimilarWeights struct {
-	Price  float64
-	Volume float64
-	Takers float64
-	OI     float64
-	Book   float64
+	Price   float64
+	Volume  float64
+	Takers  float64
+	OI      float64
+	Book    float64
+	Options float64
 }
 
 // AroundSimilarFieldScore is one requested field on one match.
@@ -157,15 +160,15 @@ type AroundSimilarReport struct {
 
 // DefaultAroundSimilarFields compares every tape piece.
 func DefaultAroundSimilarFields() AroundSimilarFields {
-	return AroundSimilarFields{Price: true, Volume: true, Takers: true, OI: true, Book: true}
+	return AroundSimilarFields{Price: true, Volume: true, Takers: true, OI: true, Book: true, Options: true}
 }
 
 // DefaultAroundSimilarWeights gives book and OI more say than volume.
 func DefaultAroundSimilarWeights() AroundSimilarWeights {
-	return AroundSimilarWeights{Price: 1, Volume: 1, Takers: 1.5, OI: 3, Book: 3}
+	return AroundSimilarWeights{Price: 1, Volume: 1, Takers: 1.5, OI: 3, Book: 3, Options: 2}
 }
 
-// ParseAroundSimilarFields accepts a CSV of price, volume, takers, oi, book.
+// ParseAroundSimilarFields accepts a CSV of price, volume, takers, oi, book, options.
 // Empty means all. Aliases: orderbook, open_interest.
 func ParseAroundSimilarFields(raw string) (AroundSimilarFields, error) {
 	s := strings.TrimSpace(raw)
@@ -187,24 +190,26 @@ func ParseAroundSimilarFields(raw string) (AroundSimilarFields, error) {
 			out.OI = true
 		case AroundSimilarFieldBook, "orderbook", "order_book", "order-book":
 			out.Book = true
+		case AroundSimilarFieldOptions, "option", "opt":
+			out.Options = true
 		default:
-			return AroundSimilarFields{}, fmt.Errorf("%w: fields must be price, volume, takers, oi, book", ErrInvalidArgument)
+			return AroundSimilarFields{}, fmt.Errorf("%w: fields must be price, volume, takers, oi, book, options", ErrInvalidArgument)
 		}
 	}
 	if !out.Any() {
-		return AroundSimilarFields{}, fmt.Errorf("%w: select at least one field (price, volume, takers, oi, book)", ErrInvalidArgument)
+		return AroundSimilarFields{}, fmt.Errorf("%w: select at least one field (price, volume, takers, oi, book, options)", ErrInvalidArgument)
 	}
 	return out, nil
 }
 
 // Any reports whether at least one field is on.
 func (f AroundSimilarFields) Any() bool {
-	return f.Price || f.Volume || f.Takers || f.OI || f.Book
+	return f.Price || f.Volume || f.Takers || f.OI || f.Book || f.Options
 }
 
 // IDs lists selected field names in a stable order.
 func (f AroundSimilarFields) IDs() []string {
-	out := make([]string, 0, 5)
+	out := make([]string, 0, 6)
 	if f.Price {
 		out = append(out, AroundSimilarFieldPrice)
 	}
@@ -219,6 +224,9 @@ func (f AroundSimilarFields) IDs() []string {
 	}
 	if f.Book {
 		out = append(out, AroundSimilarFieldBook)
+	}
+	if f.Options {
+		out = append(out, AroundSimilarFieldOptions)
 	}
 	return out
 }
@@ -245,6 +253,9 @@ func ParseAroundSimilarWeights(raw string, fields AroundSimilarFields) (AroundSi
 	}
 	if fields.Book {
 		out.Book = d.Book
+	}
+	if fields.Options {
+		out.Options = d.Options
 	}
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -289,6 +300,11 @@ func ParseAroundSimilarWeights(raw string, fields AroundSimilarFields) (AroundSi
 				return AroundSimilarWeights{}, fmt.Errorf("%w: weight for book but book is not in fields", ErrInvalidArgument)
 			}
 			out.Book = w
+		case AroundSimilarFieldOptions, "option", "opt":
+			if !fields.Options {
+				return AroundSimilarWeights{}, fmt.Errorf("%w: weight for options but options is not in fields", ErrInvalidArgument)
+			}
+			out.Options = w
 		default:
 			return AroundSimilarWeights{}, fmt.Errorf("%w: unknown weight field %q", ErrInvalidArgument, name)
 		}
@@ -463,6 +479,8 @@ func (w AroundSimilarWeights) of(name string) float64 {
 		return w.OI
 	case AroundSimilarFieldBook:
 		return w.Book
+	case AroundSimilarFieldOptions:
+		return w.Options
 	default:
 		return 0
 	}
@@ -470,7 +488,7 @@ func (w AroundSimilarWeights) of(name string) float64 {
 
 // ListAroundSimilarWeights is selected fields with their weights, for the API.
 func ListAroundSimilarWeights(fields AroundSimilarFields, w AroundSimilarWeights) []AroundSimilarFieldScore {
-	out := make([]AroundSimilarFieldScore, 0, 5)
+	out := make([]AroundSimilarFieldScore, 0, 6)
 	for _, id := range fields.IDs() {
 		out = append(out, AroundSimilarFieldScore{Name: id, Used: true, Weight: w.of(id)})
 	}
@@ -791,6 +809,18 @@ func aroundPhaseSimilarity(a, b AroundPhase, want AroundSimilarFields, w AroundS
 			c.match = sb >= 0.65 && sa >= 0.65
 		}
 		cands = append(cands, c)
+	}
+	if want.Options && w.of(AroundSimilarFieldOptions) > 0 {
+		aHas := optionsComparable(a.Options)
+		bHas := optionsComparable(b.Options)
+		if aHas || bHas {
+			c := cand{name: AroundSimilarFieldOptions, weight: w.of(AroundSimilarFieldOptions)}
+			if aHas && bHas {
+				c.have = true
+				c.score, c.match = optionsSimilarity(a.Options, b.Options)
+			}
+			cands = append(cands, c)
+		}
 	}
 	var selected, usedW, ssum float64
 	out := aroundSimilarScore{}

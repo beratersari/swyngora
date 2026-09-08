@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-const forensicsWhyCaution = "This is a read of the tape, not a prediction or financial advice. Missing book, open interest, or a short after-window can change the story."
+const forensicsWhyCaution = "This is a read of the tape, not a prediction or financial advice. Missing book, open interest, options samples (BTC/ETH only), or a short after-window can change the story."
 
 // ExplainForensicsWhy writes why the move may have happened in plain language.
 // It interprets the before / during / after tape and similar past cases.
@@ -27,7 +27,7 @@ func ExplainForensicsWhy(r ForensicsReport) ForensicsWhy {
 
 	out := ForensicsWhy{
 		Before:  explainForensicsBefore(name, before, during),
-		During:  explainForensicsDuring(name, before, during),
+		During:  explainForensicsDuring(name, before, during, r.Tape),
 		After:   explainForensicsAfter(name, during, after, venue.Changes),
 		Similar: explainForensicsSimilar(name, r.Similar, r.SimilarError),
 		Caution: forensicsWhyCaution,
@@ -96,13 +96,16 @@ func explainForensicsBefore(name string, before, during AroundPhase) string {
 	if o := forensicsPositionStory(before, during); o != "" {
 		s = append(s, o)
 	}
+	if o := forensicsOptionsStory(before, true); o != "" {
+		s = append(s, o)
+	}
 	if e := forensicsEventStory(before, true); e != "" {
 		s = append(s, e)
 	}
 	return strings.Join(s, " ")
 }
 
-func explainForensicsDuring(name string, before, during AroundPhase) string {
+func explainForensicsDuring(name string, before, during AroundPhase, tape *AroundReport) string {
 	if !during.Complete {
 		return "The move window itself is incomplete (it may still be running), so the during-read is partial."
 	}
@@ -119,8 +122,14 @@ func explainForensicsDuring(name string, before, during AroundPhase) string {
 	if o := forensicsDuringPositionStory(during); o != "" {
 		s = append(s, o)
 	}
+	if o := forensicsOptionsStory(during, false); o != "" {
+		s = append(s, o)
+	}
 	if e := forensicsEventStory(during, false); e != "" {
 		s = append(s, e)
+	}
+	if tape != nil && tape.VenueTiming != nil && tape.VenueTiming.Summary != "" {
+		s = append(s, tape.VenueTiming.Summary)
 	}
 	if during.Flow.VWAP > 0 && during.Flow.VsVWAP == VolumeProfileVsAbove {
 		s = append(s, "Price finished the window above VWAP, so the average participant was still underwater if they faded the move.")
@@ -278,6 +287,25 @@ func forensicsHeadlineSetup(before, during AroundPhase) string {
 	if !before.Complete {
 		return ""
 	}
+	if o := before.Options; o != nil && o.Unusual && o.Started != AroundOptionsStartedDuring {
+		s := "Listed options were already unusual before the price push."
+		if o.LeadLabel != "" {
+			s = "Listed options were already unusual " + o.LeadLabel + " before the price push."
+		}
+		if o.Together >= 3 {
+			return strings.TrimSuffix(s, ".") + " Open interest, put/call, and implied vol all moved together — a stronger print than a single series."
+		}
+		if o.Together == 2 {
+			s = strings.TrimSuffix(s, ".") + " Two options series moved together — more important than a one-off print."
+		}
+		if o.AfterSummary != "" {
+			return strings.TrimSuffix(s, ".") + " " + o.AfterSummary
+		}
+		return s
+	}
+	if o := during.Options; o != nil && o.Unusual && o.Started == AroundOptionsStartedDuring {
+		return "Listed options only became unusual while price was already moving."
+	}
 	if before.Book != nil && before.Book.Complete && before.Book.BidNotionalDelta < 0 && during.Complete && during.Price.Direction == CVDDirUp {
 		return "Bids had already thinned, so there was less support under the market."
 	}
@@ -403,6 +431,60 @@ func forensicsPositionStory(before, during AroundPhase) string {
 		s = append(s, "Funding moved more negative, so the short side was paying to stay in — a crowded short can squeeze once selling dries up.")
 	}
 	return strings.Join(s, " ")
+}
+
+func forensicsOptionsStory(p AroundPhase, before bool) string {
+	o := p.Options
+	if o == nil || !o.Complete {
+		return ""
+	}
+	var bits []string
+	if o.Unusual {
+		switch {
+		case o.Started == AroundOptionsStartedDuring:
+			bits = append(bits, "Listed options only became unusual while price was already moving — this print started with the spot impulse, not ahead of it")
+		case before:
+			lead := "Listed options were already unusual before the move"
+			if o.LeadLabel != "" {
+				lead = "Listed options were already unusual " + o.LeadLabel + " before the move"
+			}
+			if o.Together >= 3 {
+				bits = append(bits, lead+" — open interest, put/call, and implied vol all moved together, which is a stronger options print than a single series")
+			} else if o.Together == 2 {
+				bits = append(bits, lead+" — two options series moved together, more important than a one-off print")
+			} else {
+				bits = append(bits, lead+" — that kind of open-interest, put/call, or implied-vol jump sometimes shows up ahead of a spot impulse")
+			}
+		case o.Started == AroundOptionsStartedBefore:
+			bits = append(bits, "The options print had already started before the price move and was still running")
+		default:
+			bits = append(bits, "Listed options stayed unusual while price was moving")
+		}
+	}
+	if o.HasOI && o.OIDirection == CVDDirUp && absFloat(o.OIChangePct) >= aroundOptionsOIFloor {
+		bits = append(bits, fmt.Sprintf("options open interest rose %s%%", FormatSignedPct(o.OIChangePct)))
+	} else if o.HasOI && o.OIDirection == CVDDirDown && absFloat(o.OIChangePct) >= aroundOptionsOIFloor {
+		bits = append(bits, fmt.Sprintf("options open interest fell %s%%", FormatSignedPct(o.OIChangePct)))
+	}
+	if o.HasPutCall && o.LeanFrom != "" && o.LeanTo != "" && o.LeanFrom != o.LeanTo {
+		bits = append(bits, fmt.Sprintf("put/call lean shifted from %s toward %s", o.LeanFrom, o.LeanTo))
+	} else if o.LeanTo == OptionsLeanPuts {
+		bits = append(bits, "the options book leaned puts")
+	} else if o.LeanTo == OptionsLeanCalls {
+		bits = append(bits, "the options book leaned calls")
+	}
+	if o.HasDVOL && o.DVOLDelta >= aroundOptionsDVOLFloor {
+		bits = append(bits, fmt.Sprintf("implied vol rose %.1f points", o.DVOLDelta))
+	} else if o.HasDVOL && o.DVOLDelta <= -aroundOptionsDVOLFloor {
+		bits = append(bits, fmt.Sprintf("implied vol cooled %.1f points", -o.DVOLDelta))
+	}
+	if o.AfterSummary != "" {
+		bits = append(bits, strings.TrimSuffix(o.AfterSummary, "."))
+	}
+	if len(bits) == 0 {
+		return ""
+	}
+	return ensureSentence(strings.Join(bits, "; "))
 }
 
 func forensicsDuringPositionStory(p AroundPhase) string {

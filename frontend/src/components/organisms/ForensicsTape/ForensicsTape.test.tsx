@@ -23,4 +23,66 @@ describe('ForensicsTape', () => {
     expect(screen.getAllByText('107').length).toBeGreaterThan(0);
     expect(screen.getByText('faded')).toBeInTheDocument();
   });
+
+  it('shows unusual options on a phase', () => {
+    renderWithProviders(
+      <ForensicsTape
+        venue={{
+          exchange: 'combined',
+          phases: [
+            {
+              phase: 'before',
+              complete: true,
+              options: {
+                complete: true,
+                unusual: true,
+                started: 'before',
+                lead: '40m',
+                together: 2,
+                oiChangePct: '+8.00%',
+                oiDirection: 'up',
+                leanTo: 'puts',
+              },
+            },
+            { phase: 'during', complete: true },
+            { phase: 'after', complete: true },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByText(/unusual/i)).toBeInTheDocument();
+    expect(screen.getByText(/\+8\.00%/)).toBeInTheDocument();
+  });
+
+  it('shows which venue started the price move first', () => {
+    renderWithProviders(
+      <ForensicsTape
+        venue={{ exchange: 'combined', phases: [{ phase: 'during', complete: true }] }}
+        venueTiming={{
+          agreement: 'binance_earlier',
+          follow: 'followed',
+          leader: 'binance',
+          summary:
+            'Binance started the price move about 8 minutes before Bybit. Bybit followed later. Before Bybit printed, Binance open interest rose and Binance takers were buying.',
+        }}
+      />,
+    );
+    expect(screen.getByText(/binance started the price move/i)).toBeInTheDocument();
+    expect(screen.getByText(/bybit followed later/i)).toBeInTheDocument();
+    expect(screen.getByText(/open interest rose/i)).toBeInTheDocument();
+  });
+
+  it('says when the move stayed on Binance', () => {
+    renderWithProviders(
+      <ForensicsTape
+        venue={{ exchange: 'combined', phases: [{ phase: 'during', complete: true }] }}
+        venueTiming={{
+          agreement: 'binance_only',
+          follow: 'stayed',
+          summary: 'The price move printed on Binance. Bybit did not follow.',
+        }}
+      />,
+    );
+    expect(screen.getByText(/bybit did not follow/i)).toBeInTheDocument();
+  });
 });

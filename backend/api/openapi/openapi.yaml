@@ -2006,8 +2006,22 @@ paths:
         area. Liquidity sweeps that poked in the span are attached.
         Stored order-book and futures history (OI, funding, long/short,
         liquidations) are included when those archives have a sample.
+        BTC/ETH listed options (OI, put/call, implied vol, unusual prints)
+        attach when the options archive has samples. Options `lead` is the
+        real start inside a 1h/4h/24h unusual lookback, not the window open.
         `exchange=all` (default) returns Binance and Bybit separately plus
-        `combined`. Informational only.
+        `combined`. `venueTiming` says which venue printed first, whether the
+        other followed or the move stayed on one venue, and whether OI or
+        taker flow had already changed before the laggard's real start (not
+        the during-window close). The first signal across price, OI, and
+        takers is the leader only if that OI or taker print kept going until
+        price. If the last OI sample or taker bar is much earlier than the
+        price start, the path is omitted (not continued / faded / reversed).
+        The taker bar at the price start is not pre-price tape.
+        Continued / faded / reversed also need a continuous pre-price
+        taker path at the tape's bar size (no hole longer than one missing
+        1m or 5m bar, and tape after the start print).
+        Informational only.
       operationId: getMarketAround
       tags: [Market]
       parameters:
@@ -2222,10 +2236,11 @@ paths:
       description: |
         Compares the **current** market (last `window`, default 1h) to the
         setup **before** past important moves — volume vs typical, order
-        book, open interest, takers, and price. `fields` selects which
-        pieces to use (e.g. `volume,book,oi` skips price). `weights` sets
-        importance (`book:3,oi:3,volume:1`; defaults book and OI 3, takers
-        1.5, volume and price 1). Uncompared fields have no score.
+        book, open interest, listed options (BTC/ETH), takers, and price.
+        `fields` selects which pieces to use (e.g. `volume,book,oi` skips
+        price). `weights` sets importance (`book:3,oi:3,volume:1`; defaults
+        book and OI 3, options 2, takers 1.5, volume and price 1).
+        Options is only scored when both sides have samples. Uncompared fields have no score.
         Similarity uses only fields that actually had data. `minCoverage`
         (default 60) sends cases that lack enough selected data to
         `skipped` (with `missing` and `coverage`), not `matches`.
@@ -2281,11 +2296,11 @@ paths:
           schema: { type: string }
         - name: fields
           in: query
-          description: Tape to compare — price,volume,takers,oi,book (default all). Example volume,book,oi
+          description: Tape to compare — price,volume,takers,oi,book,options (default all). Example volume,book,oi
           schema: { type: string, example: "volume,book,oi" }
         - name: weights
           in: query
-          description: Importance per field — book:3,oi:3,volume:1 (defaults book and oi 3, takers 1.5, volume and price 1)
+          description: Importance per field — book:3,oi:3,volume:1 (defaults book and oi 3, options 2, takers 1.5, volume and price 1)
           schema: { type: string, example: "book:3,oi:3,volume:1" }
         - name: minCoverage
           in: query
@@ -2315,7 +2330,8 @@ paths:
       description: |
         One report for a coin and a chosen time. Combines the around-the-move
         tape (**before** / **during** / **after** — price, volume, takers,
-        VWAP, vs typical, POC, sweeps, stored book/futures) with past
+        VWAP, vs typical, POC, sweeps, stored book/futures, and BTC/ETH
+        listed options when sampled) with past
         important-move setups that looked like the **before** window, and
         how price moved after those (`afterHorizons`). `at` is required
         (RFC3339 or unix ms). Same `window` / `during` as `/around`. Same
@@ -2324,7 +2340,9 @@ paths:
         fails, `tape` is still returned and `similarError` explains why.
         `why` is a plain-language read of why the move may have happened
         (before / during / after plus similar past cases), not a metric
-        dump. Informational only.
+        dump. Same `venueTiming` path rule as `/around`: last OI/taker
+        print much earlier than price omits continued / faded / reversed.
+        Informational only.
       operationId: getMarketForensics
       tags: [Market]
       parameters:
@@ -2371,7 +2389,7 @@ paths:
           schema: { type: integer, default: 5 }
         - name: fields
           in: query
-          description: Tape to compare — price,volume,takers,oi,book (default all)
+          description: Tape to compare — price,volume,takers,oi,book,options (default all)
           schema: { type: string, example: "volume,book,oi" }
         - name: weights
           in: query
@@ -2446,7 +2464,7 @@ paths:
           schema: { type: string }
         - name: fields
           in: query
-          description: Tape to compare — price,volume,takers,oi,book (default all)
+          description: Tape to compare — price,volume,takers,oi,book,options (default all)
           schema: { type: string, example: "volume,book,oi" }
         - name: weights
           in: query
@@ -10527,11 +10545,11 @@ components:
         whySimilar: { type: string, description: Which tape pieces matched the closest past setup }
         compared:
           type: array
-          description: Closest twin scores for price, volume, takers, oi, book
+          description: Closest twin scores for price, volume, takers, oi, book, options
           items:
             type: object
             properties:
-              name: { type: string, enum: [price, volume, takers, oi, book] }
+              name: { type: string, enum: [price, volume, takers, oi, book, options] }
               used: { type: boolean }
               score: { type: string, description: 0–100 closeness when used }
               weight: { type: string }

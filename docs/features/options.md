@@ -44,6 +44,10 @@ Web: `/options` — BTC / ETH toggle, headline cards, **important moves** (only 
 
 MCP: `get_options_overview`.
 
+Forensics / around tapes on BTC and ETH attach these stored samples to the
+before / during / after windows and flag unusual prints — see
+[`forensics.md`](forensics.md).
+
 ## Where the code lives
 
 | Layer | Path |

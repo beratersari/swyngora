@@ -291,7 +291,7 @@ export function ForensicsPage() {
               </Text>
             </SummaryBlock>
           ) : null}
-          <ForensicsTape venue={venue} isLoading={loading} />
+          <ForensicsTape venue={venue} venueTiming={report?.tape?.venueTiming} isLoading={loading} />
           <ForensicsSimilar
             similar={report?.similar}
             similarError={report?.similarError}

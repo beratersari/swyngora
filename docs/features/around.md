@@ -28,12 +28,26 @@ Each phase includes:
 - absorption on the window when the score is at least moderate
 - stored spot-book compare (when order-book history has samples)
 - stored futures: open interest, funding, long %, liquidations (when the archive has samples)
+- listed BTC/ETH options: open interest, put/call, implied vol, and unusual prints (two samples required; `started` is before vs during; `lead` is the real start inside the 1h/4h/24h unusual lookback, not the window open; `after` is kept going / turned / went quiet)
 
 Liquidity sweeps whose poke sits in the span are attached as events.
 `changes` compares the three windows (continued / reversed / faded).
 
 `exchange=all` (default) returns Binance and Bybit separately plus
-`combined` (volume-weighted). `at` is RFC3339 or unix milliseconds,
+`combined` (volume-weighted). `venueTiming` says whether those two
+venues started the during-move together, which printed first, whether
+the other followed later or the move stayed on one venue, and whether
+OI or taker flow had already changed before the laggard's real start
+(not the during-window close). The first signal across price, OI, and
+takers is the leader only when that OI or taker print kept going until
+price — a spike that faded is not treated as a precursor. If the last
+OI sample or taker bar is much earlier than the price start, the path
+is omitted (not continued / faded / reversed). The taker bar at the
+price start is not pre-price tape. Continued / faded / reversed also
+need a continuous pre-price taker path at the tape's bar size (no hole
+longer than one missing 1m or 5m bar, and tape after the start print —
+one bar only shows the flow started).
+`at` is RFC3339 or unix milliseconds,
 and must be within the last 30 days. If the look-forward is still in
 the future, `after` (and sometimes `during`) is clipped to now.
 
@@ -82,6 +96,7 @@ each move and lists conditions that show up often:
 - open interest rising or falling
 - bid or ask liquidity pulled
 - a sweep or absorption in the before-window
+- listed options already unusual, OI/IV rising or falling, put/call lean (BTC/ETH)
 
 `common` on a **combo** is the **overall** hit rate across every
 sampled before-window (not “often on one side only”) — **60%+** with
@@ -103,7 +118,7 @@ the current last window. Combined with `/around` in
 
 Compares the **current** tape (last `window`, default 1h) to the
 setup before past important moves. `fields` selects which pieces to
-use (`price`, `volume`, `takers`, `oi`, `book`). Example:
+use (`price`, `volume`, `takers`, `oi`, `book`, `options`). Example:
 `fields=volume,book,oi` skips price.
 
 `weights` sets how much each selected field counts

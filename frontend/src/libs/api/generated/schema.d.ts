@@ -6742,10 +6742,10 @@ export interface components {
             lean?: "up" | "down" | "mixed" | "unknown";
             /** @description Which tape pieces matched the closest past setup */
             whySimilar?: string;
-            /** @description Closest twin scores for price, volume, takers, oi, book */
+            /** @description Closest twin scores for price, volume, takers, oi, book, options */
             compared?: {
                 /** @enum {string} */
-                name?: "price" | "volume" | "takers" | "oi" | "book";
+                name?: "price" | "volume" | "takers" | "oi" | "book" | "options";
                 used?: boolean;
                 /** @description 0–100 closeness when used */
                 score?: string;

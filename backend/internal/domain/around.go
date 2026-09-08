@@ -35,6 +35,7 @@ const (
 
 	AroundEventSweep      = "sweep"
 	AroundEventAbsorption = "absorption"
+	AroundEventOptions    = "options"
 )
 
 // AroundWindows are accepted before/after lookbacks.
@@ -190,6 +191,7 @@ type AroundPhase struct {
 	Profile  *AroundProfile
 	Book     *AroundBook
 	Futures  *AroundFutures
+	Options  *AroundOptions
 	Events   []AroundEvent
 	Summary  string
 	Complete bool
@@ -208,31 +210,39 @@ type AroundChange struct {
 
 // AroundVenue is one exchange's (or combined) around-the-move read.
 type AroundVenue struct {
-	Exchange Exchange
-	Symbol   string
-	Interval string
-	Phases   []AroundPhase
-	Changes  []AroundChange
-	Events   []AroundEvent
-	Summary  string
-	Error    string
+	Exchange   Exchange
+	Symbol     string
+	Interval   string
+	Phases     []AroundPhase
+	Changes    []AroundChange
+	Events     []AroundEvent
+	MoveStart  time.Time
+	OIStart    time.Time
+	OIDir      string
+	OIUntil    string
+	TakerStart time.Time
+	TakerDir   string
+	TakerUntil string
+	Summary    string
+	Error      string
 }
 
 // AroundReport is the API result.
 type AroundReport struct {
-	Symbol   string
-	Exchange string
-	At       time.Time
-	Window   string
-	During   string
-	From     time.Time
-	To       time.Time
-	AsOf     time.Time
-	Clipped  bool
-	Venues   []AroundVenue
-	Combined *AroundVenue
-	Summary  string
-	Note     string
+	Symbol      string
+	Exchange    string
+	At          time.Time
+	Window      string
+	During      string
+	From        time.Time
+	To          time.Time
+	AsOf        time.Time
+	Clipped     bool
+	Venues      []AroundVenue
+	Combined    *AroundVenue
+	VenueTiming *AroundVenueTiming
+	Summary     string
+	Note        string
 }
 
 // ParseAroundWindow accepts 15m / 30m / 1h / 2h / 4h (empty = 1h).
@@ -443,6 +453,9 @@ func BuildAroundVenue(ex Exchange, symbol string, bars []AroundBar, plan AroundP
 		out.Events = append(out.Events, ph.Events...)
 	}
 	out.Changes = CompareAroundPhases(out.Phases)
+	out.MoveStart = FindAroundPriceRunStart(bars, plan)
+	out.TakerStart, out.TakerDir = FindAroundTakerRunStart(bars, plan)
+	out.TakerUntil = MarkAroundTakerUntil(bars, out.TakerStart, out.TakerDir, AroundVenueUntilPrice(out.MoveStart, plan), interval)
 	out.Summary = ExplainAroundVenue(out)
 	return out
 }
@@ -518,6 +531,14 @@ func CompareAroundPhases(phases []AroundPhase) []AroundChange {
 			Metric: "oi",
 			Before: futuresOIChange(before), During: futuresOIChange(during), After: futuresOIChange(after),
 			Path: path, Summary: aroundOIChangeSummary(before, during, after, path),
+		})
+	}
+	if bo, dopt, ao := phaseOptions(before), phaseOptions(during), phaseOptions(after); bo || dopt || ao {
+		path := aroundOptionsOIPath(before, during, after)
+		out = append(out, AroundChange{
+			Metric: "options_oi",
+			Before: optionsOIChange(before), During: optionsOIChange(during), After: optionsOIChange(after),
+			Path: path, Summary: aroundOptionsOIChangeSummary(before, during, after, path),
 		})
 	}
 	return out
@@ -607,6 +628,34 @@ func ExplainAroundPhase(p AroundPhase) string {
 	if f := p.Futures; f != nil && f.Complete {
 		head += fmt.Sprintf(", OI %s%%", FormatSignedPct(f.OIChangePct))
 	}
+	if o := p.Options; o != nil && o.Complete {
+		if o.Unusual {
+			switch o.Started {
+			case AroundOptionsStartedBefore:
+				head += "; unusual options before the move"
+				if o.LeadLabel != "" {
+					head += " (" + o.LeadLabel + " earlier)"
+				}
+			case AroundOptionsStartedDuring:
+				head += "; unusual options during the move"
+			default:
+				head += "; unusual options"
+			}
+			if o.Together >= 2 {
+				head += fmt.Sprintf(", %d series together", o.Together)
+			}
+			if o.After == AroundOptionsAfterReversed {
+				head += "; options turned after price started"
+			} else if o.After == AroundOptionsAfterContinued {
+				head += "; options kept going after price started"
+			}
+			if o.HasOI {
+				head += fmt.Sprintf(" (listed OI %s%%)", FormatSignedPct(o.OIChangePct))
+			}
+		} else if o.HasOI {
+			head += fmt.Sprintf(", listed OI %s%%", FormatSignedPct(o.OIChangePct))
+		}
+	}
 	for _, ev := range p.Events {
 		if ev.Kind == AroundEventSweep {
 			head += "; sweep " + ev.Side
@@ -669,20 +718,32 @@ func ExplainAroundVenue(v AroundVenue) string {
 
 // ExplainAroundReport prefers combined, then the first complete venue.
 func ExplainAroundReport(r AroundReport) string {
+	head := ""
 	if r.Combined != nil && r.Combined.Summary != "" && r.Combined.Error == "" {
-		return "Combined: " + r.Combined.Summary
-	}
-	for _, v := range r.Venues {
-		if v.Summary != "" && v.Error == "" {
-			return string(v.Exchange) + ": " + v.Summary
+		head = "Combined: " + r.Combined.Summary
+	} else {
+		for _, v := range r.Venues {
+			if v.Summary != "" && v.Error == "" {
+				head = string(v.Exchange) + ": " + v.Summary
+				break
+			}
 		}
 	}
-	for _, v := range r.Venues {
-		if v.Summary != "" {
-			return v.Summary
+	if head == "" {
+		for _, v := range r.Venues {
+			if v.Summary != "" {
+				head = v.Summary
+				break
+			}
 		}
 	}
-	return "No tape around that time."
+	if head == "" {
+		head = "No tape around that time."
+	}
+	if r.VenueTiming != nil && r.VenueTiming.Summary != "" {
+		head += " " + r.VenueTiming.Summary
+	}
+	return head
 }
 
 func aroundPriceOf(bars []AroundBar) AroundPrice {
@@ -1044,6 +1105,10 @@ func combineAroundPhases(id string, parts []AroundPhase, from, to time.Time) Aro
 		}
 		if p.Futures != nil && p.Futures.Complete {
 			futs = append(futs, *p.Futures)
+		}
+		if out.Options == nil && p.Options != nil && p.Options.Complete {
+			o := *p.Options
+			out.Options = &o
 		}
 		out.Events = append(out.Events, p.Events...)
 	}

@@ -10,7 +10,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const aroundDisclaimer = "Before / during / after are adjacent windows around the time you pick: before is the lookback ending at that time, during is the move starting there, after is the same lookback after the move. Price, volume, buy/sell, VWAP, volume vs typical, and the volume-profile POC come from spot candles. Liquidity sweeps use 15-minute bars. Stored order-book and futures history are attached when those archives have a sample near the window. Informational only — not financial advice."
+const aroundDisclaimer = "Before / during / after are adjacent windows around the time you pick: before is the lookback ending at that time, during is the move starting there, after is the same lookback after the move. Price, volume, buy/sell, VWAP, volume vs typical, and the volume-profile POC come from spot candles. Liquidity sweeps use 15-minute bars. Stored order-book and futures history are attached when those archives have a sample near the window. Listed BTC/ETH options (open interest, put/call, implied vol, unusual prints) attach when the options archive has samples. Informational only — not financial advice."
 
 const aroundSweepLookback = 48 * time.Hour
 
@@ -65,7 +65,9 @@ func (s *Service) GetAround(ctx context.Context, exchange, symbol, window, durin
 	})
 	if ex == "all" && len(out.Venues) > 0 {
 		out.Combined = domain.CombineAroundVenues(symbol, out.Venues, plan, interval)
+		out.VenueTiming = domain.CompareAroundVenueTiming(out.Venues)
 	}
+	s.attachAroundOptions(ctx, symbol, plan, out)
 	out.Summary = domain.ExplainAroundReport(*out)
 	return out, nil
 }
@@ -290,6 +292,72 @@ func (s *Service) attachAroundFutures(ctx context.Context, ex domain.Exchange, s
 			ph.Summary = domain.ExplainAroundPhase(*ph)
 		}
 	}
+	ven.OIStart, ven.OIDir = domain.FindAroundOIRunStart(oi, plan)
+	ven.OIUntil = domain.MarkAroundOIUntil(oi, ven.OIStart, ven.OIDir, domain.AroundVenueUntilPrice(ven.MoveStart, plan))
+}
+
+func (s *Service) attachAroundOptions(ctx context.Context, symbol string, plan domain.AroundPlan, out *domain.AroundReport) {
+	if s == nil || out == nil {
+		return
+	}
+	asset, err := domain.ParseOptionsAsset(symbol)
+	if err != nil {
+		return
+	}
+	from := plan.From.Add(-domain.AroundOptionsLookbackPad)
+	to := plan.To.Add(15 * time.Minute)
+	var samples []domain.OptionsSample
+	if s.optionsHist != nil {
+		if got, err := s.optionsHist.ListSamples(ctx, asset, from, to, domain.OptionsHistoryListLimit); err == nil {
+			samples = got
+		}
+	}
+	var dvol []domain.OptionsDVOLPoint
+	if p, ok := s.options.(domain.OptionsDVOLHistoryPort); ok && p != nil {
+		if got, err := p.GetOptionsDVOLHistory(ctx, asset, from, to); err == nil {
+			dvol = got
+		}
+	}
+	points := domain.MergeOptionsHistoryPoints(samples, dvol, from, to)
+	if len(points) == 0 {
+		return
+	}
+	apply := func(ven *domain.AroundVenue) {
+		if ven == nil || ven.Error != "" {
+			return
+		}
+		for i := range ven.Phases {
+			ph := &ven.Phases[i]
+			if !ph.To.After(ph.From) {
+				continue
+			}
+			if got := domain.OptionsAcrossWindow(asset, points, ph.From, ph.To); got != nil {
+				ph.Options = got
+			}
+		}
+		domain.FinalizeAroundOptions(ven.Phases, points)
+		var extra []domain.AroundEvent
+		for i := range ven.Phases {
+			ph := &ven.Phases[i]
+			if ph.Options == nil {
+				continue
+			}
+			if evs := domain.AroundOptionsToEvents(*ph.Options, ph.Phase, ph.To); len(evs) > 0 {
+				ph.Events = append(ph.Events, evs...)
+				extra = append(extra, evs...)
+			}
+			ph.Summary = domain.ExplainAroundPhase(*ph)
+		}
+		if len(extra) > 0 {
+			ven.Events = append(ven.Events, extra...)
+		}
+		ven.Changes = domain.CompareAroundPhases(ven.Phases)
+		ven.Summary = domain.ExplainAroundVenue(*ven)
+	}
+	for i := range out.Venues {
+		apply(&out.Venues[i])
+	}
+	apply(out.Combined)
 }
 
 func (s *Service) aroundFuturesSnaps(ctx context.Context, metric, exchange, symbol string, from, to time.Time) []domain.FuturesSnapshot {

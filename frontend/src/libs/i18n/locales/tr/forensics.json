@@ -42,7 +42,8 @@
       "volume": "Hacim",
       "takers": "Taker akışı",
       "oi": "Açık pozisyon",
-      "book": "Emir defteri"
+      "book": "Emir defteri",
+      "options": "Opsiyonlar"
     },
     "leans": {
       "up": "Çoğunlukla yükseldi",
@@ -78,6 +79,7 @@
   "oi": "Açık pozisyon",
   "funding": "Fonlama",
   "liquidations": "Likidasyonlar",
+  "options": "Opsiyonlar",
   "events": "Olaylar",
   "changes": "Ne değişti",
   "metric": "Ölçüt",

@@ -372,6 +372,39 @@ type aroundFuturesDTO struct {
 	Complete    bool   `json:"complete"`
 }
 
+type aroundOptionsDTO struct {
+	Asset        string           `json:"asset"`
+	OiFrom       string           `json:"oiFrom,omitempty"`
+	OiTo         string           `json:"oiTo,omitempty"`
+	OiChange     string           `json:"oiChange,omitempty"`
+	OiChangePct  string           `json:"oiChangePct,omitempty"`
+	OiDirection  string           `json:"oiDirection,omitempty"`
+	PutCallFrom  string           `json:"putCallFrom,omitempty"`
+	PutCallTo    string           `json:"putCallTo,omitempty"`
+	PutCallDelta string           `json:"putCallDelta,omitempty"`
+	LeanFrom     string           `json:"leanFrom,omitempty"`
+	LeanTo       string           `json:"leanTo,omitempty"`
+	DvolFrom     string           `json:"dvolFrom,omitempty"`
+	DvolTo       string           `json:"dvolTo,omitempty"`
+	DvolDelta    string           `json:"dvolDelta,omitempty"`
+	AtmIvFrom    string           `json:"atmIvFrom,omitempty"`
+	AtmIvTo      string           `json:"atmIvTo,omitempty"`
+	AtmIvDelta   string           `json:"atmIvDelta,omitempty"`
+	Moves        []optionsMoveDTO `json:"moves,omitempty"`
+	Unusual      bool             `json:"unusual,omitempty"`
+	Started      string           `json:"started,omitempty"`
+	StartedAt    *time.Time       `json:"startedAt,omitempty"`
+	Lead         string           `json:"lead,omitempty"`
+	LeadLabel    string           `json:"leadLabel,omitempty"`
+	LeadWindow   string           `json:"leadWindow,omitempty"`
+	Together     int              `json:"together,omitempty"`
+	Weight       string           `json:"weight,omitempty"`
+	After        string           `json:"after,omitempty"`
+	AfterSummary string           `json:"afterSummary,omitempty"`
+	Summary      string           `json:"summary,omitempty"`
+	Complete     bool             `json:"complete"`
+}
+
 type aroundEventDTO struct {
 	Kind    string    `json:"kind"`
 	Phase   string    `json:"phase,omitempty"`
@@ -393,6 +426,7 @@ type aroundPhaseDTO struct {
 	Profile  *aroundProfileDTO `json:"profile,omitempty"`
 	Book     *aroundBookDTO    `json:"book,omitempty"`
 	Futures  *aroundFuturesDTO `json:"futures,omitempty"`
+	Options  *aroundOptionsDTO `json:"options,omitempty"`
 	Events   []aroundEventDTO  `json:"events,omitempty"`
 	Summary  string            `json:"summary"`
 	Complete bool              `json:"complete"`
@@ -420,19 +454,47 @@ type aroundVenueDTO struct {
 }
 
 type aroundResponse struct {
-	Symbol   string           `json:"symbol"`
-	Exchange string           `json:"exchange"`
-	At       time.Time        `json:"at"`
-	Window   string           `json:"window"`
-	During   string           `json:"during"`
-	From     time.Time        `json:"from"`
-	To       time.Time        `json:"to"`
-	AsOf     time.Time        `json:"asOf"`
-	Clipped  bool             `json:"clipped"`
-	Venues   []aroundVenueDTO `json:"venues"`
-	Combined *aroundVenueDTO  `json:"combined,omitempty"`
-	Summary  string           `json:"summary"`
-	Note     string           `json:"note"`
+	Symbol      string                `json:"symbol"`
+	Exchange    string                `json:"exchange"`
+	At          time.Time             `json:"at"`
+	Window      string                `json:"window"`
+	During      string                `json:"during"`
+	From        time.Time             `json:"from"`
+	To          time.Time             `json:"to"`
+	AsOf        time.Time             `json:"asOf"`
+	Clipped     bool                  `json:"clipped"`
+	Venues      []aroundVenueDTO      `json:"venues"`
+	Combined    *aroundVenueDTO       `json:"combined,omitempty"`
+	VenueTiming *aroundVenueTimingDTO `json:"venueTiming,omitempty"`
+	Summary     string                `json:"summary"`
+	Note        string                `json:"note"`
+}
+
+type aroundVenueTimingDTO struct {
+	Agreement         string                    `json:"agreement"`
+	Follow            string                    `json:"follow,omitempty"`
+	Leader            string                    `json:"leader,omitempty"`
+	LeaderMetric      string                    `json:"leaderMetric,omitempty"`
+	BinanceStart      *time.Time                `json:"binanceStart,omitempty"`
+	BybitStart        *time.Time                `json:"bybitStart,omitempty"`
+	BinanceOIStart    *time.Time                `json:"binanceOiStart,omitempty"`
+	BybitOIStart      *time.Time                `json:"bybitOiStart,omitempty"`
+	BinanceTakerStart *time.Time                `json:"binanceTakerStart,omitempty"`
+	BybitTakerStart   *time.Time                `json:"bybitTakerStart,omitempty"`
+	Lead              string                    `json:"lead,omitempty"`
+	LeadLabel         string                    `json:"leadLabel,omitempty"`
+	Before            []aroundVenueBeforeBitDTO `json:"beforeFollow,omitempty"`
+	Summary           string                    `json:"summary,omitempty"`
+}
+
+type aroundVenueBeforeBitDTO struct {
+	Metric    string     `json:"metric"`
+	Venue     string     `json:"venue"`
+	Direction string     `json:"direction,omitempty"`
+	Phase     string     `json:"phase,omitempty"`
+	At        *time.Time `json:"at,omitempty"`
+	Until     string     `json:"until,omitempty"`
+	Summary   string     `json:"summary,omitempty"`
 }
 
 func aroundToDTO(a *domain.AroundReport) aroundResponse {
@@ -452,6 +514,61 @@ func aroundToDTO(a *domain.AroundReport) aroundResponse {
 	if a.Combined != nil {
 		c := aroundVenueToDTO(*a.Combined)
 		out.Combined = &c
+	}
+	if a.VenueTiming != nil {
+		out.VenueTiming = aroundVenueTimingToDTO(a.VenueTiming)
+	}
+	return out
+}
+
+func aroundVenueTimingToDTO(v *domain.AroundVenueTiming) *aroundVenueTimingDTO {
+	if v == nil {
+		return nil
+	}
+	out := &aroundVenueTimingDTO{
+		Agreement: v.Agreement, Follow: v.Follow, Leader: v.Leader, LeaderMetric: v.LeaderMetric,
+		LeadLabel: v.LeadLabel, Summary: v.Summary,
+	}
+	if len(v.Before) > 0 {
+		out.Before = make([]aroundVenueBeforeBitDTO, 0, len(v.Before))
+		for _, b := range v.Before {
+			bit := aroundVenueBeforeBitDTO{
+				Metric: b.Metric, Venue: b.Venue, Direction: b.Direction, Phase: b.Phase,
+				Until: b.Until, Summary: b.Summary,
+			}
+			if !b.At.IsZero() {
+				t := b.At.UTC()
+				bit.At = &t
+			}
+			out.Before = append(out.Before, bit)
+		}
+	}
+	if !v.BinanceStart.IsZero() {
+		t := v.BinanceStart.UTC()
+		out.BinanceStart = &t
+	}
+	if !v.BybitStart.IsZero() {
+		t := v.BybitStart.UTC()
+		out.BybitStart = &t
+	}
+	if !v.BinanceOIStart.IsZero() {
+		t := v.BinanceOIStart.UTC()
+		out.BinanceOIStart = &t
+	}
+	if !v.BybitOIStart.IsZero() {
+		t := v.BybitOIStart.UTC()
+		out.BybitOIStart = &t
+	}
+	if !v.BinanceTakerStart.IsZero() {
+		t := v.BinanceTakerStart.UTC()
+		out.BinanceTakerStart = &t
+	}
+	if !v.BybitTakerStart.IsZero() {
+		t := v.BybitTakerStart.UTC()
+		out.BybitTakerStart = &t
+	}
+	if v.Lead >= time.Minute {
+		out.Lead = domain.FormatOptionsLeadShort(v.Lead)
 	}
 	return out
 }
@@ -533,6 +650,53 @@ func aroundPhaseToDTO(p domain.AroundPhase) aroundPhaseDTO {
 			Complete: p.Futures.Complete,
 		}
 	}
+	if p.Options != nil {
+		out.Options = aroundOptionsToDTO(p.Options)
+	}
+	return out
+}
+
+func aroundOptionsToDTO(o *domain.AroundOptions) *aroundOptionsDTO {
+	if o == nil {
+		return nil
+	}
+	out := &aroundOptionsDTO{
+		Asset: o.Asset, Unusual: o.Unusual, Started: o.Started, Summary: o.Summary, Complete: o.Complete,
+		OiDirection: o.OIDirection, LeanFrom: o.LeanFrom, LeanTo: o.LeanTo,
+		LeadLabel: o.LeadLabel, LeadWindow: o.LeadWindow, Together: o.Together, Weight: o.Weight,
+		After: o.After, AfterSummary: o.AfterSummary,
+	}
+	if !o.StartedAt.IsZero() {
+		t := o.StartedAt.UTC()
+		out.StartedAt = &t
+	}
+	if o.Lead >= time.Minute {
+		out.Lead = domain.FormatOptionsLeadShort(o.Lead)
+	}
+	if o.HasOI {
+		out.OiFrom = formatHistQty(o.OIFrom)
+		out.OiTo = formatHistQty(o.OITo)
+		out.OiChange = domain.FormatSignedQty(o.OIChange)
+		out.OiChangePct = domain.FormatSignedPct(o.OIChangePct)
+	}
+	if o.HasPutCall {
+		out.PutCallFrom = formatHistQty(o.PutCallFrom)
+		out.PutCallTo = formatHistQty(o.PutCallTo)
+		out.PutCallDelta = domain.FormatSignedQty(o.PutCallDelta)
+	}
+	if o.HasDVOL {
+		out.DvolFrom = formatHistQty(o.DVOLFrom)
+		out.DvolTo = formatHistQty(o.DVOLTo)
+		out.DvolDelta = domain.FormatSignedQty(o.DVOLDelta)
+	}
+	if o.HasAtmIV {
+		out.AtmIvFrom = formatHistQty(o.AtmIVFrom)
+		out.AtmIvTo = formatHistQty(o.AtmIVTo)
+		out.AtmIvDelta = domain.FormatSignedQty(o.AtmIVDelta)
+	}
+	if len(o.Moves) > 0 {
+		out.Moves = optionsMovesToDTO(&domain.OptionsMoves{Findings: o.Moves}).Findings
+	}
 	return out
 }
 
@@ -556,7 +720,7 @@ func aroundEventsToDTO(in []domain.AroundEvent) []aroundEventDTO {
 
 func formatAroundNum(metric string, v float64) string {
 	switch metric {
-	case "price", "oi":
+	case "price", "oi", "options_oi":
 		return domain.FormatSignedPct(v)
 	case "delta":
 		return domain.FormatSignedQty(v)

@@ -191,12 +191,12 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
   `get_liquidity_sweeps` → poke through a prior high/low that comes back (level, excursion, time, volume);
   `get_rsi_heatmap` → ranked RSI scatter for top pairs (stables omitted; oversold/overbought);
   `get_volume_surge` / `scan_volume_surges` → current vs typical 5m/15m/1h volume (buy/sell split; which coins are hot);
-  `get_around` → what happened around a time (before / during / after: price, volume, VWAP, vs typical, POC, sweeps, stored book/futures);
+  `get_around` → what happened around a time (before / during / after: price, volume, VWAP, vs typical, POC, sweeps, stored book/futures, BTC/ETH options when sampled);
   `compare_around` → how two times / moves differed (price, volume, book, OI, sweeps);
   `find_around_moves` → strongest recent up/down legs plus the around tape for each;
   `find_around_precursors` → what often changed before those moves, including combos that fire together and lean up or down;
   `find_around_similar` → past important-move setups like now (unique events; pick horizons for after up/down/avg/median), and what price did after;
-  `get_market_forensics` → one report: before / during / after a chosen time plus similar past moves, after-horizons, and why the move may have happened;
+  `get_market_forensics` → one report: before / during / after a chosen time plus similar past moves, after-horizons, and why the move may have happened (unusual BTC/ETH options prints in the before-window are called out);
   `scan_market_forensics` → which coins currently look like past pre-move setups, which tape pieces matched, and what usually happened after;
   `review_setup_radar` → saved radar hits and whether price later matched the lean;
   `create_setup_radar_alert` → notify when a coin starts looking similar enough to those past setups (min_similarity, lean any/up/down, symbol or all);

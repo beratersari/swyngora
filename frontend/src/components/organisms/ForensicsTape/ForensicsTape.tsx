@@ -21,6 +21,40 @@ function dash(v: string | undefined): string {
   return v && v.trim() ? v : '—';
 }
 
+function optionsTapeValue(phase?: ForensicsPhase): string {
+  const o = phase?.options;
+  if (!o?.complete) return '—';
+  const when =
+    o.started === 'before'
+      ? o.lead
+        ? `${o.lead} before the move`
+        : 'before the move'
+      : o.started === 'during'
+        ? 'during the move'
+        : '';
+  const cluster =
+    o.together && o.together >= 3 ? '3 series together' : o.together === 2 ? '2 series together' : '';
+  const follow =
+    o.after === 'continued'
+      ? 'kept going'
+      : o.after === 'reversed'
+        ? 'turned the other way'
+        : o.after === 'faded'
+          ? 'went quiet'
+          : o.after === 'mixed'
+            ? 'mixed after'
+            : '';
+  const bits = [
+    o.unusual ? (when ? `unusual ${when}` : 'unusual') : '',
+    cluster,
+    follow,
+    [o.oiChangePct, o.oiDirection].filter(Boolean).join(' '),
+    o.leanTo ? `lean ${o.leanTo}` : '',
+    o.dvolDelta ? `IV ${o.dvolDelta}` : '',
+  ].filter((s) => s && s.trim());
+  return bits[0] ? bits.slice(0, 4).join(' · ') : '—';
+}
+
 function PhaseMetrics({ phase }: { phase?: ForensicsPhase }) {
   const { t } = useTranslation('forensics');
   const rows: { label: string; value: string }[] = [
@@ -59,6 +93,10 @@ function PhaseMetrics({ phase }: { phase?: ForensicsPhase }) {
           ? `L ${dash(phase.futures.longLiq)} / S ${dash(phase.futures.shortLiq)}`
           : '—',
     },
+    {
+      label: t('options'),
+      value: optionsTapeValue(phase),
+    },
   ];
   return (
     <MetricGrid>
@@ -78,7 +116,7 @@ function PhaseMetrics({ phase }: { phase?: ForensicsPhase }) {
   );
 }
 
-export function ForensicsTape({ venue, isLoading }: ForensicsTapeProps) {
+export function ForensicsTape({ venue, venueTiming, isLoading }: ForensicsTapeProps) {
   const { t } = useTranslation('forensics');
   if (isLoading) {
     return <Skeleton active paragraph={{ rows: 8 }} />;
@@ -89,6 +127,11 @@ export function ForensicsTape({ venue, isLoading }: ForensicsTapeProps) {
       {venue.summary ? (
         <Text variant="bodySm" color="secondary">
           {venue.summary}
+        </Text>
+      ) : null}
+      {venueTiming?.summary ? (
+        <Text variant="bodySm" color="secondary">
+          {venueTiming.summary}
         </Text>
       ) : null}
       {venue.error ? (
