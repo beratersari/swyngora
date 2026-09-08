@@ -57,6 +57,37 @@ export function customSignalGrade(score: number): string {
   return 'C';
 }
 
+export function customEvidenceLabel(score: number): 'strong' | 'fair' | 'weak' {
+  if (score >= 75) return 'strong';
+  if (score >= 50) return 'fair';
+  return 'weak';
+}
+
+export function previewEvidence(
+  factors: CustomMixPreviewFactor[],
+): { score: number; label: 'strong' | 'fair' | 'weak'; detail?: string } {
+  let mass = 0;
+  let acc = 0;
+  const missing: string[] = [];
+  for (const factor of factors) {
+    if (factor.appliedPct <= 0) continue;
+    mass += factor.appliedPct;
+    if (factor.status === 'missing') {
+      acc += 0;
+      missing.push(factor.id);
+      continue;
+    }
+    if (factor.status === 'idle') {
+      acc += 0.2 * factor.appliedPct;
+      continue;
+    }
+    const q = Number.isFinite(factor.quality) ? Math.min(1, Math.max(0, (factor.quality ?? 100) / 100)) : 1;
+    acc += q * factor.appliedPct;
+  }
+  const score = mass > 0 ? round1(Math.max(0, Math.min(100, (acc / mass) * 100))) : 0;
+  return { score, label: customEvidenceLabel(score), detail: missing.length ? `missing ${missing.join(', ')}` : undefined };
+}
+
 function pctOf(draft: CustomWeightDraftRow[], id: CustomSignalFactorId): number {
   const row = draft.find((d) => d.id === id);
   if (!row?.enabled) return 0;
@@ -139,12 +170,14 @@ export function previewCustomMix(items: CustomSignalItem[], draft: CustomWeightD
         appliedEffect: assembledApp.effects.get(factor.id) ?? 0,
         deltaEffect: round1((assembledApp.effects.get(factor.id) ?? 0) - (assembledDef.effects.get(factor.id) ?? 0)),
         detail: src?.detail,
+        quality: src?.quality,
       };
     });
     const hunt = factors.find((f) => f.id === 'hunt_up');
     const tapeMissing = factors.some(
       (f) => (f.id === 'forensics' || f.id === 'similar_setup') && f.appliedPct > 0 && f.status === 'missing',
     );
+    const evidence = previewEvidence(factors);
     return {
       exchange: item.exchange ?? '',
       symbol: item.symbol ?? '',
@@ -175,6 +208,9 @@ export function previewCustomMix(items: CustomSignalItem[], draft: CustomWeightD
           item.tapeFresh?.book?.stale ||
           item.tapeFresh?.options?.stale,
       ),
+      evidenceScore: evidence.score,
+      evidenceLabel: evidence.label,
+      evidenceDetail: item.custom?.evidence?.detail ?? evidence.detail,
     };
   }).sort((a, b) => b.appliedScore - a.appliedScore || a.symbol.localeCompare(b.symbol));
 }

@@ -102,7 +102,7 @@ func SimilarSetupFactorRaw(rep *AroundSimilarReport, horizon string) CustomSigna
 	if note != "" {
 		detail = note + ". " + detail
 	}
-	return CustomSignalRaw{Score: score, Status: CustomFactorUsed, Detail: detail}
+	return CustomSignalRaw{Score: score, Status: CustomFactorUsed, Detail: detail, Quality: tapeFactorQuality(stats, CustomSignalTapeFreshFrom(rep))}
 }
 
 // ForensicsFactorRaw maps the current tape's match to past pre-move setups
@@ -157,7 +157,37 @@ func ForensicsFactorRaw(rep *AroundSimilarReport, horizon string) CustomSignalRa
 	if note != "" {
 		detail = note + ". " + detail
 	}
-	return CustomSignalRaw{Score: score, Status: CustomFactorUsed, Detail: detail}
+	return CustomSignalRaw{Score: score, Status: CustomFactorUsed, Detail: detail, Quality: tapeFactorQuality(stats, CustomSignalTapeFreshFrom(rep))}
+}
+
+// tapeFactorQuality is 0–1 from complete-setup share and current-tape freshness.
+func tapeFactorQuality(stats CustomSignalTapeStats, fresh CustomSignalTapeFresh) float64 {
+	if stats.Used <= 0 || stats.Setups <= 0 {
+		return 0
+	}
+	share := float64(stats.Used) / float64(stats.Setups)
+	return clamp01(share * (0.5 + 0.5*tapeFreshQuality(fresh)))
+}
+
+func tapeFreshQuality(f CustomSignalTapeFresh) float64 {
+	rows := []CustomSignalTapeAge{f.OI, f.Takers, f.Book, f.Options}
+	var acc float64
+	present := 0
+	for _, a := range rows {
+		if a.Age == "" || a.Age == "missing" {
+			continue
+		}
+		present++
+		if a.Stale {
+			acc += 0.4
+		} else {
+			acc += 1
+		}
+	}
+	if present == 0 {
+		return 1
+	}
+	return acc / 4
 }
 
 // CustomSignalTapeAge is how old one current-tape series is vs the scan clock.

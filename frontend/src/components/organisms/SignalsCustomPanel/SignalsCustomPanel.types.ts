@@ -17,6 +17,7 @@ export type CustomMixPreviewFactor = {
   appliedEffect: number;
   deltaEffect: number;
   detail?: string;
+  quality?: number;
 };
 
 export type CustomMixPreviewRow = {
@@ -36,6 +37,9 @@ export type CustomMixPreviewRow = {
   tapeThin?: number;
   tapeFreshNote?: string;
   tapeFreshStale?: boolean;
+  evidenceScore?: number;
+  evidenceLabel?: 'strong' | 'fair' | 'weak';
+  evidenceDetail?: string;
   price?: number;
 };
 

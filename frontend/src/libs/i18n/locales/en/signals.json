@@ -160,6 +160,11 @@
     "tapeReload": "Forensics or similar setups are on but this scan has no tape data yet. Apply the mix to load them.",
     "tapeStats": "Used {{used}} of {{setups}} similar setups",
     "tapeStatsThin": "Used {{used}} of {{setups}} similar setups; {{thin}} had missing tape",
+    "evidence": {
+      "strong": "Strong evidence ({{score}})",
+      "fair": "Fair evidence ({{score}})",
+      "weak": "Weak evidence ({{score}})"
+    },
     "factors": {
       "ema_crossover": "EMA 9/21 cross",
       "ema_trend_bias": "EMA 50/200 pullback",

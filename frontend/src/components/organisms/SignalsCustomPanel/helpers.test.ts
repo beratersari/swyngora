@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { CustomSignalItem } from '@/libs/api';
-import { defaultCustomWeightDraft, previewCustomMix, customWeightsValid, weightsFromDraft } from './helpers';
+import {
+  defaultCustomWeightDraft,
+  previewCustomMix,
+  customWeightsValid,
+  weightsFromDraft,
+  previewEvidence,
+} from './helpers';
 
 function item(partial: Partial<CustomSignalItem> & { symbol: string }): CustomSignalItem {
   return {
@@ -69,6 +75,43 @@ describe('custom signal helpers', () => {
     expect(rows[0]?.tapeThin).toBe(2);
     expect(rows[0]?.tapeFreshNote).toBe('oi 6m ago; options 40m ago (old)');
     expect(rows[0]?.tapeFreshStale).toBe(true);
+  });
+
+  it('marks a high score as weak evidence when half the mix is missing tape', () => {
+    const draft = defaultCustomWeightDraft().map((row) =>
+      row.id === 'ema_crossover'
+        ? { ...row, enabled: true, pct: 50 }
+        : row.id === 'similar_setup'
+          ? { ...row, enabled: true, pct: 50 }
+          : { ...row, enabled: false, pct: 0 },
+    );
+    const rows = previewCustomMix(
+      [
+        item({
+          symbol: 'SOLUSDT',
+          custom: {
+            score: 88,
+            factors: [
+              { id: 'ema_crossover', score: 90, status: 'used', quality: 100 },
+              { id: 'similar_setup', score: 80, status: 'missing' },
+            ],
+          },
+        }),
+      ],
+      draft,
+    );
+    expect(rows[0]?.appliedScore).toBeGreaterThan(70);
+    expect(rows[0]?.evidenceLabel).toBe('fair');
+    expect(rows[0]?.evidenceScore).toBeLessThanOrEqual(50);
+  });
+
+  it('scores evidence from used-factor quality', () => {
+    const ev = previewEvidence([
+      { id: 'ema_crossover', score: 90, status: 'used', defaultPct: 0, appliedPct: 40, defaultEffect: 0, appliedEffect: 0, deltaEffect: 0, quality: 100 },
+      { id: 'similar_setup', score: 80, status: 'used', defaultPct: 0, appliedPct: 60, defaultEffect: 0, appliedEffect: 0, deltaEffect: 0, quality: 30 },
+    ]);
+    expect(ev.label).not.toBe('strong');
+    expect(ev.score).toBe(58);
   });
 
   it('previews score change and names the largest mover', () => {

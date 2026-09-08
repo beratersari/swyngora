@@ -9441,11 +9441,20 @@ components:
         effect: { type: number }
         status: { type: string, enum: [used, missing, disabled, idle] }
         detail: { type: string }
+        quality: { type: number, description: 0–100 evidence for this factor }
+    CustomSignalEvidence:
+      type: object
+      properties:
+        score: { type: number, description: 0–100 how complete the mix data is }
+        label: { type: string, enum: [strong, fair, weak] }
+        detail: { type: string }
     CustomSignalScore:
       type: object
       properties:
         score: { type: number }
         grade: { type: string }
+        evidence:
+          $ref: '#/components/schemas/CustomSignalEvidence'
         factors:
           type: array
           items:

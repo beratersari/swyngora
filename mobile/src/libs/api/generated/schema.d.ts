@@ -5683,10 +5683,20 @@ export interface components {
             /** @enum {string} */
             status?: "used" | "missing" | "disabled" | "idle";
             detail?: string;
+            /** 0–100 evidence for this factor */
+            quality?: number;
+        };
+        CustomSignalEvidence: {
+            /** 0–100 how complete the mix data is */
+            score?: number;
+            /** @enum {string} */
+            label?: "strong" | "fair" | "weak";
+            detail?: string;
         };
         CustomSignalScore: {
             score?: number;
             grade?: string;
+            evidence?: components["schemas"]["CustomSignalEvidence"];
             factors?: components["schemas"]["CustomSignalFactor"][];
             scoreMix?: {
                 [key: string]: unknown;

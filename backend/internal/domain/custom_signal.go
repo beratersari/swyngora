@@ -31,6 +31,12 @@ const (
 	CustomFactorDisabled = "disabled"
 	CustomFactorIdle     = "idle"
 
+	CustomEvidenceStrong = "strong"
+	CustomEvidenceFair   = "fair"
+	CustomEvidenceWeak   = "weak"
+
+	customEvidenceIdleQuality = 0.2
+
 	CustomSignalMixDefault = "default"
 	CustomSignalMixCustom  = "custom"
 
@@ -369,9 +375,10 @@ type CustomSignalCatalogRow struct {
 
 // CustomSignalRaw is one factor's 0–100 input before the mix.
 type CustomSignalRaw struct {
-	Score  float64
-	Status string
-	Detail string
+	Score   float64
+	Status  string
+	Detail  string
+	Quality float64 // 0–1 evidence for this factor when used; 0 means full if used
 }
 
 // CustomSignalWeightRow is one factor in the requested or used mix.
@@ -406,14 +413,24 @@ type CustomSignalFactor struct {
 	Effect       float64 `json:"effect"`
 	Status       string  `json:"status"`
 	Detail       string  `json:"detail,omitempty"`
+	Quality      float64 `json:"quality,omitempty"`
+}
+
+// CustomSignalEvidence is how trustworthy the custom score is, separate from
+// the 0–100 lean. Weak data can still produce a high score.
+type CustomSignalEvidence struct {
+	Score  float64 `json:"score"`
+	Label  string  `json:"label"`
+	Detail string  `json:"detail"`
 }
 
 // CustomSignalScore is the 0–100 custom mix for one symbol.
 type CustomSignalScore struct {
-	Score   float64              `json:"score"`
-	Grade   string               `json:"grade"`
-	Factors []CustomSignalFactor `json:"factors"`
-	Mix     CustomSignalMix      `json:"scoreMix"`
+	Score    float64              `json:"score"`
+	Grade    string               `json:"grade"`
+	Evidence CustomSignalEvidence `json:"evidence"`
+	Factors  []CustomSignalFactor `json:"factors"`
+	Mix      CustomSignalMix      `json:"scoreMix"`
 }
 
 // CustomSignalSnapshot is one mix's score (default or applied).
@@ -677,10 +694,18 @@ func HuntUpRaw(report *HuntReport) CustomSignalRaw {
 		}
 		return CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: detail}
 	}
+	q := report.Bias.Coverage.Score / 100
+	if q <= 0 {
+		q = 0.7
+	}
+	if q > 1 {
+		q = 1
+	}
 	return CustomSignalRaw{
-		Score:  report.Bias.UpScore,
-		Status: CustomFactorUsed,
-		Detail: fmt.Sprintf("up %.1f / down %.1f · %s", report.Bias.UpScore, report.Bias.DownScore, report.Bias.Lean),
+		Score:   report.Bias.UpScore,
+		Status:  CustomFactorUsed,
+		Detail:  fmt.Sprintf("up %.1f / down %.1f · %s", report.Bias.UpScore, report.Bias.DownScore, report.Bias.Lean),
+		Quality: q,
 	}
 }
 
@@ -696,7 +721,7 @@ func ScoreCustomSignal(raws map[string]CustomSignalRaw, w CustomSignalWeights) C
 		pct, score float64
 	}
 	var live []usedRow
-	var reqTotal float64
+	var reqTotal, evMass, evAcc float64
 	requested := make([]CustomSignalWeightRow, 0, len(CustomSignalFactorIDs))
 	var missing, disabled []string
 	idle := make([]string, 0)
@@ -723,6 +748,7 @@ func ScoreCustomSignal(raws map[string]CustomSignalRaw, w CustomSignalWeights) C
 			row.Status = CustomFactorMissing
 			row.Detail = src.Detail
 			missing = append(missing, id)
+			evMass += pct
 		case src.Status == CustomFactorIdle || src.Score <= 0:
 			f.Status = CustomFactorIdle
 			row.Status = CustomFactorIdle
@@ -731,10 +757,17 @@ func ScoreCustomSignal(raws map[string]CustomSignalRaw, w CustomSignalWeights) C
 				row.Detail = "pattern not present"
 			}
 			idle = append(idle, id)
+			evMass += pct
+			evAcc += customEvidenceIdleQuality * pct
+			f.Quality = round1(customEvidenceIdleQuality * 100)
 		default:
 			row.Status = CustomFactorUsed
 			row.Detail = src.Detail
 			f.Status = CustomFactorUsed
+			q := rawEvidenceQuality(src)
+			f.Quality = round1(q * 100)
+			evMass += pct
+			evAcc += q * pct
 			live = append(live, usedRow{id: id, detail: src.Detail, pct: pct, score: src.Score})
 		}
 		requested = append(requested, row)
@@ -779,15 +812,92 @@ func ScoreCustomSignal(raws map[string]CustomSignalRaw, w CustomSignalWeights) C
 	}
 	note := "Same average as the swing engine: only present patterns (score > 0) are mixed. Absent patterns are omitted, not scored as 0."
 	return CustomSignalScore{
-		Score:   score,
-		Grade:   customSignalGrade(score),
-		Factors: factors,
+		Score:    score,
+		Grade:    customSignalGrade(score),
+		Evidence: finishCustomEvidence(evMass, evAcc, missing, factors),
+		Factors:  factors,
 		Mix: CustomSignalMix{
 			Source: src, Requested: requested, Used: used,
 			RequestedTotal: round1(reqTotal), UsedTotal: round1(mass),
 			Missing: missing, Idle: idle, Disabled: disabled, Note: note,
 		},
 	}
+}
+
+func rawEvidenceQuality(src CustomSignalRaw) float64 {
+	if src.Quality > 0 {
+		if src.Quality > 1 {
+			return 1
+		}
+		return src.Quality
+	}
+	return 1
+}
+
+func customEvidenceLabel(score float64) string {
+	if score >= 75 {
+		return CustomEvidenceStrong
+	}
+	if score >= 50 {
+		return CustomEvidenceFair
+	}
+	return CustomEvidenceWeak
+}
+
+func finishCustomEvidence(mass, acc float64, missing []string, factors []CustomSignalFactor) CustomSignalEvidence {
+	score := 0.0
+	if mass > 0 {
+		score = acc / mass * 100
+	}
+	score = clampScore(score)
+	label := customEvidenceLabel(score)
+	return CustomSignalEvidence{
+		Score:  score,
+		Label:  label,
+		Detail: customEvidenceDetail(label, score, missing, factors),
+	}
+}
+
+func customEvidenceDetail(label string, score float64, missing []string, factors []CustomSignalFactor) string {
+	head := fmt.Sprintf("Evidence is %s (%.0f)", label, score)
+	var bits []string
+	if len(missing) > 0 {
+		names := make([]string, 0, len(missing))
+		for _, id := range missing {
+			names = append(names, CustomSignalFactorLabel(id))
+		}
+		bits = append(bits, "missing "+joinList(names))
+	}
+	for _, f := range factors {
+		if f.Status != CustomFactorUsed || f.Quality >= 75 {
+			continue
+		}
+		if CustomSignalFactorGroup(f.ID) != "tape" {
+			continue
+		}
+		if note := tapeStatsPrefix(f.Detail); note != "" {
+			bits = append(bits, note)
+			break
+		}
+	}
+	if len(bits) == 0 {
+		if score >= 75 {
+			return head + " — factors in this mix have complete data"
+		}
+		return head
+	}
+	return head + " — " + strings.Join(bits, "; ")
+}
+
+func tapeStatsPrefix(detail string) string {
+	detail = strings.TrimSpace(detail)
+	if !strings.HasPrefix(detail, "Used ") {
+		return ""
+	}
+	if i := strings.Index(detail, ". "); i > 0 {
+		return detail[:i]
+	}
+	return detail
 }
 
 // AlignCustomDefaultToEngine sets the built-in snapshot to the engine swing score

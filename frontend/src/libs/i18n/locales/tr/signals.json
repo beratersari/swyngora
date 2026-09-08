@@ -160,6 +160,11 @@
     "tapeReload": "Adli veya benzer kurulumlar açık ama bu taramada bant verisi yok. Yüklemek için karışımı uygulayın.",
     "tapeStats": "Kullanılan {{used}} / {{setups}} benzer kurulum",
     "tapeStatsThin": "Kullanılan {{used}} / {{setups}} benzer kurulum; {{thin}} tanesinde eksik bant vardı",
+    "evidence": {
+      "strong": "Güçlü kanıt ({{score}})",
+      "fair": "Orta kanıt ({{score}})",
+      "weak": "Zayıf kanıt ({{score}})"
+    },
     "factors": {
       "ema_crossover": "EMA 9/21 kesişimi",
       "ema_trend_bias": "EMA 50/200 geri çekilme",

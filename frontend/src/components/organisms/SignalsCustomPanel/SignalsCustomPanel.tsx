@@ -28,6 +28,13 @@ function gradeVariant(grade?: string): 'gradeA' | 'gradeB' | 'gradeC' {
   return 'gradeC';
 }
 
+function evidenceColor(label?: string): 'success' | 'warning' | 'error' | 'secondary' {
+  if (label === 'strong') return 'success';
+  if (label === 'fair') return 'warning';
+  if (label === 'weak') return 'error';
+  return 'secondary';
+}
+
 /**
  * Custom swing-signal mixer: pick factors, preview score vs built-in mix, save profiles.
  * Informational only — not financial advice.
@@ -194,6 +201,20 @@ export function SignalsCustomPanel({
                   {t('signals:custom.grade', { grade: row.grade, score: row.appliedScore })}
                 </BrandTag>
               </CardTop>
+              {row.evidenceLabel ? (
+                <Text
+                  variant="bodySm"
+                  color={evidenceColor(row.evidenceLabel)}
+                  data-testid="signals-custom-evidence"
+                >
+                  {t(`signals:custom.evidence.${row.evidenceLabel}`, { score: row.evidenceScore ?? 0 })}
+                </Text>
+              ) : null}
+              {row.evidenceDetail ? (
+                <Text variant="caption" color={row.evidenceLabel === 'weak' ? 'error' : 'secondary'}>
+                  {row.evidenceDetail}
+                </Text>
+              ) : null}
               <Text variant="bodySm" color="secondary">
                 {t('signals:custom.vsDefault', {
                   applied: row.appliedScore,

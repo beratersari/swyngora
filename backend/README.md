@@ -163,7 +163,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/swing/custom/factors` | Mixable swing + hunt + forensics/similar factors and built-in percents |
 | `GET`/`POST` | `/api/v1/swing/custom/profiles` | List / save a named custom mix (weights sum to 100) |
 | `GET`/`PATCH`/`DELETE` | `/api/v1/swing/custom/profiles/{id}` | Get / update / delete a saved mix |
-| `GET` | `/api/v1/swing/custom/scan` | Watchlist scored with a mix (`profileId` or `weight*`); tape rows include `tapeSetups` / `tapeUsed` / `tapeThin` / `tapeFresh` |
+| `GET` | `/api/v1/swing/custom/scan` | Watchlist scored with a mix (`profileId` or `weight*`); tape rows include `tapeSetups` / `tapeUsed` / `tapeThin` / `tapeFresh`; `custom.evidence` is strong/fair/weak |
 | `POST` | `/api/v1/export` | Start JSON/CSV export of own watchlist/shares/alerts/backtests/portfolios/customSignals |
 | `GET` | `/api/v1/export` | List export jobs |
 | `GET` | `/api/v1/export/{id}` | Export progress / status |

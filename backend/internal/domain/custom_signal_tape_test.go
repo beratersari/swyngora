@@ -358,6 +358,74 @@ func missingTapeHit(sim float64) AroundSimilarHit {
 	}
 }
 
+func TestScoreCustomSignal_EvidenceWeakWhenDataIsThin(t *testing.T) {
+	t.Parallel()
+	full := BuildCustomSignalRaws([]SwingPattern{
+		{Name: CustomFactorEMACrossover, Score: 90, Description: "cross"},
+		{Name: CustomFactorRSIRecovery, Score: 88, Description: "rsi"},
+	}, nil)
+	strong := ScoreCustomSignal(full, CustomSignalWeights{Source: CustomSignalMixCustom, Pct: map[string]float64{
+		CustomFactorEMACrossover: 50,
+		CustomFactorRSIRecovery:  50,
+	}})
+	if strong.Evidence.Label != CustomEvidenceStrong || strong.Evidence.Score < 75 {
+		t.Fatalf("complete swing mix should be strong evidence: %+v", strong.Evidence)
+	}
+	thinTape := SimilarSetupFactorRaw(&AroundSimilarReport{
+		Matches: []AroundSimilarHit{
+			hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(80)),
+			hitAfter(AroundSimilarHorizon4h, CVDDirUp, completeTapeHit(78)),
+			hitAfter(AroundSimilarHorizon4h, CVDDirDown, missingTapeHit(70)),
+			hitAfter(AroundSimilarHorizon4h, CVDDirDown, missingTapeHit(70)),
+			hitAfter(AroundSimilarHorizon4h, CVDDirDown, missingTapeHit(70)),
+		},
+		AsOf: time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC),
+		Current: AroundPhase{
+			Options: &AroundOptions{Complete: true, SampledTo: time.Date(2026, 9, 8, 11, 20, 0, 0, time.UTC)},
+		},
+	}, AroundSimilarHorizon4h)
+	if thinTape.Status != CustomFactorUsed || thinTape.Quality >= 0.75 {
+		t.Fatalf("thin tape quality %+v", thinTape)
+	}
+	raws := BuildCustomSignalRaws([]SwingPattern{
+		{Name: CustomFactorEMACrossover, Score: 92, Description: "cross"},
+	}, nil)
+	raws[CustomFactorSimilarSetup] = thinTape
+	weak := ScoreCustomSignal(raws, CustomSignalWeights{Source: CustomSignalMixCustom, Pct: map[string]float64{
+		CustomFactorEMACrossover: 40,
+		CustomFactorSimilarSetup: 60,
+	}})
+	if weak.Score < 60 {
+		t.Fatalf("lean can still be high: %.1f", weak.Score)
+	}
+	if weak.Evidence.Label == CustomEvidenceStrong {
+		t.Fatalf("thin tape must not look like strong evidence: %+v score=%.1f", weak.Evidence, weak.Score)
+	}
+	if !strings.Contains(weak.Evidence.Detail, "Used 2 of 5") {
+		t.Fatalf("detail %q", weak.Evidence.Detail)
+	}
+}
+
+func TestScoreCustomSignal_MissingWeightedFactorWeakensEvidence(t *testing.T) {
+	t.Parallel()
+	raws := BuildCustomSignalRaws([]SwingPattern{
+		{Name: CustomFactorEMACrossover, Score: 90},
+	}, nil)
+	got := ScoreCustomSignal(raws, CustomSignalWeights{Source: CustomSignalMixCustom, Pct: map[string]float64{
+		CustomFactorEMACrossover: 50,
+		CustomFactorSimilarSetup: 50,
+	}})
+	if got.Evidence.Label == CustomEvidenceStrong {
+		t.Fatalf("missing half the mix must not be strong: %+v", got.Evidence)
+	}
+	if got.Evidence.Score > 55 {
+		t.Fatalf("evidence %.1f", got.Evidence.Score)
+	}
+	if !strings.Contains(got.Evidence.Detail, "missing") {
+		t.Fatalf("detail %q", got.Evidence.Detail)
+	}
+}
+
 func TestScoreCustomSignal_DisabledTapeDoesNotLoad(t *testing.T) {
 	t.Parallel()
 	raws := BuildCustomSignalRaws([]SwingPattern{
