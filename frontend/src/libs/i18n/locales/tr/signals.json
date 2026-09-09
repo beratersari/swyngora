@@ -103,7 +103,7 @@
   },
   "lab": {
     "title": "Tarihsel lab",
-    "hint": "Bir tarayıcı kuralını veya özel sinyal karışımını tek sembolde yeniden çalıştırın. Özel karışımlar yalnızca 4s salınım faktörlerini kullanır (av ve bant atlanır). Karışım skoru ilk kez 62'yi geçince sinyal oluşur. İleri getiriler, veri varsa takvim günü kapanıştandır.",
+    "hint": "Bir tarayıcı kuralını veya özel sinyal karışımını tek sembolde yeniden çalıştırın. Skor verisi olan faktörlerle hesaplanır. Seçili bir faktörde o barda tarihsel veri yoksa o zaman damgası atlanır. Karışım skoru tam bir barda ilk kez 62'yi geçince sinyal oluşur. İleri getiriler, veri varsa takvim günü kapanıştandır.",
     "source": "Kaynak",
     "rule": "Kural",
     "profile": "Özel karışım",
@@ -115,6 +115,9 @@
     "status": "Durum",
     "progress": "İlerleme",
     "signals": "Sinyaller",
+    "skipped": "Atlandı",
+    "skippedDetail": "{{count}} zaman damgası atlandı — seçili bir faktörde tarihsel veri yoktu",
+    "missingFactors": "Eksik: {{factors}}",
     "view": "Görüntüle",
     "empty": "Henüz geriye dönük test yok",
     "noSignals": "Bu aralıkta tarihsel eşleşme yok",

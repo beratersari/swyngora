@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
 
 ### Fixed
+- **Custom signal Lab skips incomplete bars:** a selected factor with no historical data no longer lets that timestamp fire. The mix score still uses the other factors. The job reports `skippedBars` and `missingFactors` (`docs/features/indicator-scanner.md`)
 - **Custom signal empty current tape:** forensics / similar setups with no OI, taker, book, or options prints are **missing**, not fresh at quality 100. Each missing series is a quarter of that factor's quality (`docs/features/swing-engine.md`)
 - **Custom signal evidence completeness:** a high evidence score (e.g. 80) is no longer described as complete data. Overall evidence now lists how many weighted factors are fresh, old, or missing (`docs/features/swing-engine.md`)
 - **Forensics taker start vs path:** one taker bar only shows the flow started — continued / faded / reversed need later pre-price tape at the same bar size (`docs/features/forensics.md`, `docs/features/around.md`)

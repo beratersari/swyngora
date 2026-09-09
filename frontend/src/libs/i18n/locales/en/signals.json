@@ -103,7 +103,7 @@
   },
   "lab": {
     "title": "Historical lab",
-    "hint": "Replay a scanner rule or a custom signal mix on one symbol. Custom mixes use 4h swing factors only (hunt and tape are omitted). A mix signal fires when the score first crosses 62. Forward returns are calendar-day close-to-close when data exists.",
+    "hint": "Replay a scanner rule or a custom signal mix on one symbol. The mix score still uses the factors that have data. If a selected factor has no history at that bar, that timestamp is skipped. A mix signal fires when the score first crosses 62 on a complete bar. Forward returns are calendar-day close-to-close when data exists.",
     "source": "Source",
     "rule": "Rule",
     "profile": "Custom mix",
@@ -115,6 +115,9 @@
     "status": "Status",
     "progress": "Progress",
     "signals": "Signals",
+    "skipped": "Skipped",
+    "skippedDetail": "{{count}} timestamps skipped — a selected factor had no historical data",
+    "missingFactors": "Missing: {{factors}}",
     "view": "View",
     "empty": "No backtests yet",
     "noSignals": "No historical hits in this range",

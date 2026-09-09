@@ -236,25 +236,27 @@ func (h *ScannerHandler) ListResults(w http.ResponseWriter, r *http.Request) {
 }
 
 type scannerBacktestDTO struct {
-	ID            string  `json:"id"`
-	ClientID      string  `json:"clientId"`
-	RuleID        string  `json:"ruleId"`
-	Kind          string  `json:"kind"`
-	SourceName    string  `json:"sourceName,omitempty"`
-	Exchange      string  `json:"exchange"`
-	Symbol        string  `json:"symbol"`
-	Interval      string  `json:"interval"`
-	RangeStart    string  `json:"rangeStart"`
-	RangeEnd      string  `json:"rangeEnd"`
-	Status        string  `json:"status"`
-	ProgressPct   float64 `json:"progressPct"`
-	ProcessedBars int     `json:"processedBars"`
-	TotalBars     int     `json:"totalBars"`
-	SignalCount   int     `json:"signalCount"`
-	ErrorMessage  string  `json:"errorMessage,omitempty"`
-	CreatedAt     string  `json:"createdAt"`
-	StartedAt     *string `json:"startedAt,omitempty"`
-	FinishedAt    *string `json:"finishedAt,omitempty"`
+	ID             string   `json:"id"`
+	ClientID       string   `json:"clientId"`
+	RuleID         string   `json:"ruleId"`
+	Kind           string   `json:"kind"`
+	SourceName     string   `json:"sourceName,omitempty"`
+	Exchange       string   `json:"exchange"`
+	Symbol         string   `json:"symbol"`
+	Interval       string   `json:"interval"`
+	RangeStart     string   `json:"rangeStart"`
+	RangeEnd       string   `json:"rangeEnd"`
+	Status         string   `json:"status"`
+	ProgressPct    float64  `json:"progressPct"`
+	ProcessedBars  int      `json:"processedBars"`
+	TotalBars      int      `json:"totalBars"`
+	SignalCount    int      `json:"signalCount"`
+	SkippedBars    int      `json:"skippedBars,omitempty"`
+	MissingFactors []string `json:"missingFactors,omitempty"`
+	ErrorMessage   string   `json:"errorMessage,omitempty"`
+	CreatedAt      string   `json:"createdAt"`
+	StartedAt      *string  `json:"startedAt,omitempty"`
+	FinishedAt     *string  `json:"finishedAt,omitempty"`
 }
 
 type scannerBacktestSignalDTO struct {
@@ -290,8 +292,9 @@ func backtestToDTO(b *domain.ScannerBacktest) scannerBacktestDTO {
 		Interval: b.Interval, RangeStart: b.RangeStart.UTC().Format(time.RFC3339Nano),
 		RangeEnd: b.RangeEnd.UTC().Format(time.RFC3339Nano), Status: string(b.Status),
 		ProgressPct: b.ProgressPct, ProcessedBars: b.ProcessedBars, TotalBars: b.TotalBars,
-		SignalCount: b.SignalCount, ErrorMessage: b.ErrorMessage,
-		CreatedAt: b.CreatedAt.UTC().Format(time.RFC3339Nano),
+		SignalCount: b.SignalCount, SkippedBars: b.SkippedBars, MissingFactors: b.MissingFactors,
+		ErrorMessage: b.ErrorMessage,
+		CreatedAt:    b.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 	if b.StartedAt != nil {
 		s := b.StartedAt.UTC().Format(time.RFC3339Nano)

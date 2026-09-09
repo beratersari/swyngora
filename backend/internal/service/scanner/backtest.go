@@ -531,7 +531,7 @@ func (s *Service) executeCustomBacktestJob(ctx context.Context, job domain.Scann
 		return nil
 	}
 	total := lastIdx - firstIdx + 1
-	hits, err := domain.ReplayCustomSignalBacktest(domain.CustomBacktestInput{
+	rep, err := domain.ReplayCustomSignalBacktest(domain.CustomBacktestInput{
 		Exchange: job.Exchange, Symbol: job.Symbol,
 		Primary: primary, Higher: higher, BTCPrimary: btcPO, BTCHigher: btcHO,
 		RangeStart: job.RangeStart, RangeEnd: job.RangeEnd,
@@ -544,8 +544,9 @@ func (s *Service) executeCustomBacktestJob(ctx context.Context, job domain.Scann
 	if st, err := s.store.GetBacktestStatus(ctx, id); err == nil && st == domain.BacktestCanceled {
 		return nil
 	}
+	_ = s.store.UpdateBacktestSkipStats(ctx, id, rep.SkippedBars, rep.MissingFactors)
 	signalCount := 0
-	for _, h := range hits {
+	for _, h := range rep.Hits {
 		if ctx.Err() != nil {
 			_ = s.store.FinishBacktest(ctx, id, domain.BacktestCanceled, signalCount, "context canceled", time.Now().UTC())
 			return ctx.Err()

@@ -3765,7 +3765,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("start_backtest",
-		mcp.WithDescription("Start a historical backtest of a scanner rule or a custom signal profile on one symbol. Send ruleId or profileId (not both). profileId=built_in uses the built-in swing mix. Custom jobs replay 4h swing factors only (hunt/tape omitted). A signal fires when the mix first crosses 62. Informational only."),
+		mcp.WithDescription("Start a historical backtest of a scanner rule or a custom signal profile on one symbol. Send ruleId or profileId (not both). profileId=built_in uses the built-in swing mix. Custom jobs still score the factors that have data. If a selected factor has no history at that bar, that timestamp is skipped (no signal); the job reports skippedBars and missingFactors. A signal fires when the mix first crosses 62 on a complete bar. Informational only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. ETHUSDT")),
 		mcp.WithString("rangeStart", mcp.Required(), mcp.Description("RFC3339 start")),

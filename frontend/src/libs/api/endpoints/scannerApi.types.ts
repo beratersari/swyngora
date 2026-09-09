@@ -67,6 +67,8 @@ export type ScannerBacktest = {
   processedBars?: number;
   totalBars?: number;
   signalCount: number;
+  skippedBars?: number;
+  missingFactors?: string[];
   errorMessage?: string;
   createdAt?: string;
   startedAt?: string | null;

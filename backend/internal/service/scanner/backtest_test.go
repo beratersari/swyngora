@@ -216,7 +216,7 @@ func TestBacktest_CustomProfileStartAndRun(t *testing.T) {
 	if err != nil || got.Status != domain.BacktestCompleted {
 		t.Fatalf("status %+v err=%v", got, err)
 	}
-	wantHits, err := domain.ReplayCustomSignalBacktest(domain.CustomBacktestInput{
+	want, err := domain.ReplayCustomSignalBacktest(domain.CustomBacktestInput{
 		Exchange: domain.ExchangeBinance, Symbol: "ETHUSDT",
 		Primary: primOHLC, Higher: dailyOHLC, BTCPrimary: dailyOHLC, BTCHigher: dailyOHLC,
 		RangeStart: start, RangeEnd: end, Weights: domain.DefaultCustomSignalWeights(),
@@ -224,8 +224,11 @@ func TestBacktest_CustomProfileStartAndRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.SignalCount != len(wantHits) {
-		t.Fatalf("signals got %d want %d job=%+v", got.SignalCount, len(wantHits), got)
+	if got.SignalCount != len(want.Hits) {
+		t.Fatalf("signals got %d want %d job=%+v", got.SignalCount, len(want.Hits), got)
+	}
+	if got.SkippedBars != want.SkippedBars {
+		t.Fatalf("skipped got %d want %d", got.SkippedBars, want.SkippedBars)
 	}
 	sigs, total, err := svc.ListBacktestSignals(ctx, "bt-custom", job.ID, 50, 0)
 	if err != nil || total != got.SignalCount || len(sigs) == 0 {

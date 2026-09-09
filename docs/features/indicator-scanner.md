@@ -125,7 +125,7 @@ Run a saved **scanner rule** or a **custom signal profile** over a symbol and da
 - After cancel/failed, a new job with the same fingerprint can be started.
 - Each signal stores close at match and optional **calendar-day** forward returns (1 / 5 / 20 days) when future candles exist.
 - Max range: 400 days. Progress fields: `processedBars`, `totalBars`, `progressPct`.
-- **Custom profile jobs** (`kind=custom_profile`) replay **closed 4h** swing factors with the snapshotted weights. Hunt and forensics/similar tape cannot be rebuilt from candles and stay omitted (add 0). A signal fires when the mix first crosses **62** (same line as the engine trigger). Jobs list `sourceName` for the mix.
+- **Custom profile jobs** (`kind=custom_profile`) replay **closed 4h** swing factors with the snapshotted weights. The mix score still uses the factors that have data. If any **selected** factor has no historical data at that bar (hunt, tape, or not enough candles), that timestamp is **skipped** — no signal. The job reports `skippedBars` and `missingFactors`. A signal fires only on complete bars when the mix first crosses **62**. Jobs list `sourceName` for the mix.
 
 ## Tests
 

@@ -44,7 +44,7 @@ func TestReplayCustomSignalBacktest_OnsetOnUptrend(t *testing.T) {
 	daily := synthTrend(220, 40, 1.5)
 	start := bars[80].OpenTime
 	end := bars[len(bars)-1].OpenTime
-	hits, err := ReplayCustomSignalBacktest(CustomBacktestInput{
+	rep, err := ReplayCustomSignalBacktest(CustomBacktestInput{
 		Exchange: ExchangeBinance, Symbol: "ETHUSDT",
 		Primary: bars, Higher: daily, BTCPrimary: daily, BTCHigher: daily,
 		RangeStart: start, RangeEnd: end,
@@ -53,14 +53,49 @@ func TestReplayCustomSignalBacktest_OnsetOnUptrend(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(hits) == 0 {
+	if len(rep.Hits) == 0 {
 		t.Fatal("expected at least one custom-mix onset on a strong uptrend")
 	}
-	if hits[0].Score < CustomBacktestThreshold {
-		t.Fatalf("hit score %.1f", hits[0].Score)
+	if rep.Hits[0].Score < CustomBacktestThreshold {
+		t.Fatalf("hit score %.1f", rep.Hits[0].Score)
 	}
-	if hits[0].At.Before(start) || hits[0].At.After(end) {
-		t.Fatalf("hit outside range %s", hits[0].At)
+	if rep.Hits[0].At.Before(start) || rep.Hits[0].At.After(end) {
+		t.Fatalf("hit outside range %s", rep.Hits[0].At)
+	}
+	if rep.SkippedBars != 0 || len(rep.MissingFactors) != 0 {
+		t.Fatalf("built-in mix should not skip: %+v", rep)
+	}
+}
+
+func TestReplayCustomSignalBacktest_SkipsWhenSelectedFactorMissing(t *testing.T) {
+	t.Parallel()
+	bars := synthTrend(220, 50, 0.8)
+	daily := synthTrend(220, 40, 1.5)
+	w, err := ParseCustomSignalWeightMap(map[string]float64{
+		CustomFactorEMACrossover: 50,
+		CustomFactorHuntUp:       50,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := bars[80].OpenTime
+	end := bars[len(bars)-1].OpenTime
+	rep, err := ReplayCustomSignalBacktest(CustomBacktestInput{
+		Exchange: ExchangeBinance, Symbol: "ETHUSDT",
+		Primary: bars, Higher: daily, BTCPrimary: daily, BTCHigher: daily,
+		RangeStart: start, RangeEnd: end, Weights: w, Threshold: CustomBacktestThreshold,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Hits) != 0 {
+		t.Fatalf("must not fire while hunt data is missing: %+v", rep.Hits)
+	}
+	if rep.SkippedBars == 0 || rep.SkippedBars != rep.EvaluatedBars {
+		t.Fatalf("every bar should skip: %+v", rep)
+	}
+	if len(rep.MissingFactors) != 1 || rep.MissingFactors[0] != CustomFactorHuntUp {
+		t.Fatalf("missing %+v", rep.MissingFactors)
 	}
 }
 

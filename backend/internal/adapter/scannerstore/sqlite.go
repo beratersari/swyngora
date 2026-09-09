@@ -208,6 +208,18 @@ CREATE TABLE IF NOT EXISTS custom_signal_profiles (
 		if err := sqliteutil.SetUserVersion(s.db, 6); err != nil {
 			return err
 		}
+		v = 6
+	}
+	if v < 7 {
+		if err := sqliteutil.ExecAllowExists(s.db, `ALTER TABLE scanner_backtests ADD COLUMN skipped_bars INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return err
+		}
+		if err := sqliteutil.ExecAllowExists(s.db, `ALTER TABLE scanner_backtests ADD COLUMN missing_factors TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 7); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -477,8 +489,8 @@ func (s *SQLite) CountResults(ctx context.Context, clientID string) (int, error)
 
 const backtestSelect = `
 	SELECT id, client_id, rule_id, kind, exchange, symbol, interval, range_start, range_end,
-		status, progress_pct, processed_bars, total_bars, signal_count, error_message,
-		created_at, started_at, finished_at, rule_json
+		status, progress_pct, processed_bars, total_bars, signal_count, skipped_bars, missing_factors,
+		error_message, created_at, started_at, finished_at, rule_json
 	FROM scanner_backtests`
 
 // CreateBacktest inserts a pending job.
@@ -596,6 +608,24 @@ func (s *SQLite) ClaimBacktest(ctx context.Context, id string, at time.Time) (bo
 	}
 	n, _ := res.RowsAffected()
 	return n > 0, nil
+}
+
+// UpdateBacktestSkipStats records bars skipped for missing selected-factor data.
+func (s *SQLite) UpdateBacktestSkipStats(ctx context.Context, id string, skipped int, missing []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	raw := "[]"
+	if len(missing) > 0 {
+		b, err := json.Marshal(missing)
+		if err != nil {
+			return err
+		}
+		raw = string(b)
+	}
+	_, err := s.db.ExecContext(ctx, `
+		UPDATE scanner_backtests SET skipped_bars = ?, missing_factors = ? WHERE id = ?
+	`, skipped, raw, id)
+	return err
 }
 
 // UpdateBacktestProgress updates progress counters.
@@ -776,12 +806,16 @@ func scanBacktest(row scannable) (*domain.ScannerBacktest, error) {
 	var b domain.ScannerBacktest
 	var ex, st, rStart, rEnd, cAt string
 	var started, finished sql.NullString
+	var missingRaw string
 	if err := row.Scan(
 		&b.ID, &b.ClientID, &b.RuleID, &b.Kind, &ex, &b.Symbol, &b.Interval, &rStart, &rEnd,
-		&st, &b.ProgressPct, &b.ProcessedBars, &b.TotalBars, &b.SignalCount, &b.ErrorMessage,
-		&cAt, &started, &finished, &b.RuleJSON,
+		&st, &b.ProgressPct, &b.ProcessedBars, &b.TotalBars, &b.SignalCount, &b.SkippedBars, &missingRaw,
+		&b.ErrorMessage, &cAt, &started, &finished, &b.RuleJSON,
 	); err != nil {
 		return nil, err
+	}
+	if missingRaw != "" {
+		_ = json.Unmarshal([]byte(missingRaw), &b.MissingFactors)
 	}
 	if b.Kind == "" {
 		b.Kind = domain.BacktestKindRule

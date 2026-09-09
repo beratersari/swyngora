@@ -155,6 +155,9 @@ func (f *fakeScanner) ListPendingBacktests(context.Context) ([]domain.ScannerBac
 func (f *fakeScanner) ClaimBacktest(context.Context, string, time.Time) (bool, error) {
 	return false, nil
 }
+func (f *fakeScanner) UpdateBacktestSkipStats(context.Context, string, int, []string) error {
+	return nil
+}
 func (f *fakeScanner) UpdateBacktestProgress(context.Context, string, int, int, int, float64) error {
 	return nil
 }

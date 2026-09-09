@@ -4254,7 +4254,8 @@ func backtestMap(job *domain.ScannerBacktest) map[string]any {
 		"rangeEnd":   job.RangeEnd.UTC().Format(time.RFC3339Nano),
 		"status":     string(job.Status), "progressPct": job.ProgressPct,
 		"processedBars": job.ProcessedBars, "totalBars": job.TotalBars,
-		"signalCount": job.SignalCount, "createdAt": job.CreatedAt.UTC().Format(time.RFC3339Nano),
+		"signalCount": job.SignalCount, "skippedBars": job.SkippedBars,
+		"createdAt": job.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 	if domain.IsCustomProfileBacktest(*job) {
 		if name, _, _, err := domain.DecodeCustomProfileSnapshot(job.RuleJSON); err == nil {
@@ -4263,6 +4264,9 @@ func backtestMap(job *domain.ScannerBacktest) map[string]any {
 	}
 	if job.ErrorMessage != "" {
 		m["errorMessage"] = job.ErrorMessage
+	}
+	if len(job.MissingFactors) > 0 {
+		m["missingFactors"] = job.MissingFactors
 	}
 	return m
 }

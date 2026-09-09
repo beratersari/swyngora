@@ -107,6 +107,20 @@ export function SignalsBacktestPanel({
       dataIndex: 'signalCount',
     },
     {
+      title: t('signals:lab.skipped'),
+      key: 'skipped',
+      render: (_, row) =>
+        row.kind === 'custom_profile' && (row.skippedBars ?? 0) > 0 ? (
+          <Text variant="caption" color="secondary">
+            {row.skippedBars}
+          </Text>
+        ) : (
+          <Text variant="caption" color="secondary">
+            —
+          </Text>
+        ),
+    },
+    {
       title: t('signals:actions'),
       key: 'actions',
       render: (_, row) => (
@@ -323,6 +337,22 @@ export function SignalsBacktestPanel({
         <SignalDrawerBody>
           {selectedJob?.errorMessage ? (
             <Alert type="error" showIcon message={selectedJob.errorMessage} />
+          ) : null}
+          {selectedJob?.kind === 'custom_profile' && (selectedJob.skippedBars ?? 0) > 0 ? (
+            <Alert
+              type="warning"
+              showIcon
+              message={t('signals:lab.skippedDetail', { count: selectedJob.skippedBars })}
+              description={
+                (selectedJob.missingFactors ?? []).length
+                  ? t('signals:lab.missingFactors', {
+                      factors: (selectedJob.missingFactors ?? [])
+                        .map((id) => t(`signals:custom.factors.${id}`, { defaultValue: id }))
+                        .join(', '),
+                    })
+                  : undefined
+              }
+            />
           ) : null}
           <DataTable
             rowKey={(r) => r.id}

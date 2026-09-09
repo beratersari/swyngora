@@ -128,6 +128,9 @@ func (emptyScanner) ListPendingBacktests(context.Context) ([]domain.ScannerBackt
 func (emptyScanner) ClaimBacktest(context.Context, string, time.Time) (bool, error) {
 	return false, nil
 }
+func (emptyScanner) UpdateBacktestSkipStats(context.Context, string, int, []string) error {
+	return nil
+}
 func (emptyScanner) UpdateBacktestProgress(context.Context, string, int, int, int, float64) error {
 	return nil
 }

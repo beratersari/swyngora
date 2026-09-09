@@ -95,6 +95,14 @@ type CustomBacktestHit struct {
 	Metrics map[string]float64
 }
 
+// CustomBacktestReplay is hits plus bars skipped because a selected factor had no data.
+type CustomBacktestReplay struct {
+	Hits           []CustomBacktestHit
+	EvaluatedBars  int
+	SkippedBars    int
+	MissingFactors []string
+}
+
 // CustomBacktestInput is one symbol's candles plus the queued mix.
 type CustomBacktestInput struct {
 	Exchange   Exchange
@@ -110,10 +118,11 @@ type CustomBacktestInput struct {
 	Interval   time.Duration
 }
 
-// ReplayCustomSignalBacktest walks closed primary bars in [start, end] and
-// emits a hit when the custom mix first crosses the threshold (onset).
-// Hunt and tape factors are omitted — they cannot be rebuilt from candles.
-func ReplayCustomSignalBacktest(in CustomBacktestInput) ([]CustomBacktestHit, error) {
+// ReplayCustomSignalBacktest walks closed primary bars in [start, end].
+// The mix score still uses whatever factors have data. A bar does not emit a
+// signal when any selected (weighted) factor is missing historical data.
+func ReplayCustomSignalBacktest(in CustomBacktestInput) (CustomBacktestReplay, error) {
+	out := CustomBacktestReplay{}
 	if in.Interval <= 0 {
 		in.Interval = 4 * time.Hour
 	}
@@ -122,8 +131,8 @@ func ReplayCustomSignalBacktest(in CustomBacktestInput) ([]CustomBacktestHit, er
 	}
 	start := in.RangeStart.UTC()
 	end := in.RangeEnd.UTC()
-	var hits []CustomBacktestHit
 	prev := 0.0
+	missingSet := map[string]struct{}{}
 	for i := range in.Primary {
 		bar := in.Primary[i]
 		ot := bar.OpenTime.UTC()
@@ -149,11 +158,20 @@ func ReplayCustomSignalBacktest(in CustomBacktestInput) ([]CustomBacktestHit, er
 			Now:        asOf,
 		})
 		if err != nil {
-			return hits, err
+			return out, err
 		}
-		scored := ScoreCustomSignal(BuildCustomSignalRaws(dec.Patterns, nil), in.Weights)
+		barsOK := len(ClosedBars(in.Primary[:i+1], asOf)) >= SwingMinClosedBars
+		scored := ScoreCustomSignal(buildCustomSignalRawsForBacktest(dec.Patterns, barsOK), in.Weights)
+		out.EvaluatedBars++
+		if miss := selectedMissingFactors(scored, in.Weights); len(miss) > 0 {
+			out.SkippedBars++
+			for _, id := range miss {
+				missingSet[id] = struct{}{}
+			}
+			continue
+		}
 		if CustomSignalCrossedTrigger(prev, scored.Score, in.Threshold) {
-			hits = append(hits, CustomBacktestHit{
+			out.Hits = append(out.Hits, CustomBacktestHit{
 				Index: i, At: ot, Close: bar.Close, Score: scored.Score, Grade: scored.Grade,
 				Summary: fmt.Sprintf("Custom mix %s (%.0f) crossed %.0f", scored.Grade, scored.Score, in.Threshold),
 				Metrics: map[string]float64{"score": scored.Score, "threshold": in.Threshold},
@@ -161,5 +179,41 @@ func ReplayCustomSignalBacktest(in CustomBacktestInput) ([]CustomBacktestHit, er
 		}
 		prev = scored.Score
 	}
-	return hits, nil
+	out.MissingFactors = missingFactorIDs(missingSet)
+	return out, nil
+}
+
+func buildCustomSignalRawsForBacktest(patterns []SwingPattern, barsOK bool) map[string]CustomSignalRaw {
+	raws := BuildCustomSignalRaws(patterns, nil)
+	if barsOK {
+		return raws
+	}
+	for _, id := range CustomSignalSwingFactorIDs {
+		raws[id] = CustomSignalRaw{Score: 50, Status: CustomFactorMissing, Detail: "not enough historical bars"}
+	}
+	return raws
+}
+
+func selectedMissingFactors(scored CustomSignalScore, w CustomSignalWeights) []string {
+	var out []string
+	for _, f := range scored.Factors {
+		if w.pctOf(f.ID) <= 0 || f.Status != CustomFactorMissing {
+			continue
+		}
+		out = append(out, f.ID)
+	}
+	return out
+}
+
+func missingFactorIDs(set map[string]struct{}) []string {
+	if len(set) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(set))
+	for _, id := range CustomSignalFactorIDs {
+		if _, ok := set[id]; ok {
+			out = append(out, id)
+		}
+	}
+	return out
 }

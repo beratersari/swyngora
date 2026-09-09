@@ -105,24 +105,26 @@ const MaxScannerBacktestsPerClient = 50
 
 // ScannerBacktest is a background historical test of one rule or custom mix.
 type ScannerBacktest struct {
-	ID            string
-	ClientID      string
-	RuleID        string
-	Kind          string // scanner_rule | custom_profile
-	Exchange      Exchange
-	Symbol        string
-	Interval      string
-	RangeStart    time.Time
-	RangeEnd      time.Time
-	Status        ScannerBacktestStatus
-	ProgressPct   float64 // 0–100
-	ProcessedBars int
-	TotalBars     int
-	SignalCount   int
-	ErrorMessage  string
-	CreatedAt     time.Time
-	StartedAt     *time.Time
-	FinishedAt    *time.Time
+	ID             string
+	ClientID       string
+	RuleID         string
+	Kind           string // scanner_rule | custom_profile
+	Exchange       Exchange
+	Symbol         string
+	Interval       string
+	RangeStart     time.Time
+	RangeEnd       time.Time
+	Status         ScannerBacktestStatus
+	ProgressPct    float64 // 0–100
+	ProcessedBars  int
+	TotalBars      int
+	SignalCount    int
+	SkippedBars    int
+	MissingFactors []string
+	ErrorMessage   string
+	CreatedAt      time.Time
+	StartedAt      *time.Time
+	FinishedAt     *time.Time
 	// RuleJSON is the rule or custom mix as queued. The worker uses this, not the live source.
 	RuleJSON string
 }
@@ -167,6 +169,8 @@ type ScannerPort interface {
 	// ClaimBacktest moves pending → running if still pending. Returns false if not claimed.
 	ClaimBacktest(ctx context.Context, id string, at time.Time) (bool, error)
 	UpdateBacktestProgress(ctx context.Context, id string, processed, total, signalCount int, progressPct float64) error
+	// UpdateBacktestSkipStats records bars skipped because a selected factor had no data.
+	UpdateBacktestSkipStats(ctx context.Context, id string, skipped int, missing []string) error
 	// FinishBacktest sets terminal status (completed/canceled/failed).
 	FinishBacktest(ctx context.Context, id string, status ScannerBacktestStatus, signalCount int, errMsg string, at time.Time) error
 	// CancelBacktest sets canceled if pending or running.
