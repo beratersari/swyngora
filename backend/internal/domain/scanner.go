@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -127,6 +128,25 @@ type ScannerBacktest struct {
 	FinishedAt     *time.Time
 	// RuleJSON is the rule or custom mix as queued. The worker uses this, not the live source.
 	RuleJSON string
+	// Performance is filled when loading a job or its signals (not persisted).
+	Performance *BacktestPerformance
+}
+
+// BacktestHorizonStats is one forward-return horizon across a job's signals.
+type BacktestHorizonStats struct {
+	Days        int      `json:"days"`
+	SampleCount int      `json:"sampleCount"`
+	Average     *float64 `json:"average,omitempty"`
+	Median      *float64 `json:"median,omitempty"`
+	WinRate     *float64 `json:"winRate,omitempty"` // 0–100, share of returns > 0
+}
+
+// BacktestPerformance is 1d / 5d / 20d summary stats for a job.
+type BacktestPerformance struct {
+	SignalCount int                  `json:"signalCount"`
+	Return1d    BacktestHorizonStats `json:"return1d"`
+	Return5d    BacktestHorizonStats `json:"return5d"`
+	Return20d   BacktestHorizonStats `json:"return20d"`
 }
 
 // ScannerBacktestSignal is one historical match with optional forward returns (%).
@@ -212,6 +232,66 @@ func ForwardReturnPct(candles []Candle, signalIdx int, days int) *float64 {
 		return &pct
 	}
 	return nil
+}
+
+// SummarizeBacktestReturns averages / medians / win-rates each horizon.
+// A return is a win only when it is greater than 0. Missing horizons are omitted from that column.
+func SummarizeBacktestReturns(sigs []ScannerBacktestSignal) BacktestPerformance {
+	one := make([]float64, 0, len(sigs))
+	five := make([]float64, 0, len(sigs))
+	twenty := make([]float64, 0, len(sigs))
+	for _, s := range sigs {
+		if s.Return1d != nil && !math.IsNaN(*s.Return1d) {
+			one = append(one, *s.Return1d)
+		}
+		if s.Return5d != nil && !math.IsNaN(*s.Return5d) {
+			five = append(five, *s.Return5d)
+		}
+		if s.Return20d != nil && !math.IsNaN(*s.Return20d) {
+			twenty = append(twenty, *s.Return20d)
+		}
+	}
+	return BacktestPerformance{
+		SignalCount: len(sigs),
+		Return1d:    backtestHorizonStats(1, one),
+		Return5d:    backtestHorizonStats(5, five),
+		Return20d:   backtestHorizonStats(20, twenty),
+	}
+}
+
+func backtestHorizonStats(days int, xs []float64) BacktestHorizonStats {
+	out := BacktestHorizonStats{Days: days, SampleCount: len(xs)}
+	if len(xs) == 0 {
+		return out
+	}
+	sum := 0.0
+	wins := 0
+	for _, v := range xs {
+		sum += v
+		if v > 0 {
+			wins++
+		}
+	}
+	avg := round1(sum / float64(len(xs)))
+	med := round1(medianFloats(xs))
+	wr := round1(float64(wins) / float64(len(xs)) * 100)
+	out.Average = &avg
+	out.Median = &med
+	out.WinRate = &wr
+	return out
+}
+
+func medianFloats(xs []float64) float64 {
+	if len(xs) == 0 {
+		return 0
+	}
+	cp := append([]float64(nil), xs...)
+	sort.Float64s(cp)
+	mid := len(cp) / 2
+	if len(cp)%2 == 1 {
+		return cp[mid]
+	}
+	return (cp[mid-1] + cp[mid]) / 2
 }
 
 // IsValidScannerRuleType reports known rule types.

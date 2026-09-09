@@ -73,6 +73,7 @@ export type ScannerBacktest = {
   createdAt?: string;
   startedAt?: string | null;
   finishedAt?: string | null;
+  performance?: ScannerBacktestPerformance;
 };
 
 export type ScannerBacktestSignalFactor = {
@@ -165,10 +166,26 @@ export type ScannerBacktestListResponse = {
   backtests?: ScannerBacktest[];
 };
 
+export type ScannerBacktestHorizonStats = {
+  days: number;
+  sampleCount: number;
+  average?: number;
+  median?: number;
+  winRate?: number;
+};
+
+export type ScannerBacktestPerformance = {
+  signalCount: number;
+  return1d: ScannerBacktestHorizonStats;
+  return5d: ScannerBacktestHorizonStats;
+  return20d: ScannerBacktestHorizonStats;
+};
+
 export type ScannerBacktestSignalListResponse = {
   backtestId?: string;
   count?: number;
   total?: number;
   signalCount?: number;
   signals?: ScannerBacktestSignal[];
+  performance?: ScannerBacktestPerformance;
 };

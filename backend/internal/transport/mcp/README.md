@@ -93,7 +93,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `list_backtests` | List Lab jobs |
 | `get_backtest` | Job progress / summary |
 | `cancel_backtest` | Cancel pending/running job |
-| `list_backtest_signals` | Signals + 1/5/20d returns |
+| `list_backtest_signals` | Signals + 1/5/20d returns and performance (avg / median / win rate / n) |
 | `detect_pump_events` | Pump/dump events on one symbol (threshold, interval, lookback) |
 | `scan_pump_events` | Scan top-volume symbols for recent pumps (`maxTotalEvents` caps total events; response includes resolved defaults) |
 | `get_watchlist` | Read watchlist (optional `ownerClientId` for shared lists) |

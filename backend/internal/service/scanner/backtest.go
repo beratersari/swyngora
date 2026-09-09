@@ -171,7 +171,53 @@ func (s *Service) GetBacktest(ctx context.Context, clientID, id string) (*domain
 	if id == "" {
 		return nil, fmt.Errorf("%w: backtest id is required", domain.ErrInvalidArgument)
 	}
-	return s.store.GetBacktest(ctx, clientID, id)
+	job, err := s.store.GetBacktest(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	s.attachBacktestPerformance(ctx, job)
+	return job, nil
+}
+
+func (s *Service) attachBacktestPerformance(ctx context.Context, job *domain.ScannerBacktest) {
+	if s == nil || s.store == nil || job == nil {
+		return
+	}
+	perf, err := s.jobPerformance(ctx, job.ID)
+	if err != nil {
+		return
+	}
+	job.Performance = &perf
+}
+
+// BacktestPerformance summarizes 1d/5d/20d returns for every signal on the job.
+func (s *Service) BacktestPerformance(ctx context.Context, clientID, backtestID string) (domain.BacktestPerformance, error) {
+	if s.store == nil {
+		return domain.BacktestPerformance{}, fmt.Errorf("%w: scanner store not configured", domain.ErrUpstream)
+	}
+	clientID, err := normalizeClientID(clientID)
+	if err != nil {
+		return domain.BacktestPerformance{}, err
+	}
+	if _, err := s.store.GetBacktest(ctx, clientID, backtestID); err != nil {
+		return domain.BacktestPerformance{}, err
+	}
+	return s.jobPerformance(ctx, backtestID)
+}
+
+func (s *Service) jobPerformance(ctx context.Context, backtestID string) (domain.BacktestPerformance, error) {
+	total, err := s.store.CountBacktestSignals(ctx, backtestID)
+	if err != nil {
+		return domain.BacktestPerformance{}, err
+	}
+	if total <= 0 {
+		return domain.SummarizeBacktestReturns(nil), nil
+	}
+	list, err := s.store.ListBacktestSignals(ctx, backtestID, total, 0)
+	if err != nil {
+		return domain.BacktestPerformance{}, err
+	}
+	return domain.SummarizeBacktestReturns(list), nil
 }
 
 // ListBacktests lists jobs for a client.

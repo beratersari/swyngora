@@ -115,7 +115,7 @@ Run a saved **scanner rule** or a **custom signal profile** over a symbol and da
 | `GET` | `/api/v1/scanner/backtests` | List jobs |
 | `GET` | `/api/v1/scanner/backtests/{id}` | Progress (`progressPct`, `signalCount`, `status`) |
 | `POST` | `/api/v1/scanner/backtests/{id}/cancel` | Cancel pending/running job |
-| `GET` | `/api/v1/scanner/backtests/{id}/signals` | Match dates + `return1d` / `return5d` / `return20d` (%) |
+| `GET` | `/api/v1/scanner/backtests/{id}/signals` | Match dates + `return1d` / `return5d` / `return20d` (%) + `performance` (avg / median / win rate / sample count per horizon) |
 
 ### Behavior
 - Job runs in the **background** (`pending` → `running` → `completed` | `canceled` | `failed`).
@@ -124,6 +124,7 @@ Run a saved **scanner rule** or a **custom signal profile** over a symbol and da
 - **No duplicate run** for the same client + rule snapshot + symbol + date range while status is pending/running/completed (returns existing job). Editing the rule and starting again creates a **new** job.
 - After cancel/failed, a new job with the same fingerprint can be started.
 - Each signal stores close at match and optional **calendar-day** forward returns (1 / 5 / 20 days) when future candles exist.
+- Job results include a **performance** summary per horizon: average return, median return, win rate (share of returns > 0), and sample count (signals that have that horizon). Missing future candles are left out of that column, not scored as 0.
 - Max range: 400 days. Progress fields: `processedBars`, `totalBars`, `progressPct`.
 - **Custom profile jobs** (`kind=custom_profile`) replay **closed 4h** swing factors with the snapshotted weights. The mix score still uses the factors that have data. If any **selected** factor has no historical data at that bar (hunt, tape, or not enough candles), that timestamp is **skipped** — no signal. The job reports `skippedBars` and `missingFactors`. A signal fires only on complete bars when the mix first crosses **62**. Each hit lists the selected factors at that bar (`factors`: id, score, weight, status). Jobs list `sourceName` for the mix.
 

@@ -2,6 +2,7 @@ import type {
   CustomSignalProfile,
   MarketExchange,
   ScannerBacktest,
+  ScannerBacktestPerformance,
   ScannerBacktestSignal,
   ScannerRule,
 } from '@/libs/api';
@@ -15,6 +16,7 @@ export type SignalsBacktestPanelProps = {
   profiles: CustomSignalProfile[];
   jobs: ScannerBacktest[];
   signals: ScannerBacktestSignal[];
+  performance?: ScannerBacktestPerformance | null;
   rangeOptions: SignalsBacktestRangeOption[];
   selectedId?: string | null;
   selectedJob?: ScannerBacktest | null;

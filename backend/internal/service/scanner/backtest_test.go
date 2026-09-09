@@ -240,6 +240,12 @@ func TestBacktest_CustomProfileStartAndRun(t *testing.T) {
 	if len(sigs[0].Factors) == 0 {
 		t.Fatal("persisted signal must keep factor scores and weights")
 	}
+	if got.Performance == nil || got.Performance.SignalCount != got.SignalCount {
+		t.Fatalf("performance %+v", got.Performance)
+	}
+	if got.Performance.Return1d.Days != 1 || got.Performance.Return5d.Days != 5 || got.Performance.Return20d.Days != 20 {
+		t.Fatalf("horizons %+v", got.Performance)
+	}
 }
 
 func TestBacktest_CustomProfileMissing(t *testing.T) {

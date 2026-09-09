@@ -4268,6 +4268,9 @@ func backtestMap(job *domain.ScannerBacktest) map[string]any {
 	if len(job.MissingFactors) > 0 {
 		m["missingFactors"] = job.MissingFactors
 	}
+	if job.Performance != nil {
+		m["performance"] = job.Performance
+	}
 	return m
 }
 
@@ -4354,7 +4357,8 @@ func (b *Backend) ListBacktestSignals(ctx context.Context, clientID, id string, 
 			"metrics": s.Metrics, "factors": s.Factors,
 		})
 	}
-	return mustJSON(map[string]any{"backtestId": id, "signals": items, "count": len(items), "total": total})
+	perf, _ := b.Scanner.BacktestPerformance(ctx, clientID, id)
+	return mustJSON(map[string]any{"backtestId": id, "signals": items, "count": len(items), "total": total, "performance": perf})
 }
 
 func (b *Backend) ListScannerResults(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {

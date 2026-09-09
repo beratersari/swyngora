@@ -506,6 +506,7 @@ export function SignalsPage() {
                 profiles={customProfilesQuery.data?.profiles ?? []}
                 jobs={jobs}
                 signals={selectedSignals.data?.signals ?? []}
+                performance={selectedSignals.data?.performance}
                 rangeOptions={rangeOptions}
                 selectedId={selectedBacktestId}
                 selectedJob={selectedJob}

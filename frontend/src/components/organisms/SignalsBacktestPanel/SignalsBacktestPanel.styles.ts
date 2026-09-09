@@ -33,6 +33,19 @@ export const FactorWhy = styled.div`
   padding: 4px 0;
 `;
 
+export const PerfTable = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+export const PerfGrid = styled.div`
+  display: grid;
+  grid-template-columns: minmax(110px, 1.2fr) repeat(3, minmax(64px, 1fr));
+  gap: 6px 10px;
+  align-items: baseline;
+`;
+
 export const FactorLine = styled.div`
   display: grid;
   grid-template-columns: minmax(120px, 1.4fr) 72px 64px 72px;

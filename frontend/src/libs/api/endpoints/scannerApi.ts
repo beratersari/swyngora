@@ -15,6 +15,8 @@ export type {
   CreateScannerRuleArg,
   UpdateScannerRuleArg,
   ScannerBacktest,
+  ScannerBacktestHorizonStats,
+  ScannerBacktestPerformance,
   ScannerBacktestSignal,
   ScannerBacktestStatus,
   ScannerCondition,

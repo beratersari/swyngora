@@ -3855,7 +3855,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("list_backtest_signals",
-		mcp.WithDescription("List backtest signals with 1/5/20-day forward returns. Custom-mix hits include factors (id, score, weight, status) for why the signal fired."),
+		mcp.WithDescription("List backtest signals with 1/5/20-day forward returns and a performance summary (average, median, win rate, sample count per horizon). Custom-mix hits include factors (id, score, weight, status) for why the signal fired."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Backtest job id")),
 		mcp.WithNumber("limit", mcp.Description("Max signals, default 100")),

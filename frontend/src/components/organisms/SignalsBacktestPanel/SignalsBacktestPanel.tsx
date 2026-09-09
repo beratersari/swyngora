@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Alert, Button, Drawer, Empty, Progress, Select } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +9,8 @@ import {
   rtkErrorMessage,
   type MarketExchange,
   type ScannerBacktest,
+  type ScannerBacktestHorizonStats,
+  type ScannerBacktestPerformance,
   type ScannerBacktestSignal,
 } from '@/libs/api';
 import {
@@ -19,8 +21,81 @@ import {
   formatSymbolDisplay,
 } from '@/libs/utils';
 import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
-import { FactorLine, FactorWhy, Field, FieldRow, SignalDrawerBody, Stack } from './SignalsBacktestPanel.styles';
+import { FactorLine, FactorWhy, Field, FieldRow, PerfGrid, PerfTable, SignalDrawerBody, Stack } from './SignalsBacktestPanel.styles';
 import type { SignalsBacktestPanelProps } from './SignalsBacktestPanel.types';
+
+function horizonLabel(days: number): string {
+  if (days === 1) return '1d';
+  if (days === 5) return '5d';
+  return '20d';
+}
+
+function PerformanceSummary({ perf }: { perf: ScannerBacktestPerformance }) {
+  const { t } = useTranslation(['signals']);
+  const rows: { key: string; label: string; render: (h: ScannerBacktestHorizonStats) => string }[] = [
+    {
+      key: 'avg',
+      label: t('signals:lab.avgReturn'),
+      render: (h) => (h.average == null ? '—' : formatChangePercent(h.average)),
+    },
+    {
+      key: 'med',
+      label: t('signals:lab.medianReturn'),
+      render: (h) => (h.median == null ? '—' : formatChangePercent(h.median)),
+    },
+    {
+      key: 'win',
+      label: t('signals:lab.winRate'),
+      render: (h) => (h.winRate == null ? '—' : `${h.winRate}%`),
+    },
+    {
+      key: 'n',
+      label: t('signals:lab.sampleCount'),
+      render: (h) => String(h.sampleCount),
+    },
+  ];
+  const horizons = [perf.return1d, perf.return5d, perf.return20d];
+  return (
+    <PerfTable>
+      <Text variant="label" color="primary">
+        {t('signals:lab.performance')}
+      </Text>
+      <PerfGrid>
+        <Text variant="caption" color="secondary">
+          {' '}
+        </Text>
+        {horizons.map((h) => (
+          <Text key={h.days} variant="caption" color="secondary" mono>
+            {horizonLabel(h.days)}
+          </Text>
+        ))}
+        {rows.map((row) => (
+          <Fragment key={row.key}>
+            <Text variant="caption" color="secondary">
+              {row.label}
+            </Text>
+            {horizons.map((h) => (
+              <Text
+                key={`${row.key}-${h.days}`}
+                variant="caption"
+                mono
+                color={
+                  row.key === 'n'
+                    ? 'secondary'
+                    : row.key === 'win'
+                      ? 'primary'
+                      : changeTone(row.key === 'med' ? h.median : h.average)
+                }
+              >
+                {row.render(h)}
+              </Text>
+            ))}
+          </Fragment>
+        ))}
+      </PerfGrid>
+    </PerfTable>
+  );
+}
 
 function statusVariant(status: string): 'live' | 'paused' | 'status' | 'delist' {
   if (status === 'completed') return 'live';
@@ -34,6 +109,7 @@ export function SignalsBacktestPanel({
   profiles,
   jobs,
   signals,
+  performance,
   rangeOptions,
   selectedId,
   selectedJob,
@@ -337,6 +413,9 @@ export function SignalsBacktestPanel({
         <SignalDrawerBody>
           {selectedJob?.errorMessage ? (
             <Alert type="error" showIcon message={selectedJob.errorMessage} />
+          ) : null}
+          {performance && (performance.signalCount ?? 0) > 0 ? (
+            <PerformanceSummary perf={performance} />
           ) : null}
           {selectedJob?.kind === 'custom_profile' && (selectedJob.skippedBars ?? 0) > 0 ? (
             <Alert

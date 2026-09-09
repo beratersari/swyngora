@@ -30,3 +30,35 @@ func TestForwardReturnPct(t *testing.T) {
 		t.Fatal("want nil for missing future")
 	}
 }
+
+func TestSummarizeBacktestReturns(t *testing.T) {
+	t.Parallel()
+	ptr := func(v float64) *float64 { return &v }
+	got := SummarizeBacktestReturns([]ScannerBacktestSignal{
+		{Return1d: ptr(10), Return5d: ptr(-2), Return20d: ptr(8)},
+		{Return1d: ptr(-4), Return5d: ptr(6)},
+		{Return1d: ptr(4), Return5d: ptr(4), Return20d: ptr(-2)},
+	})
+	if got.SignalCount != 3 {
+		t.Fatalf("n=%d", got.SignalCount)
+	}
+	if got.Return1d.SampleCount != 3 || got.Return1d.Average == nil || *got.Return1d.Average != 3.3 {
+		t.Fatalf("1d %+v", got.Return1d)
+	}
+	if got.Return1d.Median == nil || *got.Return1d.Median != 4 {
+		t.Fatalf("1d median %+v", got.Return1d)
+	}
+	if got.Return1d.WinRate == nil || *got.Return1d.WinRate != 66.7 {
+		t.Fatalf("1d win %+v", got.Return1d)
+	}
+	if got.Return5d.SampleCount != 3 || got.Return5d.Average == nil || *got.Return5d.Average != 2.7 {
+		t.Fatalf("5d %+v", got.Return5d)
+	}
+	if got.Return20d.SampleCount != 2 || got.Return20d.WinRate == nil || *got.Return20d.WinRate != 50 {
+		t.Fatalf("20d %+v", got.Return20d)
+	}
+	empty := SummarizeBacktestReturns(nil)
+	if empty.Return1d.SampleCount != 0 || empty.Return1d.Average != nil {
+		t.Fatalf("empty %+v", empty)
+	}
+}
