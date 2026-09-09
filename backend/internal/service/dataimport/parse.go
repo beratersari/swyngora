@@ -83,14 +83,15 @@ type wirePayload struct {
 		CreatedAt    string `json:"createdAt"`
 		ErrorMessage string `json:"errorMessage"`
 		Signals      []struct {
-			ID         string             `json:"id"`
-			SignalAt   string             `json:"signalAt"`
-			ClosePrice float64            `json:"closePrice"`
-			Summary    string             `json:"summary"`
-			Return1d   *float64           `json:"return1d"`
-			Return5d   *float64           `json:"return5d"`
-			Return20d  *float64           `json:"return20d"`
-			Metrics    map[string]float64 `json:"metrics"`
+			ID         string                `json:"id"`
+			SignalAt   string                `json:"signalAt"`
+			ClosePrice float64               `json:"closePrice"`
+			Summary    string                `json:"summary"`
+			Return1d   *float64              `json:"return1d"`
+			Return5d   *float64              `json:"return5d"`
+			Return20d  *float64              `json:"return20d"`
+			Metrics    map[string]float64    `json:"metrics"`
+			Trade      *domain.BacktestTrade `json:"trade"`
 		} `json:"signals"`
 	} `json:"backtests"`
 }
@@ -196,6 +197,7 @@ func parseJSON(data []byte, importer string) (*parseResult, error) {
 			wsigs = append(wsigs, wireSignal{
 				ID: s.ID, SignalAt: s.SignalAt, ClosePrice: s.ClosePrice, Summary: s.Summary,
 				Return1d: s.Return1d, Return5d: s.Return5d, Return20d: s.Return20d, Metrics: s.Metrics,
+				Trade: s.Trade,
 			})
 		}
 		bundle, err := normalizeBacktest(importer, bt.ID, bt.RuleID, bt.Exchange, bt.Symbol, bt.Interval,
@@ -253,6 +255,7 @@ type wireSignal struct {
 	Return5d   *float64
 	Return20d  *float64
 	Metrics    map[string]float64
+	Trade      *domain.BacktestTrade
 }
 
 func parseCSV(data []byte, importer string) (*parseResult, error) {
@@ -391,6 +394,7 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 			sig := domain.ScannerBacktestSignal{
 				ID: id, BacktestID: btID, SignalAt: sigAt, ClosePrice: cp, Summary: row["summary"],
 				Return1d: parseOptFloat(row["return1d"]), Return5d: parseOptFloat(row["return5d"]), Return20d: parseOptFloat(row["return20d"]),
+				Trade: csvBacktestTrade(row),
 			}
 			signalsByBT[btID] = append(signalsByBT[btID], sig)
 		case "portfolios":
@@ -587,6 +591,28 @@ func parseOptFloat(s string) *float64 {
 		return nil
 	}
 	return &v
+}
+
+func csvBacktestTrade(row map[string]string) *domain.BacktestTrade {
+	entry := csvF64(row, "entry")
+	if entry <= 0 {
+		return nil
+	}
+	lev := 1
+	if raw := strings.TrimSpace(row["leverage"]); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 {
+			lev = n
+		}
+	}
+	tr := &domain.BacktestTrade{
+		Side: domain.NormalizeTradeSide(row["side"]), Leverage: lev, Entry: entry,
+		StopLoss: csvF64(row, "stopLoss"), TakeProfit: csvF64(row, "takeProfit"),
+		Outcome: strings.TrimSpace(row["outcome"]), PnLPct: csvF64(row, "pnlPct"),
+	}
+	if tr.Outcome == "" {
+		tr.Outcome = domain.BacktestTradeOutcomeOpen
+	}
+	return tr
 }
 
 func parseTimeFlexible(s string) (time.Time, error) {
@@ -792,6 +818,7 @@ func normalizeBacktest(clientID, id, ruleID, exchange, symbol, interval, rangeSt
 		sigs = append(sigs, domain.ScannerBacktestSignal{
 			ID: sigID, BacktestID: id, SignalAt: sat, ClosePrice: ws.ClosePrice, Summary: ws.Summary,
 			Return1d: ws.Return1d, Return5d: ws.Return5d, Return20d: ws.Return20d, Metrics: ws.Metrics,
+			Trade: ws.Trade,
 		})
 	}
 	return backtestBundle{Job: job, Signals: sigs}, nil

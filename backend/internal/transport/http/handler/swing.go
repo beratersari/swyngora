@@ -36,31 +36,32 @@ type swingLevelsDTO struct {
 	RewardPct  float64 `json:"rewardPct"`
 	Rr         float64 `json:"rr"`
 	ATR        float64 `json:"atr"`
+	Leverage   int     `json:"leverage,omitempty"`
 }
 
 type swingDecisionDTO struct {
-	Exchange   string             `json:"exchange"`
-	Symbol     string             `json:"symbol"`
-	Interval   string             `json:"interval"`
-	Accepted   bool               `json:"accepted"`
-	Stage      string             `json:"stage"`
-	SetupType  string             `json:"setupType"`
-	SwingScore float64            `json:"swingScore"`
-	Grade      string             `json:"grade"`
-	Fresh      bool               `json:"fresh"`
-	BtcRegime  string             `json:"btcRegime"`
-	Side       string             `json:"side"`
-	Price      float64            `json:"price"`
-	Adx4h      *float64           `json:"adx4h,omitempty"`
-	Adx1d      *float64           `json:"adx1d,omitempty"`
-	Rsi        *float64           `json:"rsi,omitempty"`
-	Ema4h      string             `json:"ema4h"`
-	Ema1d      string             `json:"ema1d"`
-	Patterns   []swingPatternDTO  `json:"patterns"`
-	Levels     *swingLevelsDTO    `json:"levels,omitempty"`
-	Reasons    []string           `json:"reasons,omitempty"`
-	Note       string             `json:"note"`
-	BarTime    string             `json:"barTime,omitempty"`
+	Exchange   string            `json:"exchange"`
+	Symbol     string            `json:"symbol"`
+	Interval   string            `json:"interval"`
+	Accepted   bool              `json:"accepted"`
+	Stage      string            `json:"stage"`
+	SetupType  string            `json:"setupType"`
+	SwingScore float64           `json:"swingScore"`
+	Grade      string            `json:"grade"`
+	Fresh      bool              `json:"fresh"`
+	BtcRegime  string            `json:"btcRegime"`
+	Side       string            `json:"side"`
+	Price      float64           `json:"price"`
+	Adx4h      *float64          `json:"adx4h,omitempty"`
+	Adx1d      *float64          `json:"adx1d,omitempty"`
+	Rsi        *float64          `json:"rsi,omitempty"`
+	Ema4h      string            `json:"ema4h"`
+	Ema1d      string            `json:"ema1d"`
+	Patterns   []swingPatternDTO `json:"patterns"`
+	Levels     *swingLevelsDTO   `json:"levels,omitempty"`
+	Reasons    []string          `json:"reasons,omitempty"`
+	Note       string            `json:"note"`
+	BarTime    string            `json:"barTime,omitempty"`
 }
 
 func swingToDTO(d *domain.SwingDecision) swingDecisionDTO {
@@ -87,6 +88,7 @@ func swingToDTO(d *domain.SwingDecision) swingDecisionDTO {
 		out.Levels = &swingLevelsDTO{
 			Entry: d.Levels.Entry, StopLoss: d.Levels.StopLoss, TakeProfit: d.Levels.TakeProfit,
 			RiskPct: d.Levels.RiskPct, RewardPct: d.Levels.RewardPct, Rr: d.Levels.RR, ATR: d.Levels.ATR,
+			Leverage: d.Levels.Leverage,
 		}
 	}
 	return out

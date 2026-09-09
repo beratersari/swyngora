@@ -70,6 +70,10 @@ export function SwingEngineGrid({
               <BrandTag variant="outline">{(s.setupType ?? '').replace(/_/g, ' ')}</BrandTag>
               <BrandTag variant="outline">{t('engine.regime', { regime: s.btcRegime ?? 'unknown' })}</BrandTag>
               {s.fresh ? <BrandTag variant="live">{t('engine.fresh')}</BrandTag> : null}
+              {s.side ? <BrandTag variant="outline">{t('engine.side', { side: s.side })}</BrandTag> : null}
+              {s.levels?.leverage ? (
+                <BrandTag variant="outline">{t('engine.leverage', { lev: s.levels.leverage })}</BrandTag>
+              ) : null}
             </FactorRow>
             {s.levels ? (
               <Levels>

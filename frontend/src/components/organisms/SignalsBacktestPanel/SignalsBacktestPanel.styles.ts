@@ -46,6 +46,19 @@ export const PerfGrid = styled.div`
   align-items: baseline;
 `;
 
+export const TradeStats = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px 12px;
+`;
+
+export const TradePlan = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px 12px;
+  padding: 4px 0 8px;
+`;
+
 export const FactorLine = styled.div`
   display: grid;
   grid-template-columns: minmax(120px, 1.4fr) 72px 64px 72px;

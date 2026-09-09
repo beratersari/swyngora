@@ -44,7 +44,7 @@ const (
 	SwingMaxRiskPct          = 8.0
 	SwingMinQuoteVolumeUSDT  = 1_000_000.0
 	SwingStoreMinScore       = 45.0
-	SwingTriggerMinScore      = 62.0
+	SwingTriggerMinScore     = 62.0
 	SwingMinFreshPatterns    = 1
 	SwingMinPatternCount     = 2
 	SwingStopATRMult         = 1.5
@@ -81,6 +81,7 @@ type SwingLevels struct {
 	RewardPct  float64 `json:"rewardPct"`
 	RR         float64 `json:"rr"`
 	ATR        float64 `json:"atr"`
+	Leverage   int     `json:"leverage,omitempty"`
 }
 
 // SwingDecision is the quality-gated result for one symbol.
@@ -111,17 +112,17 @@ type SwingDecision struct {
 
 // SwingScanInput is market context for EvaluateSwing.
 type SwingScanInput struct {
-	Exchange     Exchange
-	Symbol       string
-	Primary      []OHLC // typically 4h, chronological, closed bars only
-	Higher       []OHLC // typically 1d
-	BTCPrimary   []OHLC // BTC 4h for regime (optional)
-	BTCHigher    []OHLC // BTC 1d
-	QuoteVolume  float64
-	MarketCap    float64
-	PrimaryTF    string
-	HigherTF     string
-	Now          time.Time
+	Exchange    Exchange
+	Symbol      string
+	Primary     []OHLC // typically 4h, chronological, closed bars only
+	Higher      []OHLC // typically 1d
+	BTCPrimary  []OHLC // BTC 4h for regime (optional)
+	BTCHigher   []OHLC // BTC 1d
+	QuoteVolume float64
+	MarketCap   float64
+	PrimaryTF   string
+	HigherTF    string
+	Now         time.Time
 }
 
 // OHLC is a parsed candle used by the swing engine.
@@ -576,9 +577,14 @@ func detectSwingPatterns(bars []OHLC, tf string) ([]SwingPattern, swingSnap, err
 }
 
 func planSwingLevels(bars []OHLC, atr, entry float64) (*SwingLevels, []string) {
+	return planSwingLevelsForSide(bars, atr, entry, BacktestTradeSideLong)
+}
+
+func planSwingLevelsForSide(bars []OHLC, atr, entry float64, side string) (*SwingLevels, []string) {
 	if entry <= 0 {
 		return nil, []string{"invalid_entry"}
 	}
+	side = NormalizeTradeSide(side)
 	n := SwingLookbackSwingLow
 	if n >= len(bars) {
 		n = len(bars) - 1
@@ -586,47 +592,93 @@ func planSwingLevels(bars []OHLC, atr, entry float64) (*SwingLevels, []string) {
 	if n < 2 {
 		return nil, []string{"missing_stop_or_rr"}
 	}
-	swingLow := bars[len(bars)-1-n].Low
-	for _, b := range bars[len(bars)-n : len(bars)-1] { // exclude last closed bar wick as optional
-		if b.Low < swingLow {
-			swingLow = b.Low
+	window := bars[len(bars)-n : len(bars)-1] // exclude last closed bar wick as optional
+	var stop, tp, risk float64
+	if side == BacktestTradeSideShort {
+		swingHigh := bars[len(bars)-1-n].High
+		for _, b := range window {
+			if b.High > swingHigh {
+				swingHigh = b.High
+			}
 		}
-	}
-	var stop float64
-	if atr > 0 {
-		structStop := swingLow - SwingStopStructureBuffer*atr
-		atrStop := entry - SwingStopATRMult*atr
-		// farther (lower) stop = more room under structure
-		stop = math.Min(structStop, atrStop)
-		// cap extremely wide stops so R:R remains possible
-		if entry-stop > 3.5*atr {
-			stop = entry - 2.5*atr
+		if atr > 0 {
+			structStop := swingHigh + SwingStopStructureBuffer*atr
+			atrStop := entry + SwingStopATRMult*atr
+			stop = math.Max(structStop, atrStop)
+			if stop-entry > 3.5*atr {
+				stop = entry + 2.5*atr
+			}
+		} else {
+			stop = swingHigh * 1.005
+		}
+		if stop <= entry {
+			if atr > 0 {
+				stop = entry + SwingStopATRMult*atr
+			} else {
+				stop = entry * 1.03
+			}
+		}
+		if stop <= entry {
+			return nil, []string{"missing_stop_or_rr"}
+		}
+		risk = stop - entry
+		tpFromRR := entry - SwingMinRRTrigger*risk
+		tp = tpFromRR
+		if atr > 0 {
+			atrTP := entry - SwingTPATRMult*atr
+			if atrTP < tpFromRR {
+				tp = atrTP
+			}
+		}
+		if tp <= 0 || tp >= entry {
+			return nil, []string{"missing_stop_or_rr"}
 		}
 	} else {
-		stop = swingLow * 0.995
-	}
-	if stop <= 0 || stop >= entry {
+		swingLow := bars[len(bars)-1-n].Low
+		for _, b := range window {
+			if b.Low < swingLow {
+				swingLow = b.Low
+			}
+		}
 		if atr > 0 {
-			stop = entry - SwingStopATRMult*atr
+			structStop := swingLow - SwingStopStructureBuffer*atr
+			atrStop := entry - SwingStopATRMult*atr
+			// farther (lower) stop = more room under structure
+			stop = math.Min(structStop, atrStop)
+			// cap extremely wide stops so R:R remains possible
+			if entry-stop > 3.5*atr {
+				stop = entry - 2.5*atr
+			}
 		} else {
-			stop = entry * 0.97
+			stop = swingLow * 0.995
+		}
+		if stop <= 0 || stop >= entry {
+			if atr > 0 {
+				stop = entry - SwingStopATRMult*atr
+			} else {
+				stop = entry * 0.97
+			}
+		}
+		if stop <= 0 || stop >= entry {
+			return nil, []string{"missing_stop_or_rr"}
+		}
+		risk = entry - stop
+		tpFromRR := entry + SwingMinRRTrigger*risk
+		tp = tpFromRR
+		if atr > 0 {
+			atrTP := entry + SwingTPATRMult*atr
+			if atrTP > tpFromRR {
+				tp = atrTP
+			}
 		}
 	}
-	if stop <= 0 || stop >= entry {
-		return nil, []string{"missing_stop_or_rr"}
-	}
-	risk := entry - stop
 	riskPct := risk / entry * 100
-	rrTarget := SwingMinRRTrigger
-	tpFromRR := entry + rrTarget*risk
-	tp := tpFromRR
-	if atr > 0 {
-		atrTP := entry + SwingTPATRMult*atr
-		if atrTP > tpFromRR {
-			tp = atrTP
-		}
+	var rewardPct float64
+	if side == BacktestTradeSideShort {
+		rewardPct = (entry - tp) / entry * 100
+	} else {
+		rewardPct = (tp - entry) / entry * 100
 	}
-	rewardPct := (tp - entry) / entry * 100
 	rr := 0.0
 	if riskPct > 0 {
 		rr = rewardPct / riskPct
@@ -634,6 +686,7 @@ func planSwingLevels(bars []OHLC, atr, entry float64) (*SwingLevels, []string) {
 	return &SwingLevels{
 		Entry: entry, StopLoss: round8(stop), TakeProfit: round8(tp),
 		RiskPct: round8(riskPct), RewardPct: round8(rewardPct), RR: round8(rr), ATR: round8(atr),
+		Leverage: SuggestedSwingLeverage(riskPct),
 	}, nil
 }
 

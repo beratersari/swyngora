@@ -4349,13 +4349,17 @@ func (b *Backend) ListBacktestSignals(ctx context.Context, clientID, id string, 
 	}
 	items := make([]map[string]any, 0, len(list))
 	for _, s := range list {
-		items = append(items, map[string]any{
+		row := map[string]any{
 			"id": s.ID, "backtestId": s.BacktestID,
 			"signalAt":   s.SignalAt.UTC().Format(time.RFC3339Nano),
 			"closePrice": s.ClosePrice, "summary": s.Summary,
 			"return1d": s.Return1d, "return5d": s.Return5d, "return20d": s.Return20d,
 			"metrics": s.Metrics, "factors": s.Factors,
-		})
+		}
+		if s.Trade != nil {
+			row["trade"] = s.Trade
+		}
+		items = append(items, row)
 	}
 	perf, _ := b.Scanner.BacktestPerformance(ctx, clientID, id)
 	return mustJSON(map[string]any{"backtestId": id, "signals": items, "count": len(items), "total": total, "performance": perf})
@@ -5244,6 +5248,7 @@ func swingDecisionMap(d *domain.SwingDecision) map[string]any {
 		m["levels"] = map[string]any{
 			"entry": d.Levels.Entry, "stopLoss": d.Levels.StopLoss, "takeProfit": d.Levels.TakeProfit,
 			"riskPct": d.Levels.RiskPct, "rewardPct": d.Levels.RewardPct, "rr": d.Levels.RR, "atr": d.Levels.ATR,
+			"leverage": d.Levels.Leverage,
 		}
 	}
 	return m

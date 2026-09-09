@@ -5603,6 +5603,8 @@ export interface components {
             rewardPct?: number;
             rr?: number;
             atr?: number;
+            /** Suggested leverage so a full stop is about 10% of notional */
+            leverage?: number;
         };
         SwingDecision: {
             exchange?: string;

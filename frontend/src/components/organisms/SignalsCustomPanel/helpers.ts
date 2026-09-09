@@ -255,6 +255,11 @@ export function previewCustomMix(items: CustomSignalItem[], draft: CustomWeightD
       evidenceOld: evidence.old,
       evidenceMissing: evidence.missing,
       evidenceIdle: evidence.idle,
+      side: item.engine?.side,
+      leverage: item.engine?.levels?.leverage,
+      entry: item.engine?.levels?.entry,
+      stopLoss: item.engine?.levels?.stopLoss,
+      takeProfit: item.engine?.levels?.takeProfit,
     };
   }).sort((a, b) => b.appliedScore - a.appliedScore || a.symbol.localeCompare(b.symbol));
 }

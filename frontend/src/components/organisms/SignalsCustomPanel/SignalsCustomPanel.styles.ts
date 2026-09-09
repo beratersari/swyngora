@@ -72,6 +72,12 @@ export const FactorLine = styled.li`
   align-items: baseline;
 `;
 
+export const LevelRow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 4px 10px;
+`;
+
 export const ActionRow = styled.div`
   display: flex;
   flex-wrap: wrap;

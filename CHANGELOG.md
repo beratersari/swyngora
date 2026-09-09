@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Forensics options history:** a missing start or end sample no longer invents an OI / put-call / IV jump from zero; opposite options prints are not treated as similar; unusual prints say whether they started before the price move or during it (`docs/features/forensics.md`)
 
 ### Added
+- **Backtest first-touch trades:** Lab signals use long/short, leverage, entry, TP, and SL. Later candles decide which of TP or SL is hit first. Hit details and the performance summary show the outcome and leveraged PnL (`docs/features/indicator-scanner.md`)
 - **Backtest performance summary:** Lab results show 1d / 5d / 20d average, median, win rate, and sample count (`docs/features/indicator-scanner.md`)
 - **Custom backtest hit factors:** each Lab signal lists which mix factors were used at that bar, with score and weight (`docs/features/indicator-scanner.md`)
 - **Custom signal Lab backtests:** Backtest Lab can replay a saved custom mix (or the built-in swing mix) on one symbol. Jobs snapshot the weights, walk closed 4h bars, and fire when the mix first crosses 62. Hunt and tape factors are omitted. `POST /api/v1/scanner/backtests` accepts `profileId`; MCP `start_backtest` / `list_backtests` / `get_backtest` / `cancel_backtest` / `list_backtest_signals` (`docs/features/indicator-scanner.md`)

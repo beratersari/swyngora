@@ -141,12 +141,13 @@ type BacktestHorizonStats struct {
 	WinRate     *float64 `json:"winRate,omitempty"` // 0–100, share of returns > 0
 }
 
-// BacktestPerformance is 1d / 5d / 20d summary stats for a job.
+// BacktestPerformance is 1d / 5d / 20d summary stats plus first-touch trades.
 type BacktestPerformance struct {
 	SignalCount int                  `json:"signalCount"`
 	Return1d    BacktestHorizonStats `json:"return1d"`
 	Return5d    BacktestHorizonStats `json:"return5d"`
 	Return20d   BacktestHorizonStats `json:"return20d"`
+	Trades      BacktestTradeStats   `json:"trades"`
 }
 
 // ScannerBacktestSignal is one historical match with optional forward returns (%).
@@ -161,6 +162,7 @@ type ScannerBacktestSignal struct {
 	Return20d  *float64
 	Metrics    map[string]float64
 	Factors    []CustomBacktestFactor
+	Trade      *BacktestTrade
 }
 
 // ScannerPort persists scanner rules, live results, and historical backtests.
@@ -256,6 +258,7 @@ func SummarizeBacktestReturns(sigs []ScannerBacktestSignal) BacktestPerformance 
 		Return1d:    backtestHorizonStats(1, one),
 		Return5d:    backtestHorizonStats(5, five),
 		Return20d:   backtestHorizonStats(20, twenty),
+		Trades:      summarizeBacktestTrades(sigs),
 	}
 }
 

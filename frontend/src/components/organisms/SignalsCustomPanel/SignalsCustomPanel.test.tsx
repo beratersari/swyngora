@@ -33,6 +33,10 @@ describe('SignalsCustomPanel', () => {
             tapeUsed: 3,
             tapeThin: 2,
             tapeFresh: { note: 'oi 6m ago; takers 1m ago; book 2m ago; options 40m ago (old)' },
+            engine: {
+              side: 'long',
+              levels: { entry: 2400, stopLoss: 2320, takeProfit: 2580, leverage: 4 },
+            },
           },
         ]}
         onSelectProfile={vi.fn()}
@@ -57,6 +61,7 @@ describe('SignalsCustomPanel', () => {
     expect(screen.getByTestId('signals-custom-evidence-counts')).toHaveTextContent(
       /1 fresh, 0 old, 0 missing|1 taze, 0 eski, 0 eksik/,
     );
+    expect(screen.getByTestId('signals-custom-levels')).toHaveTextContent(/4x/);
     await user.click(screen.getByRole('button', { name: /apply mix|karışımı uygula/i }));
     expect(onApply).toHaveBeenCalled();
   });

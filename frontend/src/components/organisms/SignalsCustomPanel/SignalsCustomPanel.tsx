@@ -17,6 +17,7 @@ import {
   FactorList,
   FactorRow,
   Layout,
+  LevelRow,
   Mixer,
   Results,
 } from './SignalsCustomPanel.styles';
@@ -238,6 +239,27 @@ export function SignalsCustomPanel({
                 })}
                 {row.price ? ` · ${formatPrice(row.price)}` : ''}
               </Text>
+              {row.entry ? (
+                <LevelRow data-testid="signals-custom-levels">
+                  <Text variant="caption" color="secondary">
+                    {row.side === 'short' ? t('signals:lab.short') : t('signals:lab.long')}
+                    {row.leverage ? ` · ${row.leverage}x` : ''}
+                  </Text>
+                  <Text variant="caption" mono color="secondary">
+                    {t('signals:engine.entry')} {formatPrice(row.entry)}
+                  </Text>
+                  {row.stopLoss ? (
+                    <Text variant="caption" mono color="secondary">
+                      {t('signals:engine.stop')} {formatPrice(row.stopLoss)}
+                    </Text>
+                  ) : null}
+                  {row.takeProfit ? (
+                    <Text variant="caption" mono color="secondary">
+                      {t('signals:engine.target')} {formatPrice(row.takeProfit)}
+                    </Text>
+                  ) : null}
+                </LevelRow>
+              ) : null}
               {row.largestChange ? (
                 <Text variant="caption" color="secondary">
                   {t('signals:custom.largestChange', {

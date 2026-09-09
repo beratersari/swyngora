@@ -46,6 +46,11 @@ export type CustomMixPreviewRow = {
   evidenceMissing?: number;
   evidenceIdle?: number;
   price?: number;
+  side?: string;
+  leverage?: number;
+  entry?: number;
+  stopLoss?: number;
+  takeProfit?: number;
 };
 
 export type SignalsCustomPanelProps = {

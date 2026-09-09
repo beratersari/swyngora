@@ -177,6 +177,9 @@ func TestPlanLevelsRR(t *testing.T) {
 	if lv.RR+1e-9 < SwingMinRRWatch {
 		t.Fatalf("rr=%v", lv.RR)
 	}
+	if lv.Leverage < 1 {
+		t.Fatalf("leverage %+v", lv)
+	}
 }
 
 func TestMACDCross(t *testing.T) {

@@ -106,6 +106,8 @@ type CustomBacktestHit struct {
 	Summary string
 	Metrics map[string]float64
 	Factors []CustomBacktestFactor
+	Side    string
+	Trade   *BacktestTrade
 }
 
 // CustomBacktestReplay is hits plus bars skipped because a selected factor had no data.
@@ -185,11 +187,16 @@ func ReplayCustomSignalBacktest(in CustomBacktestInput) (CustomBacktestReplay, e
 		}
 		if CustomSignalCrossedTrigger(prev, scored.Score, in.Threshold) {
 			factors := customBacktestFactors(scored)
+			side := NormalizeTradeSide(dec.Side)
+			trade := SimulateBacktestTrade(in.Primary, i, side, swingLevelsOrEmpty(dec.Levels))
+			if trade == nil && dec.Levels == nil {
+				trade = PlanBacktestTrade(in.Primary, i, side)
+			}
 			out.Hits = append(out.Hits, CustomBacktestHit{
 				Index: i, At: ot, Close: bar.Close, Score: scored.Score, Grade: scored.Grade,
 				Summary: customBacktestWhy(scored, in.Threshold, factors),
 				Metrics: map[string]float64{"score": scored.Score, "threshold": in.Threshold},
-				Factors: factors,
+				Factors: factors, Side: side, Trade: trade,
 			})
 		}
 		prev = scored.Score
@@ -248,6 +255,13 @@ func customBacktestWhy(scored CustomSignalScore, threshold float64, factors []Cu
 		return head
 	}
 	return head + ". Used: " + strings.Join(used, ", ")
+}
+
+func swingLevelsOrEmpty(lv *SwingLevels) SwingLevels {
+	if lv == nil {
+		return SwingLevels{}
+	}
+	return *lv
 }
 
 func missingFactorIDs(set map[string]struct{}) []string {

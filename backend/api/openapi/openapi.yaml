@@ -45,7 +45,7 @@ info:
     - Swing engine: 4h+1d pattern detection (Wilder RSI/ADX/ATR, SuperTrend, MACD), BTC regime
       and R:R quality gates, ATR/structure trade levels. Informational only.
     - Historical backtests: run a scanner rule or custom signal profile over a date range for one symbol, track progress,
-      cancel jobs, and view signals with 1/5/20-day forward returns.
+      cancel jobs, and view signals with 1/5/20-day forward returns plus first-touch TP/SL trades.
     - User data export: download watchlist, shares, price-alert history, and backtest results as
       JSON or CSV. Large exports run in the background with progress and cancel; one active export
       per client; files are owner-only downloads and expire after a TTL.
@@ -6725,7 +6725,9 @@ paths:
         edits do not change this job. Custom-mix jobs replay 4h swing factors only —
         hunt and tape add 0. A signal fires when the mix first crosses 62 (onset).
         Identical jobs return the existing pending/running/completed job.
-        Progress and signalCount update while running. Informational only.
+        Each hit stores side, leverage, entry, TP, and SL and records whether later
+        candles hit take-profit or stop-loss first. Progress and signalCount update
+        while running. Informational only.
       operationId: startScannerBacktest
       tags: [Scanner]
       requestBody:
@@ -6805,10 +6807,13 @@ paths:
           $ref: '#/components/responses/Error'
   /api/v1/scanner/backtests/{id}/signals:
     get:
-      summary: List backtest signals with forward returns
+      summary: List backtest signals with forward returns and first-touch trades
       description: |
-        Each signal includes signalAt, closePrice, and optional return1d/return5d/return20d
-        (percent price change after 1/5/20 calendar days when data exists).
+        Each signal includes signalAt, closePrice, optional return1d/return5d/return20d
+        (percent price change after 1/5/20 calendar days when data exists), and `trade`
+        when a long/short plan exists: leverage, entry, stopLoss, takeProfit, first-touch
+        outcome (tp|sl|open), and leveraged pnlPct. `performance` adds horizon stats plus
+        trade TP/SL counts, win rate, and average/median leveraged PnL.
       operationId: listScannerBacktestSignals
       tags: [Scanner]
       parameters:
@@ -6828,6 +6833,21 @@ paths:
       responses:
         '200':
           description: Signals list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  backtestId: { type: string }
+                  count: { type: integer }
+                  total: { type: integer }
+                  signalCount: { type: integer }
+                  signals:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ScannerBacktestSignal'
+                  performance:
+                    $ref: '#/components/schemas/BacktestPerformance'
         '404':
           $ref: '#/components/responses/Error'
 
@@ -9347,6 +9367,77 @@ components:
         rewardPct: { type: number }
         rr: { type: number }
         atr: { type: number }
+        leverage: { type: integer, minimum: 1, maximum: 10, description: Suggested leverage so a full stop is about 10% of notional }
+    BacktestTrade:
+      type: object
+      description: Signal side, leverage, levels, and first-touch TP/SL result.
+      properties:
+        side: { type: string, enum: [long, short] }
+        leverage: { type: integer, minimum: 1, maximum: 10 }
+        entry: { type: number }
+        stopLoss: { type: number }
+        takeProfit: { type: number }
+        outcome: { type: string, enum: [tp, sl, open], description: Which of take-profit or stop-loss the later candles hit first }
+        exitPrice: { type: number }
+        pnlPct: { type: number, description: Leveraged percent result }
+        barsHeld: { type: integer }
+        hitAt: { type: string, format: date-time }
+    BacktestHorizonStats:
+      type: object
+      properties:
+        days: { type: integer }
+        sampleCount: { type: integer }
+        average: { type: number }
+        median: { type: number }
+        winRate: { type: number, description: 0–100, share of returns greater than 0 }
+    BacktestTradeStats:
+      type: object
+      properties:
+        sampleCount: { type: integer }
+        tpHits: { type: integer }
+        slHits: { type: integer }
+        openCount: { type: integer }
+        longCount: { type: integer }
+        shortCount: { type: integer }
+        winRate: { type: number, description: 0–100, TP / (TP+SL) }
+        average: { type: number, description: Average leveraged PnL of closed trades }
+        median: { type: number }
+    BacktestPerformance:
+      type: object
+      properties:
+        signalCount: { type: integer }
+        return1d: { $ref: '#/components/schemas/BacktestHorizonStats' }
+        return5d: { $ref: '#/components/schemas/BacktestHorizonStats' }
+        return20d: { $ref: '#/components/schemas/BacktestHorizonStats' }
+        trades: { $ref: '#/components/schemas/BacktestTradeStats' }
+    ScannerBacktestSignal:
+      type: object
+      properties:
+        id: { type: string }
+        backtestId: { type: string }
+        signalAt: { type: string, format: date-time }
+        closePrice: { type: number }
+        summary: { type: string }
+        return1d: { type: number }
+        return5d: { type: number }
+        return20d: { type: number }
+        metrics:
+          type: object
+          additionalProperties: { type: number }
+        factors:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              label: { type: string }
+              score: { type: number }
+              weightPct: { type: number }
+              sharePct: { type: number }
+              effect: { type: number }
+              status: { type: string }
+              detail: { type: string }
+        trade: { $ref: '#/components/schemas/BacktestTrade' }
     SwingDecision:
       type: object
       properties:

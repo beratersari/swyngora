@@ -16,7 +16,7 @@ Route **`/signals`** (nav: Signals) is the swing-signal desk:
 | Custom | User-picked swing-engine factors + optional liquidation-hunt up score, with live weight preview and saved mixes (`GET /api/v1/swing/custom/scan`). Existing swing cards stay on Setups. |
 | Hits | Raw scanner match history with the exact trigger bar time (UTC, seconds) and a jump to the coin chart. |
 | Rules | Create, edit, enable/disable, or delete rules. Pick RSI, EMA crossover, and/or volume, then **all must match** or **one is enough**. One-click **4h swing stack** still adds the three expert long-side filters as separate rules. |
-| Lab | Historical backtest on one symbol with 1/5/20d forward returns. |
+| Lab | Historical backtest on one symbol with 1/5/20d forward returns and first-touch TP/SL trades. |
 
 Coin detail overlays scanner hits as chart markers (toggle next to pump markers). Scanner still evaluates **watchlist symbols only**.
 
@@ -115,7 +115,7 @@ Run a saved **scanner rule** or a **custom signal profile** over a symbol and da
 | `GET` | `/api/v1/scanner/backtests` | List jobs |
 | `GET` | `/api/v1/scanner/backtests/{id}` | Progress (`progressPct`, `signalCount`, `status`) |
 | `POST` | `/api/v1/scanner/backtests/{id}/cancel` | Cancel pending/running job |
-| `GET` | `/api/v1/scanner/backtests/{id}/signals` | Match dates + `return1d` / `return5d` / `return20d` (%) + `performance` (avg / median / win rate / sample count per horizon) |
+| `GET` | `/api/v1/scanner/backtests/{id}/signals` | Match dates + `return1d` / `return5d` / `return20d` (%) + `trade` (side, leverage, entry, TP, SL, first-touch outcome, leveraged PnL) + `performance` (horizon stats and trade TP/SL summary) |
 
 ### Behavior
 - Job runs in the **background** (`pending` → `running` → `completed` | `canceled` | `failed`).
@@ -124,7 +124,9 @@ Run a saved **scanner rule** or a **custom signal profile** over a symbol and da
 - **No duplicate run** for the same client + rule snapshot + symbol + date range while status is pending/running/completed (returns existing job). Editing the rule and starting again creates a **new** job.
 - After cancel/failed, a new job with the same fingerprint can be started.
 - Each signal stores close at match and optional **calendar-day** forward returns (1 / 5 / 20 days) when future candles exist.
+- Each signal also stores a paper **trade plan** when levels can be built: **side** (long, or short for RSI-below / death-cross rules), **leverage** (1–10x, sized so a full stop is about 10% of notional), **entry**, **stop**, and **take-profit**. Later candles decide the result: whichever of TP or SL the high/low hits **first** wins. If one bar touches both, the stop is taken. A gap through a level at the open fills that level. If neither is hit by the last bar, the trade stays **open** and PnL is marked to the last close. `pnlPct` is the leveraged percent.
 - Job results include a **performance** summary per horizon: average return, median return, win rate (share of returns > 0), and sample count (signals that have that horizon). Missing future candles are left out of that column, not scored as 0.
+- `performance.trades` counts TP hits, SL hits, and still-open trades, plus win rate (TP / closed) and average / median leveraged PnL of closed trades.
 - Max range: 400 days. Progress fields: `processedBars`, `totalBars`, `progressPct`.
 - **Custom profile jobs** (`kind=custom_profile`) replay **closed 4h** swing factors with the snapshotted weights. The mix score still uses the factors that have data. If any **selected** factor has no historical data at that bar (hunt, tape, or not enough candles), that timestamp is **skipped** — no signal. The job reports `skippedBars` and `missingFactors`. A signal fires only on complete bars when the mix first crosses **62**. Each hit lists the selected factors at that bar (`factors`: id, score, weight, status). Jobs list `sourceName` for the mix.
 

@@ -88,14 +88,15 @@ type backtestPayload struct {
 }
 
 type backtestSignalPayload struct {
-	ID         string             `json:"id"`
-	SignalAt   string             `json:"signalAt"`
-	ClosePrice float64            `json:"closePrice"`
-	Summary    string             `json:"summary"`
-	Return1d   *float64           `json:"return1d,omitempty"`
-	Return5d   *float64           `json:"return5d,omitempty"`
-	Return20d  *float64           `json:"return20d,omitempty"`
-	Metrics    map[string]float64 `json:"metrics,omitempty"`
+	ID         string                `json:"id"`
+	SignalAt   string                `json:"signalAt"`
+	ClosePrice float64               `json:"closePrice"`
+	Summary    string                `json:"summary"`
+	Return1d   *float64              `json:"return1d,omitempty"`
+	Return5d   *float64              `json:"return5d,omitempty"`
+	Return20d  *float64              `json:"return20d,omitempty"`
+	Metrics    map[string]float64    `json:"metrics,omitempty"`
+	Trade      *domain.BacktestTrade `json:"trade,omitempty"`
 }
 
 // runJob builds the export file for a claimed job.
@@ -230,7 +231,7 @@ func (s *Service) runJob(ctx context.Context, job *domain.ExportJob) error {
 								ID: sig.ID, SignalAt: sig.SignalAt.UTC().Format(time.RFC3339Nano),
 								ClosePrice: sig.ClosePrice, Summary: sig.Summary,
 								Return1d: sig.Return1d, Return5d: sig.Return5d, Return20d: sig.Return20d,
-								Metrics: sig.Metrics,
+								Metrics: sig.Metrics, Trade: sig.Trade,
 							})
 						}
 						if len(sigs) < page {
@@ -411,9 +412,20 @@ func buildCSV(pl *payload) ([]byte, error) {
 				bt.RangeStart, bt.RangeEnd, bt.Status, strconv.Itoa(bt.SignalCount), bt.CreatedAt, bt.ErrorMessage,
 			})
 			for _, sig := range bt.Signals {
+				side, lev, entry, sl, tp, outcome, pnl := "", "", "", "", "", "", ""
+				if sig.Trade != nil {
+					side = sig.Trade.Side
+					lev = strconv.Itoa(sig.Trade.Leverage)
+					entry = strconv.FormatFloat(sig.Trade.Entry, 'f', -1, 64)
+					sl = strconv.FormatFloat(sig.Trade.StopLoss, 'f', -1, 64)
+					tp = strconv.FormatFloat(sig.Trade.TakeProfit, 'f', -1, 64)
+					outcome = sig.Trade.Outcome
+					pnl = strconv.FormatFloat(sig.Trade.PnLPct, 'f', -1, 64)
+				}
 				sigRows = append(sigRows, []string{
 					sig.ID, bt.ID, sig.SignalAt, strconv.FormatFloat(sig.ClosePrice, 'f', -1, 64), sig.Summary,
 					fmtPtr(sig.Return1d), fmtPtr(sig.Return5d), fmtPtr(sig.Return20d),
+					side, lev, entry, sl, tp, outcome, pnl,
 				})
 			}
 		}
@@ -424,6 +436,7 @@ func buildCSV(pl *payload) ([]byte, error) {
 		}
 		if err := writeSection("backtest_signals", []string{
 			"id", "backtestId", "signalAt", "closePrice", "summary", "return1d", "return5d", "return20d",
+			"side", "leverage", "entry", "stopLoss", "takeProfit", "outcome", "pnlPct",
 		}, sigRows); err != nil {
 			return nil, err
 		}

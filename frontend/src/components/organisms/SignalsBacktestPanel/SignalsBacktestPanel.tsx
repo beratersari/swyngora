@@ -12,16 +12,30 @@ import {
   type ScannerBacktestHorizonStats,
   type ScannerBacktestPerformance,
   type ScannerBacktestSignal,
+  type ScannerBacktestTrade,
 } from '@/libs/api';
 import {
   changeTone,
   describeRule,
   formatChangePercent,
   formatExactDateTime,
+  formatPrice,
   formatSymbolDisplay,
 } from '@/libs/utils';
 import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
-import { FactorLine, FactorWhy, Field, FieldRow, PerfGrid, PerfTable, SignalDrawerBody, Stack } from './SignalsBacktestPanel.styles';
+import { formatLeverage, hasBacktestHitDetails, tradePnlTone } from './helpers';
+import {
+  FactorLine,
+  FactorWhy,
+  Field,
+  FieldRow,
+  PerfGrid,
+  PerfTable,
+  SignalDrawerBody,
+  Stack,
+  TradePlan,
+  TradeStats,
+} from './SignalsBacktestPanel.styles';
 import type { SignalsBacktestPanelProps } from './SignalsBacktestPanel.types';
 
 function horizonLabel(days: number): string {
@@ -93,7 +107,81 @@ function PerformanceSummary({ perf }: { perf: ScannerBacktestPerformance }) {
           </Fragment>
         ))}
       </PerfGrid>
+      {perf.trades && (perf.trades.sampleCount ?? 0) > 0 ? (
+        <>
+          <Text variant="label" color="primary">
+            {t('signals:lab.trades')}
+          </Text>
+          <TradeStats>
+            <Text variant="caption" color="secondary">
+              {t('signals:lab.tpHits')}: {perf.trades.tpHits}
+            </Text>
+            <Text variant="caption" color="secondary">
+              {t('signals:lab.slHits')}: {perf.trades.slHits}
+            </Text>
+            <Text variant="caption" color="secondary">
+              {t('signals:lab.openTrades')}: {perf.trades.openCount}
+            </Text>
+            <Text variant="caption" color="primary" mono>
+              {t('signals:lab.tradeWinRate')}: {perf.trades.winRate == null ? '—' : `${perf.trades.winRate}%`}
+            </Text>
+            <Text variant="caption" color={changeTone(perf.trades.average)} mono>
+              {t('signals:lab.avgPnl')}: {perf.trades.average == null ? '—' : formatChangePercent(perf.trades.average)}
+            </Text>
+            <Text variant="caption" color={changeTone(perf.trades.median)} mono>
+              {t('signals:lab.medianPnl')}: {perf.trades.median == null ? '—' : formatChangePercent(perf.trades.median)}
+            </Text>
+          </TradeStats>
+        </>
+      ) : null}
     </PerfTable>
+  );
+}
+
+function outcomeLabel(t: (key: string) => string, outcome: string | undefined): string {
+  if (outcome === 'tp') return t('signals:lab.outcomeTp');
+  if (outcome === 'sl') return t('signals:lab.outcomeSl');
+  if (outcome === 'open') return t('signals:lab.outcomeOpen');
+  return '—';
+}
+
+function sideLabel(t: (key: string) => string, side: string | undefined): string {
+  if (side === 'short') return t('signals:lab.short');
+  if (side === 'long') return t('signals:lab.long');
+  return '—';
+}
+
+function TradeDetail({ trade }: { trade: ScannerBacktestTrade }) {
+  const { t } = useTranslation(['signals']);
+  return (
+    <TradePlan>
+      <Text variant="caption" color="secondary">
+        {t('signals:lab.side')}: {sideLabel(t, trade.side)}
+      </Text>
+      <Text variant="caption" color="secondary" mono>
+        {t('signals:lab.leverage')}: {formatLeverage(trade.leverage)}
+      </Text>
+      <Text variant="caption" color="secondary" mono>
+        {t('signals:lab.entry')}: {formatPrice(trade.entry)}
+      </Text>
+      <Text variant="caption" color="secondary" mono>
+        {t('signals:lab.stop')}: {formatPrice(trade.stopLoss)}
+      </Text>
+      <Text variant="caption" color="secondary" mono>
+        {t('signals:lab.target')}: {formatPrice(trade.takeProfit)}
+      </Text>
+      <Text variant="caption" color="primary">
+        {t('signals:lab.outcome')}: {outcomeLabel(t, trade.outcome)}
+      </Text>
+      <Text variant="caption" color={tradePnlTone(trade)} mono>
+        {t('signals:lab.pnl')}: {formatChangePercent(trade.pnlPct)}
+      </Text>
+      {trade.barsHeld != null ? (
+        <Text variant="caption" color="secondary" mono>
+          {t('signals:lab.barsHeld')}: {trade.barsHeld}
+        </Text>
+      ) : null}
+    </TradePlan>
   );
 }
 
@@ -230,6 +318,31 @@ export function SignalsBacktestPanel({
       render: (v: number) => (
         <Text variant="label" mono>
           {v}
+        </Text>
+      ),
+    },
+    {
+      title: t('signals:lab.side'),
+      key: 'side',
+      render: (_, row) => (
+        <Text variant="caption">{sideLabel(t, row.trade?.side)}</Text>
+      ),
+    },
+    {
+      title: t('signals:lab.outcome'),
+      key: 'outcome',
+      render: (_, row) => (
+        <Text variant="caption" color={row.trade?.outcome === 'tp' ? 'success' : row.trade?.outcome === 'sl' ? 'error' : 'secondary'}>
+          {outcomeLabel(t, row.trade?.outcome)}
+        </Text>
+      ),
+    },
+    {
+      title: t('signals:lab.pnl'),
+      key: 'pnl',
+      render: (_, row) => (
+        <Text variant="caption" color={tradePnlTone(row.trade)} mono>
+          {row.trade == null ? '—' : formatChangePercent(row.trade.pnlPct)}
         </Text>
       ),
     },
@@ -403,7 +516,7 @@ export function SignalsBacktestPanel({
       <Drawer
         open={Boolean(selectedId)}
         onClose={() => onSelect('')}
-        width={720}
+        width={880}
         title={
           selectedJob
             ? `${formatSymbolDisplay(selectedJob.symbol)} · ${selectedJob.interval}`
@@ -442,33 +555,45 @@ export function SignalsBacktestPanel({
             locale={{ emptyText: <Empty description={t('signals:lab.noSignals')} /> }}
             size="small"
             expandable={{
-              rowExpandable: (row) => (row.factors?.length ?? 0) > 0,
+              rowExpandable: (row) => hasBacktestHitDetails(row),
               expandedRowRender: (row) => (
                 <FactorWhy>
-                  <Text variant="caption" color="secondary">
-                    {t('signals:lab.hitFactors')}
-                  </Text>
-                  {row.factors?.map((f) => (
-                    <FactorLine key={f.id}>
-                      <Text variant="caption" color="primary">
-                        {t(`signals:custom.factors.${f.id}`, { defaultValue: f.label })}
-                        {f.status === 'idle' ? ` (${t('signals:custom.idle')})` : ''}
+                  {row.trade ? (
+                    <>
+                      <Text variant="caption" color="secondary">
+                        {t('signals:lab.hitTrade')}
                       </Text>
-                      <Text variant="caption" mono color="secondary">
-                        {t('signals:lab.factorScore', { score: Math.round(f.score) })}
+                      <TradeDetail trade={row.trade} />
+                    </>
+                  ) : null}
+                  {(row.factors?.length ?? 0) > 0 ? (
+                    <>
+                      <Text variant="caption" color="secondary">
+                        {t('signals:lab.hitFactors')}
                       </Text>
-                      <Text variant="caption" mono color="secondary">
-                        {t('signals:lab.factorWeight', { pct: f.weightPct })}
-                      </Text>
-                      <Text variant="caption" mono color={f.effect && f.effect < 0 ? 'error' : 'success'}>
-                        {f.status === 'used' && f.effect != null
-                          ? f.effect > 0
-                            ? `+${f.effect}`
-                            : String(f.effect)
-                          : '—'}
-                      </Text>
-                    </FactorLine>
-                  ))}
+                      {row.factors?.map((f) => (
+                        <FactorLine key={f.id}>
+                          <Text variant="caption" color="primary">
+                            {t(`signals:custom.factors.${f.id}`, { defaultValue: f.label })}
+                            {f.status === 'idle' ? ` (${t('signals:custom.idle')})` : ''}
+                          </Text>
+                          <Text variant="caption" mono color="secondary">
+                            {t('signals:lab.factorScore', { score: Math.round(f.score) })}
+                          </Text>
+                          <Text variant="caption" mono color="secondary">
+                            {t('signals:lab.factorWeight', { pct: f.weightPct })}
+                          </Text>
+                          <Text variant="caption" mono color={f.effect && f.effect < 0 ? 'error' : 'success'}>
+                            {f.status === 'used' && f.effect != null
+                              ? f.effect > 0
+                                ? `+${f.effect}`
+                                : String(f.effect)
+                              : '—'}
+                          </Text>
+                        </FactorLine>
+                      ))}
+                    </>
+                  ) : null}
                 </FactorWhy>
               ),
             }}

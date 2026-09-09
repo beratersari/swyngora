@@ -240,6 +240,12 @@ func TestBacktest_CustomProfileStartAndRun(t *testing.T) {
 	if len(sigs[0].Factors) == 0 {
 		t.Fatal("persisted signal must keep factor scores and weights")
 	}
+	if sigs[0].Trade == nil || sigs[0].Trade.Entry <= 0 || sigs[0].Trade.Leverage < 1 {
+		t.Fatalf("persisted trade %+v", sigs[0].Trade)
+	}
+	if got.Performance.Trades.SampleCount != got.SignalCount {
+		t.Fatalf("trade stats %+v", got.Performance.Trades)
+	}
 	if got.Performance == nil || got.Performance.SignalCount != got.SignalCount {
 		t.Fatalf("performance %+v", got.Performance)
 	}

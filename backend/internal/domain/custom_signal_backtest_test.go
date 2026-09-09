@@ -86,6 +86,17 @@ func TestReplayCustomSignalBacktest_OnsetOnUptrend(t *testing.T) {
 	if !strings.Contains(rep.Hits[0].Summary, "Used:") {
 		t.Fatalf("summary %q", rep.Hits[0].Summary)
 	}
+	if rep.Hits[0].Trade == nil || rep.Hits[0].Trade.Entry <= 0 || rep.Hits[0].Trade.Leverage < 1 {
+		t.Fatalf("hit must plan a trade: %+v", rep.Hits[0].Trade)
+	}
+	if rep.Hits[0].Side != BacktestTradeSideLong {
+		t.Fatalf("side %s", rep.Hits[0].Side)
+	}
+	switch rep.Hits[0].Trade.Outcome {
+	case BacktestTradeOutcomeTP, BacktestTradeOutcomeSL, BacktestTradeOutcomeOpen:
+	default:
+		t.Fatalf("outcome %q", rep.Hits[0].Trade.Outcome)
+	}
 }
 
 func TestReplayCustomSignalBacktest_SkipsWhenSelectedFactorMissing(t *testing.T) {

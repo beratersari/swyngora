@@ -87,6 +87,21 @@ export type ScannerBacktestSignalFactor = {
   detail?: string;
 };
 
+export type ScannerBacktestTradeOutcome = 'tp' | 'sl' | 'open';
+
+export type ScannerBacktestTrade = {
+  side: 'long' | 'short';
+  leverage: number;
+  entry: number;
+  stopLoss: number;
+  takeProfit: number;
+  outcome: ScannerBacktestTradeOutcome;
+  exitPrice?: number;
+  pnlPct: number;
+  barsHeld?: number;
+  hitAt?: string;
+};
+
 export type ScannerBacktestSignal = {
   id: string;
   backtestId: string;
@@ -98,6 +113,7 @@ export type ScannerBacktestSignal = {
   return20d?: number;
   metrics?: Record<string, number>;
   factors?: ScannerBacktestSignalFactor[];
+  trade?: ScannerBacktestTrade;
 };
 
 export type CreateScannerRuleArg = {
@@ -174,11 +190,24 @@ export type ScannerBacktestHorizonStats = {
   winRate?: number;
 };
 
+export type ScannerBacktestTradeStats = {
+  sampleCount: number;
+  tpHits: number;
+  slHits: number;
+  openCount: number;
+  longCount: number;
+  shortCount: number;
+  winRate?: number;
+  average?: number;
+  median?: number;
+};
+
 export type ScannerBacktestPerformance = {
   signalCount: number;
   return1d: ScannerBacktestHorizonStats;
   return5d: ScannerBacktestHorizonStats;
   return20d: ScannerBacktestHorizonStats;
+  trades?: ScannerBacktestTradeStats;
 };
 
 export type ScannerBacktestSignalListResponse = {
