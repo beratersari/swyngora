@@ -239,6 +239,8 @@ type scannerBacktestDTO struct {
 	ID            string  `json:"id"`
 	ClientID      string  `json:"clientId"`
 	RuleID        string  `json:"ruleId"`
+	Kind          string  `json:"kind"`
+	SourceName    string  `json:"sourceName,omitempty"`
 	Exchange      string  `json:"exchange"`
 	Symbol        string  `json:"symbol"`
 	Interval      string  `json:"interval"`
@@ -268,8 +270,23 @@ type scannerBacktestSignalDTO struct {
 }
 
 func backtestToDTO(b *domain.ScannerBacktest) scannerBacktestDTO {
+	kind := b.Kind
+	if kind == "" {
+		if domain.IsCustomProfileBacktest(*b) {
+			kind = domain.BacktestKindCustom
+		} else {
+			kind = domain.BacktestKindRule
+		}
+	}
+	sourceName := ""
+	if domain.IsCustomProfileBacktest(*b) {
+		if name, _, _, err := domain.DecodeCustomProfileSnapshot(b.RuleJSON); err == nil {
+			sourceName = name
+		}
+	}
 	d := scannerBacktestDTO{
-		ID: b.ID, ClientID: b.ClientID, RuleID: b.RuleID, Exchange: string(b.Exchange), Symbol: b.Symbol,
+		ID: b.ID, ClientID: b.ClientID, RuleID: b.RuleID, Kind: kind, SourceName: sourceName,
+		Exchange: string(b.Exchange), Symbol: b.Symbol,
 		Interval: b.Interval, RangeStart: b.RangeStart.UTC().Format(time.RFC3339Nano),
 		RangeEnd: b.RangeEnd.UTC().Format(time.RFC3339Nano), Status: string(b.Status),
 		ProgressPct: b.ProgressPct, ProcessedBars: b.ProcessedBars, TotalBars: b.TotalBars,
@@ -298,6 +315,7 @@ func backtestSignalToDTO(s *domain.ScannerBacktestSignal) scannerBacktestSignalD
 type startBacktestBody struct {
 	ClientID   string `json:"clientId"`
 	RuleID     string `json:"ruleId"`
+	ProfileID  string `json:"profileId"`
 	Exchange   string `json:"exchange"`
 	Symbol     string `json:"symbol"`
 	RangeStart string `json:"rangeStart"`
@@ -326,7 +344,8 @@ func (h *ScannerHandler) StartBacktest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	job, err := h.svc.StartBacktest(r.Context(), scanner.StartBacktestInput{
-		ClientID: clientID, RuleID: body.RuleID, Exchange: body.Exchange, Symbol: body.Symbol,
+		ClientID: clientID, RuleID: body.RuleID, ProfileID: body.ProfileID,
+		Exchange: body.Exchange, Symbol: body.Symbol,
 		RangeStart: start, RangeEnd: end,
 	})
 	if err != nil {

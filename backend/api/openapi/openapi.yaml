@@ -44,7 +44,7 @@ info:
       client's watchlist; background evaluation; match history deduped by rule/symbol/bar.
     - Swing engine: 4h+1d pattern detection (Wilder RSI/ADX/ATR, SuperTrend, MACD), BTC regime
       and R:R quality gates, ATR/structure trade levels. Informational only.
-    - Historical scanner backtests: run a rule over a date range for one symbol, track progress,
+    - Historical backtests: run a scanner rule or custom signal profile over a date range for one symbol, track progress,
       cancel jobs, and view signals with 1/5/20-day forward returns.
     - User data export: download watchlist, shares, price-alert history, and backtest results as
       JSON or CSV. Large exports run in the background with progress and cancel; one active export
@@ -6717,12 +6717,14 @@ paths:
                 $ref: '#/components/schemas/ScannerResultList'
   /api/v1/scanner/backtests:
     post:
-      summary: Start a historical scanner backtest
+      summary: Start a historical scanner or custom-signal backtest
       description: |
-        Runs a rule over a symbol and date range in the background. The rule is
-        snapshotted at queue time; later edits do not change this job. Identical jobs
-        (same client, rule snapshot, symbol, range) return the existing pending/running/completed job.
-        Editing the rule and starting again creates a new job.
+        Runs a scanner rule or a custom signal profile over a symbol and date range
+        in the background. Send `ruleId` or `profileId` (not both). `profileId=built_in`
+        uses the built-in swing mix. The source is snapshotted at queue time; later
+        edits do not change this job. Custom-mix jobs replay 4h swing factors only —
+        hunt and tape add 0. A signal fires when the mix first crosses 62 (onset).
+        Identical jobs return the existing pending/running/completed job.
         Progress and signalCount update while running. Informational only.
       operationId: startScannerBacktest
       tags: [Scanner]
@@ -6732,10 +6734,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [ruleId, symbol, rangeStart, rangeEnd]
+              required: [symbol, rangeStart, rangeEnd]
               properties:
                 clientId: { type: string }
-                ruleId: { type: string }
+                ruleId: { type: string, description: Scanner rule id (omit when profileId is set) }
+                profileId: { type: string, description: Custom signal profile id, or built_in }
                 exchange: { type: string, enum: [binance, coinbase, bybit, nasdaq, bist], default: binance }
                 symbol: { type: string }
                 rangeStart: { type: string, format: date-time }

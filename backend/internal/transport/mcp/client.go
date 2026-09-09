@@ -2605,6 +2605,68 @@ func (c *APIClient) DeleteScannerRule(ctx context.Context, clientID, id string) 
 	return c.sendJSON(ctx, http.MethodDelete, path, nil)
 }
 
+func (c *APIClient) StartBacktest(ctx context.Context, clientID, ruleID, profileID, exchange, symbol, rangeStart, rangeEnd string) (json.RawMessage, error) {
+	body := map[string]any{
+		"clientId": clientID, "symbol": symbol, "exchange": exchange,
+		"rangeStart": rangeStart, "rangeEnd": rangeEnd,
+	}
+	if ruleID != "" {
+		body["ruleId"] = ruleID
+	}
+	if profileID != "" {
+		body["profileId"] = profileID
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/scanner/backtests", body)
+}
+
+func (c *APIClient) ListBacktests(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", strconv.Itoa(offset))
+	}
+	return c.get(ctx, "/api/v1/scanner/backtests", q)
+}
+
+func (c *APIClient) GetBacktest(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	return c.get(ctx, "/api/v1/scanner/backtests/"+url.PathEscape(id), q)
+}
+
+func (c *APIClient) CancelBacktest(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/scanner/backtests/" + url.PathEscape(id) + "/cancel"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodPost, path, nil)
+}
+
+func (c *APIClient) ListBacktestSignals(ctx context.Context, clientID, id string, limit, offset int) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", strconv.Itoa(offset))
+	}
+	return c.get(ctx, "/api/v1/scanner/backtests/"+url.PathEscape(id)+"/signals", q)
+}
+
 // AnalyzeSwing runs the swing engine on one symbol.
 func (c *APIClient) AnalyzeSwing(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

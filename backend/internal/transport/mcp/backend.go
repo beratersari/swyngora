@@ -4235,6 +4235,124 @@ func (b *Backend) DeleteScannerRule(ctx context.Context, clientID, id string) (j
 	return mustJSON(map[string]any{"deleted": true, "id": id})
 }
 
+func backtestMap(job *domain.ScannerBacktest) map[string]any {
+	if job == nil {
+		return map[string]any{}
+	}
+	kind := job.Kind
+	if kind == "" {
+		if domain.IsCustomProfileBacktest(*job) {
+			kind = domain.BacktestKindCustom
+		} else {
+			kind = domain.BacktestKindRule
+		}
+	}
+	m := map[string]any{
+		"id": job.ID, "clientId": job.ClientID, "ruleId": job.RuleID, "kind": kind,
+		"exchange": string(job.Exchange), "symbol": job.Symbol, "interval": job.Interval,
+		"rangeStart": job.RangeStart.UTC().Format(time.RFC3339Nano),
+		"rangeEnd":   job.RangeEnd.UTC().Format(time.RFC3339Nano),
+		"status":     string(job.Status), "progressPct": job.ProgressPct,
+		"processedBars": job.ProcessedBars, "totalBars": job.TotalBars,
+		"signalCount": job.SignalCount, "createdAt": job.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if domain.IsCustomProfileBacktest(*job) {
+		if name, _, _, err := domain.DecodeCustomProfileSnapshot(job.RuleJSON); err == nil {
+			m["sourceName"] = name
+		}
+	}
+	if job.ErrorMessage != "" {
+		m["errorMessage"] = job.ErrorMessage
+	}
+	return m
+}
+
+func (b *Backend) StartBacktest(ctx context.Context, clientID, ruleID, profileID, exchange, symbol, rangeStart, rangeEnd string) (json.RawMessage, error) {
+	if b.Scanner == nil {
+		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)
+	}
+	start, err := time.Parse(time.RFC3339Nano, rangeStart)
+	if err != nil {
+		start, err = time.Parse(time.RFC3339, rangeStart)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%w: rangeStart must be RFC3339", domain.ErrInvalidArgument)
+	}
+	end, err := time.Parse(time.RFC3339Nano, rangeEnd)
+	if err != nil {
+		end, err = time.Parse(time.RFC3339, rangeEnd)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%w: rangeEnd must be RFC3339", domain.ErrInvalidArgument)
+	}
+	job, err := b.Scanner.StartBacktest(ctx, scanner.StartBacktestInput{
+		ClientID: clientID, RuleID: ruleID, ProfileID: profileID,
+		Exchange: exchange, Symbol: symbol, RangeStart: start.UTC(), RangeEnd: end.UTC(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(backtestMap(job))
+}
+
+func (b *Backend) ListBacktests(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
+	if b.Scanner == nil {
+		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)
+	}
+	list, total, err := b.Scanner.ListBacktests(ctx, clientID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, backtestMap(&list[i]))
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "backtests": items, "count": len(items), "total": total})
+}
+
+func (b *Backend) GetBacktest(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Scanner == nil {
+		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)
+	}
+	job, err := b.Scanner.GetBacktest(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(backtestMap(job))
+}
+
+func (b *Backend) CancelBacktest(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Scanner == nil {
+		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)
+	}
+	job, err := b.Scanner.CancelBacktest(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(backtestMap(job))
+}
+
+func (b *Backend) ListBacktestSignals(ctx context.Context, clientID, id string, limit, offset int) (json.RawMessage, error) {
+	if b.Scanner == nil {
+		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)
+	}
+	list, total, err := b.Scanner.ListBacktestSignals(ctx, clientID, id, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for _, s := range list {
+		items = append(items, map[string]any{
+			"id": s.ID, "backtestId": s.BacktestID,
+			"signalAt":   s.SignalAt.UTC().Format(time.RFC3339Nano),
+			"closePrice": s.ClosePrice, "summary": s.Summary,
+			"return1d": s.Return1d, "return5d": s.Return5d, "return20d": s.Return20d,
+			"metrics": s.Metrics,
+		})
+	}
+	return mustJSON(map[string]any{"backtestId": id, "signals": items, "count": len(items), "total": total})
+}
+
 func (b *Backend) ListScannerResults(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
 	if b.Scanner == nil {
 		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)

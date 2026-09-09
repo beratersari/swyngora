@@ -55,6 +55,8 @@ export type ScannerBacktest = {
   id: string;
   clientId?: string;
   ruleId: string;
+  kind?: 'scanner_rule' | 'custom_profile';
+  sourceName?: string;
   exchange: string;
   symbol: string;
   interval: string;
@@ -104,7 +106,8 @@ export type UpdateScannerRuleArg = CreateScannerRuleArg & {
 };
 
 export type StartScannerBacktestArg = {
-  ruleId: string;
+  ruleId?: string;
+  profileId?: string;
   symbol: string;
   exchange?: 'binance' | 'coinbase' | 'bybit' | 'nasdaq' | 'bist';
   rangeStart: string;

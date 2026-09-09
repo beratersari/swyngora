@@ -31,6 +31,7 @@ function statusVariant(status: string): 'live' | 'paused' | 'status' | 'delist' 
 
 export function SignalsBacktestPanel({
   rules,
+  profiles,
   jobs,
   signals,
   rangeOptions,
@@ -46,12 +47,18 @@ export function SignalsBacktestPanel({
   onCancel,
 }: SignalsBacktestPanelProps) {
   const { t, i18n } = useTranslation(['signals', 'common']);
+  const [source, setSource] = useState<'rule' | 'profile'>('rule');
   const [ruleId, setRuleId] = useState(rules[0]?.id ?? '');
+  const [profileId, setProfileId] = useState(profiles.find((p) => p.isDefault)?.id ?? 'built_in');
   const [exchange, setExchange] = useState<string>('binance');
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [rangeKey, setRangeKey] = useState(rangeOptions[1]?.value ?? rangeOptions[0]?.value ?? '90d');
 
   const ruleById = useMemo(() => new Map(rules.map((r) => [r.id, r])), [rules]);
+  const canStart =
+    Boolean(symbol.trim()) &&
+    !startLoading &&
+    (source === 'rule' ? Boolean(ruleId) : Boolean(profileId));
 
   const jobColumns: ColumnsType<ScannerBacktest> = [
     {
@@ -69,9 +76,12 @@ export function SignalsBacktestPanel({
       render: (ex: string) => <BrandTag variant="exchange">{ex}</BrandTag>,
     },
     {
-      title: t('signals:rules.type'),
+      title: t('signals:lab.source'),
       key: 'rule',
       render: (_, row) => {
+        if (row.kind === 'custom_profile') {
+          return <Text variant="caption">{row.sourceName || t('signals:custom.builtIn')}</Text>;
+        }
         const rule = ruleById.get(row.ruleId);
         return <Text variant="caption">{rule ? describeRule(rule) : row.ruleId}</Text>;
       },
@@ -180,20 +190,56 @@ export function SignalsBacktestPanel({
       <FieldRow>
         <Field>
           <Text variant="caption" color="secondary">
-            {t('signals:lab.rule')}
+            {t('signals:lab.source')}
           </Text>
           <Select
-            value={ruleId || undefined}
-            aria-label={t('signals:lab.rule')}
-            style={{ minWidth: 240 }}
-            placeholder={t('signals:lab.pickRule')}
-            options={rules.map((r) => ({
-              value: r.id,
-              label: `${r.interval} · ${describeRule(r)}`,
-            }))}
-            onChange={setRuleId}
+            value={source}
+            aria-label={t('signals:lab.source')}
+            style={{ minWidth: 160 }}
+            options={[
+              { value: 'rule', label: t('signals:lab.rule') },
+              { value: 'profile', label: t('signals:lab.profile') },
+            ]}
+            onChange={setSource}
           />
         </Field>
+        {source === 'rule' ? (
+          <Field>
+            <Text variant="caption" color="secondary">
+              {t('signals:lab.rule')}
+            </Text>
+            <Select
+              value={ruleId || undefined}
+              aria-label={t('signals:lab.rule')}
+              style={{ minWidth: 240 }}
+              placeholder={t('signals:lab.pickRule')}
+              options={rules.map((r) => ({
+                value: r.id,
+                label: `${r.interval} · ${describeRule(r)}`,
+              }))}
+              onChange={setRuleId}
+            />
+          </Field>
+        ) : (
+          <Field>
+            <Text variant="caption" color="secondary">
+              {t('signals:lab.profile')}
+            </Text>
+            <Select
+              value={profileId}
+              aria-label={t('signals:lab.profile')}
+              style={{ minWidth: 240 }}
+              options={[
+                { value: 'built_in', label: t('signals:custom.builtIn') },
+                ...profiles.map((p) => ({
+                  value: p.id,
+                  label: p.name || p.id,
+                })),
+              ]}
+              onChange={setProfileId}
+            />
+          </Field>
+        )}
         <Field>
           <Text variant="caption" color="secondary">
             {t('signals:exchange')}
@@ -232,10 +278,11 @@ export function SignalsBacktestPanel({
         <Button
           type="primary"
           loading={startLoading}
-          disabled={!ruleId || !symbol.trim() || startLoading}
+          disabled={!canStart}
           onClick={() =>
             onStart({
-              ruleId,
+              ruleId: source === 'rule' ? ruleId : undefined,
+              profileId: source === 'profile' ? profileId : undefined,
               symbol: symbol.trim().toUpperCase(),
               exchange: exchange as MarketExchange,
               rangeKey,

@@ -12755,7 +12755,10 @@ export interface operations {
             content: {
                 "application/json": {
                     clientId?: string;
-                    ruleId: string;
+                    /** Scanner rule id (omit when profileId is set) */
+                    ruleId?: string;
+                    /** Custom signal profile id, or built_in */
+                    profileId?: string;
                     /**
                      * @default binance
                      * @enum {string}

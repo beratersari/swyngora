@@ -14,10 +14,11 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-// StartBacktestInput starts a historical test of a rule on one symbol.
+// StartBacktestInput starts a historical test of a rule or custom mix on one symbol.
 type StartBacktestInput struct {
 	ClientID   string
 	RuleID     string
+	ProfileID  string
 	Exchange   string
 	Symbol     string
 	RangeStart time.Time
@@ -34,9 +35,18 @@ func (s *Service) StartBacktest(ctx context.Context, in StartBacktestInput) (*do
 	if err != nil {
 		return nil, err
 	}
+	profileID := strings.TrimSpace(in.ProfileID)
 	ruleID := strings.TrimSpace(in.RuleID)
+	if profileID != "" && ruleID != "" {
+		return nil, fmt.Errorf("%w: provide ruleId or profileId, not both", domain.ErrInvalidArgument)
+	}
+	if profileID != "" {
+		in.ClientID = clientID
+		in.ProfileID = profileID
+		return s.startCustomBacktest(ctx, in)
+	}
 	if ruleID == "" {
-		return nil, fmt.Errorf("%w: ruleId is required", domain.ErrInvalidArgument)
+		return nil, fmt.Errorf("%w: ruleId or profileId is required", domain.ErrInvalidArgument)
 	}
 	rule, err := s.store.GetRule(ctx, clientID, ruleID)
 	if err != nil {
@@ -80,7 +90,68 @@ func (s *Service) StartBacktest(ctx context.Context, in StartBacktestInput) (*do
 	now := time.Now().UTC()
 	job := domain.ScannerBacktest{
 		ID: uuid.NewString(), ClientID: clientID, RuleID: rule.ID,
+		Kind:     domain.BacktestKindRule,
 		Exchange: ex, Symbol: sym, Interval: rule.Interval,
+		RangeStart: start, RangeEnd: end, Status: domain.BacktestPending, CreatedAt: now,
+		RuleJSON: snap,
+	}
+	return s.store.CreateBacktest(ctx, job)
+}
+
+func (s *Service) startCustomBacktest(ctx context.Context, in StartBacktestInput) (*domain.ScannerBacktest, error) {
+	name := "Built-in swing mix"
+	w := domain.DefaultCustomSignalWeights()
+	sourceID := domain.CustomBacktestBuiltInID
+	if in.ProfileID != domain.CustomBacktestBuiltInID {
+		if s.profiles == nil {
+			return nil, fmt.Errorf("%w: custom profiles not configured", domain.ErrUpstream)
+		}
+		p, err := s.profiles.GetProfile(ctx, in.ClientID, in.ProfileID)
+		if err != nil {
+			return nil, err
+		}
+		name = p.Name
+		w = p.Weights
+		sourceID = p.ID
+	}
+	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
+	if err != nil {
+		return nil, err
+	}
+	if in.RangeStart.IsZero() || in.RangeEnd.IsZero() {
+		return nil, fmt.Errorf("%w: rangeStart and rangeEnd are required", domain.ErrInvalidArgument)
+	}
+	start := in.RangeStart.UTC()
+	end := in.RangeEnd.UTC()
+	if !end.After(start) {
+		return nil, fmt.Errorf("%w: rangeEnd must be after rangeStart", domain.ErrInvalidArgument)
+	}
+	if end.Sub(start) > 400*24*time.Hour {
+		return nil, fmt.Errorf("%w: date range must be at most 400 days", domain.ErrInvalidArgument)
+	}
+	snap, err := domain.EncodeCustomProfileSnapshot(name, w)
+	if err != nil {
+		return nil, err
+	}
+	if existing, err := s.store.FindActiveBacktest(ctx, in.ClientID, sourceID, ex, sym, start, end); err == nil && existing != nil {
+		if domain.IsCustomProfileBacktest(*existing) && existing.RuleJSON == snap {
+			return existing, nil
+		}
+	} else if err != nil && err != domain.ErrNotFound {
+		return nil, err
+	}
+	n, err := s.store.CountBacktests(ctx, in.ClientID)
+	if err != nil {
+		return nil, err
+	}
+	if n >= domain.MaxScannerBacktestsPerClient {
+		return nil, fmt.Errorf("%w: max %d backtests per client", domain.ErrInvalidArgument, domain.MaxScannerBacktestsPerClient)
+	}
+	now := time.Now().UTC()
+	job := domain.ScannerBacktest{
+		ID: uuid.NewString(), ClientID: in.ClientID, RuleID: sourceID,
+		Kind:     domain.BacktestKindCustom,
+		Exchange: ex, Symbol: sym, Interval: string(domain.Interval4h),
 		RangeStart: start, RangeEnd: end, Status: domain.BacktestPending, CreatedAt: now,
 		RuleJSON: snap,
 	}
@@ -232,6 +303,9 @@ func (w *BacktestWorker) RunOnce(ctx context.Context) {
 
 func (s *Service) executeBacktestJob(ctx context.Context, job domain.ScannerBacktest) error {
 	id := job.ID
+	if domain.IsCustomProfileBacktest(job) {
+		return s.executeCustomBacktestJob(ctx, job)
+	}
 	rule, err := resolveBacktestRule(ctx, s.store, job)
 	if err != nil {
 		_ = s.store.FinishBacktest(ctx, id, domain.BacktestFailed, 0, err.Error(), time.Now().UTC())
@@ -392,6 +466,117 @@ func (s *Service) fetchCandlesRange(ctx context.Context, exchange, symbol, inter
 		}
 	}
 	return out, nil
+}
+
+func (s *Service) executeCustomBacktestJob(ctx context.Context, job domain.ScannerBacktest) error {
+	id := job.ID
+	_, weights, threshold, err := domain.DecodeCustomProfileSnapshot(job.RuleJSON)
+	if err != nil {
+		_ = s.store.FinishBacktest(ctx, id, domain.BacktestFailed, 0, err.Error(), time.Now().UTC())
+		return err
+	}
+	warmup := domain.SwingMinClosedBars + 20
+	ivDur := 4 * time.Hour
+	fetchStart := job.RangeStart.Add(-time.Duration(warmup) * ivDur)
+	fetchEnd := job.RangeEnd.Add(21 * 24 * time.Hour)
+	dailyStart := job.RangeStart.Add(-220 * 24 * time.Hour)
+
+	primaryC, err := s.fetchCandlesRange(ctx, string(job.Exchange), job.Symbol, string(domain.Interval4h), fetchStart, fetchEnd)
+	if err != nil {
+		_ = s.store.FinishBacktest(ctx, id, domain.BacktestFailed, 0, err.Error(), time.Now().UTC())
+		return err
+	}
+	higherC, err := s.fetchCandlesRange(ctx, string(job.Exchange), job.Symbol, string(domain.Interval1d), dailyStart, fetchEnd)
+	if err != nil {
+		_ = s.store.FinishBacktest(ctx, id, domain.BacktestFailed, 0, err.Error(), time.Now().UTC())
+		return err
+	}
+	btcSym := customBacktestBTCSymbol(job.Exchange, job.Symbol)
+	var btcP, btcH []domain.Candle
+	if btcSym == job.Symbol {
+		btcP, btcH = primaryC, higherC
+	} else {
+		btcP, _ = s.fetchCandlesRange(ctx, string(job.Exchange), btcSym, string(domain.Interval4h), fetchStart, fetchEnd)
+		btcH, _ = s.fetchCandlesRange(ctx, string(job.Exchange), btcSym, string(domain.Interval1d), dailyStart, fetchEnd)
+	}
+	primary, err := domain.ParseOHLC(primaryC)
+	if err != nil {
+		_ = s.store.FinishBacktest(ctx, id, domain.BacktestFailed, 0, err.Error(), time.Now().UTC())
+		return err
+	}
+	if len(primary) == 0 {
+		_ = s.store.FinishBacktest(ctx, id, domain.BacktestFailed, 0, "no candles in range", time.Now().UTC())
+		return fmt.Errorf("no candles")
+	}
+	higher, _ := domain.ParseOHLC(higherC)
+	btcPO, _ := domain.ParseOHLC(btcP)
+	btcHO, _ := domain.ParseOHLC(btcH)
+
+	firstIdx, lastIdx := -1, -1
+	for i, c := range primary {
+		ot := c.OpenTime.UTC()
+		if ot.Before(job.RangeStart) {
+			continue
+		}
+		if ot.After(job.RangeEnd) {
+			break
+		}
+		if firstIdx < 0 {
+			firstIdx = i
+		}
+		lastIdx = i
+	}
+	if firstIdx < 0 || lastIdx < firstIdx {
+		_ = s.store.FinishBacktest(ctx, id, domain.BacktestCompleted, 0, "", time.Now().UTC())
+		return nil
+	}
+	total := lastIdx - firstIdx + 1
+	hits, err := domain.ReplayCustomSignalBacktest(domain.CustomBacktestInput{
+		Exchange: job.Exchange, Symbol: job.Symbol,
+		Primary: primary, Higher: higher, BTCPrimary: btcPO, BTCHigher: btcHO,
+		RangeStart: job.RangeStart, RangeEnd: job.RangeEnd,
+		Weights: weights, Threshold: threshold, Interval: ivDur,
+	})
+	if err != nil {
+		_ = s.store.FinishBacktest(ctx, id, domain.BacktestFailed, 0, err.Error(), time.Now().UTC())
+		return err
+	}
+	if st, err := s.store.GetBacktestStatus(ctx, id); err == nil && st == domain.BacktestCanceled {
+		return nil
+	}
+	signalCount := 0
+	for _, h := range hits {
+		if ctx.Err() != nil {
+			_ = s.store.FinishBacktest(ctx, id, domain.BacktestCanceled, signalCount, "context canceled", time.Now().UTC())
+			return ctx.Err()
+		}
+		if st, err := s.store.GetBacktestStatus(ctx, id); err == nil && st == domain.BacktestCanceled {
+			return nil
+		}
+		sig := domain.ScannerBacktestSignal{
+			ID: uuid.NewString(), BacktestID: id, SignalAt: h.At,
+			ClosePrice: h.Close, Summary: h.Summary, Metrics: h.Metrics,
+			Return1d:  domain.ForwardReturnPct(primaryC, h.Index, 1),
+			Return5d:  domain.ForwardReturnPct(primaryC, h.Index, 5),
+			Return20d: domain.ForwardReturnPct(primaryC, h.Index, 20),
+		}
+		if err := s.store.InsertBacktestSignal(ctx, sig); err == nil {
+			signalCount++
+		}
+	}
+	_ = s.store.UpdateBacktestProgress(ctx, id, total, total, signalCount, 100)
+	return s.store.FinishBacktest(ctx, id, domain.BacktestCompleted, signalCount, "", time.Now().UTC())
+}
+
+func customBacktestBTCSymbol(ex domain.Exchange, symbol string) string {
+	s := strings.ToUpper(strings.ReplaceAll(symbol, "-", ""))
+	if strings.HasPrefix(s, "BTC") && (strings.HasSuffix(s, "USDT") || strings.HasSuffix(s, "USD") || strings.HasSuffix(s, "USDC")) {
+		return symbol
+	}
+	if ex == domain.ExchangeCoinbase {
+		return "BTC-USD"
+	}
+	return "BTCUSDT"
 }
 
 func intervalApprox(iv string) time.Duration {

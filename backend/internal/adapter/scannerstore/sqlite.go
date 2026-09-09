@@ -199,7 +199,77 @@ CREATE TABLE IF NOT EXISTS custom_signal_profiles (
 		if err := sqliteutil.SetUserVersion(s.db, 5); err != nil {
 			return err
 		}
+		v = 5
 	}
+	if v < 6 {
+		if err := migrateBacktestsDropRuleFK(s.db); err != nil {
+			return err
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 6); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func migrateBacktestsDropRuleFK(db *sql.DB) error {
+	if _, err := db.Exec(`PRAGMA foreign_keys=OFF`); err != nil {
+		return err
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		_, _ = db.Exec(`PRAGMA foreign_keys=ON`)
+		return err
+	}
+	stmts := []string{
+		`CREATE TABLE scanner_backtests_v6 (
+			id              TEXT PRIMARY KEY NOT NULL,
+			client_id       TEXT NOT NULL,
+			rule_id         TEXT NOT NULL,
+			kind            TEXT NOT NULL DEFAULT 'scanner_rule',
+			exchange        TEXT NOT NULL,
+			symbol          TEXT NOT NULL,
+			interval        TEXT NOT NULL,
+			range_start     TEXT NOT NULL,
+			range_end       TEXT NOT NULL,
+			status          TEXT NOT NULL,
+			progress_pct    REAL NOT NULL DEFAULT 0,
+			processed_bars  INTEGER NOT NULL DEFAULT 0,
+			total_bars      INTEGER NOT NULL DEFAULT 0,
+			signal_count    INTEGER NOT NULL DEFAULT 0,
+			error_message   TEXT NOT NULL DEFAULT '',
+			created_at      TEXT NOT NULL,
+			started_at      TEXT,
+			finished_at     TEXT,
+			rule_json       TEXT NOT NULL DEFAULT ''
+		)`,
+		`INSERT INTO scanner_backtests_v6 (
+			id, client_id, rule_id, kind, exchange, symbol, interval, range_start, range_end,
+			status, progress_pct, processed_bars, total_bars, signal_count, error_message,
+			created_at, started_at, finished_at, rule_json
+		) SELECT
+			id, client_id, rule_id, 'scanner_rule', exchange, symbol, interval, range_start, range_end,
+			status, progress_pct, processed_bars, total_bars, signal_count, error_message,
+			created_at, started_at, finished_at, COALESCE(rule_json, '')
+		FROM scanner_backtests`,
+		`DROP TABLE scanner_backtests`,
+		`ALTER TABLE scanner_backtests_v6 RENAME TO scanner_backtests`,
+		`CREATE INDEX IF NOT EXISTS idx_scanner_backtests_client ON scanner_backtests(client_id, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_scanner_backtests_pending ON scanner_backtests(status) WHERE status = 'pending'`,
+		`CREATE INDEX IF NOT EXISTS idx_scanner_backtests_fingerprint ON scanner_backtests(client_id, kind, rule_id, exchange, symbol, range_start, range_end)`,
+	}
+	for _, q := range stmts {
+		if _, err := tx.Exec(q); err != nil {
+			_ = tx.Rollback()
+			_, _ = db.Exec(`PRAGMA foreign_keys=ON`)
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		_, _ = db.Exec(`PRAGMA foreign_keys=ON`)
+		return err
+	}
+	_, _ = db.Exec(`PRAGMA foreign_keys=ON`)
 	return nil
 }
 
@@ -406,7 +476,7 @@ func (s *SQLite) CountResults(ctx context.Context, clientID string) (int, error)
 }
 
 const backtestSelect = `
-	SELECT id, client_id, rule_id, exchange, symbol, interval, range_start, range_end,
+	SELECT id, client_id, rule_id, kind, exchange, symbol, interval, range_start, range_end,
 		status, progress_pct, processed_bars, total_bars, signal_count, error_message,
 		created_at, started_at, finished_at, rule_json
 	FROM scanner_backtests`
@@ -421,13 +491,16 @@ func (s *SQLite) CreateBacktest(ctx context.Context, b domain.ScannerBacktest) (
 	if b.Status == "" {
 		b.Status = domain.BacktestPending
 	}
+	if b.Kind == "" {
+		b.Kind = domain.BacktestKindRule
+	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO scanner_backtests (
-			id, client_id, rule_id, exchange, symbol, interval, range_start, range_end,
+			id, client_id, rule_id, kind, exchange, symbol, interval, range_start, range_end,
 			status, progress_pct, processed_bars, total_bars, signal_count, error_message,
 			created_at, started_at, finished_at, rule_json
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, b.ID, b.ClientID, b.RuleID, string(b.Exchange), b.Symbol, b.Interval,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, b.ID, b.ClientID, b.RuleID, b.Kind, string(b.Exchange), b.Symbol, b.Interval,
 		b.RangeStart.UTC().Format(time.RFC3339Nano), b.RangeEnd.UTC().Format(time.RFC3339Nano),
 		string(b.Status), b.ProgressPct, b.ProcessedBars, b.TotalBars, b.SignalCount, b.ErrorMessage,
 		b.CreatedAt.UTC().Format(time.RFC3339Nano), nullTime(b.StartedAt), nullTime(b.FinishedAt), b.RuleJSON)
@@ -704,11 +777,14 @@ func scanBacktest(row scannable) (*domain.ScannerBacktest, error) {
 	var ex, st, rStart, rEnd, cAt string
 	var started, finished sql.NullString
 	if err := row.Scan(
-		&b.ID, &b.ClientID, &b.RuleID, &ex, &b.Symbol, &b.Interval, &rStart, &rEnd,
+		&b.ID, &b.ClientID, &b.RuleID, &b.Kind, &ex, &b.Symbol, &b.Interval, &rStart, &rEnd,
 		&st, &b.ProgressPct, &b.ProcessedBars, &b.TotalBars, &b.SignalCount, &b.ErrorMessage,
 		&cAt, &started, &finished, &b.RuleJSON,
 	); err != nil {
 		return nil, err
+	}
+	if b.Kind == "" {
+		b.Kind = domain.BacktestKindRule
 	}
 	b.Exchange = domain.Exchange(ex)
 	b.Status = domain.ScannerBacktestStatus(st)

@@ -103,8 +103,10 @@
   },
   "lab": {
     "title": "Historical lab",
-    "hint": "Replay a saved rule on one symbol. Forward returns are calendar-day close-to-close when data exists.",
+    "hint": "Replay a scanner rule or a custom signal mix on one symbol. Custom mixes use 4h swing factors only (hunt and tape are omitted). A mix signal fires when the score first crosses 62. Forward returns are calendar-day close-to-close when data exists.",
+    "source": "Source",
     "rule": "Rule",
+    "profile": "Custom mix",
     "pickRule": "Select a rule",
     "range": "Range",
     "start": "Run backtest",

@@ -30,15 +30,28 @@ type AccountChecker interface {
 
 // Service orchestrates scanner rules and evaluation.
 type Service struct {
-	store   domain.ScannerPort
-	market  CandleFetcher
-	watch   WatchlistReader
-	account AccountChecker
+	store    domain.ScannerPort
+	market   CandleFetcher
+	watch    WatchlistReader
+	account  AccountChecker
+	profiles domain.CustomSignalProfilePort
 }
 
 // New constructs a scanner service.
 func New(store domain.ScannerPort, market CandleFetcher, watch WatchlistReader) *Service {
-	return &Service{store: store, market: market, watch: watch}
+	s := &Service{store: store, market: market, watch: watch}
+	if p, ok := store.(domain.CustomSignalProfilePort); ok {
+		s.profiles = p
+	}
+	return s
+}
+
+// WithProfiles attaches saved custom-signal mixes for Lab backtests.
+func (s *Service) WithProfiles(p domain.CustomSignalProfilePort) *Service {
+	if s != nil {
+		s.profiles = p
+	}
+	return s
 }
 
 // SetAccountChecker wires account-closed skips for the background runner.

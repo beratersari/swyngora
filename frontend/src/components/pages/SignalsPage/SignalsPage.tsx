@@ -503,6 +503,7 @@ export function SignalsPage() {
             children: (
               <SignalsBacktestPanel
                 rules={rules}
+                profiles={customProfilesQuery.data?.profiles ?? []}
                 jobs={jobs}
                 signals={selectedSignals.data?.signals ?? []}
                 rangeOptions={rangeOptions}
@@ -513,11 +514,18 @@ export function SignalsPage() {
                 startLoading={startState.isLoading}
                 cancelLoading={cancelState.isLoading}
                 startError={startState.isError ? startState.error : undefined}
-                onStart={({ ruleId, symbol, exchange, rangeKey }) => {
+                onStart={({ ruleId, profileId, symbol, exchange, rangeKey }) => {
                   const days =
                     SIGNALS_BACKTEST_RANGES.find((r) => r.key === rangeKey)?.days ?? 90;
                   const { rangeStart, rangeEnd } = backtestRangeIso(days);
-                  void startBacktest({ ruleId, symbol, exchange, rangeStart, rangeEnd })
+                  void startBacktest({
+                    ruleId,
+                    profileId,
+                    symbol,
+                    exchange,
+                    rangeStart,
+                    rangeEnd,
+                  })
                     .unwrap()
                     .then((job) => {
                       void message.success(t('signals:lab.startSuccess'));

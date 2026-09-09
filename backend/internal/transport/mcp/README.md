@@ -89,6 +89,11 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `set_default_custom_signal_profile` | Mix the Custom tab opens with |
 | `delete_custom_signal_profile` | Delete a saved mix |
 | `scan_custom_signals` | Watchlist scored with a custom mix (`profileId` or weight*; optional forensics / similar_setup; `tapeSetups` / `tapeUsed` / `tapeThin` / `tapeFresh`; `custom.evidence` strong/fair/weak plus fresh/old/missing factor counts) |
+| `start_backtest` | Historical rule or custom-profile backtest (`ruleId` or `profileId=built_in`) |
+| `list_backtests` | List Lab jobs |
+| `get_backtest` | Job progress / summary |
+| `cancel_backtest` | Cancel pending/running job |
+| `list_backtest_signals` | Signals + 1/5/20d returns |
 | `detect_pump_events` | Pump/dump events on one symbol (threshold, interval, lookback) |
 | `scan_pump_events` | Scan top-volume symbols for recent pumps (`maxTotalEvents` caps total events; response includes resolved defaults) |
 | `get_watchlist` | Read watchlist (optional `ownerClientId` for shared lists) |

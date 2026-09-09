@@ -1,4 +1,5 @@
 import type {
+  CustomSignalProfile,
   MarketExchange,
   ScannerBacktest,
   ScannerBacktestSignal,
@@ -7,8 +8,11 @@ import type {
 
 export type SignalsBacktestRangeOption = { value: string; label: string };
 
+export type SignalsBacktestSource = 'rule' | 'profile';
+
 export type SignalsBacktestPanelProps = {
   rules: ScannerRule[];
+  profiles: CustomSignalProfile[];
   jobs: ScannerBacktest[];
   signals: ScannerBacktestSignal[];
   rangeOptions: SignalsBacktestRangeOption[];
@@ -20,7 +24,8 @@ export type SignalsBacktestPanelProps = {
   cancelLoading?: boolean;
   startError?: unknown;
   onStart: (input: {
-    ruleId: string;
+    ruleId?: string;
+    profileId?: string;
     symbol: string;
     exchange: MarketExchange;
     rangeKey: string;

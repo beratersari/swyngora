@@ -107,11 +107,11 @@ Re-running the scanner on the same bar does not create another row.
 
 ## Historical backtests
 
-Run a saved rule over a symbol and date range to see past signals and what price did afterward.
+Run a saved **scanner rule** or a **custom signal profile** over a symbol and date range to see past signals and what price did afterward.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/v1/scanner/backtests` | Start job (`ruleId`, `symbol`, `rangeStart`, `rangeEnd`) |
+| `POST` | `/api/v1/scanner/backtests` | Start job (`ruleId` **or** `profileId`, `symbol`, `rangeStart`, `rangeEnd`). `profileId=built_in` is the built-in swing mix. |
 | `GET` | `/api/v1/scanner/backtests` | List jobs |
 | `GET` | `/api/v1/scanner/backtests/{id}` | Progress (`progressPct`, `signalCount`, `status`) |
 | `POST` | `/api/v1/scanner/backtests/{id}/cancel` | Cancel pending/running job |
@@ -125,6 +125,7 @@ Run a saved rule over a symbol and date range to see past signals and what price
 - After cancel/failed, a new job with the same fingerprint can be started.
 - Each signal stores close at match and optional **calendar-day** forward returns (1 / 5 / 20 days) when future candles exist.
 - Max range: 400 days. Progress fields: `processedBars`, `totalBars`, `progressPct`.
+- **Custom profile jobs** (`kind=custom_profile`) replay **closed 4h** swing factors with the snapshotted weights. Hunt and forensics/similar tape cannot be rebuilt from candles and stay omitted (add 0). A signal fires when the mix first crosses **62** (same line as the engine trigger). Jobs list `sourceName` for the mix.
 
 ## Tests
 

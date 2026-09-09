@@ -103,11 +103,12 @@ const (
 // MaxScannerBacktestsPerClient caps stored jobs per client.
 const MaxScannerBacktestsPerClient = 50
 
-// ScannerBacktest is a background historical test of one rule on one symbol.
+// ScannerBacktest is a background historical test of one rule or custom mix.
 type ScannerBacktest struct {
 	ID            string
 	ClientID      string
 	RuleID        string
+	Kind          string // scanner_rule | custom_profile
 	Exchange      Exchange
 	Symbol        string
 	Interval      string
@@ -122,7 +123,7 @@ type ScannerBacktest struct {
 	CreatedAt     time.Time
 	StartedAt     *time.Time
 	FinishedAt    *time.Time
-	// RuleJSON is the rule as queued. The worker uses this, not the live rule.
+	// RuleJSON is the rule or custom mix as queued. The worker uses this, not the live source.
 	RuleJSON string
 }
 

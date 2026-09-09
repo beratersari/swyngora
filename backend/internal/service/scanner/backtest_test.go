@@ -158,3 +158,123 @@ func TestBacktest_UsesQueuedRuleNotLaterEdit(t *testing.T) {
 		t.Fatal("changed rule must start a new backtest, not reuse the completed one")
 	}
 }
+
+func ohlcToCandles(bars []domain.OHLC) []domain.Candle {
+	out := make([]domain.Candle, len(bars))
+	for i, b := range bars {
+		out[i] = domain.Candle{
+			OpenTime: b.OpenTime, CloseTime: b.CloseTime,
+			Open: fmt.Sprintf("%.8f", b.Open), High: fmt.Sprintf("%.8f", b.High),
+			Low: fmt.Sprintf("%.8f", b.Low), Close: fmt.Sprintf("%.8f", b.Close),
+			Volume: fmt.Sprintf("%.4f", b.Volume),
+		}
+	}
+	return out
+}
+
+func TestBacktest_CustomProfileStartAndRun(t *testing.T) {
+	st, err := scannerstore.Open(filepath.Join(t.TempDir(), "s.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	primOHLC := synthTrendService(220, 50, 0.8)
+	dailyOHLC := synthTrendService(220, 40, 1.5)
+	primary := ohlcToCandles(primOHLC)
+	daily := ohlcToCandles(dailyOHLC)
+	svc := New(st, &fakeCandles{byKey: map[string][]domain.Candle{
+		"binance|ETHUSDT|4h": primary,
+		"binance|ETHUSDT|1d": daily,
+		"binance|BTCUSDT|4h": daily,
+		"binance|BTCUSDT|1d": daily,
+	}}, &fakeWatch{})
+	ctx := context.Background()
+
+	start := primary[80].OpenTime
+	end := primary[len(primary)-1].OpenTime
+	job, err := svc.StartBacktest(ctx, StartBacktestInput{
+		ClientID: "bt-custom", ProfileID: domain.CustomBacktestBuiltInID,
+		Exchange: "binance", Symbol: "ETHUSDT", RangeStart: start, RangeEnd: end,
+	})
+	if err != nil || job.Kind != domain.BacktestKindCustom {
+		t.Fatalf("%+v %v", job, err)
+	}
+	if !domain.IsCustomProfileBacktest(*job) {
+		t.Fatal("queued job must be a custom snapshot")
+	}
+	dup, err := svc.StartBacktest(ctx, StartBacktestInput{
+		ClientID: "bt-custom", ProfileID: domain.CustomBacktestBuiltInID,
+		Exchange: "binance", Symbol: "ETHUSDT", RangeStart: start, RangeEnd: end,
+	})
+	if err != nil || dup.ID != job.ID {
+		t.Fatalf("dedupe %v vs %v err=%v", job.ID, dup.ID, err)
+	}
+
+	(&BacktestWorker{Scanner: svc, Interval: time.Hour}).RunOnce(ctx)
+	got, err := svc.GetBacktest(ctx, "bt-custom", job.ID)
+	if err != nil || got.Status != domain.BacktestCompleted {
+		t.Fatalf("status %+v err=%v", got, err)
+	}
+	wantHits, err := domain.ReplayCustomSignalBacktest(domain.CustomBacktestInput{
+		Exchange: domain.ExchangeBinance, Symbol: "ETHUSDT",
+		Primary: primOHLC, Higher: dailyOHLC, BTCPrimary: dailyOHLC, BTCHigher: dailyOHLC,
+		RangeStart: start, RangeEnd: end, Weights: domain.DefaultCustomSignalWeights(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SignalCount != len(wantHits) {
+		t.Fatalf("signals got %d want %d job=%+v", got.SignalCount, len(wantHits), got)
+	}
+	sigs, total, err := svc.ListBacktestSignals(ctx, "bt-custom", job.ID, 50, 0)
+	if err != nil || total != got.SignalCount || len(sigs) == 0 {
+		t.Fatalf("sigs total=%d len=%d err=%v", total, len(sigs), err)
+	}
+	if _, ok := sigs[0].Metrics["score"]; !ok {
+		t.Fatalf("metrics %+v", sigs[0].Metrics)
+	}
+}
+
+func TestBacktest_CustomProfileMissing(t *testing.T) {
+	st, err := scannerstore.Open(filepath.Join(t.TempDir(), "s.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	svc := New(st, &fakeCandles{}, &fakeWatch{})
+	_, err = svc.StartBacktest(context.Background(), StartBacktestInput{
+		ClientID: "bt-miss", ProfileID: "no-such-profile",
+		Exchange: "binance", Symbol: "ETHUSDT",
+		RangeStart: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+		RangeEnd:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+	})
+	if err == nil {
+		t.Fatal("expected missing profile")
+	}
+}
+
+func synthTrendService(n int, start, step float64) []domain.OHLC {
+	out := make([]domain.OHLC, n)
+	t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	px := start
+	for i := 0; i < n; i++ {
+		o := px
+		px += step * (1 + 0.05*float64((i%7)-3)/3)
+		h, l := o, o
+		if px > h {
+			h = px
+		}
+		if px < l {
+			l = px
+		}
+		out[i] = domain.OHLC{
+			OpenTime:  t0.Add(time.Duration(i) * 4 * time.Hour),
+			CloseTime: t0.Add(time.Duration(i+1) * 4 * time.Hour),
+			Open:      o, High: h + step*0.4, Low: l - step*0.3, Close: px,
+			Volume: 1000 + float64(i),
+		}
+	}
+	out[n-1].Volume = 20000
+	return out
+}

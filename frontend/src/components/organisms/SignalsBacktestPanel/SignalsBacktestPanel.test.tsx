@@ -16,6 +16,7 @@ describe('SignalsBacktestPanel', () => {
     renderWithProviders(
       <SignalsBacktestPanel
         rules={[{ id: 'r1', type: 'rsi', interval: '4h', enabled: true, rsiThreshold: 40 }]}
+        profiles={[]}
         jobs={[]}
         signals={[]}
         rangeOptions={[{ value: '90d', label: '90d' }]}
