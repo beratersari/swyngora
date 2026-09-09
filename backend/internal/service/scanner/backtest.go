@@ -556,7 +556,7 @@ func (s *Service) executeCustomBacktestJob(ctx context.Context, job domain.Scann
 		}
 		sig := domain.ScannerBacktestSignal{
 			ID: uuid.NewString(), BacktestID: id, SignalAt: h.At,
-			ClosePrice: h.Close, Summary: h.Summary, Metrics: h.Metrics,
+			ClosePrice: h.Close, Summary: h.Summary, Metrics: h.Metrics, Factors: h.Factors,
 			Return1d:  domain.ForwardReturnPct(primaryC, h.Index, 1),
 			Return5d:  domain.ForwardReturnPct(primaryC, h.Index, 5),
 			Return20d: domain.ForwardReturnPct(primaryC, h.Index, 20),

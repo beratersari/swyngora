@@ -19,7 +19,7 @@ import {
   formatSymbolDisplay,
 } from '@/libs/utils';
 import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
-import { Field, FieldRow, SignalDrawerBody, Stack } from './SignalsBacktestPanel.styles';
+import { FactorLine, FactorWhy, Field, FieldRow, SignalDrawerBody, Stack } from './SignalsBacktestPanel.styles';
 import type { SignalsBacktestPanelProps } from './SignalsBacktestPanel.types';
 
 function statusVariant(status: string): 'live' | 'paused' | 'status' | 'delist' {
@@ -362,6 +362,37 @@ export function SignalsBacktestPanel({
             pagination={{ pageSize: 20 }}
             locale={{ emptyText: <Empty description={t('signals:lab.noSignals')} /> }}
             size="small"
+            expandable={{
+              rowExpandable: (row) => (row.factors?.length ?? 0) > 0,
+              expandedRowRender: (row) => (
+                <FactorWhy>
+                  <Text variant="caption" color="secondary">
+                    {t('signals:lab.hitFactors')}
+                  </Text>
+                  {row.factors?.map((f) => (
+                    <FactorLine key={f.id}>
+                      <Text variant="caption" color="primary">
+                        {t(`signals:custom.factors.${f.id}`, { defaultValue: f.label })}
+                        {f.status === 'idle' ? ` (${t('signals:custom.idle')})` : ''}
+                      </Text>
+                      <Text variant="caption" mono color="secondary">
+                        {t('signals:lab.factorScore', { score: Math.round(f.score) })}
+                      </Text>
+                      <Text variant="caption" mono color="secondary">
+                        {t('signals:lab.factorWeight', { pct: f.weightPct })}
+                      </Text>
+                      <Text variant="caption" mono color={f.effect && f.effect < 0 ? 'error' : 'success'}>
+                        {f.status === 'used' && f.effect != null
+                          ? f.effect > 0
+                            ? `+${f.effect}`
+                            : String(f.effect)
+                          : '—'}
+                      </Text>
+                    </FactorLine>
+                  ))}
+                </FactorWhy>
+              ),
+            }}
           />
         </SignalDrawerBody>
       </Drawer>

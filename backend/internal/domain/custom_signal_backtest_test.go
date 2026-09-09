@@ -65,6 +65,27 @@ func TestReplayCustomSignalBacktest_OnsetOnUptrend(t *testing.T) {
 	if rep.SkippedBars != 0 || len(rep.MissingFactors) != 0 {
 		t.Fatalf("built-in mix should not skip: %+v", rep)
 	}
+	if len(rep.Hits[0].Factors) == 0 {
+		t.Fatal("hit must list selected factors")
+	}
+	var used int
+	for _, f := range rep.Hits[0].Factors {
+		if f.WeightPct <= 0 {
+			t.Fatalf("disabled factor in hit: %+v", f)
+		}
+		if f.Status == CustomFactorUsed {
+			used++
+			if f.Score <= 0 {
+				t.Fatalf("used factor needs a score: %+v", f)
+			}
+		}
+	}
+	if used == 0 {
+		t.Fatal("expected at least one used factor")
+	}
+	if !strings.Contains(rep.Hits[0].Summary, "Used:") {
+		t.Fatalf("summary %q", rep.Hits[0].Summary)
+	}
 }
 
 func TestReplayCustomSignalBacktest_SkipsWhenSelectedFactorMissing(t *testing.T) {

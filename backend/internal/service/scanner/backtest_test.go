@@ -237,6 +237,9 @@ func TestBacktest_CustomProfileStartAndRun(t *testing.T) {
 	if _, ok := sigs[0].Metrics["score"]; !ok {
 		t.Fatalf("metrics %+v", sigs[0].Metrics)
 	}
+	if len(sigs[0].Factors) == 0 {
+		t.Fatal("persisted signal must keep factor scores and weights")
+	}
 }
 
 func TestBacktest_CustomProfileMissing(t *testing.T) {

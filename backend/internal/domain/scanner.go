@@ -140,6 +140,7 @@ type ScannerBacktestSignal struct {
 	Return5d   *float64
 	Return20d  *float64
 	Metrics    map[string]float64
+	Factors    []CustomBacktestFactor
 }
 
 // ScannerPort persists scanner rules, live results, and historical backtests.

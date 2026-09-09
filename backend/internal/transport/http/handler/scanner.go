@@ -260,15 +260,16 @@ type scannerBacktestDTO struct {
 }
 
 type scannerBacktestSignalDTO struct {
-	ID         string             `json:"id"`
-	BacktestID string             `json:"backtestId"`
-	SignalAt   string             `json:"signalAt"`
-	ClosePrice float64            `json:"closePrice"`
-	Summary    string             `json:"summary"`
-	Return1d   *float64           `json:"return1d,omitempty"`
-	Return5d   *float64           `json:"return5d,omitempty"`
-	Return20d  *float64           `json:"return20d,omitempty"`
-	Metrics    map[string]float64 `json:"metrics,omitempty"`
+	ID         string                        `json:"id"`
+	BacktestID string                        `json:"backtestId"`
+	SignalAt   string                        `json:"signalAt"`
+	ClosePrice float64                       `json:"closePrice"`
+	Summary    string                        `json:"summary"`
+	Return1d   *float64                      `json:"return1d,omitempty"`
+	Return5d   *float64                      `json:"return5d,omitempty"`
+	Return20d  *float64                      `json:"return20d,omitempty"`
+	Metrics    map[string]float64            `json:"metrics,omitempty"`
+	Factors    []domain.CustomBacktestFactor `json:"factors,omitempty"`
 }
 
 func backtestToDTO(b *domain.ScannerBacktest) scannerBacktestDTO {
@@ -311,7 +312,7 @@ func backtestSignalToDTO(s *domain.ScannerBacktestSignal) scannerBacktestSignalD
 	return scannerBacktestSignalDTO{
 		ID: s.ID, BacktestID: s.BacktestID, SignalAt: s.SignalAt.UTC().Format(time.RFC3339Nano),
 		ClosePrice: s.ClosePrice, Summary: s.Summary, Return1d: s.Return1d, Return5d: s.Return5d,
-		Return20d: s.Return20d, Metrics: s.Metrics,
+		Return20d: s.Return20d, Metrics: s.Metrics, Factors: s.Factors,
 	}
 }
 

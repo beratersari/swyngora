@@ -220,6 +220,15 @@ CREATE TABLE IF NOT EXISTS custom_signal_profiles (
 		if err := sqliteutil.SetUserVersion(s.db, 7); err != nil {
 			return err
 		}
+		v = 7
+	}
+	if v < 8 {
+		if err := sqliteutil.ExecAllowExists(s.db, `ALTER TABLE scanner_backtest_signals ADD COLUMN factors_json TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 8); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -715,13 +724,21 @@ func (s *SQLite) InsertBacktestSignal(ctx context.Context, sig domain.ScannerBac
 	if mj == nil {
 		mj = []byte("{}")
 	}
+	fj := ""
+	if len(sig.Factors) > 0 {
+		b, err := json.Marshal(sig.Factors)
+		if err != nil {
+			return err
+		}
+		fj = string(b)
+	}
 	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO scanner_backtest_signals (
 			id, backtest_id, signal_at, close_price, summary,
-			return_1d, return_5d, return_20d, metrics_json
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+			return_1d, return_5d, return_20d, metrics_json, factors_json
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, sig.ID, sig.BacktestID, sig.SignalAt.UTC().Format(time.RFC3339Nano), sig.ClosePrice, sig.Summary,
-		nullFloat(sig.Return1d), nullFloat(sig.Return5d), nullFloat(sig.Return20d), string(mj))
+		nullFloat(sig.Return1d), nullFloat(sig.Return5d), nullFloat(sig.Return20d), string(mj), fj)
 	return err
 }
 
@@ -741,7 +758,7 @@ func (s *SQLite) ListBacktestSignals(ctx context.Context, backtestID string, lim
 		offset = 0
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, backtest_id, signal_at, close_price, summary, return_1d, return_5d, return_20d, metrics_json
+		SELECT id, backtest_id, signal_at, close_price, summary, return_1d, return_5d, return_20d, metrics_json, factors_json
 		FROM scanner_backtest_signals WHERE backtest_id = ?
 		ORDER BY signal_at ASC LIMIT ? OFFSET ?
 	`, backtestID, limit, offset)
@@ -850,10 +867,10 @@ func scanBacktests(rows *sql.Rows) ([]domain.ScannerBacktest, error) {
 
 func scanBacktestSignal(row scannable) (*domain.ScannerBacktestSignal, error) {
 	var sig domain.ScannerBacktestSignal
-	var sAt, metrics string
+	var sAt, metrics, factors string
 	var r1, r5, r20 sql.NullFloat64
 	if err := row.Scan(
-		&sig.ID, &sig.BacktestID, &sAt, &sig.ClosePrice, &sig.Summary, &r1, &r5, &r20, &metrics,
+		&sig.ID, &sig.BacktestID, &sAt, &sig.ClosePrice, &sig.Summary, &r1, &r5, &r20, &metrics, &factors,
 	); err != nil {
 		return nil, err
 	}
@@ -873,6 +890,9 @@ func scanBacktestSignal(row scannable) (*domain.ScannerBacktestSignal, error) {
 	sig.Metrics = map[string]float64{}
 	if metrics != "" && metrics != "{}" {
 		_ = json.Unmarshal([]byte(metrics), &sig.Metrics)
+	}
+	if factors != "" && factors != "[]" {
+		_ = json.Unmarshal([]byte(factors), &sig.Factors)
 	}
 	return &sig, nil
 }

@@ -25,3 +25,17 @@ export const SignalDrawerBody = styled.div`
   flex-direction: column;
   gap: ${({ theme }) => theme.spacing[3]}px;
 `;
+
+export const FactorWhy = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 0;
+`;
+
+export const FactorLine = styled.div`
+  display: grid;
+  grid-template-columns: minmax(120px, 1.4fr) 72px 64px 72px;
+  gap: 8px;
+  align-items: baseline;
+`;

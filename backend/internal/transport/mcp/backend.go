@@ -4351,7 +4351,7 @@ func (b *Backend) ListBacktestSignals(ctx context.Context, clientID, id string, 
 			"signalAt":   s.SignalAt.UTC().Format(time.RFC3339Nano),
 			"closePrice": s.ClosePrice, "summary": s.Summary,
 			"return1d": s.Return1d, "return5d": s.Return5d, "return20d": s.Return20d,
-			"metrics": s.Metrics,
+			"metrics": s.Metrics, "factors": s.Factors,
 		})
 	}
 	return mustJSON(map[string]any{"backtestId": id, "signals": items, "count": len(items), "total": total})

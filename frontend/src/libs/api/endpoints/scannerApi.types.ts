@@ -75,6 +75,17 @@ export type ScannerBacktest = {
   finishedAt?: string | null;
 };
 
+export type ScannerBacktestSignalFactor = {
+  id: string;
+  label: string;
+  score: number;
+  weightPct: number;
+  sharePct?: number;
+  effect?: number;
+  status: string;
+  detail?: string;
+};
+
 export type ScannerBacktestSignal = {
   id: string;
   backtestId: string;
@@ -85,6 +96,7 @@ export type ScannerBacktestSignal = {
   return5d?: number;
   return20d?: number;
   metrics?: Record<string, number>;
+  factors?: ScannerBacktestSignalFactor[];
 };
 
 export type CreateScannerRuleArg = {

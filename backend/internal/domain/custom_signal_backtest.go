@@ -84,6 +84,18 @@ func CustomSignalCrossedTrigger(prev, curr, threshold float64) bool {
 	return prev < threshold && curr >= threshold
 }
 
+// CustomBacktestFactor is one selected mix factor at the signal bar.
+type CustomBacktestFactor struct {
+	ID        string  `json:"id"`
+	Label     string  `json:"label"`
+	Score     float64 `json:"score"`
+	WeightPct float64 `json:"weightPct"`
+	SharePct  float64 `json:"sharePct,omitempty"`
+	Effect    float64 `json:"effect,omitempty"`
+	Status    string  `json:"status"`
+	Detail    string  `json:"detail,omitempty"`
+}
+
 // CustomBacktestHit is one onset during a custom-mix replay.
 type CustomBacktestHit struct {
 	Index   int
@@ -93,6 +105,7 @@ type CustomBacktestHit struct {
 	Grade   string
 	Summary string
 	Metrics map[string]float64
+	Factors []CustomBacktestFactor
 }
 
 // CustomBacktestReplay is hits plus bars skipped because a selected factor had no data.
@@ -171,10 +184,12 @@ func ReplayCustomSignalBacktest(in CustomBacktestInput) (CustomBacktestReplay, e
 			continue
 		}
 		if CustomSignalCrossedTrigger(prev, scored.Score, in.Threshold) {
+			factors := customBacktestFactors(scored)
 			out.Hits = append(out.Hits, CustomBacktestHit{
 				Index: i, At: ot, Close: bar.Close, Score: scored.Score, Grade: scored.Grade,
-				Summary: fmt.Sprintf("Custom mix %s (%.0f) crossed %.0f", scored.Grade, scored.Score, in.Threshold),
+				Summary: customBacktestWhy(scored, in.Threshold, factors),
 				Metrics: map[string]float64{"score": scored.Score, "threshold": in.Threshold},
+				Factors: factors,
 			})
 		}
 		prev = scored.Score
@@ -203,6 +218,36 @@ func selectedMissingFactors(scored CustomSignalScore, w CustomSignalWeights) []s
 		out = append(out, f.ID)
 	}
 	return out
+}
+
+func customBacktestFactors(scored CustomSignalScore) []CustomBacktestFactor {
+	out := make([]CustomBacktestFactor, 0, len(scored.Factors))
+	for _, f := range scored.Factors {
+		if f.RequestedPct <= 0 {
+			continue
+		}
+		out = append(out, CustomBacktestFactor{
+			ID: f.ID, Label: f.Label, Score: f.Score,
+			WeightPct: f.RequestedPct, SharePct: f.SharePct,
+			Effect: f.Effect, Status: f.Status, Detail: f.Detail,
+		})
+	}
+	return out
+}
+
+func customBacktestWhy(scored CustomSignalScore, threshold float64, factors []CustomBacktestFactor) string {
+	head := fmt.Sprintf("Custom mix %s (%.0f) crossed %.0f", scored.Grade, scored.Score, threshold)
+	var used []string
+	for _, f := range factors {
+		if f.Status != CustomFactorUsed {
+			continue
+		}
+		used = append(used, fmt.Sprintf("%s %.0f (%.0f%%)", f.Label, f.Score, f.WeightPct))
+	}
+	if len(used) == 0 {
+		return head
+	}
+	return head + ". Used: " + strings.Join(used, ", ")
 }
 
 func missingFactorIDs(set map[string]struct{}) []string {
