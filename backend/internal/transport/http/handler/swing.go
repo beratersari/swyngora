@@ -29,14 +29,16 @@ type swingPatternDTO struct {
 }
 
 type swingLevelsDTO struct {
-	Entry      float64 `json:"entry"`
-	StopLoss   float64 `json:"stopLoss"`
-	TakeProfit float64 `json:"takeProfit"`
-	RiskPct    float64 `json:"riskPct"`
-	RewardPct  float64 `json:"rewardPct"`
-	Rr         float64 `json:"rr"`
-	ATR        float64 `json:"atr"`
-	Leverage   int     `json:"leverage,omitempty"`
+	Entry       float64 `json:"entry"`
+	StopLoss    float64 `json:"stopLoss"`
+	TakeProfit  float64 `json:"takeProfit"`
+	TakeProfit1 float64 `json:"takeProfit1,omitempty"`
+	TakeProfit2 float64 `json:"takeProfit2,omitempty"`
+	RiskPct     float64 `json:"riskPct"`
+	RewardPct   float64 `json:"rewardPct"`
+	Rr          float64 `json:"rr"`
+	ATR         float64 `json:"atr"`
+	Leverage    int     `json:"leverage,omitempty"`
 }
 
 type swingDecisionDTO struct {
@@ -87,6 +89,7 @@ func swingToDTO(d *domain.SwingDecision) swingDecisionDTO {
 	if d.Levels != nil {
 		out.Levels = &swingLevelsDTO{
 			Entry: d.Levels.Entry, StopLoss: d.Levels.StopLoss, TakeProfit: d.Levels.TakeProfit,
+			TakeProfit1: d.Levels.TakeProfit1, TakeProfit2: d.Levels.TakeProfit2,
 			RiskPct: d.Levels.RiskPct, RewardPct: d.Levels.RewardPct, Rr: d.Levels.RR, ATR: d.Levels.ATR,
 			Leverage: d.Levels.Leverage,
 		}

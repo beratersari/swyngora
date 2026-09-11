@@ -6,7 +6,7 @@ export function hasBacktestHitDetails(row: ScannerBacktestSignal): boolean {
 
 export function tradePnlTone(trade: ScannerBacktestTrade | undefined): 'success' | 'error' | 'secondary' {
   if (trade == null) return 'secondary';
-  if (trade.outcome === 'open') return 'secondary';
+  if (trade.outcome === 'open' || trade.outcome === 'tp1_open') return 'secondary';
   if (trade.pnlPct > 0) return 'success';
   if (trade.pnlPct < 0) return 'error';
   return 'secondary';

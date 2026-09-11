@@ -16,9 +16,9 @@ func synthTrend(n int, start, step float64) []OHLC {
 		h := math.Max(o, px) + step*0.4
 		l := math.Min(o, px) - step*0.3
 		out[i] = OHLC{
-			OpenTime: t0.Add(time.Duration(i) * 4 * time.Hour),
+			OpenTime:  t0.Add(time.Duration(i) * 4 * time.Hour),
 			CloseTime: t0.Add(time.Duration(i+1) * 4 * time.Hour),
-			Open: o, High: h, Low: l, Close: px, Volume: 1000 + float64(i),
+			Open:      o, High: h, Low: l, Close: px, Volume: 1000 + float64(i),
 		}
 	}
 	return out
@@ -30,9 +30,9 @@ func synthChop(n int, mid float64) []OHLC {
 	for i := 0; i < n; i++ {
 		px := mid + 2*math.Sin(float64(i)/2)
 		out[i] = OHLC{
-			OpenTime: t0.Add(time.Duration(i) * 4 * time.Hour),
+			OpenTime:  t0.Add(time.Duration(i) * 4 * time.Hour),
 			CloseTime: t0.Add(time.Duration(i+1) * 4 * time.Hour),
-			Open: px, High: px + 0.8, Low: px - 0.8, Close: px + 0.1*math.Cos(float64(i)),
+			Open:      px, High: px + 0.8, Low: px - 0.8, Close: px + 0.1*math.Cos(float64(i)),
 			Volume: 800,
 		}
 	}
@@ -102,6 +102,12 @@ func TestEvaluateSwing_UptrendTriggerOrWatch(t *testing.T) {
 	}
 	if dec.Levels.TakeProfit <= dec.Levels.Entry {
 		t.Fatalf("tp %+v", dec.Levels)
+	}
+	if dec.Levels.TakeProfit1 > 0 && dec.Levels.TakeProfit1 <= dec.Levels.Entry {
+		t.Fatalf("tp1 %+v", dec.Levels)
+	}
+	if dec.Levels.TakeProfit2 > 0 && dec.Levels.TakeProfit1 >= dec.Levels.TakeProfit2 {
+		t.Fatalf("tp1 must be closer than tp2 %+v", dec.Levels)
 	}
 	if dec.Levels.RR < 1.4 {
 		t.Fatalf("rr too low %+v", dec.Levels)

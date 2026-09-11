@@ -93,7 +93,8 @@ func TestReplayCustomSignalBacktest_OnsetOnUptrend(t *testing.T) {
 		t.Fatalf("side %s", rep.Hits[0].Side)
 	}
 	switch rep.Hits[0].Trade.Outcome {
-	case BacktestTradeOutcomeTP, BacktestTradeOutcomeSL, BacktestTradeOutcomeOpen:
+	case BacktestTradeOutcomeTP, BacktestTradeOutcomeSL, BacktestTradeOutcomeOpen,
+		BacktestTradeOutcomeTP1, BacktestTradeOutcomeTP1TP2, BacktestTradeOutcomeTP1SL, BacktestTradeOutcomeTP1Open:
 	default:
 		t.Fatalf("outcome %q", rep.Hits[0].Trade.Outcome)
 	}

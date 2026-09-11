@@ -584,10 +584,18 @@ type scannerRuleSnapshot struct {
 	MADirection    string   `json:"maDirection"`
 	VolumeLookback int      `json:"volumeLookback"`
 	VolumeMinRatio float64  `json:"volumeMinRatio"`
+	UseTP2         bool     `json:"useTp2,omitempty"`
+	TP1ClosePct    float64  `json:"tp1ClosePct,omitempty"`
+	StopAfterTP1   string   `json:"stopAfterTp1,omitempty"`
 }
 
 // EncodeScannerRuleSnapshot freezes rule params for a backtest job.
 func EncodeScannerRuleSnapshot(r ScannerRule) (string, error) {
+	return EncodeScannerRuleSnapshotScale(r, BacktestScale{})
+}
+
+// EncodeScannerRuleSnapshotScale freezes the rule plus Lab TP scale.
+func EncodeScannerRuleSnapshotScale(r ScannerRule, scale BacktestScale) (string, error) {
 	conds := r.SelectedConditions()
 	names := make([]string, 0, len(conds))
 	for _, c := range conds {
@@ -597,11 +605,13 @@ func EncodeScannerRuleSnapshot(r ScannerRule) (string, error) {
 	if mode == "" {
 		mode = string(ScannerMatchAll)
 	}
+	scale = NormalizeBacktestScale(scale)
 	b, err := json.Marshal(scannerRuleSnapshot{
 		Type: string(r.Type), Conditions: names, MatchMode: mode, Interval: r.Interval,
 		RSIPeriod: r.RSIPeriod, RSICondition: string(r.RSICondition), RSIThreshold: r.RSIThreshold,
 		MAFastPeriod: r.MAFastPeriod, MASlowPeriod: r.MASlowPeriod, MADirection: r.MADirection,
 		VolumeLookback: r.VolumeLookback, VolumeMinRatio: r.VolumeMinRatio,
+		UseTP2: scale.UseTP2, TP1ClosePct: scale.TP1ClosePct, StopAfterTP1: scale.StopAfterTP1,
 	})
 	if err != nil {
 		return "", err
@@ -609,15 +619,23 @@ func EncodeScannerRuleSnapshot(r ScannerRule) (string, error) {
 	return string(b), nil
 }
 
-// DecodeScannerRuleSnapshot restores a queued rule. Empty input is an error.
-func DecodeScannerRuleSnapshot(raw string) (*ScannerRule, error) {
+func parseScannerRuleSnapshot(raw string) (scannerRuleSnapshot, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return nil, fmt.Errorf("%w: missing scanner rule snapshot", ErrInvalidArgument)
+		return scannerRuleSnapshot{}, fmt.Errorf("%w: missing scanner rule snapshot", ErrInvalidArgument)
 	}
 	var snap scannerRuleSnapshot
 	if err := json.Unmarshal([]byte(raw), &snap); err != nil {
-		return nil, fmt.Errorf("%w: invalid scanner rule snapshot", ErrInvalidArgument)
+		return scannerRuleSnapshot{}, fmt.Errorf("%w: invalid scanner rule snapshot", ErrInvalidArgument)
+	}
+	return snap, nil
+}
+
+// DecodeScannerRuleSnapshot restores a queued rule. Empty input is an error.
+func DecodeScannerRuleSnapshot(raw string) (*ScannerRule, error) {
+	snap, err := parseScannerRuleSnapshot(raw)
+	if err != nil {
+		return nil, err
 	}
 	conds, typ, err := ResolveScannerConditions(snap.Type, snap.Conditions)
 	if err != nil {

@@ -29,24 +29,38 @@ type customProfileSnapshot struct {
 	StartingBalance float64            `json:"startingBalance,omitempty"`
 	RiskPct         float64            `json:"riskPct,omitempty"`
 	MaxOpenRiskPct  float64            `json:"maxOpenRiskPct,omitempty"`
+	UseTP2          bool               `json:"useTp2,omitempty"`
+	TP1ClosePct     float64            `json:"tp1ClosePct,omitempty"`
+	StopAfterTP1    string             `json:"stopAfterTp1,omitempty"`
 }
 
 // EncodeCustomProfileSnapshot freezes mix weights for a backtest job.
 func EncodeCustomProfileSnapshot(name string, w CustomSignalWeights) (string, error) {
-	return encodeCustomProfileSnapshot(name, w, BacktestScopeSymbol, nil, 0, 0, 0)
+	return encodeCustomProfileSnapshot(name, w, BacktestScopeSymbol, nil, 0, 0, 0, BacktestScale{})
 }
 
 // EncodeWatchlistCustomProfileSnapshot freezes mix weights plus the watchlist coins.
 func EncodeWatchlistCustomProfileSnapshot(name string, w CustomSignalWeights, markets []BacktestMarket, startingBalance, riskPct, maxOpenRiskPct float64) (string, error) {
-	return encodeCustomProfileSnapshot(name, w, BacktestScopeWatchlist, markets, startingBalance, riskPct, maxOpenRiskPct)
+	return EncodeWatchlistCustomProfileSnapshotScale(name, w, markets, startingBalance, riskPct, maxOpenRiskPct, BacktestScale{})
 }
 
-func encodeCustomProfileSnapshot(name string, w CustomSignalWeights, scope string, markets []BacktestMarket, startingBalance, riskPct, maxOpenRiskPct float64) (string, error) {
+// EncodeWatchlistCustomProfileSnapshotScale is EncodeWatchlistCustomProfileSnapshot plus TP scale.
+func EncodeWatchlistCustomProfileSnapshotScale(name string, w CustomSignalWeights, markets []BacktestMarket, startingBalance, riskPct, maxOpenRiskPct float64, scale BacktestScale) (string, error) {
+	return encodeCustomProfileSnapshot(name, w, BacktestScopeWatchlist, markets, startingBalance, riskPct, maxOpenRiskPct, scale)
+}
+
+// EncodeCustomProfileSnapshotScale freezes mix weights and Lab TP scale for a one-coin job.
+func EncodeCustomProfileSnapshotScale(name string, w CustomSignalWeights, scale BacktestScale) (string, error) {
+	return encodeCustomProfileSnapshot(name, w, BacktestScopeSymbol, nil, 0, 0, 0, scale)
+}
+
+func encodeCustomProfileSnapshot(name string, w CustomSignalWeights, scope string, markets []BacktestMarket, startingBalance, riskPct, maxOpenRiskPct float64, scale BacktestScale) (string, error) {
 	pct := w.Pct
 	if pct == nil {
 		pct = map[string]float64{}
 	}
 	th := CustomBacktestThreshold
+	scale = NormalizeBacktestScale(scale)
 	if scope == BacktestScopeWatchlist {
 		startingBalance = NormalizeBacktestStartBalance(startingBalance)
 		riskPct = NormalizeBacktestRiskPct(riskPct)
@@ -56,6 +70,7 @@ func encodeCustomProfileSnapshot(name string, w CustomSignalWeights, scope strin
 		Kind: BacktestKindCustom, Name: strings.TrimSpace(name),
 		Weights: pct, Threshold: th, Scope: scope, Markets: markets,
 		StartingBalance: startingBalance, RiskPct: riskPct, MaxOpenRiskPct: maxOpenRiskPct,
+		UseTP2: scale.UseTP2, TP1ClosePct: scale.TP1ClosePct, StopAfterTP1: scale.StopAfterTP1,
 	})
 	if err != nil {
 		return "", err
@@ -126,6 +141,22 @@ func CustomBacktestRiskPct(job ScannerBacktest) float64 {
 		return BacktestDefaultRiskPct
 	}
 	return 0
+}
+
+// CustomBacktestScale is the snapshotted TP1/TP2 Lab config.
+func CustomBacktestScale(job ScannerBacktest) BacktestScale {
+	return BacktestScaleFromJob(job)
+}
+
+// BacktestScaleFromJob reads scale config from a custom or rule snapshot.
+func BacktestScaleFromJob(job ScannerBacktest) BacktestScale {
+	if snap, err := parseCustomProfileSnapshot(job.RuleJSON); err == nil {
+		return NormalizeBacktestScale(BacktestScale{UseTP2: snap.UseTP2, TP1ClosePct: snap.TP1ClosePct, StopAfterTP1: snap.StopAfterTP1})
+	}
+	if snap, err := parseScannerRuleSnapshot(job.RuleJSON); err == nil {
+		return NormalizeBacktestScale(BacktestScale{UseTP2: snap.UseTP2, TP1ClosePct: snap.TP1ClosePct, StopAfterTP1: snap.StopAfterTP1})
+	}
+	return BacktestScale{}
 }
 
 // CustomBacktestMaxOpenRiskPct is the combined open-stop cap on a watchlist job.

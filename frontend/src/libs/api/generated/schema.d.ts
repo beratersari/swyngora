@@ -5599,6 +5599,8 @@ export interface components {
             entry?: number;
             stopLoss?: number;
             takeProfit?: number;
+            takeProfit1?: number;
+            takeProfit2?: number;
             riskPct?: number;
             rewardPct?: number;
             rr?: number;

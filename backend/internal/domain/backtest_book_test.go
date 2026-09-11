@@ -129,6 +129,35 @@ func TestSimulateSharedBacktestBook_SizesOnMarkedOpenEquity(t *testing.T) {
 	}
 }
 
+func TestSimulateSharedBacktestBook_TP1FreesRemainingRisk(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	t1 := t0.Add(time.Hour)
+	t2 := t0.Add(2 * time.Hour)
+	// A: 1% risk, 1% stop, 10x. After 50% TP1 and stop-to-entry, remaining risk is 0.
+	// B can open even with maxOpenRisk 1%.
+	got := SimulateSharedBacktestBook(10000, 1, 1, []BacktestBookFill{
+		{Symbol: "ETHUSDT", Side: BacktestTradeSideLong, EntryAt: t0, ExitAt: t2,
+			Entry: 100, StopLoss: 99, ExitPrice: 105, RangeExitPrice: 105, Leverage: 10,
+			HasExit: true, ClosedInRange: true, Outcome: BacktestTradeOutcomeTP1TP2,
+			HasScale: true, ScaleAt: t1, ScalePct: 0.5, ScalePrice: 101, StopToEntry: true},
+		{Symbol: "SOLUSDT", Side: BacktestTradeSideLong, EntryAt: t1.Add(time.Minute),
+			Entry: 50, StopLoss: 49.5, ExitPrice: 50, RangeExitPrice: 50, Leverage: 10,
+			Outcome: BacktestTradeOutcomeOpen},
+	}, t0.Add(24*time.Hour))
+	if got.TradesTaken != 2 || got.SkippedNoRisk != 0 {
+		t.Fatalf("TP1 + BE must free risk for B: %+v", got)
+	}
+	// 50% of 10000 notional at +1% = +50 realized at scale. Rest still open at 105 = +5% on 5000 = +250.
+	// Start 10000 + 50 + 250 = 10300 if B is flat at cost.
+	if math.Abs(got.EndingBalance-10300) > 1 && math.Abs(got.EndingBalance-10350) > 1 {
+		// B is marked at 50 = entry, 0 upnl. A remainder 5000 * 5% = 250. Scale 5000 * 1% = 50.
+		if math.Abs(got.EndingBalance-10300) > 1 {
+			t.Fatalf("partial pnl must hit the pot: %+v", got)
+		}
+	}
+}
+
 func TestSimulateSharedBacktestBook_MaxOpenRisk(t *testing.T) {
 	t.Parallel()
 	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)

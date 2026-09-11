@@ -6727,9 +6727,9 @@ paths:
         `scope=watchlist` (or `symbol=watchlist`) with `profileId` replays every
         coin on the client's watchlist in one job; the list is snapshotted when queued.
         Identical jobs return the existing pending/running/completed job.
-        Each hit stores side, leverage, entry, TP, and SL and records whether later
-        candles hit take-profit or stop-loss first. Progress and signalCount update
-        while running. Informational only.
+        Each hit stores side, leverage, entry, TP1, TP2, and SL. Lab can close part
+        of the fill at TP1 and leave a runner for TP2; after TP1 the stop can stay
+        or move to entry. Progress and signalCount update while running. Informational only.
       operationId: startScannerBacktest
       tags: [Scanner]
       requestBody:
@@ -6749,6 +6749,9 @@ paths:
                 startingBalance: { type: number, description: Shared cash pot for a watchlist job (default 10000) }
                 riskPct: { type: number, description: Share of current equity lost on a full stop (default 1). Size follows the stop distance and the live pot }
                 maxOpenRiskPct: { type: number, description: Max combined stop risk of open fills (default 3). A new signal is skipped until a fill closes }
+                useTp2: { type: boolean, description: Close part of the fill at TP1 and leave the rest for TP2 }
+                tp1ClosePct: { type: number, description: Share of the position closed at TP1 when useTp2 is true (default 50) }
+                stopAfterTp1: { type: string, enum: [keep, entry], description: After TP1, keep the original stop or move it to the fill (default entry) }
                 rangeStart: { type: string, format: date-time }
                 rangeEnd: { type: string, format: date-time }
       responses:
@@ -9372,7 +9375,9 @@ components:
       properties:
         entry: { type: number }
         stopLoss: { type: number }
-        takeProfit: { type: number }
+        takeProfit: { type: number, description: Farther target (TP2). Same as takeProfit2 when both exist }
+        takeProfit1: { type: number, description: First scale (1R) }
+        takeProfit2: { type: number, description: Runner target (about 1.8R or 2.5 ATR) }
         riskPct: { type: number }
         rewardPct: { type: number }
         rr: { type: number }
@@ -9387,7 +9392,16 @@ components:
         entry: { type: number }
         stopLoss: { type: number }
         takeProfit: { type: number }
-        outcome: { type: string, enum: [tp, sl, open], description: Which of take-profit or stop-loss the later candles hit first. When one bar tags both, a smaller interval is used when available }
+        takeProfit1: { type: number }
+        takeProfit2: { type: number }
+        useTp2: { type: boolean }
+        tp1ClosePct: { type: number }
+        stopAfterTp1: { type: string, enum: [keep, entry] }
+        stopMovedToEntry: { type: boolean }
+        outcome: { type: string, enum: [tp, sl, open, tp1, tp1_tp2, tp1_sl, tp1_open], description: First-touch result. tp1_* means a partial close at TP1 then the runner }
+        tp1ExitPrice: { type: number }
+        tp1PnlPct: { type: number }
+        remainderPct: { type: number }
         exitPrice: { type: number, description: Fill price. A gap through the stop uses the candle open; a wick through the stop or a TP fill uses the level }
         pnlPct: { type: number, description: Leveraged percent result }
         barsHeld: { type: integer }

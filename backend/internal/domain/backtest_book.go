@@ -83,6 +83,11 @@ type BacktestBookFill struct {
 	HitTimeUnknown bool
 	Score          float64
 	Marks          []BacktestPriceMark
+	HasScale       bool
+	ScaleAt        time.Time
+	ScalePct       float64
+	ScalePrice     float64
+	StopToEntry    bool
 }
 
 // NormalizeBacktestStartBalance applies the Lab default and a hard cap.
@@ -145,17 +150,25 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 	}
 	end := rangeEnd.UTC()
 	type ev struct {
-		at   time.Time
-		exit bool
-		i    int
+		at    time.Time
+		exit  bool
+		scale bool
+		i     int
 	}
-	events := make([]ev, 0, len(fills)*2)
+	events := make([]ev, 0, len(fills)*3)
 	for i, f := range fills {
 		if f.EntryAt.IsZero() || f.Entry <= 0 || f.StopLoss <= 0 {
 			continue
 		}
 		entry := f.EntryAt.UTC()
-		events = append(events, ev{at: entry, exit: false, i: i})
+		events = append(events, ev{at: entry, i: i})
+		if f.HasScale && !f.ScaleAt.IsZero() && f.ScalePct > 0 && f.ScalePct < 1 {
+			sc := f.ScaleAt.UTC()
+			if !sc.After(entry) {
+				sc = entry.Add(time.Nanosecond)
+			}
+			events = append(events, ev{at: sc, scale: true, i: i})
+		}
 		if f.HasExit && !f.ExitAt.IsZero() {
 			exit := f.ExitAt.UTC()
 			if !exit.After(entry) {
@@ -171,7 +184,10 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 		if events[i].exit != events[j].exit {
 			return events[i].exit
 		}
-		if !events[i].exit {
+		if events[i].scale != events[j].scale {
+			return events[i].scale
+		}
+		if !events[i].exit && !events[i].scale {
 			si, sj := fills[events[i].i].Score, fills[events[j].i].Score
 			if si != sj {
 				return si > sj
@@ -226,6 +242,30 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 	}
 	for _, e := range events {
 		maybeSnap(e.at)
+		if e.scale {
+			p, ok := open[e.i]
+			if !ok {
+				continue
+			}
+			f := fills[e.i]
+			pct := f.ScalePct
+			if pct <= 0 || pct >= 1 {
+				continue
+			}
+			closedN := p.notional * pct
+			closedM := p.margin * pct
+			cash += closedM + notionalPnLPrice(f, closedN, f.ScalePrice)
+			p.notional -= closedN
+			p.margin -= closedM
+			if f.StopToEntry {
+				p.risk = 0
+			} else {
+				p.risk *= 1 - pct
+			}
+			open[e.i] = p
+			mark(e.at)
+			continue
+		}
 		if e.exit {
 			p, ok := open[e.i]
 			if !ok {
@@ -346,6 +386,13 @@ func notionalPnL(f BacktestBookFill, notional float64, atRange bool) float64 {
 
 func notionalPnLAt(f BacktestBookFill, notional float64, at time.Time) float64 {
 	px := markPriceAt(f.Marks, at, f.Entry)
+	return notionalPnLPrice(f, notional, px)
+}
+
+func notionalPnLPrice(f BacktestBookFill, notional, px float64) float64 {
+	if px <= 0 {
+		px = f.Entry
+	}
 	return notional * unleveredMove(f.Side, f.Entry, px)
 }
 
@@ -363,7 +410,7 @@ func BookFillsFromSignals(sigs []ScannerBacktestSignal, rangeEnd time.Time) []Ba
 		}
 		entryAt := tr.EnteredAt.UTC()
 		var exit time.Time
-		closed := tr.Outcome == BacktestTradeOutcomeTP || tr.Outcome == BacktestTradeOutcomeSL
+		closed := tradeFullyClosed(tr)
 		free := TradeRiskFreeAt(tr)
 		hasExit := closed && free != nil
 		if hasExit {
@@ -381,13 +428,21 @@ func BookFillsFromSignals(sigs []ScannerBacktestSignal, rangeEnd time.Time) []Ba
 		if s.Metrics != nil {
 			score = s.Metrics["score"]
 		}
-		out = append(out, BacktestBookFill{
+		fill := BacktestBookFill{
 			Exchange: s.Exchange, Symbol: s.Symbol, Side: tr.Side, EntryAt: entryAt, ExitAt: exit,
 			Entry: tr.Entry, StopLoss: tr.StopLoss, ExitPrice: tr.ExitPrice,
 			RangeExitPrice: rangePx, Leverage: tr.Leverage,
 			ClosedInRange: closedIn, Outcome: tr.Outcome, HasExit: hasExit,
 			HitTimeUnknown: tr.HitTimeUnknown, Score: score, Marks: tr.Marks,
-		})
+		}
+		if sc := tradeScaleEvent(tr); sc != nil {
+			fill.HasScale = true
+			fill.ScaleAt = sc.at
+			fill.ScalePct = sc.pct
+			fill.ScalePrice = sc.price
+			fill.StopToEntry = sc.stopToEntry
+		}
+		out = append(out, fill)
 	}
 	return out
 }

@@ -96,7 +96,7 @@ export type ScannerBacktestSignalFactor = {
   detail?: string;
 };
 
-export type ScannerBacktestTradeOutcome = 'tp' | 'sl' | 'open';
+export type ScannerBacktestTradeOutcome = 'tp' | 'sl' | 'open' | 'tp1' | 'tp1_tp2' | 'tp1_sl' | 'tp1_open';
 
 export type ScannerBacktestTrade = {
   side: 'long' | 'short';
@@ -104,6 +104,12 @@ export type ScannerBacktestTrade = {
   entry: number;
   stopLoss: number;
   takeProfit: number;
+  takeProfit1?: number;
+  takeProfit2?: number;
+  useTp2?: boolean;
+  tp1ClosePct?: number;
+  stopAfterTp1?: 'keep' | 'entry';
+  stopMovedToEntry?: boolean;
   outcome: ScannerBacktestTradeOutcome;
   exitPrice?: number;
   pnlPct: number;
@@ -112,6 +118,9 @@ export type ScannerBacktestTrade = {
   hitTimeUnknown?: boolean;
   closedKnownAt?: string;
   enteredAt?: string;
+  tp1ExitPrice?: number;
+  tp1PnlPct?: number;
+  remainderPct?: number;
   marks?: { at: string; price: number }[];
 };
 
@@ -159,6 +168,9 @@ export type StartScannerBacktestArg = {
   startingBalance?: number;
   riskPct?: number;
   maxOpenRiskPct?: number;
+  useTp2?: boolean;
+  tp1ClosePct?: number;
+  stopAfterTp1?: 'keep' | 'entry';
   exchange?: 'binance' | 'coinbase' | 'bybit' | 'nasdaq' | 'bist';
   rangeStart: string;
   rangeEnd: string;

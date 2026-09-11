@@ -386,6 +386,55 @@ func TestFirstTouch_ShortTPAndSL(t *testing.T) {
 	}
 }
 
+func TestFirstTouch_TP1ThenTP2(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	got := SimulateBacktestTradeOpts([]OHLC{
+		{OpenTime: t0, CloseTime: t0.Add(4 * time.Hour), Open: 100, High: 101, Low: 99, Close: 100},
+		{OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(8 * time.Hour), Open: 100, High: 101.2, Low: 99.8, Close: 101},
+		{OpenTime: t0.Add(8 * time.Hour), CloseTime: t0.Add(12 * time.Hour), Open: 101, High: 106, Low: 100.8, Close: 105},
+	}, 0, BacktestTradeSideLong, SwingLevels{
+		Entry: 100, StopLoss: 97, TakeProfit: 105, TakeProfit1: 101, TakeProfit2: 105, Leverage: 2,
+	}, BacktestTouchOpts{
+		Interval: Interval4h,
+		Scale:    BacktestScale{UseTP2: true, TP1ClosePct: 50, StopAfterTP1: BacktestStopKeep},
+	})
+	if got == nil || got.Outcome != BacktestTradeOutcomeTP1TP2 {
+		t.Fatalf("%+v", got)
+	}
+	if math.Abs(got.TP1ExitPrice-101) > 1e-9 || math.Abs(got.ExitPrice-105) > 1e-9 {
+		t.Fatalf("scale then runner %+v", got)
+	}
+	// 50% at +1%*2 lev = +2 on that slice; 50% at +5%*2 = +10; blend +6 on the original fill.
+	if math.Abs(got.PnLPct-6) > 0.15 {
+		t.Fatalf("blended pnl %+v", got)
+	}
+}
+
+func TestFirstTouch_TP1ThenStopAtEntry(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	got := SimulateBacktestTradeOpts([]OHLC{
+		{OpenTime: t0, CloseTime: t0.Add(4 * time.Hour), Open: 100, High: 101, Low: 99, Close: 100},
+		{OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(8 * time.Hour), Open: 100.2, High: 101.2, Low: 100.1, Close: 101.1},
+		{OpenTime: t0.Add(8 * time.Hour), CloseTime: t0.Add(12 * time.Hour), Open: 100.8, High: 101, Low: 99.9, Close: 100},
+	}, 0, BacktestTradeSideLong, SwingLevels{
+		Entry: 100, StopLoss: 97, TakeProfit: 105, TakeProfit1: 101, TakeProfit2: 105, Leverage: 1,
+	}, BacktestTouchOpts{
+		Interval: Interval4h,
+		Scale:    BacktestScale{UseTP2: true, TP1ClosePct: 50, StopAfterTP1: BacktestStopEntry},
+	})
+	if got == nil || got.Outcome != BacktestTradeOutcomeTP1SL || !got.StopMovedToEntry {
+		t.Fatalf("%+v", got)
+	}
+	if math.Abs(got.ExitPrice-99.9) > 1e-9 && math.Abs(got.ExitPrice-100.2) > 1e-9 && math.Abs(got.ExitPrice-100) > 1e-9 {
+		// remainder stop is entry (100) or the open that gapped through it
+		if got.ExitPrice > 101 {
+			t.Fatalf("runner stop should be at/through entry: %+v", got)
+		}
+	}
+}
+
 func TestFirstTouch_RecordsMarksWhileOpen(t *testing.T) {
 	t.Parallel()
 	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)

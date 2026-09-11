@@ -4282,7 +4282,7 @@ func backtestMap(job *domain.ScannerBacktest) map[string]any {
 	return m
 }
 
-func (b *Backend) StartBacktest(ctx context.Context, clientID, ruleID, profileID, exchange, symbol, rangeStart, rangeEnd string, startingBalance, riskPct, maxOpenRiskPct float64) (json.RawMessage, error) {
+func (b *Backend) StartBacktest(ctx context.Context, clientID, ruleID, profileID, exchange, symbol, rangeStart, rangeEnd string, startingBalance, riskPct, maxOpenRiskPct float64, useTP2 bool, tp1ClosePct float64, stopAfterTP1 string) (json.RawMessage, error) {
 	if b.Scanner == nil {
 		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)
 	}
@@ -4303,6 +4303,7 @@ func (b *Backend) StartBacktest(ctx context.Context, clientID, ruleID, profileID
 	job, err := b.Scanner.StartBacktest(ctx, scanner.StartBacktestInput{
 		ClientID: clientID, RuleID: ruleID, ProfileID: profileID,
 		Exchange: exchange, Symbol: symbol, StartingBalance: startingBalance, RiskPct: riskPct, MaxOpenRiskPct: maxOpenRiskPct,
+		UseTP2: useTP2, TP1ClosePct: tp1ClosePct, StopAfterTP1: stopAfterTP1,
 		RangeStart: start.UTC(), RangeEnd: end.UTC(),
 	})
 	if err != nil {
@@ -5257,6 +5258,7 @@ func swingDecisionMap(d *domain.SwingDecision) map[string]any {
 	if d.Levels != nil {
 		m["levels"] = map[string]any{
 			"entry": d.Levels.Entry, "stopLoss": d.Levels.StopLoss, "takeProfit": d.Levels.TakeProfit,
+			"takeProfit1": d.Levels.TakeProfit1, "takeProfit2": d.Levels.TakeProfit2,
 			"riskPct": d.Levels.RiskPct, "rewardPct": d.Levels.RewardPct, "rr": d.Levels.RR, "atr": d.Levels.ATR,
 			"leverage": d.Levels.Leverage,
 		}

@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from 'react';
-import { Alert, Button, Drawer, Empty, InputNumber, Progress, Select } from 'antd';
+import { Alert, Button, Drawer, Empty, InputNumber, Progress, Select, Switch } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
@@ -208,6 +208,10 @@ function outcomeLabel(t: (key: string) => string, outcome: string | undefined): 
   if (outcome === 'tp') return t('signals:lab.outcomeTp');
   if (outcome === 'sl') return t('signals:lab.outcomeSl');
   if (outcome === 'open') return t('signals:lab.outcomeOpen');
+  if (outcome === 'tp1') return t('signals:lab.outcomeTp1');
+  if (outcome === 'tp1_tp2') return t('signals:lab.outcomeTp1Tp2');
+  if (outcome === 'tp1_sl') return t('signals:lab.outcomeTp1Sl');
+  if (outcome === 'tp1_open') return t('signals:lab.outcomeTp1Open');
   return '—';
 }
 
@@ -233,9 +237,26 @@ function TradeDetail({ trade }: { trade: ScannerBacktestTrade }) {
       <Text variant="caption" color="secondary" mono>
         {t('signals:lab.stop')}: {formatPrice(trade.stopLoss)}
       </Text>
-      <Text variant="caption" color="secondary" mono>
-        {t('signals:lab.target')}: {formatPrice(trade.takeProfit)}
-      </Text>
+      {trade.takeProfit1 ? (
+        <Text variant="caption" color="secondary" mono>
+          {t('signals:lab.target1')}: {formatPrice(trade.takeProfit1)}
+          {trade.tp1ClosePct != null ? ` (${trade.tp1ClosePct}%)` : ''}
+        </Text>
+      ) : null}
+      {trade.takeProfit2 ? (
+        <Text variant="caption" color="secondary" mono>
+          {t('signals:lab.target2')}: {formatPrice(trade.takeProfit2)}
+        </Text>
+      ) : (
+        <Text variant="caption" color="secondary" mono>
+          {t('signals:lab.target')}: {formatPrice(trade.takeProfit)}
+        </Text>
+      )}
+      {trade.stopMovedToEntry ? (
+        <Text variant="caption" color="secondary">
+          {t('signals:lab.stopMovedToEntry')}
+        </Text>
+      ) : null}
       <Text variant="caption" color="primary">
         {t('signals:lab.outcome')}: {outcomeLabel(t, trade.outcome)}
         {trade.hitTimeUnknown ? ` (${t('signals:lab.hitTimeUnknown')})` : ''}
@@ -287,6 +308,9 @@ export function SignalsBacktestPanel({
   const [startingBalance, setStartingBalance] = useState(10000);
   const [riskPct, setRiskPct] = useState(1);
   const [maxOpenRiskPct, setMaxOpenRiskPct] = useState(3);
+  const [useTp2, setUseTp2] = useState(true);
+  const [tp1ClosePct, setTp1ClosePct] = useState(50);
+  const [stopAfterTp1, setStopAfterTp1] = useState<'keep' | 'entry'>('entry');
   const [rangeKey, setRangeKey] = useState(rangeOptions[1]?.value ?? rangeOptions[0]?.value ?? '90d');
 
   const ruleById = useMemo(() => new Map(rules.map((r) => [r.id, r])), [rules]);
@@ -624,6 +648,44 @@ export function SignalsBacktestPanel({
         ) : null}
         <Field>
           <Text variant="caption" color="secondary">
+            {t('signals:lab.useTp2')}
+          </Text>
+          <Switch checked={useTp2} aria-label={t('signals:lab.useTp2')} onChange={setUseTp2} />
+        </Field>
+        {useTp2 ? (
+          <>
+            <Field>
+              <Text variant="caption" color="secondary">
+                {t('signals:lab.tp1ClosePct')}
+              </Text>
+              <InputNumber
+                min={1}
+                max={99}
+                value={tp1ClosePct}
+                aria-label={t('signals:lab.tp1ClosePct')}
+                style={{ minWidth: 100 }}
+                onChange={(v) => setTp1ClosePct(typeof v === 'number' ? v : 50)}
+              />
+            </Field>
+            <Field>
+              <Text variant="caption" color="secondary">
+                {t('signals:lab.stopAfterTp1')}
+              </Text>
+              <Select
+                value={stopAfterTp1}
+                aria-label={t('signals:lab.stopAfterTp1')}
+                style={{ minWidth: 160 }}
+                options={[
+                  { value: 'entry', label: t('signals:lab.stopToEntry') },
+                  { value: 'keep', label: t('signals:lab.stopKeep') },
+                ]}
+                onChange={setStopAfterTp1}
+              />
+            </Field>
+          </>
+        ) : null}
+        <Field>
+          <Text variant="caption" color="secondary">
             {t('signals:lab.range')}
           </Text>
           <Select
@@ -646,6 +708,9 @@ export function SignalsBacktestPanel({
               startingBalance: watchlistRun ? startingBalance : undefined,
               riskPct: watchlistRun ? riskPct : undefined,
               maxOpenRiskPct: watchlistRun ? maxOpenRiskPct : undefined,
+              useTp2,
+              tp1ClosePct: useTp2 ? tp1ClosePct : undefined,
+              stopAfterTp1: useTp2 ? stopAfterTp1 : undefined,
               symbol: watchlistRun ? undefined : symbol.trim().toUpperCase(),
               exchange: watchlistRun ? undefined : (exchange as MarketExchange),
               rangeKey,

@@ -339,6 +339,9 @@ type startBacktestBody struct {
 	StartingBalance float64 `json:"startingBalance"`
 	RiskPct         float64 `json:"riskPct"`
 	MaxOpenRiskPct  float64 `json:"maxOpenRiskPct"`
+	UseTP2          bool    `json:"useTp2"`
+	TP1ClosePct     float64 `json:"tp1ClosePct"`
+	StopAfterTP1    string  `json:"stopAfterTp1"`
 	RangeStart      string  `json:"rangeStart"`
 	RangeEnd        string  `json:"rangeEnd"`
 }
@@ -368,6 +371,7 @@ func (h *ScannerHandler) StartBacktest(w http.ResponseWriter, r *http.Request) {
 		ClientID: clientID, RuleID: body.RuleID, ProfileID: body.ProfileID,
 		Exchange: body.Exchange, Symbol: body.Symbol, Scope: body.Scope,
 		StartingBalance: body.StartingBalance, RiskPct: body.RiskPct, MaxOpenRiskPct: body.MaxOpenRiskPct,
+		UseTP2: body.UseTP2, TP1ClosePct: body.TP1ClosePct, StopAfterTP1: body.StopAfterTP1,
 		RangeStart: start, RangeEnd: end,
 	})
 	if err != nil {

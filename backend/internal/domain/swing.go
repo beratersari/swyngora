@@ -74,14 +74,16 @@ type SwingPattern struct {
 
 // SwingLevels is an ATR/structure risk plan (informational).
 type SwingLevels struct {
-	Entry      float64 `json:"entry"`
-	StopLoss   float64 `json:"stopLoss"`
-	TakeProfit float64 `json:"takeProfit"`
-	RiskPct    float64 `json:"riskPct"`
-	RewardPct  float64 `json:"rewardPct"`
-	RR         float64 `json:"rr"`
-	ATR        float64 `json:"atr"`
-	Leverage   int     `json:"leverage,omitempty"`
+	Entry       float64 `json:"entry"`
+	StopLoss    float64 `json:"stopLoss"`
+	TakeProfit  float64 `json:"takeProfit"` // TP2 (or the only target)
+	TakeProfit1 float64 `json:"takeProfit1,omitempty"`
+	TakeProfit2 float64 `json:"takeProfit2,omitempty"`
+	RiskPct     float64 `json:"riskPct"`
+	RewardPct   float64 `json:"rewardPct"`
+	RR          float64 `json:"rr"`
+	ATR         float64 `json:"atr"`
+	Leverage    int     `json:"leverage,omitempty"`
 }
 
 // SwingDecision is the quality-gated result for one symbol.
@@ -672,6 +674,30 @@ func planSwingLevelsForSide(bars []OHLC, atr, entry float64, side string) (*Swin
 			}
 		}
 	}
+	var tp1 float64
+	if side == BacktestTradeSideShort {
+		tp1 = entry - SwingTP1RR*risk
+		if tp1 <= 0 || tp1 >= entry {
+			tp1 = tp
+		}
+		if tp >= tp1 {
+			tp = entry - SwingMinRRTrigger*risk
+		}
+		if tp >= tp1 {
+			tp = tp1
+		}
+	} else {
+		tp1 = entry + SwingTP1RR*risk
+		if tp1 <= entry {
+			tp1 = tp
+		}
+		if tp <= tp1 {
+			tp = entry + SwingMinRRTrigger*risk
+		}
+		if tp <= tp1 {
+			tp = tp1
+		}
+	}
 	riskPct := risk / entry * 100
 	var rewardPct float64
 	if side == BacktestTradeSideShort {
@@ -683,11 +709,18 @@ func planSwingLevelsForSide(bars []OHLC, atr, entry float64, side string) (*Swin
 	if riskPct > 0 {
 		rr = rewardPct / riskPct
 	}
-	return &SwingLevels{
+	lv := &SwingLevels{
 		Entry: entry, StopLoss: round8(stop), TakeProfit: round8(tp),
 		RiskPct: round8(riskPct), RewardPct: round8(rewardPct), RR: round8(rr), ATR: round8(atr),
 		Leverage: SuggestedSwingLeverage(riskPct),
-	}, nil
+	}
+	if !samePrice(tp1, tp) {
+		lv.TakeProfit1 = round8(tp1)
+		lv.TakeProfit2 = round8(tp)
+	} else {
+		lv.TakeProfit1 = round8(tp)
+	}
+	return lv, nil
 }
 
 var swingWeights = map[string]float64{

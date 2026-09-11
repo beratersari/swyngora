@@ -33,6 +33,7 @@ type BacktestTouchOpts struct {
 	// RangeEnd clips the Lab window. Hits after this are still recorded, but
 	// RangePnLPct marks the last in-range close.
 	RangeEnd time.Time
+	Scale    BacktestScale
 }
 
 // BacktestTrade is the signal's plan plus first-touch result.
@@ -42,9 +43,15 @@ type BacktestTrade struct {
 	Entry            float64             `json:"entry"`
 	StopLoss         float64             `json:"stopLoss"`
 	TakeProfit       float64             `json:"takeProfit"`
-	Outcome          string              `json:"outcome"` // tp | sl | open
+	TakeProfit1      float64             `json:"takeProfit1,omitempty"`
+	TakeProfit2      float64             `json:"takeProfit2,omitempty"`
+	UseTP2           bool                `json:"useTp2,omitempty"`
+	TP1ClosePct      float64             `json:"tp1ClosePct,omitempty"`
+	StopAfterTP1     string              `json:"stopAfterTp1,omitempty"`
+	StopMovedToEntry bool                `json:"stopMovedToEntry,omitempty"`
+	Outcome          string              `json:"outcome"` // tp | sl | open | tp1 | tp1_tp2 | tp1_sl | tp1_open
 	ExitPrice        float64             `json:"exitPrice,omitempty"`
-	PnLPct           float64             `json:"pnlPct"` // leveraged percent from the fill
+	PnLPct           float64             `json:"pnlPct"` // leveraged percent of the whole fill
 	BarsHeld         int                 `json:"barsHeld,omitempty"`
 	HitAt            *time.Time          `json:"hitAt,omitempty"`
 	HitTimeUnknown   bool                `json:"hitTimeUnknown,omitempty"`
@@ -53,6 +60,12 @@ type BacktestTrade struct {
 	ClosedAfterRange bool                `json:"closedAfterRange,omitempty"`
 	RangeExitPrice   float64             `json:"rangeExitPrice,omitempty"`
 	RangePnLPct      float64             `json:"rangePnlPct,omitempty"`
+	TP1ExitPrice     float64             `json:"tp1ExitPrice,omitempty"`
+	TP1PnLPct        float64             `json:"tp1PnlPct,omitempty"`
+	TP1HitAt         *time.Time          `json:"tp1HitAt,omitempty"`
+	TP1HitUnknown    bool                `json:"tp1HitTimeUnknown,omitempty"`
+	TP1KnownAt       *time.Time          `json:"tp1KnownAt,omitempty"`
+	RemainderPct     float64             `json:"remainderPct,omitempty"`
 	Marks            []BacktestPriceMark `json:"marks,omitempty"`
 }
 
@@ -201,49 +214,77 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 		return nil
 	}
 	side = NormalizeTradeSide(side)
-	sl, tp := levels.StopLoss, levels.TakeProfit
-	// The signal is only known at the bar close. Fill the next open.
+	sl := levels.StopLoss
 	entryIdx := signalIdx + 1
 	if entryIdx >= len(bars) {
-		// No next bar, so no real fill. Do not invent Outcome=open at the plan.
 		return nil
 	}
 	nextOpen := bars[entryIdx].Open
 	if nextOpen <= 0 {
-		// Next bar has no open. Do not invent a fill from the close or plan.
 		return nil
 	}
 	entry = nextOpen
+	plan := resolveScalePlan(side, entry, sl, levels, opts.Scale)
 	lev := clampBacktestLeverage(levels)
 	out := &BacktestTrade{
 		Side: side, Leverage: lev, Entry: round8(entry),
-		StopLoss: round8(sl), TakeProfit: round8(tp),
+		StopLoss: round8(sl), TakeProfit: round8(plan.finalTP),
 		Outcome: BacktestTradeOutcomeOpen,
+	}
+	if plan.tp1 > 0 {
+		out.TakeProfit1 = round8(plan.tp1)
+	}
+	if plan.use2 {
+		out.TakeProfit2 = round8(plan.tp2)
+		out.UseTP2 = true
+		out.TP1ClosePct = plan.closePct * 100
+		if plan.stopToEntry {
+			out.StopAfterTP1 = BacktestStopEntry
+		} else {
+			out.StopAfterTP1 = BacktestStopKeep
+		}
 	}
 	if !bars[entryIdx].OpenTime.IsZero() {
 		t := bars[entryIdx].OpenTime.UTC()
 		out.EnteredAt = &t
 	}
 	out.Marks = appendBacktestMark(out.Marks, bars[entryIdx].OpenTime, entry)
-	if hit := throughAtOpenPrice(side, entry, sl, tp); hit != "" {
-		// Already through a level at the only fill we can take. No old-entry PnL.
-		out.Outcome = hit
-		out.ExitPrice = round8(entry)
-		out.PnLPct = 0
-		out.BarsHeld = 0
-		out.HitAt = out.EnteredAt
-		out.ClosedKnownAt = out.EnteredAt
-		out.RangeExitPrice = out.ExitPrice
-		out.RangePnLPct = 0
-		return out
+
+	if hit := throughAtOpenPrice(side, entry, sl, plan.tp1); hit == BacktestTradeOutcomeSL {
+		return finishThroughOpen(out, hit, entry)
 	}
+	if plan.use2 {
+		if throughAtOpenPrice(side, entry, sl, plan.tp2) == BacktestTradeOutcomeTP {
+			return finishThroughOpen(out, BacktestTradeOutcomeTP, entry)
+		}
+		if throughAtOpenPrice(side, entry, sl, plan.tp1) == BacktestTradeOutcomeTP {
+			applyTP1Scale(out, entry, entry, out.EnteredAt, false, out.EnteredAt, plan)
+			if plan.stopToEntry {
+				out.StopMovedToEntry = true
+			}
+		}
+	} else if hit := throughAtOpenPrice(side, entry, sl, plan.tp1); hit != "" {
+		return finishThroughOpen(out, hit, entry)
+	}
+
 	rangeEnd := opts.RangeEnd.UTC()
 	markRange := func(px float64) {
 		if px <= 0 {
 			return
 		}
 		out.RangeExitPrice = round8(px)
-		out.RangePnLPct = LeveragedPnLPct(side, entry, px, lev)
+		if out.TP1ExitPrice > 0 && plan.use2 && plan.closePct < 1 {
+			out.RangePnLPct = scaledPnL(side, entry, out.TP1ExitPrice, px, plan.closePct, lev)
+		} else {
+			out.RangePnLPct = LeveragedPnLPct(side, entry, px, lev)
+		}
+	}
+	phase := 1
+	activeSL, activeTP := sl, plan.tp1
+	if out.TP1ExitPrice > 0 {
+		phase = 2
+		activeSL = plan.slAfter
+		activeTP = plan.tp2
 	}
 	lastInRange := -1
 	for j := entryIdx; j < len(bars); j++ {
@@ -269,56 +310,51 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 				lastInRange = j
 			}
 		}
-		touch := resolveFirstTouch(bar, side, sl, tp, opts.Interval, opts.Finer, 0)
+
+		if phase == 1 && plan.use2 {
+			touch := resolveFirstTouch(bar, side, activeSL, plan.tp1, opts.Interval, opts.Finer, 0)
+			if touch.hit == "" {
+				out.Marks = appendBacktestMark(out.Marks, barMarkAt(bar, opts.Interval), bar.Close)
+				continue
+			}
+			if touch.hit == BacktestTradeOutcomeSL {
+				applyTouchExit(out, touch, bar, bars, j, entryIdx, side, entry, lev, rangeEnd, spansEnd, opts.Interval, markRange)
+				return out
+			}
+			applyTP1Scale(out, touch.price, entry, touchTime(touch), touch.at.IsZero(), knownByOrBar(touch, bar, bars, j, opts.Interval), plan)
+			if plan.stopToEntry {
+				out.StopMovedToEntry = true
+			}
+			phase = 2
+			activeSL = plan.slAfter
+			activeTP = plan.tp2
+			rem := remainderFirstTouch(bar, side, activeSL, activeTP, opts, touch)
+			if rem.hit == "" {
+				continue
+			}
+			applyRemainderExit(out, rem, bar, bars, j, entryIdx, side, entry, lev, rangeEnd, spansEnd, opts.Interval, plan, markRange)
+			return out
+		}
+
+		touch := resolveFirstTouch(bar, side, activeSL, activeTP, opts.Interval, opts.Finer, 0)
 		if touch.hit == "" {
 			out.Marks = appendBacktestMark(out.Marks, barMarkAt(bar, opts.Interval), bar.Close)
 			continue
 		}
-		hit, px, at := touch.hit, touch.price, touch.at
-		barEnd := touch.knownBy
-		if barEnd.IsZero() || !barEnd.After(bar.OpenTime) {
-			if _, end := ParentBarWindow(bar, opts.Interval); end.After(bar.OpenTime) {
-				barEnd = end
-			} else if j+1 < len(bars) && bars[j+1].OpenTime.After(bar.OpenTime) {
-				barEnd = bars[j+1].OpenTime.UTC()
-			}
-		}
-		known := !at.IsZero()
-		if known {
-			t := at.UTC()
-			out.HitAt = &t
-			out.ClosedKnownAt = &t
+		if phase == 2 {
+			applyRemainderExit(out, touch, bar, bars, j, entryIdx, side, entry, lev, rangeEnd, spansEnd, opts.Interval, plan, markRange)
 		} else {
-			out.HitTimeUnknown = true
-			if !barEnd.IsZero() {
-				t := barEnd.UTC()
-				out.ClosedKnownAt = &t
-			}
-		}
-		freeAt := TradeRiskFreeAt(out)
-		hitInRange := rangeEnd.IsZero() || (freeAt != nil && !freeAt.After(rangeEnd))
-		if known {
-			hitInRange = rangeEnd.IsZero() || !at.UTC().After(rangeEnd)
-		} else if spansEnd {
-			// Hit was somewhere in this bar; do not assume it printed before range end.
-			hitInRange = false
-		}
-		out.Outcome = hit
-		out.ExitPrice = round8(px)
-		out.BarsHeld = j - entryIdx
-		out.PnLPct = LeveragedPnLPct(side, entry, px, lev)
-		if !hitInRange {
-			out.ClosedAfterRange = true
-		} else {
-			markRange(px)
+			applyTouchExit(out, touch, bar, bars, j, entryIdx, side, entry, lev, rangeEnd, spansEnd, opts.Interval, markRange)
 		}
 		return out
 	}
-	// Still open: mark the last in-range close. Do not use later tape as an exit.
 	if lastInRange >= 0 && out.RangeExitPrice > 0 {
 		out.ExitPrice = out.RangeExitPrice
 		out.PnLPct = out.RangePnLPct
 		out.BarsHeld = lastInRange - entryIdx
+		if phase == 2 {
+			out.Outcome = BacktestTradeOutcomeTP1Open
+		}
 		return out
 	}
 	last := bars[len(bars)-1]
@@ -331,11 +367,204 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 	if out.BarsHeld < 0 {
 		out.BarsHeld = 0
 	}
-	out.PnLPct = LeveragedPnLPct(side, entry, exit, lev)
+	if phase == 2 {
+		out.Outcome = BacktestTradeOutcomeTP1Open
+		out.PnLPct = scaledPnL(side, entry, out.TP1ExitPrice, exit, plan.closePct, lev)
+	} else {
+		out.PnLPct = LeveragedPnLPct(side, entry, exit, lev)
+	}
 	if out.RangeExitPrice <= 0 {
 		markRange(exit)
 	}
 	return out
+}
+
+func finishThroughOpen(out *BacktestTrade, hit string, px float64) *BacktestTrade {
+	out.Outcome = hit
+	out.ExitPrice = round8(px)
+	out.PnLPct = 0
+	out.BarsHeld = 0
+	out.HitAt = out.EnteredAt
+	out.ClosedKnownAt = out.EnteredAt
+	out.RangeExitPrice = out.ExitPrice
+	out.RangePnLPct = 0
+	return out
+}
+
+func applyTP1Scale(out *BacktestTrade, px, entry float64, at *time.Time, unknown bool, knownBy *time.Time, plan scalePlan) {
+	out.TP1ExitPrice = round8(px)
+	out.TP1PnLPct = LeveragedPnLPct(out.Side, entry, px, out.Leverage)
+	out.TP1HitAt = at
+	out.TP1HitUnknown = unknown
+	out.TP1KnownAt = knownBy
+	out.RemainderPct = round1((1 - plan.closePct) * 100)
+	out.Outcome = BacktestTradeOutcomeTP1Open
+}
+
+func applyTouchExit(out *BacktestTrade, touch firstTouch, bar OHLC, bars []OHLC, j, entryIdx int, side string, entry float64, lev int, rangeEnd time.Time, spansEnd bool, iv CandleInterval, markRange func(float64)) {
+	stampTouch(out, touch, bar, bars, j, iv)
+	hitInRange := touchInRange(out, touch, rangeEnd, spansEnd)
+	out.Outcome = touch.hit
+	out.ExitPrice = round8(touch.price)
+	out.BarsHeld = j - entryIdx
+	out.PnLPct = LeveragedPnLPct(side, entry, touch.price, lev)
+	if !hitInRange {
+		out.ClosedAfterRange = true
+	} else {
+		markRange(touch.price)
+	}
+}
+
+func applyRemainderExit(out *BacktestTrade, touch firstTouch, bar OHLC, bars []OHLC, j, entryIdx int, side string, entry float64, lev int, rangeEnd time.Time, spansEnd bool, iv CandleInterval, plan scalePlan, markRange func(float64)) {
+	stampTouch(out, touch, bar, bars, j, iv)
+	hitInRange := touchInRange(out, touch, rangeEnd, spansEnd)
+	if touch.hit == BacktestTradeOutcomeTP {
+		out.Outcome = BacktestTradeOutcomeTP1TP2
+	} else {
+		out.Outcome = BacktestTradeOutcomeTP1SL
+	}
+	out.ExitPrice = round8(touch.price)
+	out.BarsHeld = j - entryIdx
+	out.PnLPct = scaledPnL(side, entry, out.TP1ExitPrice, touch.price, plan.closePct, lev)
+	if !hitInRange {
+		out.ClosedAfterRange = true
+	} else {
+		markRange(touch.price)
+	}
+}
+
+func stampTouch(out *BacktestTrade, touch firstTouch, bar OHLC, bars []OHLC, j int, iv CandleInterval) {
+	barEnd := knownByOrEnd(touch, bar, bars, j, iv)
+	if !touch.at.IsZero() {
+		t := touch.at.UTC()
+		out.HitAt = &t
+		out.ClosedKnownAt = &t
+		return
+	}
+	out.HitTimeUnknown = true
+	if !barEnd.IsZero() {
+		t := barEnd.UTC()
+		out.ClosedKnownAt = &t
+	}
+}
+
+func touchInRange(out *BacktestTrade, touch firstTouch, rangeEnd time.Time, spansEnd bool) bool {
+	freeAt := TradeRiskFreeAt(out)
+	hitInRange := rangeEnd.IsZero() || (freeAt != nil && !freeAt.After(rangeEnd))
+	if !touch.at.IsZero() {
+		return rangeEnd.IsZero() || !touch.at.UTC().After(rangeEnd)
+	}
+	if spansEnd {
+		return false
+	}
+	return hitInRange
+}
+
+func knownByOrEnd(touch firstTouch, bar OHLC, bars []OHLC, j int, iv CandleInterval) time.Time {
+	barEnd := touch.knownBy
+	if barEnd.IsZero() || !barEnd.After(bar.OpenTime) {
+		if _, end := ParentBarWindow(bar, iv); end.After(bar.OpenTime) {
+			barEnd = end
+		} else if j+1 < len(bars) && bars[j+1].OpenTime.After(bar.OpenTime) {
+			barEnd = bars[j+1].OpenTime.UTC()
+		}
+	}
+	return barEnd
+}
+
+func knownByOrBar(touch firstTouch, bar OHLC, bars []OHLC, j int, iv CandleInterval) *time.Time {
+	end := knownByOrEnd(touch, bar, bars, j, iv)
+	if end.IsZero() {
+		return nil
+	}
+	t := end.UTC()
+	return &t
+}
+
+func touchTime(touch firstTouch) *time.Time {
+	if touch.at.IsZero() {
+		return nil
+	}
+	t := touch.at.UTC()
+	return &t
+}
+
+func remainderFirstTouch(bar OHLC, side string, sl, tp float64, opts BacktestTouchOpts, tp1 firstTouch) firstTouch {
+	if !tp1.at.IsZero() && !bar.OpenTime.IsZero() && tp1.at.UTC().Equal(bar.OpenTime.UTC()) {
+		return resolveFirstTouch(bar, side, sl, tp, opts.Interval, opts.Finer, 0)
+	}
+	if rem := remainderOnFiner(bar, side, sl, tp, opts, tp1); rem.hit != "" || rem.knownBy.IsZero() && rem.hit == "" && rem.price == -1 {
+		if rem.price == -1 {
+			return firstTouch{}
+		}
+		if rem.hit != "" {
+			return rem
+		}
+	}
+	hit, px, both := inspectBarTouch(bar, side, sl, tp)
+	if both {
+		_, end := ParentBarWindow(bar, opts.Interval)
+		return firstTouch{hit: BacktestTradeOutcomeSL, price: sl, knownBy: end}
+	}
+	if hit == BacktestTradeOutcomeTP {
+		_, end := ParentBarWindow(bar, opts.Interval)
+		out := firstTouch{hit: hit, price: px, knownBy: end}
+		if openGapsLevel(bar, side, sl, tp) {
+			out.at = bar.OpenTime.UTC()
+		}
+		return out
+	}
+	return firstTouch{}
+}
+
+func remainderOnFiner(bar OHLC, side string, sl, tp float64, opts BacktestTouchOpts, tp1 firstTouch) firstTouch {
+	if opts.Finer == nil {
+		return firstTouch{}
+	}
+	next, ok := FinerBacktestInterval(opts.Interval)
+	if !ok {
+		if span := barSpan(bar, opts.Interval); span > 0 {
+			next, ok = FinerBacktestIntervalForDuration(span)
+		}
+	}
+	if !ok {
+		return firstTouch{}
+	}
+	parent := bar
+	if parent.CloseTime.IsZero() || !parent.CloseTime.After(parent.OpenTime) {
+		if _, end := ParentBarWindow(bar, opts.Interval); end.After(bar.OpenTime) {
+			parent.CloseTime = end
+		}
+	}
+	sub := OHLCInside(opts.Finer(parent, next), parent, opts.Interval)
+	if len(sub) == 0 {
+		return firstTouch{}
+	}
+	seenTP1 := !tp1.at.IsZero() && !bar.OpenTime.IsZero() && !tp1.at.Before(bar.OpenTime)
+	for _, sb := range sub {
+		if !seenTP1 {
+			got := resolveFirstTouch(sb, side, sl, tp1TargetFromTouch(tp1, tp), next, opts.Finer, 1)
+			if got.hit == BacktestTradeOutcomeTP || (!got.at.IsZero() && got.hit != "") {
+				seenTP1 = true
+			}
+			continue
+		}
+		got := resolveFirstTouch(sb, side, sl, tp, next, opts.Finer, 1)
+		if got.hit != "" {
+			return got
+		}
+	}
+	if seenTP1 {
+		return firstTouch{price: -1} // walked after TP1, no remainder hit
+	}
+	return firstTouch{}
+}
+
+func tp1TargetFromTouch(tp1 firstTouch, fallback float64) float64 {
+	if tp1.price > 0 {
+		return tp1.price
+	}
+	return fallback
 }
 
 func barClosedAtOrBefore(bar OHLC, at time.Time, iv CandleInterval) bool {
@@ -765,10 +994,10 @@ func summarizeBacktestTrades(sigs []ScannerBacktestSignal) BacktestTradeStats {
 			out.LongCount++
 		}
 		switch s.Trade.Outcome {
-		case BacktestTradeOutcomeTP:
+		case BacktestTradeOutcomeTP, BacktestTradeOutcomeTP1, BacktestTradeOutcomeTP1TP2:
 			out.TpHits++
 			closed = append(closed, s.Trade.PnLPct)
-		case BacktestTradeOutcomeSL:
+		case BacktestTradeOutcomeSL, BacktestTradeOutcomeTP1SL:
 			out.SlHits++
 			closed = append(closed, s.Trade.PnLPct)
 		default:

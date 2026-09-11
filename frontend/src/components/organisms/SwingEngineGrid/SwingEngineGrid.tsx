@@ -85,10 +85,23 @@ export function SwingEngineGrid({
                   <LevelLabel>{t('engine.stop')}</LevelLabel>
                   <LevelValue>{formatPrice(s.levels.stopLoss)}</LevelValue>
                 </LevelRow>
-                <LevelRow>
-                  <LevelLabel>{t('engine.target')}</LevelLabel>
-                  <LevelValue>{formatPrice(s.levels.takeProfit)}</LevelValue>
-                </LevelRow>
+                {s.levels.takeProfit1 ? (
+                  <LevelRow>
+                    <LevelLabel>{t('engine.target1')}</LevelLabel>
+                    <LevelValue>{formatPrice(s.levels.takeProfit1)}</LevelValue>
+                  </LevelRow>
+                ) : null}
+                {s.levels.takeProfit2 ? (
+                  <LevelRow>
+                    <LevelLabel>{t('engine.target2')}</LevelLabel>
+                    <LevelValue>{formatPrice(s.levels.takeProfit2)}</LevelValue>
+                  </LevelRow>
+                ) : (
+                  <LevelRow>
+                    <LevelLabel>{t('engine.target')}</LevelLabel>
+                    <LevelValue>{formatPrice(s.levels.takeProfit)}</LevelValue>
+                  </LevelRow>
+                )}
               </Levels>
             ) : null}
             <Text variant="caption" color="secondary">
