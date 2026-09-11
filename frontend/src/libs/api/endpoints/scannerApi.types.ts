@@ -153,6 +153,7 @@ export type StartScannerBacktestArg = {
   symbol?: string;
   scope?: ScannerBacktestScope;
   startingBalance?: number;
+  riskPct?: number;
   exchange?: 'binance' | 'coinbase' | 'bybit' | 'nasdaq' | 'bist';
   rangeStart: string;
   rangeEnd: string;
@@ -231,12 +232,18 @@ export type ScannerBacktestMarketPerformance = {
 
 export type ScannerBacktestBook = {
   startingBalance: number;
+  rangeEndBalance?: number;
+  afterRangeBalance?: number;
   endingBalance: number;
   peakEquity?: number;
   troughEquity?: number;
+  riskPct?: number;
   stakePct?: number;
   tradesTaken?: number;
   tradesSkipped?: number;
+  closedInRange?: number;
+  closedAfterRange?: number;
+  openAtRangeEnd?: number;
   openAtEnd?: number;
 };
 

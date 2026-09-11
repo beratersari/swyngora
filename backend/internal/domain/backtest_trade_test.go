@@ -20,11 +20,40 @@ func TestFirstTouch_LongTP(t *testing.T) {
 	if got == nil || got.Outcome != BacktestTradeOutcomeTP {
 		t.Fatalf("%+v", got)
 	}
-	if got.ExitPrice != 105 || got.BarsHeld != 2 || got.Leverage != 2 {
+	if got.ExitPrice != 105 || got.Leverage != 2 {
 		t.Fatalf("%+v", got)
 	}
-	if math.Abs(got.PnLPct-10) > 0.05 {
-		t.Fatalf("pnl %+v", got)
+	if got.EnteredAt == nil || !got.EnteredAt.Equal(t0.Add(4*time.Hour)) {
+		t.Fatalf("enter next open %+v", got.EnteredAt)
+	}
+	if math.Abs(got.Entry-100.5) > 1e-9 {
+		t.Fatalf("fill next open %+v", got)
+	}
+	if got.BarsHeld != 1 {
+		t.Fatalf("held from entry bar %+v", got)
+	}
+	wantPnL := 2 * (105/100.5 - 1) * 100
+	if math.Abs(got.PnLPct-wantPnL) > 0.05 {
+		t.Fatalf("pnl %+v want %v", got, wantPnL)
+	}
+}
+
+func TestFirstTouch_EntersNextOpenNotSignalOpen(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	got := SimulateBacktestTrade([]OHLC{
+		{OpenTime: t0, CloseTime: t0.Add(4 * time.Hour), Open: 90, High: 110, Low: 89, Close: 100},
+		{OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(8 * time.Hour), Open: 101, High: 102, Low: 100.5, Close: 101.5},
+		{OpenTime: t0.Add(8 * time.Hour), CloseTime: t0.Add(12 * time.Hour), Open: 101.5, High: 106, Low: 101, Close: 105},
+	}, 0, BacktestTradeSideLong, SwingLevels{Entry: 100, StopLoss: 97, TakeProfit: 105, Leverage: 1})
+	if got == nil || got.Outcome != BacktestTradeOutcomeTP {
+		t.Fatalf("%+v", got)
+	}
+	if math.Abs(got.Entry-101) > 1e-9 {
+		t.Fatalf("must fill next open, not signal open/close: %+v", got)
+	}
+	if got.EnteredAt == nil || !got.EnteredAt.Equal(t0.Add(4*time.Hour)) {
+		t.Fatalf("enteredAt %+v", got.EnteredAt)
 	}
 }
 
@@ -201,6 +230,29 @@ func TestFinerBacktestInterval(t *testing.T) {
 	}
 }
 
+func TestFirstTouch_RangeMarkBeforeLaterTP(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	rangeEnd := t0.Add(6 * time.Hour)
+	got := SimulateBacktestTradeOpts([]OHLC{
+		{OpenTime: t0, CloseTime: t0.Add(4 * time.Hour), Open: 100, High: 101, Low: 99, Close: 100},
+		{OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(8 * time.Hour), Open: 100, High: 101, Low: 99.5, Close: 100.5},
+		{OpenTime: t0.Add(8 * time.Hour), CloseTime: t0.Add(12 * time.Hour), Open: 100.5, High: 101, Low: 100, Close: 100.8},
+		{OpenTime: t0.Add(12 * time.Hour), CloseTime: t0.Add(16 * time.Hour), Open: 101, High: 106, Low: 100.8, Close: 105},
+	}, 0, BacktestTradeSideLong, SwingLevels{Entry: 100, StopLoss: 97, TakeProfit: 105, Leverage: 1}, BacktestTouchOpts{
+		RangeEnd: rangeEnd,
+	})
+	if got == nil || got.Outcome != BacktestTradeOutcomeTP || !got.ClosedAfterRange {
+		t.Fatalf("later TP %+v", got)
+	}
+	if math.Abs(got.RangeExitPrice-100.5) > 1e-9 {
+		t.Fatalf("range mark %+v", got)
+	}
+	if math.Abs(got.RangePnLPct-0.5) > 0.05 {
+		t.Fatalf("range pnl %+v", got)
+	}
+}
+
 func TestFirstTouch_GapThroughTP(t *testing.T) {
 	t.Parallel()
 	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
@@ -248,8 +300,9 @@ func TestFirstTouch_ShortTPAndSL(t *testing.T) {
 	if tp == nil || tp.Outcome != BacktestTradeOutcomeTP {
 		t.Fatalf("tp %+v", tp)
 	}
-	if math.Abs(tp.PnLPct-15) > 0.05 {
-		t.Fatalf("short tp pnl %+v", tp)
+	wantShort := 3.0 * (99.0 - 95.0) / 99.0 * 100
+	if math.Abs(tp.PnLPct-wantShort) > 0.05 {
+		t.Fatalf("short tp pnl %+v want %v", tp, wantShort)
 	}
 	sl := SimulateBacktestTrade([]OHLC{
 		{OpenTime: t0, Open: 100, High: 101, Low: 99, Close: 100},

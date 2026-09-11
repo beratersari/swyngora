@@ -30,20 +30,27 @@ type FineBarLookup func(parent OHLC, interval CandleInterval) []OHLC
 type BacktestTouchOpts struct {
 	Interval CandleInterval
 	Finer    FineBarLookup
+	// RangeEnd clips the Lab window. Hits after this are still recorded, but
+	// RangePnLPct marks the last in-range close.
+	RangeEnd time.Time
 }
 
 // BacktestTrade is the signal's plan plus first-touch result.
 type BacktestTrade struct {
-	Side       string     `json:"side"`
-	Leverage   int        `json:"leverage"`
-	Entry      float64    `json:"entry"`
-	StopLoss   float64    `json:"stopLoss"`
-	TakeProfit float64    `json:"takeProfit"`
-	Outcome    string     `json:"outcome"` // tp | sl | open
-	ExitPrice  float64    `json:"exitPrice,omitempty"`
-	PnLPct     float64    `json:"pnlPct"` // leveraged percent
-	BarsHeld   int        `json:"barsHeld,omitempty"`
-	HitAt      *time.Time `json:"hitAt,omitempty"`
+	Side             string     `json:"side"`
+	Leverage         int        `json:"leverage"`
+	Entry            float64    `json:"entry"`
+	StopLoss         float64    `json:"stopLoss"`
+	TakeProfit       float64    `json:"takeProfit"`
+	Outcome          string     `json:"outcome"` // tp | sl | open
+	ExitPrice        float64    `json:"exitPrice,omitempty"`
+	PnLPct           float64    `json:"pnlPct"` // leveraged percent from the fill
+	BarsHeld         int        `json:"barsHeld,omitempty"`
+	HitAt            *time.Time `json:"hitAt,omitempty"`
+	EnteredAt        *time.Time `json:"enteredAt,omitempty"`
+	ClosedAfterRange bool       `json:"closedAfterRange,omitempty"`
+	RangeExitPrice   float64    `json:"rangeExitPrice,omitempty"`
+	RangePnLPct      float64    `json:"rangePnlPct,omitempty"`
 }
 
 // BacktestTradeStats summarizes first-touch trades across a job.
@@ -167,7 +174,35 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 	}
 	side = NormalizeTradeSide(side)
 	sl, tp := levels.StopLoss, levels.TakeProfit
-	if !validTradeLevels(side, entry, sl, tp) {
+	// The signal is only known at the bar close. Fill the next open.
+	entryIdx := signalIdx + 1
+	if entryIdx >= len(bars) {
+		if !validTradeLevels(side, entry, sl, tp) {
+			return nil
+		}
+		lev := levels.Leverage
+		if lev < 1 {
+			lev = SuggestedSwingLeverage(levels.RiskPct)
+		}
+		if lev < 1 {
+			lev = 1
+		}
+		if lev > BacktestMaxLeverage {
+			lev = BacktestMaxLeverage
+		}
+		return &BacktestTrade{
+			Side: side, Leverage: lev, Entry: round8(entry),
+			StopLoss: round8(sl), TakeProfit: round8(tp),
+			Outcome: BacktestTradeOutcomeOpen,
+		}
+	}
+	nextOpen := bars[entryIdx].Open
+	if nextOpen <= 0 {
+		nextOpen = bars[entryIdx].Close
+	}
+	if nextOpen > 0 && validTradeLevels(side, nextOpen, sl, tp) {
+		entry = nextOpen
+	} else if !validTradeLevels(side, entry, sl, tp) {
 		return nil
 	}
 	lev := levels.Leverage
@@ -185,10 +220,30 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 		StopLoss: round8(sl), TakeProfit: round8(tp),
 		Outcome: BacktestTradeOutcomeOpen,
 	}
-	for j := signalIdx + 1; j < len(bars); j++ {
+	if !bars[entryIdx].OpenTime.IsZero() {
+		t := bars[entryIdx].OpenTime.UTC()
+		out.EnteredAt = &t
+	}
+	rangeEnd := opts.RangeEnd.UTC()
+	markRange := func(px float64) {
+		if px <= 0 {
+			return
+		}
+		out.RangeExitPrice = round8(px)
+		out.RangePnLPct = LeveragedPnLPct(side, entry, px, lev)
+	}
+	for j := entryIdx; j < len(bars); j++ {
 		bar := bars[j]
 		if bar.Close <= 0 && bar.High <= 0 {
 			continue
+		}
+		inRange := rangeEnd.IsZero() || !bar.OpenTime.UTC().After(rangeEnd)
+		if inRange {
+			if bar.Close > 0 {
+				markRange(bar.Close)
+			} else {
+				markRange(entry)
+			}
 		}
 		hit, px, at := resolveFirstTouch(bar, side, sl, tp, opts.Interval, opts.Finer, 0)
 		if hit == "" {
@@ -196,7 +251,7 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 		}
 		out.Outcome = hit
 		out.ExitPrice = round8(px)
-		out.BarsHeld = j - signalIdx
+		out.BarsHeld = j - entryIdx
 		if !at.IsZero() {
 			t := at.UTC()
 			out.HitAt = &t
@@ -205,6 +260,11 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 			out.HitAt = &t
 		}
 		out.PnLPct = LeveragedPnLPct(side, entry, px, lev)
+		if !inRange {
+			out.ClosedAfterRange = true
+		} else {
+			markRange(px)
+		}
 		return out
 	}
 	last := bars[len(bars)-1]
@@ -213,11 +273,14 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 		exit = entry
 	}
 	out.ExitPrice = round8(exit)
-	out.BarsHeld = len(bars) - 1 - signalIdx
+	out.BarsHeld = len(bars) - 1 - entryIdx
 	if out.BarsHeld < 0 {
 		out.BarsHeld = 0
 	}
 	out.PnLPct = LeveragedPnLPct(side, entry, exit, lev)
+	if rangeEnd.IsZero() || out.RangeExitPrice <= 0 {
+		markRange(exit)
+	}
 	return out
 }
 

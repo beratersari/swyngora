@@ -37,43 +37,44 @@ func TestMergeBacktestMarkets_KeepsZeroAndErrors(t *testing.T) {
 	}
 }
 
-func TestSimulateSharedBacktestBook_CompoundsAndSkips(t *testing.T) {
+func TestSimulateSharedBacktestBook_RiskStopAndRange(t *testing.T) {
 	t.Parallel()
 	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
-	// Sequential: first +10% on 10% stake of 10000 = +100 → 10100
-	// second -5% on 10% of 10100 = -50.5 → 10049.5
-	seq := SimulateSharedBacktestBook(10000, 10, []BacktestBookFill{
-		{Symbol: "ETHUSDT", EntryAt: t0, ExitAt: t0.Add(time.Hour), PnLPct: 10},
-		{Symbol: "SOLUSDT", EntryAt: t0.Add(2 * time.Hour), ExitAt: t0.Add(3 * time.Hour), PnLPct: -5},
-	})
-	if seq.TradesTaken != 2 || seq.TradesSkipped != 0 {
-		t.Fatalf("seq counts %+v", seq)
+	// 1% risk, 1% stop: full stop loses 1% of 10000 = 100.
+	stop := SimulateSharedBacktestBook(10000, 1, []BacktestBookFill{
+		{Symbol: "ETHUSDT", Side: BacktestTradeSideLong, EntryAt: t0, ExitAt: t0.Add(time.Hour),
+			Entry: 100, StopLoss: 99, ExitPrice: 99, RangeExitPrice: 99, Leverage: 1, ClosedInRange: true},
+	}, t0.Add(24*time.Hour))
+	if stop.TradesTaken != 1 {
+		t.Fatalf("taken %+v", stop)
 	}
-	if math.Abs(seq.EndingBalance-10049.5) > 0.05 {
-		t.Fatalf("seq end %+v", seq)
+	if math.Abs(stop.EndingBalance-9900) > 0.05 {
+		t.Fatalf("stop should lose ~1%%: %+v", stop)
 	}
-
-	// Overlap: two entries before any exit, each 10% of 10000. Cash left 8000.
-	// Third entry while both open: stake 10% of 10000 = 1000, cash 7000. Then all close flat.
-	overlap := SimulateSharedBacktestBook(10000, 10, []BacktestBookFill{
-		{Symbol: "A", EntryAt: t0, ExitAt: t0.Add(3 * time.Hour), PnLPct: 0},
-		{Symbol: "B", EntryAt: t0.Add(time.Hour), ExitAt: t0.Add(3 * time.Hour), PnLPct: 0},
-		{Symbol: "C", EntryAt: t0.Add(2 * time.Hour), ExitAt: t0.Add(4 * time.Hour), PnLPct: 0},
-	})
-	if overlap.TradesTaken != 3 {
-		t.Fatalf("overlap taken %+v", overlap)
+	// Next trade sizes on 9900: another 1% stop loses 99.
+	two := SimulateSharedBacktestBook(10000, 1, []BacktestBookFill{
+		{Symbol: "A", Side: BacktestTradeSideLong, EntryAt: t0, ExitAt: t0.Add(time.Hour),
+			Entry: 100, StopLoss: 99, ExitPrice: 99, RangeExitPrice: 99, Leverage: 1, ClosedInRange: true},
+		{Symbol: "B", Side: BacktestTradeSideLong, EntryAt: t0.Add(2 * time.Hour), ExitAt: t0.Add(3 * time.Hour),
+			Entry: 50, StopLoss: 49.5, ExitPrice: 49.5, RangeExitPrice: 49.5, Leverage: 1, ClosedInRange: true},
+	}, t0.Add(24*time.Hour))
+	if math.Abs(two.EndingBalance-9801) > 0.1 {
+		t.Fatalf("compound stop %+v", two)
 	}
 
-	// Stake 50% so a third concurrent fill is skipped (cash 0 after two opens).
-	tight := SimulateSharedBacktestBook(10000, 50, []BacktestBookFill{
-		{Symbol: "A", EntryAt: t0, ExitAt: t0.Add(3 * time.Hour), PnLPct: 0},
-		{Symbol: "B", EntryAt: t0.Add(time.Hour), ExitAt: t0.Add(3 * time.Hour), PnLPct: 0},
-		{Symbol: "C", EntryAt: t0.Add(2 * time.Hour), ExitAt: t0.Add(4 * time.Hour), PnLPct: 10},
-	})
-	if tight.TradesTaken != 2 || tight.TradesSkipped != 1 {
-		t.Fatalf("tight %+v", tight)
+	// Still open at range end (mark 101), TP later at 105. 1% risk, 1% stop → notional = equity.
+	// Range mark +1%; after +5%.
+	later := SimulateSharedBacktestBook(10000, 1, []BacktestBookFill{
+		{Symbol: "ETHUSDT", Side: BacktestTradeSideLong, EntryAt: t0, ExitAt: t0.Add(48 * time.Hour),
+			Entry: 100, StopLoss: 99, ExitPrice: 105, RangeExitPrice: 101, Leverage: 1, ClosedInRange: false},
+	}, t0.Add(24*time.Hour))
+	if later.OpenAtRangeEnd != 1 || later.ClosedAfterRange != 1 {
+		t.Fatalf("later counts %+v", later)
 	}
-	if math.Abs(tight.EndingBalance-10000) > 0.05 {
-		t.Fatalf("flat end %+v", tight)
+	if math.Abs(later.RangeEndBalance-10100) > 0.05 {
+		t.Fatalf("range mark %+v", later)
+	}
+	if math.Abs(later.AfterRangeBalance-10500) > 0.05 || math.Abs(later.EndingBalance-10500) > 0.05 {
+		t.Fatalf("after later TP %+v", later)
 	}
 }

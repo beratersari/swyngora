@@ -108,7 +108,7 @@ func TestCustomBacktestMarkets(t *testing.T) {
 	raw, err := EncodeWatchlistCustomProfileSnapshot("Desk", DefaultCustomSignalWeights(), []BacktestMarket{
 		{Exchange: ExchangeBinance, Symbol: "ETHUSDT"},
 		{Exchange: ExchangeBybit, Symbol: "SOLUSDT"},
-	}, 10000)
+	}, 10000, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

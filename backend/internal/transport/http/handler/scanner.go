@@ -337,6 +337,7 @@ type startBacktestBody struct {
 	Symbol          string  `json:"symbol"`
 	Scope           string  `json:"scope"`
 	StartingBalance float64 `json:"startingBalance"`
+	RiskPct         float64 `json:"riskPct"`
 	RangeStart      string  `json:"rangeStart"`
 	RangeEnd        string  `json:"rangeEnd"`
 }
@@ -365,8 +366,8 @@ func (h *ScannerHandler) StartBacktest(w http.ResponseWriter, r *http.Request) {
 	job, err := h.svc.StartBacktest(r.Context(), scanner.StartBacktestInput{
 		ClientID: clientID, RuleID: body.RuleID, ProfileID: body.ProfileID,
 		Exchange: body.Exchange, Symbol: body.Symbol, Scope: body.Scope,
-		StartingBalance: body.StartingBalance,
-		RangeStart:      start, RangeEnd: end,
+		StartingBalance: body.StartingBalance, RiskPct: body.RiskPct,
+		RangeStart: start, RangeEnd: end,
 	})
 	if err != nil {
 		writeError(w, err)

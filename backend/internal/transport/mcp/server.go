@@ -193,7 +193,7 @@ type DataPort interface {
 	UpdateScannerRule(ctx context.Context, args map[string]any) (json.RawMessage, error)
 	DeleteScannerRule(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListScannerResults(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
-	StartBacktest(ctx context.Context, clientID, ruleID, profileID, exchange, symbol, rangeStart, rangeEnd string, startingBalance float64) (json.RawMessage, error)
+	StartBacktest(ctx context.Context, clientID, ruleID, profileID, exchange, symbol, rangeStart, rangeEnd string, startingBalance, riskPct float64) (json.RawMessage, error)
 	ListBacktests(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	GetBacktest(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	CancelBacktest(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -3774,7 +3774,8 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("ruleId", mcp.Description("Scanner rule id")),
 		mcp.WithString("profileId", mcp.Description("Custom signal profile id, or built_in")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist, default binance")),
-		mcp.WithNumber("startingBalance", mcp.Description("Shared cash pot for a watchlist job (default 10000). Each fill locks 10% of current equity.")),
+		mcp.WithNumber("startingBalance", mcp.Description("Shared cash pot for a watchlist job (default 10000).")),
+		mcp.WithNumber("riskPct", mcp.Description("Share of current equity lost on a full stop (default 1). Trade size follows the stop distance and the live pot.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -3792,7 +3793,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if scope := strings.TrimSpace(req.GetString("scope", "")); strings.EqualFold(scope, domain.BacktestScopeWatchlist) && symbol == "" {
 			symbol = domain.BacktestWatchlistSymbol
 		}
-		raw, err := api.StartBacktest(ctx, clientID, req.GetString("ruleId", ""), req.GetString("profileId", ""), req.GetString("exchange", "binance"), symbol, start, end, req.GetFloat("startingBalance", 0))
+		raw, err := api.StartBacktest(ctx, clientID, req.GetString("ruleId", ""), req.GetString("profileId", ""), req.GetString("exchange", "binance"), symbol, start, end, req.GetFloat("startingBalance", 0), req.GetFloat("riskPct", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

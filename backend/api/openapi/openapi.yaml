@@ -6746,7 +6746,8 @@ paths:
                 exchange: { type: string, enum: [binance, coinbase, bybit, nasdaq, bist], default: binance }
                 symbol: { type: string, description: Pair for a one-coin job. Use watchlist or omit when scope is watchlist }
                 scope: { type: string, enum: [symbol, watchlist], description: watchlist runs a custom mix on every watchlist coin }
-                startingBalance: { type: number, description: Shared cash pot for a watchlist job (default 10000). Each fill locks 10% of current equity }
+                startingBalance: { type: number, description: Shared cash pot for a watchlist job (default 10000) }
+                riskPct: { type: number, description: Share of current equity lost on a full stop (default 1). Size follows the stop distance and the live pot }
                 rangeStart: { type: string, format: date-time }
                 rangeEnd: { type: string, format: date-time }
       responses:

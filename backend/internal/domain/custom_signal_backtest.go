@@ -27,19 +27,20 @@ type customProfileSnapshot struct {
 	Scope           string             `json:"scope,omitempty"`
 	Markets         []BacktestMarket   `json:"markets,omitempty"`
 	StartingBalance float64            `json:"startingBalance,omitempty"`
+	RiskPct         float64            `json:"riskPct,omitempty"`
 }
 
 // EncodeCustomProfileSnapshot freezes mix weights for a backtest job.
 func EncodeCustomProfileSnapshot(name string, w CustomSignalWeights) (string, error) {
-	return encodeCustomProfileSnapshot(name, w, BacktestScopeSymbol, nil, 0)
+	return encodeCustomProfileSnapshot(name, w, BacktestScopeSymbol, nil, 0, 0)
 }
 
 // EncodeWatchlistCustomProfileSnapshot freezes mix weights plus the watchlist coins.
-func EncodeWatchlistCustomProfileSnapshot(name string, w CustomSignalWeights, markets []BacktestMarket, startingBalance float64) (string, error) {
-	return encodeCustomProfileSnapshot(name, w, BacktestScopeWatchlist, markets, startingBalance)
+func EncodeWatchlistCustomProfileSnapshot(name string, w CustomSignalWeights, markets []BacktestMarket, startingBalance, riskPct float64) (string, error) {
+	return encodeCustomProfileSnapshot(name, w, BacktestScopeWatchlist, markets, startingBalance, riskPct)
 }
 
-func encodeCustomProfileSnapshot(name string, w CustomSignalWeights, scope string, markets []BacktestMarket, startingBalance float64) (string, error) {
+func encodeCustomProfileSnapshot(name string, w CustomSignalWeights, scope string, markets []BacktestMarket, startingBalance, riskPct float64) (string, error) {
 	pct := w.Pct
 	if pct == nil {
 		pct = map[string]float64{}
@@ -47,11 +48,12 @@ func encodeCustomProfileSnapshot(name string, w CustomSignalWeights, scope strin
 	th := CustomBacktestThreshold
 	if scope == BacktestScopeWatchlist {
 		startingBalance = NormalizeBacktestStartBalance(startingBalance)
+		riskPct = NormalizeBacktestRiskPct(riskPct)
 	}
 	b, err := json.Marshal(customProfileSnapshot{
 		Kind: BacktestKindCustom, Name: strings.TrimSpace(name),
 		Weights: pct, Threshold: th, Scope: scope, Markets: markets,
-		StartingBalance: startingBalance,
+		StartingBalance: startingBalance, RiskPct: riskPct,
 	})
 	if err != nil {
 		return "", err
@@ -109,6 +111,17 @@ func CustomBacktestStartBalance(job ScannerBacktest) float64 {
 	}
 	if IsWatchlistBacktest(job) {
 		return BacktestDefaultStartBalance
+	}
+	return 0
+}
+
+// CustomBacktestRiskPct is the stop-loss share of equity on a watchlist job.
+func CustomBacktestRiskPct(job ScannerBacktest) float64 {
+	if snap, err := parseCustomProfileSnapshot(job.RuleJSON); err == nil && snap.RiskPct > 0 {
+		return NormalizeBacktestRiskPct(snap.RiskPct)
+	}
+	if IsWatchlistBacktest(job) {
+		return BacktestDefaultRiskPct
 	}
 	return 0
 }

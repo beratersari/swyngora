@@ -148,7 +148,10 @@ function formatBalance(n: number | undefined): string {
 
 function BookSummary({ book }: { book: ScannerBacktestBook }) {
   const { t } = useTranslation(['signals']);
-  const pnl = book.endingBalance - book.startingBalance;
+  const rangeBal = book.rangeEndBalance ?? book.endingBalance;
+  const afterBal = book.afterRangeBalance ?? book.endingBalance;
+  const rangePnl = rangeBal - book.startingBalance;
+  const afterPnl = afterBal - book.startingBalance;
   return (
     <>
       <Text variant="label" color="primary">
@@ -158,12 +161,28 @@ function BookSummary({ book }: { book: ScannerBacktestBook }) {
         <Text variant="caption" color="secondary" mono>
           {t('signals:lab.bookStart')}: {formatBalance(book.startingBalance)}
         </Text>
-        <Text variant="caption" color={changeTone(pnl)} mono>
-          {t('signals:lab.bookEnd')}: {formatBalance(book.endingBalance)}
+        <Text variant="caption" color="secondary">
+          {t('signals:lab.riskPct')}: {book.riskPct ?? book.stakePct ?? '—'}%
         </Text>
-        <Text variant="caption" color={changeTone(pnl)} mono>
-          {t('signals:lab.bookPnl')}: {formatChangePercent((pnl / book.startingBalance) * 100)}
+        <Text variant="caption" color={changeTone(rangePnl)} mono>
+          {t('signals:lab.bookRangeEnd')}: {formatBalance(rangeBal)}
         </Text>
+        <Text variant="caption" color={changeTone(rangePnl)} mono>
+          {t('signals:lab.bookRangePnl')}: {formatChangePercent((rangePnl / book.startingBalance) * 100)}
+        </Text>
+        {(book.closedAfterRange ?? 0) > 0 || (book.openAtRangeEnd ?? 0) > 0 ? (
+          <>
+            <Text variant="caption" color="secondary">
+              {t('signals:lab.bookLaterClosed')}: {book.closedAfterRange ?? 0}
+            </Text>
+            <Text variant="caption" color={changeTone(afterPnl)} mono>
+              {t('signals:lab.bookAfter')}: {formatBalance(afterBal)}
+            </Text>
+            <Text variant="caption" color={changeTone(afterPnl)} mono>
+              {t('signals:lab.bookAfterPnl')}: {formatChangePercent((afterPnl / book.startingBalance) * 100)}
+            </Text>
+          </>
+        ) : null}
         <Text variant="caption" color="secondary">
           {t('signals:lab.bookTaken')}: {book.tradesTaken ?? 0}
         </Text>
@@ -262,6 +281,7 @@ export function SignalsBacktestPanel({
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [scope, setScope] = useState<'symbol' | 'watchlist'>('symbol');
   const [startingBalance, setStartingBalance] = useState(10000);
+  const [riskPct, setRiskPct] = useState(1);
   const [rangeKey, setRangeKey] = useState(rangeOptions[1]?.value ?? rangeOptions[0]?.value ?? '90d');
 
   const ruleById = useMemo(() => new Map(rules.map((r) => [r.id, r])), [rules]);
@@ -567,6 +587,20 @@ export function SignalsBacktestPanel({
               onChange={(v) => setStartingBalance(typeof v === 'number' ? v : 10000)}
             />
           </Field>
+          <Field>
+            <Text variant="caption" color="secondary">
+              {t('signals:lab.riskPct')}
+            </Text>
+            <InputNumber
+              min={0.1}
+              max={25}
+              step={0.1}
+              value={riskPct}
+              aria-label={t('signals:lab.riskPct')}
+              style={{ minWidth: 100 }}
+              onChange={(v) => setRiskPct(typeof v === 'number' ? v : 1)}
+            />
+          </Field>
         ) : null}
         <Field>
           <Text variant="caption" color="secondary">
@@ -590,6 +624,7 @@ export function SignalsBacktestPanel({
               profileId: source === 'profile' ? profileId : undefined,
               scope: source === 'profile' ? scope : 'symbol',
               startingBalance: watchlistRun ? startingBalance : undefined,
+              riskPct: watchlistRun ? riskPct : undefined,
               symbol: watchlistRun ? undefined : symbol.trim().toUpperCase(),
               exchange: watchlistRun ? undefined : (exchange as MarketExchange),
               rangeKey,

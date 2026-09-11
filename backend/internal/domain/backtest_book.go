@@ -15,11 +15,14 @@ const (
 	// BacktestMarketError failed to fetch or parse tape.
 	BacktestMarketError = "error"
 
-	// BacktestBookStakePct is the share of current equity locked as margin per fill.
-	BacktestBookStakePct = 10.0
+	// BacktestDefaultRiskPct is the share of current equity lost on a full stop.
+	BacktestDefaultRiskPct = 1.0
+	// BacktestBookStakePct is kept for older jobs that stored a stake share.
+	BacktestBookStakePct = BacktestDefaultRiskPct
 	// BacktestDefaultStartBalance is the Lab default shared pot (quote units).
 	BacktestDefaultStartBalance = 10000.0
 	backtestBookMaxStart        = 1e9
+	backtestBookMaxRisk         = 25.0
 )
 
 // BacktestMarketResult is one coin after a watchlist Lab run.
@@ -34,14 +37,20 @@ type BacktestMarketResult struct {
 
 // BacktestBook is one shared cash pot used by every watchlist fill.
 type BacktestBook struct {
-	StartingBalance float64 `json:"startingBalance"`
-	EndingBalance   float64 `json:"endingBalance"`
-	PeakEquity      float64 `json:"peakEquity"`
-	TroughEquity    float64 `json:"troughEquity"`
-	StakePct        float64 `json:"stakePct"`
-	TradesTaken     int     `json:"tradesTaken"`
-	TradesSkipped   int     `json:"tradesSkipped"`
-	OpenAtEnd       int     `json:"openAtEnd"`
+	StartingBalance   float64 `json:"startingBalance"`
+	RangeEndBalance   float64 `json:"rangeEndBalance"`
+	AfterRangeBalance float64 `json:"afterRangeBalance"`
+	EndingBalance     float64 `json:"endingBalance"` // same as afterRangeBalance
+	PeakEquity        float64 `json:"peakEquity"`
+	TroughEquity      float64 `json:"troughEquity"`
+	RiskPct           float64 `json:"riskPct"`
+	StakePct          float64 `json:"stakePct,omitempty"` // alias of riskPct for older clients
+	TradesTaken       int     `json:"tradesTaken"`
+	TradesSkipped     int     `json:"tradesSkipped"`
+	ClosedInRange     int     `json:"closedInRange"`
+	ClosedAfterRange  int     `json:"closedAfterRange"`
+	OpenAtRangeEnd    int     `json:"openAtRangeEnd"`
+	OpenAtEnd         int     `json:"openAtEnd"`
 }
 
 // BacktestRunState is persisted after a custom job walks its coins.
@@ -52,11 +61,17 @@ type BacktestRunState struct {
 
 // BacktestBookFill is one first-touch trade on the shared pot.
 type BacktestBookFill struct {
-	Symbol  string
-	EntryAt time.Time
-	ExitAt  time.Time
-	PnLPct  float64
-	Outcome string
+	Symbol         string
+	Side           string
+	EntryAt        time.Time
+	ExitAt         time.Time
+	Entry          float64
+	StopLoss       float64
+	ExitPrice      float64
+	RangeExitPrice float64
+	Leverage       int
+	ClosedInRange  bool
+	Outcome        string
 }
 
 // NormalizeBacktestStartBalance applies the Lab default and a hard cap.
@@ -70,24 +85,38 @@ func NormalizeBacktestStartBalance(v float64) float64 {
 	return v
 }
 
-// SimulateSharedBacktestBook walks fills in time order against one cash pot.
-// Each taken trade locks stakePct of current equity (cash + open margin).
-// A fill is skipped when cash is short. Still-open trades are marked into the end balance.
-func SimulateSharedBacktestBook(start, stakePct float64, fills []BacktestBookFill) BacktestBook {
-	start = NormalizeBacktestStartBalance(start)
-	if stakePct <= 0 || math.IsNaN(stakePct) {
-		stakePct = BacktestBookStakePct
+// NormalizeBacktestRiskPct is the stop-loss share of equity (default 1%).
+func NormalizeBacktestRiskPct(v float64) float64 {
+	if v <= 0 || math.IsNaN(v) {
+		return BacktestDefaultRiskPct
 	}
+	if v > backtestBookMaxRisk {
+		return backtestBookMaxRisk
+	}
+	return v
+}
+
+// SimulateSharedBacktestBook walks fills in time order against one cash pot.
+// Each taken trade is sized so a full stop loses about riskPct of current equity.
+// RangeEndBalance marks still-open trades at the last in-range close and does not
+// apply TP/SL that print after the Lab window. AfterRangeBalance includes those later fills.
+func SimulateSharedBacktestBook(start, riskPct float64, fills []BacktestBookFill, rangeEnd time.Time) BacktestBook {
+	start = NormalizeBacktestStartBalance(start)
+	riskPct = NormalizeBacktestRiskPct(riskPct)
 	out := BacktestBook{
-		StartingBalance: round2(start),
-		EndingBalance:   round2(start),
-		PeakEquity:      round2(start),
-		TroughEquity:    round2(start),
-		StakePct:        stakePct,
+		StartingBalance:   round2(start),
+		RangeEndBalance:   round2(start),
+		AfterRangeBalance: round2(start),
+		EndingBalance:     round2(start),
+		PeakEquity:        round2(start),
+		TroughEquity:      round2(start),
+		RiskPct:           riskPct,
+		StakePct:          riskPct,
 	}
 	if len(fills) == 0 {
 		return out
 	}
+	end := rangeEnd.UTC()
 	type ev struct {
 		at   time.Time
 		exit bool
@@ -95,6 +124,9 @@ func SimulateSharedBacktestBook(start, stakePct float64, fills []BacktestBookFil
 	}
 	events := make([]ev, 0, len(fills)*2)
 	for i, f := range fills {
+		if f.EntryAt.IsZero() || f.Entry <= 0 || f.StopLoss <= 0 {
+			continue
+		}
 		entry := f.EntryAt.UTC()
 		exit := f.ExitAt.UTC()
 		if exit.IsZero() || !exit.After(entry) {
@@ -114,14 +146,16 @@ func SimulateSharedBacktestBook(start, stakePct float64, fills []BacktestBookFil
 	})
 	cash := start
 	type pos struct {
-		stake  float64
-		pnlPct float64
+		margin   float64
+		notional float64
+		i        int
 	}
 	open := map[int]pos{}
+	snapshotted := end.IsZero()
 	equity := func() float64 {
 		e := cash
 		for _, p := range open {
-			e += p.stake
+			e += p.margin
 		}
 		return e
 	}
@@ -134,33 +168,75 @@ func SimulateSharedBacktestBook(start, stakePct float64, fills []BacktestBookFil
 			out.TroughEquity = eq
 		}
 	}
+	snapshotRange := func() {
+		if snapshotted {
+			return
+		}
+		eq := cash
+		for _, p := range open {
+			eq += p.margin + notionalPnL(fills[p.i], p.notional, true)
+		}
+		out.RangeEndBalance = round2(eq)
+		out.OpenAtRangeEnd = len(open)
+		snapshotted = true
+	}
+	maybeSnap := func(at time.Time) {
+		if !end.IsZero() && !at.After(end) {
+			return
+		}
+		snapshotRange()
+	}
 	for _, e := range events {
+		maybeSnap(e.at)
 		if e.exit {
 			p, ok := open[e.i]
 			if !ok {
 				continue
 			}
 			delete(open, e.i)
-			cash += p.stake + p.stake*(p.pnlPct/100)
+			cash += p.margin + notionalPnL(fills[e.i], p.notional, false)
+			if fills[e.i].ClosedInRange {
+				out.ClosedInRange++
+			} else {
+				out.ClosedAfterRange++
+			}
 			mark()
 			continue
 		}
-		eq := equity()
-		stake := eq * (stakePct / 100)
-		if stake <= 0 || cash+1e-9 < stake {
+		f := fills[e.i]
+		stopF := stopFrac(f.Entry, f.StopLoss)
+		if stopF <= 0 {
 			out.TradesSkipped++
 			continue
 		}
-		cash -= stake
-		open[e.i] = pos{stake: stake, pnlPct: fills[e.i].PnLPct}
+		eq := equity()
+		notional := eq * (riskPct / 100) / stopF
+		lev := f.Leverage
+		if lev < 1 {
+			lev = 1
+		}
+		margin := notional / float64(lev)
+		if margin <= 0 || cash+1e-9 < margin {
+			out.TradesSkipped++
+			continue
+		}
+		cash -= margin
+		open[e.i] = pos{margin: margin, notional: notional, i: e.i}
 		out.TradesTaken++
 		mark()
 	}
+	if !snapshotted {
+		snapshotRange()
+	}
 	out.OpenAtEnd = len(open)
 	for _, p := range open {
-		cash += p.stake + p.stake*(p.pnlPct/100)
+		cash += p.margin + notionalPnL(fills[p.i], p.notional, false)
 	}
-	out.EndingBalance = round2(cash)
+	out.AfterRangeBalance = round2(cash)
+	out.EndingBalance = out.AfterRangeBalance
+	if end.IsZero() {
+		out.RangeEndBalance = out.AfterRangeBalance
+	}
 	out.PeakEquity = round2(out.PeakEquity)
 	out.TroughEquity = round2(out.TroughEquity)
 	if out.EndingBalance > out.PeakEquity {
@@ -172,24 +248,74 @@ func SimulateSharedBacktestBook(start, stakePct float64, fills []BacktestBookFil
 	return out
 }
 
-// BookFillsFromSignals keeps trades that have a plan, in list order.
+func stopFrac(entry, sl float64) float64 {
+	if entry <= 0 {
+		return 0
+	}
+	d := math.Abs(entry-sl) / entry
+	if d < 1e-6 {
+		return 0
+	}
+	return d
+}
+
+func unleveredMove(side string, entry, exit float64) float64 {
+	if entry <= 0 {
+		return 0
+	}
+	if NormalizeTradeSide(side) == BacktestTradeSideShort {
+		return (entry - exit) / entry
+	}
+	return (exit - entry) / entry
+}
+
+func notionalPnL(f BacktestBookFill, notional float64, atRange bool) float64 {
+	px := f.ExitPrice
+	if atRange && f.RangeExitPrice > 0 {
+		px = f.RangeExitPrice
+	}
+	if px <= 0 {
+		px = f.Entry
+	}
+	return notional * unleveredMove(f.Side, f.Entry, px)
+}
+
+// BookFillsFromSignals keeps trades that actually filled after the signal bar closed.
 func BookFillsFromSignals(sigs []ScannerBacktestSignal, rangeEnd time.Time) []BacktestBookFill {
 	out := make([]BacktestBookFill, 0, len(sigs))
 	end := rangeEnd.UTC()
 	for _, s := range sigs {
-		if s.Trade == nil {
+		if s.Trade == nil || s.Trade.Entry <= 0 {
+			continue
+		}
+		tr := s.Trade
+		entryAt := s.SignalAt.UTC()
+		if tr.EnteredAt != nil && !tr.EnteredAt.IsZero() {
+			entryAt = tr.EnteredAt.UTC()
+		} else if !s.SignalAt.IsZero() {
+			// Legacy rows used the signal open; skip the signal bar.
+			entryAt = s.SignalAt.UTC().Add(time.Nanosecond)
+		}
+		if entryAt.IsZero() {
 			continue
 		}
 		exit := end
-		if s.Trade.HitAt != nil && !s.Trade.HitAt.IsZero() {
-			exit = s.Trade.HitAt.UTC()
+		if tr.HitAt != nil && !tr.HitAt.IsZero() {
+			exit = tr.HitAt.UTC()
+		}
+		rangePx := tr.RangeExitPrice
+		if rangePx <= 0 {
+			rangePx = tr.ExitPrice
+		}
+		closedIn := !tr.ClosedAfterRange
+		if !end.IsZero() && tr.HitAt != nil && tr.HitAt.After(end) {
+			closedIn = false
 		}
 		out = append(out, BacktestBookFill{
-			Symbol:  s.Symbol,
-			EntryAt: s.SignalAt.UTC(),
-			ExitAt:  exit,
-			PnLPct:  s.Trade.PnLPct,
-			Outcome: s.Trade.Outcome,
+			Symbol: s.Symbol, Side: tr.Side, EntryAt: entryAt, ExitAt: exit,
+			Entry: tr.Entry, StopLoss: tr.StopLoss, ExitPrice: tr.ExitPrice,
+			RangeExitPrice: rangePx, Leverage: tr.Leverage,
+			ClosedInRange: closedIn, Outcome: tr.Outcome,
 		})
 	}
 	return out

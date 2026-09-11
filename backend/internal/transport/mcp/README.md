@@ -89,7 +89,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `set_default_custom_signal_profile` | Mix the Custom tab opens with |
 | `delete_custom_signal_profile` | Delete a saved mix |
 | `scan_custom_signals` | Watchlist scored with a custom mix (`profileId` or weight*; optional forensics / similar_setup; `tapeSetups` / `tapeUsed` / `tapeThin` / `tapeFresh`; `custom.evidence` strong/fair/weak plus fresh/old/missing factor counts) |
-| `start_backtest` | Historical rule or custom-profile backtest (`ruleId` or `profileId=built_in`). `scope=watchlist` (or `symbol=watchlist`) runs a custom mix on every watchlist coin; `startingBalance` (default 10000) is a shared pot (10% of equity per fill). Custom jobs skip timestamps when a selected factor has no history (`skippedBars` / `missingFactors`) |
+| `start_backtest` | Historical rule or custom-profile backtest (`ruleId` or `profileId=built_in`). `scope=watchlist` (or `symbol=watchlist`) runs a custom mix on every watchlist coin; `startingBalance` (default 10000) and `riskPct` (default 1) size fills so a stop loses about that share of the live pot. Range-end balance is separate from later TP/SL. Custom jobs skip timestamps when a selected factor has no history (`skippedBars` / `missingFactors`) |
 | `list_backtests` | List Lab jobs |
 | `get_backtest` | Job progress / summary |
 | `cancel_backtest` | Cancel pending/running job |
