@@ -190,6 +190,7 @@ function BookSummary({ book }: { book: ScannerBacktestBook }) {
         <Text variant="caption" color="secondary">
           {t('signals:lab.bookSkipped')}: {book.tradesSkipped ?? 0}
           {(book.skippedNoRisk ?? 0) > 0 ? ` (${t('signals:lab.bookSkippedRisk')}: ${book.skippedNoRisk})` : ''}
+          {(book.skippedSameCoin ?? 0) > 0 ? ` (${t('signals:lab.bookSkippedCoin')}: ${book.skippedSameCoin})` : ''}
         </Text>
       </TradeStats>
     </>

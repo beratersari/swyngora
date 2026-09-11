@@ -221,6 +221,7 @@ func ReplayCustomSignalBacktest(in CustomBacktestInput) (CustomBacktestReplay, e
 	end := in.RangeEnd.UTC()
 	prev := 0.0
 	missingSet := map[string]struct{}{}
+	var openTrade *BacktestTrade
 	for i := range in.Primary {
 		bar := in.Primary[i]
 		ot := bar.OpenTime.UTC()
@@ -261,9 +262,21 @@ func ReplayCustomSignalBacktest(in CustomBacktestInput) (CustomBacktestReplay, e
 		if CustomSignalCrossedTrigger(prev, scored.Score, in.Threshold) {
 			factors := customBacktestFactors(scored)
 			side := NormalizeTradeSide(dec.Side)
-			trade := SimulateBacktestTradeOpts(in.Primary, i, side, swingLevelsOrEmpty(dec.Levels), in.Touch)
-			if trade == nil && dec.Levels == nil {
-				trade = PlanBacktestTradeOpts(in.Primary, i, side, in.Touch)
+			var trade *BacktestTrade
+			entryAt := ot
+			if i+1 < len(in.Primary) && !in.Primary[i+1].OpenTime.IsZero() {
+				entryAt = in.Primary[i+1].OpenTime.UTC()
+			} else if !asOf.IsZero() {
+				entryAt = asOf.UTC()
+			}
+			if !TradeOpenAt(openTrade, entryAt) {
+				trade = SimulateBacktestTradeOpts(in.Primary, i, side, swingLevelsOrEmpty(dec.Levels), in.Touch)
+				if trade == nil && dec.Levels == nil {
+					trade = PlanBacktestTradeOpts(in.Primary, i, side, in.Touch)
+				}
+				if trade != nil {
+					openTrade = trade
+				}
 			}
 			out.Hits = append(out.Hits, CustomBacktestHit{
 				Index: i, At: ot, Close: bar.Close, Score: scored.Score, Grade: scored.Grade,

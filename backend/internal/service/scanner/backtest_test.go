@@ -244,8 +244,8 @@ func TestBacktest_CustomProfileStartAndRun(t *testing.T) {
 	if sigs[0].Trade == nil || sigs[0].Trade.Entry <= 0 || sigs[0].Trade.Leverage < 1 {
 		t.Fatalf("persisted trade %+v", sigs[0].Trade)
 	}
-	if got.Performance.Trades.SampleCount != got.SignalCount {
-		t.Fatalf("trade stats %+v", got.Performance.Trades)
+	if got.Performance.Trades.SampleCount < 1 || got.Performance.Trades.SampleCount > got.SignalCount {
+		t.Fatalf("trade stats %+v signals=%d", got.Performance.Trades, got.SignalCount)
 	}
 	if got.Performance == nil || got.Performance.SignalCount != got.SignalCount {
 		t.Fatalf("performance %+v", got.Performance)

@@ -372,6 +372,48 @@ func TestFirstTouch_StillOpenIgnoresFutureTape(t *testing.T) {
 	}
 }
 
+func TestFirstTouch_HitTimeFromFinerNotParentOpen(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	parent := OHLC{OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(8 * time.Hour), Open: 100, High: 106, Low: 99, Close: 104}
+	finer := []OHLC{
+		{OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(5 * time.Hour), Open: 100, High: 101, Low: 99.5, Close: 100.5},
+		{OpenTime: t0.Add(5 * time.Hour), CloseTime: t0.Add(6 * time.Hour), Open: 100.5, High: 102, Low: 100, Close: 101},
+		{OpenTime: t0.Add(6 * time.Hour), CloseTime: t0.Add(7 * time.Hour), Open: 101, High: 106, Low: 100.8, Close: 105},
+		{OpenTime: t0.Add(7 * time.Hour), CloseTime: t0.Add(8 * time.Hour), Open: 105, High: 105.5, Low: 104, Close: 104},
+	}
+	got := SimulateBacktestTradeOpts([]OHLC{
+		{OpenTime: t0, CloseTime: t0.Add(4 * time.Hour), Open: 100, High: 101, Low: 99, Close: 100},
+		parent,
+	}, 0, BacktestTradeSideLong, SwingLevels{Entry: 100, StopLoss: 97, TakeProfit: 105, Leverage: 1}, BacktestTouchOpts{
+		Interval: Interval4h,
+		Finer:    func(OHLC, CandleInterval) []OHLC { return finer },
+	})
+	if got == nil || got.Outcome != BacktestTradeOutcomeTP {
+		t.Fatalf("%+v", got)
+	}
+	if got.HitAt == nil || !got.HitAt.Equal(t0.Add(6*time.Hour)) {
+		t.Fatalf("hit time must be the 1h print, not 4h open: %+v", got.HitAt)
+	}
+}
+
+func TestTradeOpenAt(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	open := &BacktestTrade{Outcome: BacktestTradeOutcomeOpen}
+	if !TradeOpenAt(open, t0) {
+		t.Fatal("no hit stays open")
+	}
+	hit := t0.Add(8 * time.Hour)
+	closed := &BacktestTrade{Outcome: BacktestTradeOutcomeTP, HitAt: &hit}
+	if TradeOpenAt(closed, t0.Add(8*time.Hour)) {
+		t.Fatal("closed at entry instant is free")
+	}
+	if !TradeOpenAt(closed, t0.Add(4*time.Hour)) {
+		t.Fatal("still open before hit")
+	}
+}
+
 func TestSuggestedSwingLeverage(t *testing.T) {
 	t.Parallel()
 	if SuggestedSwingLeverage(2.5) != 4 {

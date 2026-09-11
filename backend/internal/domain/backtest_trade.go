@@ -494,38 +494,57 @@ func OHLCInside(bars []OHLC, parent OHLC, parentIV CandleInterval) []OHLC {
 
 func resolveFirstTouch(bar OHLC, side string, sl, tp float64, iv CandleInterval, finer FineBarLookup, depth int) (hit string, price float64, at time.Time) {
 	hit, px, both := inspectBarTouch(bar, side, sl, tp)
-	if !both {
-		return hit, px, bar.OpenTime
+	if hit == "" && !both {
+		return "", 0, time.Time{}
 	}
-	if finer == nil || depth >= backtestFinerMaxDepth {
-		return BacktestTradeOutcomeSL, sl, bar.OpenTime
-	}
-	next, ok := FinerBacktestInterval(iv)
-	if !ok {
-		if span := barSpan(bar, iv); span > 0 {
-			next, ok = FinerBacktestIntervalForDuration(span)
+	if finer != nil && depth < backtestFinerMaxDepth {
+		next, ok := FinerBacktestInterval(iv)
+		if !ok {
+			if span := barSpan(bar, iv); span > 0 {
+				next, ok = FinerBacktestIntervalForDuration(span)
+			}
+		}
+		if ok {
+			parent := bar
+			if parent.CloseTime.IsZero() || !parent.CloseTime.After(parent.OpenTime) {
+				if _, end := ParentBarWindow(bar, iv); end.After(bar.OpenTime) {
+					parent.CloseTime = end
+				}
+			}
+			sub := OHLCInside(finer(parent, next), parent, iv)
+			start, _ := ParentBarWindow(parent, iv)
+			canWalk := finerCoversParent(sub, parent, iv, next)
+			if !canWalk && len(sub) > 0 && !start.IsZero() && sub[0].OpenTime.UTC().Equal(start) {
+				canWalk = true
+			}
+			if canWalk {
+				for _, sb := range sub {
+					h, p, t := resolveFirstTouch(sb, side, sl, tp, next, finer, depth+1)
+					if h != "" {
+						return h, p, t
+					}
+				}
+			}
 		}
 	}
-	if !ok {
+	if both {
 		return BacktestTradeOutcomeSL, sl, bar.OpenTime
 	}
-	parent := bar
-	if parent.CloseTime.IsZero() || !parent.CloseTime.After(parent.OpenTime) {
-		if _, end := ParentBarWindow(bar, iv); end.After(bar.OpenTime) {
-			parent.CloseTime = end
-		}
+	return hit, px, bar.OpenTime
+}
+
+// TradeOpenAt is true when tr has not printed TP/SL before at.
+func TradeOpenAt(tr *BacktestTrade, at time.Time) bool {
+	if tr == nil {
+		return false
 	}
-	sub := OHLCInside(finer(parent, next), parent, iv)
-	if !finerCoversParent(sub, parent, iv, next) {
-		return BacktestTradeOutcomeSL, sl, bar.OpenTime
+	if tr.HitAt == nil || tr.HitAt.IsZero() {
+		return true
 	}
-	for _, sb := range sub {
-		h, p, t := resolveFirstTouch(sb, side, sl, tp, next, finer, depth+1)
-		if h != "" {
-			return h, p, t
-		}
+	if at.IsZero() {
+		return true
 	}
-	return BacktestTradeOutcomeSL, sl, bar.OpenTime
+	return tr.HitAt.UTC().After(at.UTC())
 }
 
 func barSpan(bar OHLC, iv CandleInterval) time.Duration {

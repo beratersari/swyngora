@@ -161,3 +161,30 @@ func TestSimulateSharedBacktestBook_SameTimePrefersHigherScore(t *testing.T) {
 		t.Fatalf("higher score must take the slot (ETH +2%%): %+v", eth)
 	}
 }
+
+func TestSimulateSharedBacktestBook_OneOpenPerCoin(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	got := SimulateSharedBacktestBook(10000, 1, 10, []BacktestBookFill{
+		{Exchange: ExchangeBinance, Symbol: "ETHUSDT", Side: BacktestTradeSideLong, EntryAt: t0,
+			Entry: 100, StopLoss: 99, ExitPrice: 100, RangeExitPrice: 100, Leverage: 10, Outcome: BacktestTradeOutcomeOpen},
+		{Exchange: ExchangeBinance, Symbol: "ETHUSDT", Side: BacktestTradeSideLong, EntryAt: t0.Add(time.Hour),
+			Entry: 100, StopLoss: 99, ExitPrice: 102, RangeExitPrice: 102, Leverage: 10, Outcome: BacktestTradeOutcomeOpen},
+		{Exchange: ExchangeBinance, Symbol: "SOLUSDT", Side: BacktestTradeSideLong, EntryAt: t0.Add(time.Hour),
+			Entry: 100, StopLoss: 99, ExitPrice: 100, RangeExitPrice: 100, Leverage: 10, Outcome: BacktestTradeOutcomeOpen},
+	}, t0.Add(24*time.Hour))
+	if got.TradesTaken != 2 || got.SkippedSameCoin != 1 {
+		t.Fatalf("one ETH open + SOL: %+v", got)
+	}
+
+	freed := SimulateSharedBacktestBook(10000, 1, 10, []BacktestBookFill{
+		{Exchange: ExchangeBinance, Symbol: "ETHUSDT", Side: BacktestTradeSideLong, EntryAt: t0, ExitAt: t0.Add(2 * time.Hour),
+			Entry: 100, StopLoss: 99, ExitPrice: 100, RangeExitPrice: 100, Leverage: 10,
+			HasExit: true, ClosedInRange: true, Outcome: BacktestTradeOutcomeTP},
+		{Exchange: ExchangeBinance, Symbol: "ETHUSDT", Side: BacktestTradeSideLong, EntryAt: t0.Add(3 * time.Hour),
+			Entry: 100, StopLoss: 99, ExitPrice: 100, RangeExitPrice: 100, Leverage: 10, Outcome: BacktestTradeOutcomeOpen},
+	}, t0.Add(24*time.Hour))
+	if freed.TradesTaken != 2 || freed.SkippedSameCoin != 0 {
+		t.Fatalf("after close next ETH can open: %+v", freed)
+	}
+}

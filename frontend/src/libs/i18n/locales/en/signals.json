@@ -114,6 +114,7 @@
     "riskPct": "Risk %",
     "maxOpenRisk": "Max open risk %",
     "bookSkippedRisk": "no risk room",
+    "bookSkippedCoin": "already in a trade",
     "book": "Shared balance",
     "bookStart": "Start",
     "bookEnd": "End",

@@ -52,6 +52,7 @@ type BacktestBook struct {
 	TradesTaken       int     `json:"tradesTaken"`
 	TradesSkipped     int     `json:"tradesSkipped"`
 	SkippedNoRisk     int     `json:"skippedNoRisk,omitempty"`
+	SkippedSameCoin   int     `json:"skippedSameCoin,omitempty"`
 	ClosedInRange     int     `json:"closedInRange"`
 	ClosedAfterRange  int     `json:"closedAfterRange"`
 	OpenAtRangeEnd    int     `json:"openAtRangeEnd"`
@@ -66,6 +67,7 @@ type BacktestRunState struct {
 
 // BacktestBookFill is one first-touch trade on the shared pot.
 type BacktestBookFill struct {
+	Exchange       Exchange
 	Symbol         string
 	Side           string
 	EntryAt        time.Time
@@ -180,8 +182,10 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 		notional float64
 		risk     float64
 		i        int
+		key      string
 	}
 	open := map[int]pos{}
+	openCoin := map[string]int{}
 	snapshotted := end.IsZero()
 	equity := func() float64 {
 		e := cash
@@ -225,6 +229,12 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 				continue
 			}
 			delete(open, e.i)
+			if p.key != "" {
+				openCoin[p.key]--
+				if openCoin[p.key] <= 0 {
+					delete(openCoin, p.key)
+				}
+			}
 			cash += p.margin + notionalPnL(fills[e.i], p.notional, false)
 			if fills[e.i].ClosedInRange {
 				out.ClosedInRange++
@@ -235,6 +245,12 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 			continue
 		}
 		f := fills[e.i]
+		coin := marketKey(f.Exchange, f.Symbol)
+		if coin != "|" && openCoin[coin] > 0 {
+			out.TradesSkipped++
+			out.SkippedSameCoin++
+			continue
+		}
 		stopF := stopFrac(f.Entry, f.StopLoss)
 		if stopF <= 0 {
 			out.TradesSkipped++
@@ -262,7 +278,10 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 			continue
 		}
 		cash -= margin
-		open[e.i] = pos{margin: margin, notional: notional, risk: newRisk, i: e.i}
+		open[e.i] = pos{margin: margin, notional: notional, risk: newRisk, i: e.i, key: coin}
+		if coin != "|" {
+			openCoin[coin]++
+		}
 		out.TradesTaken++
 		mark()
 	}
@@ -360,7 +379,7 @@ func BookFillsFromSignals(sigs []ScannerBacktestSignal, rangeEnd time.Time) []Ba
 			score = s.Metrics["score"]
 		}
 		out = append(out, BacktestBookFill{
-			Symbol: s.Symbol, Side: tr.Side, EntryAt: entryAt, ExitAt: exit,
+			Exchange: s.Exchange, Symbol: s.Symbol, Side: tr.Side, EntryAt: entryAt, ExitAt: exit,
 			Entry: tr.Entry, StopLoss: tr.StopLoss, ExitPrice: tr.ExitPrice,
 			RangeExitPrice: rangePx, Leverage: tr.Leverage,
 			ClosedInRange: closedIn, Outcome: tr.Outcome, HasExit: hasExit, Score: score,

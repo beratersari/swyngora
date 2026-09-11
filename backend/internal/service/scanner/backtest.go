@@ -487,6 +487,7 @@ func (s *Service) executeBacktestJob(ctx context.Context, job domain.ScannerBack
 	signalCount := 0
 	ohlc := domain.OHLCFromCandles(candles)
 	touch := s.backtestTouchOpts(ctx, job)
+	var openTrade *domain.BacktestTrade
 	for i := firstIdx; i <= lastIdx; i++ {
 		if ctx.Err() != nil {
 			_ = s.store.FinishBacktest(ctx, id, domain.BacktestCanceled, signalCount, "context canceled", time.Now().UTC())
@@ -510,7 +511,16 @@ func (s *Service) executeBacktestJob(ctx context.Context, job domain.ScannerBack
 				Return20d: domain.ForwardReturnPct(candles, i, 20),
 			}
 			if i < len(ohlc) && ohlc[i].Close > 0 {
-				sig.Trade = domain.PlanBacktestTradeOpts(ohlc, i, domain.ScannerRuleTradeSide(*rule), touch)
+				entryAt := ohlc[i].OpenTime.UTC()
+				if i+1 < len(ohlc) && !ohlc[i+1].OpenTime.IsZero() {
+					entryAt = ohlc[i+1].OpenTime.UTC()
+				}
+				if !domain.TradeOpenAt(openTrade, entryAt) {
+					sig.Trade = domain.PlanBacktestTradeOpts(ohlc, i, domain.ScannerRuleTradeSide(*rule), touch)
+					if sig.Trade != nil {
+						openTrade = sig.Trade
+					}
+				}
 			}
 			if err := s.store.InsertBacktestSignal(ctx, sig); err == nil {
 				signalCount++

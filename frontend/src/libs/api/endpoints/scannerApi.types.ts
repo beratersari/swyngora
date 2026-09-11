@@ -244,6 +244,7 @@ export type ScannerBacktestBook = {
   tradesTaken?: number;
   tradesSkipped?: number;
   skippedNoRisk?: number;
+  skippedSameCoin?: number;
   closedInRange?: number;
   closedAfterRange?: number;
   openAtRangeEnd?: number;

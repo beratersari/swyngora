@@ -114,6 +114,7 @@
     "riskPct": "Risk %",
     "maxOpenRisk": "Açık risk tavanı %",
     "bookSkippedRisk": "risk yeri yok",
+    "bookSkippedCoin": "zaten işlemde",
     "book": "Ortak bakiye",
     "bookStart": "Başlangıç",
     "bookEnd": "Bitiş",
