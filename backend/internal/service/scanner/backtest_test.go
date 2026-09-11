@@ -305,6 +305,97 @@ func TestBacktest_FinerLookupResolvesSameBarTP(t *testing.T) {
 	}
 }
 
+func TestBacktest_WatchlistCustomProfile(t *testing.T) {
+	st, err := scannerstore.Open(filepath.Join(t.TempDir(), "s.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	primOHLC := synthTrendService(220, 50, 0.8)
+	dailyOHLC := synthTrendService(220, 40, 1.5)
+	primary := ohlcToCandles(primOHLC)
+	daily := ohlcToCandles(dailyOHLC)
+	watch := &fakeWatch{wl: &domain.Watchlist{
+		ClientID: "bt-wl",
+		Items: []domain.WatchlistItem{
+			{Exchange: domain.ExchangeBinance, Symbol: "ETHUSDT"},
+			{Exchange: domain.ExchangeBinance, Symbol: "SOLUSDT"},
+		},
+	}}
+	svc := New(st, &fakeCandles{byKey: map[string][]domain.Candle{
+		"binance|ETHUSDT|4h": primary,
+		"binance|ETHUSDT|1d": daily,
+		"binance|SOLUSDT|4h": primary,
+		"binance|SOLUSDT|1d": daily,
+		"binance|BTCUSDT|4h": daily,
+		"binance|BTCUSDT|1d": daily,
+	}}, watch)
+	ctx := context.Background()
+	start := primary[80].OpenTime
+	end := primary[len(primary)-1].OpenTime
+
+	_, err = svc.StartBacktest(ctx, StartBacktestInput{
+		ClientID: "empty-wl", ProfileID: domain.CustomBacktestBuiltInID,
+		Scope: domain.BacktestScopeWatchlist, RangeStart: start, RangeEnd: end,
+	})
+	if err == nil {
+		t.Fatal("empty watchlist must fail")
+	}
+
+	job, err := svc.StartBacktest(ctx, StartBacktestInput{
+		ClientID: "bt-wl", ProfileID: domain.CustomBacktestBuiltInID,
+		Scope: domain.BacktestScopeWatchlist, RangeStart: start, RangeEnd: end,
+	})
+	if err != nil || !domain.IsWatchlistBacktest(*job) {
+		t.Fatalf("%+v %v", job, err)
+	}
+	if len(domain.CustomBacktestMarkets(*job)) != 2 {
+		t.Fatalf("snapshot %+v", domain.CustomBacktestMarkets(*job))
+	}
+	dup, err := svc.StartBacktest(ctx, StartBacktestInput{
+		ClientID: "bt-wl", ProfileID: domain.CustomBacktestBuiltInID,
+		Symbol: "watchlist", RangeStart: start, RangeEnd: end,
+	})
+	if err != nil || dup.ID != job.ID {
+		t.Fatalf("dedupe %v vs %v err=%v", job.ID, dup.ID, err)
+	}
+
+	(&BacktestWorker{Scanner: svc, Interval: time.Hour}).RunOnce(ctx)
+	got, err := svc.GetBacktest(ctx, "bt-wl", job.ID)
+	if err != nil || got.Status != domain.BacktestCompleted {
+		t.Fatalf("status %+v err=%v", got, err)
+	}
+	want, err := domain.ReplayCustomSignalBacktest(domain.CustomBacktestInput{
+		Exchange: domain.ExchangeBinance, Symbol: "ETHUSDT",
+		Primary: primOHLC, Higher: dailyOHLC, BTCPrimary: dailyOHLC, BTCHigher: dailyOHLC,
+		RangeStart: start, RangeEnd: end, Weights: domain.DefaultCustomSignalWeights(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SignalCount != len(want.Hits)*2 {
+		t.Fatalf("signals got %d want %d", got.SignalCount, len(want.Hits)*2)
+	}
+	sigs, _, err := svc.ListBacktestSignals(ctx, "bt-wl", job.ID, 500, 0)
+	if err != nil || len(sigs) == 0 {
+		t.Fatalf("sigs %d err=%v", len(sigs), err)
+	}
+	seen := map[string]int{}
+	for _, s := range sigs {
+		if s.Symbol == "" {
+			t.Fatalf("signal missing symbol %+v", s)
+		}
+		seen[s.Symbol]++
+	}
+	if seen["ETHUSDT"] == 0 || seen["SOLUSDT"] == 0 {
+		t.Fatalf("coins %+v", seen)
+	}
+	if got.Performance == nil || len(got.Performance.Markets) != 2 {
+		t.Fatalf("markets %+v", got.Performance)
+	}
+}
+
 func TestBacktest_CustomProfileMissing(t *testing.T) {
 	st, err := scannerstore.Open(filepath.Join(t.TempDir(), "s.db"))
 	if err != nil {

@@ -51,6 +51,13 @@ export type ScannerBacktestStatus =
   | 'canceled'
   | 'failed';
 
+export type ScannerBacktestScope = 'symbol' | 'watchlist';
+
+export type ScannerBacktestMarket = {
+  exchange: string;
+  symbol: string;
+};
+
 export type ScannerBacktest = {
   id: string;
   clientId?: string;
@@ -59,6 +66,8 @@ export type ScannerBacktest = {
   sourceName?: string;
   exchange: string;
   symbol: string;
+  scope?: ScannerBacktestScope;
+  markets?: ScannerBacktestMarket[];
   interval: string;
   rangeStart: string;
   rangeEnd: string;
@@ -105,6 +114,8 @@ export type ScannerBacktestTrade = {
 export type ScannerBacktestSignal = {
   id: string;
   backtestId: string;
+  exchange?: string;
+  symbol?: string;
   signalAt: string;
   closePrice: number;
   summary: string;
@@ -139,7 +150,8 @@ export type UpdateScannerRuleArg = CreateScannerRuleArg & {
 export type StartScannerBacktestArg = {
   ruleId?: string;
   profileId?: string;
-  symbol: string;
+  symbol?: string;
+  scope?: ScannerBacktestScope;
   exchange?: 'binance' | 'coinbase' | 'bybit' | 'nasdaq' | 'bist';
   rangeStart: string;
   rangeEnd: string;
@@ -202,12 +214,23 @@ export type ScannerBacktestTradeStats = {
   median?: number;
 };
 
+export type ScannerBacktestMarketPerformance = {
+  exchange: string;
+  symbol: string;
+  signalCount: number;
+  return1d: ScannerBacktestHorizonStats;
+  return5d: ScannerBacktestHorizonStats;
+  return20d: ScannerBacktestHorizonStats;
+  trades?: ScannerBacktestTradeStats;
+};
+
 export type ScannerBacktestPerformance = {
   signalCount: number;
   return1d: ScannerBacktestHorizonStats;
   return5d: ScannerBacktestHorizonStats;
   return20d: ScannerBacktestHorizonStats;
   trades?: ScannerBacktestTradeStats;
+  markets?: ScannerBacktestMarketPerformance[];
 };
 
 export type ScannerBacktestSignalListResponse = {

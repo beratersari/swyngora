@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatLeverage, hasBacktestHitDetails, tradePnlTone } from './helpers';
+import { formatLeverage, hasBacktestHitDetails, isWatchlistBacktest, tradePnlTone, watchlistMarketCount } from './helpers';
 
 describe('SignalsBacktestPanel helpers', () => {
   it('expands rows with trade or factors', () => {
@@ -38,5 +38,44 @@ describe('SignalsBacktestPanel helpers', () => {
     );
     expect(formatLeverage(4)).toBe('4x');
     expect(formatLeverage(0)).toBe('—');
+  });
+
+  it('detects watchlist jobs', () => {
+    expect(
+      isWatchlistBacktest({
+        id: '1',
+        ruleId: 'p',
+        exchange: 'watchlist',
+        symbol: 'watchlist',
+        scope: 'watchlist',
+        interval: '4h',
+        rangeStart: '',
+        rangeEnd: '',
+        status: 'completed',
+        progressPct: 100,
+        signalCount: 2,
+        markets: [
+          { exchange: 'binance', symbol: 'ETHUSDT' },
+          { exchange: 'binance', symbol: 'SOLUSDT' },
+        ],
+      }),
+    ).toBe(true);
+    expect(watchlistMarketCount({
+      id: '1',
+      ruleId: 'p',
+      exchange: 'watchlist',
+      symbol: 'watchlist',
+      scope: 'watchlist',
+      interval: '4h',
+      rangeStart: '',
+      rangeEnd: '',
+      status: 'completed',
+      progressPct: 100,
+      signalCount: 2,
+      markets: [
+        { exchange: 'binance', symbol: 'ETHUSDT' },
+        { exchange: 'binance', symbol: 'SOLUSDT' },
+      ],
+    })).toBe(2);
   });
 });

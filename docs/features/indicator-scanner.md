@@ -16,7 +16,7 @@ Route **`/signals`** (nav: Signals) is the swing-signal desk:
 | Custom | User-picked swing-engine factors + optional liquidation-hunt up score, with live weight preview and saved mixes (`GET /api/v1/swing/custom/scan`). Existing swing cards stay on Setups. |
 | Hits | Raw scanner match history with the exact trigger bar time (UTC, seconds) and a jump to the coin chart. |
 | Rules | Create, edit, enable/disable, or delete rules. Pick RSI, EMA crossover, and/or volume, then **all must match** or **one is enough**. One-click **4h swing stack** still adds the three expert long-side filters as separate rules. |
-| Lab | Historical backtest on one symbol with 1/5/20d forward returns and first-touch TP/SL trades. |
+| Lab | Historical backtest on one symbol, or a custom mix on the whole watchlist, with 1/5/20d forward returns and first-touch TP/SL trades. |
 
 Coin detail overlays scanner hits as chart markers (toggle next to pump markers). Scanner still evaluates **watchlist symbols only**.
 
@@ -107,15 +107,15 @@ Re-running the scanner on the same bar does not create another row.
 
 ## Historical backtests
 
-Run a saved **scanner rule** or a **custom signal profile** over a symbol and date range to see past signals and what price did afterward.
+Run a saved **scanner rule** or a **custom signal profile** over a date range to see past signals and what price did afterward. One coin, or a custom mix on every watchlist coin.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/v1/scanner/backtests` | Start job (`ruleId` **or** `profileId`, `symbol`, `rangeStart`, `rangeEnd`). `profileId=built_in` is the built-in swing mix. |
+| `POST` | `/api/v1/scanner/backtests` | Start job (`ruleId` **or** `profileId`, `rangeStart`, `rangeEnd`). One coin: send `symbol`. Custom mix on the whole watchlist: `profileId` + `scope=watchlist` (or `symbol=watchlist`). `profileId=built_in` is the built-in swing mix. |
 | `GET` | `/api/v1/scanner/backtests` | List jobs |
 | `GET` | `/api/v1/scanner/backtests/{id}` | Progress (`progressPct`, `signalCount`, `status`) |
 | `POST` | `/api/v1/scanner/backtests/{id}/cancel` | Cancel pending/running job |
-| `GET` | `/api/v1/scanner/backtests/{id}/signals` | Match dates + `return1d` / `return5d` / `return20d` (%) + `trade` (side, leverage, entry, TP, SL, first-touch outcome, leveraged PnL) + `performance` (horizon stats and trade TP/SL summary) |
+| `GET` | `/api/v1/scanner/backtests/{id}/signals` | Match dates + `exchange`/`symbol` + `return1d` / `return5d` / `return20d` (%) + `trade` + `performance` (horizon stats, trade TP/SL, per-coin `markets` on watchlist jobs) |
 
 ### Behavior
 - Job runs in the **background** (`pending` → `running` → `completed` | `canceled` | `failed`).
@@ -129,6 +129,7 @@ Run a saved **scanner rule** or a **custom signal profile** over a symbol and da
 - `performance.trades` counts TP hits, SL hits, and still-open trades, plus win rate (TP / closed) and average / median leveraged PnL of closed trades.
 - Max range: 400 days. Progress fields: `processedBars`, `totalBars`, `progressPct`.
 - **Custom profile jobs** (`kind=custom_profile`) replay **closed 4h** swing factors with the snapshotted weights. The mix score still uses the factors that have data. If any **selected** factor has no historical data at that bar (hunt, tape, or not enough candles), that timestamp is **skipped** — no signal. The job reports `skippedBars` and `missingFactors`. A signal fires only on complete bars when the mix first crosses **62**. Each hit lists the selected factors at that bar (`factors`: id, score, weight, status). Jobs list `sourceName` for the mix.
+- **Watchlist custom jobs** (`scope=watchlist`) snapshot the client's watchlist when queued and run the same mix on every pair (each item's own exchange). Signals include `exchange` and `symbol`. `performance.markets` is one row per coin (signal count, forward returns, trade TP/SL). An empty watchlist is rejected. A coin with no candles is skipped; if every coin fails the job fails. Progress is by coin. MCP `start_backtest` accepts `scope=watchlist` or `symbol=watchlist`.
 
 ## Tests
 

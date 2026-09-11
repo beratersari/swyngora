@@ -24,10 +24,21 @@ type customProfileSnapshot struct {
 	Name      string             `json:"name"`
 	Weights   map[string]float64 `json:"weights"`
 	Threshold float64            `json:"threshold"`
+	Scope     string             `json:"scope,omitempty"`
+	Markets   []BacktestMarket   `json:"markets,omitempty"`
 }
 
 // EncodeCustomProfileSnapshot freezes mix weights for a backtest job.
 func EncodeCustomProfileSnapshot(name string, w CustomSignalWeights) (string, error) {
+	return encodeCustomProfileSnapshot(name, w, BacktestScopeSymbol, nil)
+}
+
+// EncodeWatchlistCustomProfileSnapshot freezes mix weights plus the watchlist coins.
+func EncodeWatchlistCustomProfileSnapshot(name string, w CustomSignalWeights, markets []BacktestMarket) (string, error) {
+	return encodeCustomProfileSnapshot(name, w, BacktestScopeWatchlist, markets)
+}
+
+func encodeCustomProfileSnapshot(name string, w CustomSignalWeights, scope string, markets []BacktestMarket) (string, error) {
 	pct := w.Pct
 	if pct == nil {
 		pct = map[string]float64{}
@@ -35,7 +46,7 @@ func EncodeCustomProfileSnapshot(name string, w CustomSignalWeights) (string, er
 	th := CustomBacktestThreshold
 	b, err := json.Marshal(customProfileSnapshot{
 		Kind: BacktestKindCustom, Name: strings.TrimSpace(name),
-		Weights: pct, Threshold: th,
+		Weights: pct, Threshold: th, Scope: scope, Markets: markets,
 	})
 	if err != nil {
 		return "", err
@@ -43,18 +54,26 @@ func EncodeCustomProfileSnapshot(name string, w CustomSignalWeights) (string, er
 	return string(b), nil
 }
 
-// DecodeCustomProfileSnapshot restores a queued custom mix.
-func DecodeCustomProfileSnapshot(raw string) (name string, w CustomSignalWeights, threshold float64, err error) {
+func parseCustomProfileSnapshot(raw string) (customProfileSnapshot, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
-		return "", CustomSignalWeights{}, 0, fmt.Errorf("%w: missing custom profile snapshot", ErrInvalidArgument)
+		return customProfileSnapshot{}, fmt.Errorf("%w: missing custom profile snapshot", ErrInvalidArgument)
 	}
 	var snap customProfileSnapshot
 	if err := json.Unmarshal([]byte(raw), &snap); err != nil {
-		return "", CustomSignalWeights{}, 0, fmt.Errorf("%w: invalid custom profile snapshot", ErrInvalidArgument)
+		return customProfileSnapshot{}, fmt.Errorf("%w: invalid custom profile snapshot", ErrInvalidArgument)
 	}
 	if snap.Kind != BacktestKindCustom {
-		return "", CustomSignalWeights{}, 0, fmt.Errorf("%w: not a custom profile snapshot", ErrInvalidArgument)
+		return customProfileSnapshot{}, fmt.Errorf("%w: not a custom profile snapshot", ErrInvalidArgument)
+	}
+	return snap, nil
+}
+
+// DecodeCustomProfileSnapshot restores a queued custom mix.
+func DecodeCustomProfileSnapshot(raw string) (name string, w CustomSignalWeights, threshold float64, err error) {
+	snap, err := parseCustomProfileSnapshot(raw)
+	if err != nil {
+		return "", CustomSignalWeights{}, 0, err
 	}
 	parsed, err := ParseCustomSignalWeightMap(snap.Weights)
 	if err != nil {
@@ -65,6 +84,17 @@ func DecodeCustomProfileSnapshot(raw string) (name string, w CustomSignalWeights
 		th = CustomBacktestThreshold
 	}
 	return snap.Name, parsed, th, nil
+}
+
+// CustomBacktestMarkets is the coin list for a job (watchlist snapshot or the single pair).
+func CustomBacktestMarkets(job ScannerBacktest) []BacktestMarket {
+	if snap, err := parseCustomProfileSnapshot(job.RuleJSON); err == nil && len(snap.Markets) > 0 {
+		return append([]BacktestMarket(nil), snap.Markets...)
+	}
+	if job.Symbol != "" && !strings.EqualFold(job.Symbol, BacktestWatchlistSymbol) {
+		return []BacktestMarket{{Exchange: job.Exchange, Symbol: job.Symbol}}
+	}
+	return nil
 }
 
 // IsCustomProfileBacktest reports whether the job is a custom-mix replay.

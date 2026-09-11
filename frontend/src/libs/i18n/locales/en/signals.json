@@ -105,7 +105,11 @@
   },
   "lab": {
     "title": "Historical lab",
-    "hint": "Replay a scanner rule or a custom signal mix on one symbol. The mix score still uses the factors that have data. If a selected factor has no history at that bar, that timestamp is skipped. A mix signal fires when the score first crosses 62 on a complete bar. Each hit uses the signal side, leverage, entry, take-profit, and stop. Later candles decide which of TP or SL is hit first. Forward returns are calendar-day close-to-close when data exists.",
+    "hint": "Replay a scanner rule or a custom signal mix on one symbol, or run the same mix on every coin in your watchlist. The mix score still uses the factors that have data. If a selected factor has no history at that bar, that timestamp is skipped. A mix signal fires when the score first crosses 62 on a complete bar. Each hit uses the signal side, leverage, entry, take-profit, and stop. Later candles decide which of TP or SL is hit first. Forward returns are calendar-day close-to-close when data exists.",
+    "universe": "Markets",
+    "oneCoin": "One coin",
+    "watchlist": "Watchlist",
+    "watchlistCoins": "Watchlist ({{count}})",
     "source": "Source",
     "rule": "Rule",
     "profile": "Custom mix",

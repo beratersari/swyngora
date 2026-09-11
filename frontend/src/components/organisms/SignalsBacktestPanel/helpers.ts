@@ -1,4 +1,4 @@
-import type { ScannerBacktestSignal, ScannerBacktestTrade } from '@/libs/api';
+import type { ScannerBacktest, ScannerBacktestSignal, ScannerBacktestTrade } from '@/libs/api';
 
 export function hasBacktestHitDetails(row: ScannerBacktestSignal): boolean {
   return (row.factors?.length ?? 0) > 0 || row.trade != null;
@@ -15,4 +15,13 @@ export function tradePnlTone(trade: ScannerBacktestTrade | undefined): 'success'
 export function formatLeverage(lev: number | undefined): string {
   if (lev == null || !Number.isFinite(lev) || lev <= 0) return '—';
   return `${lev}x`;
+}
+
+export function isWatchlistBacktest(job: ScannerBacktest | null | undefined): boolean {
+  if (job == null) return false;
+  return job.scope === 'watchlist' || job.symbol === 'watchlist';
+}
+
+export function watchlistMarketCount(job: ScannerBacktest | null | undefined): number {
+  return job?.markets?.length ?? 0;
 }

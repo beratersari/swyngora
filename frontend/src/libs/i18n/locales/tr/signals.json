@@ -105,7 +105,11 @@
   },
   "lab": {
     "title": "Tarihsel lab",
-    "hint": "Bir tarayıcı kuralını veya özel sinyal karışımını tek sembolde yeniden çalıştırın. Skor verisi olan faktörlerle hesaplanır. Seçili bir faktörde o barda tarihsel veri yoksa o zaman damgası atlanır. Karışım skoru tam bir barda ilk kez 62'yi geçince sinyal oluşur. Her sinyal yön, kaldıraç, giriş, kâr al ve stop kullanır. Sonraki mumlar TP veya SL'den hangisine önce değdiğini belirler. İleri getiriler, veri varsa takvim günü kapanıştandır.",
+    "hint": "Bir tarayıcı kuralını veya özel sinyal karışımını tek sembolde, ya da aynı karışımı izleme listesindeki tüm coinlerde yeniden çalıştırın. Skor verisi olan faktörlerle hesaplanır. Seçili bir faktörde o barda tarihsel veri yoksa o zaman damgası atlanır. Karışım skoru tam bir barda ilk kez 62'yi geçince sinyal oluşur. Her sinyal yön, kaldıraç, giriş, kâr al ve stop kullanır. Sonraki mumlar TP veya SL'den hangisine önce değdiğini belirler. İleri getiriler, veri varsa takvim günü kapanıştandır.",
+    "universe": "Piyasalar",
+    "oneCoin": "Tek coin",
+    "watchlist": "İzleme listesi",
+    "watchlistCoins": "İzleme listesi ({{count}})",
     "source": "Kaynak",
     "rule": "Kural",
     "profile": "Özel karışım",

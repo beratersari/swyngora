@@ -97,4 +97,97 @@ describe('SignalsBacktestPanel', () => {
     expect(screen.getByText(/take profit first|önce kâr al/i)).toBeInTheDocument();
     expect(screen.getByText(/trade results|işlem sonuçları/i)).toBeInTheDocument();
   });
+
+  it('labels a watchlist job and shows per-coin signals', () => {
+    renderWithProviders(
+      <SignalsBacktestPanel
+        rules={[]}
+        profiles={[{ id: 'p1', name: 'Desk mix', weights: {}, isDefault: true }]}
+        jobs={[
+          {
+            id: 'job-wl',
+            ruleId: 'p1',
+            kind: 'custom_profile',
+            sourceName: 'Desk mix',
+            exchange: 'watchlist',
+            symbol: 'watchlist',
+            scope: 'watchlist',
+            markets: [
+              { exchange: 'binance', symbol: 'ETHUSDT' },
+              { exchange: 'binance', symbol: 'SOLUSDT' },
+            ],
+            interval: '4h',
+            rangeStart: '2024-01-01T00:00:00Z',
+            rangeEnd: '2024-04-01T00:00:00Z',
+            status: 'completed',
+            progressPct: 100,
+            signalCount: 2,
+          },
+        ]}
+        signals={[
+          {
+            id: 's1',
+            backtestId: 'job-wl',
+            exchange: 'binance',
+            symbol: 'ETHUSDT',
+            signalAt: '2024-02-01T00:00:00Z',
+            closePrice: 100,
+            summary: 'ETH hit',
+          },
+        ]}
+        performance={{
+          signalCount: 2,
+          return1d: { days: 1, sampleCount: 2, average: 1, median: 1, winRate: 50 },
+          return5d: { days: 5, sampleCount: 0 },
+          return20d: { days: 20, sampleCount: 0 },
+          trades: { sampleCount: 0, tpHits: 0, slHits: 0, openCount: 0, longCount: 0, shortCount: 0 },
+          markets: [
+            {
+              exchange: 'binance',
+              symbol: 'ETHUSDT',
+              signalCount: 1,
+              return1d: { days: 1, sampleCount: 1, average: 2, median: 2, winRate: 100 },
+              return5d: { days: 5, sampleCount: 0 },
+              return20d: { days: 20, sampleCount: 0 },
+              trades: { sampleCount: 1, tpHits: 1, slHits: 0, openCount: 0, longCount: 1, shortCount: 0, winRate: 100, average: 8, median: 8 },
+            },
+            {
+              exchange: 'binance',
+              symbol: 'SOLUSDT',
+              signalCount: 1,
+              return1d: { days: 1, sampleCount: 1, average: 0, median: 0, winRate: 0 },
+              return5d: { days: 5, sampleCount: 0 },
+              return20d: { days: 20, sampleCount: 0 },
+              trades: { sampleCount: 1, tpHits: 0, slHits: 1, openCount: 0, longCount: 1, shortCount: 0, winRate: 0, average: -4, median: -4 },
+            },
+          ],
+        }}
+        rangeOptions={[{ value: '90d', label: '90d' }]}
+        selectedId="job-wl"
+        selectedJob={{
+          id: 'job-wl',
+          ruleId: 'p1',
+          kind: 'custom_profile',
+          exchange: 'watchlist',
+          symbol: 'watchlist',
+          scope: 'watchlist',
+          markets: [
+            { exchange: 'binance', symbol: 'ETHUSDT' },
+            { exchange: 'binance', symbol: 'SOLUSDT' },
+          ],
+          interval: '4h',
+          rangeStart: '2024-01-01T00:00:00Z',
+          rangeEnd: '2024-04-01T00:00:00Z',
+          status: 'completed',
+          progressPct: 100,
+          signalCount: 2,
+        }}
+        onStart={() => undefined}
+        onSelect={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
+    expect(screen.getAllByText(/watchlist \(2\)|izleme listesi \(2\)/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/ETHUSDT/i).length).toBeGreaterThan(0);
+  });
 });

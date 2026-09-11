@@ -104,6 +104,21 @@ const (
 // MaxScannerBacktestsPerClient caps stored jobs per client.
 const MaxScannerBacktestsPerClient = 50
 
+const (
+	// BacktestScopeSymbol is one pair (default).
+	BacktestScopeSymbol = "symbol"
+	// BacktestScopeWatchlist replays a custom mix on every watchlist coin.
+	BacktestScopeWatchlist = "watchlist"
+	// BacktestWatchlistSymbol is the job.Symbol sentinel for a watchlist run.
+	BacktestWatchlistSymbol = "watchlist"
+)
+
+// BacktestMarket is one exchange+symbol in a watchlist Lab job.
+type BacktestMarket struct {
+	Exchange Exchange `json:"exchange"`
+	Symbol   string   `json:"symbol"`
+}
+
 // ScannerBacktest is a background historical test of one rule or custom mix.
 type ScannerBacktest struct {
 	ID             string
@@ -132,6 +147,30 @@ type ScannerBacktest struct {
 	Performance *BacktestPerformance
 }
 
+// IsWatchlistBacktest reports a custom-mix job that covers the client's watchlist.
+func IsWatchlistBacktest(job ScannerBacktest) bool {
+	if strings.EqualFold(strings.TrimSpace(job.Symbol), BacktestWatchlistSymbol) {
+		return true
+	}
+	if snap, err := parseCustomProfileSnapshot(job.RuleJSON); err == nil && snap.Scope == BacktestScopeWatchlist {
+		return true
+	}
+	return false
+}
+
+// NormalizeBacktestScope maps API input. symbol=watchlist|all implies watchlist.
+func NormalizeBacktestScope(scope, symbol string) string {
+	s := strings.ToLower(strings.TrimSpace(scope))
+	if s == BacktestScopeWatchlist {
+		return BacktestScopeWatchlist
+	}
+	sym := strings.ToLower(strings.TrimSpace(symbol))
+	if sym == BacktestWatchlistSymbol || sym == "all" {
+		return BacktestScopeWatchlist
+	}
+	return BacktestScopeSymbol
+}
+
 // BacktestHorizonStats is one forward-return horizon across a job's signals.
 type BacktestHorizonStats struct {
 	Days        int      `json:"days"`
@@ -143,6 +182,18 @@ type BacktestHorizonStats struct {
 
 // BacktestPerformance is 1d / 5d / 20d summary stats plus first-touch trades.
 type BacktestPerformance struct {
+	SignalCount int                         `json:"signalCount"`
+	Return1d    BacktestHorizonStats        `json:"return1d"`
+	Return5d    BacktestHorizonStats        `json:"return5d"`
+	Return20d   BacktestHorizonStats        `json:"return20d"`
+	Trades      BacktestTradeStats          `json:"trades"`
+	Markets     []BacktestMarketPerformance `json:"markets,omitempty"`
+}
+
+// BacktestMarketPerformance is one coin's slice of a watchlist Lab job.
+type BacktestMarketPerformance struct {
+	Exchange    string               `json:"exchange"`
+	Symbol      string               `json:"symbol"`
 	SignalCount int                  `json:"signalCount"`
 	Return1d    BacktestHorizonStats `json:"return1d"`
 	Return5d    BacktestHorizonStats `json:"return5d"`
@@ -154,6 +205,8 @@ type BacktestPerformance struct {
 type ScannerBacktestSignal struct {
 	ID         string
 	BacktestID string
+	Exchange   Exchange
+	Symbol     string
 	SignalAt   time.Time
 	ClosePrice float64
 	Summary    string
@@ -259,7 +312,54 @@ func SummarizeBacktestReturns(sigs []ScannerBacktestSignal) BacktestPerformance 
 		Return5d:    backtestHorizonStats(5, five),
 		Return20d:   backtestHorizonStats(20, twenty),
 		Trades:      summarizeBacktestTrades(sigs),
+		Markets:     summarizeBacktestMarkets(sigs),
 	}
+}
+
+func summarizeBacktestMarkets(sigs []ScannerBacktestSignal) []BacktestMarketPerformance {
+	order := make([]string, 0)
+	groups := map[string][]ScannerBacktestSignal{}
+	for _, s := range sigs {
+		ex, sym := string(s.Exchange), strings.TrimSpace(s.Symbol)
+		if ex == "" && sym == "" {
+			continue
+		}
+		key := ex + "|" + strings.ToUpper(sym)
+		if _, ok := groups[key]; !ok {
+			order = append(order, key)
+		}
+		groups[key] = append(groups[key], s)
+	}
+	if len(order) == 0 {
+		return nil
+	}
+	out := make([]BacktestMarketPerformance, 0, len(order))
+	for _, key := range order {
+		g := groups[key]
+		one := make([]float64, 0, len(g))
+		five := make([]float64, 0, len(g))
+		twenty := make([]float64, 0, len(g))
+		for _, s := range g {
+			if s.Return1d != nil && !math.IsNaN(*s.Return1d) {
+				one = append(one, *s.Return1d)
+			}
+			if s.Return5d != nil && !math.IsNaN(*s.Return5d) {
+				five = append(five, *s.Return5d)
+			}
+			if s.Return20d != nil && !math.IsNaN(*s.Return20d) {
+				twenty = append(twenty, *s.Return20d)
+			}
+		}
+		out = append(out, BacktestMarketPerformance{
+			Exchange: string(g[0].Exchange), Symbol: g[0].Symbol,
+			SignalCount: len(g),
+			Return1d:    backtestHorizonStats(1, one),
+			Return5d:    backtestHorizonStats(5, five),
+			Return20d:   backtestHorizonStats(20, twenty),
+			Trades:      summarizeBacktestTrades(g),
+		})
+	}
+	return out
 }
 
 func backtestHorizonStats(days int, xs []float64) BacktestHorizonStats {

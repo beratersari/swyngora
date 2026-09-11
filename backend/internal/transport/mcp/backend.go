@@ -4247,9 +4247,14 @@ func backtestMap(job *domain.ScannerBacktest) map[string]any {
 			kind = domain.BacktestKindRule
 		}
 	}
+	scope := domain.BacktestScopeSymbol
+	if domain.IsWatchlistBacktest(*job) {
+		scope = domain.BacktestScopeWatchlist
+	}
 	m := map[string]any{
 		"id": job.ID, "clientId": job.ClientID, "ruleId": job.RuleID, "kind": kind,
-		"exchange": string(job.Exchange), "symbol": job.Symbol, "interval": job.Interval,
+		"exchange": string(job.Exchange), "symbol": job.Symbol, "scope": scope,
+		"interval":   job.Interval,
 		"rangeStart": job.RangeStart.UTC().Format(time.RFC3339Nano),
 		"rangeEnd":   job.RangeEnd.UTC().Format(time.RFC3339Nano),
 		"status":     string(job.Status), "progressPct": job.ProgressPct,
@@ -4270,6 +4275,9 @@ func backtestMap(job *domain.ScannerBacktest) map[string]any {
 	}
 	if job.Performance != nil {
 		m["performance"] = job.Performance
+	}
+	if mk := domain.CustomBacktestMarkets(*job); len(mk) > 0 {
+		m["markets"] = mk
 	}
 	return m
 }
@@ -4351,6 +4359,7 @@ func (b *Backend) ListBacktestSignals(ctx context.Context, clientID, id string, 
 	for _, s := range list {
 		row := map[string]any{
 			"id": s.ID, "backtestId": s.BacktestID,
+			"exchange": string(s.Exchange), "symbol": s.Symbol,
 			"signalAt":   s.SignalAt.UTC().Format(time.RFC3339Nano),
 			"closePrice": s.ClosePrice, "summary": s.Summary,
 			"return1d": s.Return1d, "return5d": s.Return5d, "return20d": s.Return20d,

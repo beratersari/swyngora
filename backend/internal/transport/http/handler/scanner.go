@@ -243,6 +243,8 @@ type scannerBacktestDTO struct {
 	SourceName     string                      `json:"sourceName,omitempty"`
 	Exchange       string                      `json:"exchange"`
 	Symbol         string                      `json:"symbol"`
+	Scope          string                      `json:"scope,omitempty"`
+	Markets        []domain.BacktestMarket     `json:"markets,omitempty"`
 	Interval       string                      `json:"interval"`
 	RangeStart     string                      `json:"rangeStart"`
 	RangeEnd       string                      `json:"rangeEnd"`
@@ -263,6 +265,8 @@ type scannerBacktestDTO struct {
 type scannerBacktestSignalDTO struct {
 	ID         string                        `json:"id"`
 	BacktestID string                        `json:"backtestId"`
+	Exchange   string                        `json:"exchange,omitempty"`
+	Symbol     string                        `json:"symbol,omitempty"`
 	SignalAt   string                        `json:"signalAt"`
 	ClosePrice float64                       `json:"closePrice"`
 	Summary    string                        `json:"summary"`
@@ -289,9 +293,14 @@ func backtestToDTO(b *domain.ScannerBacktest) scannerBacktestDTO {
 			sourceName = name
 		}
 	}
+	scope := domain.BacktestScopeSymbol
+	if domain.IsWatchlistBacktest(*b) {
+		scope = domain.BacktestScopeWatchlist
+	}
 	d := scannerBacktestDTO{
 		ID: b.ID, ClientID: b.ClientID, RuleID: b.RuleID, Kind: kind, SourceName: sourceName,
-		Exchange: string(b.Exchange), Symbol: b.Symbol,
+		Exchange: string(b.Exchange), Symbol: b.Symbol, Scope: scope,
+		Markets:  domain.CustomBacktestMarkets(*b),
 		Interval: b.Interval, RangeStart: b.RangeStart.UTC().Format(time.RFC3339Nano),
 		RangeEnd: b.RangeEnd.UTC().Format(time.RFC3339Nano), Status: string(b.Status),
 		ProgressPct: b.ProgressPct, ProcessedBars: b.ProcessedBars, TotalBars: b.TotalBars,
@@ -313,7 +322,8 @@ func backtestToDTO(b *domain.ScannerBacktest) scannerBacktestDTO {
 
 func backtestSignalToDTO(s *domain.ScannerBacktestSignal) scannerBacktestSignalDTO {
 	return scannerBacktestSignalDTO{
-		ID: s.ID, BacktestID: s.BacktestID, SignalAt: s.SignalAt.UTC().Format(time.RFC3339Nano),
+		ID: s.ID, BacktestID: s.BacktestID, Exchange: string(s.Exchange), Symbol: s.Symbol,
+		SignalAt:   s.SignalAt.UTC().Format(time.RFC3339Nano),
 		ClosePrice: s.ClosePrice, Summary: s.Summary, Return1d: s.Return1d, Return5d: s.Return5d,
 		Return20d: s.Return20d, Metrics: s.Metrics, Factors: s.Factors, Trade: s.Trade,
 	}
@@ -325,6 +335,7 @@ type startBacktestBody struct {
 	ProfileID  string `json:"profileId"`
 	Exchange   string `json:"exchange"`
 	Symbol     string `json:"symbol"`
+	Scope      string `json:"scope"`
 	RangeStart string `json:"rangeStart"`
 	RangeEnd   string `json:"rangeEnd"`
 }
@@ -352,7 +363,7 @@ func (h *ScannerHandler) StartBacktest(w http.ResponseWriter, r *http.Request) {
 	}
 	job, err := h.svc.StartBacktest(r.Context(), scanner.StartBacktestInput{
 		ClientID: clientID, RuleID: body.RuleID, ProfileID: body.ProfileID,
-		Exchange: body.Exchange, Symbol: body.Symbol,
+		Exchange: body.Exchange, Symbol: body.Symbol, Scope: body.Scope,
 		RangeStart: start, RangeEnd: end,
 	})
 	if err != nil {

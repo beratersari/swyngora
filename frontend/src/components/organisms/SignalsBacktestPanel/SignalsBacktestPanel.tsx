@@ -23,7 +23,7 @@ import {
   formatSymbolDisplay,
 } from '@/libs/utils';
 import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
-import { formatLeverage, hasBacktestHitDetails, tradePnlTone } from './helpers';
+import { formatLeverage, hasBacktestHitDetails, isWatchlistBacktest, tradePnlTone, watchlistMarketCount } from './helpers';
 import {
   FactorLine,
   FactorWhy,
@@ -216,13 +216,14 @@ export function SignalsBacktestPanel({
   const [profileId, setProfileId] = useState(profiles.find((p) => p.isDefault)?.id ?? 'built_in');
   const [exchange, setExchange] = useState<string>('binance');
   const [symbol, setSymbol] = useState('BTCUSDT');
+  const [scope, setScope] = useState<'symbol' | 'watchlist'>('symbol');
   const [rangeKey, setRangeKey] = useState(rangeOptions[1]?.value ?? rangeOptions[0]?.value ?? '90d');
 
   const ruleById = useMemo(() => new Map(rules.map((r) => [r.id, r])), [rules]);
+  const watchlistRun = source === 'profile' && scope === 'watchlist';
   const canStart =
-    Boolean(symbol.trim()) &&
     !startLoading &&
-    (source === 'rule' ? Boolean(ruleId) : Boolean(profileId));
+    (source === 'rule' ? Boolean(ruleId) && Boolean(symbol.trim()) : Boolean(profileId) && (watchlistRun || Boolean(symbol.trim())));
 
   const jobColumns: ColumnsType<ScannerBacktest> = [
     {
@@ -230,14 +231,23 @@ export function SignalsBacktestPanel({
       key: 'symbol',
       render: (_, row) => (
         <Text variant="label" mono>
-          {formatSymbolDisplay(row.symbol)}
+          {isWatchlistBacktest(row)
+            ? t('signals:lab.watchlistCoins', { count: watchlistMarketCount(row) })
+            : formatSymbolDisplay(row.symbol)}
         </Text>
       ),
     },
     {
       title: t('signals:exchange'),
       dataIndex: 'exchange',
-      render: (ex: string) => <BrandTag variant="exchange">{ex}</BrandTag>,
+      render: (ex: string, row) =>
+        isWatchlistBacktest(row) ? (
+          <Text variant="caption" color="secondary">
+            —
+          </Text>
+        ) : (
+          <BrandTag variant="exchange">{ex}</BrandTag>
+        ),
     },
     {
       title: t('signals:lab.source'),
@@ -302,7 +312,21 @@ export function SignalsBacktestPanel({
     },
   ];
 
+  const showSignalMarket = isWatchlistBacktest(selectedJob) || signals.some((s) => Boolean(s.symbol));
   const signalColumns: ColumnsType<ScannerBacktestSignal> = [
+    ...(showSignalMarket
+      ? [
+          {
+            title: t('signals:symbol'),
+            key: 'market',
+            render: (_: unknown, row: ScannerBacktestSignal) => (
+              <Text variant="label" mono>
+                {row.symbol ? formatSymbolDisplay(row.symbol) : '—'}
+              </Text>
+            ),
+          } satisfies ColumnsType<ScannerBacktestSignal>[number],
+        ]
+      : []),
     {
       title: t('signals:lab.signalAt'),
       dataIndex: 'signalAt',
@@ -443,6 +467,24 @@ export function SignalsBacktestPanel({
             />
           </Field>
         )}
+        {source === 'profile' ? (
+          <Field>
+            <Text variant="caption" color="secondary">
+              {t('signals:lab.universe')}
+            </Text>
+            <Select
+              value={scope}
+              aria-label={t('signals:lab.universe')}
+              style={{ minWidth: 160 }}
+              options={[
+                { value: 'symbol', label: t('signals:lab.oneCoin') },
+                { value: 'watchlist', label: t('signals:lab.watchlist') },
+              ]}
+              onChange={setScope}
+            />
+          </Field>
+        ) : null}
+        {watchlistRun ? null : (
         <Field>
           <Text variant="caption" color="secondary">
             {t('signals:exchange')}
@@ -466,6 +508,7 @@ export function SignalsBacktestPanel({
             aria-label={t('signals:symbol')}
           />
         </Field>
+        )}
         <Field>
           <Text variant="caption" color="secondary">
             {t('signals:lab.range')}
@@ -486,8 +529,9 @@ export function SignalsBacktestPanel({
             onStart({
               ruleId: source === 'rule' ? ruleId : undefined,
               profileId: source === 'profile' ? profileId : undefined,
-              symbol: symbol.trim().toUpperCase(),
-              exchange: exchange as MarketExchange,
+              scope: source === 'profile' ? scope : 'symbol',
+              symbol: watchlistRun ? undefined : symbol.trim().toUpperCase(),
+              exchange: watchlistRun ? undefined : (exchange as MarketExchange),
               rangeKey,
             })
           }
@@ -519,7 +563,11 @@ export function SignalsBacktestPanel({
         width={880}
         title={
           selectedJob
-            ? `${formatSymbolDisplay(selectedJob.symbol)} · ${selectedJob.interval}`
+            ? `${
+                isWatchlistBacktest(selectedJob)
+                  ? t('signals:lab.watchlistCoins', { count: watchlistMarketCount(selectedJob) })
+                  : formatSymbolDisplay(selectedJob.symbol)
+              } · ${selectedJob.interval}`
             : t('signals:lab.signals')
         }
       >
@@ -529,6 +577,47 @@ export function SignalsBacktestPanel({
           ) : null}
           {performance && (performance.signalCount ?? 0) > 0 ? (
             <PerformanceSummary perf={performance} />
+          ) : null}
+          {(performance?.markets?.length ?? 0) > 1 ? (
+            <DataTable
+              rowKey={(r) => `${r.exchange}-${r.symbol}`}
+              size="small"
+              pagination={false}
+              dataSource={performance?.markets}
+              columns={[
+                {
+                  title: t('signals:symbol'),
+                  key: 'sym',
+                  render: (_, row) => (
+                    <Text variant="label" mono>
+                      {formatSymbolDisplay(row.symbol)}
+                    </Text>
+                  ),
+                },
+                {
+                  title: t('signals:lab.signals'),
+                  dataIndex: 'signalCount',
+                },
+                {
+                  title: t('signals:lab.tradeWinRate'),
+                  key: 'wr',
+                  render: (_, row) => (
+                    <Text variant="caption" mono>
+                      {row.trades?.winRate == null ? '—' : `${row.trades.winRate}%`}
+                    </Text>
+                  ),
+                },
+                {
+                  title: t('signals:lab.avgPnl'),
+                  key: 'avg',
+                  render: (_, row) => (
+                    <Text variant="caption" color={changeTone(row.trades?.average)} mono>
+                      {row.trades?.average == null ? '—' : formatChangePercent(row.trades.average)}
+                    </Text>
+                  ),
+                },
+              ]}
+            />
           ) : null}
           {selectedJob?.kind === 'custom_profile' && (selectedJob.skippedBars ?? 0) > 0 ? (
             <Alert

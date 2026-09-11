@@ -6719,11 +6719,13 @@ paths:
     post:
       summary: Start a historical scanner or custom-signal backtest
       description: |
-        Runs a scanner rule or a custom signal profile over a symbol and date range
+        Runs a scanner rule or a custom signal profile over a date range
         in the background. Send `ruleId` or `profileId` (not both). `profileId=built_in`
         uses the built-in swing mix. The source is snapshotted at queue time; later
         edits do not change this job. Custom-mix jobs replay 4h swing factors only —
         hunt and tape add 0. A signal fires when the mix first crosses 62 (onset).
+        `scope=watchlist` (or `symbol=watchlist`) with `profileId` replays every
+        coin on the client's watchlist in one job; the list is snapshotted when queued.
         Identical jobs return the existing pending/running/completed job.
         Each hit stores side, leverage, entry, TP, and SL and records whether later
         candles hit take-profit or stop-loss first. Progress and signalCount update
@@ -6736,13 +6738,14 @@ paths:
           application/json:
             schema:
               type: object
-              required: [symbol, rangeStart, rangeEnd]
+              required: [rangeStart, rangeEnd]
               properties:
                 clientId: { type: string }
                 ruleId: { type: string, description: Scanner rule id (omit when profileId is set) }
                 profileId: { type: string, description: Custom signal profile id, or built_in }
                 exchange: { type: string, enum: [binance, coinbase, bybit, nasdaq, bist], default: binance }
-                symbol: { type: string }
+                symbol: { type: string, description: Pair for a one-coin job. Use watchlist or omit when scope is watchlist }
+                scope: { type: string, enum: [symbol, watchlist], description: watchlist runs a custom mix on every watchlist coin }
                 rangeStart: { type: string, format: date-time }
                 rangeEnd: { type: string, format: date-time }
       responses:
@@ -6814,8 +6817,9 @@ paths:
         when a long/short plan exists: leverage, entry, stopLoss, takeProfit, first-touch
         outcome (tp|sl|open), and leveraged pnlPct. If one bar tags both TP and SL, a
         smaller interval decides which printed first (outcome and pnlPct follow that
-        print). `performance` adds horizon stats plus
-        trade TP/SL counts, win rate, and average/median leveraged PnL.
+        print). Watchlist jobs include exchange/symbol on each signal.
+        `performance` adds horizon stats plus trade TP/SL counts, win rate,
+        average/median leveraged PnL, and per-coin `markets` when more than one pair ran.
       operationId: listScannerBacktestSignals
       tags: [Scanner]
       parameters:

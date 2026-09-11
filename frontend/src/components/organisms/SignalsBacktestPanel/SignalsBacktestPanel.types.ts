@@ -28,8 +28,9 @@ export type SignalsBacktestPanelProps = {
   onStart: (input: {
     ruleId?: string;
     profileId?: string;
-    symbol: string;
-    exchange: MarketExchange;
+    symbol?: string;
+    scope?: 'symbol' | 'watchlist';
+    exchange?: MarketExchange;
     rangeKey: string;
   }) => void;
   onSelect: (id: string) => void;

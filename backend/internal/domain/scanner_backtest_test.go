@@ -62,3 +62,62 @@ func TestSummarizeBacktestReturns(t *testing.T) {
 		t.Fatalf("empty %+v", empty)
 	}
 }
+
+func TestNormalizeBacktestScope(t *testing.T) {
+	t.Parallel()
+	if NormalizeBacktestScope("", "ETHUSDT") != BacktestScopeSymbol {
+		t.Fatal("default symbol")
+	}
+	if NormalizeBacktestScope("watchlist", "") != BacktestScopeWatchlist {
+		t.Fatal("scope")
+	}
+	if NormalizeBacktestScope("", "watchlist") != BacktestScopeWatchlist {
+		t.Fatal("symbol alias")
+	}
+	if NormalizeBacktestScope("", "ALL") != BacktestScopeWatchlist {
+		t.Fatal("all alias")
+	}
+}
+
+func TestSummarizeBacktestReturns_Markets(t *testing.T) {
+	t.Parallel()
+	ptr := func(v float64) *float64 { return &v }
+	got := SummarizeBacktestReturns([]ScannerBacktestSignal{
+		{Exchange: ExchangeBinance, Symbol: "ETHUSDT", Return1d: ptr(2), Trade: &BacktestTrade{Side: "long", Outcome: BacktestTradeOutcomeTP, PnLPct: 8}},
+		{Exchange: ExchangeBinance, Symbol: "SOLUSDT", Return1d: ptr(-1), Trade: &BacktestTrade{Side: "long", Outcome: BacktestTradeOutcomeSL, PnLPct: -4}},
+		{Exchange: ExchangeBinance, Symbol: "ETHUSDT", Return1d: ptr(4), Trade: &BacktestTrade{Side: "long", Outcome: BacktestTradeOutcomeTP, PnLPct: 6}},
+	})
+	if len(got.Markets) != 2 {
+		t.Fatalf("markets %+v", got.Markets)
+	}
+	if got.Markets[0].Symbol != "ETHUSDT" || got.Markets[0].SignalCount != 2 {
+		t.Fatalf("eth %+v", got.Markets[0])
+	}
+	if got.Markets[1].Symbol != "SOLUSDT" || got.Markets[1].Trades.SlHits != 1 {
+		t.Fatalf("sol %+v", got.Markets[1])
+	}
+}
+
+func TestCustomBacktestMarkets(t *testing.T) {
+	t.Parallel()
+	one := ScannerBacktest{Exchange: ExchangeBinance, Symbol: "ETHUSDT"}
+	got := CustomBacktestMarkets(one)
+	if len(got) != 1 || got[0].Symbol != "ETHUSDT" {
+		t.Fatalf("%+v", got)
+	}
+	raw, err := EncodeWatchlistCustomProfileSnapshot("Desk", DefaultCustomSignalWeights(), []BacktestMarket{
+		{Exchange: ExchangeBinance, Symbol: "ETHUSDT"},
+		{Exchange: ExchangeBybit, Symbol: "SOLUSDT"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := ScannerBacktest{Kind: BacktestKindCustom, Symbol: BacktestWatchlistSymbol, RuleJSON: raw}
+	if !IsWatchlistBacktest(job) {
+		t.Fatal("watchlist job")
+	}
+	mk := CustomBacktestMarkets(job)
+	if len(mk) != 2 || mk[1].Symbol != "SOLUSDT" {
+		t.Fatalf("%+v", mk)
+	}
+}

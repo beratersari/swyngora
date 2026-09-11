@@ -14,13 +14,15 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-// StartBacktestInput starts a historical test of a rule or custom mix on one symbol.
+// StartBacktestInput starts a historical test of a rule or custom mix.
+// Scope watchlist (or symbol=watchlist/all) with profileId runs every watchlist coin.
 type StartBacktestInput struct {
 	ClientID   string
 	RuleID     string
 	ProfileID  string
 	Exchange   string
 	Symbol     string
+	Scope      string
 	RangeStart time.Time
 	RangeEnd   time.Time
 }
@@ -114,10 +116,6 @@ func (s *Service) startCustomBacktest(ctx context.Context, in StartBacktestInput
 		w = p.Weights
 		sourceID = p.ID
 	}
-	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
-	if err != nil {
-		return nil, err
-	}
 	if in.RangeStart.IsZero() || in.RangeEnd.IsZero() {
 		return nil, fmt.Errorf("%w: rangeStart and rangeEnd are required", domain.ErrInvalidArgument)
 	}
@@ -129,9 +127,33 @@ func (s *Service) startCustomBacktest(ctx context.Context, in StartBacktestInput
 	if end.Sub(start) > 400*24*time.Hour {
 		return nil, fmt.Errorf("%w: date range must be at most 400 days", domain.ErrInvalidArgument)
 	}
-	snap, err := domain.EncodeCustomProfileSnapshot(name, w)
-	if err != nil {
-		return nil, err
+	scope := domain.NormalizeBacktestScope(in.Scope, in.Symbol)
+	var (
+		ex   domain.Exchange
+		sym  string
+		snap string
+		err  error
+	)
+	if scope == domain.BacktestScopeWatchlist {
+		markets, err := s.watchlistBacktestMarkets(ctx, in.ClientID)
+		if err != nil {
+			return nil, err
+		}
+		snap, err = domain.EncodeWatchlistCustomProfileSnapshot(name, w, markets)
+		if err != nil {
+			return nil, err
+		}
+		ex = domain.Exchange(domain.BacktestWatchlistSymbol)
+		sym = domain.BacktestWatchlistSymbol
+	} else {
+		ex, sym, err = normalizeExchangeSymbol(in.Exchange, in.Symbol)
+		if err != nil {
+			return nil, err
+		}
+		snap, err = domain.EncodeCustomProfileSnapshot(name, w)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if existing, err := s.store.FindActiveBacktest(ctx, in.ClientID, sourceID, ex, sym, start, end); err == nil && existing != nil {
 		if domain.IsCustomProfileBacktest(*existing) && existing.RuleJSON == snap {
@@ -156,6 +178,40 @@ func (s *Service) startCustomBacktest(ctx context.Context, in StartBacktestInput
 		RuleJSON: snap,
 	}
 	return s.store.CreateBacktest(ctx, job)
+}
+
+func (s *Service) watchlistBacktestMarkets(ctx context.Context, clientID string) ([]domain.BacktestMarket, error) {
+	if s.watch == nil {
+		return nil, fmt.Errorf("%w: watchlist not configured", domain.ErrUpstream)
+	}
+	acc, err := s.watch.Get(ctx, clientID, "")
+	if err != nil {
+		if err == domain.ErrNotFound {
+			return nil, fmt.Errorf("%w: watchlist is empty", domain.ErrInvalidArgument)
+		}
+		return nil, err
+	}
+	if acc == nil || len(acc.Watchlist.Items) == 0 {
+		return nil, fmt.Errorf("%w: watchlist is empty", domain.ErrInvalidArgument)
+	}
+	seen := map[string]struct{}{}
+	out := make([]domain.BacktestMarket, 0, len(acc.Watchlist.Items))
+	for _, it := range acc.Watchlist.Items {
+		ex, sym, err := normalizeExchangeSymbol(string(it.Exchange), it.Symbol)
+		if err != nil {
+			continue
+		}
+		key := string(ex) + "|" + sym
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, domain.BacktestMarket{Exchange: ex, Symbol: sym})
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("%w: watchlist is empty", domain.ErrInvalidArgument)
+	}
+	return out, nil
 }
 
 // GetBacktest returns one job.
@@ -271,7 +327,8 @@ func (s *Service) ListBacktestSignals(ctx context.Context, clientID, backtestID 
 	if err != nil {
 		return nil, 0, err
 	}
-	if _, err := s.store.GetBacktest(ctx, clientID, backtestID); err != nil {
+	job, err := s.store.GetBacktest(ctx, clientID, backtestID)
+	if err != nil {
 		return nil, 0, err
 	}
 	if limit <= 0 {
@@ -288,7 +345,23 @@ func (s *Service) ListBacktestSignals(ctx context.Context, clientID, backtestID 
 		return nil, 0, err
 	}
 	list, err := s.store.ListBacktestSignals(ctx, backtestID, limit, offset)
-	return list, total, err
+	if err != nil {
+		return nil, 0, err
+	}
+	fillBacktestSignalMarkets(job, list)
+	return list, total, nil
+}
+
+func fillBacktestSignalMarkets(job *domain.ScannerBacktest, list []domain.ScannerBacktestSignal) {
+	if job == nil || domain.IsWatchlistBacktest(*job) {
+		return
+	}
+	for i := range list {
+		if list[i].Symbol == "" {
+			list[i].Exchange = job.Exchange
+			list[i].Symbol = job.Symbol
+		}
+	}
 }
 
 // BacktestWorker claims and executes pending backtests until ctx is done.
@@ -526,38 +599,90 @@ func (s *Service) executeCustomBacktestJob(ctx context.Context, job domain.Scann
 		_ = s.store.FinishBacktest(ctx, id, domain.BacktestFailed, 0, err.Error(), time.Now().UTC())
 		return err
 	}
+	markets := domain.CustomBacktestMarkets(job)
+	if len(markets) == 0 {
+		_ = s.store.FinishBacktest(ctx, id, domain.BacktestFailed, 0, "no markets to backtest", time.Now().UTC())
+		return fmt.Errorf("no markets")
+	}
+	signalCount := 0
+	skipped := 0
+	missing := map[string]struct{}{}
+	processed := 0
+	failedMarkets := 0
+	n := len(markets)
+	for i, m := range markets {
+		if ctx.Err() != nil {
+			_ = s.store.FinishBacktest(ctx, id, domain.BacktestCanceled, signalCount, "context canceled", time.Now().UTC())
+			return ctx.Err()
+		}
+		if st, err := s.store.GetBacktestStatus(ctx, id); err == nil && st == domain.BacktestCanceled {
+			return nil
+		}
+		hits, bars, skip, miss, err := s.replayCustomMarket(ctx, job, m, weights, threshold)
+		if err != nil {
+			failedMarkets++
+		} else {
+			skipped += skip
+			for _, idf := range miss {
+				missing[idf] = struct{}{}
+			}
+			processed += bars
+			signalCount += hits
+		}
+		pct := float64(i+1) / float64(n) * 100
+		_ = s.store.UpdateBacktestProgress(ctx, id, processed, processed, signalCount, pct)
+		_ = s.store.UpdateBacktestSkipStats(ctx, id, skipped, missingFactorIDs(missing))
+	}
+	if failedMarkets == n {
+		_ = s.store.FinishBacktest(ctx, id, domain.BacktestFailed, 0, "no candles in range", time.Now().UTC())
+		return fmt.Errorf("no candles")
+	}
+	return s.store.FinishBacktest(ctx, id, domain.BacktestCompleted, signalCount, "", time.Now().UTC())
+}
+
+func missingFactorIDs(set map[string]struct{}) []string {
+	if len(set) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(set))
+	for _, id := range domain.CustomSignalFactorIDs {
+		if _, ok := set[id]; ok {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+func (s *Service) replayCustomMarket(ctx context.Context, job domain.ScannerBacktest, m domain.BacktestMarket, weights domain.CustomSignalWeights, threshold float64) (hits, bars, skipped int, missing []string, err error) {
 	warmup := domain.SwingMinClosedBars + 20
 	ivDur := 4 * time.Hour
 	fetchStart := job.RangeStart.Add(-time.Duration(warmup) * ivDur)
 	fetchEnd := job.RangeEnd.Add(21 * 24 * time.Hour)
 	dailyStart := job.RangeStart.Add(-220 * 24 * time.Hour)
+	ex, sym := string(m.Exchange), m.Symbol
 
-	primaryC, err := s.fetchCandlesRange(ctx, string(job.Exchange), job.Symbol, string(domain.Interval4h), fetchStart, fetchEnd)
+	primaryC, err := s.fetchCandlesRange(ctx, ex, sym, string(domain.Interval4h), fetchStart, fetchEnd)
 	if err != nil {
-		_ = s.store.FinishBacktest(ctx, id, domain.BacktestFailed, 0, err.Error(), time.Now().UTC())
-		return err
+		return 0, 0, 0, nil, err
 	}
-	higherC, err := s.fetchCandlesRange(ctx, string(job.Exchange), job.Symbol, string(domain.Interval1d), dailyStart, fetchEnd)
+	higherC, err := s.fetchCandlesRange(ctx, ex, sym, string(domain.Interval1d), dailyStart, fetchEnd)
 	if err != nil {
-		_ = s.store.FinishBacktest(ctx, id, domain.BacktestFailed, 0, err.Error(), time.Now().UTC())
-		return err
+		return 0, 0, 0, nil, err
 	}
-	btcSym := customBacktestBTCSymbol(job.Exchange, job.Symbol)
+	btcSym := customBacktestBTCSymbol(m.Exchange, sym)
 	var btcP, btcH []domain.Candle
-	if btcSym == job.Symbol {
+	if btcSym == sym {
 		btcP, btcH = primaryC, higherC
 	} else {
-		btcP, _ = s.fetchCandlesRange(ctx, string(job.Exchange), btcSym, string(domain.Interval4h), fetchStart, fetchEnd)
-		btcH, _ = s.fetchCandlesRange(ctx, string(job.Exchange), btcSym, string(domain.Interval1d), dailyStart, fetchEnd)
+		btcP, _ = s.fetchCandlesRange(ctx, ex, btcSym, string(domain.Interval4h), fetchStart, fetchEnd)
+		btcH, _ = s.fetchCandlesRange(ctx, ex, btcSym, string(domain.Interval1d), dailyStart, fetchEnd)
 	}
 	primary, err := domain.ParseOHLC(primaryC)
 	if err != nil {
-		_ = s.store.FinishBacktest(ctx, id, domain.BacktestFailed, 0, err.Error(), time.Now().UTC())
-		return err
+		return 0, 0, 0, nil, err
 	}
 	if len(primary) == 0 {
-		_ = s.store.FinishBacktest(ctx, id, domain.BacktestFailed, 0, "no candles in range", time.Now().UTC())
-		return fmt.Errorf("no candles")
+		return 0, 0, 0, nil, fmt.Errorf("no candles")
 	}
 	higher, _ := domain.ParseOHLC(higherC)
 	btcPO, _ := domain.ParseOHLC(btcP)
@@ -578,48 +703,44 @@ func (s *Service) executeCustomBacktestJob(ctx context.Context, job domain.Scann
 		lastIdx = i
 	}
 	if firstIdx < 0 || lastIdx < firstIdx {
-		_ = s.store.FinishBacktest(ctx, id, domain.BacktestCompleted, 0, "", time.Now().UTC())
-		return nil
+		return 0, 0, 0, nil, nil
 	}
-	total := lastIdx - firstIdx + 1
+	bars = lastIdx - firstIdx + 1
+	touch := domain.BacktestTouchOpts{
+		Interval: domain.Interval4h,
+		Finer:    s.newFinerLookup(ctx, ex, sym),
+	}
 	rep, err := domain.ReplayCustomSignalBacktest(domain.CustomBacktestInput{
-		Exchange: job.Exchange, Symbol: job.Symbol,
+		Exchange: m.Exchange, Symbol: sym,
 		Primary: primary, Higher: higher, BTCPrimary: btcPO, BTCHigher: btcHO,
 		RangeStart: job.RangeStart, RangeEnd: job.RangeEnd,
 		Weights: weights, Threshold: threshold, Interval: ivDur,
-		Touch: s.backtestTouchOpts(ctx, job),
+		Touch: touch,
 	})
 	if err != nil {
-		_ = s.store.FinishBacktest(ctx, id, domain.BacktestFailed, 0, err.Error(), time.Now().UTC())
-		return err
+		return 0, bars, 0, nil, err
 	}
-	if st, err := s.store.GetBacktestStatus(ctx, id); err == nil && st == domain.BacktestCanceled {
-		return nil
-	}
-	_ = s.store.UpdateBacktestSkipStats(ctx, id, rep.SkippedBars, rep.MissingFactors)
-	signalCount := 0
+	stored := 0
 	for _, h := range rep.Hits {
 		if ctx.Err() != nil {
-			_ = s.store.FinishBacktest(ctx, id, domain.BacktestCanceled, signalCount, "context canceled", time.Now().UTC())
-			return ctx.Err()
+			return stored, bars, rep.SkippedBars, rep.MissingFactors, ctx.Err()
 		}
-		if st, err := s.store.GetBacktestStatus(ctx, id); err == nil && st == domain.BacktestCanceled {
-			return nil
+		if st, err := s.store.GetBacktestStatus(ctx, job.ID); err == nil && st == domain.BacktestCanceled {
+			return stored, bars, rep.SkippedBars, rep.MissingFactors, nil
 		}
 		sig := domain.ScannerBacktestSignal{
-			ID: uuid.NewString(), BacktestID: id, SignalAt: h.At,
-			ClosePrice: h.Close, Summary: h.Summary, Metrics: h.Metrics, Factors: h.Factors,
+			ID: uuid.NewString(), BacktestID: job.ID, Exchange: m.Exchange, Symbol: sym,
+			SignalAt: h.At, ClosePrice: h.Close, Summary: h.Summary, Metrics: h.Metrics, Factors: h.Factors,
 			Return1d:  domain.ForwardReturnPct(primaryC, h.Index, 1),
 			Return5d:  domain.ForwardReturnPct(primaryC, h.Index, 5),
 			Return20d: domain.ForwardReturnPct(primaryC, h.Index, 20),
 			Trade:     h.Trade,
 		}
 		if err := s.store.InsertBacktestSignal(ctx, sig); err == nil {
-			signalCount++
+			stored++
 		}
 	}
-	_ = s.store.UpdateBacktestProgress(ctx, id, total, total, signalCount, 100)
-	return s.store.FinishBacktest(ctx, id, domain.BacktestCompleted, signalCount, "", time.Now().UTC())
+	return stored, bars, rep.SkippedBars, rep.MissingFactors, nil
 }
 
 func (s *Service) backtestTouchOpts(ctx context.Context, job domain.ScannerBacktest) domain.BacktestTouchOpts {
