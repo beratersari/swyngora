@@ -3775,7 +3775,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("profileId", mcp.Description("Custom signal profile id, or built_in")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist, default binance")),
 		mcp.WithNumber("startingBalance", mcp.Description("Shared cash pot for a watchlist job (default 10000).")),
-		mcp.WithNumber("riskPct", mcp.Description("Share of current equity lost on a full stop (default 1). Trade size follows the stop distance and the live pot.")),
+		mcp.WithNumber("riskPct", mcp.Description("Share of current mark-to-market equity lost on a full stop (default 1). Open fills are marked at their last print; size is not only the last closed cash.")),
 		mcp.WithNumber("maxOpenRiskPct", mcp.Description("Max combined stop risk of open fills (default 3). A new signal is skipped until a fill closes and frees risk.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")

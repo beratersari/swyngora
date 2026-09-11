@@ -91,6 +91,44 @@ func TestSimulateSharedBacktestBook_RiskStopAndRange(t *testing.T) {
 	}
 }
 
+func TestSimulateSharedBacktestBook_SizesOnMarkedOpenEquity(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	t1 := t0.Add(time.Hour)
+	// A is +10% when B opens. 1% risk / 1% stop / 10x: A notional 10000.
+	// Marked equity at t1 is 11000, so B's stop must lose 110 — not 100 from the 10000 cost pot.
+	got := SimulateSharedBacktestBook(10000, 1, 3, []BacktestBookFill{
+		{Symbol: "ETHUSDT", Side: BacktestTradeSideLong, EntryAt: t0,
+			Entry: 100, StopLoss: 99, ExitPrice: 110, RangeExitPrice: 110, Leverage: 10,
+			Outcome: BacktestTradeOutcomeOpen,
+			Marks: []BacktestPriceMark{
+				{At: t0, Price: 100},
+				{At: t1, Price: 110},
+			}},
+		{Symbol: "SOLUSDT", Side: BacktestTradeSideLong, EntryAt: t1, ExitAt: t1.Add(time.Hour),
+			Entry: 50, StopLoss: 49.5, ExitPrice: 49.5, RangeExitPrice: 49.5, Leverage: 10,
+			HasExit: true, ClosedInRange: true, Outcome: BacktestTradeOutcomeSL},
+	}, t0.Add(24*time.Hour))
+	if got.TradesTaken != 2 {
+		t.Fatalf("taken %+v", got)
+	}
+	if math.Abs(got.EndingBalance-10890) > 0.2 {
+		t.Fatalf("B must size on 11000 MTM equity (end 10890), not 10000 cost: %+v", got)
+	}
+
+	cost := SimulateSharedBacktestBook(10000, 1, 3, []BacktestBookFill{
+		{Symbol: "ETHUSDT", Side: BacktestTradeSideLong, EntryAt: t0,
+			Entry: 100, StopLoss: 99, ExitPrice: 110, RangeExitPrice: 110, Leverage: 10,
+			Outcome: BacktestTradeOutcomeOpen},
+		{Symbol: "SOLUSDT", Side: BacktestTradeSideLong, EntryAt: t1, ExitAt: t1.Add(time.Hour),
+			Entry: 50, StopLoss: 49.5, ExitPrice: 49.5, RangeExitPrice: 49.5, Leverage: 10,
+			HasExit: true, ClosedInRange: true, Outcome: BacktestTradeOutcomeSL},
+	}, t0.Add(24*time.Hour))
+	if math.Abs(cost.EndingBalance-10900) > 0.2 {
+		t.Fatalf("no marks stays on the cost pot: %+v", cost)
+	}
+}
+
 func TestSimulateSharedBacktestBook_MaxOpenRisk(t *testing.T) {
 	t.Parallel()
 	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)

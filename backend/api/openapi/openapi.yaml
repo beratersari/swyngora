@@ -9394,6 +9394,15 @@ components:
         hitAt: { type: string, format: date-time, description: Set only when a candle opens through TP/SL. Omitted for wick hits }
         hitTimeUnknown: { type: boolean, description: True when TP/SL printed inside a bar (any interval) so the exact time is unknown }
         closedKnownAt: { type: string, format: date-time, description: When risk can be released. Parent bar close if hit time is unknown }
+        enteredAt: { type: string, format: date-time, description: Next-bar open when the fill was taken }
+        marks:
+          type: array
+          description: Price path while the fill is open. Later fills size risk from mark-to-market equity using these prints
+          items:
+            type: object
+            properties:
+              at: { type: string, format: date-time }
+              price: { type: number }
     BacktestHorizonStats:
       type: object
       properties:

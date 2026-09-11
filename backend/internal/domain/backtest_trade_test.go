@@ -386,6 +386,28 @@ func TestFirstTouch_ShortTPAndSL(t *testing.T) {
 	}
 }
 
+func TestFirstTouch_RecordsMarksWhileOpen(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	got := SimulateBacktestTradeOpts([]OHLC{
+		{OpenTime: t0, CloseTime: t0.Add(4 * time.Hour), Open: 100, High: 101, Low: 99, Close: 100},
+		{OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(8 * time.Hour), Open: 100.5, High: 102, Low: 100, Close: 101},
+		{OpenTime: t0.Add(8 * time.Hour), CloseTime: t0.Add(12 * time.Hour), Open: 101, High: 106, Low: 100.8, Close: 105},
+	}, 0, BacktestTradeSideLong, SwingLevels{Entry: 100, StopLoss: 97, TakeProfit: 105, Leverage: 1}, BacktestTouchOpts{Interval: Interval4h})
+	if got == nil || got.Outcome != BacktestTradeOutcomeTP {
+		t.Fatalf("%+v", got)
+	}
+	if len(got.Marks) < 2 {
+		t.Fatalf("need entry + later prints: %+v", got.Marks)
+	}
+	if math.Abs(got.Marks[0].Price-100.5) > 1e-9 || !got.Marks[0].At.Equal(t0.Add(4*time.Hour)) {
+		t.Fatalf("first mark is the fill: %+v", got.Marks[0])
+	}
+	if math.Abs(got.Marks[1].Price-101) > 1e-9 {
+		t.Fatalf("closed bar mark %+v", got.Marks[1])
+	}
+}
+
 func TestFirstTouch_StillOpenMarksLastClose(t *testing.T) {
 	t.Parallel()
 	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)

@@ -111,6 +111,8 @@ export type ScannerBacktestTrade = {
   hitAt?: string;
   hitTimeUnknown?: boolean;
   closedKnownAt?: string;
+  enteredAt?: string;
+  marks?: { at: string; price: number }[];
 };
 
 export type ScannerBacktestSignal = {

@@ -37,22 +37,29 @@ type BacktestTouchOpts struct {
 
 // BacktestTrade is the signal's plan plus first-touch result.
 type BacktestTrade struct {
-	Side             string     `json:"side"`
-	Leverage         int        `json:"leverage"`
-	Entry            float64    `json:"entry"`
-	StopLoss         float64    `json:"stopLoss"`
-	TakeProfit       float64    `json:"takeProfit"`
-	Outcome          string     `json:"outcome"` // tp | sl | open
-	ExitPrice        float64    `json:"exitPrice,omitempty"`
-	PnLPct           float64    `json:"pnlPct"` // leveraged percent from the fill
-	BarsHeld         int        `json:"barsHeld,omitempty"`
-	HitAt            *time.Time `json:"hitAt,omitempty"`
-	HitTimeUnknown   bool       `json:"hitTimeUnknown,omitempty"`
-	ClosedKnownAt    *time.Time `json:"closedKnownAt,omitempty"`
-	EnteredAt        *time.Time `json:"enteredAt,omitempty"`
-	ClosedAfterRange bool       `json:"closedAfterRange,omitempty"`
-	RangeExitPrice   float64    `json:"rangeExitPrice,omitempty"`
-	RangePnLPct      float64    `json:"rangePnlPct,omitempty"`
+	Side             string              `json:"side"`
+	Leverage         int                 `json:"leverage"`
+	Entry            float64             `json:"entry"`
+	StopLoss         float64             `json:"stopLoss"`
+	TakeProfit       float64             `json:"takeProfit"`
+	Outcome          string              `json:"outcome"` // tp | sl | open
+	ExitPrice        float64             `json:"exitPrice,omitempty"`
+	PnLPct           float64             `json:"pnlPct"` // leveraged percent from the fill
+	BarsHeld         int                 `json:"barsHeld,omitempty"`
+	HitAt            *time.Time          `json:"hitAt,omitempty"`
+	HitTimeUnknown   bool                `json:"hitTimeUnknown,omitempty"`
+	ClosedKnownAt    *time.Time          `json:"closedKnownAt,omitempty"`
+	EnteredAt        *time.Time          `json:"enteredAt,omitempty"`
+	ClosedAfterRange bool                `json:"closedAfterRange,omitempty"`
+	RangeExitPrice   float64             `json:"rangeExitPrice,omitempty"`
+	RangePnLPct      float64             `json:"rangePnlPct,omitempty"`
+	Marks            []BacktestPriceMark `json:"marks,omitempty"`
+}
+
+// BacktestPriceMark is one print on a fill while it is open.
+type BacktestPriceMark struct {
+	At    time.Time `json:"at"`
+	Price float64   `json:"price"`
 }
 
 // BacktestTradeStats summarizes first-touch trades across a job.
@@ -217,6 +224,7 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 		t := bars[entryIdx].OpenTime.UTC()
 		out.EnteredAt = &t
 	}
+	out.Marks = appendBacktestMark(out.Marks, bars[entryIdx].OpenTime, entry)
 	if hit := throughAtOpenPrice(side, entry, sl, tp); hit != "" {
 		// Already through a level at the only fill we can take. No old-entry PnL.
 		out.Outcome = hit
@@ -240,6 +248,9 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 	lastInRange := -1
 	for j := entryIdx; j < len(bars); j++ {
 		bar := bars[j]
+		if j > entryIdx {
+			out.Marks = appendBacktestMark(out.Marks, bar.OpenTime, bar.Open)
+		}
 		if bar.Close <= 0 && bar.High <= 0 {
 			continue
 		}
@@ -260,6 +271,7 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 		}
 		touch := resolveFirstTouch(bar, side, sl, tp, opts.Interval, opts.Finer, 0)
 		if touch.hit == "" {
+			out.Marks = appendBacktestMark(out.Marks, barMarkAt(bar, opts.Interval), bar.Close)
 			continue
 		}
 		hit, px, at := touch.hit, touch.price, touch.at
@@ -653,6 +665,48 @@ func TradeOpenAt(tr *BacktestTrade, at time.Time) bool {
 		return true
 	}
 	return free.After(at.UTC())
+}
+
+func appendBacktestMark(marks []BacktestPriceMark, at time.Time, px float64) []BacktestPriceMark {
+	if at.IsZero() || px <= 0 || math.IsNaN(px) {
+		return marks
+	}
+	at = at.UTC()
+	if n := len(marks); n > 0 && !marks[n-1].At.Before(at) {
+		marks[n-1] = BacktestPriceMark{At: at, Price: px}
+		return marks
+	}
+	return append(marks, BacktestPriceMark{At: at, Price: px})
+}
+
+func barMarkAt(bar OHLC, iv CandleInterval) time.Time {
+	if !bar.CloseTime.IsZero() && bar.CloseTime.After(bar.OpenTime) {
+		return bar.CloseTime.UTC()
+	}
+	if _, end := ParentBarWindow(bar, iv); end.After(bar.OpenTime) {
+		return end
+	}
+	return bar.OpenTime.UTC()
+}
+
+func markPriceAt(marks []BacktestPriceMark, at time.Time, fallback float64) float64 {
+	px := fallback
+	if at.IsZero() {
+		if n := len(marks); n > 0 && marks[n-1].Price > 0 {
+			return marks[n-1].Price
+		}
+		return px
+	}
+	at = at.UTC()
+	for _, m := range marks {
+		if m.At.After(at) {
+			break
+		}
+		if m.Price > 0 {
+			px = m.Price
+		}
+	}
+	return px
 }
 
 func barSpan(bar OHLC, iv CandleInterval) time.Duration {

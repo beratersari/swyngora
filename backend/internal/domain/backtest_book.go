@@ -82,6 +82,7 @@ type BacktestBookFill struct {
 	HasExit        bool
 	HitTimeUnknown bool
 	Score          float64
+	Marks          []BacktestPriceMark
 }
 
 // NormalizeBacktestStartBalance applies the Lab default and a hard cap.
@@ -118,9 +119,10 @@ func NormalizeBacktestMaxOpenRiskPct(v float64) float64 {
 }
 
 // SimulateSharedBacktestBook walks fills in time order against one cash pot.
-// Each taken trade is sized so a full stop loses about riskPct of current equity.
-// Combined open stop risk cannot exceed maxOpenRisk of current equity; skipped
-// signals stay skipped. When a fill closes, later signals can use the free risk.
+// Each taken trade is sized so a full stop loses about riskPct of current
+// mark-to-market equity (cash + open margin + open unrealized). Combined open
+// stop risk cannot exceed maxOpenRisk of that equity; skipped signals stay
+// skipped. When a fill closes, later signals can use the free risk.
 // RangeEndBalance marks still-open trades at the last in-range close.
 // AfterRangeBalance applies later TP/SL only; still-open trades stay marked in-range.
 func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []BacktestBookFill, rangeEnd time.Time) BacktestBook {
@@ -188,15 +190,15 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 	open := map[int]pos{}
 	openCoin := map[string]int{}
 	snapshotted := end.IsZero()
-	equity := func() float64 {
+	equityAt := func(at time.Time) float64 {
 		e := cash
 		for _, p := range open {
-			e += p.margin
+			e += p.margin + notionalPnLAt(fills[p.i], p.notional, at)
 		}
 		return e
 	}
-	mark := func() {
-		eq := equity()
+	mark := func(at time.Time) {
+		eq := equityAt(at)
 		if eq > out.PeakEquity {
 			out.PeakEquity = eq
 		}
@@ -242,7 +244,7 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 			} else {
 				out.ClosedAfterRange++
 			}
-			mark()
+			mark(e.at)
 			continue
 		}
 		f := fills[e.i]
@@ -257,7 +259,7 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 			out.TradesSkipped++
 			continue
 		}
-		eq := equity()
+		eq := equityAt(e.at)
 		newRisk := eq * (riskPct / 100)
 		used := 0.0
 		for _, p := range open {
@@ -284,7 +286,7 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 			openCoin[coin]++
 		}
 		out.TradesTaken++
-		mark()
+		mark(e.at)
 	}
 	if !snapshotted {
 		snapshotRange()
@@ -342,6 +344,11 @@ func notionalPnL(f BacktestBookFill, notional float64, atRange bool) float64 {
 	return notional * unleveredMove(f.Side, f.Entry, px)
 }
 
+func notionalPnLAt(f BacktestBookFill, notional float64, at time.Time) float64 {
+	px := markPriceAt(f.Marks, at, f.Entry)
+	return notional * unleveredMove(f.Side, f.Entry, px)
+}
+
 // BookFillsFromSignals keeps trades that actually filled after the signal bar closed.
 func BookFillsFromSignals(sigs []ScannerBacktestSignal, rangeEnd time.Time) []BacktestBookFill {
 	out := make([]BacktestBookFill, 0, len(sigs))
@@ -379,7 +386,7 @@ func BookFillsFromSignals(sigs []ScannerBacktestSignal, rangeEnd time.Time) []Ba
 			Entry: tr.Entry, StopLoss: tr.StopLoss, ExitPrice: tr.ExitPrice,
 			RangeExitPrice: rangePx, Leverage: tr.Leverage,
 			ClosedInRange: closedIn, Outcome: tr.Outcome, HasExit: hasExit,
-			HitTimeUnknown: tr.HitTimeUnknown, Score: score,
+			HitTimeUnknown: tr.HitTimeUnknown, Score: score, Marks: tr.Marks,
 		})
 	}
 	return out

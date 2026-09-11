@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
 
 ### Fixed
+- **Lab open-trade sizing:** a new Lab fill sizes risk from mark-to-market equity, including still-open trades at their last print — not only cash left after the last close (`docs/features/indicator-scanner.md`)
 - **Lab missing next open:** a signal with no next-bar open (or no next bar) no longer invents an `outcome=open` trade at the planned entry. The signal stays; the trade is omitted (`docs/features/indicator-scanner.md`)
 - **Backtest stop gap fill:** if the next candle opens through the stop, the trade exits at that open and leveraged PnL uses the open — not the stop price (`docs/features/indicator-scanner.md`)
 - **Backtest same-bar TP/SL:** when one candle wicks both take-profit and stop, Lab no longer always takes the stop. It walks a smaller interval (4h → 1h → 15m → 5m → 1m) and uses the first clear print for the outcome and leveraged PnL. Missing or still-ambiguous finer tape stays stop-first (`docs/features/indicator-scanner.md`)
