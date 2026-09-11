@@ -23,6 +23,9 @@ const (
 	BacktestDefaultStartBalance = 10000.0
 	backtestBookMaxStart        = 1e9
 	backtestBookMaxRisk         = 25.0
+	// BacktestDefaultMaxOpenRiskPct caps combined stop risk of open fills.
+	BacktestDefaultMaxOpenRiskPct = 3.0
+	backtestBookMaxOpenRisk       = 100.0
 )
 
 // BacktestMarketResult is one coin after a watchlist Lab run.
@@ -45,8 +48,10 @@ type BacktestBook struct {
 	TroughEquity      float64 `json:"troughEquity"`
 	RiskPct           float64 `json:"riskPct"`
 	StakePct          float64 `json:"stakePct,omitempty"` // alias of riskPct for older clients
+	MaxOpenRiskPct    float64 `json:"maxOpenRiskPct"`
 	TradesTaken       int     `json:"tradesTaken"`
 	TradesSkipped     int     `json:"tradesSkipped"`
+	SkippedNoRisk     int     `json:"skippedNoRisk,omitempty"`
 	ClosedInRange     int     `json:"closedInRange"`
 	ClosedAfterRange  int     `json:"closedAfterRange"`
 	OpenAtRangeEnd    int     `json:"openAtRangeEnd"`
@@ -72,6 +77,7 @@ type BacktestBookFill struct {
 	Leverage       int
 	ClosedInRange  bool
 	Outcome        string
+	HasExit        bool
 }
 
 // NormalizeBacktestStartBalance applies the Lab default and a hard cap.
@@ -96,13 +102,27 @@ func NormalizeBacktestRiskPct(v float64) float64 {
 	return v
 }
 
+// NormalizeBacktestMaxOpenRiskPct is the combined open-stop cap (default 3%).
+func NormalizeBacktestMaxOpenRiskPct(v float64) float64 {
+	if v <= 0 || math.IsNaN(v) {
+		return BacktestDefaultMaxOpenRiskPct
+	}
+	if v > backtestBookMaxOpenRisk {
+		return backtestBookMaxOpenRisk
+	}
+	return v
+}
+
 // SimulateSharedBacktestBook walks fills in time order against one cash pot.
 // Each taken trade is sized so a full stop loses about riskPct of current equity.
-// RangeEndBalance marks still-open trades at the last in-range close and does not
-// apply TP/SL that print after the Lab window. AfterRangeBalance includes those later fills.
-func SimulateSharedBacktestBook(start, riskPct float64, fills []BacktestBookFill, rangeEnd time.Time) BacktestBook {
+// Combined open stop risk cannot exceed maxOpenRisk of current equity; skipped
+// signals stay skipped. When a fill closes, later signals can use the free risk.
+// RangeEndBalance marks still-open trades at the last in-range close.
+// AfterRangeBalance applies later TP/SL only; still-open trades stay marked in-range.
+func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []BacktestBookFill, rangeEnd time.Time) BacktestBook {
 	start = NormalizeBacktestStartBalance(start)
 	riskPct = NormalizeBacktestRiskPct(riskPct)
+	maxOpenRisk = NormalizeBacktestMaxOpenRiskPct(maxOpenRisk)
 	out := BacktestBook{
 		StartingBalance:   round2(start),
 		RangeEndBalance:   round2(start),
@@ -112,6 +132,7 @@ func SimulateSharedBacktestBook(start, riskPct float64, fills []BacktestBookFill
 		TroughEquity:      round2(start),
 		RiskPct:           riskPct,
 		StakePct:          riskPct,
+		MaxOpenRiskPct:    maxOpenRisk,
 	}
 	if len(fills) == 0 {
 		return out
@@ -128,12 +149,14 @@ func SimulateSharedBacktestBook(start, riskPct float64, fills []BacktestBookFill
 			continue
 		}
 		entry := f.EntryAt.UTC()
-		exit := f.ExitAt.UTC()
-		if exit.IsZero() || !exit.After(entry) {
-			exit = entry.Add(time.Nanosecond)
-		}
 		events = append(events, ev{at: entry, exit: false, i: i})
-		events = append(events, ev{at: exit, exit: true, i: i})
+		if f.HasExit && !f.ExitAt.IsZero() {
+			exit := f.ExitAt.UTC()
+			if !exit.After(entry) {
+				exit = entry.Add(time.Nanosecond)
+			}
+			events = append(events, ev{at: exit, exit: true, i: i})
+		}
 	}
 	sort.SliceStable(events, func(i, j int) bool {
 		if events[i].at.Equal(events[j].at) {
@@ -148,6 +171,7 @@ func SimulateSharedBacktestBook(start, riskPct float64, fills []BacktestBookFill
 	type pos struct {
 		margin   float64
 		notional float64
+		risk     float64
 		i        int
 	}
 	open := map[int]pos{}
@@ -210,7 +234,17 @@ func SimulateSharedBacktestBook(start, riskPct float64, fills []BacktestBookFill
 			continue
 		}
 		eq := equity()
-		notional := eq * (riskPct / 100) / stopF
+		newRisk := eq * (riskPct / 100)
+		used := 0.0
+		for _, p := range open {
+			used += p.risk
+		}
+		if used+newRisk > eq*(maxOpenRisk/100)+1e-9 {
+			out.TradesSkipped++
+			out.SkippedNoRisk++
+			continue
+		}
+		notional := newRisk / stopF
 		lev := f.Leverage
 		if lev < 1 {
 			lev = 1
@@ -221,7 +255,7 @@ func SimulateSharedBacktestBook(start, riskPct float64, fills []BacktestBookFill
 			continue
 		}
 		cash -= margin
-		open[e.i] = pos{margin: margin, notional: notional, i: e.i}
+		open[e.i] = pos{margin: margin, notional: notional, risk: newRisk, i: e.i}
 		out.TradesTaken++
 		mark()
 	}
@@ -230,7 +264,8 @@ func SimulateSharedBacktestBook(start, riskPct float64, fills []BacktestBookFill
 	}
 	out.OpenAtEnd = len(open)
 	for _, p := range open {
-		cash += p.margin + notionalPnL(fills[p.i], p.notional, false)
+		// Still open: keep range-end mark. Do not apply a later tape price.
+		cash += p.margin + notionalPnL(fills[p.i], p.notional, true)
 	}
 	out.AfterRangeBalance = round2(cash)
 	out.EndingBalance = out.AfterRangeBalance
@@ -299,23 +334,25 @@ func BookFillsFromSignals(sigs []ScannerBacktestSignal, rangeEnd time.Time) []Ba
 		if entryAt.IsZero() {
 			continue
 		}
-		exit := end
-		if tr.HitAt != nil && !tr.HitAt.IsZero() {
+		var exit time.Time
+		hasExit := tr.HitAt != nil && !tr.HitAt.IsZero() &&
+			(tr.Outcome == BacktestTradeOutcomeTP || tr.Outcome == BacktestTradeOutcomeSL)
+		if hasExit {
 			exit = tr.HitAt.UTC()
 		}
 		rangePx := tr.RangeExitPrice
 		if rangePx <= 0 {
 			rangePx = tr.ExitPrice
 		}
-		closedIn := !tr.ClosedAfterRange
-		if !end.IsZero() && tr.HitAt != nil && tr.HitAt.After(end) {
+		closedIn := hasExit && !tr.ClosedAfterRange
+		if hasExit && !end.IsZero() && tr.HitAt.After(end) {
 			closedIn = false
 		}
 		out = append(out, BacktestBookFill{
 			Symbol: s.Symbol, Side: tr.Side, EntryAt: entryAt, ExitAt: exit,
 			Entry: tr.Entry, StopLoss: tr.StopLoss, ExitPrice: tr.ExitPrice,
 			RangeExitPrice: rangePx, Leverage: tr.Leverage,
-			ClosedInRange: closedIn, Outcome: tr.Outcome,
+			ClosedInRange: closedIn, Outcome: tr.Outcome, HasExit: hasExit,
 		})
 	}
 	return out

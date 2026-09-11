@@ -28,19 +28,20 @@ type customProfileSnapshot struct {
 	Markets         []BacktestMarket   `json:"markets,omitempty"`
 	StartingBalance float64            `json:"startingBalance,omitempty"`
 	RiskPct         float64            `json:"riskPct,omitempty"`
+	MaxOpenRiskPct  float64            `json:"maxOpenRiskPct,omitempty"`
 }
 
 // EncodeCustomProfileSnapshot freezes mix weights for a backtest job.
 func EncodeCustomProfileSnapshot(name string, w CustomSignalWeights) (string, error) {
-	return encodeCustomProfileSnapshot(name, w, BacktestScopeSymbol, nil, 0, 0)
+	return encodeCustomProfileSnapshot(name, w, BacktestScopeSymbol, nil, 0, 0, 0)
 }
 
 // EncodeWatchlistCustomProfileSnapshot freezes mix weights plus the watchlist coins.
-func EncodeWatchlistCustomProfileSnapshot(name string, w CustomSignalWeights, markets []BacktestMarket, startingBalance, riskPct float64) (string, error) {
-	return encodeCustomProfileSnapshot(name, w, BacktestScopeWatchlist, markets, startingBalance, riskPct)
+func EncodeWatchlistCustomProfileSnapshot(name string, w CustomSignalWeights, markets []BacktestMarket, startingBalance, riskPct, maxOpenRiskPct float64) (string, error) {
+	return encodeCustomProfileSnapshot(name, w, BacktestScopeWatchlist, markets, startingBalance, riskPct, maxOpenRiskPct)
 }
 
-func encodeCustomProfileSnapshot(name string, w CustomSignalWeights, scope string, markets []BacktestMarket, startingBalance, riskPct float64) (string, error) {
+func encodeCustomProfileSnapshot(name string, w CustomSignalWeights, scope string, markets []BacktestMarket, startingBalance, riskPct, maxOpenRiskPct float64) (string, error) {
 	pct := w.Pct
 	if pct == nil {
 		pct = map[string]float64{}
@@ -49,11 +50,12 @@ func encodeCustomProfileSnapshot(name string, w CustomSignalWeights, scope strin
 	if scope == BacktestScopeWatchlist {
 		startingBalance = NormalizeBacktestStartBalance(startingBalance)
 		riskPct = NormalizeBacktestRiskPct(riskPct)
+		maxOpenRiskPct = NormalizeBacktestMaxOpenRiskPct(maxOpenRiskPct)
 	}
 	b, err := json.Marshal(customProfileSnapshot{
 		Kind: BacktestKindCustom, Name: strings.TrimSpace(name),
 		Weights: pct, Threshold: th, Scope: scope, Markets: markets,
-		StartingBalance: startingBalance, RiskPct: riskPct,
+		StartingBalance: startingBalance, RiskPct: riskPct, MaxOpenRiskPct: maxOpenRiskPct,
 	})
 	if err != nil {
 		return "", err
@@ -122,6 +124,17 @@ func CustomBacktestRiskPct(job ScannerBacktest) float64 {
 	}
 	if IsWatchlistBacktest(job) {
 		return BacktestDefaultRiskPct
+	}
+	return 0
+}
+
+// CustomBacktestMaxOpenRiskPct is the combined open-stop cap on a watchlist job.
+func CustomBacktestMaxOpenRiskPct(job ScannerBacktest) float64 {
+	if snap, err := parseCustomProfileSnapshot(job.RuleJSON); err == nil && snap.MaxOpenRiskPct > 0 {
+		return NormalizeBacktestMaxOpenRiskPct(snap.MaxOpenRiskPct)
+	}
+	if IsWatchlistBacktest(job) {
+		return BacktestDefaultMaxOpenRiskPct
 	}
 	return 0
 }

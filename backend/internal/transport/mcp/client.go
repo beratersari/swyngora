@@ -2605,7 +2605,7 @@ func (c *APIClient) DeleteScannerRule(ctx context.Context, clientID, id string) 
 	return c.sendJSON(ctx, http.MethodDelete, path, nil)
 }
 
-func (c *APIClient) StartBacktest(ctx context.Context, clientID, ruleID, profileID, exchange, symbol, rangeStart, rangeEnd string, startingBalance, riskPct float64) (json.RawMessage, error) {
+func (c *APIClient) StartBacktest(ctx context.Context, clientID, ruleID, profileID, exchange, symbol, rangeStart, rangeEnd string, startingBalance, riskPct, maxOpenRiskPct float64) (json.RawMessage, error) {
 	body := map[string]any{
 		"clientId": clientID, "symbol": symbol, "exchange": exchange,
 		"rangeStart": rangeStart, "rangeEnd": rangeEnd,
@@ -2615,6 +2615,9 @@ func (c *APIClient) StartBacktest(ctx context.Context, clientID, ruleID, profile
 	}
 	if riskPct > 0 {
 		body["riskPct"] = riskPct
+	}
+	if maxOpenRiskPct > 0 {
+		body["maxOpenRiskPct"] = maxOpenRiskPct
 	}
 	if ruleID != "" {
 		body["ruleId"] = ruleID

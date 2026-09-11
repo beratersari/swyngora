@@ -232,6 +232,7 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 		out.RangeExitPrice = round8(px)
 		out.RangePnLPct = LeveragedPnLPct(side, entry, px, lev)
 	}
+	lastInRange := -1
 	for j := entryIdx; j < len(bars); j++ {
 		bar := bars[j]
 		if bar.Close <= 0 && bar.High <= 0 {
@@ -239,6 +240,7 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 		}
 		inRange := rangeEnd.IsZero() || !bar.OpenTime.UTC().After(rangeEnd)
 		if inRange {
+			lastInRange = j
 			if bar.Close > 0 {
 				markRange(bar.Close)
 			} else {
@@ -267,6 +269,13 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 		}
 		return out
 	}
+	// Still open: mark the last in-range close. Do not use later tape as an exit.
+	if lastInRange >= 0 && out.RangeExitPrice > 0 {
+		out.ExitPrice = out.RangeExitPrice
+		out.PnLPct = out.RangePnLPct
+		out.BarsHeld = lastInRange - entryIdx
+		return out
+	}
 	last := bars[len(bars)-1]
 	exit := last.Close
 	if exit <= 0 {
@@ -278,7 +287,7 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 		out.BarsHeld = 0
 	}
 	out.PnLPct = LeveragedPnLPct(side, entry, exit, lev)
-	if rangeEnd.IsZero() || out.RangeExitPrice <= 0 {
+	if out.RangeExitPrice <= 0 {
 		markRange(exit)
 	}
 	return out

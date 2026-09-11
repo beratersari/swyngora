@@ -325,6 +325,27 @@ func TestFirstTouch_StillOpenMarksLastClose(t *testing.T) {
 	}
 }
 
+func TestFirstTouch_StillOpenIgnoresFutureTape(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	got := SimulateBacktestTradeOpts([]OHLC{
+		{OpenTime: t0, CloseTime: t0.Add(4 * time.Hour), Open: 100, High: 101, Low: 99, Close: 100},
+		{OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(8 * time.Hour), Open: 100, High: 101, Low: 99.5, Close: 100.4},
+		{OpenTime: t0.Add(24 * time.Hour), CloseTime: t0.Add(28 * time.Hour), Open: 110, High: 112, Low: 109, Close: 111},
+	}, 0, BacktestTradeSideLong, SwingLevels{Entry: 100, StopLoss: 90, TakeProfit: 130, Leverage: 1}, BacktestTouchOpts{
+		RangeEnd: t0.Add(8 * time.Hour),
+	})
+	if got == nil || got.Outcome != BacktestTradeOutcomeOpen || got.ClosedAfterRange {
+		t.Fatalf("%+v", got)
+	}
+	if math.Abs(got.ExitPrice-100.4) > 1e-9 || math.Abs(got.RangeExitPrice-100.4) > 1e-9 {
+		t.Fatalf("must mark last in-range close, not future 111: %+v", got)
+	}
+	if got.HitAt != nil {
+		t.Fatalf("open trade must not invent a hit: %+v", got.HitAt)
+	}
+}
+
 func TestSuggestedSwingLeverage(t *testing.T) {
 	t.Parallel()
 	if SuggestedSwingLeverage(2.5) != 4 {

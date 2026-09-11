@@ -6748,6 +6748,7 @@ paths:
                 scope: { type: string, enum: [symbol, watchlist], description: watchlist runs a custom mix on every watchlist coin }
                 startingBalance: { type: number, description: Shared cash pot for a watchlist job (default 10000) }
                 riskPct: { type: number, description: Share of current equity lost on a full stop (default 1). Size follows the stop distance and the live pot }
+                maxOpenRiskPct: { type: number, description: Max combined stop risk of open fills (default 3). A new signal is skipped until a fill closes }
                 rangeStart: { type: string, format: date-time }
                 rangeEnd: { type: string, format: date-time }
       responses:

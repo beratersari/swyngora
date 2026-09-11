@@ -25,6 +25,7 @@ type StartBacktestInput struct {
 	Scope           string
 	StartingBalance float64
 	RiskPct         float64
+	MaxOpenRiskPct  float64
 	RangeStart      time.Time
 	RangeEnd        time.Time
 }
@@ -141,7 +142,7 @@ func (s *Service) startCustomBacktest(ctx context.Context, in StartBacktestInput
 		if err != nil {
 			return nil, err
 		}
-		snap, err = domain.EncodeWatchlistCustomProfileSnapshot(name, w, markets, in.StartingBalance, in.RiskPct)
+		snap, err = domain.EncodeWatchlistCustomProfileSnapshot(name, w, markets, in.StartingBalance, in.RiskPct, in.MaxOpenRiskPct)
 		if err != nil {
 			return nil, err
 		}
@@ -668,7 +669,7 @@ func (s *Service) executeCustomBacktestJob(ctx context.Context, job domain.Scann
 	if startBal := domain.CustomBacktestStartBalance(job); startBal > 0 {
 		sigs, err := s.store.ListBacktestSignals(ctx, id, 10000, 0)
 		if err == nil {
-			book := domain.SimulateSharedBacktestBook(startBal, domain.CustomBacktestRiskPct(job), domain.BookFillsFromSignals(sigs, job.RangeEnd), job.RangeEnd)
+			book := domain.SimulateSharedBacktestBook(startBal, domain.CustomBacktestRiskPct(job), domain.CustomBacktestMaxOpenRiskPct(job), domain.BookFillsFromSignals(sigs, job.RangeEnd), job.RangeEnd)
 			run.Book = &book
 		}
 	}

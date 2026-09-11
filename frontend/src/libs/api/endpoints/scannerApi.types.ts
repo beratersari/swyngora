@@ -154,6 +154,7 @@ export type StartScannerBacktestArg = {
   scope?: ScannerBacktestScope;
   startingBalance?: number;
   riskPct?: number;
+  maxOpenRiskPct?: number;
   exchange?: 'binance' | 'coinbase' | 'bybit' | 'nasdaq' | 'bist';
   rangeStart: string;
   rangeEnd: string;
@@ -238,9 +239,11 @@ export type ScannerBacktestBook = {
   peakEquity?: number;
   troughEquity?: number;
   riskPct?: number;
+  maxOpenRiskPct?: number;
   stakePct?: number;
   tradesTaken?: number;
   tradesSkipped?: number;
+  skippedNoRisk?: number;
   closedInRange?: number;
   closedAfterRange?: number;
   openAtRangeEnd?: number;

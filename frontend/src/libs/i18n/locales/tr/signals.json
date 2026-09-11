@@ -112,6 +112,8 @@
     "watchlistCoins": "İzleme listesi ({{count}})",
     "startingBalance": "Başlangıç bakiyesi",
     "riskPct": "Risk %",
+    "maxOpenRisk": "Açık risk tavanı %",
+    "bookSkippedRisk": "risk yeri yok",
     "book": "Ortak bakiye",
     "bookStart": "Başlangıç",
     "bookEnd": "Bitiş",

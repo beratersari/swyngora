@@ -163,6 +163,7 @@ function BookSummary({ book }: { book: ScannerBacktestBook }) {
         </Text>
         <Text variant="caption" color="secondary">
           {t('signals:lab.riskPct')}: {book.riskPct ?? book.stakePct ?? '—'}%
+          {book.maxOpenRiskPct != null ? ` / ${t('signals:lab.maxOpenRisk')}: ${book.maxOpenRiskPct}%` : ''}
         </Text>
         <Text variant="caption" color={changeTone(rangePnl)} mono>
           {t('signals:lab.bookRangeEnd')}: {formatBalance(rangeBal)}
@@ -188,6 +189,7 @@ function BookSummary({ book }: { book: ScannerBacktestBook }) {
         </Text>
         <Text variant="caption" color="secondary">
           {t('signals:lab.bookSkipped')}: {book.tradesSkipped ?? 0}
+          {(book.skippedNoRisk ?? 0) > 0 ? ` (${t('signals:lab.bookSkippedRisk')}: ${book.skippedNoRisk})` : ''}
         </Text>
       </TradeStats>
     </>
@@ -282,6 +284,7 @@ export function SignalsBacktestPanel({
   const [scope, setScope] = useState<'symbol' | 'watchlist'>('symbol');
   const [startingBalance, setStartingBalance] = useState(10000);
   const [riskPct, setRiskPct] = useState(1);
+  const [maxOpenRiskPct, setMaxOpenRiskPct] = useState(3);
   const [rangeKey, setRangeKey] = useState(rangeOptions[1]?.value ?? rangeOptions[0]?.value ?? '90d');
 
   const ruleById = useMemo(() => new Map(rules.map((r) => [r.id, r])), [rules]);
@@ -601,6 +604,20 @@ export function SignalsBacktestPanel({
               onChange={(v) => setRiskPct(typeof v === 'number' ? v : 1)}
             />
           </Field>
+          <Field>
+            <Text variant="caption" color="secondary">
+              {t('signals:lab.maxOpenRisk')}
+            </Text>
+            <InputNumber
+              min={0.1}
+              max={100}
+              step={0.5}
+              value={maxOpenRiskPct}
+              aria-label={t('signals:lab.maxOpenRisk')}
+              style={{ minWidth: 100 }}
+              onChange={(v) => setMaxOpenRiskPct(typeof v === 'number' ? v : 3)}
+            />
+          </Field>
         ) : null}
         <Field>
           <Text variant="caption" color="secondary">
@@ -625,6 +642,7 @@ export function SignalsBacktestPanel({
               scope: source === 'profile' ? scope : 'symbol',
               startingBalance: watchlistRun ? startingBalance : undefined,
               riskPct: watchlistRun ? riskPct : undefined,
+              maxOpenRiskPct: watchlistRun ? maxOpenRiskPct : undefined,
               symbol: watchlistRun ? undefined : symbol.trim().toUpperCase(),
               exchange: watchlistRun ? undefined : (exchange as MarketExchange),
               rangeKey,

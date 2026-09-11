@@ -112,6 +112,8 @@
     "watchlistCoins": "Watchlist ({{count}})",
     "startingBalance": "Starting balance",
     "riskPct": "Risk %",
+    "maxOpenRisk": "Max open risk %",
+    "bookSkippedRisk": "no risk room",
     "book": "Shared balance",
     "bookStart": "Start",
     "bookEnd": "End",

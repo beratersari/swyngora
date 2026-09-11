@@ -32,6 +32,7 @@ export type SignalsBacktestPanelProps = {
     scope?: 'symbol' | 'watchlist';
     startingBalance?: number;
     riskPct?: number;
+    maxOpenRiskPct?: number;
     exchange?: MarketExchange;
     rangeKey: string;
   }) => void;
