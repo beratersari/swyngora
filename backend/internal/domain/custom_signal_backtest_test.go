@@ -39,11 +39,11 @@ func TestEncodeDecodeCustomProfileSnapshot(t *testing.T) {
 
 func TestReplayCustomSignalBacktest_OnsetOnUptrend(t *testing.T) {
 	t.Parallel()
-	bars := synthTrend(220, 50, 0.8)
-	bars[len(bars)-1].Volume = 20000
-	daily := synthTrend(220, 40, 1.5)
+	bars := synthTrend(221, 50, 0.8)
+	bars[219].Volume = 20000
+	daily := synthTrend(221, 40, 1.5)
 	start := bars[80].OpenTime
-	end := bars[len(bars)-1].OpenTime
+	end := bars[219].OpenTime
 	rep, err := ReplayCustomSignalBacktest(CustomBacktestInput{
 		Exchange: ExchangeBinance, Symbol: "ETHUSDT",
 		Primary: bars, Higher: daily, BTCPrimary: daily, BTCHigher: daily,

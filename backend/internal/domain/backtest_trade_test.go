@@ -57,6 +57,47 @@ func TestFirstTouch_EntersNextOpenNotSignalOpen(t *testing.T) {
 	}
 }
 
+func TestFirstTouch_MissingNextOpenHasNoTrade(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	got := SimulateBacktestTrade([]OHLC{
+		{OpenTime: t0, Open: 100, High: 101, Low: 99, Close: 100},
+		{OpenTime: t0.Add(4 * time.Hour), Open: 0, High: 106, Low: 99, Close: 104},
+	}, 0, BacktestTradeSideLong, SwingLevels{Entry: 100, StopLoss: 97, TakeProfit: 105, Leverage: 1})
+	if got != nil {
+		t.Fatalf("missing next open must not invent Outcome=open at plan entry: %+v", got)
+	}
+}
+
+func TestFirstTouch_LastBarHasNoTrade(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	got := SimulateBacktestTrade([]OHLC{
+		{OpenTime: t0, Open: 100, High: 101, Low: 99, Close: 100},
+	}, 0, BacktestTradeSideLong, SwingLevels{Entry: 100, StopLoss: 97, TakeProfit: 105, Leverage: 1})
+	if got != nil {
+		t.Fatalf("no next bar must not invent Outcome=open at plan entry: %+v", got)
+	}
+}
+
+func TestOHLCFromCandles_DoesNotInventOpen(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	got := OHLCFromCandles([]Candle{
+		{OpenTime: t0, Open: "", High: "101", Low: "99", Close: "100"},
+		{OpenTime: t0.Add(time.Hour), Open: "0", High: "102", Low: "98", Close: "101"},
+	})
+	if len(got) != 2 {
+		t.Fatalf("len %d", len(got))
+	}
+	if got[0].Open != 0 || got[0].Close != 100 || got[0].High != 101 || got[0].Low != 99 {
+		t.Fatalf("keep close/high/low, leave open empty: %+v", got[0])
+	}
+	if got[1].Open != 0 || got[1].Close != 101 {
+		t.Fatalf("zero open stays missing: %+v", got[1])
+	}
+}
+
 func TestFirstTouch_LongSLAndSameBarConservative(t *testing.T) {
 	t.Parallel()
 	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)

@@ -122,7 +122,9 @@ func ScannerRuleTradeSide(r ScannerRule) string {
 	return BacktestTradeSideLong
 }
 
-// OHLCFromCandles keeps index alignment. Missing open/high/low fall back to close.
+// OHLCFromCandles keeps index alignment. Missing open stays 0 (Lab must not
+// invent a fill from the close). Missing high/low fall back to close, or to
+// open+close when the open is known — never to a zero open.
 func OHLCFromCandles(candles []Candle) []OHLC {
 	out := make([]OHLC, len(candles))
 	for i, c := range candles {
@@ -132,21 +134,38 @@ func OHLCFromCandles(candles []Candle) []OHLC {
 		}
 		o, oerr := parseClose(c.Open)
 		if oerr != nil || o <= 0 || math.IsNaN(o) {
-			o = cl
+			o = 0
 		}
 		h, herr := parseClose(c.High)
 		if herr != nil || h <= 0 || math.IsNaN(h) {
-			h = math.Max(o, cl)
+			if o > 0 {
+				h = math.Max(o, cl)
+			} else {
+				h = cl
+			}
 		}
 		l, lerr := parseClose(c.Low)
 		if lerr != nil || l <= 0 || math.IsNaN(l) {
-			l = math.Min(o, cl)
+			if o > 0 {
+				l = math.Min(o, cl)
+			} else {
+				l = cl
+			}
 		}
-		if h < math.Max(o, cl) {
-			h = math.Max(o, cl)
-		}
-		if l > math.Min(o, cl) {
-			l = math.Min(o, cl)
+		if o > 0 {
+			if h < math.Max(o, cl) {
+				h = math.Max(o, cl)
+			}
+			if l > math.Min(o, cl) {
+				l = math.Min(o, cl)
+			}
+		} else {
+			if h < cl {
+				h = cl
+			}
+			if l <= 0 || l > cl {
+				l = cl
+			}
 		}
 		out[i] = OHLC{
 			OpenTime: c.OpenTime, CloseTime: c.CloseTime,
@@ -179,27 +198,13 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 	// The signal is only known at the bar close. Fill the next open.
 	entryIdx := signalIdx + 1
 	if entryIdx >= len(bars) {
-		if !validTradeLevels(side, entry, sl, tp) {
-			return nil
-		}
-		return &BacktestTrade{
-			Side: side, Leverage: clampBacktestLeverage(levels), Entry: round8(entry),
-			StopLoss: round8(sl), TakeProfit: round8(tp),
-			Outcome: BacktestTradeOutcomeOpen,
-		}
+		// No next bar, so no real fill. Do not invent Outcome=open at the plan.
+		return nil
 	}
 	nextOpen := bars[entryIdx].Open
 	if nextOpen <= 0 {
-		// Next bar has no open. Do not invent one from the close.
-		if !validTradeLevels(side, entry, sl, tp) {
-			return nil
-		}
-		lev := clampBacktestLeverage(levels)
-		return &BacktestTrade{
-			Side: side, Leverage: lev, Entry: round8(entry),
-			StopLoss: round8(sl), TakeProfit: round8(tp),
-			Outcome: BacktestTradeOutcomeOpen,
-		}
+		// Next bar has no open. Do not invent a fill from the close or plan.
+		return nil
 	}
 	entry = nextOpen
 	lev := clampBacktestLeverage(levels)
