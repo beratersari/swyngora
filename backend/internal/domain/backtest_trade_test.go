@@ -99,8 +99,11 @@ func TestFirstTouch_SameBarFinerTakesTP(t *testing.T) {
 	if math.Abs(got.PnLPct-10) > 0.05 {
 		t.Fatalf("tp pnl %+v", got)
 	}
-	if got.HitAt == nil || !got.HitAt.Equal(t0.Add(4*time.Hour)) {
-		t.Fatalf("hitAt %+v", got.HitAt)
+	if got.HitAt != nil || !got.HitTimeUnknown {
+		t.Fatalf("wick is not an exact time: %+v", got)
+	}
+	if got.ClosedKnownAt == nil || !got.ClosedKnownAt.Equal(t0.Add(5*time.Hour)) {
+		t.Fatalf("hold risk until the 1h close %+v", got.ClosedKnownAt)
 	}
 }
 
@@ -392,8 +395,28 @@ func TestFirstTouch_HitTimeFromFinerNotParentOpen(t *testing.T) {
 	if got == nil || got.Outcome != BacktestTradeOutcomeTP {
 		t.Fatalf("%+v", got)
 	}
-	if got.HitAt == nil || !got.HitAt.Equal(t0.Add(6*time.Hour)) || got.HitTimeUnknown {
-		t.Fatalf("hit time must be the 1h print, not 4h open: %+v", got)
+	if got.HitAt != nil || !got.HitTimeUnknown {
+		t.Fatalf("1h wick is not exact: %+v", got)
+	}
+	if got.ClosedKnownAt == nil || !got.ClosedKnownAt.Equal(t0.Add(7*time.Hour)) {
+		t.Fatalf("known-by is that 1h close, not 4h open: %+v", got.ClosedKnownAt)
+	}
+}
+
+func TestFirstTouch_GapOpenIsExactHitTime(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	got := SimulateBacktestTradeOpts([]OHLC{
+		{OpenTime: t0, CloseTime: t0.Add(4 * time.Hour), Open: 100, High: 101, Low: 99, Close: 100},
+		{OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(8 * time.Hour), Open: 106, High: 107, Low: 105, Close: 106},
+	}, 0, BacktestTradeSideLong, SwingLevels{Entry: 100, StopLoss: 97, TakeProfit: 105, Leverage: 1}, BacktestTouchOpts{
+		Interval: Interval4h,
+	})
+	if got == nil || got.Outcome != BacktestTradeOutcomeTP || got.HitTimeUnknown {
+		t.Fatalf("gap through TP is exact: %+v", got)
+	}
+	if got.HitAt == nil || !got.HitAt.Equal(t0.Add(4*time.Hour)) {
+		t.Fatalf("hitAt %+v", got.HitAt)
 	}
 }
 

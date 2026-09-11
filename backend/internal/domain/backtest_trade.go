@@ -255,14 +255,15 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 				lastInRange = j
 			}
 		}
-		hit, px, at := resolveFirstTouch(bar, side, sl, tp, opts.Interval, opts.Finer, 0)
-		if hit == "" {
+		touch := resolveFirstTouch(bar, side, sl, tp, opts.Interval, opts.Finer, 0)
+		if touch.hit == "" {
 			continue
 		}
-		_, barEnd := ParentBarWindow(bar, opts.Interval)
+		hit, px, at := touch.hit, touch.price, touch.at
+		barEnd := touch.knownBy
 		if barEnd.IsZero() || !barEnd.After(bar.OpenTime) {
-			if d := IntervalDuration(opts.Interval); d > 0 && !bar.OpenTime.IsZero() {
-				barEnd = bar.OpenTime.UTC().Add(d)
+			if _, end := ParentBarWindow(bar, opts.Interval); end.After(bar.OpenTime) {
+				barEnd = end
 			} else if j+1 < len(bars) && bars[j+1].OpenTime.After(bar.OpenTime) {
 				barEnd = bars[j+1].OpenTime.UTC()
 			}
@@ -510,10 +511,17 @@ func OHLCInside(bars []OHLC, parent OHLC, parentIV CandleInterval) []OHLC {
 	return out
 }
 
-func resolveFirstTouch(bar OHLC, side string, sl, tp float64, iv CandleInterval, finer FineBarLookup, depth int) (hit string, price float64, at time.Time) {
+type firstTouch struct {
+	hit     string
+	price   float64
+	at      time.Time // set only when the open gapped through the level
+	knownBy time.Time // bar close: earliest we know the trade is done
+}
+
+func resolveFirstTouch(bar OHLC, side string, sl, tp float64, iv CandleInterval, finer FineBarLookup, depth int) firstTouch {
 	hit, px, both := inspectBarTouch(bar, side, sl, tp)
 	if hit == "" && !both {
-		return "", 0, time.Time{}
+		return firstTouch{}
 	}
 	if finer != nil && depth < backtestFinerMaxDepth {
 		next, ok := FinerBacktestInterval(iv)
@@ -537,9 +545,9 @@ func resolveFirstTouch(bar OHLC, side string, sl, tp float64, iv CandleInterval,
 			}
 			if canWalk {
 				for _, sb := range sub {
-					h, p, t := resolveFirstTouch(sb, side, sl, tp, next, finer, depth+1)
-					if h != "" {
-						return h, p, t
+					got := resolveFirstTouch(sb, side, sl, tp, next, finer, depth+1)
+					if got.hit != "" {
+						return got
 					}
 				}
 			}
@@ -549,21 +557,34 @@ func resolveFirstTouch(bar OHLC, side string, sl, tp float64, iv CandleInterval,
 		hit, px = BacktestTradeOutcomeSL, sl
 	}
 	if hit == "" {
-		return "", 0, time.Time{}
+		return firstTouch{}
 	}
-	// Finest bar, or a bar we reached by walking finer: its open is the print time.
-	if depth > 0 {
-		return hit, px, bar.OpenTime
+	_, end := ParentBarWindow(bar, iv)
+	if end.IsZero() || !end.After(bar.OpenTime) {
+		if d := IntervalDuration(iv); d > 0 && !bar.OpenTime.IsZero() {
+			end = bar.OpenTime.UTC().Add(d)
+		}
 	}
-	d := IntervalDuration(iv)
-	if d <= 0 {
-		d = barSpan(bar, iv)
+	out := firstTouch{hit: hit, price: px, knownBy: end}
+	// Only a gap through the level at the open is an exact print time.
+	if !both && openGapsLevel(bar, side, sl, tp) {
+		out.at = bar.OpenTime.UTC()
 	}
-	if d > 0 && d <= time.Minute {
-		return hit, px, bar.OpenTime
+	return out
+}
+
+func openGapsLevel(bar OHLC, side string, sl, tp float64) bool {
+	open := bar.Open
+	if open <= 0 {
+		open = bar.Close
 	}
-	// Parent bar with no usable smaller tape: keep the result, time unknown.
-	return hit, px, time.Time{}
+	if open <= 0 {
+		return false
+	}
+	if side == BacktestTradeSideShort {
+		return open >= sl || open <= tp
+	}
+	return open <= sl || open >= tp
 }
 
 // TradeRiskFreeAt is when risk can be released. Unknown hit times wait until the parent bar close.

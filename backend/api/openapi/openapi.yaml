@@ -9391,8 +9391,8 @@ components:
         exitPrice: { type: number, description: Fill price. A gap through the stop uses the candle open; a wick through the stop or a TP fill uses the level }
         pnlPct: { type: number, description: Leveraged percent result }
         barsHeld: { type: integer }
-        hitAt: { type: string, format: date-time, description: When TP/SL printed on finer tape. Omitted when the exact time is unknown }
-        hitTimeUnknown: { type: boolean, description: True when TP/SL printed on the parent bar but smaller-interval tape was missing }
+        hitAt: { type: string, format: date-time, description: Set only when a candle opens through TP/SL. Omitted for wick hits }
+        hitTimeUnknown: { type: boolean, description: True when TP/SL printed inside a bar (any interval) so the exact time is unknown }
         closedKnownAt: { type: string, format: date-time, description: When risk can be released. Parent bar close if hit time is unknown }
     BacktestHorizonStats:
       type: object
