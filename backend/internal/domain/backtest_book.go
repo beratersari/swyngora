@@ -80,6 +80,7 @@ type BacktestBookFill struct {
 	ClosedInRange  bool
 	Outcome        string
 	HasExit        bool
+	HitTimeUnknown bool
 	Score          float64
 }
 
@@ -361,17 +362,18 @@ func BookFillsFromSignals(sigs []ScannerBacktestSignal, rangeEnd time.Time) []Ba
 			continue
 		}
 		var exit time.Time
-		hasExit := tr.HitAt != nil && !tr.HitAt.IsZero() &&
-			(tr.Outcome == BacktestTradeOutcomeTP || tr.Outcome == BacktestTradeOutcomeSL)
+		closed := tr.Outcome == BacktestTradeOutcomeTP || tr.Outcome == BacktestTradeOutcomeSL
+		free := TradeRiskFreeAt(tr)
+		hasExit := closed && free != nil
 		if hasExit {
-			exit = tr.HitAt.UTC()
+			exit = free.UTC()
 		}
 		rangePx := tr.RangeExitPrice
 		if rangePx <= 0 {
 			rangePx = tr.ExitPrice
 		}
 		closedIn := hasExit && !tr.ClosedAfterRange
-		if hasExit && !end.IsZero() && tr.HitAt.After(end) {
+		if hasExit && !end.IsZero() && free.After(end) {
 			closedIn = false
 		}
 		score := 0.0
@@ -382,7 +384,8 @@ func BookFillsFromSignals(sigs []ScannerBacktestSignal, rangeEnd time.Time) []Ba
 			Exchange: s.Exchange, Symbol: s.Symbol, Side: tr.Side, EntryAt: entryAt, ExitAt: exit,
 			Entry: tr.Entry, StopLoss: tr.StopLoss, ExitPrice: tr.ExitPrice,
 			RangeExitPrice: rangePx, Leverage: tr.Leverage,
-			ClosedInRange: closedIn, Outcome: tr.Outcome, HasExit: hasExit, Score: score,
+			ClosedInRange: closedIn, Outcome: tr.Outcome, HasExit: hasExit,
+			HitTimeUnknown: tr.HitTimeUnknown, Score: score,
 		})
 	}
 	return out

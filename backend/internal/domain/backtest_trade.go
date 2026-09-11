@@ -47,6 +47,8 @@ type BacktestTrade struct {
 	PnLPct           float64    `json:"pnlPct"` // leveraged percent from the fill
 	BarsHeld         int        `json:"barsHeld,omitempty"`
 	HitAt            *time.Time `json:"hitAt,omitempty"`
+	HitTimeUnknown   bool       `json:"hitTimeUnknown,omitempty"`
+	ClosedKnownAt    *time.Time `json:"closedKnownAt,omitempty"`
 	EnteredAt        *time.Time `json:"enteredAt,omitempty"`
 	ClosedAfterRange bool       `json:"closedAfterRange,omitempty"`
 	RangeExitPrice   float64    `json:"rangeExitPrice,omitempty"`
@@ -257,21 +259,37 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 		if hit == "" {
 			continue
 		}
-		hitAt := at
-		if hitAt.IsZero() {
-			hitAt = bar.OpenTime
+		_, barEnd := ParentBarWindow(bar, opts.Interval)
+		if barEnd.IsZero() || !barEnd.After(bar.OpenTime) {
+			if d := IntervalDuration(opts.Interval); d > 0 && !bar.OpenTime.IsZero() {
+				barEnd = bar.OpenTime.UTC().Add(d)
+			} else if j+1 < len(bars) && bars[j+1].OpenTime.After(bar.OpenTime) {
+				barEnd = bars[j+1].OpenTime.UTC()
+			}
 		}
-		hitInRange := rangeEnd.IsZero() || !hitAt.UTC().After(rangeEnd)
-		if hitInRange && spansEnd && opts.Finer == nil {
+		known := !at.IsZero()
+		if known {
+			t := at.UTC()
+			out.HitAt = &t
+			out.ClosedKnownAt = &t
+		} else {
+			out.HitTimeUnknown = true
+			if !barEnd.IsZero() {
+				t := barEnd.UTC()
+				out.ClosedKnownAt = &t
+			}
+		}
+		freeAt := TradeRiskFreeAt(out)
+		hitInRange := rangeEnd.IsZero() || (freeAt != nil && !freeAt.After(rangeEnd))
+		if known {
+			hitInRange = rangeEnd.IsZero() || !at.UTC().After(rangeEnd)
+		} else if spansEnd {
+			// Hit was somewhere in this bar; do not assume it printed before range end.
 			hitInRange = false
 		}
 		out.Outcome = hit
 		out.ExitPrice = round8(px)
 		out.BarsHeld = j - entryIdx
-		if !hitAt.IsZero() {
-			t := hitAt.UTC()
-			out.HitAt = &t
-		}
 		out.PnLPct = LeveragedPnLPct(side, entry, px, lev)
 		if !hitInRange {
 			out.ClosedAfterRange = true
@@ -528,23 +546,59 @@ func resolveFirstTouch(bar OHLC, side string, sl, tp float64, iv CandleInterval,
 		}
 	}
 	if both {
-		return BacktestTradeOutcomeSL, sl, bar.OpenTime
+		hit, px = BacktestTradeOutcomeSL, sl
 	}
-	return hit, px, bar.OpenTime
+	if hit == "" {
+		return "", 0, time.Time{}
+	}
+	// Finest bar, or a bar we reached by walking finer: its open is the print time.
+	if depth > 0 {
+		return hit, px, bar.OpenTime
+	}
+	d := IntervalDuration(iv)
+	if d <= 0 {
+		d = barSpan(bar, iv)
+	}
+	if d > 0 && d <= time.Minute {
+		return hit, px, bar.OpenTime
+	}
+	// Parent bar with no usable smaller tape: keep the result, time unknown.
+	return hit, px, time.Time{}
 }
 
-// TradeOpenAt is true when tr has not printed TP/SL before at.
+// TradeRiskFreeAt is when risk can be released. Unknown hit times wait until the parent bar close.
+func TradeRiskFreeAt(tr *BacktestTrade) *time.Time {
+	if tr == nil {
+		return nil
+	}
+	if tr.HitTimeUnknown && tr.ClosedKnownAt != nil && !tr.ClosedKnownAt.IsZero() {
+		t := tr.ClosedKnownAt.UTC()
+		return &t
+	}
+	if tr.HitAt != nil && !tr.HitAt.IsZero() {
+		t := tr.HitAt.UTC()
+		return &t
+	}
+	if tr.ClosedKnownAt != nil && !tr.ClosedKnownAt.IsZero() {
+		t := tr.ClosedKnownAt.UTC()
+		return &t
+	}
+	return nil
+}
+
+// TradeOpenAt is true when tr has not released risk before at.
 func TradeOpenAt(tr *BacktestTrade, at time.Time) bool {
 	if tr == nil {
 		return false
 	}
-	if tr.HitAt == nil || tr.HitAt.IsZero() {
+	free := TradeRiskFreeAt(tr)
+	if free == nil {
 		return true
 	}
 	if at.IsZero() {
 		return true
 	}
-	return tr.HitAt.UTC().After(at.UTC())
+	return free.After(at.UTC())
 }
 
 func barSpan(bar OHLC, iv CandleInterval) time.Duration {

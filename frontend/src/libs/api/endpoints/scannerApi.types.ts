@@ -109,6 +109,8 @@ export type ScannerBacktestTrade = {
   pnlPct: number;
   barsHeld?: number;
   hitAt?: string;
+  hitTimeUnknown?: boolean;
+  closedKnownAt?: string;
 };
 
 export type ScannerBacktestSignal = {

@@ -392,8 +392,28 @@ func TestFirstTouch_HitTimeFromFinerNotParentOpen(t *testing.T) {
 	if got == nil || got.Outcome != BacktestTradeOutcomeTP {
 		t.Fatalf("%+v", got)
 	}
-	if got.HitAt == nil || !got.HitAt.Equal(t0.Add(6*time.Hour)) {
-		t.Fatalf("hit time must be the 1h print, not 4h open: %+v", got.HitAt)
+	if got.HitAt == nil || !got.HitAt.Equal(t0.Add(6*time.Hour)) || got.HitTimeUnknown {
+		t.Fatalf("hit time must be the 1h print, not 4h open: %+v", got)
+	}
+}
+
+func TestFirstTouch_UnknownTimeWithoutFiner(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	got := SimulateBacktestTradeOpts([]OHLC{
+		{OpenTime: t0, CloseTime: t0.Add(4 * time.Hour), Open: 100, High: 101, Low: 99, Close: 100},
+		{OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(8 * time.Hour), Open: 100, High: 106, Low: 99, Close: 105},
+	}, 0, BacktestTradeSideLong, SwingLevels{Entry: 100, StopLoss: 97, TakeProfit: 105, Leverage: 1}, BacktestTouchOpts{
+		Interval: Interval4h,
+	})
+	if got == nil || got.Outcome != BacktestTradeOutcomeTP || got.ExitPrice != 105 {
+		t.Fatalf("keep TP %+v", got)
+	}
+	if got.HitAt != nil || !got.HitTimeUnknown {
+		t.Fatalf("time must be unknown without finer: %+v", got)
+	}
+	if got.ClosedKnownAt == nil || !got.ClosedKnownAt.Equal(t0.Add(8*time.Hour)) {
+		t.Fatalf("risk free at parent close %+v", got.ClosedKnownAt)
 	}
 }
 
@@ -411,6 +431,14 @@ func TestTradeOpenAt(t *testing.T) {
 	}
 	if !TradeOpenAt(closed, t0.Add(4*time.Hour)) {
 		t.Fatal("still open before hit")
+	}
+	known := t0.Add(8 * time.Hour)
+	unk := &BacktestTrade{Outcome: BacktestTradeOutcomeSL, HitTimeUnknown: true, ClosedKnownAt: &known}
+	if !TradeOpenAt(unk, t0.Add(4*time.Hour)) {
+		t.Fatal("unknown hit must hold risk until bar close")
+	}
+	if TradeOpenAt(unk, t0.Add(8*time.Hour)) {
+		t.Fatal("risk frees at known close")
 	}
 }
 

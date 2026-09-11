@@ -238,6 +238,7 @@ function TradeDetail({ trade }: { trade: ScannerBacktestTrade }) {
       </Text>
       <Text variant="caption" color="primary">
         {t('signals:lab.outcome')}: {outcomeLabel(t, trade.outcome)}
+        {trade.hitTimeUnknown ? ` (${t('signals:lab.hitTimeUnknown')})` : ''}
       </Text>
       <Text variant="caption" color={tradePnlTone(trade)} mono>
         {t('signals:lab.pnl')}: {formatChangePercent(trade.pnlPct)}
@@ -427,6 +428,7 @@ export function SignalsBacktestPanel({
       render: (_, row) => (
         <Text variant="caption" color={row.trade?.outcome === 'tp' ? 'success' : row.trade?.outcome === 'sl' ? 'error' : 'secondary'}>
           {outcomeLabel(t, row.trade?.outcome)}
+          {row.trade?.hitTimeUnknown ? ` (${t('signals:lab.hitTimeUnknown')})` : ''}
         </Text>
       ),
     },

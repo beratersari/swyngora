@@ -169,6 +169,7 @@
     "outcomeTp": "Take profit first",
     "outcomeSl": "Stop first",
     "outcomeOpen": "Still open",
+    "hitTimeUnknown": "time unknown",
     "pnl": "PnL",
     "barsHeld": "Bars held",
     "hitTrade": "Trade plan",

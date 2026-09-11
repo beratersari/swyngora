@@ -188,3 +188,26 @@ func TestSimulateSharedBacktestBook_OneOpenPerCoin(t *testing.T) {
 		t.Fatalf("after close next ETH can open: %+v", freed)
 	}
 }
+
+func TestSimulateSharedBacktestBook_UnknownHitHoldsRiskUntilBarClose(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	// ETH TP sometime in 08:00–12:00. Risk stays until 12:00, not 08:00.
+	got := SimulateSharedBacktestBook(10000, 1, 1, []BacktestBookFill{
+		{Exchange: ExchangeBinance, Symbol: "ETHUSDT", Side: BacktestTradeSideLong,
+			EntryAt: t0, ExitAt: t0.Add(4 * time.Hour),
+			Entry: 100, StopLoss: 99, ExitPrice: 105, RangeExitPrice: 105, Leverage: 10,
+			HasExit: true, ClosedInRange: true, HitTimeUnknown: true, Outcome: BacktestTradeOutcomeTP},
+		{Exchange: ExchangeBinance, Symbol: "SOLUSDT", Side: BacktestTradeSideLong,
+			EntryAt: t0.Add(time.Hour),
+			Entry:   50, StopLoss: 49.5, ExitPrice: 50, RangeExitPrice: 50, Leverage: 10,
+			Outcome: BacktestTradeOutcomeOpen},
+		{Exchange: ExchangeBinance, Symbol: "SOLUSDT", Side: BacktestTradeSideLong,
+			EntryAt: t0.Add(4 * time.Hour),
+			Entry:   50, StopLoss: 49.5, ExitPrice: 50, RangeExitPrice: 50, Leverage: 10,
+			Outcome: BacktestTradeOutcomeOpen},
+	}, t0.Add(24*time.Hour))
+	if got.SkippedNoRisk != 1 || got.TradesTaken != 2 {
+		t.Fatalf("hold risk until parent close: %+v", got)
+	}
+}
