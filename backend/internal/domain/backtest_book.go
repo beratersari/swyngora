@@ -351,16 +351,10 @@ func BookFillsFromSignals(sigs []ScannerBacktestSignal, rangeEnd time.Time) []Ba
 			continue
 		}
 		tr := s.Trade
-		entryAt := s.SignalAt.UTC()
-		if tr.EnteredAt != nil && !tr.EnteredAt.IsZero() {
-			entryAt = tr.EnteredAt.UTC()
-		} else if !s.SignalAt.IsZero() {
-			// Legacy rows used the signal open; skip the signal bar.
-			entryAt = s.SignalAt.UTC().Add(time.Nanosecond)
-		}
-		if entryAt.IsZero() {
+		if tr.EnteredAt == nil || tr.EnteredAt.IsZero() {
 			continue
 		}
+		entryAt := tr.EnteredAt.UTC()
 		var exit time.Time
 		closed := tr.Outcome == BacktestTradeOutcomeTP || tr.Outcome == BacktestTradeOutcomeSL
 		free := TradeRiskFreeAt(tr)

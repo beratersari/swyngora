@@ -289,8 +289,11 @@ func TestFirstTouch_GapThroughTP(t *testing.T) {
 		{OpenTime: t0, Open: 100, High: 101, Low: 99, Close: 100},
 		{OpenTime: t0.Add(time.Hour), Open: 107, High: 108, Low: 106, Close: 107},
 	}, 0, BacktestTradeSideLong, SwingLevels{Entry: 100, StopLoss: 97, TakeProfit: 105, Leverage: 1})
-	if got == nil || got.Outcome != BacktestTradeOutcomeTP || got.ExitPrice != 105 {
+	if got == nil || got.Outcome != BacktestTradeOutcomeTP {
 		t.Fatalf("%+v", got)
+	}
+	if math.Abs(got.Entry-107) > 1e-9 || got.ExitPrice != 107 || math.Abs(got.PnLPct) > 0.05 {
+		t.Fatalf("already through TP at next open: %+v", got)
 	}
 }
 
@@ -304,8 +307,8 @@ func TestFirstTouch_GapThroughStopFillsOpen(t *testing.T) {
 	if long == nil || long.Outcome != BacktestTradeOutcomeSL || long.ExitPrice != 94 {
 		t.Fatalf("long gap SL %+v", long)
 	}
-	if math.Abs(long.PnLPct-(-12)) > 0.05 {
-		t.Fatalf("long gap pnl %+v", long)
+	if math.Abs(long.Entry-94) > 1e-9 || math.Abs(long.PnLPct) > 0.05 {
+		t.Fatalf("must not PnL from the old signal close: %+v", long)
 	}
 	short := SimulateBacktestTrade([]OHLC{
 		{OpenTime: t0, Open: 100, High: 101, Low: 99, Close: 100},
@@ -314,8 +317,8 @@ func TestFirstTouch_GapThroughStopFillsOpen(t *testing.T) {
 	if short == nil || short.Outcome != BacktestTradeOutcomeSL || short.ExitPrice != 106 {
 		t.Fatalf("short gap SL %+v", short)
 	}
-	if math.Abs(short.PnLPct-(-6)) > 0.05 {
-		t.Fatalf("short gap pnl %+v", short)
+	if math.Abs(short.Entry-106) > 1e-9 || math.Abs(short.PnLPct) > 0.05 {
+		t.Fatalf("must not PnL from the old signal close: %+v", short)
 	}
 }
 
@@ -414,6 +417,9 @@ func TestFirstTouch_GapOpenIsExactHitTime(t *testing.T) {
 	})
 	if got == nil || got.Outcome != BacktestTradeOutcomeTP || got.HitTimeUnknown {
 		t.Fatalf("gap through TP is exact: %+v", got)
+	}
+	if math.Abs(got.Entry-106) > 1e-9 || got.ExitPrice != 106 || math.Abs(got.PnLPct) > 0.05 {
+		t.Fatalf("fill at the real open, not the old entry: %+v", got)
 	}
 	if got.HitAt == nil || !got.HitAt.Equal(t0.Add(4*time.Hour)) {
 		t.Fatalf("hitAt %+v", got.HitAt)

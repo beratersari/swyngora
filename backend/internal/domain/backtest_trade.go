@@ -182,41 +182,27 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 		if !validTradeLevels(side, entry, sl, tp) {
 			return nil
 		}
-		lev := levels.Leverage
-		if lev < 1 {
-			lev = SuggestedSwingLeverage(levels.RiskPct)
-		}
-		if lev < 1 {
-			lev = 1
-		}
-		if lev > BacktestMaxLeverage {
-			lev = BacktestMaxLeverage
-		}
 		return &BacktestTrade{
-			Side: side, Leverage: lev, Entry: round8(entry),
+			Side: side, Leverage: clampBacktestLeverage(levels), Entry: round8(entry),
 			StopLoss: round8(sl), TakeProfit: round8(tp),
 			Outcome: BacktestTradeOutcomeOpen,
 		}
 	}
 	nextOpen := bars[entryIdx].Open
 	if nextOpen <= 0 {
-		nextOpen = bars[entryIdx].Close
+		// Next bar has no open. Do not invent one from the close.
+		if !validTradeLevels(side, entry, sl, tp) {
+			return nil
+		}
+		lev := clampBacktestLeverage(levels)
+		return &BacktestTrade{
+			Side: side, Leverage: lev, Entry: round8(entry),
+			StopLoss: round8(sl), TakeProfit: round8(tp),
+			Outcome: BacktestTradeOutcomeOpen,
+		}
 	}
-	if nextOpen > 0 && validTradeLevels(side, nextOpen, sl, tp) {
-		entry = nextOpen
-	} else if !validTradeLevels(side, entry, sl, tp) {
-		return nil
-	}
-	lev := levels.Leverage
-	if lev < 1 {
-		lev = SuggestedSwingLeverage(levels.RiskPct)
-	}
-	if lev < 1 {
-		lev = 1
-	}
-	if lev > BacktestMaxLeverage {
-		lev = BacktestMaxLeverage
-	}
+	entry = nextOpen
+	lev := clampBacktestLeverage(levels)
 	out := &BacktestTrade{
 		Side: side, Leverage: lev, Entry: round8(entry),
 		StopLoss: round8(sl), TakeProfit: round8(tp),
@@ -225,6 +211,18 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 	if !bars[entryIdx].OpenTime.IsZero() {
 		t := bars[entryIdx].OpenTime.UTC()
 		out.EnteredAt = &t
+	}
+	if hit := throughAtOpenPrice(side, entry, sl, tp); hit != "" {
+		// Already through a level at the only fill we can take. No old-entry PnL.
+		out.Outcome = hit
+		out.ExitPrice = round8(entry)
+		out.PnLPct = 0
+		out.BarsHeld = 0
+		out.HitAt = out.EnteredAt
+		out.ClosedKnownAt = out.EnteredAt
+		out.RangeExitPrice = out.ExitPrice
+		out.RangePnLPct = 0
+		return out
 	}
 	rangeEnd := opts.RangeEnd.UTC()
 	markRange := func(px float64) {
@@ -379,6 +377,42 @@ func priceAtOrBefore(bar OHLC, at time.Time, iv CandleInterval, finer FineBarLoo
 	return 0
 }
 
+func clampBacktestLeverage(levels SwingLevels) int {
+	lev := levels.Leverage
+	if lev < 1 {
+		lev = SuggestedSwingLeverage(levels.RiskPct)
+	}
+	if lev < 1 {
+		lev = 1
+	}
+	if lev > BacktestMaxLeverage {
+		lev = BacktestMaxLeverage
+	}
+	return lev
+}
+
+func throughAtOpenPrice(side string, open, sl, tp float64) string {
+	if open <= 0 || sl <= 0 || tp <= 0 {
+		return ""
+	}
+	if side == BacktestTradeSideShort {
+		if open >= sl {
+			return BacktestTradeOutcomeSL
+		}
+		if open <= tp {
+			return BacktestTradeOutcomeTP
+		}
+		return ""
+	}
+	if open <= sl {
+		return BacktestTradeOutcomeSL
+	}
+	if open >= tp {
+		return BacktestTradeOutcomeTP
+	}
+	return ""
+}
+
 func validTradeLevels(side string, entry, sl, tp float64) bool {
 	if entry <= 0 || sl <= 0 || tp <= 0 {
 		return false
@@ -404,9 +438,6 @@ func firstTouchOnBar(bar OHLC, side string, sl, tp float64) (hit string, price f
 // and the open did not already gap through one of them. A stop gap fills at the open.
 func inspectBarTouch(bar OHLC, side string, sl, tp float64) (hit string, price float64, both bool) {
 	open := bar.Open
-	if open <= 0 {
-		open = bar.Close
-	}
 	if side == BacktestTradeSideShort {
 		if open > 0 && open >= sl {
 			return BacktestTradeOutcomeSL, open, false
@@ -575,9 +606,6 @@ func resolveFirstTouch(bar OHLC, side string, sl, tp float64, iv CandleInterval,
 
 func openGapsLevel(bar OHLC, side string, sl, tp float64) bool {
 	open := bar.Open
-	if open <= 0 {
-		open = bar.Close
-	}
 	if open <= 0 {
 		return false
 	}
