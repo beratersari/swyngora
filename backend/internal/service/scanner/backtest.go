@@ -395,6 +395,7 @@ func (s *Service) executeBacktestJob(ctx context.Context, job domain.ScannerBack
 	total := lastIdx - firstIdx + 1
 	signalCount := 0
 	ohlc := domain.OHLCFromCandles(candles)
+	touch := s.backtestTouchOpts(ctx, job)
 	for i := firstIdx; i <= lastIdx; i++ {
 		if ctx.Err() != nil {
 			_ = s.store.FinishBacktest(ctx, id, domain.BacktestCanceled, signalCount, "context canceled", time.Now().UTC())
@@ -418,7 +419,7 @@ func (s *Service) executeBacktestJob(ctx context.Context, job domain.ScannerBack
 				Return20d: domain.ForwardReturnPct(candles, i, 20),
 			}
 			if i < len(ohlc) && ohlc[i].Close > 0 {
-				sig.Trade = domain.PlanBacktestTrade(ohlc, i, domain.ScannerRuleTradeSide(*rule))
+				sig.Trade = domain.PlanBacktestTradeOpts(ohlc, i, domain.ScannerRuleTradeSide(*rule), touch)
 			}
 			if err := s.store.InsertBacktestSignal(ctx, sig); err == nil {
 				signalCount++
@@ -586,6 +587,7 @@ func (s *Service) executeCustomBacktestJob(ctx context.Context, job domain.Scann
 		Primary: primary, Higher: higher, BTCPrimary: btcPO, BTCHigher: btcHO,
 		RangeStart: job.RangeStart, RangeEnd: job.RangeEnd,
 		Weights: weights, Threshold: threshold, Interval: ivDur,
+		Touch: s.backtestTouchOpts(ctx, job),
 	})
 	if err != nil {
 		_ = s.store.FinishBacktest(ctx, id, domain.BacktestFailed, 0, err.Error(), time.Now().UTC())
@@ -618,6 +620,50 @@ func (s *Service) executeCustomBacktestJob(ctx context.Context, job domain.Scann
 	}
 	_ = s.store.UpdateBacktestProgress(ctx, id, total, total, signalCount, 100)
 	return s.store.FinishBacktest(ctx, id, domain.BacktestCompleted, signalCount, "", time.Now().UTC())
+}
+
+func (s *Service) backtestTouchOpts(ctx context.Context, job domain.ScannerBacktest) domain.BacktestTouchOpts {
+	iv := domain.CandleInterval(strings.TrimSpace(job.Interval))
+	if iv == "" {
+		iv = domain.Interval4h
+	}
+	return domain.BacktestTouchOpts{
+		Interval: iv,
+		Finer:    s.newFinerLookup(ctx, string(job.Exchange), job.Symbol),
+	}
+}
+
+func (s *Service) newFinerLookup(ctx context.Context, exchange, symbol string) domain.FineBarLookup {
+	if s == nil || s.market == nil {
+		return nil
+	}
+	cache := map[string][]domain.OHLC{}
+	return func(parent domain.OHLC, interval domain.CandleInterval) []domain.OHLC {
+		if interval == "" || parent.OpenTime.IsZero() {
+			return nil
+		}
+		start, end := domain.ParentBarWindow(parent, "")
+		if !end.After(start) {
+			return nil
+		}
+		key := string(interval) + "|" + start.UTC().Format(time.RFC3339Nano) + "|" + end.UTC().Format(time.RFC3339Nano)
+		if got, ok := cache[key]; ok {
+			return got
+		}
+		// Pad one finer step so the last slot is not clipped by exclusive end.
+		fetchEnd := end
+		if step := domain.IntervalDuration(interval); step > 0 {
+			fetchEnd = end.Add(step)
+		}
+		candles, err := s.fetchCandlesRange(ctx, exchange, symbol, string(interval), start, fetchEnd)
+		if err != nil {
+			cache[key] = nil
+			return nil
+		}
+		bars := domain.OHLCFromCandles(candles)
+		cache[key] = bars
+		return bars
+	}
 }
 
 func customBacktestBTCSymbol(ex domain.Exchange, symbol string) string {

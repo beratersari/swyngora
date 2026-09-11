@@ -6812,7 +6812,9 @@ paths:
         Each signal includes signalAt, closePrice, optional return1d/return5d/return20d
         (percent price change after 1/5/20 calendar days when data exists), and `trade`
         when a long/short plan exists: leverage, entry, stopLoss, takeProfit, first-touch
-        outcome (tp|sl|open), and leveraged pnlPct. `performance` adds horizon stats plus
+        outcome (tp|sl|open), and leveraged pnlPct. If one bar tags both TP and SL, a
+        smaller interval decides which printed first (outcome and pnlPct follow that
+        print). `performance` adds horizon stats plus
         trade TP/SL counts, win rate, and average/median leveraged PnL.
       operationId: listScannerBacktestSignals
       tags: [Scanner]
@@ -9377,7 +9379,7 @@ components:
         entry: { type: number }
         stopLoss: { type: number }
         takeProfit: { type: number }
-        outcome: { type: string, enum: [tp, sl, open], description: Which of take-profit or stop-loss the later candles hit first }
+        outcome: { type: string, enum: [tp, sl, open], description: Which of take-profit or stop-loss the later candles hit first. When one bar tags both, a smaller interval is used when available }
         exitPrice: { type: number }
         pnlPct: { type: number, description: Leveraged percent result }
         barsHeld: { type: integer }

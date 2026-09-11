@@ -131,6 +131,7 @@ type CustomBacktestInput struct {
 	Weights    CustomSignalWeights
 	Threshold  float64
 	Interval   time.Duration
+	Touch      BacktestTouchOpts
 }
 
 // ReplayCustomSignalBacktest walks closed primary bars in [start, end].
@@ -188,9 +189,9 @@ func ReplayCustomSignalBacktest(in CustomBacktestInput) (CustomBacktestReplay, e
 		if CustomSignalCrossedTrigger(prev, scored.Score, in.Threshold) {
 			factors := customBacktestFactors(scored)
 			side := NormalizeTradeSide(dec.Side)
-			trade := SimulateBacktestTrade(in.Primary, i, side, swingLevelsOrEmpty(dec.Levels))
+			trade := SimulateBacktestTradeOpts(in.Primary, i, side, swingLevelsOrEmpty(dec.Levels), in.Touch)
 			if trade == nil && dec.Levels == nil {
-				trade = PlanBacktestTrade(in.Primary, i, side)
+				trade = PlanBacktestTradeOpts(in.Primary, i, side, in.Touch)
 			}
 			out.Hits = append(out.Hits, CustomBacktestHit{
 				Index: i, At: ot, Close: bar.Close, Score: scored.Score, Grade: scored.Grade,

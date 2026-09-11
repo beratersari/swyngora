@@ -254,6 +254,57 @@ func TestBacktest_CustomProfileStartAndRun(t *testing.T) {
 	}
 }
 
+func TestBacktest_FinerLookupResolvesSameBarTP(t *testing.T) {
+	st, err := scannerstore.Open(filepath.Join(t.TempDir(), "s.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	hour := ohlcToCandles([]domain.OHLC{
+		{OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(5 * time.Hour), Open: 100, High: 106, Low: 99.5, Close: 105},
+		{OpenTime: t0.Add(5 * time.Hour), CloseTime: t0.Add(6 * time.Hour), Open: 105, High: 105.5, Low: 104, Close: 104.5},
+		{OpenTime: t0.Add(6 * time.Hour), CloseTime: t0.Add(7 * time.Hour), Open: 104.5, High: 105, Low: 97, Close: 98},
+		{OpenTime: t0.Add(7 * time.Hour), CloseTime: t0.Add(8 * time.Hour), Open: 98, High: 101, Low: 96, Close: 101},
+	})
+	svc := New(st, &fakeCandles{byKey: map[string][]domain.Candle{
+		"binance|ETHUSDT|1h": hour,
+	}}, &fakeWatch{})
+	parent := domain.OHLC{
+		OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(8 * time.Hour),
+		Open: 100, High: 106, Low: 96, Close: 101,
+	}
+	got := domain.SimulateBacktestTradeOpts([]domain.OHLC{
+		{OpenTime: t0, CloseTime: t0.Add(4 * time.Hour), Open: 100, High: 101, Low: 99, Close: 100},
+		parent,
+	}, 0, domain.BacktestTradeSideLong, domain.SwingLevels{
+		Entry: 100, StopLoss: 97, TakeProfit: 105, Leverage: 2,
+	}, domain.BacktestTouchOpts{
+		Interval: domain.Interval4h,
+		Finer:    svc.newFinerLookup(context.Background(), "binance", "ETHUSDT"),
+	})
+	if got == nil || got.Outcome != domain.BacktestTradeOutcomeTP || got.ExitPrice != 105 {
+		t.Fatalf("lookup must take TP from 1h: %+v", got)
+	}
+	if got.PnLPct <= 0 {
+		t.Fatalf("tp pnl %+v", got)
+	}
+
+	missing := domain.SimulateBacktestTradeOpts([]domain.OHLC{
+		{OpenTime: t0, CloseTime: t0.Add(4 * time.Hour), Open: 100, High: 101, Low: 99, Close: 100},
+		parent,
+	}, 0, domain.BacktestTradeSideLong, domain.SwingLevels{
+		Entry: 100, StopLoss: 97, TakeProfit: 105, Leverage: 1,
+	}, domain.BacktestTouchOpts{
+		Interval: domain.Interval4h,
+		Finer:    svc.newFinerLookup(context.Background(), "binance", "SOLUSDT"),
+	})
+	if missing == nil || missing.Outcome != domain.BacktestTradeOutcomeSL {
+		t.Fatalf("no finer tape must stay SL: %+v", missing)
+	}
+}
+
 func TestBacktest_CustomProfileMissing(t *testing.T) {
 	st, err := scannerstore.Open(filepath.Join(t.TempDir(), "s.db"))
 	if err != nil {

@@ -3765,7 +3765,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("start_backtest",
-		mcp.WithDescription("Start a historical backtest of a scanner rule or a custom signal profile on one symbol. Send ruleId or profileId (not both). profileId=built_in uses the built-in swing mix. Custom jobs still score the factors that have data. If a selected factor has no history at that bar, that timestamp is skipped (no signal); the job reports skippedBars and missingFactors. A signal fires when the mix first crosses 62 on a complete bar. Each hit stores side, leverage, entry, TP, and SL and records whether later candles hit take-profit or stop-loss first. Informational only."),
+		mcp.WithDescription("Start a historical backtest of a scanner rule or a custom signal profile on one symbol. Send ruleId or profileId (not both). profileId=built_in uses the built-in swing mix. Custom jobs still score the factors that have data. If a selected factor has no history at that bar, that timestamp is skipped (no signal); the job reports skippedBars and missingFactors. A signal fires when the mix first crosses 62 on a complete bar. Each hit stores side, leverage, entry, TP, and SL and records whether later candles hit take-profit or stop-loss first. If one bar tags both, a smaller interval is used when available so outcome and PnL follow the first print. Informational only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. ETHUSDT")),
 		mcp.WithString("rangeStart", mcp.Required(), mcp.Description("RFC3339 start")),
@@ -3855,7 +3855,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("list_backtest_signals",
-		mcp.WithDescription("List backtest signals with 1/5/20-day forward returns, first-touch TP/SL trade results (side, leverage, entry, stop, target, outcome, leveraged PnL), and a performance summary (average, median, win rate, sample count per horizon plus trade TP/SL counts). Custom-mix hits include factors (id, score, weight, status) for why the signal fired."),
+		mcp.WithDescription("List backtest signals with 1/5/20-day forward returns, first-touch TP/SL trade results (side, leverage, entry, stop, target, outcome, leveraged PnL), and a performance summary (average, median, win rate, sample count per horizon plus trade TP/SL counts). Same-bar TP+SL uses a smaller interval when available. Custom-mix hits include factors (id, score, weight, status) for why the signal fired."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("id", mcp.Required(), mcp.Description("Backtest job id")),
 		mcp.WithNumber("limit", mcp.Description("Max signals, default 100")),

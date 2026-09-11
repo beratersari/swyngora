@@ -18,7 +18,19 @@ const (
 	BacktestMaxLeverage = 10
 	// BacktestTargetStopLossPct sizes leverage so a full stop is about this % of notional.
 	BacktestTargetStopLossPct = 10.0
+	// backtestFinerMaxDepth is 1d→1h→15m→5m→1m.
+	backtestFinerMaxDepth = 5
 )
+
+// FineBarLookup returns smaller candles inside parent for the given interval.
+// Used when one parent bar touches both TP and SL. Empty means "cannot resolve".
+type FineBarLookup func(parent OHLC, interval CandleInterval) []OHLC
+
+// BacktestTouchOpts is optional first-touch resolution (smaller bars).
+type BacktestTouchOpts struct {
+	Interval CandleInterval
+	Finer    FineBarLookup
+}
 
 // BacktestTrade is the signal's plan plus first-touch result.
 type BacktestTrade struct {
@@ -137,6 +149,12 @@ func OHLCFromCandles(candles []Candle) []OHLC {
 
 // SimulateBacktestTrade walks bars after signalIdx and records which of TP or SL trades first.
 func SimulateBacktestTrade(bars []OHLC, signalIdx int, side string, levels SwingLevels) *BacktestTrade {
+	return SimulateBacktestTradeOpts(bars, signalIdx, side, levels, BacktestTouchOpts{})
+}
+
+// SimulateBacktestTradeOpts is SimulateBacktestTrade with optional finer bars.
+// When one parent bar wicks both TP and SL, Finer is used to see which printed first.
+func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels SwingLevels, opts BacktestTouchOpts) *BacktestTrade {
 	if signalIdx < 0 || signalIdx >= len(bars) {
 		return nil
 	}
@@ -172,14 +190,17 @@ func SimulateBacktestTrade(bars []OHLC, signalIdx int, side string, levels Swing
 		if bar.Close <= 0 && bar.High <= 0 {
 			continue
 		}
-		hit, px := firstTouchOnBar(bar, side, sl, tp)
+		hit, px, at := resolveFirstTouch(bar, side, sl, tp, opts.Interval, opts.Finer, 0)
 		if hit == "" {
 			continue
 		}
 		out.Outcome = hit
 		out.ExitPrice = round8(px)
 		out.BarsHeld = j - signalIdx
-		if !bar.OpenTime.IsZero() {
+		if !at.IsZero() {
+			t := at.UTC()
+			out.HitAt = &t
+		} else if !bar.OpenTime.IsZero() {
 			t := bar.OpenTime.UTC()
 			out.HitAt = &t
 		}
@@ -211,50 +232,187 @@ func validTradeLevels(side string, entry, sl, tp float64) bool {
 }
 
 // firstTouchOnBar returns tp|sl and the fill price. Empty hit means neither level traded.
-// A gap through a level at the open takes that level. Both wicks in one bar count as SL (conservative).
+// A gap through a level at the open takes that level. Both wicks with no finer bars count as SL.
 func firstTouchOnBar(bar OHLC, side string, sl, tp float64) (hit string, price float64) {
+	hit, px, both := inspectBarTouch(bar, side, sl, tp)
+	if both {
+		return BacktestTradeOutcomeSL, sl
+	}
+	return hit, px
+}
+
+// inspectBarTouch reports a clear hit, or both=true when high and low tag both levels
+// and the open did not already gap through one of them.
+func inspectBarTouch(bar OHLC, side string, sl, tp float64) (hit string, price float64, both bool) {
 	open := bar.Open
 	if open <= 0 {
 		open = bar.Close
 	}
 	if side == BacktestTradeSideShort {
 		if open > 0 && open >= sl {
-			return BacktestTradeOutcomeSL, sl
+			return BacktestTradeOutcomeSL, sl, false
 		}
 		if open > 0 && open <= tp {
-			return BacktestTradeOutcomeTP, tp
+			return BacktestTradeOutcomeTP, tp, false
 		}
 		hitSL := bar.High >= sl
 		hitTP := bar.Low <= tp
 		if hitSL && hitTP {
-			return BacktestTradeOutcomeSL, sl
+			return "", 0, true
 		}
 		if hitSL {
-			return BacktestTradeOutcomeSL, sl
+			return BacktestTradeOutcomeSL, sl, false
 		}
 		if hitTP {
-			return BacktestTradeOutcomeTP, tp
+			return BacktestTradeOutcomeTP, tp, false
 		}
-		return "", 0
+		return "", 0, false
 	}
 	if open > 0 && open <= sl {
-		return BacktestTradeOutcomeSL, sl
+		return BacktestTradeOutcomeSL, sl, false
 	}
 	if open > 0 && open >= tp {
-		return BacktestTradeOutcomeTP, tp
+		return BacktestTradeOutcomeTP, tp, false
 	}
 	hitSL := bar.Low <= sl
 	hitTP := bar.High >= tp
 	if hitSL && hitTP {
-		return BacktestTradeOutcomeSL, sl
+		return "", 0, true
 	}
 	if hitSL {
-		return BacktestTradeOutcomeSL, sl
+		return BacktestTradeOutcomeSL, sl, false
 	}
 	if hitTP {
-		return BacktestTradeOutcomeTP, tp
+		return BacktestTradeOutcomeTP, tp, false
 	}
-	return "", 0
+	return "", 0, false
+}
+
+// FinerBacktestInterval is the next smaller bar used when a parent bar tags both levels.
+// Steps stay on intervals every venue publishes (1d / 1h / 15m / 5m / 1m).
+func FinerBacktestInterval(iv CandleInterval) (CandleInterval, bool) {
+	d := IntervalDuration(iv)
+	if d <= 0 {
+		return "", false
+	}
+	return FinerBacktestIntervalForDuration(d)
+}
+
+// FinerBacktestIntervalForDuration picks the next smaller step from a bar's length.
+func FinerBacktestIntervalForDuration(d time.Duration) (CandleInterval, bool) {
+	if d <= time.Minute {
+		return "", false
+	}
+	var next CandleInterval
+	switch {
+	case d > 24*time.Hour:
+		next = Interval1d
+	case d > time.Hour:
+		next = Interval1h
+	case d > 15*time.Minute:
+		next = Interval15m
+	case d > 5*time.Minute:
+		next = Interval5m
+	default:
+		next = Interval1m
+	}
+	if step := IntervalDuration(next); step <= 0 || step >= d {
+		return "", false
+	}
+	return next, true
+}
+
+// ParentBarWindow is [open, close) for a candle. Close is inferred from iv when missing.
+func ParentBarWindow(bar OHLC, iv CandleInterval) (start, end time.Time) {
+	start = bar.OpenTime.UTC()
+	end = bar.CloseTime.UTC()
+	if end.After(start) {
+		return start, end
+	}
+	if d := IntervalDuration(iv); d > 0 && !start.IsZero() {
+		return start, start.Add(d)
+	}
+	return start, end
+}
+
+// OHLCInside keeps finer bars whose open is in the parent window.
+func OHLCInside(bars []OHLC, parent OHLC, parentIV CandleInterval) []OHLC {
+	start, end := ParentBarWindow(parent, parentIV)
+	if start.IsZero() || !end.After(start) {
+		return nil
+	}
+	out := make([]OHLC, 0, len(bars))
+	for _, b := range bars {
+		ot := b.OpenTime.UTC()
+		if ot.Before(start) || !ot.Before(end) {
+			continue
+		}
+		out = append(out, b)
+	}
+	return out
+}
+
+func resolveFirstTouch(bar OHLC, side string, sl, tp float64, iv CandleInterval, finer FineBarLookup, depth int) (hit string, price float64, at time.Time) {
+	hit, px, both := inspectBarTouch(bar, side, sl, tp)
+	if !both {
+		return hit, px, bar.OpenTime
+	}
+	if finer == nil || depth >= backtestFinerMaxDepth {
+		return BacktestTradeOutcomeSL, sl, bar.OpenTime
+	}
+	next, ok := FinerBacktestInterval(iv)
+	if !ok {
+		if span := barSpan(bar, iv); span > 0 {
+			next, ok = FinerBacktestIntervalForDuration(span)
+		}
+	}
+	if !ok {
+		return BacktestTradeOutcomeSL, sl, bar.OpenTime
+	}
+	parent := bar
+	if parent.CloseTime.IsZero() || !parent.CloseTime.After(parent.OpenTime) {
+		if _, end := ParentBarWindow(bar, iv); end.After(bar.OpenTime) {
+			parent.CloseTime = end
+		}
+	}
+	sub := OHLCInside(finer(parent, next), parent, iv)
+	if !finerCoversParent(sub, parent, iv, next) {
+		return BacktestTradeOutcomeSL, sl, bar.OpenTime
+	}
+	for _, sb := range sub {
+		h, p, t := resolveFirstTouch(sb, side, sl, tp, next, finer, depth+1)
+		if h != "" {
+			return h, p, t
+		}
+	}
+	return BacktestTradeOutcomeSL, sl, bar.OpenTime
+}
+
+func barSpan(bar OHLC, iv CandleInterval) time.Duration {
+	if !bar.CloseTime.IsZero() && bar.CloseTime.After(bar.OpenTime) {
+		return bar.CloseTime.Sub(bar.OpenTime)
+	}
+	return IntervalDuration(iv)
+}
+
+func finerCoversParent(sub []OHLC, parent OHLC, parentIV, finerIV CandleInterval) bool {
+	start, end := ParentBarWindow(parent, parentIV)
+	step := IntervalDuration(finerIV)
+	if step <= 0 || !end.After(start) || len(sub) == 0 {
+		return false
+	}
+	have := make(map[int64]struct{}, len(sub))
+	for _, b := range sub {
+		if !b.OpenTime.IsZero() {
+			have[b.OpenTime.UTC().Unix()] = struct{}{}
+		}
+	}
+	for t := start; t.Before(end); t = t.Add(step) {
+		if _, ok := have[t.Unix()]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // LeveragedPnLPct is (price move / entry) * leverage * 100, signed for the side.
@@ -314,6 +472,11 @@ func summarizeBacktestTrades(sigs []ScannerBacktestSignal) BacktestTradeStats {
 
 // PlanBacktestTrade builds ATR/structure levels for the bar and simulates first-touch.
 func PlanBacktestTrade(bars []OHLC, signalIdx int, side string) *BacktestTrade {
+	return PlanBacktestTradeOpts(bars, signalIdx, side, BacktestTouchOpts{})
+}
+
+// PlanBacktestTradeOpts is PlanBacktestTrade with optional finer first-touch bars.
+func PlanBacktestTradeOpts(bars []OHLC, signalIdx int, side string, opts BacktestTouchOpts) *BacktestTrade {
 	if signalIdx < 0 || signalIdx >= len(bars) {
 		return nil
 	}
@@ -327,5 +490,5 @@ func PlanBacktestTrade(bars []OHLC, signalIdx int, side string) *BacktestTrade {
 	if levels == nil {
 		return nil
 	}
-	return SimulateBacktestTrade(bars, signalIdx, side, *levels)
+	return SimulateBacktestTradeOpts(bars, signalIdx, side, *levels, opts)
 }
