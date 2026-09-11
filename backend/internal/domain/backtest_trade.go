@@ -238,31 +238,42 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 		if bar.Close <= 0 && bar.High <= 0 {
 			continue
 		}
-		inRange := rangeEnd.IsZero() || !bar.OpenTime.UTC().After(rangeEnd)
-		if inRange {
+		closedByEnd := rangeEnd.IsZero() || barClosedAtOrBefore(bar, rangeEnd, opts.Interval)
+		spansEnd := !rangeEnd.IsZero() && !bar.OpenTime.UTC().After(rangeEnd) && !closedByEnd
+		if closedByEnd {
 			lastInRange = j
 			if bar.Close > 0 {
 				markRange(bar.Close)
 			} else {
 				markRange(entry)
 			}
+		} else if spansEnd {
+			if px := priceAtOrBefore(bar, rangeEnd, opts.Interval, opts.Finer, 0); px > 0 {
+				markRange(px)
+				lastInRange = j
+			}
 		}
 		hit, px, at := resolveFirstTouch(bar, side, sl, tp, opts.Interval, opts.Finer, 0)
 		if hit == "" {
 			continue
 		}
+		hitAt := at
+		if hitAt.IsZero() {
+			hitAt = bar.OpenTime
+		}
+		hitInRange := rangeEnd.IsZero() || !hitAt.UTC().After(rangeEnd)
+		if hitInRange && spansEnd && opts.Finer == nil {
+			hitInRange = false
+		}
 		out.Outcome = hit
 		out.ExitPrice = round8(px)
 		out.BarsHeld = j - entryIdx
-		if !at.IsZero() {
-			t := at.UTC()
-			out.HitAt = &t
-		} else if !bar.OpenTime.IsZero() {
-			t := bar.OpenTime.UTC()
+		if !hitAt.IsZero() {
+			t := hitAt.UTC()
 			out.HitAt = &t
 		}
 		out.PnLPct = LeveragedPnLPct(side, entry, px, lev)
-		if !inRange {
+		if !hitInRange {
 			out.ClosedAfterRange = true
 		} else {
 			markRange(px)
@@ -291,6 +302,62 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 		markRange(exit)
 	}
 	return out
+}
+
+func barClosedAtOrBefore(bar OHLC, at time.Time, iv CandleInterval) bool {
+	_, end := ParentBarWindow(bar, iv)
+	if end.IsZero() || !end.After(bar.OpenTime) {
+		return !bar.OpenTime.UTC().After(at.UTC())
+	}
+	return !end.After(at.UTC())
+}
+
+// priceAtOrBefore is the last print at or before at. An unfinished parent bar
+// walks finer tape; if that is missing, the parent open is used (not its later close).
+func priceAtOrBefore(bar OHLC, at time.Time, iv CandleInterval, finer FineBarLookup, depth int) float64 {
+	at = at.UTC()
+	if barClosedAtOrBefore(bar, at, iv) {
+		if bar.Close > 0 {
+			return bar.Close
+		}
+		return bar.Open
+	}
+	if bar.OpenTime.UTC().After(at) {
+		return 0
+	}
+	if finer != nil && depth < backtestFinerMaxDepth {
+		next, ok := FinerBacktestInterval(iv)
+		if !ok {
+			if span := barSpan(bar, iv); span > 0 {
+				next, ok = FinerBacktestIntervalForDuration(span)
+			}
+		}
+		if ok {
+			parent := bar
+			if parent.CloseTime.IsZero() || !parent.CloseTime.After(parent.OpenTime) {
+				if _, end := ParentBarWindow(bar, iv); end.After(bar.OpenTime) {
+					parent.CloseTime = end
+				}
+			}
+			sub := OHLCInside(finer(parent, next), parent, iv)
+			var last float64
+			for _, sb := range sub {
+				if sb.OpenTime.UTC().After(at) {
+					break
+				}
+				if p := priceAtOrBefore(sb, at, next, finer, depth+1); p > 0 {
+					last = p
+				}
+			}
+			if last > 0 {
+				return last
+			}
+		}
+	}
+	if bar.Open > 0 {
+		return bar.Open
+	}
+	return 0
 }
 
 func validTradeLevels(side string, entry, sl, tp float64) bool {

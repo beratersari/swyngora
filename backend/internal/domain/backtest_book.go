@@ -78,6 +78,7 @@ type BacktestBookFill struct {
 	ClosedInRange  bool
 	Outcome        string
 	HasExit        bool
+	Score          float64
 }
 
 // NormalizeBacktestStartBalance applies the Lab default and a hard cap.
@@ -159,13 +160,19 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 		}
 	}
 	sort.SliceStable(events, func(i, j int) bool {
-		if events[i].at.Equal(events[j].at) {
-			if events[i].exit != events[j].exit {
-				return events[i].exit
-			}
-			return events[i].i < events[j].i
+		if !events[i].at.Equal(events[j].at) {
+			return events[i].at.Before(events[j].at)
 		}
-		return events[i].at.Before(events[j].at)
+		if events[i].exit != events[j].exit {
+			return events[i].exit
+		}
+		if !events[i].exit {
+			si, sj := fills[events[i].i].Score, fills[events[j].i].Score
+			if si != sj {
+				return si > sj
+			}
+		}
+		return events[i].i < events[j].i
 	})
 	cash := start
 	type pos struct {
@@ -348,11 +355,15 @@ func BookFillsFromSignals(sigs []ScannerBacktestSignal, rangeEnd time.Time) []Ba
 		if hasExit && !end.IsZero() && tr.HitAt.After(end) {
 			closedIn = false
 		}
+		score := 0.0
+		if s.Metrics != nil {
+			score = s.Metrics["score"]
+		}
 		out = append(out, BacktestBookFill{
 			Symbol: s.Symbol, Side: tr.Side, EntryAt: entryAt, ExitAt: exit,
 			Entry: tr.Entry, StopLoss: tr.StopLoss, ExitPrice: tr.ExitPrice,
 			RangeExitPrice: rangePx, Leverage: tr.Leverage,
-			ClosedInRange: closedIn, Outcome: tr.Outcome, HasExit: hasExit,
+			ClosedInRange: closedIn, Outcome: tr.Outcome, HasExit: hasExit, Score: score,
 		})
 	}
 	return out

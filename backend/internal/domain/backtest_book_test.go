@@ -124,3 +124,40 @@ func TestSimulateSharedBacktestBook_MaxOpenRisk(t *testing.T) {
 		t.Fatalf("free slot %+v", freed)
 	}
 }
+
+func TestSimulateSharedBacktestBook_SameTimePrefersHigherScore(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	fill := func(sym string, score float64) BacktestBookFill {
+		return BacktestBookFill{
+			Symbol: sym, Side: BacktestTradeSideLong, EntryAt: t0,
+			Entry: 100, StopLoss: 99, ExitPrice: 100, RangeExitPrice: 100, Leverage: 10,
+			Score: score, Outcome: BacktestTradeOutcomeOpen,
+		}
+	}
+	// Listed low-score first. Only one 1% slot (max 1%).
+	got := SimulateSharedBacktestBook(10000, 1, 1, []BacktestBookFill{
+		fill("AAAUSDT", 40),
+		fill("ETHUSDT", 80),
+		fill("SOLUSDT", 55),
+	}, t0.Add(24*time.Hour))
+	if got.TradesTaken != 1 || got.SkippedNoRisk != 2 {
+		t.Fatalf("taken %+v", got)
+	}
+	// Reconstruct which symbol was taken: only the first allocated keep OpenAtEnd.
+	// Higher score ETH must win the single slot — verify by running with only ETH vs only AAA
+	// through the same sorter via a tagged fill that closes.
+	eth := SimulateSharedBacktestBook(10000, 1, 1, []BacktestBookFill{
+		{Symbol: "AAAUSDT", Side: BacktestTradeSideLong, EntryAt: t0, ExitAt: t0.Add(time.Hour),
+			Entry: 100, StopLoss: 99, ExitPrice: 99, RangeExitPrice: 99, Leverage: 10,
+			Score: 40, HasExit: true, ClosedInRange: true, Outcome: BacktestTradeOutcomeSL},
+		{Symbol: "ETHUSDT", Side: BacktestTradeSideLong, EntryAt: t0, ExitAt: t0.Add(time.Hour),
+			Entry: 100, StopLoss: 99, ExitPrice: 102, RangeExitPrice: 102, Leverage: 10,
+			Score: 80, HasExit: true, ClosedInRange: true, Outcome: BacktestTradeOutcomeTP},
+	}, t0.Add(24*time.Hour))
+	// ETH +2% on 1% risk / 1% stop → notional = equity, +2% of 10000 = +200 if taken.
+	// AAA stop −1% = −100 if taken.
+	if math.Abs(eth.EndingBalance-10200) > 0.5 {
+		t.Fatalf("higher score must take the slot (ETH +2%%): %+v", eth)
+	}
+}

@@ -245,11 +245,37 @@ func TestFirstTouch_RangeMarkBeforeLaterTP(t *testing.T) {
 	if got == nil || got.Outcome != BacktestTradeOutcomeTP || !got.ClosedAfterRange {
 		t.Fatalf("later TP %+v", got)
 	}
-	if math.Abs(got.RangeExitPrice-100.5) > 1e-9 {
-		t.Fatalf("range mark %+v", got)
+	if math.Abs(got.RangeExitPrice-100) > 1e-9 {
+		t.Fatalf("mid-candle must not use later close 100.5: %+v", got)
 	}
-	if math.Abs(got.RangePnLPct-0.5) > 0.05 {
+	if math.Abs(got.RangePnLPct) > 0.05 {
 		t.Fatalf("range pnl %+v", got)
+	}
+}
+
+func TestFirstTouch_MidCandleUsesFinerPrice(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	rangeEnd := t0.Add(6 * time.Hour)
+	finer := []OHLC{
+		{OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(5 * time.Hour), Open: 100, High: 100.2, Low: 99.8, Close: 100.1},
+		{OpenTime: t0.Add(5 * time.Hour), CloseTime: t0.Add(6 * time.Hour), Open: 100.1, High: 100.4, Low: 100, Close: 100.3},
+		{OpenTime: t0.Add(6 * time.Hour), CloseTime: t0.Add(7 * time.Hour), Open: 100.3, High: 101, Low: 100.2, Close: 100.8},
+	}
+	got := SimulateBacktestTradeOpts([]OHLC{
+		{OpenTime: t0, CloseTime: t0.Add(4 * time.Hour), Open: 100, High: 101, Low: 99, Close: 100},
+		{OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(8 * time.Hour), Open: 100, High: 102, Low: 99.5, Close: 101.5},
+		{OpenTime: t0.Add(8 * time.Hour), CloseTime: t0.Add(12 * time.Hour), Open: 101.5, High: 102, Low: 101, Close: 101.6},
+	}, 0, BacktestTradeSideLong, SwingLevels{Entry: 100, StopLoss: 90, TakeProfit: 130, Leverage: 1}, BacktestTouchOpts{
+		Interval: Interval4h,
+		RangeEnd: rangeEnd,
+		Finer:    func(OHLC, CandleInterval) []OHLC { return finer },
+	})
+	if got == nil || got.Outcome != BacktestTradeOutcomeOpen {
+		t.Fatalf("%+v", got)
+	}
+	if math.Abs(got.RangeExitPrice-100.3) > 1e-9 {
+		t.Fatalf("want 1h close at range end, not 4h close 101.5: %+v", got)
 	}
 }
 
