@@ -28,7 +28,7 @@ class NoteLLMError(BaseCallbackHandler):
         self.attempts = 0
         NoteLLMError._live.add(self)
 
-    def on_llm_error(self, error: BaseException, **kwargs: object) -> None:
+    def on_llm_error(self, error: BaseException, **_kwargs: object) -> None:
         self.last_error = error
         self.attempts += 1
         self._emit_status()
@@ -62,7 +62,7 @@ class NoteToolError(BaseCallbackHandler):
         self._names: dict[str, str] = {}
         self._attempts: dict[str, int] = {}
 
-    def on_tool_start(self, serialized: dict[str, Any], input_str: str, **kwargs: object) -> None:
+    def on_tool_start(self, serialized: dict[str, Any], input_str: str, **kwargs: object) -> None:  # noqa: ARG002
         name = ""
         if isinstance(serialized, dict):
             name = str(serialized.get("name") or "")

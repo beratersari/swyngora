@@ -78,6 +78,8 @@ select = [
   "PLE",     # pylint error
   "TRY400",  # error-instead-of-exception
   "TRY004",  # type-check-without-type-error
+  "RET504",  # unnecessary-assign: do not assign then immediately return
+  "ARG",    # flake8-unused-arguments: unused function/method/lambda args
   "RUF013",  # implicit-optional
   "RUF034",  # useless-if-else
   "N804",    # first arg of a classmethod should be named cls
@@ -130,7 +132,8 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 # Tests may call module-private helpers (_wikipedia, etc.). SLF still applies in src/.
-"tests/**" = ["SLF001"]
+# Test fakes keep real API names (session_id=, pack=); unused stub args are not ARG in tests.
+"tests/**" = ["SLF001", "ARG"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["swyngora_ai"]
