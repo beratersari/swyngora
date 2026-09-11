@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -15,6 +16,7 @@ from rich.align import Align
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.markup import escape
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
 if TYPE_CHECKING:
@@ -524,6 +526,9 @@ def _print_error(exc: BaseException) -> None:
 
 
 _STATUS_TYPES = frozenset({"status", "tool", "thinking", "tool_error"})
+# Count the start event. Prefetch only emits "tool" (no tool_result on success);
+# orchestrator also emits tool_result later — do not count both.
+_TOOL_TICK_TYPES = frozenset({"tool"})
 _STATUS_MAX = 88
 
 
@@ -538,18 +543,77 @@ def _status_text(ev: dict[str, Any]) -> str | None:
     return text
 
 
+def _tools_label(count: int) -> str:
+    return "1 tool" if count == 1 else f"{count} tools"
+
+
+def _format_elapsed(seconds: float) -> str:
+    total = max(0, int(seconds))
+    return f"{total // 60}:{total % 60:02d}"
+
+
+@dataclass
+class ActivityBarState:
+    """Live CLI activity line plus the recap trail after the bar clears."""
+
+    description: str = "Planning…"
+    tools: int = 0
+    steps: list[str] = field(default_factory=lambda: ["Planning…"])
+
+
+def apply_activity_event(state: ActivityBarState, ev: dict[str, Any]) -> bool:
+    """Update description, steps, and tool count. True if the bar should refresh."""
+    changed = False
+    if (ev.get("type") or "") in _TOOL_TICK_TYPES:
+        state.tools += 1
+        changed = True
+    text = _status_text(ev)
+    if text is not None:
+        state.description = text
+        if not state.steps or state.steps[-1] != text:
+            state.steps.append(text)
+        changed = True
+    return changed
+
+
+def activity_recap_lines(state: ActivityBarState, elapsed: float) -> list[str]:
+    return [*state.steps, f"{_tools_label(state.tools)} · {_format_elapsed(elapsed)}"]
+
+
+def _print_activity_recap(state: ActivityBarState, elapsed: float) -> None:
+    for line in activity_recap_lines(state, elapsed):
+        _console.print(f"[dim]{escape(line)}[/]")
+    _console.print()
+
+
 def _chat(orch: Orchestrator, message: str, session_id: str) -> ChatResult:
     if not _console.is_terminal:
         return orch.chat(message, session_id=session_id)
 
-    with _console.status("[dim]Planning…[/]", spinner="dots") as status:
+    started = time.monotonic()
+    state = ActivityBarState()
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[cyan]{task.description}[/]"),
+        TextColumn("[dim]{task.fields[tools]}[/]"),
+        TimeElapsedColumn(),
+        console=_console,
+        transient=True,
+    ) as progress:
+        task_id = progress.add_task(escape(state.description), total=None, tools=_tools_label(0))
 
         def on_event(ev: dict[str, Any]) -> None:
-            text = _status_text(ev)
-            if text:
-                status.update(f"[cyan]{escape(text)}[/]")
+            if not apply_activity_event(state, ev):
+                return
+            progress.update(
+                task_id,
+                description=escape(state.description),
+                tools=_tools_label(state.tools),
+            )
 
-        return orch.chat(message, session_id=session_id, on_event=on_event)
+        result = orch.chat(message, session_id=session_id, on_event=on_event)
+    _print_activity_recap(state, time.monotonic() - started)
+    return result
 
 
 def _one_shot(orch: Orchestrator, message: str, session_id: str) -> int:

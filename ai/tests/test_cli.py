@@ -11,6 +11,7 @@ from swyngora_ai.cli import (
     _CTRL_F,
     _CTRL_N,
     _CTRL_P,
+    ActivityBarState,
     ReplCompleteState,
     _bind_clear_line,
     _bind_cycle_nav_keys,
@@ -19,9 +20,12 @@ from swyngora_ai.cli import (
     _completion_wants_reverse,
     _readline_uses_libedit,
     _status_text,
+    _tools_label,
+    activity_recap_lines,
     advance_repl_cycle,
     advance_repl_nav,
     app,
+    apply_activity_event,
     attach_repl_readline,
     complete_repl,
     full_history_matches,
@@ -71,6 +75,42 @@ def test_status_text_filters_noise_and_truncates() -> None:
     assert out is not None
     assert out.endswith("…")
     assert len(out) == 88
+
+
+def test_apply_activity_event_updates_description_and_tool_count() -> None:
+    state = ActivityBarState()
+    assert apply_activity_event(state, {"type": "status", "text": "Planning…"})
+    assert state.description == "Planning…"
+    assert state.tools == 0
+    assert apply_activity_event(state, {"type": "tool", "text": "prefetch → get_ticker"})
+    assert state.description == "prefetch → get_ticker"
+    assert state.tools == 1
+    assert not apply_activity_event(state, {"type": "final", "text": "done"})
+    assert not apply_activity_event(state, {"type": "tool_result", "text": "get_ticker ✓ 100"})
+    assert state.tools == 1
+    assert state.description == "prefetch → get_ticker"
+    assert apply_activity_event(state, {"type": "tool_error", "text": "get_indicators failed"})
+    assert state.tools == 1
+    assert state.description == "get_indicators failed"
+    assert _tools_label(0) == "0 tools"
+    assert _tools_label(1) == "1 tool"
+    assert _tools_label(2) == "2 tools"
+    assert state.steps == [
+        "Planning…",
+        "prefetch → get_ticker",
+        "get_indicators failed",
+    ]
+    assert activity_recap_lines(state, 12.8) == [
+        "Planning…",
+        "prefetch → get_ticker",
+        "get_indicators failed",
+        "1 tool · 0:12",
+    ]
+    again = ActivityBarState()
+    apply_activity_event(again, {"type": "status", "text": "Planning…"})
+    apply_activity_event(again, {"type": "status", "text": "Planning…"})
+    assert again.steps == ["Planning…"]
+    assert activity_recap_lines(again, 75)[-1] == "0 tools · 1:15"
 
 
 def test_help() -> None:
