@@ -232,7 +232,8 @@ func validTradeLevels(side string, entry, sl, tp float64) bool {
 }
 
 // firstTouchOnBar returns tp|sl and the fill price. Empty hit means neither level traded.
-// A gap through a level at the open takes that level. Both wicks with no finer bars count as SL.
+// A gap through the stop at the open fills at the open. A gap through TP fills at TP.
+// Both wicks with no finer bars count as SL.
 func firstTouchOnBar(bar OHLC, side string, sl, tp float64) (hit string, price float64) {
 	hit, px, both := inspectBarTouch(bar, side, sl, tp)
 	if both {
@@ -242,7 +243,7 @@ func firstTouchOnBar(bar OHLC, side string, sl, tp float64) (hit string, price f
 }
 
 // inspectBarTouch reports a clear hit, or both=true when high and low tag both levels
-// and the open did not already gap through one of them.
+// and the open did not already gap through one of them. A stop gap fills at the open.
 func inspectBarTouch(bar OHLC, side string, sl, tp float64) (hit string, price float64, both bool) {
 	open := bar.Open
 	if open <= 0 {
@@ -250,7 +251,7 @@ func inspectBarTouch(bar OHLC, side string, sl, tp float64) (hit string, price f
 	}
 	if side == BacktestTradeSideShort {
 		if open > 0 && open >= sl {
-			return BacktestTradeOutcomeSL, sl, false
+			return BacktestTradeOutcomeSL, open, false
 		}
 		if open > 0 && open <= tp {
 			return BacktestTradeOutcomeTP, tp, false
@@ -269,7 +270,7 @@ func inspectBarTouch(bar OHLC, side string, sl, tp float64) (hit string, price f
 		return "", 0, false
 	}
 	if open > 0 && open <= sl {
-		return BacktestTradeOutcomeSL, sl, false
+		return BacktestTradeOutcomeSL, open, false
 	}
 	if open > 0 && open >= tp {
 		return BacktestTradeOutcomeTP, tp, false

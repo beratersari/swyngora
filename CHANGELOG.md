@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
 
 ### Fixed
+- **Backtest stop gap fill:** if the next candle opens through the stop, the trade exits at that open and leveraged PnL uses the open — not the stop price (`docs/features/indicator-scanner.md`)
 - **Backtest same-bar TP/SL:** when one candle wicks both take-profit and stop, Lab no longer always takes the stop. It walks a smaller interval (4h → 1h → 15m → 5m → 1m) and uses the first clear print for the outcome and leveraged PnL. Missing or still-ambiguous finer tape stays stop-first (`docs/features/indicator-scanner.md`)
 - **Custom signal Lab skips incomplete bars:** a selected factor with no historical data no longer lets that timestamp fire. The mix score still uses the other factors. The job reports `skippedBars` and `missingFactors` (`docs/features/indicator-scanner.md`)
 - **Custom signal empty current tape:** forensics / similar setups with no OI, taker, book, or options prints are **missing**, not fresh at quality 100. Each missing series is a quarter of that factor's quality (`docs/features/swing-engine.md`)

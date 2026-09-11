@@ -213,6 +213,31 @@ func TestFirstTouch_GapThroughTP(t *testing.T) {
 	}
 }
 
+func TestFirstTouch_GapThroughStopFillsOpen(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	long := SimulateBacktestTrade([]OHLC{
+		{OpenTime: t0, Open: 100, High: 101, Low: 99, Close: 100},
+		{OpenTime: t0.Add(time.Hour), Open: 94, High: 95, Low: 93, Close: 94.5},
+	}, 0, BacktestTradeSideLong, SwingLevels{Entry: 100, StopLoss: 97, TakeProfit: 105, Leverage: 2})
+	if long == nil || long.Outcome != BacktestTradeOutcomeSL || long.ExitPrice != 94 {
+		t.Fatalf("long gap SL %+v", long)
+	}
+	if math.Abs(long.PnLPct-(-12)) > 0.05 {
+		t.Fatalf("long gap pnl %+v", long)
+	}
+	short := SimulateBacktestTrade([]OHLC{
+		{OpenTime: t0, Open: 100, High: 101, Low: 99, Close: 100},
+		{OpenTime: t0.Add(time.Hour), Open: 106, High: 107, Low: 105, Close: 106.5},
+	}, 0, BacktestTradeSideShort, SwingLevels{Entry: 100, StopLoss: 103, TakeProfit: 95, Leverage: 1})
+	if short == nil || short.Outcome != BacktestTradeOutcomeSL || short.ExitPrice != 106 {
+		t.Fatalf("short gap SL %+v", short)
+	}
+	if math.Abs(short.PnLPct-(-6)) > 0.05 {
+		t.Fatalf("short gap pnl %+v", short)
+	}
+}
+
 func TestFirstTouch_ShortTPAndSL(t *testing.T) {
 	t.Parallel()
 	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)

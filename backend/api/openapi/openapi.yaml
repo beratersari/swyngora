@@ -9380,7 +9380,7 @@ components:
         stopLoss: { type: number }
         takeProfit: { type: number }
         outcome: { type: string, enum: [tp, sl, open], description: Which of take-profit or stop-loss the later candles hit first. When one bar tags both, a smaller interval is used when available }
-        exitPrice: { type: number }
+        exitPrice: { type: number, description: Fill price. A gap through the stop uses the candle open; a wick through the stop or a TP fill uses the level }
         pnlPct: { type: number, description: Leveraged percent result }
         barsHeld: { type: integer }
         hitAt: { type: string, format: date-time }
