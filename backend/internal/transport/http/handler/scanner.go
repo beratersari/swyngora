@@ -330,14 +330,15 @@ func backtestSignalToDTO(s *domain.ScannerBacktestSignal) scannerBacktestSignalD
 }
 
 type startBacktestBody struct {
-	ClientID   string `json:"clientId"`
-	RuleID     string `json:"ruleId"`
-	ProfileID  string `json:"profileId"`
-	Exchange   string `json:"exchange"`
-	Symbol     string `json:"symbol"`
-	Scope      string `json:"scope"`
-	RangeStart string `json:"rangeStart"`
-	RangeEnd   string `json:"rangeEnd"`
+	ClientID        string  `json:"clientId"`
+	RuleID          string  `json:"ruleId"`
+	ProfileID       string  `json:"profileId"`
+	Exchange        string  `json:"exchange"`
+	Symbol          string  `json:"symbol"`
+	Scope           string  `json:"scope"`
+	StartingBalance float64 `json:"startingBalance"`
+	RangeStart      string  `json:"rangeStart"`
+	RangeEnd        string  `json:"rangeEnd"`
 }
 
 // StartBacktest handles POST /api/v1/scanner/backtests
@@ -364,7 +365,8 @@ func (h *ScannerHandler) StartBacktest(w http.ResponseWriter, r *http.Request) {
 	job, err := h.svc.StartBacktest(r.Context(), scanner.StartBacktestInput{
 		ClientID: clientID, RuleID: body.RuleID, ProfileID: body.ProfileID,
 		Exchange: body.Exchange, Symbol: body.Symbol, Scope: body.Scope,
-		RangeStart: start, RangeEnd: end,
+		StartingBalance: body.StartingBalance,
+		RangeStart:      start, RangeEnd: end,
 	})
 	if err != nil {
 		writeError(w, err)

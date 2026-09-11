@@ -143,6 +143,8 @@ type ScannerBacktest struct {
 	FinishedAt     *time.Time
 	// RuleJSON is the rule or custom mix as queued. The worker uses this, not the live source.
 	RuleJSON string
+	// Run is per-coin status and the shared cash book (persisted after the worker walks coins).
+	Run *BacktestRunState
 	// Performance is filled when loading a job or its signals (not persisted).
 	Performance *BacktestPerformance
 }
@@ -188,12 +190,15 @@ type BacktestPerformance struct {
 	Return20d   BacktestHorizonStats        `json:"return20d"`
 	Trades      BacktestTradeStats          `json:"trades"`
 	Markets     []BacktestMarketPerformance `json:"markets,omitempty"`
+	Book        *BacktestBook               `json:"book,omitempty"`
 }
 
 // BacktestMarketPerformance is one coin's slice of a watchlist Lab job.
 type BacktestMarketPerformance struct {
 	Exchange    string               `json:"exchange"`
 	Symbol      string               `json:"symbol"`
+	Status      string               `json:"status,omitempty"`
+	Error       string               `json:"error,omitempty"`
 	SignalCount int                  `json:"signalCount"`
 	Return1d    BacktestHorizonStats `json:"return1d"`
 	Return5d    BacktestHorizonStats `json:"return5d"`
@@ -247,6 +252,8 @@ type ScannerPort interface {
 	UpdateBacktestProgress(ctx context.Context, id string, processed, total, signalCount int, progressPct float64) error
 	// UpdateBacktestSkipStats records bars skipped because a selected factor had no data.
 	UpdateBacktestSkipStats(ctx context.Context, id string, skipped int, missing []string) error
+	// UpdateBacktestRun stores per-coin status and the shared cash book.
+	UpdateBacktestRun(ctx context.Context, id string, run BacktestRunState) error
 	// FinishBacktest sets terminal status (completed/canceled/failed).
 	FinishBacktest(ctx context.Context, id string, status ScannerBacktestStatus, signalCount int, errMsg string, at time.Time) error
 	// CancelBacktest sets canceled if pending or running.

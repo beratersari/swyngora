@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -321,16 +322,23 @@ func TestBacktest_WatchlistCustomProfile(t *testing.T) {
 		Items: []domain.WatchlistItem{
 			{Exchange: domain.ExchangeBinance, Symbol: "ETHUSDT"},
 			{Exchange: domain.ExchangeBinance, Symbol: "SOLUSDT"},
+			{Exchange: domain.ExchangeBinance, Symbol: "ADAUSDT"},
+			{Exchange: domain.ExchangeBinance, Symbol: "XRPUSDT"},
 		},
 	}}
-	svc := New(st, &fakeCandles{byKey: map[string][]domain.Candle{
-		"binance|ETHUSDT|4h": primary,
-		"binance|ETHUSDT|1d": daily,
-		"binance|SOLUSDT|4h": primary,
-		"binance|SOLUSDT|1d": daily,
-		"binance|BTCUSDT|4h": daily,
-		"binance|BTCUSDT|1d": daily,
-	}}, watch)
+	svc := New(st, &fakeCandles{
+		byKey: map[string][]domain.Candle{
+			"binance|ETHUSDT|4h": primary,
+			"binance|ETHUSDT|1d": daily,
+			"binance|SOLUSDT|4h": primary,
+			"binance|SOLUSDT|1d": daily,
+			"binance|BTCUSDT|4h": daily,
+			"binance|BTCUSDT|1d": daily,
+		},
+		errs: map[string]error{
+			"binance|XRPUSDT|4h": fmt.Errorf("upstream 429"),
+		},
+	}, watch)
 	ctx := context.Background()
 	start := primary[80].OpenTime
 	end := primary[len(primary)-1].OpenTime
@@ -350,7 +358,7 @@ func TestBacktest_WatchlistCustomProfile(t *testing.T) {
 	if err != nil || !domain.IsWatchlistBacktest(*job) {
 		t.Fatalf("%+v %v", job, err)
 	}
-	if len(domain.CustomBacktestMarkets(*job)) != 2 {
+	if len(domain.CustomBacktestMarkets(*job)) != 4 {
 		t.Fatalf("snapshot %+v", domain.CustomBacktestMarkets(*job))
 	}
 	dup, err := svc.StartBacktest(ctx, StartBacktestInput{
@@ -391,8 +399,27 @@ func TestBacktest_WatchlistCustomProfile(t *testing.T) {
 	if seen["ETHUSDT"] == 0 || seen["SOLUSDT"] == 0 {
 		t.Fatalf("coins %+v", seen)
 	}
-	if got.Performance == nil || len(got.Performance.Markets) != 2 {
+	if got.Performance == nil || len(got.Performance.Markets) != 4 {
 		t.Fatalf("markets %+v", got.Performance)
+	}
+	bySym := map[string]domain.BacktestMarketPerformance{}
+	for _, m := range got.Performance.Markets {
+		bySym[m.Symbol] = m
+	}
+	if bySym["ADAUSDT"].SignalCount != 0 || bySym["ADAUSDT"].Status != domain.BacktestMarketNoData {
+		t.Fatalf("zero-signal coin must stay visible: %+v", bySym["ADAUSDT"])
+	}
+	if bySym["XRPUSDT"].Status != domain.BacktestMarketError || bySym["XRPUSDT"].Error == "" {
+		t.Fatalf("fetch error must name the coin: %+v", bySym["XRPUSDT"])
+	}
+	if !strings.Contains(got.ErrorMessage, "data errors") && !strings.Contains(got.ErrorMessage, "no candles") {
+		t.Fatalf("job must say which coins failed: %q", got.ErrorMessage)
+	}
+	if got.Performance.Book == nil || got.Performance.Book.StartingBalance != 10000 {
+		t.Fatalf("shared book %+v", got.Performance.Book)
+	}
+	if got.Performance.Book.TradesTaken == 0 {
+		t.Fatalf("book should take fills %+v", got.Performance.Book)
 	}
 }
 

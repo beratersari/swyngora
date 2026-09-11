@@ -81,7 +81,7 @@ func (emptyAlerts) ScheduleDigestRetry(context.Context, string, int, time.Time, 
 	return nil
 }
 func (emptyAlerts) FailDigest(context.Context, string, string) error { return nil }
-func (emptyAlerts) PurgeClient(context.Context, string) error         { return nil }
+func (emptyAlerts) PurgeClient(context.Context, string) error        { return nil }
 
 type emptyScanner struct{}
 
@@ -127,6 +127,9 @@ func (emptyScanner) ListPendingBacktests(context.Context) ([]domain.ScannerBackt
 }
 func (emptyScanner) ClaimBacktest(context.Context, string, time.Time) (bool, error) {
 	return false, nil
+}
+func (emptyScanner) UpdateBacktestRun(context.Context, string, domain.BacktestRunState) error {
+	return nil
 }
 func (emptyScanner) UpdateBacktestSkipStats(context.Context, string, int, []string) error {
 	return nil

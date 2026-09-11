@@ -247,6 +247,7 @@ export type {
   UpdateScannerRuleArg,
   ScannerBacktest,
   ScannerBacktestHorizonStats,
+  ScannerBacktestBook,
   ScannerBacktestMarket,
   ScannerBacktestMarketPerformance,
   ScannerBacktestPerformance,

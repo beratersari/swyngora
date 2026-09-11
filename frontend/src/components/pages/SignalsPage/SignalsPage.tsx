@@ -515,7 +515,7 @@ export function SignalsPage() {
                 startLoading={startState.isLoading}
                 cancelLoading={cancelState.isLoading}
                 startError={startState.isError ? startState.error : undefined}
-                onStart={({ ruleId, profileId, symbol, exchange, scope, rangeKey }) => {
+                onStart={({ ruleId, profileId, symbol, exchange, scope, startingBalance, rangeKey }) => {
                   const days =
                     SIGNALS_BACKTEST_RANGES.find((r) => r.key === rangeKey)?.days ?? 90;
                   const { rangeStart, rangeEnd } = backtestRangeIso(days);
@@ -525,6 +525,7 @@ export function SignalsPage() {
                     symbol,
                     exchange,
                     scope,
+                    startingBalance,
                     rangeStart,
                     rangeEnd,
                   })

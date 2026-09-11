@@ -250,6 +250,15 @@ CREATE TABLE IF NOT EXISTS custom_signal_profiles (
 		if err := sqliteutil.SetUserVersion(s.db, 10); err != nil {
 			return err
 		}
+		v = 10
+	}
+	if v < 11 {
+		if err := sqliteutil.ExecAllowExists(s.db, `ALTER TABLE scanner_backtests ADD COLUMN run_json TEXT NOT NULL DEFAULT ''`); err != nil {
+			return err
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 11); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -520,7 +529,7 @@ func (s *SQLite) CountResults(ctx context.Context, clientID string) (int, error)
 const backtestSelect = `
 	SELECT id, client_id, rule_id, kind, exchange, symbol, interval, range_start, range_end,
 		status, progress_pct, processed_bars, total_bars, signal_count, skipped_bars, missing_factors,
-		error_message, created_at, started_at, finished_at, rule_json
+		error_message, created_at, started_at, finished_at, rule_json, run_json
 	FROM scanner_backtests`
 
 // CreateBacktest inserts a pending job.
@@ -540,12 +549,12 @@ func (s *SQLite) CreateBacktest(ctx context.Context, b domain.ScannerBacktest) (
 		INSERT INTO scanner_backtests (
 			id, client_id, rule_id, kind, exchange, symbol, interval, range_start, range_end,
 			status, progress_pct, processed_bars, total_bars, signal_count, error_message,
-			created_at, started_at, finished_at, rule_json
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			created_at, started_at, finished_at, rule_json, run_json
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, b.ID, b.ClientID, b.RuleID, b.Kind, string(b.Exchange), b.Symbol, b.Interval,
 		b.RangeStart.UTC().Format(time.RFC3339Nano), b.RangeEnd.UTC().Format(time.RFC3339Nano),
 		string(b.Status), b.ProgressPct, b.ProcessedBars, b.TotalBars, b.SignalCount, b.ErrorMessage,
-		b.CreatedAt.UTC().Format(time.RFC3339Nano), nullTime(b.StartedAt), nullTime(b.FinishedAt), b.RuleJSON)
+		b.CreatedAt.UTC().Format(time.RFC3339Nano), nullTime(b.StartedAt), nullTime(b.FinishedAt), b.RuleJSON, encodeBacktestRun(b.Run))
 	if err != nil {
 		return nil, err
 	}
@@ -638,6 +647,25 @@ func (s *SQLite) ClaimBacktest(ctx context.Context, id string, at time.Time) (bo
 	}
 	n, _ := res.RowsAffected()
 	return n > 0, nil
+}
+
+// UpdateBacktestRun stores per-coin status and the shared cash book.
+func (s *SQLite) UpdateBacktestRun(ctx context.Context, id string, run domain.BacktestRunState) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, err := s.db.ExecContext(ctx, `UPDATE scanner_backtests SET run_json = ? WHERE id = ?`, encodeBacktestRun(&run), id)
+	return err
+}
+
+func encodeBacktestRun(run *domain.BacktestRunState) string {
+	if run == nil {
+		return ""
+	}
+	b, err := json.Marshal(run)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
 
 // UpdateBacktestSkipStats records bars skipped for missing selected-factor data.
@@ -852,16 +880,22 @@ func scanBacktest(row scannable) (*domain.ScannerBacktest, error) {
 	var b domain.ScannerBacktest
 	var ex, st, rStart, rEnd, cAt string
 	var started, finished sql.NullString
-	var missingRaw string
+	var missingRaw, runRaw string
 	if err := row.Scan(
 		&b.ID, &b.ClientID, &b.RuleID, &b.Kind, &ex, &b.Symbol, &b.Interval, &rStart, &rEnd,
 		&st, &b.ProgressPct, &b.ProcessedBars, &b.TotalBars, &b.SignalCount, &b.SkippedBars, &missingRaw,
-		&b.ErrorMessage, &cAt, &started, &finished, &b.RuleJSON,
+		&b.ErrorMessage, &cAt, &started, &finished, &b.RuleJSON, &runRaw,
 	); err != nil {
 		return nil, err
 	}
 	if missingRaw != "" {
 		_ = json.Unmarshal([]byte(missingRaw), &b.MissingFactors)
+	}
+	if runRaw != "" && runRaw != "{}" {
+		var run domain.BacktestRunState
+		if err := json.Unmarshal([]byte(runRaw), &run); err == nil {
+			b.Run = &run
+		}
 	}
 	if b.Kind == "" {
 		b.Kind = domain.BacktestKindRule

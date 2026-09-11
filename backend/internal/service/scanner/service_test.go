@@ -12,12 +12,18 @@ import (
 
 type fakeCandles struct {
 	byKey     map[string][]domain.Candle
+	errs      map[string]error
 	lastLimit int
 }
 
 func (f *fakeCandles) GetCandles(_ context.Context, exchange, symbol, interval string, limit int, _, _ *time.Time) ([]domain.Candle, error) {
 	f.lastLimit = limit
 	k := exchange + "|" + symbol + "|" + interval
+	if f.errs != nil {
+		if err, ok := f.errs[k]; ok {
+			return nil, err
+		}
+	}
 	c := f.byKey[k]
 	if len(c) > limit {
 		return c[len(c)-limit:], nil

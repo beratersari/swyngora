@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from 'react';
-import { Alert, Button, Drawer, Empty, Progress, Select } from 'antd';
+import { Alert, Button, Drawer, Empty, InputNumber, Progress, Select } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
@@ -10,6 +10,8 @@ import {
   type MarketExchange,
   type ScannerBacktest,
   type ScannerBacktestHorizonStats,
+  type ScannerBacktestBook,
+  type ScannerBacktestMarketPerformance,
   type ScannerBacktestPerformance,
   type ScannerBacktestSignal,
   type ScannerBacktestTrade,
@@ -107,6 +109,7 @@ function PerformanceSummary({ perf }: { perf: ScannerBacktestPerformance }) {
           </Fragment>
         ))}
       </PerfGrid>
+      {perf.book ? <BookSummary book={perf.book} /> : null}
       {perf.trades && (perf.trades.sampleCount ?? 0) > 0 ? (
         <>
           <Text variant="label" color="primary">
@@ -136,6 +139,47 @@ function PerformanceSummary({ perf }: { perf: ScannerBacktestPerformance }) {
       ) : null}
     </PerfTable>
   );
+}
+
+function formatBalance(n: number | undefined): string {
+  if (n == null || !Number.isFinite(n)) return '—';
+  return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function BookSummary({ book }: { book: ScannerBacktestBook }) {
+  const { t } = useTranslation(['signals']);
+  const pnl = book.endingBalance - book.startingBalance;
+  return (
+    <>
+      <Text variant="label" color="primary">
+        {t('signals:lab.book')}
+      </Text>
+      <TradeStats>
+        <Text variant="caption" color="secondary" mono>
+          {t('signals:lab.bookStart')}: {formatBalance(book.startingBalance)}
+        </Text>
+        <Text variant="caption" color={changeTone(pnl)} mono>
+          {t('signals:lab.bookEnd')}: {formatBalance(book.endingBalance)}
+        </Text>
+        <Text variant="caption" color={changeTone(pnl)} mono>
+          {t('signals:lab.bookPnl')}: {formatChangePercent((pnl / book.startingBalance) * 100)}
+        </Text>
+        <Text variant="caption" color="secondary">
+          {t('signals:lab.bookTaken')}: {book.tradesTaken ?? 0}
+        </Text>
+        <Text variant="caption" color="secondary">
+          {t('signals:lab.bookSkipped')}: {book.tradesSkipped ?? 0}
+        </Text>
+      </TradeStats>
+    </>
+  );
+}
+
+function marketStatusLabel(t: (key: string) => string, row: ScannerBacktestMarketPerformance): string {
+  if (row.status === 'error') return t('signals:lab.marketError');
+  if (row.status === 'no_data') return t('signals:lab.marketNoData');
+  if ((row.signalCount ?? 0) === 0) return t('signals:lab.marketNone');
+  return t('signals:lab.marketOk');
 }
 
 function outcomeLabel(t: (key: string) => string, outcome: string | undefined): string {
@@ -217,6 +261,7 @@ export function SignalsBacktestPanel({
   const [exchange, setExchange] = useState<string>('binance');
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [scope, setScope] = useState<'symbol' | 'watchlist'>('symbol');
+  const [startingBalance, setStartingBalance] = useState(10000);
   const [rangeKey, setRangeKey] = useState(rangeOptions[1]?.value ?? rangeOptions[0]?.value ?? '90d');
 
   const ruleById = useMemo(() => new Map(rules.map((r) => [r.id, r])), [rules]);
@@ -509,6 +554,20 @@ export function SignalsBacktestPanel({
           />
         </Field>
         )}
+        {watchlistRun ? (
+          <Field>
+            <Text variant="caption" color="secondary">
+              {t('signals:lab.startingBalance')}
+            </Text>
+            <InputNumber
+              min={1}
+              value={startingBalance}
+              aria-label={t('signals:lab.startingBalance')}
+              style={{ minWidth: 140 }}
+              onChange={(v) => setStartingBalance(typeof v === 'number' ? v : 10000)}
+            />
+          </Field>
+        ) : null}
         <Field>
           <Text variant="caption" color="secondary">
             {t('signals:lab.range')}
@@ -530,6 +589,7 @@ export function SignalsBacktestPanel({
               ruleId: source === 'rule' ? ruleId : undefined,
               profileId: source === 'profile' ? profileId : undefined,
               scope: source === 'profile' ? scope : 'symbol',
+              startingBalance: watchlistRun ? startingBalance : undefined,
               symbol: watchlistRun ? undefined : symbol.trim().toUpperCase(),
               exchange: watchlistRun ? undefined : (exchange as MarketExchange),
               rangeKey,
@@ -575,10 +635,10 @@ export function SignalsBacktestPanel({
           {selectedJob?.errorMessage ? (
             <Alert type="error" showIcon message={selectedJob.errorMessage} />
           ) : null}
-          {performance && (performance.signalCount ?? 0) > 0 ? (
+          {performance && ((performance.signalCount ?? 0) > 0 || performance.book) ? (
             <PerformanceSummary perf={performance} />
           ) : null}
-          {(performance?.markets?.length ?? 0) > 1 ? (
+          {(performance?.markets?.length ?? 0) > 0 ? (
             <DataTable
               rowKey={(r) => `${r.exchange}-${r.symbol}`}
               size="small"
@@ -591,6 +651,16 @@ export function SignalsBacktestPanel({
                   render: (_, row) => (
                     <Text variant="label" mono>
                       {formatSymbolDisplay(row.symbol)}
+                    </Text>
+                  ),
+                },
+                {
+                  title: t('signals:lab.marketStatus'),
+                  key: 'st',
+                  render: (_, row) => (
+                    <Text variant="caption" color={row.status === 'error' || row.status === 'no_data' ? 'error' : 'secondary'}>
+                      {marketStatusLabel(t, row)}
+                      {row.error ? ` — ${row.error}` : ''}
                     </Text>
                   ),
                 },

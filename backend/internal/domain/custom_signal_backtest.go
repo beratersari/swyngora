@@ -20,33 +20,38 @@ const (
 
 // customProfileSnapshot is the queued mix used by a custom backtest.
 type customProfileSnapshot struct {
-	Kind      string             `json:"kind"`
-	Name      string             `json:"name"`
-	Weights   map[string]float64 `json:"weights"`
-	Threshold float64            `json:"threshold"`
-	Scope     string             `json:"scope,omitempty"`
-	Markets   []BacktestMarket   `json:"markets,omitempty"`
+	Kind            string             `json:"kind"`
+	Name            string             `json:"name"`
+	Weights         map[string]float64 `json:"weights"`
+	Threshold       float64            `json:"threshold"`
+	Scope           string             `json:"scope,omitempty"`
+	Markets         []BacktestMarket   `json:"markets,omitempty"`
+	StartingBalance float64            `json:"startingBalance,omitempty"`
 }
 
 // EncodeCustomProfileSnapshot freezes mix weights for a backtest job.
 func EncodeCustomProfileSnapshot(name string, w CustomSignalWeights) (string, error) {
-	return encodeCustomProfileSnapshot(name, w, BacktestScopeSymbol, nil)
+	return encodeCustomProfileSnapshot(name, w, BacktestScopeSymbol, nil, 0)
 }
 
 // EncodeWatchlistCustomProfileSnapshot freezes mix weights plus the watchlist coins.
-func EncodeWatchlistCustomProfileSnapshot(name string, w CustomSignalWeights, markets []BacktestMarket) (string, error) {
-	return encodeCustomProfileSnapshot(name, w, BacktestScopeWatchlist, markets)
+func EncodeWatchlistCustomProfileSnapshot(name string, w CustomSignalWeights, markets []BacktestMarket, startingBalance float64) (string, error) {
+	return encodeCustomProfileSnapshot(name, w, BacktestScopeWatchlist, markets, startingBalance)
 }
 
-func encodeCustomProfileSnapshot(name string, w CustomSignalWeights, scope string, markets []BacktestMarket) (string, error) {
+func encodeCustomProfileSnapshot(name string, w CustomSignalWeights, scope string, markets []BacktestMarket, startingBalance float64) (string, error) {
 	pct := w.Pct
 	if pct == nil {
 		pct = map[string]float64{}
 	}
 	th := CustomBacktestThreshold
+	if scope == BacktestScopeWatchlist {
+		startingBalance = NormalizeBacktestStartBalance(startingBalance)
+	}
 	b, err := json.Marshal(customProfileSnapshot{
 		Kind: BacktestKindCustom, Name: strings.TrimSpace(name),
 		Weights: pct, Threshold: th, Scope: scope, Markets: markets,
+		StartingBalance: startingBalance,
 	})
 	if err != nil {
 		return "", err
@@ -95,6 +100,17 @@ func CustomBacktestMarkets(job ScannerBacktest) []BacktestMarket {
 		return []BacktestMarket{{Exchange: job.Exchange, Symbol: job.Symbol}}
 	}
 	return nil
+}
+
+// CustomBacktestStartBalance is the shared pot snapshotted on a watchlist job.
+func CustomBacktestStartBalance(job ScannerBacktest) float64 {
+	if snap, err := parseCustomProfileSnapshot(job.RuleJSON); err == nil && snap.StartingBalance > 0 {
+		return NormalizeBacktestStartBalance(snap.StartingBalance)
+	}
+	if IsWatchlistBacktest(job) {
+		return BacktestDefaultStartBalance
+	}
+	return 0
 }
 
 // IsCustomProfileBacktest reports whether the job is a custom-mix replay.

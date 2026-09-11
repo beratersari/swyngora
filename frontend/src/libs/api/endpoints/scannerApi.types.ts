@@ -152,6 +152,7 @@ export type StartScannerBacktestArg = {
   profileId?: string;
   symbol?: string;
   scope?: ScannerBacktestScope;
+  startingBalance?: number;
   exchange?: 'binance' | 'coinbase' | 'bybit' | 'nasdaq' | 'bist';
   rangeStart: string;
   rangeEnd: string;
@@ -214,14 +215,29 @@ export type ScannerBacktestTradeStats = {
   median?: number;
 };
 
+export type ScannerBacktestMarketStatus = 'ok' | 'no_data' | 'error';
+
 export type ScannerBacktestMarketPerformance = {
   exchange: string;
   symbol: string;
+  status?: ScannerBacktestMarketStatus;
+  error?: string;
   signalCount: number;
   return1d: ScannerBacktestHorizonStats;
   return5d: ScannerBacktestHorizonStats;
   return20d: ScannerBacktestHorizonStats;
   trades?: ScannerBacktestTradeStats;
+};
+
+export type ScannerBacktestBook = {
+  startingBalance: number;
+  endingBalance: number;
+  peakEquity?: number;
+  troughEquity?: number;
+  stakePct?: number;
+  tradesTaken?: number;
+  tradesSkipped?: number;
+  openAtEnd?: number;
 };
 
 export type ScannerBacktestPerformance = {
@@ -231,6 +247,7 @@ export type ScannerBacktestPerformance = {
   return20d: ScannerBacktestHorizonStats;
   trades?: ScannerBacktestTradeStats;
   markets?: ScannerBacktestMarketPerformance[];
+  book?: ScannerBacktestBook;
 };
 
 export type ScannerBacktestSignalListResponse = {

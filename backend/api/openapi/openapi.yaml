@@ -6746,6 +6746,7 @@ paths:
                 exchange: { type: string, enum: [binance, coinbase, bybit, nasdaq, bist], default: binance }
                 symbol: { type: string, description: Pair for a one-coin job. Use watchlist or omit when scope is watchlist }
                 scope: { type: string, enum: [symbol, watchlist], description: watchlist runs a custom mix on every watchlist coin }
+                startingBalance: { type: number, description: Shared cash pot for a watchlist job (default 10000). Each fill locks 10% of current equity }
                 rangeStart: { type: string, format: date-time }
                 rangeEnd: { type: string, format: date-time }
       responses:
@@ -6819,7 +6820,8 @@ paths:
         smaller interval decides which printed first (outcome and pnlPct follow that
         print). Watchlist jobs include exchange/symbol on each signal.
         `performance` adds horizon stats plus trade TP/SL counts, win rate,
-        average/median leveraged PnL, and per-coin `markets` when more than one pair ran.
+        average/median leveraged PnL, per-coin `markets` (including zero-signal and
+        data-error coins), and `book` (shared starting/ending balance) on watchlist jobs.
       operationId: listScannerBacktestSignals
       tags: [Scanner]
       parameters:
