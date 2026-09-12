@@ -22,7 +22,8 @@
   },
   "timeline": {
     "title": "Zaman sırasıyla ne oldu",
-    "knownUntil": "{{time}} itibarıyla bilinen"
+    "knownUntil": "{{time}} itibarıyla bilinen",
+    "orderUnknown": "Bu bar boyutunda sıra kesin değil"
   },
   "view": {
     "event": "Bir zaman",

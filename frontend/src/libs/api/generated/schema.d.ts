@@ -6938,6 +6938,8 @@ export interface components {
              * @description Latest time a timeline print may have — the observer clock (`asOf`, or now)
              */
             knownUntil?: string;
+            /** @description False when two beats overlap at this tape's bar/sample size so the order is not certain */
+            orderKnown?: boolean;
             events?: components["schemas"]["MarketForensicsTimelineEvent"][];
         };
         /** @description One beat on the forensics clock */
@@ -6957,6 +6959,10 @@ export interface components {
             direction?: string;
             title?: string;
             detail?: string;
+            /** @description Bar or sample size this stamp is known to (1m, 5m). Empty when the time is an exact tick. */
+            resolution?: string;
+            /** @description True when this beat overlaps another so we cannot say which printed first */
+            orderUnknown?: boolean;
         };
         /** @description Coins whose current tape looks like past important-move setups */
         MarketForensicsScan: {

@@ -222,12 +222,15 @@ export type ForensicsTimelineEvent = {
   direction?: string;
   title?: string;
   detail?: string;
+  resolution?: string;
+  orderUnknown?: boolean;
 };
 
 export type ForensicsTimeline = {
   events?: ForensicsTimelineEvent[];
   summary?: string;
   knownUntil?: string;
+  orderKnown?: boolean;
 };
 
 export type ForensicsReport = {

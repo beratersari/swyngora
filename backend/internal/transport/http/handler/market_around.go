@@ -1103,21 +1103,24 @@ type forensicsWhyDTO struct {
 }
 
 type forensicsTimelineEventDTO struct {
-	At          time.Time `json:"at"`
-	Offset      string    `json:"offset,omitempty"`
-	OffsetLabel string    `json:"offsetLabel,omitempty"`
-	Phase       string    `json:"phase,omitempty"`
-	Kind        string    `json:"kind"`
-	Venue       string    `json:"venue,omitempty"`
-	Direction   string    `json:"direction,omitempty"`
-	Title       string    `json:"title"`
-	Detail      string    `json:"detail,omitempty"`
+	At           time.Time `json:"at"`
+	Offset       string    `json:"offset,omitempty"`
+	OffsetLabel  string    `json:"offsetLabel,omitempty"`
+	Phase        string    `json:"phase,omitempty"`
+	Kind         string    `json:"kind"`
+	Venue        string    `json:"venue,omitempty"`
+	Direction    string    `json:"direction,omitempty"`
+	Title        string    `json:"title"`
+	Detail       string    `json:"detail,omitempty"`
+	Resolution   string    `json:"resolution,omitempty"`
+	OrderUnknown bool      `json:"orderUnknown,omitempty"`
 }
 
 type forensicsTimelineDTO struct {
 	Events     []forensicsTimelineEventDTO `json:"events"`
 	Summary    string                      `json:"summary,omitempty"`
 	KnownUntil time.Time                   `json:"knownUntil,omitempty"`
+	OrderKnown *bool                       `json:"orderKnown,omitempty"`
 }
 
 type forensicsResponse struct {
@@ -1222,19 +1225,25 @@ func forensicsTimelineToDTO(t domain.ForensicsTimeline) *forensicsTimelineDTO {
 	}
 	evs := make([]forensicsTimelineEventDTO, 0, len(t.Events))
 	for _, e := range t.Events {
-		evs = append(evs, forensicsTimelineEventDTO{
-			At:          e.At.UTC(),
-			Offset:      domain.FormatForensicsTimelineOffset(e.Offset),
-			OffsetLabel: e.OffsetLabel,
-			Phase:       e.Phase,
-			Kind:        e.Kind,
-			Venue:       e.Venue,
-			Direction:   e.Direction,
-			Title:       e.Title,
-			Detail:      e.Detail,
-		})
+		row := forensicsTimelineEventDTO{
+			At:           e.At.UTC(),
+			Offset:       domain.FormatForensicsTimelineOffset(e.Offset),
+			OffsetLabel:  e.OffsetLabel,
+			Phase:        e.Phase,
+			Kind:         e.Kind,
+			Venue:        e.Venue,
+			Direction:    e.Direction,
+			Title:        e.Title,
+			Detail:       e.Detail,
+			OrderUnknown: e.OrderUnknown,
+		}
+		if e.Resolution > 0 {
+			row.Resolution = domain.FormatOptionsLeadShort(e.Resolution)
+		}
+		evs = append(evs, row)
 	}
-	out := &forensicsTimelineDTO{Events: evs, Summary: t.Summary}
+	known := t.OrderKnown
+	out := &forensicsTimelineDTO{Events: evs, Summary: t.Summary, OrderKnown: &known}
 	if !t.KnownUntil.IsZero() {
 		out.KnownUntil = t.KnownUntil.UTC()
 	}

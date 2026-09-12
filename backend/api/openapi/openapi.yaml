@@ -10734,6 +10734,9 @@ components:
           type: string
           format: date-time
           description: Latest time a timeline print may have — the observer clock (`asOf`, or now)
+        orderKnown:
+          type: boolean
+          description: False when two beats overlap at this tape's bar/sample size so the order is not certain
         events:
           type: array
           items: { $ref: '#/components/schemas/MarketForensicsTimelineEvent' }
@@ -10750,6 +10753,12 @@ components:
         direction: { type: string }
         title: { type: string }
         detail: { type: string }
+        resolution:
+          type: string
+          description: Bar or sample size this stamp is known to (1m, 5m). Empty when the time is an exact tick.
+        orderUnknown:
+          type: boolean
+          description: True when this beat overlaps another so we cannot say which printed first
     MarketForensicsScan:
       type: object
       description: Coins whose current tape looks like past important-move setups

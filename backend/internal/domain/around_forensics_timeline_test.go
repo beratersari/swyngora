@@ -185,6 +185,34 @@ func TestBuildForensicsTimeline_AsOfTenMinutesHidesLaterVenue(t *testing.T) {
 	}
 }
 
+func TestBuildForensicsTimeline_OverlappingStampsDoNotClaimOrder(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	r := ForensicsReport{
+		Symbol: "BTCUSDT", At: at, Window: AroundWindow1h, During: AroundDuring15m, AsOf: at.Add(2 * time.Hour),
+		Tape: &AroundReport{
+			Venues: []AroundVenue{
+				{Exchange: ExchangeBinance, Interval: string(Interval5m), MoveStart: at,
+					Phases: []AroundPhase{{Phase: AroundPhaseDuring, Complete: true, Price: AroundPrice{Direction: CVDDirUp, ChangePct: 1}}}},
+				{Exchange: ExchangeBybit, Interval: string(Interval5m), MoveStart: at.Add(2 * time.Minute),
+					Phases: []AroundPhase{{Phase: AroundPhaseDuring, Complete: true, Price: AroundPrice{Direction: CVDDirUp, ChangePct: 0.9}}}},
+			},
+		},
+	}
+	got := BuildForensicsTimeline(r)
+	if got.OrderKnown || len(got.Events) != 2 {
+		t.Fatalf("%+v", got)
+	}
+	if !got.Events[0].OrderUnknown || !got.Events[1].OrderUnknown {
+		t.Fatalf("events %+v", got.Events)
+	}
+	if !strings.Contains(got.Summary, "Order is not certain") {
+		t.Fatalf("summary %q", got.Summary)
+	}
+	if got.Events[1].OffsetLabel != "around the event" {
+		t.Fatalf("offset %q", got.Events[1].OffsetLabel)
+	}
+}
+
 func TestFormatForensicsTimelineOffset(t *testing.T) {
 	if got := FormatForensicsTimelineOffset(-8 * time.Minute); got != "-8m" {
 		t.Fatalf("%q", got)

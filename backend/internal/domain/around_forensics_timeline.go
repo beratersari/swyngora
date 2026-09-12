@@ -22,19 +22,22 @@ type ForensicsTimeline struct {
 	Events     []ForensicsTimelineEvent
 	Summary    string
 	KnownUntil time.Time
+	OrderKnown bool
 }
 
 // ForensicsTimelineEvent is one beat on that clock.
 type ForensicsTimelineEvent struct {
-	At          time.Time
-	Offset      time.Duration
-	OffsetLabel string
-	Phase       string
-	Kind        string
-	Venue       string
-	Direction   string
-	Title       string
-	Detail      string
+	At           time.Time
+	Offset       time.Duration
+	OffsetLabel  string
+	Phase        string
+	Kind         string
+	Venue        string
+	Direction    string
+	Title        string
+	Detail       string
+	Resolution   time.Duration
+	OrderUnknown bool
 }
 
 // ForensicsTimelineKnownUntil is the latest print the timeline may show.
@@ -86,10 +89,25 @@ func BuildForensicsTimeline(r ForensicsReport) ForensicsTimeline {
 	evs = append(evs, timelineTapeEvents(r.Tape, plan, cutoff)...)
 	evs = dedupeForensicsTimeline(evs)
 	sortForensicsTimeline(evs)
+	markForensicsTimelineOrder(evs)
 	return ForensicsTimeline{
 		Events:     evs,
 		Summary:    explainForensicsTimeline(evs),
 		KnownUntil: cutoff,
+		OrderKnown: forensicsTimelineOrderKnown(evs),
+	}
+}
+
+func timelineKindResolution(kind, interval string) time.Duration {
+	switch kind {
+	case ForensicsTimelineLiq:
+		return 0
+	case ForensicsTimelineOI, ForensicsTimelineOptions:
+		return aroundVenueOIStep
+	case ForensicsTimelineSweep:
+		return 15 * time.Minute
+	default:
+		return aroundIntervalOrMinute(interval)
 	}
 }
 
@@ -103,12 +121,12 @@ func timelineVenueBeats(v AroundVenue, plan AroundPlan, cutoff time.Time) []Fore
 		}
 		out = append(out, newForensicsTimelineEvent(v.OIStart, plan, ForensicsTimelineOI, venue, v.OIDir,
 			fmt.Sprintf("%s open interest started %s", prettyTimelineVenue(venue), word),
-			timelineUntilDetail(v.OIUntil)))
+			timelineUntilDetail(v.OIUntil), timelineKindResolution(ForensicsTimelineOI, v.Interval)))
 	}
 	if timelineEventKnown(v.TakerStart, cutoff) && (v.TakerDir == TakerSideBuy || v.TakerDir == TakerSideSell) {
 		out = append(out, newForensicsTimelineEvent(v.TakerStart, plan, ForensicsTimelineTakers, venue, v.TakerDir,
 			fmt.Sprintf("%s takers started %s", prettyTimelineVenue(venue), v.TakerDir+"ing"),
-			timelineUntilDetail(v.TakerUntil)))
+			timelineUntilDetail(v.TakerUntil), timelineKindResolution(ForensicsTimelineTakers, v.Interval)))
 	}
 	if timelineEventKnown(v.MoveStart, cutoff) {
 		dir := timelinePriceDir(v)
@@ -119,7 +137,7 @@ func timelineVenueBeats(v AroundVenue, plan AroundPlan, cutoff time.Time) []Fore
 			word = "moving down"
 		}
 		out = append(out, newForensicsTimelineEvent(v.MoveStart, plan, ForensicsTimelinePrice, venue, dir,
-			fmt.Sprintf("%s price started %s", prettyTimelineVenue(venue), word), ""))
+			fmt.Sprintf("%s price started %s", prettyTimelineVenue(venue), word), "", timelineKindResolution(ForensicsTimelinePrice, v.Interval)))
 	}
 	if timelineEventKnown(v.LiqStart, cutoff) {
 		side := v.LiqSide
@@ -127,7 +145,7 @@ func timelineVenueBeats(v AroundVenue, plan AroundPlan, cutoff time.Time) []Fore
 		if side == LiquidationSideLong || side == LiquidationSideShort {
 			title = fmt.Sprintf("%s %s liquidations started", prettyTimelineVenue(venue), side)
 		}
-		out = append(out, newForensicsTimelineEvent(v.LiqStart, plan, ForensicsTimelineLiq, venue, side, title, ""))
+		out = append(out, newForensicsTimelineEvent(v.LiqStart, plan, ForensicsTimelineLiq, venue, side, title, "", timelineKindResolution(ForensicsTimelineLiq, v.Interval)))
 	}
 	return out
 }
@@ -186,7 +204,7 @@ func timelineOptionsBeat(tape *AroundReport, plan AroundPlan, cutoff time.Time) 
 	if best.LeadLabel != "" && best.Started == AroundOptionsStartedBefore {
 		title = "Listed options turned unusual " + best.LeadLabel + " before the move"
 	}
-	return newForensicsTimelineEvent(best.StartedAt, plan, ForensicsTimelineOptions, string(ExchangeDeribit), best.OIDirection, title, strings.TrimSpace(best.Summary))
+	return newForensicsTimelineEvent(best.StartedAt, plan, ForensicsTimelineOptions, string(ExchangeDeribit), best.OIDirection, title, strings.TrimSpace(best.Summary), timelineKindResolution(ForensicsTimelineOptions, ""))
 }
 
 func timelineTapeEvents(tape *AroundReport, plan AroundPlan, cutoff time.Time) []ForensicsTimelineEvent {
@@ -212,7 +230,7 @@ func timelineTapeEvents(tape *AroundReport, plan AroundPlan, cutoff time.Time) [
 		if title == "" {
 			title = kind
 		}
-		out = append(out, newForensicsTimelineEvent(ev.At, plan, kind, venue, ev.Side, title, ev.Summary))
+		out = append(out, newForensicsTimelineEvent(ev.At, plan, kind, venue, ev.Side, title, ev.Summary, timelineKindResolution(kind, "")))
 	}
 	for _, v := range tape.Venues {
 		for _, ev := range v.Events {
@@ -227,7 +245,7 @@ func timelineTapeEvents(tape *AroundReport, plan AroundPlan, cutoff time.Time) [
 	return out
 }
 
-func newForensicsTimelineEvent(at time.Time, plan AroundPlan, kind, venue, dir, title, detail string) ForensicsTimelineEvent {
+func newForensicsTimelineEvent(at time.Time, plan AroundPlan, kind, venue, dir, title, detail string, res time.Duration) ForensicsTimelineEvent {
 	at = at.UTC()
 	off := at.Sub(plan.At)
 	if plan.At.IsZero() {
@@ -236,26 +254,30 @@ func newForensicsTimelineEvent(at time.Time, plan AroundPlan, kind, venue, dir, 
 	return ForensicsTimelineEvent{
 		At:          at,
 		Offset:      off,
-		OffsetLabel: timelineOffsetLabel(off),
+		OffsetLabel: timelineOffsetLabel(off, res),
 		Phase:       timelinePhaseOf(at, plan),
 		Kind:        kind,
 		Venue:       venue,
 		Direction:   dir,
 		Title:       title,
 		Detail:      detail,
+		Resolution:  res,
 	}
 }
 
-func timelineOffsetLabel(d time.Duration) string {
-	if d < 0 {
-		d = -d
-		if d < 45*time.Second {
-			return "at the event"
-		}
-		return formatOptionsLead(d) + " before"
+func timelineOffsetLabel(d, res time.Duration) string {
+	abs := d
+	if abs < 0 {
+		abs = -abs
 	}
-	if d < 45*time.Second {
+	if abs < 45*time.Second {
 		return "at the event"
+	}
+	if res > 0 && abs < res {
+		return "around the event"
+	}
+	if d < 0 {
+		return formatOptionsLead(-d) + " before"
 	}
 	return formatOptionsLead(d) + " after"
 }
@@ -358,12 +380,67 @@ func sortForensicsTimeline(evs []ForensicsTimelineEvent) {
 	})
 }
 
+func timelineEventStamp(e ForensicsTimelineEvent) AroundStamp {
+	return AroundStamp{At: e.At, Resolution: e.Resolution}
+}
+
+func markForensicsTimelineOrder(evs []ForensicsTimelineEvent) {
+	for i := range evs {
+		for j := range evs {
+			if i == j {
+				continue
+			}
+			if AroundStampsOverlap(timelineEventStamp(evs[i]), timelineEventStamp(evs[j])) {
+				evs[i].OrderUnknown = true
+				break
+			}
+		}
+	}
+}
+
+func forensicsTimelineOrderKnown(evs []ForensicsTimelineEvent) bool {
+	if len(evs) <= 1 {
+		return true
+	}
+	for _, e := range evs {
+		if e.OrderUnknown {
+			return false
+		}
+	}
+	return true
+}
+
 func explainForensicsTimeline(evs []ForensicsTimelineEvent) string {
 	if len(evs) == 0 {
 		return ""
 	}
-	parts := make([]string, 0, len(evs))
-	for _, e := range evs {
+	var parts []string
+	for i := 0; i < len(evs); {
+		cluster := []ForensicsTimelineEvent{evs[i]}
+		j := i + 1
+		for j < len(evs) {
+			ok := false
+			for _, c := range cluster {
+				if AroundStampsOverlap(timelineEventStamp(c), timelineEventStamp(evs[j])) {
+					ok = true
+					break
+				}
+			}
+			if !ok {
+				break
+			}
+			cluster = append(cluster, evs[j])
+			j++
+		}
+		parts = append(parts, explainForensicsTimelineCluster(cluster))
+		i = j
+	}
+	return strings.Join(parts, " ")
+}
+
+func explainForensicsTimelineCluster(cluster []ForensicsTimelineEvent) string {
+	if len(cluster) == 1 {
+		e := cluster[0]
 		s := e.Title
 		if e.OffsetLabel != "" {
 			if e.OffsetLabel == "at the event" {
@@ -372,7 +449,14 @@ func explainForensicsTimeline(evs []ForensicsTimelineEvent) string {
 				s += " (" + e.OffsetLabel + ")"
 			}
 		}
-		parts = append(parts, s)
+		return s + "."
 	}
-	return strings.Join(parts, ". ") + "."
+	titles := make([]string, 0, len(cluster))
+	for _, e := range cluster {
+		if e.Title != "" {
+			titles = append(titles, e.Title)
+		}
+	}
+	at := cluster[0].At.UTC().Format("15:04")
+	return "Around " + at + " UTC: " + strings.Join(titles, "; ") + ". Order is not certain at this tape's bar size."
 }

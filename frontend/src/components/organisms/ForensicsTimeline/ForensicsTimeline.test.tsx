@@ -32,6 +32,7 @@ describe('ForensicsTimeline', () => {
               kind: 'price',
               venue: 'bybit',
               title: 'Bybit price started moving up',
+              orderUnknown: true,
             },
             {
               at: '2026-08-20T14:03:00Z',
@@ -48,6 +49,7 @@ describe('ForensicsTimeline', () => {
     expect(screen.getByText(/known as of|itibarıyla bilinen/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Binance open interest started rising/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Bybit price started moving up/i)).toBeInTheDocument();
+    expect(screen.getByText(/order not certain|sıra kesin değil/i)).toBeInTheDocument();
     expect(screen.getByText(/short liquidations started/i)).toBeInTheDocument();
   });
 

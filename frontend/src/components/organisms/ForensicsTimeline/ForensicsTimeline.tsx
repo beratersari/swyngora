@@ -43,6 +43,11 @@ export function ForensicsTimeline({ timeline, isLoading }: ForensicsTimelineProp
                     {ev.offsetLabel}
                   </Text>
                 ) : null}
+                {ev.orderUnknown ? (
+                  <Text variant="caption" color="secondary">
+                    {t('timeline.orderUnknown')}
+                  </Text>
+                ) : null}
               </Meta>
               <Text variant="bodySm">{ev.title}</Text>
               {ev.detail ? (

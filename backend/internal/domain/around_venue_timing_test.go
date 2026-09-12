@@ -23,6 +23,24 @@ func aroundFlatBars(at time.Time, fromMin, toMin int, px float64) []AroundBar {
 	return bars
 }
 
+func TestAroundStampsOverlap_BarWindows(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	five := 5 * time.Minute
+	a := AroundStamp{At: at, Resolution: five}
+	b := AroundStamp{At: at.Add(2 * time.Minute), Resolution: five}
+	if !AroundStampsOverlap(a, b) || AroundStampBefore(a, b) {
+		t.Fatal("5m vs 5m +2m must overlap")
+	}
+	c := AroundStamp{At: at.Add(3 * time.Minute), Resolution: time.Minute}
+	if !AroundStampsOverlap(a, c) {
+		t.Fatal("5m vs 1m inside the same bar must overlap")
+	}
+	d := AroundStamp{At: at.Add(5 * time.Minute), Resolution: time.Minute}
+	if !AroundStampBefore(a, d) || AroundStampsOverlap(a, d) {
+		t.Fatal("5m bar must end before the next 1m bar")
+	}
+}
+
 func TestFindAroundPriceRunStart_FindsFirstPrint(t *testing.T) {
 	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
 	plan := aroundTestPlan(at)
@@ -125,11 +143,14 @@ func TestCompareAroundVenueTiming_BinanceEarlier(t *testing.T) {
 		t.Fatalf("summary %q", got.Summary)
 	}
 	same := CompareAroundVenueTiming([]AroundVenue{
-		{Exchange: ExchangeBinance, MoveStart: at},
-		{Exchange: ExchangeBybit, MoveStart: at.Add(time.Minute)},
+		{Exchange: ExchangeBinance, MoveStart: at, Interval: string(Interval5m)},
+		{Exchange: ExchangeBybit, MoveStart: at.Add(2 * time.Minute), Interval: string(Interval5m)},
 	})
 	if same == nil || same.Agreement != AroundVenueSame {
 		t.Fatalf("same %+v", same)
+	}
+	if !strings.Contains(same.Summary, "not fine enough") {
+		t.Fatalf("summary %q", same.Summary)
 	}
 }
 
@@ -222,6 +243,43 @@ func TestCompareAroundVenueTiming_OIAndTakersBeforeLaggard(t *testing.T) {
 	}
 	if len(got.Before) < 3 {
 		t.Fatalf("before bits %+v", got.Before)
+	}
+}
+
+func TestFindAroundPriceRunStart_HoleBeforeStartIsUnknown(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	plan := aroundTestPlan(at)
+	var bars []AroundBar
+	px := 100.0
+	for i := -10; i < 3; i++ {
+		t0 := at.Add(time.Duration(i) * time.Minute)
+		bars = append(bars, AroundBar{Time: t0, Open: px, Close: px, High: px, Low: px})
+	}
+	// Hole 14:03–14:09, then an impulse. We cannot date the start.
+	for i := 10; i < 16; i++ {
+		t0 := at.Add(time.Duration(i) * time.Minute)
+		px = 101.5 + float64(i-10)*0.2
+		bars = append(bars, AroundBar{Time: t0, Open: px, Close: px, High: px, Low: px})
+	}
+	got := FindAroundPriceRunStart(bars, plan)
+	if !got.IsZero() {
+		t.Fatalf("hole start %s", got)
+	}
+}
+
+func TestCompareAroundVenueTiming_MixedIntervalOverlapIsUnknown(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	got := CompareAroundVenueTiming([]AroundVenue{
+		{Exchange: ExchangeBinance, MoveStart: at, Interval: string(Interval5m),
+			Phases: []AroundPhase{{Phase: AroundPhaseDuring, Complete: true, Price: AroundPrice{ChangePct: 1.2, Direction: CVDDirUp}}}},
+		{Exchange: ExchangeBybit, MoveStart: at.Add(3 * time.Minute), Interval: string(Interval1m),
+			Phases: []AroundPhase{{Phase: AroundPhaseDuring, Complete: true, Price: AroundPrice{ChangePct: 1.1, Direction: CVDDirUp}}}},
+	})
+	if got == nil || got.Agreement != AroundVenueSame || got.Follow != AroundVenueFollowTogether {
+		t.Fatalf("%+v", got)
+	}
+	if strings.Contains(got.Summary, "followed") {
+		t.Fatalf("overlap must not claim a follow: %q", got.Summary)
 	}
 }
 

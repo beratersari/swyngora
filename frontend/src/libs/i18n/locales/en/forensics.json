@@ -22,7 +22,8 @@
   },
   "timeline": {
     "title": "What happened, in order",
-    "knownUntil": "Known as of {{time}}"
+    "knownUntil": "Known as of {{time}}",
+    "orderUnknown": "Order not certain at this bar size"
   },
   "view": {
     "event": "A time",

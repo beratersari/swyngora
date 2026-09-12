@@ -60,6 +60,17 @@ followed at 14:08 — that print is missing data, not a follow. A later
 impulse after those late bars are already on the tape can still be a
 follow.
 
+A **hole in the middle** of the tape is the same: if bars stop and the
+next print is already the move, we do not date the start (it may have
+begun in the gap).
+
+Timestamps are **bar or sample windows**, not exact ticks. A 5m candle
+at 14:00 means sometime in that bar. If two stamps overlap at that
+size — 5m vs 5m two minutes apart, or 5m vs 1m inside the same bar —
+`venueTiming` says they started around the same time and the timeline
+marks `orderUnknown`. The summary does not narrate a sequence we
+cannot know. Liquidation prints stay exact.
+
 Informational only.
 
 On BTC and ETH, each phase can include stored Deribit desk samples
