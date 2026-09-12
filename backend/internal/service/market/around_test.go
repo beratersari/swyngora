@@ -361,7 +361,7 @@ func TestGetForensics_ReturnsTape(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Minute)
 	at := now.Add(-2 * time.Hour)
 	svc := New(&fakeMarket{candles: aroundTape(at), ticker: &domain.Ticker24h{LastPrice: "105"}}, &fakeSupply{})
-	got, err := svc.GetForensics(context.Background(), "binance", "BTCUSDT", "1h", "15m", at, "24h", "15m", "both", 1.5, 5, "volume,book,oi", "", "60", "30m,2h")
+	got, err := svc.GetForensics(context.Background(), "binance", "BTCUSDT", "1h", "15m", at, "24h", "15m", "both", 1.5, 5, "volume,book,oi", "", "60", "30m,2h", time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,6 +382,35 @@ func TestGetForensics_ReturnsTape(t *testing.T) {
 	}
 	if got.Similar != nil && got.Similar.At.IsZero() {
 		t.Fatal("similar at should be set")
+	}
+}
+
+func TestGetForensics_AsOfMustBeAtOrAfterEvent(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Minute)
+	at := now.Add(-2 * time.Hour)
+	svc := New(&fakeMarket{candles: aroundTape(at), ticker: &domain.Ticker24h{LastPrice: "105"}}, &fakeSupply{})
+	if _, err := svc.GetForensics(context.Background(), "binance", "BTCUSDT", "1h", "15m", at, "24h", "15m", "both", 1.5, 5, "volume,book,oi", "", "60", "30m,2h", at.Add(-time.Minute)); !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+	if _, err := svc.GetForensics(context.Background(), "binance", "BTCUSDT", "1h", "15m", at, "24h", "15m", "both", 1.5, 5, "volume,book,oi", "", "60", "30m,2h", now.Add(time.Hour)); !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestGetForensics_ExplicitAsOfSetsKnownUntil(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Minute)
+	at := now.Add(-2 * time.Hour)
+	asOf := at.Add(10 * time.Minute)
+	svc := New(&fakeMarket{candles: aroundTape(at), ticker: &domain.Ticker24h{LastPrice: "105"}}, &fakeSupply{})
+	got, err := svc.GetForensics(context.Background(), "binance", "BTCUSDT", "1h", "15m", at, "24h", "15m", "both", 1.5, 5, "volume,book,oi", "", "60", "30m,2h", asOf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.AsOfExplicit || !got.AsOf.Equal(asOf) {
+		t.Fatalf("asOf %+v", got)
+	}
+	if !got.Timeline.KnownUntil.Equal(asOf) {
+		t.Fatalf("knownUntil %s want %s", got.Timeline.KnownUntil, asOf)
 	}
 }
 

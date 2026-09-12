@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Lab TP1 / TP2:** signals plan a 1R first target and a farther runner. Lab can close part of the fill at TP1, leave the rest for TP2, and keep the stop, move it to entry, or trail it with price. The partial close hits cash/PnL; remaining shared risk follows the live stop (`docs/features/indicator-scanner.md`)
 
 ### Fixed
+- **Forensics timeline as-of:** reviewing an old event no longer shows later liquidations or other-venue prints as if they were known at the move. The timeline stops at the end of the during window once the around look-forward has closed. While the after window is still open, a later refresh can add prints. Optional `asOf` replays a clock (`docs/features/forensics.md`)
 - **Lab TP1 risk timing:** a new fill at the same timestamp as a TP1 scale does not take the freed risk. TP1 must already have printed (`docs/features/indicator-scanner.md`)
 - **Lab same-bar TP1 vs entry:** after the stop moves to entry, a pullback to entry on the TP1 candle does not close the runner unless a smaller bar shows TP1 printed first. A stop first still cancels TP1 (`docs/features/indicator-scanner.md`)
 - **Lab open-trade sizing:** a new Lab fill sizes risk from mark-to-market equity, including still-open trades at their last print — not only cash left after the last close (`docs/features/indicator-scanner.md`)

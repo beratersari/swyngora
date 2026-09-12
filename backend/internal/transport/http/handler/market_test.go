@@ -840,6 +840,17 @@ func TestScanForensics_OK(t *testing.T) {
 	}
 }
 
+func TestGetForensics_BadAsOf(t *testing.T) {
+	h := newTestHandler()
+	at := time.Now().UTC().Add(-90 * time.Minute).Format(time.RFC3339)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/forensics?symbol=BTCUSDT&at="+at+"&asOf=nope", nil)
+	rr := httptest.NewRecorder()
+	h.GetForensics(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestGetForensics_MissingAt(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/forensics?symbol=BTCUSDT", nil)

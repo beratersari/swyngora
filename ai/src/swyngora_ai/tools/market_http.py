@@ -2270,6 +2270,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         weights: str = "",
         min_coverage: float = -1,
         horizons: str = "",
+        as_of: str = "",
     ) -> str:
         params: dict[str, Any] = {
             "symbol": symbol,
@@ -2298,6 +2299,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             params["minCoverage"] = min_coverage
         if horizons:
             params["horizons"] = horizons
+        if as_of:
+            params["asOf"] = as_of
         return http.get("/api/v1/market/forensics", params)
 
     def scan_market_forensics(

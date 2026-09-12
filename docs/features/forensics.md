@@ -41,7 +41,22 @@ listing raw metrics.
 print (open interest, takers, price on Binance or Bybit, liquidations,
 listed options, a sweep or absorption) with the time, how far it sits
 from `at` (`offset` / `offsetLabel`), and which venue printed it.
-Missing series are omitted. Informational only.
+Missing series are omitted. The clock only includes prints that were
+**already known** at the observer time (`timeline.knownUntil`).
+
+Optional `asOf` (RFC3339 or unix ms) is that observer clock — tape and
+timeline stop there. Example: a 14:00 move checked `asOf=14:10` does
+not show a 14:30 liquidation or a Bybit start at 14:30. Checking again
+later (or passing a later `asOf`) can add those prints.
+
+When `asOf` is omitted:
+
+| When you look | Timeline cutoff |
+|---|---|
+| Still inside the after window (event unfolding) | `now` — a refresh can add later prints |
+| After the around-window has closed (old event) | End of **during** — later prints are not treated as known at the event |
+
+Informational only.
 
 On BTC and ETH, each phase can include stored Deribit desk samples
 (`options`): listed open interest, put/call lean, DVOL/ATM IV, and
@@ -130,6 +145,7 @@ Informational only — not financial advice.
 ```bash
 cd backend && go test ./internal/domain/ ./internal/service/market/ ./internal/transport/http/handler/ -run 'Forensics|Around'
 curl "http://localhost:8080/api/v1/market/forensics?symbol=BTCUSDT&at=2026-08-20T14:00:00Z"
+curl "http://localhost:8080/api/v1/market/forensics?symbol=BTCUSDT&at=2026-08-20T14:00:00Z&asOf=2026-08-20T14:10:00Z"
 curl "http://localhost:8080/api/v1/market/forensics/scan?limit=12&lookback=3d"
 curl "http://localhost:8080/api/v1/market/forensics/radar?since=7d"
 ```

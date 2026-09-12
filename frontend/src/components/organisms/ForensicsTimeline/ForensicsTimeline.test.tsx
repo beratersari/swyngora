@@ -8,6 +8,7 @@ describe('ForensicsTimeline', () => {
     renderWithProviders(
       <ForensicsTimeline
         timeline={{
+          knownUntil: '2026-08-20T14:15:00Z',
           summary: 'Binance open interest started rising (about 8 minutes before).',
           events: [
             {
@@ -44,6 +45,7 @@ describe('ForensicsTimeline', () => {
       />,
     );
     expect(screen.getByText(/what happened, in order|zaman sırasıyla/i)).toBeInTheDocument();
+    expect(screen.getByText(/known as of|itibarıyla bilinen/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Binance open interest started rising/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Bybit price started moving up/i)).toBeInTheDocument();
     expect(screen.getByText(/short liquidations started/i)).toBeInTheDocument();

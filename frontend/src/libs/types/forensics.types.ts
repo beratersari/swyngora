@@ -227,6 +227,7 @@ export type ForensicsTimelineEvent = {
 export type ForensicsTimeline = {
   events?: ForensicsTimelineEvent[];
   summary?: string;
+  knownUntil?: string;
 };
 
 export type ForensicsReport = {

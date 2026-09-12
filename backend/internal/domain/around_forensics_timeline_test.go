@@ -85,11 +85,126 @@ func TestBuildForensicsTimeline_Order(t *testing.T) {
 	if !strings.Contains(got.Summary, "open interest") || !strings.Contains(got.Summary, "Bybit") || !strings.Contains(got.Summary, "short liquidations") {
 		t.Fatalf("summary %q", got.Summary)
 	}
+	if !got.KnownUntil.Equal(at.Add(15 * time.Minute)) {
+		t.Fatalf("knownUntil %s", got.KnownUntil)
+	}
 }
 
 func TestBuildForensicsTimeline_EmptyTape(t *testing.T) {
 	if got := BuildForensicsTimeline(ForensicsReport{}); len(got.Events) != 0 || got.Summary != "" {
 		t.Fatalf("%+v", got)
+	}
+}
+
+func TestForensicsTimelineKnownUntil_CompletedStopsAtDuring(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	// Next-day review: do not pretend 14:30 was known at the move.
+	got := ForensicsTimelineKnownUntil(AroundWindow1h, AroundDuring15m, at, at.Add(26*time.Hour), false)
+	if !got.Equal(at.Add(15 * time.Minute)) {
+		t.Fatalf("got %s", got)
+	}
+}
+
+func TestForensicsTimelineKnownUntil_StillOpenUsesAsOf(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	asOf := at.Add(10 * time.Minute)
+	got := ForensicsTimelineKnownUntil(AroundWindow1h, AroundDuring15m, at, asOf, false)
+	if !got.Equal(asOf) {
+		t.Fatalf("got %s", got)
+	}
+	later := at.Add(40 * time.Minute)
+	got = ForensicsTimelineKnownUntil(AroundWindow1h, AroundDuring15m, at, later, false)
+	if !got.Equal(later) {
+		t.Fatalf("later %s", got)
+	}
+}
+
+func TestForensicsTimelineKnownUntil_ExplicitReplay(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	asOf := at.Add(2 * time.Hour)
+	got := ForensicsTimelineKnownUntil(AroundWindow1h, AroundDuring15m, at, asOf, true)
+	if !got.Equal(asOf) {
+		t.Fatalf("got %s", got)
+	}
+}
+
+func TestBuildForensicsTimeline_HidesLaterPrintsOnOldEvent(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	bn := AroundVenue{
+		Exchange:  ExchangeBinance,
+		Symbol:    "BTCUSDT",
+		MoveStart: at,
+		LiqStart:  at.Add(30 * time.Minute),
+		LiqSide:   LiquidationSideShort,
+		Phases:    []AroundPhase{{Phase: AroundPhaseDuring, Complete: true, Price: AroundPrice{Direction: CVDDirUp, ChangePct: 1.2}}},
+	}
+	by := AroundVenue{
+		Exchange:  ExchangeBybit,
+		Symbol:    "BTCUSDT",
+		MoveStart: at.Add(30 * time.Minute),
+		Phases:    []AroundPhase{{Phase: AroundPhaseAfter, Complete: true, Price: AroundPrice{Direction: CVDDirUp, ChangePct: 0.9}}},
+	}
+	r := ForensicsReport{
+		Symbol: "BTCUSDT", At: at, Window: AroundWindow1h, During: AroundDuring15m, AsOf: at.Add(26 * time.Hour),
+		Tape: &AroundReport{
+			Symbol: "BTCUSDT", At: at, Window: AroundWindow1h, During: AroundDuring15m,
+			Venues: []AroundVenue{bn, by},
+		},
+	}
+	got := BuildForensicsTimeline(r)
+	if !got.KnownUntil.Equal(at.Add(15 * time.Minute)) {
+		t.Fatalf("knownUntil %s", got.KnownUntil)
+	}
+	if len(got.Events) != 1 {
+		t.Fatalf("events=%d %+v", len(got.Events), got.Events)
+	}
+	if got.Events[0].Kind != ForensicsTimelinePrice || got.Events[0].Venue != "binance" {
+		t.Fatalf("%+v", got.Events[0])
+	}
+}
+
+func TestBuildForensicsTimeline_AddsLaterPrintsWhenStillOpen(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	asOf := at.Add(40 * time.Minute)
+	r := ForensicsReport{
+		Symbol: "BTCUSDT", At: at, Window: AroundWindow1h, During: AroundDuring15m, AsOf: asOf,
+		Tape: &AroundReport{
+			Symbol: "BTCUSDT", At: at, Window: AroundWindow1h, During: AroundDuring15m,
+			Venues: []AroundVenue{{
+				Exchange: ExchangeBinance, Symbol: "BTCUSDT",
+				MoveStart: at, LiqStart: at.Add(30 * time.Minute), LiqSide: LiquidationSideShort,
+				Phases: []AroundPhase{{Phase: AroundPhaseDuring, Complete: true, Price: AroundPrice{Direction: CVDDirUp, ChangePct: 1}}},
+			}},
+		},
+	}
+	got := BuildForensicsTimeline(r)
+	if len(got.Events) != 2 {
+		t.Fatalf("events=%d %+v", len(got.Events), got.Events)
+	}
+	if got.Events[1].Kind != ForensicsTimelineLiq {
+		t.Fatalf("%+v", got.Events[1])
+	}
+}
+
+func TestBuildForensicsTimeline_AsOfTenMinutesHidesLaterVenue(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	r := ForensicsReport{
+		Symbol: "BTCUSDT", At: at, Window: AroundWindow1h, During: AroundDuring15m,
+		AsOf: at.Add(10 * time.Minute), AsOfExplicit: true,
+		Tape: &AroundReport{
+			Symbol: "BTCUSDT", At: at, Window: AroundWindow1h, During: AroundDuring15m,
+			Venues: []AroundVenue{
+				{Exchange: ExchangeBinance, Symbol: "BTCUSDT", MoveStart: at, LiqStart: at.Add(3 * time.Minute), LiqSide: LiquidationSideShort},
+				{Exchange: ExchangeBybit, Symbol: "BTCUSDT", MoveStart: at.Add(30 * time.Minute)},
+			},
+		},
+	}
+	got := BuildForensicsTimeline(r)
+	if len(got.Events) != 2 {
+		t.Fatalf("events=%d %+v", len(got.Events), got.Events)
+	}
+	if got.Events[0].Venue != "binance" || got.Events[1].Kind != ForensicsTimelineLiq {
+		t.Fatalf("%+v", got.Events)
 	}
 }
 

@@ -757,7 +757,7 @@ func (b *Backend) GetAroundSimilar(ctx context.Context, exchange, symbol, lookba
 	return mustJSON(got)
 }
 
-func (b *Backend) GetForensics(ctx context.Context, exchange, symbol, at, window, during, lookback, interval, direction string, minReturnPct float64, limit int, fields, weights, minCoverage, horizons string) (json.RawMessage, error) {
+func (b *Backend) GetForensics(ctx context.Context, exchange, symbol, at, window, during, lookback, interval, direction string, minReturnPct float64, limit int, fields, weights, minCoverage, horizons, asOf string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
 	}
@@ -765,7 +765,14 @@ func (b *Backend) GetForensics(ctx context.Context, exchange, symbol, at, window
 	if err != nil {
 		return nil, err
 	}
-	got, err := b.Market.GetForensics(ctx, exchange, symbol, window, during, when, lookback, interval, direction, minReturnPct, limit, fields, weights, minCoverage, horizons)
+	var asOfTime time.Time
+	if strings.TrimSpace(asOf) != "" {
+		asOfTime, err = parseMCPTime(asOf)
+		if err != nil {
+			return nil, err
+		}
+	}
+	got, err := b.Market.GetForensics(ctx, exchange, symbol, window, during, when, lookback, interval, direction, minReturnPct, limit, fields, weights, minCoverage, horizons, asOfTime)
 	if err != nil {
 		return nil, err
 	}

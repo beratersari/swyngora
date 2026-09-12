@@ -74,7 +74,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/around/moves` | Strongest recent up/down legs plus what happened during each |
 | `GET` | `/api/v1/market/around/precursors` | What often changed before those moves, including conditions that fire together |
 | `GET` | `/api/v1/market/around/similar` | Past important-move setups like the current tape (optional `at`); unique events; caller-picked after horizons |
-| `GET` | `/api/v1/market/forensics` | Around-the-move tape plus similar past setups for a chosen time; `timeline` is one clock of OI / venues / liquidations |
+| `GET` | `/api/v1/market/forensics` | Around-the-move tape plus similar past setups for a chosen time; `timeline` is one clock of OI / venues / liquidations (only prints known by `asOf` / `knownUntil`) |
 | `GET` | `/api/v1/market/forensics/scan` | Coins whose current tape looks like past pre-move setups, plus what usually happened after |
 | `GET` | `/api/v1/market/forensics/radar` | Saved Setup Radar hits and what price did after, plus lean usefulness |
 | `GET` | `/api/v1/market/vwap` | Volume-weighted average price from a start time; last vs VWAP; Binance, Bybit, combined |

@@ -19,8 +19,9 @@ const (
 
 // ForensicsTimeline is one clock of what printed around the event.
 type ForensicsTimeline struct {
-	Events  []ForensicsTimelineEvent
-	Summary string
+	Events     []ForensicsTimelineEvent
+	Summary    string
+	KnownUntil time.Time
 }
 
 // ForensicsTimelineEvent is one beat on that clock.
@@ -36,13 +37,61 @@ type ForensicsTimelineEvent struct {
 	Detail      string
 }
 
+// ForensicsTimelineKnownUntil is the latest print the timeline may show.
+//
+// When asOfExplicit is true, the caller asked for that observer clock (replay).
+// Otherwise a completed around-window (asOf at or after the unclipped after
+// end) stops at the end of the during move so later liquidations or other-
+// venue prints are not treated as known at the event. While the after
+// window is still open, asOf (usually now) is used so a later refresh can
+// add prints that have since occurred.
+func ForensicsTimelineKnownUntil(window, during string, at, asOf time.Time, asOfExplicit bool) time.Time {
+	asOf = asOf.UTC()
+	if asOf.IsZero() {
+		asOf = time.Now().UTC()
+	}
+	at = at.UTC()
+	if at.IsZero() {
+		return asOf
+	}
+	_, winDur, err := ParseAroundWindow(window)
+	if err != nil {
+		return asOf
+	}
+	_, durDur, err := ParseAroundDuring(during)
+	if err != nil {
+		return asOf
+	}
+	duringTo := at.Add(durDur)
+	afterTo := duringTo.Add(winDur)
+	if asOfExplicit {
+		return asOf
+	}
+	if !asOf.Before(afterTo) {
+		return duringTo
+	}
+	return asOf
+}
+
+func timelineEventKnown(at, cutoff time.Time) bool {
+	if at.IsZero() {
+		return false
+	}
+	if cutoff.IsZero() {
+		return true
+	}
+	return !at.UTC().After(cutoff.UTC())
+}
+
 // BuildForensicsTimeline orders OI, takers, price, follow-through, liquidations,
-// options, and sweeps on one clock. Missing series are omitted.
+// options, and sweeps on one clock. Missing series are omitted. Prints after
+// KnownUntil are omitted — they were not visible yet at that observer clock.
 func BuildForensicsTimeline(r ForensicsReport) ForensicsTimeline {
 	if r.Tape == nil {
 		return ForensicsTimeline{}
 	}
-	plan, _ := ResolveAroundPlan(r.Window, r.During, r.At, r.AsOf)
+	cutoff := ForensicsTimelineKnownUntil(r.Window, r.During, r.At, r.AsOf, r.AsOfExplicit)
+	plan, _ := ResolveAroundPlan(r.Window, r.During, r.At, cutoff)
 	if plan.At.IsZero() {
 		plan.At = r.At.UTC()
 	}
@@ -51,27 +100,28 @@ func BuildForensicsTimeline(r ForensicsReport) ForensicsTimeline {
 		if v.Error != "" || v.Exchange == "" || v.Exchange == "all" {
 			continue
 		}
-		evs = append(evs, timelineVenueBeats(v, plan)...)
+		evs = append(evs, timelineVenueBeats(v, plan, cutoff)...)
 	}
 	if len(evs) == 0 && r.Tape.Combined != nil && r.Tape.Combined.Error == "" {
-		evs = append(evs, timelineVenueBeats(*r.Tape.Combined, plan)...)
+		evs = append(evs, timelineVenueBeats(*r.Tape.Combined, plan, cutoff)...)
 	}
-	if ev := timelineOptionsBeat(r.Tape, plan); ev.Kind != "" {
+	if ev := timelineOptionsBeat(r.Tape, plan, cutoff); ev.Kind != "" {
 		evs = append(evs, ev)
 	}
-	evs = append(evs, timelineTapeEvents(r.Tape, plan)...)
+	evs = append(evs, timelineTapeEvents(r.Tape, plan, cutoff)...)
 	evs = dedupeForensicsTimeline(evs)
 	sortForensicsTimeline(evs)
 	return ForensicsTimeline{
-		Events:  evs,
-		Summary: explainForensicsTimeline(evs),
+		Events:     evs,
+		Summary:    explainForensicsTimeline(evs),
+		KnownUntil: cutoff,
 	}
 }
 
-func timelineVenueBeats(v AroundVenue, plan AroundPlan) []ForensicsTimelineEvent {
+func timelineVenueBeats(v AroundVenue, plan AroundPlan, cutoff time.Time) []ForensicsTimelineEvent {
 	venue := string(v.Exchange)
 	var out []ForensicsTimelineEvent
-	if !v.OIStart.IsZero() && (v.OIDir == CVDDirUp || v.OIDir == CVDDirDown) {
+	if timelineEventKnown(v.OIStart, cutoff) && (v.OIDir == CVDDirUp || v.OIDir == CVDDirDown) {
 		word := "rising"
 		if v.OIDir == CVDDirDown {
 			word = "falling"
@@ -80,12 +130,12 @@ func timelineVenueBeats(v AroundVenue, plan AroundPlan) []ForensicsTimelineEvent
 			fmt.Sprintf("%s open interest started %s", prettyTimelineVenue(venue), word),
 			timelineUntilDetail(v.OIUntil)))
 	}
-	if !v.TakerStart.IsZero() && (v.TakerDir == TakerSideBuy || v.TakerDir == TakerSideSell) {
+	if timelineEventKnown(v.TakerStart, cutoff) && (v.TakerDir == TakerSideBuy || v.TakerDir == TakerSideSell) {
 		out = append(out, newForensicsTimelineEvent(v.TakerStart, plan, ForensicsTimelineTakers, venue, v.TakerDir,
 			fmt.Sprintf("%s takers started %s", prettyTimelineVenue(venue), v.TakerDir+"ing"),
 			timelineUntilDetail(v.TakerUntil)))
 	}
-	if !v.MoveStart.IsZero() {
+	if timelineEventKnown(v.MoveStart, cutoff) {
 		dir := timelinePriceDir(v)
 		word := "moving"
 		if dir == CVDDirUp {
@@ -96,7 +146,7 @@ func timelineVenueBeats(v AroundVenue, plan AroundPlan) []ForensicsTimelineEvent
 		out = append(out, newForensicsTimelineEvent(v.MoveStart, plan, ForensicsTimelinePrice, venue, dir,
 			fmt.Sprintf("%s price started %s", prettyTimelineVenue(venue), word), ""))
 	}
-	if !v.LiqStart.IsZero() {
+	if timelineEventKnown(v.LiqStart, cutoff) {
 		side := v.LiqSide
 		title := fmt.Sprintf("%s liquidations started", prettyTimelineVenue(venue))
 		if side == LiquidationSideLong || side == LiquidationSideShort {
@@ -130,7 +180,7 @@ func timelineUntilDetail(until string) string {
 	}
 }
 
-func timelineOptionsBeat(tape *AroundReport, plan AroundPlan) ForensicsTimelineEvent {
+func timelineOptionsBeat(tape *AroundReport, plan AroundPlan, cutoff time.Time) ForensicsTimelineEvent {
 	if tape == nil {
 		return ForensicsTimelineEvent{}
 	}
@@ -141,7 +191,7 @@ func timelineOptionsBeat(tape *AroundReport, plan AroundPlan) ForensicsTimelineE
 		}
 		for i := range v.Phases {
 			o := v.Phases[i].Options
-			if o == nil || !o.Unusual || o.StartedAt.IsZero() {
+			if o == nil || !o.Unusual || !timelineEventKnown(o.StartedAt, cutoff) {
 				continue
 			}
 			if best == nil || o.StartedAt.Before(best.StartedAt) {
@@ -164,14 +214,14 @@ func timelineOptionsBeat(tape *AroundReport, plan AroundPlan) ForensicsTimelineE
 	return newForensicsTimelineEvent(best.StartedAt, plan, ForensicsTimelineOptions, string(ExchangeDeribit), best.OIDirection, title, strings.TrimSpace(best.Summary))
 }
 
-func timelineTapeEvents(tape *AroundReport, plan AroundPlan) []ForensicsTimelineEvent {
+func timelineTapeEvents(tape *AroundReport, plan AroundPlan, cutoff time.Time) []ForensicsTimelineEvent {
 	if tape == nil {
 		return nil
 	}
 	seen := map[string]bool{}
 	var out []ForensicsTimelineEvent
 	add := func(ev AroundEvent, venue string) {
-		if ev.At.IsZero() {
+		if !timelineEventKnown(ev.At, cutoff) {
 			return
 		}
 		kind := ev.Kind

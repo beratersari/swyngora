@@ -17,6 +17,11 @@ export function ForensicsTimeline({ timeline, isLoading }: ForensicsTimelineProp
   return (
     <Card aria-label={t('timeline.title')}>
       <Text variant="bodySm">{t('timeline.title')}</Text>
+      {timeline?.knownUntil ? (
+        <Text variant="caption" color="secondary">
+          {t('timeline.knownUntil', { time: formatForensicsTime(timeline.knownUntil) })}
+        </Text>
+      ) : null}
       {timeline?.summary ? (
         <Text variant="bodySm" color="secondary">
           {timeline.summary}

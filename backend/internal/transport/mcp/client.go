@@ -838,7 +838,7 @@ func (c *APIClient) GetAroundSimilar(ctx context.Context, exchange, symbol, look
 }
 
 // GetForensics returns the around-the-move tape plus similar past setups.
-func (c *APIClient) GetForensics(ctx context.Context, exchange, symbol, at, window, during, lookback, interval, direction string, minReturnPct float64, limit int, fields, weights, minCoverage, horizons string) (json.RawMessage, error) {
+func (c *APIClient) GetForensics(ctx context.Context, exchange, symbol, at, window, during, lookback, interval, direction string, minReturnPct float64, limit int, fields, weights, minCoverage, horizons, asOf string) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)
 	q.Set("at", at)
@@ -877,6 +877,9 @@ func (c *APIClient) GetForensics(ctx context.Context, exchange, symbol, at, wind
 	}
 	if horizons != "" {
 		q.Set("horizons", horizons)
+	}
+	if asOf != "" {
+		q.Set("asOf", asOf)
 	}
 	return c.get(ctx, "/api/v1/market/forensics", q)
 }

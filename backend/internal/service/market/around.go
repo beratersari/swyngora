@@ -16,6 +16,10 @@ const aroundSweepLookback = 48 * time.Hour
 
 // GetAround assembles what changed before, during, and after a chosen time.
 func (s *Service) GetAround(ctx context.Context, exchange, symbol, window, during string, at time.Time) (*domain.AroundReport, error) {
+	return s.getAround(ctx, exchange, symbol, window, during, at, time.Time{})
+}
+
+func (s *Service) getAround(ctx context.Context, exchange, symbol, window, during string, at, asOf time.Time) (*domain.AroundReport, error) {
 	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
 	if err != nil {
 		return nil, err
@@ -25,7 +29,18 @@ func (s *Service) GetAround(ctx context.Context, exchange, symbol, window, durin
 		return nil, err
 	}
 	now := time.Now().UTC()
-	plan, err := domain.ResolveAroundPlan(window, during, at, now)
+	clock := now
+	if !asOf.IsZero() {
+		asOf = asOf.UTC()
+		if asOf.After(now) {
+			return nil, fmt.Errorf("%w: asOf is in the future", domain.ErrInvalidArgument)
+		}
+		if asOf.Before(at.UTC()) {
+			return nil, fmt.Errorf("%w: asOf must be at or after the event time", domain.ErrInvalidArgument)
+		}
+		clock = asOf
+	}
+	plan, err := domain.ResolveAroundPlan(window, during, at, clock)
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +53,7 @@ func (s *Service) GetAround(ctx context.Context, exchange, symbol, window, durin
 
 	out := &domain.AroundReport{
 		Symbol: symbol, Exchange: ex, At: plan.At, Window: plan.Window, During: plan.During,
-		From: plan.From, To: plan.To, AsOf: now, Clipped: plan.Clipped,
+		From: plan.From, To: plan.To, AsOf: clock, Clipped: plan.Clipped,
 		Venues: make([]domain.AroundVenue, 0, len(want)),
 		Note:   aroundDisclaimer,
 	}

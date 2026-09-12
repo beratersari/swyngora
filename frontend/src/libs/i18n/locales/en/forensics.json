@@ -21,7 +21,8 @@
     "similar": "What similar moves did"
   },
   "timeline": {
-    "title": "What happened, in order"
+    "title": "What happened, in order",
+    "knownUntil": "Known as of {{time}}"
   },
   "view": {
     "event": "A time",

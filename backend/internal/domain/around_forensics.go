@@ -9,12 +9,15 @@ const ForensicsDisclaimer = "One tape of what happened before, during, and after
 
 // ForensicsReport is the around-the-move tape plus similar past setups for one event.
 type ForensicsReport struct {
-	Symbol       string
-	Exchange     string
-	At           time.Time
-	Window       string
-	During       string
-	AsOf         time.Time
+	Symbol   string
+	Exchange string
+	At       time.Time
+	Window   string
+	During   string
+	AsOf     time.Time
+	// AsOfExplicit is true when the caller asked for AsOf (replay).
+	// When false, a completed around-window hides later timeline prints.
+	AsOfExplicit bool
 	Tape         *AroundReport
 	Similar      *AroundSimilarReport
 	SimilarError string

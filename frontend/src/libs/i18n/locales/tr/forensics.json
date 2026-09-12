@@ -21,7 +21,8 @@
     "similar": "Benzer hareketler ne yaptı"
   },
   "timeline": {
-    "title": "Zaman sırasıyla ne oldu"
+    "title": "Zaman sırasıyla ne oldu",
+    "knownUntil": "{{time}} itibarıyla bilinen"
   },
   "view": {
     "event": "Bir zaman",

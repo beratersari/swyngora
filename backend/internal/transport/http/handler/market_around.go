@@ -117,12 +117,20 @@ func (h *MarketHandler) GetForensics(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	var asOf time.Time
+	if rawAsOf := q.Get("asOf"); rawAsOf != "" {
+		asOf, err = parseTimeParam(rawAsOf)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+	}
 	minPct, limit, _, err := parseAroundSimilarQuery(q)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	got, err := h.svc.GetForensics(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("window"), q.Get("during"), at, q.Get("lookback"), q.Get("interval"), q.Get("direction"), minPct, limit, q.Get("fields"), q.Get("weights"), q.Get("minCoverage"), q.Get("horizons"))
+	got, err := h.svc.GetForensics(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("window"), q.Get("during"), at, q.Get("lookback"), q.Get("interval"), q.Get("direction"), minPct, limit, q.Get("fields"), q.Get("weights"), q.Get("minCoverage"), q.Get("horizons"), asOf)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -1107,8 +1115,9 @@ type forensicsTimelineEventDTO struct {
 }
 
 type forensicsTimelineDTO struct {
-	Events  []forensicsTimelineEventDTO `json:"events"`
-	Summary string                      `json:"summary,omitempty"`
+	Events     []forensicsTimelineEventDTO `json:"events"`
+	Summary    string                      `json:"summary,omitempty"`
+	KnownUntil time.Time                   `json:"knownUntil,omitempty"`
 }
 
 type forensicsResponse struct {
@@ -1225,7 +1234,11 @@ func forensicsTimelineToDTO(t domain.ForensicsTimeline) *forensicsTimelineDTO {
 			Detail:      e.Detail,
 		})
 	}
-	return &forensicsTimelineDTO{Events: evs, Summary: t.Summary}
+	out := &forensicsTimelineDTO{Events: evs, Summary: t.Summary}
+	if !t.KnownUntil.IsZero() {
+		out.KnownUntil = t.KnownUntil.UTC()
+	}
+	return out
 }
 
 func parseAroundSimilarQuery(q interface{ Get(string) string }) (minPct float64, limit int, at time.Time, err error) {
