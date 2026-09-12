@@ -490,36 +490,33 @@ func touchTime(touch firstTouch) *time.Time {
 }
 
 func remainderFirstTouch(bar OHLC, side string, sl, tp float64, opts BacktestTouchOpts, tp1 firstTouch) firstTouch {
+	// Scale at this bar's open: the rest of the bar is after TP1.
 	if !tp1.at.IsZero() && !bar.OpenTime.IsZero() && tp1.at.UTC().Equal(bar.OpenTime.UTC()) {
 		return resolveFirstTouch(bar, side, sl, tp, opts.Interval, opts.Finer, 0)
 	}
-	if rem := remainderOnFiner(bar, side, sl, tp, opts, tp1); rem.hit != "" || rem.knownBy.IsZero() && rem.hit == "" && rem.price == -1 {
-		if rem.price == -1 {
-			return firstTouch{}
-		}
-		if rem.hit != "" {
-			return rem
-		}
+	if rem, ok := remainderAfterTP1(bar, side, sl, tp, opts, tp1); ok {
+		return rem
 	}
+	// No known order. A same-bar pullback to the new entry stop may have printed
+	// before TP1. Do not invent a runner result. TP2-only is safe: price had to
+	// pass TP1 to reach TP2, and the new stop was not tagged.
 	hit, px, both := inspectBarTouch(bar, side, sl, tp)
-	if both {
-		_, end := ParentBarWindow(bar, opts.Interval)
-		return firstTouch{hit: BacktestTradeOutcomeSL, price: sl, knownBy: end}
+	if both || hit != BacktestTradeOutcomeTP {
+		return firstTouch{}
 	}
-	if hit == BacktestTradeOutcomeTP {
-		_, end := ParentBarWindow(bar, opts.Interval)
-		out := firstTouch{hit: hit, price: px, knownBy: end}
-		if openGapsLevel(bar, side, sl, tp) {
-			out.at = bar.OpenTime.UTC()
-		}
-		return out
+	_, end := ParentBarWindow(bar, opts.Interval)
+	out := firstTouch{hit: hit, price: px, knownBy: end}
+	if openGapsLevel(bar, side, sl, tp) {
+		out.at = bar.OpenTime.UTC()
 	}
-	return firstTouch{}
+	return out
 }
 
-func remainderOnFiner(bar OHLC, side string, sl, tp float64, opts BacktestTouchOpts, tp1 firstTouch) firstTouch {
+// remainderAfterTP1 walks smaller bars after the TP1 print. ok is true when the
+// tape after TP1 was actually walked (so an empty hit means "no remainder yet").
+func remainderAfterTP1(bar OHLC, side string, sl, tp float64, opts BacktestTouchOpts, tp1 firstTouch) (firstTouch, bool) {
 	if opts.Finer == nil {
-		return firstTouch{}
+		return firstTouch{}, false
 	}
 	next, ok := FinerBacktestInterval(opts.Interval)
 	if !ok {
@@ -528,7 +525,7 @@ func remainderOnFiner(bar OHLC, side string, sl, tp float64, opts BacktestTouchO
 		}
 	}
 	if !ok {
-		return firstTouch{}
+		return firstTouch{}, false
 	}
 	parent := bar
 	if parent.CloseTime.IsZero() || !parent.CloseTime.After(parent.OpenTime) {
@@ -537,34 +534,52 @@ func remainderOnFiner(bar OHLC, side string, sl, tp float64, opts BacktestTouchO
 		}
 	}
 	sub := OHLCInside(opts.Finer(parent, next), parent, opts.Interval)
-	if len(sub) == 0 {
-		return firstTouch{}
+	start, _ := ParentBarWindow(parent, opts.Interval)
+	canWalk := finerCoversParent(sub, parent, opts.Interval, next)
+	if !canWalk && len(sub) > 0 && !start.IsZero() && sub[0].OpenTime.UTC().Equal(start) {
+		canWalk = true
 	}
-	seenTP1 := !tp1.at.IsZero() && !bar.OpenTime.IsZero() && !tp1.at.Before(bar.OpenTime)
+	if !canWalk {
+		return firstTouch{}, false
+	}
+	tp1Px := tp1.price
+	if tp1Px <= 0 {
+		tp1Px = tp
+	}
+	seen := !tp1.at.IsZero() && !bar.OpenTime.IsZero() && !tp1.at.Before(bar.OpenTime)
 	for _, sb := range sub {
-		if !seenTP1 {
-			got := resolveFirstTouch(sb, side, sl, tp1TargetFromTouch(tp1, tp), next, opts.Finer, 1)
-			if got.hit == BacktestTradeOutcomeTP || (!got.at.IsZero() && got.hit != "") {
-				seenTP1 = true
+		if !seen {
+			if !tagsTP(sb, side, tp1Px) {
+				continue
 			}
-			continue
+			seen = true
+			// This sub-bar printed TP1. Remainder on it only if TP1 was the open.
+			if throughAtOpenPrice(side, sb.Open, sl, tp1Px) != BacktestTradeOutcomeTP {
+				continue
+			}
 		}
 		got := resolveFirstTouch(sb, side, sl, tp, next, opts.Finer, 1)
 		if got.hit != "" {
-			return got
+			return got, true
 		}
 	}
-	if seenTP1 {
-		return firstTouch{price: -1} // walked after TP1, no remainder hit
-	}
-	return firstTouch{}
+	return firstTouch{}, seen
 }
 
-func tp1TargetFromTouch(tp1 firstTouch, fallback float64) float64 {
-	if tp1.price > 0 {
-		return tp1.price
+func tagsTP(bar OHLC, side string, tp float64) bool {
+	if tp <= 0 {
+		return false
 	}
-	return fallback
+	if side == BacktestTradeSideShort {
+		if bar.Open > 0 && bar.Open <= tp {
+			return true
+		}
+		return bar.Low > 0 && bar.Low <= tp
+	}
+	if bar.Open > 0 && bar.Open >= tp {
+		return true
+	}
+	return bar.High >= tp
 }
 
 func barClosedAtOrBefore(bar OHLC, at time.Time, iv CandleInterval) bool {

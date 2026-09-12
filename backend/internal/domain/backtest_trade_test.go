@@ -435,6 +435,52 @@ func TestFirstTouch_TP1ThenStopAtEntry(t *testing.T) {
 	}
 }
 
+func TestFirstTouch_SameBarTP1AndEntryNeedsOrder(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	parent := OHLC{OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(8 * time.Hour), Open: 100.2, High: 101.2, Low: 99.5, Close: 100.4}
+	levels := SwingLevels{Entry: 100, StopLoss: 97, TakeProfit: 105, TakeProfit1: 101, TakeProfit2: 105, Leverage: 1}
+	opts := BacktestTouchOpts{
+		Interval: Interval4h,
+		Scale:    BacktestScale{UseTP2: true, TP1ClosePct: 50, StopAfterTP1: BacktestStopEntry},
+	}
+	unknown := SimulateBacktestTradeOpts([]OHLC{
+		{OpenTime: t0, CloseTime: t0.Add(4 * time.Hour), Open: 100, High: 101, Low: 99, Close: 100},
+		parent,
+	}, 0, BacktestTradeSideLong, levels, opts)
+	if unknown == nil || unknown.Outcome != BacktestTradeOutcomeTP1Open {
+		t.Fatalf("same-bar TP1 and entry without order must not invent BE: %+v", unknown)
+	}
+
+	opts.Finer = func(OHLC, CandleInterval) []OHLC {
+		return []OHLC{
+			{OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(5 * time.Hour), Open: 100.2, High: 101.2, Low: 100.1, Close: 101.1},
+			{OpenTime: t0.Add(5 * time.Hour), CloseTime: t0.Add(6 * time.Hour), Open: 101, High: 101.1, Low: 99.5, Close: 100},
+		}
+	}
+	after := SimulateBacktestTradeOpts([]OHLC{
+		{OpenTime: t0, CloseTime: t0.Add(4 * time.Hour), Open: 100, High: 101, Low: 99, Close: 100},
+		parent,
+	}, 0, BacktestTradeSideLong, levels, opts)
+	if after == nil || after.Outcome != BacktestTradeOutcomeTP1SL {
+		t.Fatalf("finer TP1 then later entry is BE: %+v", after)
+	}
+
+	opts.Finer = func(OHLC, CandleInterval) []OHLC {
+		return []OHLC{
+			{OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(5 * time.Hour), Open: 100.2, High: 100.6, Low: 99.5, Close: 100.4},
+			{OpenTime: t0.Add(5 * time.Hour), CloseTime: t0.Add(6 * time.Hour), Open: 100.4, High: 101.2, Low: 100.3, Close: 101},
+		}
+	}
+	before := SimulateBacktestTradeOpts([]OHLC{
+		{OpenTime: t0, CloseTime: t0.Add(4 * time.Hour), Open: 100, High: 101, Low: 99, Close: 100},
+		parent,
+	}, 0, BacktestTradeSideLong, levels, opts)
+	if before == nil || before.Outcome != BacktestTradeOutcomeTP1Open {
+		t.Fatalf("dip to entry before TP1 is not a runner stop: %+v", before)
+	}
+}
+
 func TestFirstTouch_RecordsMarksWhileOpen(t *testing.T) {
 	t.Parallel()
 	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
