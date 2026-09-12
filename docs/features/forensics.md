@@ -35,7 +35,13 @@ If similar-move search fails, `tape` is still returned and
 tape — volume vs typical, who was aggressive, book thinning, open
 interest vs price, funding, liquidations, sweeps, and unusual listed
 options (OI / put-call / implied vol) on BTC and ETH — instead of
-listing raw metrics. Informational only.
+listing raw metrics.
+
+`timeline` is the same tape on **one clock**. Each beat is a start
+print (open interest, takers, price on Binance or Bybit, liquidations,
+listed options, a sweep or absorption) with the time, how far it sits
+from `at` (`offset` / `offsetLabel`), and which venue printed it.
+Missing series are omitted. Informational only.
 
 On BTC and ETH, each phase can include stored Deribit desk samples
 (`options`): listed open interest, put/call lean, DVOL/ATM IV, and
@@ -113,7 +119,7 @@ Informational only — not financial advice.
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/around_forensics.go`, `around_options.go`, `radar_case.go` |
+| Domain | `backend/internal/domain/around_forensics.go`, `around_forensics_timeline.go`, `around_options.go`, `radar_case.go` |
 | Service | `backend/internal/service/market/around_forensics.go` |
 | HTTP | `GET /api/v1/market/forensics`, `GET /api/v1/market/forensics/scan`, `GET /api/v1/market/forensics/radar` |
 | MCP / AI | `get_market_forensics`, `scan_market_forensics`, `review_setup_radar` |
@@ -128,5 +134,6 @@ curl "http://localhost:8080/api/v1/market/forensics/scan?limit=12&lookback=3d"
 curl "http://localhost:8080/api/v1/market/forensics/radar?since=7d"
 ```
 
-Open `/forensics`, pick a symbol and time, confirm three phase cards
-and the similar-move table (or a soft similar error).
+Open `/forensics`, pick a symbol and time, confirm the why-story, the
+time-ordered timeline, three phase cards, and the similar-move table
+(or a soft similar error).

@@ -26,6 +26,7 @@ func (s *Service) GetForensics(ctx context.Context, exchange, symbol, window, du
 		out.Similar = sim
 	}
 	out.Why = domain.ExplainForensicsWhy(*out)
+	out.Timeline = domain.BuildForensicsTimeline(*out)
 	out.Summary = domain.ExplainForensics(*out)
 	return out, nil
 }

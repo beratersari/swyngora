@@ -910,8 +910,9 @@ func forensicsToDTO(a *domain.ForensicsReport) forensicsResponse {
 		Symbol: a.Symbol, Exchange: a.Exchange, At: a.At.UTC(),
 		Window: a.Window, During: a.During, AsOf: a.AsOf.UTC(),
 		Tape: aroundToDTO(a.Tape), SimilarError: a.SimilarError,
-		Why:     forensicsWhyToDTO(a.Why),
-		Summary: a.Summary, Note: a.Note,
+		Why:      forensicsWhyToDTO(a.Why),
+		Timeline: forensicsTimelineToDTO(a.Timeline),
+		Summary:  a.Summary, Note: a.Note,
 	}
 	if a.Similar != nil {
 		sim := aroundSimilarToDTO(a.Similar)
@@ -1093,6 +1094,23 @@ type forensicsWhyDTO struct {
 	Caution  string `json:"caution,omitempty"`
 }
 
+type forensicsTimelineEventDTO struct {
+	At          time.Time `json:"at"`
+	Offset      string    `json:"offset,omitempty"`
+	OffsetLabel string    `json:"offsetLabel,omitempty"`
+	Phase       string    `json:"phase,omitempty"`
+	Kind        string    `json:"kind"`
+	Venue       string    `json:"venue,omitempty"`
+	Direction   string    `json:"direction,omitempty"`
+	Title       string    `json:"title"`
+	Detail      string    `json:"detail,omitempty"`
+}
+
+type forensicsTimelineDTO struct {
+	Events  []forensicsTimelineEventDTO `json:"events"`
+	Summary string                      `json:"summary,omitempty"`
+}
+
 type forensicsResponse struct {
 	Symbol       string                 `json:"symbol"`
 	Exchange     string                 `json:"exchange"`
@@ -1104,6 +1122,7 @@ type forensicsResponse struct {
 	Similar      *aroundSimilarResponse `json:"similar,omitempty"`
 	SimilarError string                 `json:"similarError,omitempty"`
 	Why          *forensicsWhyDTO       `json:"why,omitempty"`
+	Timeline     *forensicsTimelineDTO  `json:"timeline,omitempty"`
 	Summary      string                 `json:"summary"`
 	Note         string                 `json:"note"`
 }
@@ -1186,6 +1205,27 @@ func forensicsWhyToDTO(w domain.ForensicsWhy) *forensicsWhyDTO {
 		Headline: w.Headline, Before: w.Before, During: w.During,
 		After: w.After, Similar: w.Similar, Caution: w.Caution,
 	}
+}
+
+func forensicsTimelineToDTO(t domain.ForensicsTimeline) *forensicsTimelineDTO {
+	if len(t.Events) == 0 && t.Summary == "" {
+		return nil
+	}
+	evs := make([]forensicsTimelineEventDTO, 0, len(t.Events))
+	for _, e := range t.Events {
+		evs = append(evs, forensicsTimelineEventDTO{
+			At:          e.At.UTC(),
+			Offset:      domain.FormatForensicsTimelineOffset(e.Offset),
+			OffsetLabel: e.OffsetLabel,
+			Phase:       e.Phase,
+			Kind:        e.Kind,
+			Venue:       e.Venue,
+			Direction:   e.Direction,
+			Title:       e.Title,
+			Detail:      e.Detail,
+		})
+	}
+	return &forensicsTimelineDTO{Events: evs, Summary: t.Summary}
 }
 
 func parseAroundSimilarQuery(q interface{ Get(string) string }) (minPct float64, limit int, at time.Time, err error) {

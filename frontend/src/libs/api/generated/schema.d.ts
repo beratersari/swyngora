@@ -1217,8 +1217,22 @@ export interface paths {
          *     area. Liquidity sweeps that poked in the span are attached.
          *     Stored order-book and futures history (OI, funding, long/short,
          *     liquidations) are included when those archives have a sample.
+         *     BTC/ETH listed options (OI, put/call, implied vol, unusual prints)
+         *     attach when the options archive has samples. Options `lead` is the
+         *     real start inside a 1h/4h/24h unusual lookback, not the window open.
          *     `exchange=all` (default) returns Binance and Bybit separately plus
-         *     `combined`. Informational only.
+         *     `combined`. `venueTiming` says which venue printed first, whether the
+         *     other followed or the move stayed on one venue, and whether OI or
+         *     taker flow had already changed before the laggard's real start (not
+         *     the during-window close). The first signal across price, OI, and
+         *     takers is the leader only if that OI or taker print kept going until
+         *     price. If the last OI sample or taker bar is much earlier than the
+         *     price start, the path is omitted (not continued / faded / reversed).
+         *     The taker bar at the price start is not pre-price tape.
+         *     Continued / faded / reversed also need a continuous pre-price
+         *     taker path at the tape's bar size (no hole longer than one missing
+         *     1m or 5m bar, and tape after the start print).
+         *     Informational only.
          */
         get: operations["getMarketAround"];
         put?: never;
@@ -1322,10 +1336,11 @@ export interface paths {
          * Past important moves similar to the current tape
          * @description Compares the **current** market (last `window`, default 1h) to the
          *     setup **before** past important moves — volume vs typical, order
-         *     book, open interest, takers, and price. `fields` selects which
-         *     pieces to use (e.g. `volume,book,oi` skips price). `weights` sets
-         *     importance (`book:3,oi:3,volume:1`; defaults book and OI 3, takers
-         *     1.5, volume and price 1). Uncompared fields have no score.
+         *     book, open interest, listed options (BTC/ETH), takers, and price.
+         *     `fields` selects which pieces to use (e.g. `volume,book,oi` skips
+         *     price). `weights` sets importance (`book:3,oi:3,volume:1`; defaults
+         *     book and OI 3, options 2, takers 1.5, volume and price 1).
+         *     Options is only scored when both sides have samples. Uncompared fields have no score.
          *     Similarity uses only fields that actually had data. `minCoverage`
          *     (default 60) sends cases that lack enough selected data to
          *     `skipped` (with `missing` and `coverage`), not `matches`.
@@ -1361,7 +1376,8 @@ export interface paths {
          * Market forensics (before / during / after + similar past moves)
          * @description One report for a coin and a chosen time. Combines the around-the-move
          *     tape (**before** / **during** / **after** — price, volume, takers,
-         *     VWAP, vs typical, POC, sweeps, stored book/futures) with past
+         *     VWAP, vs typical, POC, sweeps, stored book/futures, and BTC/ETH
+         *     listed options when sampled) with past
          *     important-move setups that looked like the **before** window, and
          *     how price moved after those (`afterHorizons`). `at` is required
          *     (RFC3339 or unix ms). Same `window` / `during` as `/around`. Same
@@ -1370,7 +1386,11 @@ export interface paths {
          *     fails, `tape` is still returned and `similarError` explains why.
          *     `why` is a plain-language read of why the move may have happened
          *     (before / during / after plus similar past cases), not a metric
-         *     dump. Informational only.
+         *     dump. `timeline` is one clock of those prints in time order
+         *     (OI, takers, venue price, follow-through, liquidations, options,
+         *     sweeps). Same `venueTiming` path rule as `/around`: last OI/taker
+         *     print much earlier than price omits continued / faded / reversed.
+         *     Informational only.
          */
         get: operations["getMarketForensics"];
         put?: never;
@@ -1855,7 +1875,7 @@ export interface paths {
         };
         /**
          * List custom-signal factors
-         * @description Swing-engine pattern ids plus optional liquidation-hunt up score. Built-in percents match the engine; hunt defaults to 0.
+         * @description Swing-engine pattern ids plus optional hunt_up, forensics, and similar_setup. Built-in percents match the engine; hunt and tape factors default to 0.
          */
         get: operations["listCustomSignalFactors"];
         put?: never;
@@ -1950,8 +1970,11 @@ export interface paths {
         /**
          * Scan the watchlist with a custom signal mix
          * @description Scores watchlist coins with the selected factor weights (must sum to 100).
-         *     Default mix matches the swing engine (hunt off). Inline weight* overrides
-         *     a saved profileId. Missing hunt keeps its percent and adds 0 (neutral 50).
+         *     Default mix matches the swing engine (hunt / forensics / similar off).
+         *     Inline weight* overrides a saved profileId. Missing optional factors keep
+         *     their percent and add 0. Forensics and similar setups score whether the
+         *     current tape / after-path supports a long custom signal or goes against it,
+         *     using the same range as the swing bar (4h signal → 4h after-path).
          *     scoreCompare is default vs applied with per-factor effect. Informational only.
          */
         get: operations["scanCustomSignals"];
@@ -3396,12 +3419,18 @@ export interface paths {
         get: operations["listScannerBacktests"];
         put?: never;
         /**
-         * Start a historical scanner backtest
-         * @description Runs a rule over a symbol and date range in the background. The rule is
-         *     snapshotted at queue time; later edits do not change this job. Identical jobs
-         *     (same client, rule snapshot, symbol, range) return the existing pending/running/completed job.
-         *     Editing the rule and starting again creates a new job.
-         *     Progress and signalCount update while running. Informational only.
+         * Start a historical scanner or custom-signal backtest
+         * @description Runs a scanner rule or a custom signal profile over a date range
+         *     in the background. Send `ruleId` or `profileId` (not both). `profileId=built_in`
+         *     uses the built-in swing mix. The source is snapshotted at queue time; later
+         *     edits do not change this job. Custom-mix jobs replay 4h swing factors only —
+         *     hunt and tape add 0. A signal fires when the mix first crosses 62 (onset).
+         *     `scope=watchlist` (or `symbol=watchlist`) with `profileId` replays every
+         *     coin on the client's watchlist in one job; the list is snapshotted when queued.
+         *     Identical jobs return the existing pending/running/completed job.
+         *     Each hit stores side, leverage, entry, TP1, TP2, and SL. Lab can close part
+         *     of the fill at TP1 and leave a runner for TP2; after TP1 the stop can stay
+         *     or move to entry. Progress and signalCount update while running. Informational only.
          */
         post: operations["startScannerBacktest"];
         delete?: never;
@@ -3452,9 +3481,16 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List backtest signals with forward returns
-         * @description Each signal includes signalAt, closePrice, and optional return1d/return5d/return20d
-         *     (percent price change after 1/5/20 calendar days when data exists).
+         * List backtest signals with forward returns and first-touch trades
+         * @description Each signal includes signalAt, closePrice, optional return1d/return5d/return20d
+         *     (percent price change after 1/5/20 calendar days when data exists), and `trade`
+         *     when a long/short plan exists: leverage, entry, stopLoss, takeProfit, first-touch
+         *     outcome (tp|sl|open), and leveraged pnlPct. If one bar tags both TP and SL, a
+         *     smaller interval decides which printed first (outcome and pnlPct follow that
+         *     print). Watchlist jobs include exchange/symbol on each signal.
+         *     `performance` adds horizon stats plus trade TP/SL counts, win rate,
+         *     average/median leveraged PnL, per-coin `markets` (including zero-signal and
+         *     data-error coins), and `book` (shared starting/ending balance) on watchlist jobs.
          */
         get: operations["listScannerBacktestSignals"];
         put?: never;
@@ -5088,11 +5124,11 @@ export interface components {
             severity?: "watch" | "notable";
             title?: string;
             detail?: string;
-            /** @description Signed change (percent, PCR points, or vol points) */
+            /** @description Signed change (percent */
             current?: string;
             /** @description Median absolute same-length move */
             typical?: string;
-            /** @description |current| / typical */
+            /** @description abs(current) / typical */
             ratio?: string;
         };
         /** @description Unusual options moves versus that series' own typical. findings is omitted when nothing stands out. */
@@ -5598,15 +5634,134 @@ export interface components {
         SwingLevels: {
             entry?: number;
             stopLoss?: number;
+            /** @description Farther target (TP2). Same as takeProfit2 when both exist */
             takeProfit?: number;
+            /** @description First scale (1R) */
             takeProfit1?: number;
+            /** @description Runner target (about 1.8R or 2.5 ATR) */
             takeProfit2?: number;
             riskPct?: number;
             rewardPct?: number;
             rr?: number;
             atr?: number;
-            /** Suggested leverage so a full stop is about 10% of notional */
+            /** @description Suggested leverage so a full stop is about 10% of notional */
             leverage?: number;
+        };
+        /** @description Signal side, leverage, levels, and first-touch TP/SL result. */
+        BacktestTrade: {
+            /** @enum {string} */
+            side?: "long" | "short";
+            leverage?: number;
+            entry?: number;
+            stopLoss?: number;
+            takeProfit?: number;
+            takeProfit1?: number;
+            takeProfit2?: number;
+            useTp2?: boolean;
+            tp1ClosePct?: number;
+            /** @enum {string} */
+            stopAfterTp1?: "keep" | "entry" | "trail";
+            /** @description Taker fee percent applied to this fill */
+            feePct?: number;
+            /** @description Adverse slippage percent applied to this fill */
+            slipPct?: number;
+            /** @description Latest runner stop after a trail ratchet */
+            trailStop?: number;
+            trailStops?: {
+                /** Format: date-time */
+                at?: string;
+                stop?: number;
+            }[];
+            stopMovedToEntry?: boolean;
+            /**
+             * @description First-touch result. tp1_* means a partial close at TP1 then the runner
+             * @enum {string}
+             */
+            outcome?: "tp" | "sl" | "open" | "tp1" | "tp1_tp2" | "tp1_sl" | "tp1_open";
+            tp1ExitPrice?: number;
+            tp1PnlPct?: number;
+            remainderPct?: number;
+            /** @description Fill price. A gap through the stop uses the candle open; a wick through the stop or a TP fill uses the level */
+            exitPrice?: number;
+            /** @description Leveraged percent result */
+            pnlPct?: number;
+            barsHeld?: number;
+            /**
+             * Format: date-time
+             * @description Set only when a candle opens through TP/SL. Omitted for wick hits
+             */
+            hitAt?: string;
+            /** @description True when TP/SL printed inside a bar (any interval) so the exact time is unknown */
+            hitTimeUnknown?: boolean;
+            /**
+             * Format: date-time
+             * @description When risk can be released. Parent bar close if hit time is unknown
+             */
+            closedKnownAt?: string;
+            /**
+             * Format: date-time
+             * @description Next-bar open when the fill was taken
+             */
+            enteredAt?: string;
+            /** @description Price path while the fill is open. Later fills size risk from mark-to-market equity using these prints */
+            marks?: {
+                /** Format: date-time */
+                at?: string;
+                price?: number;
+            }[];
+        };
+        BacktestHorizonStats: {
+            days?: number;
+            sampleCount?: number;
+            average?: number;
+            median?: number;
+            /** @description 0–100 */
+            winRate?: number;
+        };
+        BacktestTradeStats: {
+            sampleCount?: number;
+            tpHits?: number;
+            slHits?: number;
+            openCount?: number;
+            longCount?: number;
+            shortCount?: number;
+            /** @description 0–100 */
+            winRate?: number;
+            /** @description Average leveraged PnL of closed trades */
+            average?: number;
+            median?: number;
+        };
+        BacktestPerformance: {
+            signalCount?: number;
+            return1d?: components["schemas"]["BacktestHorizonStats"];
+            return5d?: components["schemas"]["BacktestHorizonStats"];
+            return20d?: components["schemas"]["BacktestHorizonStats"];
+            trades?: components["schemas"]["BacktestTradeStats"];
+        };
+        ScannerBacktestSignal: {
+            id?: string;
+            backtestId?: string;
+            /** Format: date-time */
+            signalAt?: string;
+            closePrice?: number;
+            summary?: string;
+            return1d?: number;
+            return5d?: number;
+            return20d?: number;
+            metrics?: {
+                [key: string]: number;
+            };
+            factors?: {
+                id?: string;
+                label?: string;
+                score?: number;
+                weightPct?: number;
+                sharePct?: number;
+                effect?: number;
+                status?: string;
+                detail?: string;
+            }[];
+            trade?: components["schemas"]["BacktestTrade"];
         };
         SwingDecision: {
             exchange?: string;
@@ -5687,27 +5842,27 @@ export interface components {
             /** @enum {string} */
             status?: "used" | "missing" | "disabled" | "idle";
             detail?: string;
-            /** 0–100 evidence for this factor */
+            /** @description 0–100 evidence for this factor */
             quality?: number;
             /**
-             * Current-tape age for this weighted factor; omitted when disabled or idle
+             * @description Current-tape age for this weighted factor; omitted when disabled or idle
              * @enum {string}
              */
             freshness?: "fresh" | "old" | "missing";
         };
         CustomSignalEvidence: {
-            /** 0–100 data quality of the mix — not completeness. High quality can still have old or missing factors. */
+            /** @description 0–100 data quality of the mix — not completeness. High quality can still have old or missing factors. */
             score?: number;
             /** @enum {string} */
             label?: "strong" | "fair" | "weak";
             detail?: string;
-            /** Weighted factors with current, usable data */
+            /** @description Weighted factors with current */
             fresh?: number;
-            /** Weighted factors whose current tape is stale */
+            /** @description Weighted factors whose current tape is stale */
             old?: number;
-            /** Weighted factors with no data */
+            /** @description Weighted factors with no data */
             missing?: number;
-            /** Weighted factors whose pattern did not fire */
+            /** @description Weighted factors whose pattern did not fire */
             idle?: number;
         };
         CustomSignalScore: {
@@ -5744,22 +5899,22 @@ export interface components {
             huntDetail?: string;
             forensicsDetail?: string;
             similarDetail?: string;
-            /** Similar past setups considered */
+            /** @description Similar past setups considered */
             tapeSetups?: number;
-            /** Setups with every selected OI / taker / book / options field present */
+            /** @description Setups with every selected OI / taker / book / options field present */
             tapeUsed?: number;
-            /** Setups omitted because at least one selected tape field was missing */
+            /** @description Setups omitted because at least one selected tape field was missing */
             tapeThin?: number;
             tapeFresh?: components["schemas"]["CustomSignalTapeFresh"];
         };
         CustomSignalTapeAge: {
             field?: string;
-            /** Human age (2m) or missing */
+            /** @description Human age (2m) or missing */
             age?: string;
             ageSec?: number;
             /** Format: date-time */
             at?: string;
-            /** Older than that series' freshness slack */
+            /** @description Older than that series' freshness slack */
             stale?: boolean;
         };
         CustomSignalTapeFresh: {
@@ -6753,6 +6908,7 @@ export interface components {
             /** @description Set when similar-move search failed */
             similarError?: string;
             why?: components["schemas"]["MarketForensicsWhy"];
+            timeline?: components["schemas"]["MarketForensicsTimeline"];
             summary?: string;
             note?: string;
         };
@@ -6768,6 +6924,29 @@ export interface components {
             /** @description How similar past setups resolved */
             similar?: string;
             caution?: string;
+        };
+        /** @description One clock of what printed around the event (OI, takers, price, follow-through, liquidations, options, sweeps) */
+        MarketForensicsTimeline: {
+            summary?: string;
+            events?: components["schemas"]["MarketForensicsTimelineEvent"][];
+        };
+        /** @description One beat on the forensics clock */
+        MarketForensicsTimelineEvent: {
+            /** Format: date-time */
+            at?: string;
+            /** @description Signed short offset from the event time (-8m */
+            offset?: string;
+            /** @description Plain-language offset (about 8 minutes before) */
+            offsetLabel?: string;
+            /** @description before | during | after */
+            phase?: string;
+            /** @description oi | takers | price | liquidations | options | sweep | absorption */
+            kind?: string;
+            /** @description binance | bybit | deribit | all */
+            venue?: string;
+            direction?: string;
+            title?: string;
+            detail?: string;
         };
         /** @description Coins whose current tape looks like past important-move setups */
         MarketForensicsScan: {
@@ -8653,9 +8832,9 @@ export interface operations {
                 window?: string;
                 /** @description Override past move window */
                 during?: string;
-                /** @description Tape to compare — price,volume,takers,oi,book (default all). Example volume,book,oi */
+                /** @description Tape to compare — price,volume,takers,oi,book,options (default all). Example volume,book,oi */
                 fields?: string;
-                /** @description Importance per field — book:3,oi:3,volume:1 (defaults book and oi 3, takers 1.5, volume and price 1) */
+                /** @description Importance per field — book:3,oi:3,volume:1 (defaults book and oi 3, options 2, takers 1.5, volume and price 1) */
                 weights?: string;
                 /** @description Minimum percent of selected data that must be present (default 60). Below that goes to skipped. 0 disables the floor. */
                 minCoverage?: number;
@@ -8705,7 +8884,7 @@ export interface operations {
                 minReturnPct?: number;
                 /** @description How many nearest similar cases (default 5, max 10) */
                 limit?: number;
-                /** @description Tape to compare — price,volume,takers,oi,book (default all) */
+                /** @description Tape to compare — price,volume,takers,oi,book,options (default all) */
                 fields?: string;
                 /** @description Importance per field — book:3,oi:3,volume:1 */
                 weights?: string;
@@ -8754,7 +8933,7 @@ export interface operations {
                 window?: string;
                 /** @description Override past move window */
                 during?: string;
-                /** @description Tape to compare — price,volume,takers,oi,book (default all) */
+                /** @description Tape to compare — price,volume,takers,oi,book,options (default all) */
                 fields?: string;
                 /** @description Importance per field — book:3,oi:3,volume:1 */
                 weights?: string;
@@ -12759,16 +12938,41 @@ export interface operations {
             content: {
                 "application/json": {
                     clientId?: string;
-                    /** Scanner rule id (omit when profileId is set) */
+                    /** @description Scanner rule id (omit when profileId is set) */
                     ruleId?: string;
-                    /** Custom signal profile id, or built_in */
+                    /** @description Custom signal profile id */
                     profileId?: string;
                     /**
                      * @default binance
                      * @enum {string}
                      */
                     exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
-                    symbol: string;
+                    /** @description Pair for a one-coin job. Use watchlist or omit when scope is watchlist */
+                    symbol?: string;
+                    /**
+                     * @description watchlist runs a custom mix on every watchlist coin
+                     * @enum {string}
+                     */
+                    scope?: "symbol" | "watchlist";
+                    /** @description Shared cash pot for a watchlist job (default 10000) */
+                    startingBalance?: number;
+                    /** @description Share of current equity lost on a full stop (default 1). Size follows the stop distance and the live pot */
+                    riskPct?: number;
+                    /** @description Max combined stop risk of open fills (default 3). A new signal is skipped until a fill closes */
+                    maxOpenRiskPct?: number;
+                    /** @description Close part of the fill at TP1 and leave the rest for TP2 */
+                    useTp2?: boolean;
+                    /** @description Share of the position closed at TP1 when useTp2 is true (default 50) */
+                    tp1ClosePct?: number;
+                    /**
+                     * @description After TP1
+                     * @enum {string}
+                     */
+                    stopAfterTp1?: "keep" | "entry" | "trail";
+                    /** @description Taker fee percent on each fill including TP1 slices (0.10 = 0.10%). Default 0 */
+                    feePct?: number;
+                    /** @description Adverse slippage percent on each fill (0.05 = 0.05%). Default 0 */
+                    slipPct?: number;
                     /** Format: date-time */
                     rangeStart: string;
                     /** Format: date-time */
@@ -12854,7 +13058,16 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": {
+                        backtestId?: string;
+                        count?: number;
+                        total?: number;
+                        signalCount?: number;
+                        signals?: components["schemas"]["ScannerBacktestSignal"][];
+                        performance?: components["schemas"]["BacktestPerformance"];
+                    };
+                };
             };
             404: components["responses"]["Error"];
         };

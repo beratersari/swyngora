@@ -591,29 +591,31 @@ export function SignalsBacktestPanel({
           </Field>
         ) : null}
         {watchlistRun ? null : (
-        <Field>
-          <Text variant="caption" color="secondary">
-            {t('signals:exchange')}
-          </Text>
-          <Select
-            value={exchange}
-            aria-label={t('signals:exchange')}
-            style={{ minWidth: 120 }}
-            options={['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'].map((e) => ({ value: e, label: e }))}
-            onChange={setExchange}
-          />
-        </Field>
-        <Field>
-          <Text variant="caption" color="secondary">
-            {t('signals:symbol')}
-          </Text>
-          <SymbolSuggest
-            exchange={exchange}
-            value={symbol}
-            onChange={setSymbol}
-            aria-label={t('signals:symbol')}
-          />
-        </Field>
+          <>
+            <Field>
+              <Text variant="caption" color="secondary">
+                {t('signals:exchange')}
+              </Text>
+              <Select
+                value={exchange}
+                aria-label={t('signals:exchange')}
+                style={{ minWidth: 120 }}
+                options={['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'].map((e) => ({ value: e, label: e }))}
+                onChange={setExchange}
+              />
+            </Field>
+            <Field>
+              <Text variant="caption" color="secondary">
+                {t('signals:symbol')}
+              </Text>
+              <SymbolSuggest
+                exchange={exchange}
+                value={symbol}
+                onChange={setSymbol}
+                aria-label={t('signals:symbol')}
+              />
+            </Field>
+          </>
         )}
         {watchlistRun ? (
           <Field>

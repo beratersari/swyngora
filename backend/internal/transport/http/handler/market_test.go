@@ -802,6 +802,27 @@ func TestGetForensics_OK(t *testing.T) {
 	}
 }
 
+func TestForensicsToDTO_Timeline(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	dto := forensicsToDTO(&domain.ForensicsReport{
+		Symbol: "BTCUSDT", Exchange: "all", At: at, Window: "1h", During: "15m", AsOf: at,
+		Timeline: domain.ForensicsTimeline{
+			Summary: "Binance open interest started rising (about 8 minutes before).",
+			Events: []domain.ForensicsTimelineEvent{{
+				At: at.Add(-8 * time.Minute), Offset: -8 * time.Minute, OffsetLabel: "about 8 minutes before",
+				Phase: "before", Kind: domain.ForensicsTimelineOI, Venue: "binance", Direction: "up",
+				Title: "Binance open interest started rising",
+			}},
+		},
+	})
+	if dto.Timeline == nil || len(dto.Timeline.Events) != 1 {
+		t.Fatalf("%+v", dto.Timeline)
+	}
+	if dto.Timeline.Events[0].Offset != "-8m" || dto.Timeline.Events[0].Kind != "oi" {
+		t.Fatalf("%+v", dto.Timeline.Events[0])
+	}
+}
+
 func TestScanForensics_OK(t *testing.T) {
 	h := NewMarketHandler(market.New(volumeProfileMarket{}, stubSupply{}))
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/forensics/scan?exchange=binance&lookback=24h&limit=3&fields=volume", nil)

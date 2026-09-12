@@ -212,6 +212,23 @@ export type ForensicsWhy = {
   caution?: string;
 };
 
+export type ForensicsTimelineEvent = {
+  at?: string;
+  offset?: string;
+  offsetLabel?: string;
+  phase?: string;
+  kind?: string;
+  venue?: string;
+  direction?: string;
+  title?: string;
+  detail?: string;
+};
+
+export type ForensicsTimeline = {
+  events?: ForensicsTimelineEvent[];
+  summary?: string;
+};
+
 export type ForensicsReport = {
   symbol?: string;
   exchange?: string;
@@ -223,6 +240,7 @@ export type ForensicsReport = {
   similar?: ForensicsSimilar | null;
   similarError?: string;
   why?: ForensicsWhy | null;
+  timeline?: ForensicsTimeline | null;
   summary?: string;
   note?: string;
 };

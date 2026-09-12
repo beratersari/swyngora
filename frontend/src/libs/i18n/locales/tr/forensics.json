@@ -20,6 +20,9 @@
     "after": "Hareketten sonra",
     "similar": "Benzer hareketler ne yaptı"
   },
+  "timeline": {
+    "title": "Zaman sırasıyla ne oldu"
+  },
   "view": {
     "event": "Bir zaman",
     "now": "Şimdi",

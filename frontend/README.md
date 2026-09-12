@@ -2,7 +2,7 @@
 
 Production React application for Swyngora.
 
-> **Status:** Markets, coin detail, watchlist, **liquidations** (`/liquidations`: market cards + treemap + chart + cascade + heatmap), **options** (`/options`: BTC/ETH Deribit OI, volume, put/call, DVOL/ATM IV, expiry mix, OI/PCR/IV over time, unusual short-window moves, vs-market when IV or put/call disagrees with spot/futures), **market forensics** (`/forensics`: before / during / after + similar past moves; `/forensics?view=now` scans coins that look like past setups), **paper trading** (`/portfolio`: advanced spot ticket + **margin desk**, trade-from-detail), **swing signals**, pumps, alerts, compare, and **AI chat** (`/ai`) on a 2026 trading-desk chrome (single command bar, ticker tape, venue-aware jump search, live status). Layout wraps at 960 / 720 / 480.  
+> **Status:** Markets, coin detail, watchlist, **liquidations** (`/liquidations`: market cards + treemap + chart + cascade + heatmap), **options** (`/options`: BTC/ETH Deribit OI, volume, put/call, DVOL/ATM IV, expiry mix, OI/PCR/IV over time, unusual short-window moves, vs-market when IV or put/call disagrees with spot/futures), **market forensics** (`/forensics`: before / during / after + a time-ordered timeline + similar past moves; `/forensics?view=now` scans coins that look like past setups), **paper trading** (`/portfolio`: advanced spot ticket + **margin desk**, trade-from-detail), **swing signals**, pumps, alerts, compare, and **AI chat** (`/ai`) on a 2026 trading-desk chrome (single command bar, ticker tape, venue-aware jump search, live status). Layout wraps at 960 / 720 / 480.  
 > Track work in **`project-management/`**. Detail design: `docs/features/coin-detail.md`.  
 > `simple-frontend/` remains a static API harness only.
 

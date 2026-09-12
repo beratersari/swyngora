@@ -20,6 +20,9 @@
     "after": "After the move",
     "similar": "What similar moves did"
   },
+  "timeline": {
+    "title": "What happened, in order"
+  },
   "view": {
     "event": "A time",
     "now": "Now",

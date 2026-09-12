@@ -2340,7 +2340,9 @@ paths:
         fails, `tape` is still returned and `similarError` explains why.
         `why` is a plain-language read of why the move may have happened
         (before / during / after plus similar past cases), not a metric
-        dump. Same `venueTiming` path rule as `/around`: last OI/taker
+        dump. `timeline` is one clock of those prints in time order
+        (OI, takers, venue price, follow-through, liquidations, options,
+        sweeps). Same `venueTiming` path rule as `/around`: last OI/taker
         print much earlier than price omits continued / faded / reversed.
         Informational only.
       operationId: getMarketForensics
@@ -8811,7 +8813,7 @@ components:
         detail: { type: string }
         current: { type: string, description: Signed change (percent, PCR points, or vol points) }
         typical: { type: string, description: Median absolute same-length move }
-        ratio: { type: string, description: |current| / typical }
+        ratio: { type: string, description: "abs(current) / typical" }
     MarketOptionsMoves:
       type: object
       description: Unusual options moves versus that series' own typical. findings is omitted when nothing stands out.
@@ -10696,6 +10698,8 @@ components:
         similarError: { type: string, description: Set when similar-move search failed }
         why:
           $ref: '#/components/schemas/MarketForensicsWhy'
+        timeline:
+          $ref: '#/components/schemas/MarketForensicsTimeline'
         summary: { type: string }
         note: { type: string }
     MarketForensicsWhy:
@@ -10708,6 +10712,27 @@ components:
         after: { type: string, description: What happened after the move }
         similar: { type: string, description: How similar past setups resolved }
         caution: { type: string }
+    MarketForensicsTimeline:
+      type: object
+      description: One clock of what printed around the event (OI, takers, price, follow-through, liquidations, options, sweeps)
+      properties:
+        summary: { type: string }
+        events:
+          type: array
+          items: { $ref: '#/components/schemas/MarketForensicsTimelineEvent' }
+    MarketForensicsTimelineEvent:
+      type: object
+      description: One beat on the forensics clock
+      properties:
+        at: { type: string, format: date-time }
+        offset: { type: string, description: Signed short offset from the event time (-8m, 0, +3m) }
+        offsetLabel: { type: string, description: Plain-language offset (about 8 minutes before) }
+        phase: { type: string, description: before | during | after }
+        kind: { type: string, description: oi | takers | price | liquidations | options | sweep | absorption }
+        venue: { type: string, description: binance | bybit | deribit | all }
+        direction: { type: string }
+        title: { type: string }
+        detail: { type: string }
     MarketForensicsScan:
       type: object
       description: Coins whose current tape looks like past important-move setups

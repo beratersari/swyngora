@@ -74,7 +74,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/around/moves` | Strongest recent up/down legs plus what happened during each |
 | `GET` | `/api/v1/market/around/precursors` | What often changed before those moves, including conditions that fire together |
 | `GET` | `/api/v1/market/around/similar` | Past important-move setups like the current tape (optional `at`); unique events; caller-picked after horizons |
-| `GET` | `/api/v1/market/forensics` | Around-the-move tape plus similar past setups for a chosen time |
+| `GET` | `/api/v1/market/forensics` | Around-the-move tape plus similar past setups for a chosen time; `timeline` is one clock of OI / venues / liquidations |
 | `GET` | `/api/v1/market/forensics/scan` | Coins whose current tape looks like past pre-move setups, plus what usually happened after |
 | `GET` | `/api/v1/market/forensics/radar` | Saved Setup Radar hits and what price did after, plus lean usefulness |
 | `GET` | `/api/v1/market/vwap` | Volume-weighted average price from a start time; last vs VWAP; Binance, Bybit, combined |
@@ -390,7 +390,7 @@ Unit tests mock upstream HTTP; they do not call live Binance. `e2e_findings_test
 
 | Layer | Package | Tests |
 |---|---|---|
-| Domain | `internal/domain` | `candle_test.go`, `errors_test.go`, `ports_test.go`, `ticker_test.go`, `supply_test.go`, `open_interest_test.go`, `volume_profile_test.go`, `absorption_test.go`, `liquidity_sweep_test.go`, `volume_surge_test.go`, `vwap_test.go`, `around_test.go`, `around_compare_test.go`, `around_moves_test.go`, `around_precursors_test.go`, `around_similar_test.go`, `around_options_test.go`, `around_forensics_test.go`, `around_venue_timing_test.go`, `pricediff_quote_test.go`, `funding_arb_test.go`, `liquidation_test.go`, `liquidation_history_test.go` |
+| Domain | `internal/domain` | `candle_test.go`, `errors_test.go`, `ports_test.go`, `ticker_test.go`, `supply_test.go`, `open_interest_test.go`, `volume_profile_test.go`, `absorption_test.go`, `liquidity_sweep_test.go`, `volume_surge_test.go`, `vwap_test.go`, `around_test.go`, `around_compare_test.go`, `around_moves_test.go`, `around_precursors_test.go`, `around_similar_test.go`, `around_options_test.go`, `around_forensics_test.go`, `around_forensics_timeline_test.go`, `around_venue_timing_test.go`, `pricediff_quote_test.go`, `funding_arb_test.go`, `liquidation_test.go`, `liquidation_history_test.go` |
 | Application | `internal/service/market` | `service_test.go`, `volumeprofile_test.go`, `absorption_test.go`, `sweep_test.go`, `volumesurge_test.go`, `vwap_test.go`, `around_test.go`, `funding_arb_test.go` (fakes for ports) |
 | Application | `internal/service/futureshist` | `sink_test.go`, `backfill_test.go` (reconnect history fill, no cross-venue) |
 | Application | `internal/service/fundingarb` | `service_test.go` (create, min-profit notify, re-arm) |

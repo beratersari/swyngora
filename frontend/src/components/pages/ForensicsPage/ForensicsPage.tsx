@@ -9,6 +9,7 @@ import { ForensicsNowScan } from '@/components/organisms/ForensicsNowScan';
 import { ForensicsRadarReview } from '@/components/organisms/ForensicsRadarReview';
 import { ForensicsSimilar } from '@/components/organisms/ForensicsSimilar';
 import { ForensicsTape } from '@/components/organisms/ForensicsTape';
+import { ForensicsTimeline } from '@/components/organisms/ForensicsTimeline';
 import { ForensicsWhy } from '@/components/organisms/ForensicsWhy';
 import {
   rtkErrorMessage,
@@ -284,6 +285,7 @@ export function ForensicsPage() {
       ) : (
         <>
           <ForensicsWhy why={report?.why} isLoading={loading} />
+          <ForensicsTimeline timeline={report?.timeline} isLoading={loading} />
           {report?.note && !report.why ? (
             <SummaryBlock>
               <Text variant="caption" color="secondary">

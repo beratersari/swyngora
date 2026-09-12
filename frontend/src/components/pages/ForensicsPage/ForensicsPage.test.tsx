@@ -51,6 +51,17 @@ vi.mock('@/libs/api', async (importOriginal) => {
           after: 'After the move, BTC went quiet.',
           similar: 'When the tape looked like this before, BTC more often kept rising over the next 1h.',
         },
+        timeline: {
+          summary: 'Binance open interest started rising (about 8 minutes before).',
+          events: [
+            {
+              at: '2026-08-20T13:52:00Z',
+              offsetLabel: 'about 8 minutes before',
+              kind: 'oi',
+              title: 'Binance open interest started rising',
+            },
+          ],
+        },
         tape: {
           combined: {
             exchange: 'combined',
@@ -88,6 +99,17 @@ vi.mock('@/libs/api', async (importOriginal) => {
           during: 'Open interest fell as price rose — a short-cover shape.',
           after: 'After the move, BTC went quiet.',
           similar: 'When the tape looked like this before, BTC more often kept rising over the next 1h.',
+        },
+        timeline: {
+          summary: 'Binance open interest started rising (about 8 minutes before).',
+          events: [
+            {
+              at: '2026-08-20T13:52:00Z',
+              offsetLabel: 'about 8 minutes before',
+              kind: 'oi',
+              title: 'Binance open interest started rising',
+            },
+          ],
         },
         tape: {
           combined: {
@@ -135,6 +157,8 @@ describe('ForensicsPage', () => {
     });
     expect(await screen.findByText(/market forensics|piyasa incelemesi/i)).toBeInTheDocument();
     expect(screen.getByText(/why this may have happened|neden olmuş olabilir/i)).toBeInTheDocument();
+    expect(screen.getByText(/what happened, in order|zaman sırasıyla/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Binance open interest started rising/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/less support under the market/i)).toBeInTheDocument();
     expect(screen.getByText(/similar past moves|benzer geçmiş hareketler/i)).toBeInTheDocument();
     expect(screen.getByText('+3.5')).toBeInTheDocument();

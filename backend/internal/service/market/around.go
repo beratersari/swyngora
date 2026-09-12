@@ -294,6 +294,7 @@ func (s *Service) attachAroundFutures(ctx context.Context, ex domain.Exchange, s
 	}
 	ven.OIStart, ven.OIDir = domain.FindAroundOIRunStart(oi, plan)
 	ven.OIUntil = domain.MarkAroundOIUntil(oi, ven.OIStart, ven.OIDir, domain.AroundVenueUntilPrice(ven.MoveStart, plan))
+	ven.LiqStart, ven.LiqSide = domain.FindAroundLiqStart(liqs, plan.From, plan.To)
 }
 
 func (s *Service) attachAroundOptions(ctx context.Context, symbol string, plan domain.AroundPlan, out *domain.AroundReport) {

@@ -19,6 +19,7 @@ type ForensicsReport struct {
 	Similar      *AroundSimilarReport
 	SimilarError string
 	Why          ForensicsWhy
+	Timeline     ForensicsTimeline
 	Summary      string
 	Note         string
 }

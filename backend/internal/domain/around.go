@@ -231,6 +231,8 @@ type AroundVenue struct {
 	TakerStart time.Time
 	TakerDir   string
 	TakerUntil string
+	LiqStart   time.Time
+	LiqSide    string
 	Summary    string
 	Error      string
 }
@@ -585,6 +587,10 @@ func CombineAroundVenues(symbol string, venues []AroundVenue, plan AroundPlan, i
 	}
 	for _, v := range venues {
 		out.Events = append(out.Events, v.Events...)
+		if !v.LiqStart.IsZero() && (out.LiqStart.IsZero() || v.LiqStart.Before(out.LiqStart)) {
+			out.LiqStart = v.LiqStart.UTC()
+			out.LiqSide = v.LiqSide
+		}
 	}
 	out.Changes = CompareAroundPhases(out.Phases)
 	out.Summary = ExplainAroundVenue(*out)
@@ -1364,6 +1370,32 @@ func FuturesAcrossSamples(fromOI, toOI, fromFund, toFund, fromLS, toLS *FuturesS
 		return nil
 	}
 	return &out
+}
+
+// FindAroundLiqStart is the first forced close in [from, to). Side is that print.
+func FindAroundLiqStart(liqs []LiquidationEvent, from, to time.Time) (time.Time, string) {
+	if to.IsZero() || !to.After(from) {
+		return time.Time{}, ""
+	}
+	from, to = from.UTC(), to.UTC()
+	var hit time.Time
+	var side string
+	var notion float64
+	for _, e := range liqs {
+		if e.Time.IsZero() || e.Notional <= 0 {
+			continue
+		}
+		t := e.Time.UTC()
+		if t.Before(from) || !t.Before(to) {
+			continue
+		}
+		if hit.IsZero() || t.Before(hit) || (t.Equal(hit) && e.Notional > notion) {
+			hit = t
+			side = e.Side
+			notion = e.Notional
+		}
+	}
+	return hit, side
 }
 
 // NearestFuturesSnapshot prefers at-or-before within slack.
