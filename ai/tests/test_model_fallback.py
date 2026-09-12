@@ -176,10 +176,16 @@ def test_format_llm_failures_names_primary_then_fallback() -> None:
 def test_note_llm_error_emits_llm_on_chat_model_start(monkeypatch) -> None:
     seen: list[tuple[str, str]] = []
     monkeypatch.setattr("swyngora_ai.llm.errors.emit", lambda t, text="": seen.append((t, text)))
-    grok = NoteLLMError("grok-4.3")
+    grok = NoteLLMError("grok-4.3", "low")
     grok.on_chat_model_start({}, [])
     grok.on_chat_model_start({}, [])
-    assert seen == [("llm", "grok-4.3"), ("llm", "grok-4.3")]
+    ollama = NoteLLMError("qwen2.5")
+    ollama.on_chat_model_start({}, [])
+    assert seen == [
+        ("llm", "grok-4.3 (low)"),
+        ("llm", "grok-4.3 (low)"),
+        ("llm", "qwen2.5"),
+    ]
 
 
 def test_note_llm_error_emits_retry_then_exhausted(monkeypatch) -> None:

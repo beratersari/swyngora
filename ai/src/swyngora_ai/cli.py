@@ -632,20 +632,24 @@ def _format_elapsed(seconds: float) -> str:
 
 
 def activity_summary(state: ActivityBarState) -> str:
-    parts = [_tools_label(state.tools), _llm_label(state.llm)]
-    if state.model:
-        parts.append(f"model {state.model}")
+    parts = [_tools_label(state.tools)]
+    if state.llm_by_model:
+        parts.extend(f"{_llm_label(n)} {name}" for name, n in state.llm_by_model.items())
+    elif state.fallback_model:
+        parts.append(f"{_llm_label(0)} {state.fallback_model}")
+    else:
+        parts.append(_llm_label(0))
     return " · ".join(parts)
 
 
 @dataclass
 class ActivityBarState:
-    """Live CLI activity line: status text plus tool and llm counters."""
+    """Live CLI activity line: status text plus per-model llm counts."""
 
     description: str = "Planning…"
     tools: int = 0
-    llm: int = 0
-    model: str = ""
+    llm_by_model: dict[str, int] = field(default_factory=dict)
+    fallback_model: str = ""
 
 
 def apply_activity_event(state: ActivityBarState, ev: dict[str, Any]) -> bool:
@@ -656,7 +660,8 @@ def apply_activity_event(state: ActivityBarState, ev: dict[str, Any]) -> bool:
         state.tools += 1
         changed = True
     if kind in _LLM_TICK_TYPES:
-        state.llm += 1
+        label = (ev.get("text") or "").strip() or state.fallback_model or "unknown"
+        state.llm_by_model[label] = state.llm_by_model.get(label, 0) + 1
         changed = True
     text = _status_text(ev)
     if text is not None:
@@ -674,7 +679,7 @@ def _chat(orch: Any, message: str, session_id: str) -> tuple[ChatResult, str]:
         return orch.chat(message, session_id=session_id), ""
 
     started = time.monotonic()
-    state = ActivityBarState(model=_activity_model_id(getattr(orch, "settings", None)))
+    state = ActivityBarState(fallback_model=_activity_model_id(getattr(orch, "settings", None)))
     try:
         with Progress(
             SpinnerColumn(),

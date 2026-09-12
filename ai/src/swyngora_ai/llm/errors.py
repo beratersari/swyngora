@@ -22,18 +22,24 @@ class NoteLLMError(BaseCallbackHandler):
 
     _live: WeakSet[NoteLLMError] = WeakSet()
 
-    def __init__(self, label: str) -> None:
+    def __init__(self, label: str, reasoning_effort: str = "") -> None:
         self.label = label
+        self.reasoning_effort = reasoning_effort
         self.last_error: BaseException | None = None
         self.attempts = 0
         NoteLLMError._live.add(self)
+
+    def llm_activity_label(self) -> str:
+        if self.reasoning_effort:
+            return f"{self.label} ({self.reasoning_effort})"
+        return self.label
 
     def on_chat_model_start(
         self, serialized: dict[str, Any], messages: list[Any], **kwargs: object
     ) -> None:
         # Real generation start (retries, fallback, specialist, analyze). Not status text.
         del serialized, messages, kwargs
-        emit("llm", self.label)
+        emit("llm", self.llm_activity_label())
 
     def on_llm_error(self, error: BaseException, **_kwargs: object) -> None:
         self.last_error = error

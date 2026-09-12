@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
 
 ### Fixed
+- **AI CLI Activity models:** llm calls are counted per model that started (`5 llm calls grok-4.4 (low) · 3 llm calls qwen2.5`), not only the configured primary name. Grok shows `GROK_REASONING_EFFORT` in brackets.
 - **AI CLI prefix cycle:** typing `re` then Ctrl+P / Ctrl+N / Ctrl+F walks every `re…` history line **and** `reset`, including leftovers like `re   q` from an old Tab insert — it no longer sticks on the first match
 - **Forensics taker start vs path:** one taker bar only shows the flow started — continued / faded / reversed need later pre-price tape at the same bar size (`docs/features/forensics.md`, `docs/features/around.md`)
 - **Forensics taker continuity:** continued / faded / reversed need a continuous pre-price taker path in **bar steps** (one missing 1m or 5m bar is ok; a normal 5m gap is not a hole). A last bar near price does not fill a multi-bar gap after the start (`docs/features/forensics.md`, `docs/features/around.md`)

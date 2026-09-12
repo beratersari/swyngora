@@ -101,15 +101,36 @@ def test_apply_activity_event_updates_description_and_tool_count() -> None:
     assert _tools_label(2) == "2 tool calls"
     assert apply_activity_event(state, {"type": "llm", "text": "qwen2.5"})
     assert apply_activity_event(state, {"type": "llm", "text": "qwen2.5"})
-    assert state.llm == 2
-    composing = ActivityBarState(model="qwen2.5")
+    assert state.llm_by_model == {"qwen2.5": 2}
+    composing = ActivityBarState(fallback_model="qwen2.5")
     apply_activity_event(composing, {"type": "status", "text": "Composing answer…"})
-    assert composing.llm == 0
-    assert activity_summary(composing) == "0 tool calls · 0 llm calls · model qwen2.5"
-    again = ActivityBarState(model="qwen2.5")
+    assert composing.llm_by_model == {}
+    assert activity_summary(composing) == "0 tool calls · 0 llm calls qwen2.5"
+    again = ActivityBarState(fallback_model="qwen2.5")
     apply_activity_event(again, {"type": "tool", "text": "prefetch → get_ticker"})
     apply_activity_event(again, {"type": "llm", "text": "qwen2.5"})
-    assert activity_line(again, 75) == "1 tool call · 1 llm call · model qwen2.5 · 1:15 elapsed"
+    assert activity_line(again, 75) == "1 tool call · 1 llm call qwen2.5 · 1:15 elapsed"
+
+
+def test_activity_counts_llm_calls_per_model() -> None:
+    state = ActivityBarState()
+    for _ in range(5):
+        apply_activity_event(state, {"type": "llm", "text": "grok-4.4"})
+    for _ in range(3):
+        apply_activity_event(state, {"type": "llm", "text": "qwen2.5"})
+    assert activity_summary(state) == ("0 tool calls · 5 llm calls grok-4.4 · 3 llm calls qwen2.5")
+    apply_activity_event(state, {"type": "llm", "text": "grok-4.4"})
+    assert activity_summary(state) == ("0 tool calls · 6 llm calls grok-4.4 · 3 llm calls qwen2.5")
+
+
+def test_activity_includes_reasoning_effort_in_model_label() -> None:
+    state = ActivityBarState()
+    apply_activity_event(state, {"type": "llm", "text": "grok-4.4 (low)"})
+    apply_activity_event(state, {"type": "llm", "text": "grok-4.4 (low)"})
+    apply_activity_event(state, {"type": "llm", "text": "qwen2.5"})
+    assert activity_summary(state) == (
+        "0 tool calls · 2 llm calls grok-4.4 (low) · 1 llm call qwen2.5"
+    )
 
 
 def test_chat_prints_details_activity_when_orchestrator_raises(monkeypatch) -> None:
@@ -148,10 +169,10 @@ def test_print_details_starts_with_activity_subsection(monkeypatch) -> None:
             thinking=["Planning…"],
             tools=["prefetch → get_ticker"],
         ),
-        "1 tool call · 2 llm calls · model qwen2.5 · 0:03 elapsed",
+        "1 tool call · 2 llm calls qwen2.5 · 0:03 elapsed",
     )
     text = buf.getvalue()
-    assert "1 tool call · 2 llm calls · model qwen2.5 · 0:03 elapsed" in text
+    assert "1 tool call · 2 llm calls qwen2.5 · 0:03 elapsed" in text
     assert "Activity" in text
     assert text.find("Activity") < text.find("thinking")
     assert text.find("Activity") < text.find("prefetch")

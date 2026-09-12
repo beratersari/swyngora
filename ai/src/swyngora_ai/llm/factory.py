@@ -17,7 +17,7 @@ def _build_grok(cfg: Settings) -> BaseChatModel:
         temperature=cfg.temperature,
         extra_body={"reasoning_effort": cfg.grok_reasoning_effort},
         max_retries=0,
-        callbacks=[NoteLLMError(cfg.grok_model)],
+        callbacks=[NoteLLMError(cfg.grok_model, cfg.grok_reasoning_effort)],
     )
 
 
