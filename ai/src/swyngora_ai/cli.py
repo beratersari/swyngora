@@ -484,21 +484,87 @@ def _build_orchestrator() -> Orchestrator:
     return build_orchestrator()
 
 
-def _print_result(result: ChatResult) -> None:
+def _terminal_columns() -> int:
+    """Live TTY columns via ioctl. Ignore COLUMNS — shells often leave it stale on zoom."""
+    fds: list[int] = []
+    for stream in (sys.__stdout__, sys.stdout, sys.__stderr__, sys.stderr):
+        fileno = getattr(stream, "fileno", None)
+        if fileno is None:
+            continue
+        try:
+            fds.append(int(fileno()))
+        except (OSError, ValueError):
+            continue
+    tty_fd = -1
+    try:
+        tty_fd = os.open("/dev/tty", os.O_RDONLY)
+        fds.append(tty_fd)
+    except OSError:
+        pass
+    try:
+        for fd in fds:
+            try:
+                return max(2, os.get_terminal_size(fd).columns)
+            except OSError:
+                continue
+    finally:
+        if tty_fd >= 0:
+            os.close(tty_fd)
+    return 80
+
+
+def _rule_bar(width: int, title: str = "") -> str:
+    """Exactly ``width`` cells: dashes, or a centered heading like ``── details ──``."""
+    if not title:
+        return "─" * width
+    label = f" {title} "
+    if len(label) >= width:
+        return label[:width]
+    fill = width - len(label)
+    left = fill // 2
+    return f"{'─' * left}{label}{'─' * (fill - left)}"
+
+
+def _full_width_rule(title: str = "") -> None:
+    """One left-to-right line written to the TTY, not through Rich wrap/crop."""
+    width = _terminal_columns()
+    bar = _rule_bar(width, title)
+    out = getattr(_console, "file", None) or sys.stdout
+    if getattr(out, "isatty", lambda: False)():
+        out.write(f"\033[2m{bar}\033[0m\n")
+    else:
+        out.write(f"{bar}\n")
+    flush = getattr(out, "flush", None)
+    if flush is not None:
+        flush()
+
+
+def _print_result(result: ChatResult, activity: str = "") -> None:
     _console.print()
     _console.print(Markdown(result.reply))
     _console.print()
-    _print_details(result)
+    _print_details(result, activity)
 
 
-def _print_details(result: ChatResult) -> None:
+_DETAILS_LABEL_WIDTH = 8  # "Activity" and "thinking" — values share one left column
+
+
+def _print_details(result: ChatResult, activity: str = "") -> None:
     extras = Table.grid(padding=(0, 3))
-    extras.add_column(style="bold dim", no_wrap=True)
+    extras.add_column(
+        style="bold dim",
+        no_wrap=True,
+        min_width=_DETAILS_LABEL_WIDTH,
+        max_width=_DETAILS_LABEL_WIDTH,
+    )
     extras.add_column(overflow="fold")
 
     def _add(label: str, value: str) -> None:
         extras.add_row(label, value)
 
+    if activity:
+        _add("Activity", escape(activity))
+        _add("", "")
     first = True
     for step in result.thinking:
         _add("thinking" if first else "", escape(step))
@@ -516,7 +582,7 @@ def _print_details(result: ChatResult) -> None:
         first = False
     _add("session", escape(result.session_id))
 
-    _console.rule("[dim]details[/]", style="dim")
+    _full_width_rule("details")
     _console.print(extras)
     _console.print()
 
@@ -545,11 +611,11 @@ def _status_text(ev: dict[str, Any]) -> str | None:
 
 
 def _tools_label(count: int) -> str:
-    return "1 tool" if count == 1 else f"{count} tools"
+    return "1 tool call" if count == 1 else f"{count} tool calls"
 
 
 def _llm_label(count: int) -> str:
-    return "1 llm" if count == 1 else f"{count} llm"
+    return "1 llm call" if count == 1 else f"{count} llm calls"
 
 
 def _activity_model_id(settings: Any) -> str:
@@ -568,23 +634,22 @@ def _format_elapsed(seconds: float) -> str:
 def activity_summary(state: ActivityBarState) -> str:
     parts = [_tools_label(state.tools), _llm_label(state.llm)]
     if state.model:
-        parts.append(state.model)
+        parts.append(f"model {state.model}")
     return " · ".join(parts)
 
 
 @dataclass
 class ActivityBarState:
-    """Live CLI activity line plus the recap trail after the bar clears."""
+    """Live CLI activity line: status text plus tool and llm counters."""
 
     description: str = "Planning…"
     tools: int = 0
     llm: int = 0
     model: str = ""
-    steps: list[str] = field(default_factory=lambda: ["Planning…"])
 
 
 def apply_activity_event(state: ActivityBarState, ev: dict[str, Any]) -> bool:
-    """Update description, steps, and counters. True if the bar should refresh."""
+    """Update description and counters. True if the bar should refresh."""
     changed = False
     kind = ev.get("type") or ""
     if kind in _TOOL_TICK_TYPES:
@@ -596,25 +661,17 @@ def apply_activity_event(state: ActivityBarState, ev: dict[str, Any]) -> bool:
     text = _status_text(ev)
     if text is not None:
         state.description = text
-        if not state.steps or state.steps[-1] != text:
-            state.steps.append(text)
         changed = True
     return changed
 
 
-def activity_recap_lines(state: ActivityBarState, elapsed: float) -> list[str]:
-    return [*state.steps, f"{activity_summary(state)} · {_format_elapsed(elapsed)}"]
+def activity_line(state: ActivityBarState, elapsed: float) -> str:
+    return f"{activity_summary(state)} · {_format_elapsed(elapsed)} elapsed"
 
 
-def _print_activity_recap(state: ActivityBarState, elapsed: float) -> None:
-    for line in activity_recap_lines(state, elapsed):
-        _console.print(f"[dim]{escape(line)}[/]")
-    _console.print()
-
-
-def _chat(orch: Orchestrator, message: str, session_id: str) -> ChatResult:
+def _chat(orch: Any, message: str, session_id: str) -> tuple[ChatResult, str]:
     if not _console.is_terminal:
-        return orch.chat(message, session_id=session_id)
+        return orch.chat(message, session_id=session_id), ""
 
     started = time.monotonic()
     state = ActivityBarState(model=_activity_model_id(getattr(orch, "settings", None)))
@@ -640,14 +697,22 @@ def _chat(orch: Orchestrator, message: str, session_id: str) -> ChatResult:
                     summary=activity_summary(state),
                 )
 
-            return orch.chat(message, session_id=session_id, on_event=on_event)
-    finally:
-        _print_activity_recap(state, time.monotonic() - started)
+            result = orch.chat(message, session_id=session_id, on_event=on_event)
+    except Exception:
+        from swyngora_ai.graph.orchestrator import ChatResult as _ChatResult
+
+        _print_details(
+            _ChatResult(reply="", session_id=session_id),
+            activity_line(state, time.monotonic() - started),
+        )
+        raise
+    return result, activity_line(state, time.monotonic() - started)
 
 
 def _one_shot(orch: Orchestrator, message: str, session_id: str) -> int:
     try:
-        _print_result(_chat(orch, message, session_id))
+        result, activity = _chat(orch, message, session_id)
+        _print_result(result, activity)
     except Exception as e:  # noqa: BLE001
         _print_error(e)
         return 1
@@ -656,7 +721,8 @@ def _one_shot(orch: Orchestrator, message: str, session_id: str) -> int:
 
 def _print_banner() -> None:
     _console.print()
-    _console.rule("[bold green]Swyngora AI[/]")
+    _full_width_rule()
+    _console.print(Align.center("[bold green]Swyngora AI[/]"))
     _console.print()
     _console.print(
         Align.center("[bold yellow]Informational analysis only — not financial advice.[/]")
@@ -703,7 +769,8 @@ def _repl(orch: Orchestrator, session_id: str) -> int:
                 _console.print("[dim]session cleared[/]")
                 continue
             try:
-                _print_result(_chat(orch, line, session_id))
+                result, activity = _chat(orch, line, session_id)
+                _print_result(result, activity)
             except Exception as e:  # noqa: BLE001
                 _print_error(e)
     finally:

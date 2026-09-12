@@ -24,7 +24,7 @@ from swyngora_ai.cli import (
     _readline_uses_libedit,
     _status_text,
     _tools_label,
-    activity_recap_lines,
+    activity_line,
     activity_summary,
     advance_repl_cycle,
     advance_repl_nav,
@@ -96,47 +96,93 @@ def test_apply_activity_event_updates_description_and_tool_count() -> None:
     assert apply_activity_event(state, {"type": "tool_error", "text": "get_indicators failed"})
     assert state.tools == 1
     assert state.description == "get_indicators failed"
-    assert _tools_label(0) == "0 tools"
-    assert _tools_label(1) == "1 tool"
-    assert _tools_label(2) == "2 tools"
-    assert state.steps == [
-        "Planning…",
-        "prefetch → get_ticker",
-        "get_indicators failed",
-    ]
-    assert activity_recap_lines(state, 12.8) == [
-        "Planning…",
-        "prefetch → get_ticker",
-        "get_indicators failed",
-        "1 tool · 0 llm · 0:12",
-    ]
+    assert _tools_label(0) == "0 tool calls"
+    assert _tools_label(1) == "1 tool call"
+    assert _tools_label(2) == "2 tool calls"
     assert apply_activity_event(state, {"type": "llm", "text": "qwen2.5"})
     assert apply_activity_event(state, {"type": "llm", "text": "qwen2.5"})
     assert state.llm == 2
-    assert state.steps[-1] == "get_indicators failed"
     composing = ActivityBarState(model="qwen2.5")
     apply_activity_event(composing, {"type": "status", "text": "Composing answer…"})
     assert composing.llm == 0
-    assert activity_summary(composing) == "0 tools · 0 llm · qwen2.5"
+    assert activity_summary(composing) == "0 tool calls · 0 llm calls · model qwen2.5"
     again = ActivityBarState(model="qwen2.5")
-    apply_activity_event(again, {"type": "status", "text": "Planning…"})
-    apply_activity_event(again, {"type": "status", "text": "Planning…"})
-    assert again.steps == ["Planning…"]
-    assert activity_recap_lines(again, 75)[-1] == "0 tools · 0 llm · qwen2.5 · 1:15"
+    apply_activity_event(again, {"type": "tool", "text": "prefetch → get_ticker"})
+    apply_activity_event(again, {"type": "llm", "text": "qwen2.5"})
+    assert activity_line(again, 75) == "1 tool call · 1 llm call · model qwen2.5 · 1:15 elapsed"
 
 
-def test_chat_prints_recap_when_orchestrator_raises(monkeypatch) -> None:
+def test_chat_prints_details_activity_when_orchestrator_raises(monkeypatch) -> None:
     from swyngora_ai import cli as cli_mod
 
-    recap: list[tuple[ActivityBarState, float]] = []
+    seen: list[tuple[ChatResult, str]] = []
     monkeypatch.setattr(type(cli_mod._console), "is_terminal", property(lambda self: True))
     monkeypatch.setattr(
-        cli_mod, "_print_activity_recap", lambda state, elapsed: recap.append((state, elapsed))
+        cli_mod,
+        "_print_details",
+        lambda result, activity="": seen.append((result, activity)),
     )
     with pytest.raises(RuntimeError, match="backend down"):
         _chat(_BoomOrch(), "Hi", "s1")
-    assert recap
-    assert recap[0][1] >= 0
+    assert seen
+    result, activity = seen[0]
+    assert result.session_id == "s1"
+    assert "llm call" in activity
+    assert "tool call" in activity
+    assert "elapsed" in activity
+
+
+def test_print_details_starts_with_activity_subsection(monkeypatch) -> None:
+    from io import StringIO
+
+    from rich.console import Console
+
+    from swyngora_ai import cli as cli_mod
+
+    buf = StringIO()
+    monkeypatch.setattr(cli_mod, "_console", Console(file=buf, force_terminal=True, width=80))
+    cli_mod._print_details(
+        ChatResult(
+            reply="ok",
+            session_id="cli",
+            thinking=["Planning…"],
+            tools=["prefetch → get_ticker"],
+        ),
+        "1 tool call · 2 llm calls · model qwen2.5 · 0:03 elapsed",
+    )
+    text = buf.getvalue()
+    assert "1 tool call · 2 llm calls · model qwen2.5 · 0:03 elapsed" in text
+    assert "Activity" in text
+    assert text.find("Activity") < text.find("thinking")
+    assert text.find("Activity") < text.find("prefetch")
+    assert "details" in text
+
+
+def test_full_width_rule_is_one_uncut_line(monkeypatch) -> None:
+    from io import StringIO
+
+    from rich.console import Console
+
+    from swyngora_ai import cli as cli_mod
+
+    buf = StringIO()
+    monkeypatch.setattr(cli_mod, "_console", Console(file=buf, force_terminal=True, width=40))
+    monkeypatch.setattr(cli_mod, "_terminal_columns", lambda: 40)
+    cli_mod._full_width_rule()
+    lines = [line.rstrip("\n") for line in buf.getvalue().splitlines() if line.strip()]
+    assert len(lines) == 1
+    body = lines[0].replace("\x1b[0m", "").replace("\x1b[2m", "")
+    # strip remaining ANSI
+    import re
+
+    body = re.sub(r"\x1b\[[0-9;]*m", "", body)
+    assert set(body) == {"─"}
+    assert len(body) == 40
+    titled = cli_mod._rule_bar(40, "details")
+    assert len(titled) == 40
+    assert titled.startswith("─")
+    assert titled.endswith("─")
+    assert " details " in titled
 
 
 def test_activity_model_id_follows_provider() -> None:

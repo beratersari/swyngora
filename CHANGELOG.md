@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Forensics options history:** a missing start or end sample no longer invents an OI / put-call / IV jump from zero; opposite options prints are not treated as similar; unusual prints say whether they started before the price move or during it (`docs/features/forensics.md`)
 
 ### Added
+- **AI CLI activity recap:** compact `1 tool call · 2 llm calls · model qwen2.5 · 0:03 elapsed` line lives in the details **Activity** subsection (not reprinted above the reply)
 - **AI CLI activity recap:** TTY recap footer is `1 tool · 2 llm · qwen2.5 · 0:03` (llm count is real chat-model starts, not status text)
 - **AI CLI activity bar:** TTY `swyngora-ai` shows a spinner, current status, finished tool count, and elapsed time while a turn runs, then a dim recap of those steps with the reply (no percent; not used when piped)
 - **AI CLI Tab complete:** interactive `swyngora-ai` Tab / Ctrl+F complete `exit` / `quit` / `q` / `reset` and cycle matching previous prompts; Ctrl+P / Ctrl+N cycle the typed prefix (no Tab required), or walk full history on an empty line; Ctrl+U clears the line (`~/.swyngora/cli_history`; not filenames)
