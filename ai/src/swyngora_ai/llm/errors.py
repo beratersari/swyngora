@@ -22,13 +22,26 @@ class NoteLLMError(BaseCallbackHandler):
 
     _live: WeakSet[NoteLLMError] = WeakSet()
 
-    def __init__(self, label: str) -> None:
+    def __init__(self, label: str, reasoning_effort: str = "") -> None:
         self.label = label
+        self.reasoning_effort = reasoning_effort
         self.last_error: BaseException | None = None
         self.attempts = 0
         NoteLLMError._live.add(self)
 
-    def on_llm_error(self, error: BaseException, **kwargs: object) -> None:
+    def llm_activity_label(self) -> str:
+        if self.reasoning_effort:
+            return f"{self.label} ({self.reasoning_effort})"
+        return self.label
+
+    def on_chat_model_start(
+        self, serialized: dict[str, Any], messages: list[Any], **kwargs: object
+    ) -> None:
+        # Real generation start (retries, fallback, specialist, analyze). Not status text.
+        del serialized, messages, kwargs
+        emit("llm", self.llm_activity_label())
+
+    def on_llm_error(self, error: BaseException, **_kwargs: object) -> None:
         self.last_error = error
         self.attempts += 1
         self._emit_status()
@@ -62,7 +75,7 @@ class NoteToolError(BaseCallbackHandler):
         self._names: dict[str, str] = {}
         self._attempts: dict[str, int] = {}
 
-    def on_tool_start(self, serialized: dict[str, Any], input_str: str, **kwargs: object) -> None:
+    def on_tool_start(self, serialized: dict[str, Any], input_str: str, **kwargs: object) -> None:  # noqa: ARG002
         name = ""
         if isinstance(serialized, dict):
             name = str(serialized.get("name") or "")
@@ -97,6 +110,8 @@ class NoteToolError(BaseCallbackHandler):
 
     def _emit_status(self, name: str, attempts: int) -> None:
         if attempts < _TOOL_TRY_BUDGET:
+            # Same as llm retries: each new invoke is a start Activity should count.
+            emit("tool_retry", name)
             emit("status", f"Retrying {name} ({attempts + 1}/{_TOOL_TRY_BUDGET})…")
             return
         emit("status", f"{name} failed after {_TOOL_TRY_BUDGET} tries")

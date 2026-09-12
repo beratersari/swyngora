@@ -132,7 +132,9 @@ def test_note_tool_error_emits_retry_then_exhausted(monkeypatch) -> None:
     note.on_tool_error(ToolTransientError("timeout: blip"))
     note.on_tool_error(ToolTransientError("timeout: blip"))
     assert seen == [
+        ("tool_retry", "get_ticker"),
         ("status", "Retrying get_ticker (2/3)…"),
+        ("tool_retry", "get_ticker"),
         ("status", "Retrying get_ticker (3/3)…"),
     ]
     note.on_tool_error(ToolTransientError("timeout: blip"))
@@ -169,10 +171,11 @@ def test_note_tool_error_resets_when_tool_name_changes(monkeypatch) -> None:
     note.on_tool_error(ToolTransientError("timeout: a"))
     note.on_tool_start({"name": "get_indicators"}, "")
     note.on_tool_error(ToolTransientError("timeout: b"))
-    texts = [text for _t, text in seen]
-    assert texts == [
-        "Retrying get_ticker (2/3)…",
-        "Retrying get_indicators (2/3)…",
+    assert seen == [
+        ("tool_retry", "get_ticker"),
+        ("status", "Retrying get_ticker (2/3)…"),
+        ("tool_retry", "get_indicators"),
+        ("status", "Retrying get_indicators (2/3)…"),
     ]
 
 
@@ -193,8 +196,10 @@ def test_run_agent_exhausted_raise_is_failure() -> None:
     fn, state = _flaky_ticker(10)
     events = _run_progress(_ticker_agent(fn, final="down"))
     tool_lines = [e.get("text") or "" for e in events if e.get("type") == "tool"]
+    retry_lines = [e.get("text") or "" for e in events if e.get("type") == "tool_retry"]
     err_lines = [e.get("text") or "" for e in events if e.get("type") == "tool_error"]
-    assert tool_lines == ["market_tape_agent → get_ticker(symbol=BTCUSDT)"]
+    assert tool_lines.count("market_tape_agent → get_ticker(symbol=BTCUSDT)") == 1
+    assert retry_lines.count("get_ticker") == 2
     assert len(err_lines) == 1
     assert "get_ticker failed:" in err_lines[0]
     assert "ERROR" in err_lines[0]
@@ -211,8 +216,10 @@ def test_run_agent_recover_after_retry_one_tick() -> None:
     fn, state = _flaky_ticker(2)
     events = _run_progress(_ticker_agent(fn, final="ok"))
     tool_lines = [e.get("text") or "" for e in events if e.get("type") == "tool"]
+    retry_lines = [e.get("text") or "" for e in events if e.get("type") == "tool_retry"]
     result_lines = [e.get("text") or "" for e in events if e.get("type") == "tool_result"]
-    assert tool_lines == ["market_tape_agent → get_ticker(symbol=BTCUSDT)"]
+    assert tool_lines.count("market_tape_agent → get_ticker(symbol=BTCUSDT)") == 1
+    assert retry_lines.count("get_ticker") == 2
     assert len(result_lines) == 1
     assert "get_ticker ✓" in result_lines[0]
     assert not any(e.get("type") == "tool_error" for e in events)
@@ -266,10 +273,12 @@ def test_run_agent_exhausted_parallel_tools_no_ticks() -> None:
     )
     events = _run_progress(graph)
     tool_lines = [e.get("text") or "" for e in events if e.get("type") == "tool"]
+    retry_lines = [e.get("text") or "" for e in events if e.get("type") == "tool_retry"]
     err_lines = [e.get("text") or "" for e in events if e.get("type") == "tool_error"]
-    assert len(tool_lines) == 2
-    assert "market_tape_agent → get_ticker(symbol=BTCUSDT)" in tool_lines
-    assert "market_tape_agent → get_indicators(symbol=BTCUSDT)" in tool_lines
+    assert tool_lines.count("market_tape_agent → get_ticker(symbol=BTCUSDT)") == 1
+    assert tool_lines.count("market_tape_agent → get_indicators(symbol=BTCUSDT)") == 1
+    assert retry_lines.count("get_ticker") == 2
+    assert retry_lines.count("get_indicators") == 2
     assert len(err_lines) == 2
     assert any("get_ticker failed:" in line for line in err_lines)
     assert any("get_indicators failed:" in line for line in err_lines)

@@ -34,6 +34,8 @@ def test_grok_factory_sends_default_reasoning_effort(monkeypatch) -> None:
     assert len(cbs) == 1
     assert isinstance(cbs[0], NoteLLMError)
     assert cbs[0].label == "grok-4.3"
+    assert cbs[0].reasoning_effort == "low"
+    assert cbs[0].llm_activity_label() == "grok-4.3 (low)"
 
 
 def test_grok_factory_honors_reasoning_override(monkeypatch) -> None:

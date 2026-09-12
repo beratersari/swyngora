@@ -33,7 +33,7 @@ User
 3. LLM:
    - **Ollama**: `ollama pull qwen2.5` (or set `OLLAMA_MODEL`; avoid llama3.2 — weak tool calling)
    - **Grok**: set `XAI_API_KEY` and `AI_LLM_PROVIDER=grok`
-   - After the primary’s 4 tries fail, the agent tries the **other** provider (Grok ↔ Ollama). The spinner shows retries and fallback. A leftover `XAI_API_KEY` while on Ollama will call Grok if Ollama is down. If both fail, the CLI lists both errors.
+   - After the primary’s 4 tries fail, the agent tries the **other** provider (Grok ↔ Ollama). The activity bar shows retries and fallback. A leftover `XAI_API_KEY` while on Ollama will call Grok if Ollama is down. If both fail, the CLI lists both errors.
 
 ## Setup
 
@@ -50,7 +50,13 @@ Python 3.11+ (pinned in `.python-version`). Recreate an old pip venv with `rm -r
 ## Run
 
 ```bash
-# REPL (↑ / ↓ recalls previous prompts; stored in ~/.swyngora/cli_history)
+# REPL (↑ / ↓ previous prompts; Tab / Ctrl+F complete commands and cycle
+# matching prompts; Ctrl+P / Ctrl+N cycle the typed prefix — every matching
+# history line plus matching commands like reset — or full history if empty;
+# Ctrl+U clears the line (Ctrl+Y restores it);
+# TTY shows a live activity bar while answering; details include a compact
+# status line (tools, llm starts, model, elapsed);
+# stored in ~/.swyngora/cli_history)
 export AI_LLM_PROVIDER=ollama
 export SWYNGORA_API_URL=http://localhost:8080
 swyngora-ai
