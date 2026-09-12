@@ -49,6 +49,8 @@ type BacktestTrade struct {
 	TP1ClosePct      float64             `json:"tp1ClosePct,omitempty"`
 	StopAfterTP1     string              `json:"stopAfterTp1,omitempty"`
 	StopMovedToEntry bool                `json:"stopMovedToEntry,omitempty"`
+	TrailStop        float64             `json:"trailStop,omitempty"`
+	TrailStops       []BacktestTrailStop `json:"trailStops,omitempty"`
 	Outcome          string              `json:"outcome"` // tp | sl | open | tp1 | tp1_tp2 | tp1_sl | tp1_open
 	ExitPrice        float64             `json:"exitPrice,omitempty"`
 	PnLPct           float64             `json:"pnlPct"` // leveraged percent of the whole fill
@@ -73,6 +75,12 @@ type BacktestTrade struct {
 type BacktestPriceMark struct {
 	At    time.Time `json:"at"`
 	Price float64   `json:"price"`
+}
+
+// BacktestTrailStop is one ratchet of the runner stop after TP1.
+type BacktestTrailStop struct {
+	At   time.Time `json:"at"`
+	Stop float64   `json:"stop"`
 }
 
 // BacktestTradeStats summarizes first-touch trades across a job.
@@ -238,9 +246,12 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 		out.TakeProfit2 = round8(plan.tp2)
 		out.UseTP2 = true
 		out.TP1ClosePct = plan.closePct * 100
-		if plan.stopToEntry {
+		switch {
+		case plan.trail:
+			out.StopAfterTP1 = BacktestStopTrail
+		case plan.stopToEntry:
 			out.StopAfterTP1 = BacktestStopEntry
-		} else {
+		default:
 			out.StopAfterTP1 = BacktestStopKeep
 		}
 	}
@@ -283,8 +294,14 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 	activeSL, activeTP := sl, plan.tp1
 	if out.TP1ExitPrice > 0 {
 		phase = 2
-		activeSL = plan.slAfter
+		activeSL = startRunnerStop(side, sl, entry, bars[entryIdx], plan)
 		activeTP = plan.tp2
+		if plan.trail {
+			recordTrailStop(out, bars[entryIdx].OpenTime, activeSL)
+		}
+		if stopAtOrThroughEntry(side, entry, activeSL) {
+			out.StopMovedToEntry = true
+		}
 	}
 	lastInRange := -1
 	for j := entryIdx; j < len(bars); j++ {
@@ -322,14 +339,24 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 				return out
 			}
 			applyTP1Scale(out, touch.price, entry, touchTime(touch), touch.at.IsZero(), knownByOrBar(touch, bar, bars, j, opts.Interval), plan)
-			if plan.stopToEntry {
+			phase = 2
+			activeSL = startRunnerStop(side, sl, entry, bar, plan)
+			if plan.trail {
+				at := touch.at
+				if at.IsZero() {
+					at = barMarkAt(bar, opts.Interval)
+				}
+				recordTrailStop(out, at, activeSL)
+			}
+			if stopAtOrThroughEntry(side, entry, activeSL) {
 				out.StopMovedToEntry = true
 			}
-			phase = 2
-			activeSL = plan.slAfter
 			activeTP = plan.tp2
 			rem := remainderFirstTouch(bar, side, activeSL, activeTP, opts, touch)
 			if rem.hit == "" {
+				if plan.trail {
+					activeSL = trailAfterBar(out, bar, side, activeSL, plan, opts.Interval)
+				}
 				continue
 			}
 			applyRemainderExit(out, rem, bar, bars, j, entryIdx, side, entry, lev, rangeEnd, spansEnd, opts.Interval, plan, markRange)
@@ -339,6 +366,9 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 		touch := resolveFirstTouch(bar, side, activeSL, activeTP, opts.Interval, opts.Finer, 0)
 		if touch.hit == "" {
 			out.Marks = appendBacktestMark(out.Marks, barMarkAt(bar, opts.Interval), bar.Close)
+			if phase == 2 && plan.trail {
+				activeSL = trailAfterBar(out, bar, side, activeSL, plan, opts.Interval)
+			}
 			continue
 		}
 		if phase == 2 {
@@ -399,6 +429,62 @@ func applyTP1Scale(out *BacktestTrade, px, entry float64, at *time.Time, unknown
 	out.TP1KnownAt = knownBy
 	out.RemainderPct = round1((1 - plan.closePct) * 100)
 	out.Outcome = BacktestTradeOutcomeTP1Open
+}
+
+func startRunnerStop(side string, origSL, entry float64, bar OHLC, plan scalePlan) float64 {
+	if plan.trail {
+		ext := favorableExtreme(bar, side)
+		if plan.tp1 > 0 && !moreFavorable(side, ext, plan.tp1) {
+			ext = plan.tp1
+		}
+		return ratchetStop(side, origSL, ext, plan.trailDist)
+	}
+	if plan.stopToEntry {
+		return entry
+	}
+	return origSL
+}
+
+func trailAfterBar(out *BacktestTrade, bar OHLC, side string, cur float64, plan scalePlan, iv CandleInterval) float64 {
+	next := ratchetStop(side, cur, favorableExtreme(bar, side), plan.trailDist)
+	if next == cur {
+		return cur
+	}
+	recordTrailStop(out, barMarkAt(bar, iv), next)
+	if stopAtOrThroughEntry(side, out.Entry, next) {
+		out.StopMovedToEntry = true
+	}
+	return next
+}
+
+func recordTrailStop(out *BacktestTrade, at time.Time, stop float64) {
+	if out == nil || stop <= 0 || math.IsNaN(stop) {
+		return
+	}
+	stop = round8(stop)
+	out.TrailStop = stop
+	if at.IsZero() {
+		return
+	}
+	at = at.UTC()
+	if n := len(out.TrailStops); n > 0 && !out.TrailStops[n-1].At.Before(at) {
+		out.TrailStops[n-1].Stop = stop
+		return
+	}
+	out.TrailStops = append(out.TrailStops, BacktestTrailStop{At: at, Stop: stop})
+}
+
+func moreFavorable(side string, a, b float64) bool {
+	if a <= 0 {
+		return false
+	}
+	if b <= 0 {
+		return true
+	}
+	if side == BacktestTradeSideShort {
+		return a < b
+	}
+	return a > b
 }
 
 func applyTouchExit(out *BacktestTrade, touch firstTouch, bar OHLC, bars []OHLC, j, entryIdx int, side string, entry float64, lev int, rangeEnd time.Time, spansEnd bool, iv CandleInterval, markRange func(float64)) {

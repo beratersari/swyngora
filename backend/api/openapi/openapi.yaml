@@ -6751,7 +6751,7 @@ paths:
                 maxOpenRiskPct: { type: number, description: Max combined stop risk of open fills (default 3). A new signal is skipped until a fill closes }
                 useTp2: { type: boolean, description: Close part of the fill at TP1 and leave the rest for TP2 }
                 tp1ClosePct: { type: number, description: Share of the position closed at TP1 when useTp2 is true (default 50) }
-                stopAfterTp1: { type: string, enum: [keep, entry], description: After TP1, keep the original stop or move it to the fill (default entry) }
+                stopAfterTp1: { type: string, enum: [keep, entry, trail], description: After TP1, keep the original stop, move it to the fill, or trail it with price (default entry) }
                 rangeStart: { type: string, format: date-time }
                 rangeEnd: { type: string, format: date-time }
       responses:
@@ -9396,7 +9396,15 @@ components:
         takeProfit2: { type: number }
         useTp2: { type: boolean }
         tp1ClosePct: { type: number }
-        stopAfterTp1: { type: string, enum: [keep, entry] }
+        stopAfterTp1: { type: string, enum: [keep, entry, trail] }
+        trailStop: { type: number, description: Latest runner stop after a trail ratchet }
+        trailStops:
+          type: array
+          items:
+            type: object
+            properties:
+              at: { type: string, format: date-time }
+              stop: { type: number }
         stopMovedToEntry: { type: boolean }
         outcome: { type: string, enum: [tp, sl, open, tp1, tp1_tp2, tp1_sl, tp1_open], description: First-touch result. tp1_* means a partial close at TP1 then the runner }
         tp1ExitPrice: { type: number }

@@ -88,6 +88,7 @@ type BacktestBookFill struct {
 	ScalePct       float64
 	ScalePrice     float64
 	StopToEntry    bool
+	TrailStops     []BacktestTrailStop
 }
 
 // NormalizeBacktestStartBalance applies the Lab default and a hard cap.
@@ -155,9 +156,11 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 		at    time.Time
 		exit  bool
 		scale bool
+		trail bool
+		stop  float64
 		i     int
 	}
-	events := make([]ev, 0, len(fills)*3)
+	events := make([]ev, 0, len(fills)*4)
 	for i, f := range fills {
 		if f.EntryAt.IsZero() || f.Entry <= 0 || f.StopLoss <= 0 {
 			continue
@@ -170,6 +173,16 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 				sc = entry.Add(time.Nanosecond)
 			}
 			events = append(events, ev{at: sc, scale: true, i: i})
+		}
+		for _, ts := range f.TrailStops {
+			if ts.Stop <= 0 || ts.At.IsZero() {
+				continue
+			}
+			at := ts.At.UTC()
+			if !at.After(entry) {
+				at = entry.Add(time.Nanosecond)
+			}
+			events = append(events, ev{at: at, trail: true, stop: ts.Stop, i: i})
 		}
 		if f.HasExit && !f.ExitAt.IsZero() {
 			exit := f.ExitAt.UTC()
@@ -185,19 +198,19 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 		}
 		// Same fill: scale before that fill's exit so TP1 is realized first.
 		if events[i].i == events[j].i {
-			ri, rj := sameFillEventRank(events[i].exit, events[i].scale), sameFillEventRank(events[j].exit, events[j].scale)
+			ri, rj := sameFillEventRank(events[i].exit, events[i].scale, events[i].trail), sameFillEventRank(events[j].exit, events[j].scale, events[j].trail)
 			if ri != rj {
 				return ri < rj
 			}
 			return false
 		}
-		// Other fills: full exits first, then new entries, then TP1 scales.
-		// A same-time entry must not take risk that TP1 has not yet freed.
-		ri, rj := bookEventRank(events[i].exit, events[i].scale), bookEventRank(events[j].exit, events[j].scale)
+		// Other fills: full exits, new entries, TP1 scales, then trail ratchets.
+		// A same-time entry must not take risk that TP1/trail has not yet freed.
+		ri, rj := bookEventRank(events[i].exit, events[i].scale, events[i].trail), bookEventRank(events[j].exit, events[j].scale, events[j].trail)
 		if ri != rj {
 			return ri < rj
 		}
-		if !events[i].exit && !events[i].scale {
+		if !events[i].exit && !events[i].scale && !events[i].trail {
 			si, sj := fills[events[i].i].Score, fills[events[j].i].Score
 			if si != sj {
 				return si > sj
@@ -210,6 +223,7 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 		margin   float64
 		notional float64
 		risk     float64
+		stop     float64
 		i        int
 		key      string
 	}
@@ -252,6 +266,17 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 	}
 	for _, e := range events {
 		maybeSnap(e.at)
+		if e.trail {
+			p, ok := open[e.i]
+			if !ok {
+				continue
+			}
+			p.stop = e.stop
+			p.risk = remainingStopRisk(fills[e.i].Side, fills[e.i].Entry, e.stop, p.notional)
+			open[e.i] = p
+			mark(e.at)
+			continue
+		}
 		if e.scale {
 			p, ok := open[e.i]
 			if !ok {
@@ -267,7 +292,8 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 			cash += closedM + notionalPnLPrice(f, closedN, f.ScalePrice)
 			p.notional -= closedN
 			p.margin -= closedM
-			if f.StopToEntry {
+			if f.StopToEntry && len(f.TrailStops) == 0 {
+				p.stop = f.Entry
 				p.risk = 0
 			} else {
 				p.risk *= 1 - pct
@@ -331,7 +357,7 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 			continue
 		}
 		cash -= margin
-		open[e.i] = pos{margin: margin, notional: notional, risk: newRisk, i: e.i, key: coin}
+		open[e.i] = pos{margin: margin, notional: notional, risk: newRisk, stop: f.StopLoss, i: e.i, key: coin}
 		if coin != "|" {
 			openCoin[coin]++
 		}
@@ -383,24 +409,30 @@ func unleveredMove(side string, entry, exit float64) float64 {
 	return (exit - entry) / entry
 }
 
-func bookEventRank(exit, scale bool) int {
+func bookEventRank(exit, scale, trail bool) int {
 	if exit {
 		return 0
 	}
 	if scale {
 		return 2
 	}
+	if trail {
+		return 3
+	}
 	return 1
 }
 
-func sameFillEventRank(exit, scale bool) int {
+func sameFillEventRank(exit, scale, trail bool) int {
 	if scale {
 		return 0
 	}
-	if exit {
+	if trail {
 		return 1
 	}
-	return 2
+	if exit {
+		return 2
+	}
+	return 3
 }
 
 func notionalPnL(f BacktestBookFill, notional float64, atRange bool) float64 {
@@ -471,6 +503,9 @@ func BookFillsFromSignals(sigs []ScannerBacktestSignal, rangeEnd time.Time) []Ba
 			fill.ScalePct = sc.pct
 			fill.ScalePrice = sc.price
 			fill.StopToEntry = sc.stopToEntry
+		}
+		if len(tr.TrailStops) > 0 {
+			fill.TrailStops = append([]BacktestTrailStop(nil), tr.TrailStops...)
 		}
 		out = append(out, fill)
 	}

@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
 
 ### Added
-- **Lab TP1 / TP2:** signals plan a 1R first target and a farther runner. Lab can close part of the fill at TP1, leave the rest for TP2, and keep the stop or move it to entry. The partial close hits cash/PnL; remaining shared risk is only the runner (`docs/features/indicator-scanner.md`)
+- **Lab TP1 / TP2:** signals plan a 1R first target and a farther runner. Lab can close part of the fill at TP1, leave the rest for TP2, and keep the stop, move it to entry, or trail it with price. The partial close hits cash/PnL; remaining shared risk follows the live stop (`docs/features/indicator-scanner.md`)
 
 ### Fixed
 - **Lab TP1 risk timing:** a new fill at the same timestamp as a TP1 scale does not take the freed risk. TP1 must already have printed (`docs/features/indicator-scanner.md`)

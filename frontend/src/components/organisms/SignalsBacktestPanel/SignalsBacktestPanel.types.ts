@@ -35,7 +35,7 @@ export type SignalsBacktestPanelProps = {
     maxOpenRiskPct?: number;
     useTp2?: boolean;
     tp1ClosePct?: number;
-    stopAfterTp1?: 'keep' | 'entry';
+    stopAfterTp1?: 'keep' | 'entry' | 'trail';
     exchange?: MarketExchange;
     rangeKey: string;
   }) => void;

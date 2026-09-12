@@ -108,8 +108,9 @@ export type ScannerBacktestTrade = {
   takeProfit2?: number;
   useTp2?: boolean;
   tp1ClosePct?: number;
-  stopAfterTp1?: 'keep' | 'entry';
+  stopAfterTp1?: 'keep' | 'entry' | 'trail';
   stopMovedToEntry?: boolean;
+  trailStop?: number;
   outcome: ScannerBacktestTradeOutcome;
   exitPrice?: number;
   pnlPct: number;
@@ -170,7 +171,7 @@ export type StartScannerBacktestArg = {
   maxOpenRiskPct?: number;
   useTp2?: boolean;
   tp1ClosePct?: number;
-  stopAfterTp1?: 'keep' | 'entry';
+  stopAfterTp1?: 'keep' | 'entry' | 'trail';
   exchange?: 'binance' | 'coinbase' | 'bybit' | 'nasdaq' | 'bist';
   rangeStart: string;
   rangeEnd: string;

@@ -252,7 +252,11 @@ function TradeDetail({ trade }: { trade: ScannerBacktestTrade }) {
           {t('signals:lab.target')}: {formatPrice(trade.takeProfit)}
         </Text>
       )}
-      {trade.stopMovedToEntry ? (
+      {trade.stopAfterTp1 === 'trail' && trade.trailStop ? (
+        <Text variant="caption" color="secondary" mono>
+          {t('signals:lab.stopTrail')}: {formatPrice(trade.trailStop)}
+        </Text>
+      ) : trade.stopMovedToEntry ? (
         <Text variant="caption" color="secondary">
           {t('signals:lab.stopMovedToEntry')}
         </Text>
@@ -310,7 +314,7 @@ export function SignalsBacktestPanel({
   const [maxOpenRiskPct, setMaxOpenRiskPct] = useState(3);
   const [useTp2, setUseTp2] = useState(true);
   const [tp1ClosePct, setTp1ClosePct] = useState(50);
-  const [stopAfterTp1, setStopAfterTp1] = useState<'keep' | 'entry'>('entry');
+  const [stopAfterTp1, setStopAfterTp1] = useState<'keep' | 'entry' | 'trail'>('entry');
   const [rangeKey, setRangeKey] = useState(rangeOptions[1]?.value ?? rangeOptions[0]?.value ?? '90d');
 
   const ruleById = useMemo(() => new Map(rules.map((r) => [r.id, r])), [rules]);
@@ -677,6 +681,7 @@ export function SignalsBacktestPanel({
                 style={{ minWidth: 160 }}
                 options={[
                   { value: 'entry', label: t('signals:lab.stopToEntry') },
+                  { value: 'trail', label: t('signals:lab.stopTrail') },
                   { value: 'keep', label: t('signals:lab.stopKeep') },
                 ]}
                 onChange={setStopAfterTp1}

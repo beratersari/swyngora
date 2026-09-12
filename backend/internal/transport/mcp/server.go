@@ -3779,7 +3779,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("maxOpenRiskPct", mcp.Description("Max combined stop risk of open fills (default 3). A new signal is skipped until a fill closes and frees risk.")),
 		mcp.WithBoolean("useTp2", mcp.Description("When true, close tp1ClosePct at TP1 and leave the rest for TP2. Default false (TP1 only).")),
 		mcp.WithNumber("tp1ClosePct", mcp.Description("Share of the position closed at TP1 when useTp2 is true (default 50).")),
-		mcp.WithString("stopAfterTp1", mcp.Description("After TP1: keep the original stop, or entry to move the runner stop to the fill (default entry).")),
+		mcp.WithString("stopAfterTp1", mcp.Description("After TP1: keep the original stop, entry to move it to the fill, or trail to ratchet with price and never give it back (default entry).")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {

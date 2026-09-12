@@ -190,6 +190,34 @@ func TestSimulateSharedBacktestBook_SameTimeEntryDoesNotTakeTP1Risk(t *testing.T
 	}
 }
 
+func TestSimulateSharedBacktestBook_TrailStopUpdatesRisk(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	t1 := t0.Add(4 * time.Hour)
+	t2 := t0.Add(8 * time.Hour)
+	// 1% risk / 3% stop. After 50% TP1, trail stop 98 still has leftover risk, so B at t1 is blocked.
+	// At t2 the trail is at entry and remaining risk is 0, so C can open.
+	got := SimulateSharedBacktestBook(10000, 1, 1, []BacktestBookFill{
+		{Symbol: "ETHUSDT", Side: BacktestTradeSideLong, EntryAt: t0,
+			Entry: 100, StopLoss: 97, ExitPrice: 104, RangeExitPrice: 104, Leverage: 10,
+			Outcome:  BacktestTradeOutcomeTP1Open,
+			HasScale: true, ScaleAt: t1, ScalePct: 0.5, ScalePrice: 101,
+			TrailStops: []BacktestTrailStop{
+				{At: t1, Stop: 98},
+				{At: t2, Stop: 100},
+			}},
+		{Symbol: "SOLUSDT", Side: BacktestTradeSideLong, EntryAt: t1.Add(time.Minute),
+			Entry: 50, StopLoss: 49.5, ExitPrice: 50, RangeExitPrice: 50, Leverage: 10,
+			Outcome: BacktestTradeOutcomeOpen},
+		{Symbol: "ADAUSDT", Side: BacktestTradeSideLong, EntryAt: t2.Add(time.Minute),
+			Entry: 40, StopLoss: 39.6, ExitPrice: 40, RangeExitPrice: 40, Leverage: 10,
+			Outcome: BacktestTradeOutcomeOpen},
+	}, t0.Add(24*time.Hour))
+	if got.TradesTaken != 2 || got.SkippedNoRisk != 1 {
+		t.Fatalf("trail leftover risk then free at entry: %+v", got)
+	}
+}
+
 func TestSimulateSharedBacktestBook_MaxOpenRisk(t *testing.T) {
 	t.Parallel()
 	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)

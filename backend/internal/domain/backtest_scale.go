@@ -20,6 +20,8 @@ const (
 	BacktestStopKeep = "keep"
 	// BacktestStopEntry moves the runner stop to the fill price after TP1.
 	BacktestStopEntry = "entry"
+	// BacktestStopTrail ratchets the runner stop with price and never gives it back.
+	BacktestStopTrail = "trail"
 
 	// BacktestDefaultTP1ClosePct is the share closed at TP1 when TP2 is on.
 	BacktestDefaultTP1ClosePct = 50.0
@@ -34,7 +36,7 @@ const (
 type BacktestScale struct {
 	UseTP2       bool    `json:"useTp2,omitempty"`
 	TP1ClosePct  float64 `json:"tp1ClosePct,omitempty"`
-	StopAfterTP1 string  `json:"stopAfterTp1,omitempty"` // keep | entry
+	StopAfterTP1 string  `json:"stopAfterTp1,omitempty"` // keep | entry | trail
 }
 
 // NormalizeBacktestScale applies defaults only when TP2 is enabled.
@@ -53,7 +55,9 @@ func NormalizeBacktestScale(s BacktestScale) BacktestScale {
 		pct = backtestScaleMaxClose
 	}
 	stop := strings.ToLower(strings.TrimSpace(s.StopAfterTP1))
-	if stop != BacktestStopKeep {
+	switch stop {
+	case BacktestStopKeep, BacktestStopTrail:
+	default:
 		stop = BacktestStopEntry
 	}
 	return BacktestScale{UseTP2: true, TP1ClosePct: pct, StopAfterTP1: stop}
@@ -65,7 +69,9 @@ type scalePlan struct {
 	use2        bool
 	closePct    float64
 	stopToEntry bool
+	trail       bool
 	slAfter     float64
+	trailDist   float64
 }
 
 func resolveScalePlan(side string, entry, sl float64, levels SwingLevels, scale BacktestScale) scalePlan {
@@ -95,10 +101,69 @@ func resolveScalePlan(side string, entry, sl float64, levels SwingLevels, scale 
 	p.finalTP = tp2
 	p.closePct = scale.TP1ClosePct / 100
 	p.stopToEntry = scale.StopAfterTP1 == BacktestStopEntry
+	p.trail = scale.StopAfterTP1 == BacktestStopTrail
+	p.trailDist = math.Abs(entry - sl)
 	if p.stopToEntry {
 		p.slAfter = entry
 	}
 	return p
+}
+
+func ratchetStop(side string, cur, extreme, dist float64) float64 {
+	if dist <= 0 || extreme <= 0 || math.IsNaN(extreme) {
+		return cur
+	}
+	if side == BacktestTradeSideShort {
+		cand := extreme + dist
+		if cur <= 0 || cand < cur {
+			return cand
+		}
+		return cur
+	}
+	cand := extreme - dist
+	if cand > cur {
+		return cand
+	}
+	return cur
+}
+
+func favorableExtreme(bar OHLC, side string) float64 {
+	if side == BacktestTradeSideShort {
+		if bar.Low > 0 {
+			return bar.Low
+		}
+		return bar.Close
+	}
+	if bar.High > 0 {
+		return bar.High
+	}
+	return bar.Close
+}
+
+func remainingStopRisk(side string, entry, stop, notional float64) float64 {
+	if entry <= 0 || notional <= 0 || stop <= 0 {
+		return 0
+	}
+	if side == BacktestTradeSideShort {
+		if stop <= entry {
+			return 0
+		}
+		return notional * (stop - entry) / entry
+	}
+	if stop >= entry {
+		return 0
+	}
+	return notional * (entry - stop) / entry
+}
+
+func stopAtOrThroughEntry(side string, entry, stop float64) bool {
+	if entry <= 0 || stop <= 0 {
+		return false
+	}
+	if side == BacktestTradeSideShort {
+		return stop <= entry
+	}
+	return stop >= entry
 }
 
 func validTP(side string, entry, tp float64) bool {

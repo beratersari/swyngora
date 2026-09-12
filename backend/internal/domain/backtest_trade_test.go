@@ -481,6 +481,40 @@ func TestFirstTouch_SameBarTP1AndEntryNeedsOrder(t *testing.T) {
 	}
 }
 
+func TestFirstTouch_TrailStopRatchetsAndHolds(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	got := SimulateBacktestTradeOpts([]OHLC{
+		{OpenTime: t0, CloseTime: t0.Add(4 * time.Hour), Open: 100, High: 101, Low: 99, Close: 100},
+		{OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(8 * time.Hour), Open: 100.2, High: 101.2, Low: 100.1, Close: 101.1},
+		{OpenTime: t0.Add(8 * time.Hour), CloseTime: t0.Add(12 * time.Hour), Open: 101.1, High: 104, Low: 101, Close: 103},
+		{OpenTime: t0.Add(12 * time.Hour), CloseTime: t0.Add(16 * time.Hour), Open: 103, High: 103.2, Low: 101.4, Close: 102},
+	}, 0, BacktestTradeSideLong, SwingLevels{
+		Entry: 100, StopLoss: 97, TakeProfit: 120, TakeProfit1: 101, TakeProfit2: 120, Leverage: 1,
+	}, BacktestTouchOpts{
+		Interval: Interval4h,
+		Scale:    BacktestScale{UseTP2: true, TP1ClosePct: 50, StopAfterTP1: BacktestStopTrail},
+	})
+	if got == nil || got.Outcome != BacktestTradeOutcomeTP1Open {
+		t.Fatalf("%+v", got)
+	}
+	if got.StopAfterTP1 != BacktestStopTrail {
+		t.Fatalf("mode %+v", got.StopAfterTP1)
+	}
+	// Fill is the next open (100.2), trail distance is 3.2. High 104 → stop 100.8.
+	if math.Abs(got.TrailStop-100.8) > 1e-9 {
+		t.Fatalf("trail should follow the 104 high (104-3.2=100.8): %+v", got)
+	}
+	if len(got.TrailStops) < 2 {
+		t.Fatalf("need ratchet prints: %+v", got.TrailStops)
+	}
+	for i := 1; i < len(got.TrailStops); i++ {
+		if got.TrailStops[i].Stop+1e-9 < got.TrailStops[i-1].Stop {
+			t.Fatalf("trail moved down: %+v", got.TrailStops)
+		}
+	}
+}
+
 func TestFirstTouch_RecordsMarksWhileOpen(t *testing.T) {
 	t.Parallel()
 	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
