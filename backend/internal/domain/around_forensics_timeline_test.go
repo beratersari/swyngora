@@ -185,6 +185,28 @@ func TestBuildForensicsTimeline_AsOfTenMinutesHidesLaterVenue(t *testing.T) {
 	}
 }
 
+func TestBuildForensicsTimeline_OISampleOverlapsEarlierPriceBar(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	r := ForensicsReport{
+		Symbol: "BTCUSDT", At: at, Window: AroundWindow1h, During: AroundDuring15m, AsOf: at.Add(2 * time.Hour),
+		Tape: &AroundReport{
+			Venues: []AroundVenue{{
+				Exchange: ExchangeBinance, Interval: string(Interval1m),
+				MoveStart: at.Add(3 * time.Minute),
+				OIStart:   at.Add(5 * time.Minute), OIDir: CVDDirUp,
+				Phases: []AroundPhase{{Phase: AroundPhaseDuring, Complete: true, Price: AroundPrice{Direction: CVDDirUp, ChangePct: 1}}},
+			}},
+		},
+	}
+	got := BuildForensicsTimeline(r)
+	if got.OrderKnown {
+		t.Fatalf("OI 14:05 vs 1m price 14:03 must be unknown %+v", got)
+	}
+	if !strings.Contains(got.Summary, "Order is not certain") {
+		t.Fatalf("summary %q", got.Summary)
+	}
+}
+
 func TestBuildForensicsTimeline_OverlappingStampsDoNotClaimOrder(t *testing.T) {
 	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
 	r := ForensicsReport{

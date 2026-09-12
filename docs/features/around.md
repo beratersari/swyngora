@@ -42,7 +42,9 @@ OI or taker flow had already changed before the laggard's real start
 later is not treated as following at that first sample. A hole before
 the claimed start, or two stamps that overlap at the tape's bar size
 (5m vs 1m, or two 5m bars a couple of minutes apart), is not a known
-order — the tape says they started around the same time. The first signal across price, OI, and
+order — the tape says they started around the same time. An OI sample
+at 14:05 looks back to the previous print, so a 1m price bar at 14:03
+is not “price first.” The first signal across price, OI, and
 takers is the leader only when that OI or taker print kept going until
 price — a spike that faded is not treated as a precursor. If the last
 OI sample or taker bar is much earlier than the price start, the path

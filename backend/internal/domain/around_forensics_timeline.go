@@ -254,7 +254,7 @@ func newForensicsTimelineEvent(at time.Time, plan AroundPlan, kind, venue, dir, 
 	return ForensicsTimelineEvent{
 		At:          at,
 		Offset:      off,
-		OffsetLabel: timelineOffsetLabel(off, res),
+		OffsetLabel: timelineOffsetLabelAt(at, plan.At, AroundStamp{At: at, Resolution: res, Backward: timelineKindBackward(kind)}),
 		Phase:       timelinePhaseOf(at, plan),
 		Kind:        kind,
 		Venue:       venue,
@@ -263,6 +263,24 @@ func newForensicsTimelineEvent(at time.Time, plan AroundPlan, kind, venue, dir, 
 		Detail:      detail,
 		Resolution:  res,
 	}
+}
+
+func timelineKindBackward(kind string) bool {
+	return kind == ForensicsTimelineOI || kind == ForensicsTimelineOptions
+}
+
+func timelineOffsetLabelAt(at, event time.Time, stamp AroundStamp) string {
+	if !event.IsZero() && AroundStampsOverlap(stamp, AroundStamp{At: event}) {
+		off := at.Sub(event)
+		if off < 0 {
+			off = -off
+		}
+		if off < 45*time.Second {
+			return "at the event"
+		}
+		return "around the event"
+	}
+	return timelineOffsetLabel(at.Sub(event), stamp.Resolution)
 }
 
 func timelineOffsetLabel(d, res time.Duration) string {
@@ -381,7 +399,7 @@ func sortForensicsTimeline(evs []ForensicsTimelineEvent) {
 }
 
 func timelineEventStamp(e ForensicsTimelineEvent) AroundStamp {
-	return AroundStamp{At: e.At, Resolution: e.Resolution}
+	return AroundStamp{At: e.At, Resolution: e.Resolution, Backward: timelineKindBackward(e.Kind)}
 }
 
 func markForensicsTimelineOrder(evs []ForensicsTimelineEvent) {

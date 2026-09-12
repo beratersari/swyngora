@@ -75,11 +75,29 @@ type aroundVenueImpulse struct {
 	known bool
 }
 
-// AroundStamp is a time we only know to a bar or sample. The print
-// happened in [At, At+Resolution). Resolution 0 is an exact tick.
+// AroundStamp is a time we only know to a bar or sample. Resolution 0 is an exact tick.
+//
+// Forward (candles): the print happened in [At, At+Resolution).
+// Backward (OI / options snapshots): At is the sample time; the change
+// happened in (At−Resolution, At] — anywhere since the previous print.
 type AroundStamp struct {
 	At         time.Time
 	Resolution time.Duration
+	Backward   bool
+}
+
+// AroundStampEarliest is the first moment this print could have been.
+func AroundStampEarliest(s AroundStamp) time.Time {
+	if s.At.IsZero() {
+		return time.Time{}
+	}
+	if s.Resolution <= 0 {
+		return s.At
+	}
+	if s.Backward {
+		return s.At.Add(-s.Resolution)
+	}
+	return s.At
 }
 
 // AroundStampLatest is the last moment this print could still have been.
@@ -87,7 +105,7 @@ func AroundStampLatest(s AroundStamp) time.Time {
 	if s.At.IsZero() {
 		return time.Time{}
 	}
-	if s.Resolution <= 0 {
+	if s.Resolution <= 0 || s.Backward {
 		return s.At
 	}
 	return s.At.Add(s.Resolution)
@@ -98,7 +116,13 @@ func AroundStampBefore(a, b AroundStamp) bool {
 	if a.At.IsZero() || b.At.IsZero() {
 		return false
 	}
-	return !AroundStampLatest(a).After(b.At) && a.At.Before(b.At)
+	eb := AroundStampEarliest(b)
+	la := AroundStampLatest(a)
+	// Snapshot end is inclusive, so it must be strictly before b starts.
+	if a.Backward && a.Resolution > 0 {
+		return la.Before(eb)
+	}
+	return !la.After(eb) && AroundStampEarliest(a).Before(eb)
 }
 
 // AroundStampsOverlap is true when the two windows could be in either order.
@@ -111,6 +135,10 @@ func AroundStampsOverlap(a, b AroundStamp) bool {
 
 func aroundVenuePriceStamp(v AroundVenue) AroundStamp {
 	return AroundStamp{At: v.MoveStart.UTC(), Resolution: aroundIntervalOrMinute(v.Interval)}
+}
+
+func aroundSnapshotStamp(at time.Time, step time.Duration) AroundStamp {
+	return AroundStamp{At: at.UTC(), Resolution: step, Backward: true}
 }
 
 // FindAroundPriceRunStart is when this venue first printed its own impulse.
@@ -799,10 +827,6 @@ func CompareAroundVenueTiming(venues []AroundVenue) *AroundVenueTiming {
 	case !bn.IsZero() && by.IsZero():
 		out.Agreement = AroundVenueBinanceOnly
 		out.Follow = AroundVenueFollowStayed
-		if out.Leader == "" {
-			out.Leader = string(ExchangeBinance)
-			out.LeaderMetric = AroundVenueMetricPrice
-		}
 		out.Before = aroundVenueBeforeBits(bnVen, byVen, time.Time{})
 		out.Summary = "The price move printed on Binance. Bybit did not follow on price."
 		appendAroundVenueFirstSignal(out, bnVen, byVen, bn)
@@ -811,10 +835,6 @@ func CompareAroundVenueTiming(venues []AroundVenue) *AroundVenueTiming {
 	case bn.IsZero() && !by.IsZero():
 		out.Agreement = AroundVenueBybitOnly
 		out.Follow = AroundVenueFollowStayed
-		if out.Leader == "" {
-			out.Leader = string(ExchangeBybit)
-			out.LeaderMetric = AroundVenueMetricPrice
-		}
 		out.Before = aroundVenueBeforeBits(byVen, bnVen, time.Time{})
 		out.Summary = "The price move printed on Bybit. Binance did not follow on price."
 		appendAroundVenueFirstSignal(out, bnVen, byVen, by)
@@ -852,10 +872,6 @@ func CompareAroundVenueTiming(venues []AroundVenue) *AroundVenueTiming {
 		sameWay = bnImp.dir == byImp.dir
 	}
 	if bn.Before(by) {
-		if out.Leader == "" {
-			out.Leader = string(ExchangeBinance)
-			out.LeaderMetric = AroundVenueMetricPrice
-		}
 		out.Before = aroundVenueBeforeBits(bnVen, byVen, by)
 		if sameWay {
 			out.Agreement = AroundVenueBinanceEarlier
@@ -869,10 +885,6 @@ func CompareAroundVenueTiming(venues []AroundVenue) *AroundVenueTiming {
 		appendAroundVenueFirstSignal(out, bnVen, byVen, bn)
 		appendAroundVenueBeforeSummary(out, "Bybit", by)
 		return out
-	}
-	if out.Leader == "" {
-		out.Leader = string(ExchangeBybit)
-		out.LeaderMetric = AroundVenueMetricPrice
 	}
 	out.Before = aroundVenueBeforeBits(byVen, bnVen, bn)
 	if sameWay {
@@ -1094,6 +1106,9 @@ func aroundVenueClocks(v AroundVenue) []aroundVenueClock {
 }
 
 func aroundClockStamp(c aroundVenueClock) AroundStamp {
+	if c.metric == AroundVenueMetricOI {
+		return aroundSnapshotStamp(c.at, c.res)
+	}
 	return AroundStamp{At: c.at, Resolution: c.res}
 }
 
@@ -1147,7 +1162,7 @@ func aroundVenueFirstSignalSentence(bn, by AroundVenue, priceLead time.Time) str
 			what = "takers were already selling"
 		}
 	}
-	sig := AroundStamp{At: at.UTC(), Resolution: aroundVenueSignalResolution(venue, metric, bn, by)}
+	sig := AroundStamp{At: at.UTC(), Resolution: aroundVenueSignalResolution(venue, metric, bn, by), Backward: metric == AroundVenueMetricOI}
 	px := AroundStamp{At: priceLead.UTC(), Resolution: aroundVenuePriceResolution(priceLead, bn, by)}
 	if priceLead.IsZero() || !AroundStampBefore(sig, px) {
 		if !priceLead.IsZero() && AroundStampsOverlap(sig, px) {

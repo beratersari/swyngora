@@ -65,11 +65,14 @@ next print is already the move, we do not date the start (it may have
 begun in the gap).
 
 Timestamps are **bar or sample windows**, not exact ticks. A 5m candle
-at 14:00 means sometime in that bar. If two stamps overlap at that
-size — 5m vs 5m two minutes apart, or 5m vs 1m inside the same bar —
-`venueTiming` says they started around the same time and the timeline
-marks `orderUnknown`. The summary does not narrate a sequence we
-cannot know. Liquidation prints stay exact.
+at 14:00 means sometime in that bar. An OI (or options) sample at
+14:05 is as-of that clock — the change may have happened anywhere
+since the previous print (14:00–14:05), so a 1m price bar at 14:03 is
+not “price first.” If two stamps overlap at that size — 5m vs 5m two
+minutes apart, 5m vs 1m inside the same bar, or a snapshot window vs a
+finer candle — `venueTiming` says they started around the same time
+and the timeline marks `orderUnknown`. The summary does not narrate a
+sequence we cannot know. Liquidation prints stay exact.
 
 Informational only.
 

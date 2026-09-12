@@ -41,6 +41,24 @@ func TestAroundStampsOverlap_BarWindows(t *testing.T) {
 	}
 }
 
+func TestAroundStampsOverlap_OISampleLooksBack(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 5, 0, 0, time.UTC)
+	oi := aroundSnapshotStamp(at, 5*time.Minute)
+	// 1m price at 14:03 sits inside (14:00, 14:05] — not "price first".
+	px := AroundStamp{At: at.Add(-2 * time.Minute), Resolution: time.Minute}
+	if !AroundStampsOverlap(oi, px) || AroundStampBefore(px, oi) {
+		t.Fatal("OI at 14:05 covers 14:00–14:05; 14:03 price must overlap")
+	}
+	sameMin := AroundStamp{At: at, Resolution: time.Minute}
+	if !AroundStampsOverlap(oi, sameMin) || AroundStampBefore(oi, sameMin) {
+		t.Fatal("OI sample at 14:05 and 1m price at 14:05 must overlap")
+	}
+	later := AroundStamp{At: at.Add(time.Minute), Resolution: time.Minute}
+	if !AroundStampBefore(oi, later) || AroundStampsOverlap(oi, later) {
+		t.Fatal("OI through 14:05 is before 1m price at 14:06")
+	}
+}
+
 func TestFindAroundPriceRunStart_FindsFirstPrint(t *testing.T) {
 	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
 	plan := aroundTestPlan(at)
@@ -380,6 +398,29 @@ func TestCompareAroundVenueTiming_DoesNotUseWindowEndAsBeforeCutoff(t *testing.T
 	}
 	if !strings.Contains(got.Summary, "open interest") {
 		t.Fatalf("before-window OI ends at 12:00 and should count: %q", got.Summary)
+	}
+}
+
+func TestCompareAroundVenueTiming_OISampleDoesNotLoseToEarlierPriceBar(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 5, 0, 0, time.UTC)
+	bn := AroundVenue{
+		Exchange: ExchangeBinance, Interval: string(Interval1m),
+		MoveStart: at.Add(-2 * time.Minute),
+		OIStart:   at, OIDir: CVDDirUp, OIUntil: AroundVenueUntilContinued,
+		Phases: []AroundPhase{{
+			Phase: AroundPhaseDuring, Complete: true,
+			Price: AroundPrice{ChangePct: 1.2, Direction: CVDDirUp},
+		}},
+	}
+	got := CompareAroundVenueTiming([]AroundVenue{bn})
+	if got == nil {
+		t.Fatal("nil")
+	}
+	if got.LeaderMetric == AroundVenueMetricPrice {
+		t.Fatalf("1m price at 14:03 must not beat 5m OI sampled at 14:05: %+v", got)
+	}
+	if strings.Contains(got.Summary, "before") && strings.Contains(got.Summary, "price") {
+		t.Fatalf("must not claim a known OI-vs-price order: %q", got.Summary)
 	}
 }
 
