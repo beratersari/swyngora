@@ -158,6 +158,38 @@ func TestSimulateSharedBacktestBook_TP1FreesRemainingRisk(t *testing.T) {
 	}
 }
 
+func TestSimulateSharedBacktestBook_SameTimeEntryDoesNotTakeTP1Risk(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	t1 := t0.Add(4 * time.Hour)
+	// A uses the only 1% slot. TP1 at t1 frees it, but B fills at the same instant.
+	same := SimulateSharedBacktestBook(10000, 1, 1, []BacktestBookFill{
+		{Symbol: "ETHUSDT", Side: BacktestTradeSideLong, EntryAt: t0, ExitAt: t1.Add(time.Hour),
+			Entry: 100, StopLoss: 99, ExitPrice: 105, RangeExitPrice: 105, Leverage: 10,
+			HasExit: true, ClosedInRange: true, Outcome: BacktestTradeOutcomeTP1TP2,
+			HasScale: true, ScaleAt: t1, ScalePct: 0.5, ScalePrice: 101, StopToEntry: true},
+		{Symbol: "SOLUSDT", Side: BacktestTradeSideLong, EntryAt: t1,
+			Entry: 50, StopLoss: 49.5, ExitPrice: 50, RangeExitPrice: 50, Leverage: 10,
+			Outcome: BacktestTradeOutcomeOpen},
+	}, t0.Add(24*time.Hour))
+	if same.TradesTaken != 1 || same.SkippedNoRisk != 1 {
+		t.Fatalf("same-time fill must not take TP1 room: %+v", same)
+	}
+
+	later := SimulateSharedBacktestBook(10000, 1, 1, []BacktestBookFill{
+		{Symbol: "ETHUSDT", Side: BacktestTradeSideLong, EntryAt: t0, ExitAt: t1.Add(time.Hour),
+			Entry: 100, StopLoss: 99, ExitPrice: 105, RangeExitPrice: 105, Leverage: 10,
+			HasExit: true, ClosedInRange: true, Outcome: BacktestTradeOutcomeTP1TP2,
+			HasScale: true, ScaleAt: t1, ScalePct: 0.5, ScalePrice: 101, StopToEntry: true},
+		{Symbol: "SOLUSDT", Side: BacktestTradeSideLong, EntryAt: t1.Add(time.Minute),
+			Entry: 50, StopLoss: 49.5, ExitPrice: 50, RangeExitPrice: 50, Leverage: 10,
+			Outcome: BacktestTradeOutcomeOpen},
+	}, t0.Add(24*time.Hour))
+	if later.TradesTaken != 2 || later.SkippedNoRisk != 0 {
+		t.Fatalf("a later fill may use TP1 room: %+v", later)
+	}
+}
+
 func TestSimulateSharedBacktestBook_MaxOpenRisk(t *testing.T) {
 	t.Parallel()
 	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)

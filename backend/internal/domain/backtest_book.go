@@ -127,7 +127,9 @@ func NormalizeBacktestMaxOpenRiskPct(v float64) float64 {
 // Each taken trade is sized so a full stop loses about riskPct of current
 // mark-to-market equity (cash + open margin + open unrealized). Combined open
 // stop risk cannot exceed maxOpenRisk of that equity; skipped signals stay
-// skipped. When a fill closes, later signals can use the free risk.
+// skipped. When a fill closes or scales at TP1, later signals can use the free
+// risk. A new fill at the same timestamp as a TP1 scale does not take that
+// room — TP1 must have already printed.
 // RangeEndBalance marks still-open trades at the last in-range close.
 // AfterRangeBalance applies later TP/SL only; still-open trades stay marked in-range.
 func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []BacktestBookFill, rangeEnd time.Time) BacktestBook {
@@ -181,11 +183,19 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 		if !events[i].at.Equal(events[j].at) {
 			return events[i].at.Before(events[j].at)
 		}
-		if events[i].exit != events[j].exit {
-			return events[i].exit
+		// Same fill: scale before that fill's exit so TP1 is realized first.
+		if events[i].i == events[j].i {
+			ri, rj := sameFillEventRank(events[i].exit, events[i].scale), sameFillEventRank(events[j].exit, events[j].scale)
+			if ri != rj {
+				return ri < rj
+			}
+			return false
 		}
-		if events[i].scale != events[j].scale {
-			return events[i].scale
+		// Other fills: full exits first, then new entries, then TP1 scales.
+		// A same-time entry must not take risk that TP1 has not yet freed.
+		ri, rj := bookEventRank(events[i].exit, events[i].scale), bookEventRank(events[j].exit, events[j].scale)
+		if ri != rj {
+			return ri < rj
 		}
 		if !events[i].exit && !events[i].scale {
 			si, sj := fills[events[i].i].Score, fills[events[j].i].Score
@@ -371,6 +381,26 @@ func unleveredMove(side string, entry, exit float64) float64 {
 		return (entry - exit) / entry
 	}
 	return (exit - entry) / entry
+}
+
+func bookEventRank(exit, scale bool) int {
+	if exit {
+		return 0
+	}
+	if scale {
+		return 2
+	}
+	return 1
+}
+
+func sameFillEventRank(exit, scale bool) int {
+	if scale {
+		return 0
+	}
+	if exit {
+		return 1
+	}
+	return 2
 }
 
 func notionalPnL(f BacktestBookFill, notional float64, atRange bool) float64 {
