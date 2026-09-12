@@ -33,6 +33,7 @@ User → Orchestrator (create_agent)
 ## Behavior
 
 - Each `create_agent` model step retries the current provider (1 try + 3 retries, exponential backoff), then calls the other of ChatXAI / ChatOllama if that client can be built. Next step starts on the primary again. The CLI spinner / Process stream show `Retrying {model} (2/4)…`, `failed after 4 tries`, and `Falling back to {model}…`. If both fail, the CLI/serve error lists primary then fallback (model + exception). `analyze()` is still a bare `invoke` (no retry or fallback).
+- TTY CLI details **Activity** counts tool starts and **llm starts per model** that actually ran, not only the configured primary: `1 tool call · 5 llm calls grok-4.4 (low) · 3 llm calls qwen2.5 · 0:14 elapsed`. Grok appends `GROK_REASONING_EFFORT` in brackets (`none` / `low` / `medium` / `high` — whatever is in settings, including `none` from `.env`). Ollama has no effort setting, so no brackets. The same line is on the live bar and on the error-path details block.
 - The same middleware list includes stock `ModelCallLimitMiddleware` (`run_limit=6`, `exit_behavior="end"`) on the orchestrator **and** each specialist. A looping agent stops after 6 model steps with `Model call limits exceeded…` (Process: `Model call limit reached…`) instead of a recursion crash. Retries inside one step still count as one. `AI_MAX_ITERATIONS` only sizes LangGraph `recursion_limit`. `analyze()` / `debate()` / prefetch are not capped.
 - Read market tools (`GET` via `_HTTP`) raise `ToolTransientError` on timeout, connect failure, 429, and 5xx. The same `build_agent_middleware` list includes stock `ToolRetryMiddleware` (2 retries). `NoteToolError` (`on_tool_error`) logs `Retrying get_ticker (2/3)…` and `get_ticker failed after 3 tries` on the thinking trace only (same `status` channel as model retry). Attempts are counted per `tool_call_id`; one handler per chat turn. After the last attempt the tool still returns an `ERROR …` string. The tool column classifies the **final** v3 stream item per `tool_call_id` (`item.output` / `item.error`); an exhausted raise is `tool_error`, not a ✓. If every leaf tool in a specialist run failed, that specialist's return is prefixed `ERROR …` so the orchestrator line is `market_tape_agent failed`, not a tick. Paper/account `POST`/`PUT`/`PATCH`/`DELETE` and 4xx (except 429) never raise or auto-retry. Prefetch `get_ticker` swallows leftover exceptions so a tape refresh cannot abort the chat turn.
 - Market numbers must come from tools (ticker, candles, supply, holders, indicators, spot).
@@ -58,8 +59,9 @@ cd backend && go run ./cmd/server
 # Tab / Ctrl+F complete commands and cycle matching prompts; Ctrl+P / Ctrl+N
 # cycle the typed prefix (every matching history line plus matching commands
 # such as reset), or full history if the line is empty; Ctrl+U clears the
-# line (Ctrl+Y restores it). TTY shows a live activity bar while answering,
-# then details include a compact status line (tool calls, llm calls per model, elapsed)
+# line (Ctrl+Y restores it). TTY shows a live activity bar while answering;
+# details Activity is tool calls, llm calls per model (Grok: name (effort)),
+# and elapsed. Effort is GROK_REASONING_EFFORT (default low; none if .env says so).
 # (~/.swyngora/cli_history).
 cd ai && uv sync && source .venv/bin/activate
 export AI_LLM_PROVIDER=ollama   # or grok + XAI_API_KEY
