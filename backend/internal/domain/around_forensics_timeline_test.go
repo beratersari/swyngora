@@ -85,7 +85,7 @@ func TestBuildForensicsTimeline_Order(t *testing.T) {
 	if !strings.Contains(got.Summary, "open interest") || !strings.Contains(got.Summary, "Bybit") || !strings.Contains(got.Summary, "short liquidations") {
 		t.Fatalf("summary %q", got.Summary)
 	}
-	if !got.KnownUntil.Equal(at.Add(15 * time.Minute)) {
+	if !got.KnownUntil.Equal(at.Add(2 * time.Hour)) {
 		t.Fatalf("knownUntil %s", got.KnownUntil)
 	}
 }
@@ -96,39 +96,19 @@ func TestBuildForensicsTimeline_EmptyTape(t *testing.T) {
 	}
 }
 
-func TestForensicsTimelineKnownUntil_CompletedStopsAtDuring(t *testing.T) {
-	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
-	// Next-day review: do not pretend 14:30 was known at the move.
-	got := ForensicsTimelineKnownUntil(AroundWindow1h, AroundDuring15m, at, at.Add(26*time.Hour), false)
-	if !got.Equal(at.Add(15 * time.Minute)) {
-		t.Fatalf("got %s", got)
-	}
-}
-
-func TestForensicsTimelineKnownUntil_StillOpenUsesAsOf(t *testing.T) {
+func TestForensicsTimelineKnownUntil_UsesAsOf(t *testing.T) {
 	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
 	asOf := at.Add(10 * time.Minute)
-	got := ForensicsTimelineKnownUntil(AroundWindow1h, AroundDuring15m, at, asOf, false)
-	if !got.Equal(asOf) {
+	if got := ForensicsTimelineKnownUntil(asOf); !got.Equal(asOf) {
 		t.Fatalf("got %s", got)
 	}
-	later := at.Add(40 * time.Minute)
-	got = ForensicsTimelineKnownUntil(AroundWindow1h, AroundDuring15m, at, later, false)
-	if !got.Equal(later) {
-		t.Fatalf("later %s", got)
+	later := at.Add(26 * time.Hour)
+	if got := ForensicsTimelineKnownUntil(later); !got.Equal(later) {
+		t.Fatalf("old event %s", got)
 	}
 }
 
-func TestForensicsTimelineKnownUntil_ExplicitReplay(t *testing.T) {
-	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
-	asOf := at.Add(2 * time.Hour)
-	got := ForensicsTimelineKnownUntil(AroundWindow1h, AroundDuring15m, at, asOf, true)
-	if !got.Equal(asOf) {
-		t.Fatalf("got %s", got)
-	}
-}
-
-func TestBuildForensicsTimeline_HidesLaterPrintsOnOldEvent(t *testing.T) {
+func TestBuildForensicsTimeline_OldEventKeepsLaterPrints(t *testing.T) {
 	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
 	bn := AroundVenue{
 		Exchange:  ExchangeBinance,
@@ -152,14 +132,11 @@ func TestBuildForensicsTimeline_HidesLaterPrintsOnOldEvent(t *testing.T) {
 		},
 	}
 	got := BuildForensicsTimeline(r)
-	if !got.KnownUntil.Equal(at.Add(15 * time.Minute)) {
+	if !got.KnownUntil.Equal(at.Add(26 * time.Hour)) {
 		t.Fatalf("knownUntil %s", got.KnownUntil)
 	}
-	if len(got.Events) != 1 {
+	if len(got.Events) != 3 {
 		t.Fatalf("events=%d %+v", len(got.Events), got.Events)
-	}
-	if got.Events[0].Kind != ForensicsTimelinePrice || got.Events[0].Venue != "binance" {
-		t.Fatalf("%+v", got.Events[0])
 	}
 }
 

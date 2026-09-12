@@ -49,12 +49,16 @@ timeline stop there. Example: a 14:00 move checked `asOf=14:10` does
 not show a 14:30 liquidation or a Bybit start at 14:30. Checking again
 later (or passing a later `asOf`) can add those prints.
 
-When `asOf` is omitted:
+When `asOf` is omitted it is **now**. An old event reviewed later keeps
+prints that have already happened (a 14:30 liquidation stays on the
+clock). A 14:00 move checked at 14:10 still hides 14:30.
 
-| When you look | Timeline cutoff |
-|---|---|
-| Still inside the after window (event unfolding) | `now` — a refresh can add later prints |
-| After the around-window has closed (old event) | End of **during** — later prints are not treated as known at the event |
+A venue whose candles (or OI / taker bars) are **missing until later**
+does not get a start at that first sample. If Binance moved at 14:05
+and Bybit data only appears at 14:08, the tape does not say Bybit
+followed at 14:08 — that print is missing data, not a follow. A later
+impulse after those late bars are already on the tape can still be a
+follow.
 
 Informational only.
 
@@ -71,7 +75,8 @@ started, turned the other way, or went quiet. When both venues
 are present, `venueTiming` says whether they started together, which
 one printed first, and whether the other followed later or the move
 stayed on one venue. A venue that did not actually move is not given
-a start time. The first signal across price, open interest, and taker
+a start time. A venue whose tape is missing until later is not given
+a start at that first sample. The first signal across price, open interest, and taker
 flow is the `leader` (`leaderMetric` is `price` / `oi` / `takers`) —
 price-only can be misleading if the other venue's OI or takers moved
 earlier. An earlier OI or taker print is only treated as a precursor

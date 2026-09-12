@@ -58,6 +58,42 @@ func TestFindAroundPriceRunStart_QuietVenueHasNoStart(t *testing.T) {
 	}
 }
 
+func TestFindAroundPriceRunStart_LateTapeIsNotAStart(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	plan := aroundTestPlan(at)
+	var bars []AroundBar
+	px := 101.5
+	// Bybit candles missing until 14:08 — first print is already away.
+	for i := 8; i < 20; i++ {
+		t0 := at.Add(time.Duration(i) * time.Minute)
+		px += 0.1
+		bars = append(bars, AroundBar{Time: t0, Open: px, Close: px, High: px, Low: px})
+	}
+	got := FindAroundPriceRunStart(bars, plan)
+	if !got.IsZero() {
+		t.Fatalf("late tape start %s", got)
+	}
+}
+
+func TestFindAroundPriceRunStart_FollowAfterLateTapeIsObserved(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	plan := aroundTestPlan(at)
+	var bars []AroundBar
+	px := 100.0
+	// Tape appears at 14:08 quiet, then a real impulse at 14:12.
+	for i := 8; i < 20; i++ {
+		t0 := at.Add(time.Duration(i) * time.Minute)
+		if i >= 12 {
+			px = 101.2 + float64(i-12)*0.2
+		}
+		bars = append(bars, AroundBar{Time: t0, Open: px, Close: px, High: px, Low: px})
+	}
+	got := FindAroundPriceRunStart(bars, plan)
+	if got.Before(at.Add(11*time.Minute)) || got.After(at.Add(14*time.Minute)) {
+		t.Fatalf("observed follow %s", got)
+	}
+}
+
 func TestFindAroundPriceRunStart_FollowsInAfter(t *testing.T) {
 	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
 	plan := aroundTestPlan(at)
@@ -186,6 +222,36 @@ func TestCompareAroundVenueTiming_OIAndTakersBeforeLaggard(t *testing.T) {
 	}
 	if len(got.Before) < 3 {
 		t.Fatalf("before bits %+v", got.Before)
+	}
+}
+
+func TestCompareAroundVenueTiming_MissingTapeIsNotFollow(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	bn := AroundVenue{
+		Exchange: ExchangeBinance, MoveStart: at.Add(5 * time.Minute), TapeFrom: at,
+		Interval: string(Interval1m),
+		Phases: []AroundPhase{{
+			Phase: AroundPhaseDuring, Complete: true,
+			Price: AroundPrice{ChangePct: 1.6, Direction: CVDDirUp},
+		}},
+	}
+	by := AroundVenue{
+		Exchange: ExchangeBybit, MoveStart: at.Add(8 * time.Minute), TapeFrom: at.Add(8 * time.Minute),
+		Interval: string(Interval1m),
+		Phases: []AroundPhase{{
+			Phase: AroundPhaseDuring, Complete: true,
+			Price: AroundPrice{ChangePct: 1.2, Direction: CVDDirUp},
+		}},
+	}
+	got := CompareAroundVenueTiming([]AroundVenue{bn, by})
+	if got == nil || got.Agreement != AroundVenueBinanceOnly || got.Follow != AroundVenueFollowStayed {
+		t.Fatalf("%+v", got)
+	}
+	if strings.Contains(got.Summary, "Bybit followed") {
+		t.Fatalf("missing tape must not look like a follow: %q", got.Summary)
+	}
+	if !got.BybitStart.IsZero() {
+		t.Fatalf("bybit start %s", got.BybitStart)
 	}
 }
 

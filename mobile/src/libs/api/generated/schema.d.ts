@@ -1389,12 +1389,11 @@ export interface paths {
          *     dump. `timeline` is one clock of those prints in time order
          *     (OI, takers, venue price, follow-through, liquidations, options,
          *     sweeps). The timeline only includes prints known by `asOf`
-         *     (`timeline.knownUntil`). Omit `asOf` to use now while the after
-         *     window is still open, or the end of the during move when reviewing
-         *     a completed event — a later liquidation or other-venue print is
-         *     not treated as known at the event. Pass `asOf` to replay (for
-         *     example 14:10 on a 14:00 move) or to include later prints after
-         *     you check again. Same `venueTiming` path rule as `/around`: last
+         *     (`timeline.knownUntil`). Omit `asOf` to use now — an old event
+         *     keeps later prints that have already happened. Pass `asOf` to
+         *     replay (for example 14:10 on a 14:00 move). A venue whose tape
+         *     is missing until later is not treated as following at that first
+         *     sample. Same `venueTiming` path rule as `/around`: last
          *     OI/taker print much earlier than price omits continued / faded /
          *     reversed. Informational only.
          */
@@ -6936,7 +6935,7 @@ export interface components {
             summary?: string;
             /**
              * Format: date-time
-             * @description Latest time a timeline print may have — observer clock, or end of the during move when reviewing a completed event
+             * @description Latest time a timeline print may have — the observer clock (`asOf`, or now)
              */
             knownUntil?: string;
             events?: components["schemas"]["MarketForensicsTimelineEvent"][];
@@ -8879,7 +8878,7 @@ export interface operations {
                 symbol: string;
                 /** @description Event time (RFC3339 or unix ms) — start of the during window */
                 at: string;
-                /** @description Observer clock (RFC3339 or unix ms). Tape and timeline only include prints at or before this time. Must be at or after `at` and not in the future. Omit to use now while the after window is still open, or the end of the during move when reviewing a completed event. */
+                /** @description Observer clock (RFC3339 or unix ms). Tape and timeline only include prints at or before this time. Must be at or after `at` and not in the future. Omit to use now (old events keep later prints that have already happened). */
                 asOf?: string;
                 /** @description binance | bybit | all (default all = both + combined) */
                 exchange?: string;

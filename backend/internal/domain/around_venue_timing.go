@@ -32,7 +32,7 @@ const (
 	aroundVenueSameWindow = 2 * time.Minute
 	aroundVenueMinMove    = 0.20
 	aroundVenueOIMin      = 0.30
-	aroundVenueTakerTail = 5 * time.Minute
+	aroundVenueTakerTail  = 5 * time.Minute
 	// aroundVenueUntilFresh is how close the last OI sample must be to
 	// the price start before we will say continued / faded / reversed.
 	// Wider than one futures-history tick (5m) so a current print still
@@ -122,16 +122,68 @@ func FindAroundPriceRunStart(bars []AroundBar, plan AroundPlan) time.Time {
 		}
 	}
 	run := FilterAroundBars(bars, phaseFrom, searchTo)
+	var hit time.Time
 	if t := firstAroundRunBar(run, pre.Close, dir, thresh); !t.IsZero() {
-		return t
+		hit = t
+	} else if t := firstAroundRunBar(run, pre.Close, dir, 0); !t.IsZero() {
+		hit = t
+	} else if len(run) > 0 {
+		hit = run[0].Time.UTC()
 	}
-	if t := firstAroundRunBar(run, pre.Close, dir, 0); !t.IsZero() {
-		return t
+	if aroundStartIsTapeAppearance(bars, hit, phaseFrom, aroundPriceBarStep(bars)) {
+		return time.Time{}
 	}
-	if len(run) > 0 {
-		return run[0].Time.UTC()
+	return hit
+}
+
+// aroundPriceBarStep is the smallest positive gap between candle opens.
+func aroundPriceBarStep(bars []AroundBar) time.Duration {
+	var times []time.Time
+	for _, b := range bars {
+		if b.Time.IsZero() {
+			continue
+		}
+		times = append(times, b.Time.UTC())
 	}
-	return time.Time{}
+	if len(times) < 2 {
+		return time.Minute
+	}
+	sort.Slice(times, func(i, j int) bool { return times[i].Before(times[j]) })
+	var step time.Duration
+	for i := 1; i < len(times); i++ {
+		d := times[i].Sub(times[i-1])
+		if d > 0 && (step == 0 || d < step) {
+			step = d
+		}
+	}
+	if step <= 0 {
+		return time.Minute
+	}
+	return step
+}
+
+// aroundStartIsTapeAppearance is true when start is just the first bar
+// after a hole. We never saw this venue in the window before that print,
+// so we cannot say it started then versus earlier while data was missing.
+func aroundStartIsTapeAppearance(bars []AroundBar, start, coverFrom time.Time, step time.Duration) bool {
+	if start.IsZero() || coverFrom.IsZero() {
+		return false
+	}
+	if step <= 0 {
+		step = time.Minute
+	}
+	first := aroundFirstBar(bars, coverFrom, start.Add(step))
+	if first.Time.IsZero() {
+		first = aroundFirstBar(bars, coverFrom, start.Add(24*time.Hour))
+	}
+	if first.Time.IsZero() {
+		return true
+	}
+	if !first.Time.After(coverFrom.Add(step)) {
+		return false
+	}
+	// First few late bars are the tape appearing, not a dated start.
+	return !start.After(first.Time.Add(2 * step))
 }
 
 // aroundVenueLookbackStart is set only when price was already away from the
@@ -238,7 +290,13 @@ func FindAroundTakerRunStart(bars []AroundBar, plan AroundPlan) (time.Time, stri
 		}
 	}
 	if t := firstAroundTakerLean(FilterAroundBars(bars, searchFrom, searchTo), want); !t.IsZero() {
+		if aroundStartIsTapeAppearance(bars, t, searchFrom, aroundPriceBarStep(bars)) {
+			return time.Time{}, ""
+		}
 		return t, want
+	}
+	if aroundStartIsTapeAppearance(bars, searchFrom, searchFrom, aroundPriceBarStep(bars)) {
+		return time.Time{}, ""
 	}
 	return searchFrom.UTC(), want
 }
@@ -317,7 +375,43 @@ func FindAroundOIRunStart(snaps []FuturesSnapshot, plan AroundPlan) (time.Time, 
 	if hit.IsZero() {
 		return time.Time{}, ""
 	}
+	var sampleTimes []time.Time
+	for i := range snaps {
+		if !snaps[i].SampledAt.IsZero() {
+			sampleTimes = append(sampleTimes, snaps[i].SampledAt.UTC())
+		}
+	}
+	if aroundSampleIsTapeAppearance(sampleTimes, hit, plan.DuringFrom, 5*time.Minute) {
+		return time.Time{}, ""
+	}
 	return hit, dir
+}
+
+// aroundSampleIsTapeAppearance is the futures-sample form of
+// aroundStartIsTapeAppearance (first print after a hole is not a start).
+func aroundSampleIsTapeAppearance(samples []time.Time, start, coverFrom time.Time, step time.Duration) bool {
+	if start.IsZero() || coverFrom.IsZero() {
+		return false
+	}
+	if step <= 0 {
+		step = 5 * time.Minute
+	}
+	var first time.Time
+	for _, t := range samples {
+		if t.Before(coverFrom) {
+			continue
+		}
+		if first.IsZero() || t.Before(first) {
+			first = t
+		}
+	}
+	if first.IsZero() {
+		return true
+	}
+	if !first.After(coverFrom.Add(step)) {
+		return false
+	}
+	return !start.After(first.Add(2 * step))
 }
 
 type aroundOISpan struct {
@@ -590,6 +684,15 @@ func CompareAroundVenueTiming(venues []AroundVenue) *AroundVenueTiming {
 		by = time.Time{}
 		byVen.MoveStart = time.Time{}
 	}
+	// First candle after a hole is missing tape, not a follow.
+	if aroundVenueStartFromMissingTape(byVen, bn) {
+		by = time.Time{}
+		byVen.MoveStart = time.Time{}
+	}
+	if aroundVenueStartFromMissingTape(bnVen, by) {
+		bn = time.Time{}
+		bnVen.MoveStart = time.Time{}
+	}
 
 	if bn.IsZero() && by.IsZero() && bnVen.OIStart.IsZero() && byVen.OIStart.IsZero() &&
 		bnVen.TakerStart.IsZero() && byVen.TakerStart.IsZero() {
@@ -708,6 +811,27 @@ func CompareAroundVenueTiming(venues []AroundVenue) *AroundVenueTiming {
 	appendAroundVenueFirstSignal(out, bnVen, byVen, by)
 	appendAroundVenueBeforeSummary(out, "Binance", bn)
 	return out
+}
+
+// aroundVenueStartFromMissingTape is true when this venue's start is
+// the first bar we have, and that bar is after the other venue already
+// moved — we cannot say it followed then versus earlier while data was missing.
+func aroundVenueStartFromMissingTape(v AroundVenue, peerStart time.Time) bool {
+	if v.MoveStart.IsZero() || v.TapeFrom.IsZero() || peerStart.IsZero() {
+		return false
+	}
+	step := aroundIntervalOrMinute(v.Interval)
+	if !v.TapeFrom.After(peerStart) {
+		return false
+	}
+	return !v.MoveStart.After(v.TapeFrom.Add(2 * step))
+}
+
+func aroundIntervalOrMinute(raw string) time.Duration {
+	if d := IntervalDuration(CandleInterval(strings.ToLower(strings.TrimSpace(raw)))); d > 0 {
+		return d
+	}
+	return time.Minute
 }
 
 func aroundVenueImpulseOf(v AroundVenue) aroundVenueImpulse {

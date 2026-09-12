@@ -38,39 +38,14 @@ type ForensicsTimelineEvent struct {
 }
 
 // ForensicsTimelineKnownUntil is the latest print the timeline may show.
-//
-// When asOfExplicit is true, the caller asked for that observer clock (replay).
-// Otherwise a completed around-window (asOf at or after the unclipped after
-// end) stops at the end of the during move so later liquidations or other-
-// venue prints are not treated as known at the event. While the after
-// window is still open, asOf (usually now) is used so a later refresh can
-// add prints that have since occurred.
-func ForensicsTimelineKnownUntil(window, during string, at, asOf time.Time, asOfExplicit bool) time.Time {
-	asOf = asOf.UTC()
+// That is the observer clock (asOf, or now). Prints after this time were
+// not visible yet. Reviewing an old event with asOf=now keeps later
+// prints that have already happened.
+func ForensicsTimelineKnownUntil(asOf time.Time) time.Time {
 	if asOf.IsZero() {
-		asOf = time.Now().UTC()
+		return time.Now().UTC()
 	}
-	at = at.UTC()
-	if at.IsZero() {
-		return asOf
-	}
-	_, winDur, err := ParseAroundWindow(window)
-	if err != nil {
-		return asOf
-	}
-	_, durDur, err := ParseAroundDuring(during)
-	if err != nil {
-		return asOf
-	}
-	duringTo := at.Add(durDur)
-	afterTo := duringTo.Add(winDur)
-	if asOfExplicit {
-		return asOf
-	}
-	if !asOf.Before(afterTo) {
-		return duringTo
-	}
-	return asOf
+	return asOf.UTC()
 }
 
 func timelineEventKnown(at, cutoff time.Time) bool {
@@ -90,7 +65,7 @@ func BuildForensicsTimeline(r ForensicsReport) ForensicsTimeline {
 	if r.Tape == nil {
 		return ForensicsTimeline{}
 	}
-	cutoff := ForensicsTimelineKnownUntil(r.Window, r.During, r.At, r.AsOf, r.AsOfExplicit)
+	cutoff := ForensicsTimelineKnownUntil(r.AsOf)
 	plan, _ := ResolveAroundPlan(r.Window, r.During, r.At, cutoff)
 	if plan.At.IsZero() {
 		plan.At = r.At.UTC()

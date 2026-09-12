@@ -218,13 +218,16 @@ type AroundChange struct {
 
 // AroundVenue is one exchange's (or combined) around-the-move read.
 type AroundVenue struct {
-	Exchange   Exchange
-	Symbol     string
-	Interval   string
-	Phases     []AroundPhase
-	Changes    []AroundChange
-	Events     []AroundEvent
-	MoveStart  time.Time
+	Exchange  Exchange
+	Symbol    string
+	Interval  string
+	Phases    []AroundPhase
+	Changes   []AroundChange
+	Events    []AroundEvent
+	MoveStart time.Time
+	// TapeFrom is the first candle open we have in the around span.
+	// A start at this clock after a hole is missing tape, not a follow.
+	TapeFrom   time.Time
 	OIStart    time.Time
 	OIDir      string
 	OIUntil    string
@@ -463,6 +466,9 @@ func BuildAroundVenue(ex Exchange, symbol string, bars []AroundBar, plan AroundP
 		out.Events = append(out.Events, ph.Events...)
 	}
 	out.Changes = CompareAroundPhases(out.Phases)
+	if first := aroundFirstBar(bars, plan.From, plan.To); !first.Time.IsZero() {
+		out.TapeFrom = first.Time.UTC()
+	}
 	out.MoveStart = FindAroundPriceRunStart(bars, plan)
 	out.TakerStart, out.TakerDir = FindAroundTakerRunStart(bars, plan)
 	out.TakerUntil = MarkAroundTakerUntil(bars, out.TakerStart, out.TakerDir, AroundVenueUntilPrice(out.MoveStart, plan), interval)
