@@ -175,6 +175,8 @@
     "stopKeep": "Orijinal stop kalsın",
     "stopToEntry": "Stopu girişe çek",
     "stopTrail": "Sürüklenen stop",
+    "feePct": "Komisyon %",
+    "slipPct": "Slippage %",
     "stopMovedToEntry": "Kalan stop girişe çekildi",
     "outcome": "Sonuç",
     "outcomeTp": "Önce kâr al",

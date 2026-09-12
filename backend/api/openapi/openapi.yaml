@@ -6752,6 +6752,8 @@ paths:
                 useTp2: { type: boolean, description: Close part of the fill at TP1 and leave the rest for TP2 }
                 tp1ClosePct: { type: number, description: Share of the position closed at TP1 when useTp2 is true (default 50) }
                 stopAfterTp1: { type: string, enum: [keep, entry, trail], description: After TP1, keep the original stop, move it to the fill, or trail it with price (default entry) }
+                feePct: { type: number, description: Taker fee percent on each fill including TP1 slices (0.10 = 0.10%). Default 0 }
+                slipPct: { type: number, description: Adverse slippage percent on each fill (0.05 = 0.05%). Default 0 }
                 rangeStart: { type: string, format: date-time }
                 rangeEnd: { type: string, format: date-time }
       responses:
@@ -9397,6 +9399,8 @@ components:
         useTp2: { type: boolean }
         tp1ClosePct: { type: number }
         stopAfterTp1: { type: string, enum: [keep, entry, trail] }
+        feePct: { type: number, description: Taker fee percent applied to this fill }
+        slipPct: { type: number, description: Adverse slippage percent applied to this fill }
         trailStop: { type: number, description: Latest runner stop after a trail ratchet }
         trailStops:
           type: array

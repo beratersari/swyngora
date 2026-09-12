@@ -89,6 +89,7 @@ type BacktestBookFill struct {
 	ScalePrice     float64
 	StopToEntry    bool
 	TrailStops     []BacktestTrailStop
+	FeeRate        float64
 }
 
 // NormalizeBacktestStartBalance applies the Lab default and a hard cap.
@@ -289,7 +290,7 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 			}
 			closedN := p.notional * pct
 			closedM := p.margin * pct
-			cash += closedM + notionalPnLPrice(f, closedN, f.ScalePrice)
+			cash += closedM + notionalPnLPrice(f, closedN, f.ScalePrice) - fillFee(closedN, f.Entry, f.ScalePrice, f.FeeRate)
 			p.notional -= closedN
 			p.margin -= closedM
 			if f.StopToEntry && len(f.TrailStops) == 0 {
@@ -314,7 +315,7 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 					delete(openCoin, p.key)
 				}
 			}
-			cash += p.margin + notionalPnL(fills[e.i], p.notional, false)
+			cash += p.margin + notionalPnL(fills[e.i], p.notional, false) - fillFee(p.notional, fills[e.i].Entry, fills[e.i].ExitPrice, fills[e.i].FeeRate)
 			if fills[e.i].ClosedInRange {
 				out.ClosedInRange++
 			} else {
@@ -357,6 +358,7 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 			continue
 		}
 		cash -= margin
+		cash -= notional * f.FeeRate
 		open[e.i] = pos{margin: margin, notional: notional, risk: newRisk, stop: f.StopLoss, i: e.i, key: coin}
 		if coin != "|" {
 			openCoin[coin]++
@@ -458,6 +460,16 @@ func notionalPnLPrice(f BacktestBookFill, notional, px float64) float64 {
 	return notional * unleveredMove(f.Side, f.Entry, px)
 }
 
+func fillFee(notional, entry, px, feeRate float64) float64 {
+	if notional <= 0 || feeRate <= 0 {
+		return 0
+	}
+	if entry > 0 && px > 0 {
+		return notional * (px / entry) * feeRate
+	}
+	return notional * feeRate
+}
+
 // BookFillsFromSignals keeps trades that actually filled after the signal bar closed.
 func BookFillsFromSignals(sigs []ScannerBacktestSignal, rangeEnd time.Time) []BacktestBookFill {
 	out := make([]BacktestBookFill, 0, len(sigs))
@@ -506,6 +518,9 @@ func BookFillsFromSignals(sigs []ScannerBacktestSignal, rangeEnd time.Time) []Ba
 		}
 		if len(tr.TrailStops) > 0 {
 			fill.TrailStops = append([]BacktestTrailStop(nil), tr.TrailStops...)
+		}
+		if tr.FeePct > 0 {
+			fill.FeeRate = tr.FeePct / 100
 		}
 		out = append(out, fill)
 	}

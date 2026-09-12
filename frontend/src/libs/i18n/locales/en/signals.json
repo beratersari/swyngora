@@ -175,6 +175,8 @@
     "stopKeep": "Keep original stop",
     "stopToEntry": "Move stop to entry",
     "stopTrail": "Trailing stop",
+    "feePct": "Fee %",
+    "slipPct": "Slippage %",
     "stopMovedToEntry": "Runner stop moved to entry",
     "outcome": "Result",
     "outcomeTp": "Take profit first",

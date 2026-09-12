@@ -252,6 +252,11 @@ function TradeDetail({ trade }: { trade: ScannerBacktestTrade }) {
           {t('signals:lab.target')}: {formatPrice(trade.takeProfit)}
         </Text>
       )}
+      {trade.feePct || trade.slipPct ? (
+        <Text variant="caption" color="secondary">
+          {t('signals:lab.feePct')} {trade.feePct ?? 0} · {t('signals:lab.slipPct')} {trade.slipPct ?? 0}
+        </Text>
+      ) : null}
       {trade.stopAfterTp1 === 'trail' && trade.trailStop ? (
         <Text variant="caption" color="secondary" mono>
           {t('signals:lab.stopTrail')}: {formatPrice(trade.trailStop)}
@@ -315,6 +320,8 @@ export function SignalsBacktestPanel({
   const [useTp2, setUseTp2] = useState(true);
   const [tp1ClosePct, setTp1ClosePct] = useState(50);
   const [stopAfterTp1, setStopAfterTp1] = useState<'keep' | 'entry' | 'trail'>('entry');
+  const [feePct, setFeePct] = useState(0.1);
+  const [slipPct, setSlipPct] = useState(0.05);
   const [rangeKey, setRangeKey] = useState(rangeOptions[1]?.value ?? rangeOptions[0]?.value ?? '90d');
 
   const ruleById = useMemo(() => new Map(rules.map((r) => [r.id, r])), [rules]);
@@ -691,6 +698,34 @@ export function SignalsBacktestPanel({
         ) : null}
         <Field>
           <Text variant="caption" color="secondary">
+            {t('signals:lab.feePct')}
+          </Text>
+          <InputNumber
+            min={0}
+            max={2}
+            step={0.01}
+            value={feePct}
+            aria-label={t('signals:lab.feePct')}
+            style={{ minWidth: 100 }}
+            onChange={(v) => setFeePct(typeof v === 'number' ? v : 0.1)}
+          />
+        </Field>
+        <Field>
+          <Text variant="caption" color="secondary">
+            {t('signals:lab.slipPct')}
+          </Text>
+          <InputNumber
+            min={0}
+            max={2}
+            step={0.01}
+            value={slipPct}
+            aria-label={t('signals:lab.slipPct')}
+            style={{ minWidth: 100 }}
+            onChange={(v) => setSlipPct(typeof v === 'number' ? v : 0.05)}
+          />
+        </Field>
+        <Field>
+          <Text variant="caption" color="secondary">
             {t('signals:lab.range')}
           </Text>
           <Select
@@ -716,6 +751,8 @@ export function SignalsBacktestPanel({
               useTp2,
               tp1ClosePct: useTp2 ? tp1ClosePct : undefined,
               stopAfterTp1: useTp2 ? stopAfterTp1 : undefined,
+              feePct,
+              slipPct,
               symbol: watchlistRun ? undefined : symbol.trim().toUpperCase(),
               exchange: watchlistRun ? undefined : (exchange as MarketExchange),
               rangeKey,

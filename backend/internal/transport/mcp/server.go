@@ -193,7 +193,7 @@ type DataPort interface {
 	UpdateScannerRule(ctx context.Context, args map[string]any) (json.RawMessage, error)
 	DeleteScannerRule(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListScannerResults(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
-	StartBacktest(ctx context.Context, clientID, ruleID, profileID, exchange, symbol, rangeStart, rangeEnd string, startingBalance, riskPct, maxOpenRiskPct float64, useTP2 bool, tp1ClosePct float64, stopAfterTP1 string) (json.RawMessage, error)
+	StartBacktest(ctx context.Context, clientID, ruleID, profileID, exchange, symbol, rangeStart, rangeEnd string, startingBalance, riskPct, maxOpenRiskPct float64, useTP2 bool, tp1ClosePct float64, stopAfterTP1 string, feePct, slipPct float64) (json.RawMessage, error)
 	ListBacktests(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	GetBacktest(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	CancelBacktest(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -3780,6 +3780,8 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithBoolean("useTp2", mcp.Description("When true, close tp1ClosePct at TP1 and leave the rest for TP2. Default false (TP1 only).")),
 		mcp.WithNumber("tp1ClosePct", mcp.Description("Share of the position closed at TP1 when useTp2 is true (default 50).")),
 		mcp.WithString("stopAfterTp1", mcp.Description("After TP1: keep the original stop, entry to move it to the fill, or trail to ratchet with price and never give it back (default entry).")),
+		mcp.WithNumber("feePct", mcp.Description("Taker fee percent on each fill, including TP1 slices (e.g. 0.10 = 0.10%). Default 0.")),
+		mcp.WithNumber("slipPct", mcp.Description("Adverse slippage percent on each fill (e.g. 0.05 = 0.05%). Default 0.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -3797,7 +3799,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if scope := strings.TrimSpace(req.GetString("scope", "")); strings.EqualFold(scope, domain.BacktestScopeWatchlist) && symbol == "" {
 			symbol = domain.BacktestWatchlistSymbol
 		}
-		raw, err := api.StartBacktest(ctx, clientID, req.GetString("ruleId", ""), req.GetString("profileId", ""), req.GetString("exchange", "binance"), symbol, start, end, req.GetFloat("startingBalance", 0), req.GetFloat("riskPct", 0), req.GetFloat("maxOpenRiskPct", 0), req.GetBool("useTp2", false), req.GetFloat("tp1ClosePct", 0), req.GetString("stopAfterTp1", ""))
+		raw, err := api.StartBacktest(ctx, clientID, req.GetString("ruleId", ""), req.GetString("profileId", ""), req.GetString("exchange", "binance"), symbol, start, end, req.GetFloat("startingBalance", 0), req.GetFloat("riskPct", 0), req.GetFloat("maxOpenRiskPct", 0), req.GetBool("useTp2", false), req.GetFloat("tp1ClosePct", 0), req.GetString("stopAfterTp1", ""), req.GetFloat("feePct", 0), req.GetFloat("slipPct", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

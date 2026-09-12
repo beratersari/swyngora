@@ -111,6 +111,8 @@ export type ScannerBacktestTrade = {
   stopAfterTp1?: 'keep' | 'entry' | 'trail';
   stopMovedToEntry?: boolean;
   trailStop?: number;
+  feePct?: number;
+  slipPct?: number;
   outcome: ScannerBacktestTradeOutcome;
   exitPrice?: number;
   pnlPct: number;
@@ -172,6 +174,8 @@ export type StartScannerBacktestArg = {
   useTp2?: boolean;
   tp1ClosePct?: number;
   stopAfterTp1?: 'keep' | 'entry' | 'trail';
+  feePct?: number;
+  slipPct?: number;
   exchange?: 'binance' | 'coinbase' | 'bybit' | 'nasdaq' | 'bist';
   rangeStart: string;
   rangeEnd: string;

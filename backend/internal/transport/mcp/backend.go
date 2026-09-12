@@ -4282,7 +4282,7 @@ func backtestMap(job *domain.ScannerBacktest) map[string]any {
 	return m
 }
 
-func (b *Backend) StartBacktest(ctx context.Context, clientID, ruleID, profileID, exchange, symbol, rangeStart, rangeEnd string, startingBalance, riskPct, maxOpenRiskPct float64, useTP2 bool, tp1ClosePct float64, stopAfterTP1 string) (json.RawMessage, error) {
+func (b *Backend) StartBacktest(ctx context.Context, clientID, ruleID, profileID, exchange, symbol, rangeStart, rangeEnd string, startingBalance, riskPct, maxOpenRiskPct float64, useTP2 bool, tp1ClosePct float64, stopAfterTP1 string, feePct, slipPct float64) (json.RawMessage, error) {
 	if b.Scanner == nil {
 		return nil, fmt.Errorf("%w: scanner not configured", domain.ErrUpstream)
 	}
@@ -4304,6 +4304,7 @@ func (b *Backend) StartBacktest(ctx context.Context, clientID, ruleID, profileID
 		ClientID: clientID, RuleID: ruleID, ProfileID: profileID,
 		Exchange: exchange, Symbol: symbol, StartingBalance: startingBalance, RiskPct: riskPct, MaxOpenRiskPct: maxOpenRiskPct,
 		UseTP2: useTP2, TP1ClosePct: tp1ClosePct, StopAfterTP1: stopAfterTP1,
+		FeePct: feePct, SlipPct: slipPct,
 		RangeStart: start.UTC(), RangeEnd: end.UTC(),
 	})
 	if err != nil {

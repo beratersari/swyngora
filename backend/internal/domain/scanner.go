@@ -587,6 +587,8 @@ type scannerRuleSnapshot struct {
 	UseTP2         bool     `json:"useTp2,omitempty"`
 	TP1ClosePct    float64  `json:"tp1ClosePct,omitempty"`
 	StopAfterTP1   string   `json:"stopAfterTp1,omitempty"`
+	FeePct         float64  `json:"feePct,omitempty"`
+	SlipPct        float64  `json:"slipPct,omitempty"`
 }
 
 // EncodeScannerRuleSnapshot freezes rule params for a backtest job.
@@ -612,6 +614,7 @@ func EncodeScannerRuleSnapshotScale(r ScannerRule, scale BacktestScale) (string,
 		MAFastPeriod: r.MAFastPeriod, MASlowPeriod: r.MASlowPeriod, MADirection: r.MADirection,
 		VolumeLookback: r.VolumeLookback, VolumeMinRatio: r.VolumeMinRatio,
 		UseTP2: scale.UseTP2, TP1ClosePct: scale.TP1ClosePct, StopAfterTP1: scale.StopAfterTP1,
+		FeePct: scale.FeePct, SlipPct: scale.SlipPct,
 	})
 	if err != nil {
 		return "", err

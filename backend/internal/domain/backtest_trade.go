@@ -68,6 +68,8 @@ type BacktestTrade struct {
 	TP1HitUnknown    bool                `json:"tp1HitTimeUnknown,omitempty"`
 	TP1KnownAt       *time.Time          `json:"tp1KnownAt,omitempty"`
 	RemainderPct     float64             `json:"remainderPct,omitempty"`
+	FeePct           float64             `json:"feePct,omitempty"`
+	SlipPct          float64             `json:"slipPct,omitempty"`
 	Marks            []BacktestPriceMark `json:"marks,omitempty"`
 }
 
@@ -231,13 +233,17 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 	if nextOpen <= 0 {
 		return nil
 	}
-	entry = nextOpen
-	plan := resolveScalePlan(side, entry, sl, levels, opts.Scale)
+	rawOpen := nextOpen
+	plan := resolveScalePlan(side, rawOpen, sl, levels, opts.Scale)
 	lev := clampBacktestLeverage(levels)
+	_, slipRate := opts.Scale.costRates()
+	entry = labSlip(side, true, rawOpen, slipRate)
+	fill := newLabFill(side, entry, lev, opts.Scale)
 	out := &BacktestTrade{
 		Side: side, Leverage: lev, Entry: round8(entry),
 		StopLoss: round8(sl), TakeProfit: round8(plan.finalTP),
 		Outcome: BacktestTradeOutcomeOpen,
+		FeePct:  fill.fee * 100, SlipPct: fill.slip * 100,
 	}
 	if plan.tp1 > 0 {
 		out.TakeProfit1 = round8(plan.tp1)
@@ -261,33 +267,34 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 	}
 	out.Marks = appendBacktestMark(out.Marks, bars[entryIdx].OpenTime, entry)
 
-	if hit := throughAtOpenPrice(side, entry, sl, plan.tp1); hit == BacktestTradeOutcomeSL {
-		return finishThroughOpen(out, hit, entry)
+	if hit := throughAtOpenPrice(side, rawOpen, sl, plan.tp1); hit == BacktestTradeOutcomeSL {
+		return finishThroughOpen(out, hit, rawOpen, fill)
 	}
 	if plan.use2 {
-		if throughAtOpenPrice(side, entry, sl, plan.tp2) == BacktestTradeOutcomeTP {
-			return finishThroughOpen(out, BacktestTradeOutcomeTP, entry)
+		if throughAtOpenPrice(side, rawOpen, sl, plan.tp2) == BacktestTradeOutcomeTP {
+			return finishThroughOpen(out, BacktestTradeOutcomeTP, rawOpen, fill)
 		}
-		if throughAtOpenPrice(side, entry, sl, plan.tp1) == BacktestTradeOutcomeTP {
-			applyTP1Scale(out, entry, entry, out.EnteredAt, false, out.EnteredAt, plan)
+		if throughAtOpenPrice(side, rawOpen, sl, plan.tp1) == BacktestTradeOutcomeTP {
+			applyTP1Scale(out, rawOpen, entry, out.EnteredAt, false, out.EnteredAt, plan, fill)
 			if plan.stopToEntry {
 				out.StopMovedToEntry = true
 			}
 		}
-	} else if hit := throughAtOpenPrice(side, entry, sl, plan.tp1); hit != "" {
-		return finishThroughOpen(out, hit, entry)
+	} else if hit := throughAtOpenPrice(side, rawOpen, sl, plan.tp1); hit != "" {
+		return finishThroughOpen(out, hit, rawOpen, fill)
 	}
 
 	rangeEnd := opts.RangeEnd.UTC()
-	markRange := func(px float64) {
-		if px <= 0 {
+	markRange := func(raw float64) {
+		if raw <= 0 {
 			return
 		}
+		px := fill.slipOut(raw)
 		out.RangeExitPrice = round8(px)
 		if out.TP1ExitPrice > 0 && plan.use2 && plan.closePct < 1 {
-			out.RangePnLPct = scaledPnL(side, entry, out.TP1ExitPrice, px, plan.closePct, lev)
+			out.RangePnLPct = fill.mark(px, plan.closePct, out.TP1PnLPct)
 		} else {
-			out.RangePnLPct = LeveragedPnLPct(side, entry, px, lev)
+			out.RangePnLPct = fill.mark(px, 0, 0)
 		}
 	}
 	phase := 1
@@ -335,10 +342,10 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 				continue
 			}
 			if touch.hit == BacktestTradeOutcomeSL {
-				applyTouchExit(out, touch, bar, bars, j, entryIdx, side, entry, lev, rangeEnd, spansEnd, opts.Interval, markRange)
+				applyTouchExit(out, touch, bar, bars, j, entryIdx, side, entry, lev, rangeEnd, spansEnd, opts.Interval, markRange, fill)
 				return out
 			}
-			applyTP1Scale(out, touch.price, entry, touchTime(touch), touch.at.IsZero(), knownByOrBar(touch, bar, bars, j, opts.Interval), plan)
+			applyTP1Scale(out, touch.price, entry, touchTime(touch), touch.at.IsZero(), knownByOrBar(touch, bar, bars, j, opts.Interval), plan, fill)
 			phase = 2
 			activeSL = startRunnerStop(side, sl, entry, bar, plan)
 			if plan.trail {
@@ -359,7 +366,7 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 				}
 				continue
 			}
-			applyRemainderExit(out, rem, bar, bars, j, entryIdx, side, entry, lev, rangeEnd, spansEnd, opts.Interval, plan, markRange)
+			applyRemainderExit(out, rem, bar, bars, j, entryIdx, side, entry, lev, rangeEnd, spansEnd, opts.Interval, plan, markRange, fill)
 			return out
 		}
 
@@ -372,9 +379,9 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 			continue
 		}
 		if phase == 2 {
-			applyRemainderExit(out, touch, bar, bars, j, entryIdx, side, entry, lev, rangeEnd, spansEnd, opts.Interval, plan, markRange)
+			applyRemainderExit(out, touch, bar, bars, j, entryIdx, side, entry, lev, rangeEnd, spansEnd, opts.Interval, plan, markRange, fill)
 		} else {
-			applyTouchExit(out, touch, bar, bars, j, entryIdx, side, entry, lev, rangeEnd, spansEnd, opts.Interval, markRange)
+			applyTouchExit(out, touch, bar, bars, j, entryIdx, side, entry, lev, rangeEnd, spansEnd, opts.Interval, markRange, fill)
 		}
 		return out
 	}
@@ -392,16 +399,16 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 	if exit <= 0 {
 		exit = entry
 	}
-	out.ExitPrice = round8(exit)
+	out.ExitPrice = round8(fill.slipOut(exit))
 	out.BarsHeld = len(bars) - 1 - entryIdx
 	if out.BarsHeld < 0 {
 		out.BarsHeld = 0
 	}
 	if phase == 2 {
 		out.Outcome = BacktestTradeOutcomeTP1Open
-		out.PnLPct = scaledPnL(side, entry, out.TP1ExitPrice, exit, plan.closePct, lev)
+		out.PnLPct = fill.mark(fill.slipOut(exit), plan.closePct, out.TP1PnLPct)
 	} else {
-		out.PnLPct = LeveragedPnLPct(side, entry, exit, lev)
+		out.PnLPct = fill.mark(fill.slipOut(exit), 0, 0)
 	}
 	if out.RangeExitPrice <= 0 {
 		markRange(exit)
@@ -409,21 +416,23 @@ func SimulateBacktestTradeOpts(bars []OHLC, signalIdx int, side string, levels S
 	return out
 }
 
-func finishThroughOpen(out *BacktestTrade, hit string, px float64) *BacktestTrade {
+func finishThroughOpen(out *BacktestTrade, hit string, raw float64, fill labFill) *BacktestTrade {
+	px := fill.slipOut(raw)
 	out.Outcome = hit
 	out.ExitPrice = round8(px)
-	out.PnLPct = 0
+	out.PnLPct = fill.slice(px, 1)
 	out.BarsHeld = 0
 	out.HitAt = out.EnteredAt
 	out.ClosedKnownAt = out.EnteredAt
 	out.RangeExitPrice = out.ExitPrice
-	out.RangePnLPct = 0
+	out.RangePnLPct = out.PnLPct
 	return out
 }
 
-func applyTP1Scale(out *BacktestTrade, px, entry float64, at *time.Time, unknown bool, knownBy *time.Time, plan scalePlan) {
+func applyTP1Scale(out *BacktestTrade, raw, entry float64, at *time.Time, unknown bool, knownBy *time.Time, plan scalePlan, fill labFill) {
+	px := fill.slipOut(raw)
 	out.TP1ExitPrice = round8(px)
-	out.TP1PnLPct = LeveragedPnLPct(out.Side, entry, px, out.Leverage)
+	out.TP1PnLPct = fill.slice(px, plan.closePct)
 	out.TP1HitAt = at
 	out.TP1HitUnknown = unknown
 	out.TP1KnownAt = knownBy
@@ -487,13 +496,14 @@ func moreFavorable(side string, a, b float64) bool {
 	return a > b
 }
 
-func applyTouchExit(out *BacktestTrade, touch firstTouch, bar OHLC, bars []OHLC, j, entryIdx int, side string, entry float64, lev int, rangeEnd time.Time, spansEnd bool, iv CandleInterval, markRange func(float64)) {
+func applyTouchExit(out *BacktestTrade, touch firstTouch, bar OHLC, bars []OHLC, j, entryIdx int, side string, entry float64, lev int, rangeEnd time.Time, spansEnd bool, iv CandleInterval, markRange func(float64), fill labFill) {
 	stampTouch(out, touch, bar, bars, j, iv)
 	hitInRange := touchInRange(out, touch, rangeEnd, spansEnd)
+	px := fill.slipOut(touch.price)
 	out.Outcome = touch.hit
-	out.ExitPrice = round8(touch.price)
+	out.ExitPrice = round8(px)
 	out.BarsHeld = j - entryIdx
-	out.PnLPct = LeveragedPnLPct(side, entry, touch.price, lev)
+	out.PnLPct = fill.slice(px, 1)
 	if !hitInRange {
 		out.ClosedAfterRange = true
 	} else {
@@ -501,7 +511,7 @@ func applyTouchExit(out *BacktestTrade, touch firstTouch, bar OHLC, bars []OHLC,
 	}
 }
 
-func applyRemainderExit(out *BacktestTrade, touch firstTouch, bar OHLC, bars []OHLC, j, entryIdx int, side string, entry float64, lev int, rangeEnd time.Time, spansEnd bool, iv CandleInterval, plan scalePlan, markRange func(float64)) {
+func applyRemainderExit(out *BacktestTrade, touch firstTouch, bar OHLC, bars []OHLC, j, entryIdx int, side string, entry float64, lev int, rangeEnd time.Time, spansEnd bool, iv CandleInterval, plan scalePlan, markRange func(float64), fill labFill) {
 	stampTouch(out, touch, bar, bars, j, iv)
 	hitInRange := touchInRange(out, touch, rangeEnd, spansEnd)
 	if touch.hit == BacktestTradeOutcomeTP {
@@ -509,9 +519,10 @@ func applyRemainderExit(out *BacktestTrade, touch firstTouch, bar OHLC, bars []O
 	} else {
 		out.Outcome = BacktestTradeOutcomeTP1SL
 	}
-	out.ExitPrice = round8(touch.price)
+	px := fill.slipOut(touch.price)
+	out.ExitPrice = round8(px)
 	out.BarsHeld = j - entryIdx
-	out.PnLPct = scaledPnL(side, entry, out.TP1ExitPrice, touch.price, plan.closePct, lev)
+	out.PnLPct = round1(out.TP1PnLPct + fill.slice(px, 1-plan.closePct))
 	if !hitInRange {
 		out.ClosedAfterRange = true
 	} else {

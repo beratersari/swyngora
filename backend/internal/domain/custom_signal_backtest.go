@@ -32,6 +32,8 @@ type customProfileSnapshot struct {
 	UseTP2          bool               `json:"useTp2,omitempty"`
 	TP1ClosePct     float64            `json:"tp1ClosePct,omitempty"`
 	StopAfterTP1    string             `json:"stopAfterTp1,omitempty"`
+	FeePct          float64            `json:"feePct,omitempty"`
+	SlipPct         float64            `json:"slipPct,omitempty"`
 }
 
 // EncodeCustomProfileSnapshot freezes mix weights for a backtest job.
@@ -71,6 +73,7 @@ func encodeCustomProfileSnapshot(name string, w CustomSignalWeights, scope strin
 		Weights: pct, Threshold: th, Scope: scope, Markets: markets,
 		StartingBalance: startingBalance, RiskPct: riskPct, MaxOpenRiskPct: maxOpenRiskPct,
 		UseTP2: scale.UseTP2, TP1ClosePct: scale.TP1ClosePct, StopAfterTP1: scale.StopAfterTP1,
+		FeePct: scale.FeePct, SlipPct: scale.SlipPct,
 	})
 	if err != nil {
 		return "", err
@@ -151,10 +154,10 @@ func CustomBacktestScale(job ScannerBacktest) BacktestScale {
 // BacktestScaleFromJob reads scale config from a custom or rule snapshot.
 func BacktestScaleFromJob(job ScannerBacktest) BacktestScale {
 	if snap, err := parseCustomProfileSnapshot(job.RuleJSON); err == nil {
-		return NormalizeBacktestScale(BacktestScale{UseTP2: snap.UseTP2, TP1ClosePct: snap.TP1ClosePct, StopAfterTP1: snap.StopAfterTP1})
+		return NormalizeBacktestScale(BacktestScale{UseTP2: snap.UseTP2, TP1ClosePct: snap.TP1ClosePct, StopAfterTP1: snap.StopAfterTP1, FeePct: snap.FeePct, SlipPct: snap.SlipPct})
 	}
 	if snap, err := parseScannerRuleSnapshot(job.RuleJSON); err == nil {
-		return NormalizeBacktestScale(BacktestScale{UseTP2: snap.UseTP2, TP1ClosePct: snap.TP1ClosePct, StopAfterTP1: snap.StopAfterTP1})
+		return NormalizeBacktestScale(BacktestScale{UseTP2: snap.UseTP2, TP1ClosePct: snap.TP1ClosePct, StopAfterTP1: snap.StopAfterTP1, FeePct: snap.FeePct, SlipPct: snap.SlipPct})
 	}
 	return BacktestScale{}
 }

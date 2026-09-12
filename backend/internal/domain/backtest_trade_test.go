@@ -481,6 +481,61 @@ func TestFirstTouch_SameBarTP1AndEntryNeedsOrder(t *testing.T) {
 	}
 }
 
+func TestFirstTouch_FeesAndSlippageCutPnL(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	bars := []OHLC{
+		{OpenTime: t0, CloseTime: t0.Add(4 * time.Hour), Open: 100, High: 101, Low: 99, Close: 100},
+		{OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(8 * time.Hour), Open: 100, High: 101, Low: 99.5, Close: 100.5},
+		{OpenTime: t0.Add(8 * time.Hour), CloseTime: t0.Add(12 * time.Hour), Open: 100.5, High: 106, Low: 100.4, Close: 105},
+	}
+	levels := SwingLevels{Entry: 100, StopLoss: 97, TakeProfit: 105, Leverage: 1}
+	gross := SimulateBacktestTradeOpts(bars, 0, BacktestTradeSideLong, levels, BacktestTouchOpts{Interval: Interval4h})
+	net := SimulateBacktestTradeOpts(bars, 0, BacktestTradeSideLong, levels, BacktestTouchOpts{
+		Interval: Interval4h,
+		Scale:    BacktestScale{FeePct: 0.10, SlipPct: 0.05},
+	})
+	if gross == nil || net == nil || gross.Outcome != BacktestTradeOutcomeTP || net.Outcome != BacktestTradeOutcomeTP {
+		t.Fatalf("gross %+v net %+v", gross, net)
+	}
+	if net.Entry <= gross.Entry {
+		t.Fatalf("long entry should slip up: gross %v net %v", gross.Entry, net.Entry)
+	}
+	if net.ExitPrice >= gross.ExitPrice {
+		t.Fatalf("long exit should slip down: gross %v net %v", gross.ExitPrice, net.ExitPrice)
+	}
+	if net.PnLPct >= gross.PnLPct {
+		t.Fatalf("net pnl must be worse: gross %v net %v", gross.PnLPct, net.PnLPct)
+	}
+}
+
+func TestFirstTouch_TP1SlicePaysItsOwnCosts(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	got := SimulateBacktestTradeOpts([]OHLC{
+		{OpenTime: t0, CloseTime: t0.Add(4 * time.Hour), Open: 100, High: 101, Low: 99, Close: 100},
+		{OpenTime: t0.Add(4 * time.Hour), CloseTime: t0.Add(8 * time.Hour), Open: 100, High: 101.2, Low: 99.8, Close: 101},
+		{OpenTime: t0.Add(8 * time.Hour), CloseTime: t0.Add(12 * time.Hour), Open: 101, High: 106, Low: 100.8, Close: 105},
+	}, 0, BacktestTradeSideLong, SwingLevels{
+		Entry: 100, StopLoss: 97, TakeProfit: 105, TakeProfit1: 101, TakeProfit2: 105, Leverage: 1,
+	}, BacktestTouchOpts{
+		Interval: Interval4h,
+		Scale:    BacktestScale{UseTP2: true, TP1ClosePct: 50, StopAfterTP1: BacktestStopKeep, FeePct: 0.10, SlipPct: 0.05},
+	})
+	if got == nil || got.Outcome != BacktestTradeOutcomeTP1TP2 {
+		t.Fatalf("%+v", got)
+	}
+	if got.TP1PnLPct >= 0.5 {
+		t.Fatalf("TP1 slice should pay its own fee+slip: %+v", got)
+	}
+	if got.PnLPct >= got.TP1PnLPct {
+		// remainder at TP2 is still positive; total can exceed the TP1 slice
+	}
+	if got.PnLPct >= 5 {
+		t.Fatalf("round trip must be under the 5%% tape move: %+v", got)
+	}
+}
+
 func TestFirstTouch_TrailStopRatchetsAndHolds(t *testing.T) {
 	t.Parallel()
 	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)

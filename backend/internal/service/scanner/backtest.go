@@ -29,6 +29,8 @@ type StartBacktestInput struct {
 	UseTP2          bool
 	TP1ClosePct     float64
 	StopAfterTP1    string
+	FeePct          float64
+	SlipPct         float64
 	RangeStart      time.Time
 	RangeEnd        time.Time
 }
@@ -76,7 +78,7 @@ func (s *Service) StartBacktest(ctx context.Context, in StartBacktestInput) (*do
 		return nil, fmt.Errorf("%w: date range must be at most 400 days", domain.ErrInvalidArgument)
 	}
 
-	scale := domain.NormalizeBacktestScale(domain.BacktestScale{UseTP2: in.UseTP2, TP1ClosePct: in.TP1ClosePct, StopAfterTP1: in.StopAfterTP1})
+	scale := domain.NormalizeBacktestScale(domain.BacktestScale{UseTP2: in.UseTP2, TP1ClosePct: in.TP1ClosePct, StopAfterTP1: in.StopAfterTP1, FeePct: in.FeePct, SlipPct: in.SlipPct})
 	snap, err := domain.EncodeScannerRuleSnapshotScale(*rule, scale)
 	if err != nil {
 		return nil, err
@@ -135,7 +137,7 @@ func (s *Service) startCustomBacktest(ctx context.Context, in StartBacktestInput
 		return nil, fmt.Errorf("%w: date range must be at most 400 days", domain.ErrInvalidArgument)
 	}
 	scope := domain.NormalizeBacktestScope(in.Scope, in.Symbol)
-	scale := domain.NormalizeBacktestScale(domain.BacktestScale{UseTP2: in.UseTP2, TP1ClosePct: in.TP1ClosePct, StopAfterTP1: in.StopAfterTP1})
+	scale := domain.NormalizeBacktestScale(domain.BacktestScale{UseTP2: in.UseTP2, TP1ClosePct: in.TP1ClosePct, StopAfterTP1: in.StopAfterTP1, FeePct: in.FeePct, SlipPct: in.SlipPct})
 	var (
 		ex   domain.Exchange
 		sym  string

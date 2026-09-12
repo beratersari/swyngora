@@ -28,6 +28,12 @@ const (
 	backtestScaleMinClose      = 1.0
 	backtestScaleMaxClose      = 99.0
 
+	// BacktestDefaultFeePct is the Lab UI default taker fee (0.10%).
+	BacktestDefaultFeePct = 0.10
+	// BacktestDefaultSlipPct is the Lab UI default adverse slippage (0.05%).
+	BacktestDefaultSlipPct = 0.05
+	backtestCostPctMax     = 2.0
+
 	// SwingTP1RR is the first scale (1R). TP2 stays the farther swing target.
 	SwingTP1RR = 1.0
 )
@@ -37,12 +43,15 @@ type BacktestScale struct {
 	UseTP2       bool    `json:"useTp2,omitempty"`
 	TP1ClosePct  float64 `json:"tp1ClosePct,omitempty"`
 	StopAfterTP1 string  `json:"stopAfterTp1,omitempty"` // keep | entry | trail
+	FeePct       float64 `json:"feePct,omitempty"`       // 0.10 = 0.10%
+	SlipPct      float64 `json:"slipPct,omitempty"`      // 0.05 = 0.05%
 }
 
-// NormalizeBacktestScale applies defaults only when TP2 is enabled.
+// NormalizeBacktestScale applies TP2 defaults when enabled and clamps costs.
 func NormalizeBacktestScale(s BacktestScale) BacktestScale {
+	out := BacktestScale{FeePct: clampLabCostPct(s.FeePct), SlipPct: clampLabCostPct(s.SlipPct)}
 	if !s.UseTP2 {
-		return BacktestScale{}
+		return out
 	}
 	pct := s.TP1ClosePct
 	if pct <= 0 || math.IsNaN(pct) {
@@ -60,7 +69,80 @@ func NormalizeBacktestScale(s BacktestScale) BacktestScale {
 	default:
 		stop = BacktestStopEntry
 	}
-	return BacktestScale{UseTP2: true, TP1ClosePct: pct, StopAfterTP1: stop}
+	out.UseTP2 = true
+	out.TP1ClosePct = pct
+	out.StopAfterTP1 = stop
+	return out
+}
+
+func clampLabCostPct(v float64) float64 {
+	if v <= 0 || math.IsNaN(v) {
+		return 0
+	}
+	if v > backtestCostPctMax {
+		return backtestCostPctMax
+	}
+	return v
+}
+
+func (s BacktestScale) costRates() (feeRate, slipRate float64) {
+	n := NormalizeBacktestScale(s)
+	return n.FeePct / 100, n.SlipPct / 100
+}
+
+type labFill struct {
+	entry    float64
+	sideName string
+	lev      int
+	fee      float64
+	slip     float64
+}
+
+func newLabFill(side string, slippedEntry float64, lev int, scale BacktestScale) labFill {
+	fee, slip := scale.costRates()
+	if lev < 1 {
+		lev = 1
+	}
+	return labFill{sideName: side, entry: slippedEntry, lev: lev, fee: fee, slip: slip}
+}
+
+func labSlip(side string, isEntry bool, px, slipRate float64) float64 {
+	buy := (side == BacktestTradeSideLong && isEntry) || (side == BacktestTradeSideShort && !isEntry)
+	if buy {
+		return ApplySlippage(px, TradeSideBuy, slipRate)
+	}
+	return ApplySlippage(px, TradeSideSell, slipRate)
+}
+
+func (f labFill) slipOut(raw float64) float64 {
+	return labSlip(f.sideName, false, raw, f.slip)
+}
+
+func labFeePnLPct(entry, fillPx, frac, feeRate float64, lev int) float64 {
+	if entry <= 0 || fillPx <= 0 || frac <= 0 || feeRate <= 0 {
+		return 0
+	}
+	return -round1(feeRate * frac * (fillPx / entry) * float64(lev) * 100)
+}
+
+func (f labFill) slice(exitSlipped, frac float64) float64 {
+	if frac <= 0 {
+		return 0
+	}
+	gross := frac * LeveragedPnLPct(f.sideName, f.entry, exitSlipped, f.lev)
+	entryFee := labFeePnLPct(f.entry, f.entry, frac, f.fee, f.lev)
+	exitFee := labFeePnLPct(f.entry, exitSlipped, frac, f.fee, f.lev)
+	return round1(gross + entryFee + exitFee)
+}
+
+func (f labFill) mark(exitSlipped, closedFrac, realizedSlice float64) float64 {
+	rem := 1 - closedFrac
+	if rem < 0 {
+		rem = 0
+	}
+	mtm := rem * LeveragedPnLPct(f.sideName, f.entry, exitSlipped, f.lev)
+	entryFee := labFeePnLPct(f.entry, f.entry, rem, f.fee, f.lev)
+	return round1(realizedSlice + mtm + entryFee)
 }
 
 type scalePlan struct {

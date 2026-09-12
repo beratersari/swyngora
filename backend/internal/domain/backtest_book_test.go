@@ -190,6 +190,20 @@ func TestSimulateSharedBacktestBook_SameTimeEntryDoesNotTakeTP1Risk(t *testing.T
 	}
 }
 
+func TestSimulateSharedBacktestBook_FeesCutBalance(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	got := SimulateSharedBacktestBook(10000, 1, 3, []BacktestBookFill{
+		{Symbol: "ETHUSDT", Side: BacktestTradeSideLong, EntryAt: t0, ExitAt: t0.Add(time.Hour),
+			Entry: 100, StopLoss: 99, ExitPrice: 100, RangeExitPrice: 100, Leverage: 10,
+			HasExit: true, ClosedInRange: true, Outcome: BacktestTradeOutcomeTP, FeeRate: 0.001},
+	}, t0.Add(24*time.Hour))
+	// 1% risk / 1% stop → notional 10000. Entry fee 10 + exit fee 10.
+	if math.Abs(got.EndingBalance-9980) > 0.2 {
+		t.Fatalf("fees on both legs: %+v", got)
+	}
+}
+
 func TestSimulateSharedBacktestBook_TrailStopUpdatesRisk(t *testing.T) {
 	t.Parallel()
 	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)

@@ -36,6 +36,8 @@ export type SignalsBacktestPanelProps = {
     useTp2?: boolean;
     tp1ClosePct?: number;
     stopAfterTp1?: 'keep' | 'entry' | 'trail';
+    feePct?: number;
+    slipPct?: number;
     exchange?: MarketExchange;
     rangeKey: string;
   }) => void;
