@@ -115,7 +115,8 @@ Copy [`ai/.env.example`](.env.example) → `ai/.env` (or use repo-root / `backen
 ```bash
 cd ai
 source .venv/bin/activate   # after uv sync
-pytest -q
+pytest -q          # parallel (pytest-xdist, -n auto)
+pytest -n0 -q      # serial (debug)
 ty check
 ```
 

@@ -704,7 +704,8 @@ golangci-lint run   # when configured
 
 # AI (Python) — from ai/  (uv, not pip)
 uv sync && source .venv/bin/activate       # .venv + lock + editable + dev tools
-pytest -q
+pytest -q                        # parallel (pytest-xdist, -n auto)
+pytest -n0 -q                    # serial
 ruff check . && ruff format --check .
 ty check
 # swyngora-ai "What is BTC RSI on binance?"   # needs Ollama or XAI_API_KEY + API up

@@ -26,18 +26,20 @@ swyngora-ai-serve = "swyngora_ai.serve:main"
 [dependency-groups]
 dev = [
     "langgraph-cli[inmem]>=0.4.31",
-    "pytest>=8.0.0",
-    "ruff>=0.16.5",
-    "ty>=0.0.77",
+    "pytest>=9.1.1",
+    "pytest-xdist>=3.8.0",
+    "ruff>=0.16.7",
+    "ty>=0.0.80",
 ]
 
 [build-system]
 requires = ["uv_build>=0.12.8,<0.13"]
 build-backend = "uv_build"
 
-[tool.pytest.ini_options]
+[tool.pytest]
 testpaths = ["tests"]
 pythonpath = ["src"]
+addopts = ["-n", "auto", "--dist", "loadscope"]
 
 [tool.ruff]
 target-version = "py311"

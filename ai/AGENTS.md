@@ -22,7 +22,8 @@ Python multi-agent assistant (LangGraph orchestrator + specialists). LLM provide
 cd ai
 uv sync                          # .venv + editable install + lock + dev tools
 source .venv/bin/activate
-pytest -q
+pytest -q                        # parallel (pytest-xdist, -n auto)
+pytest -n0 -q                    # serial (debug)
 ruff check . && ruff format --check .
 ty check
 swyngora-ai "your question"
