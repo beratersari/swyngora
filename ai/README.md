@@ -54,7 +54,8 @@ Python 3.11+ (pinned in `.python-version`). Recreate an old pip venv with `rm -r
 # matching prompts; Ctrl+P / Ctrl+N cycle the typed prefix — every matching
 # history line plus matching commands like reset — or full history if empty;
 # Ctrl+U clears the line (Ctrl+Y restores it);
-# TTY shows a live activity bar while answering, then a dim recap of those steps;
+# TTY shows a live activity bar while answering, then a dim recap
+# (tools, llm starts, model, elapsed);
 # stored in ~/.swyngora/cli_history)
 export AI_LLM_PROVIDER=ollama
 export SWYNGORA_API_URL=http://localhost:8080

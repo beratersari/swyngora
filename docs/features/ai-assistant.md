@@ -59,7 +59,7 @@ cd backend && go run ./cmd/server
 # cycle the typed prefix (every matching history line plus matching commands
 # such as reset), or full history if the line is empty; Ctrl+U clears the
 # line (Ctrl+Y restores it). TTY shows a live activity bar while answering,
-# then a dim recap of those steps with the reply
+# then a dim recap (tools, llm starts, model, elapsed) with the reply
 # (~/.swyngora/cli_history).
 cd ai && uv sync && source .venv/bin/activate
 export AI_LLM_PROVIDER=ollama   # or grok + XAI_API_KEY

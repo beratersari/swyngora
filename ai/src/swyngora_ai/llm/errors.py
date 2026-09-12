@@ -28,6 +28,13 @@ class NoteLLMError(BaseCallbackHandler):
         self.attempts = 0
         NoteLLMError._live.add(self)
 
+    def on_chat_model_start(
+        self, serialized: dict[str, Any], messages: list[Any], **kwargs: object
+    ) -> None:
+        # Real generation start (retries, fallback, specialist, analyze). Not status text.
+        del serialized, messages, kwargs
+        emit("llm", self.label)
+
     def on_llm_error(self, error: BaseException, **_kwargs: object) -> None:
         self.last_error = error
         self.attempts += 1

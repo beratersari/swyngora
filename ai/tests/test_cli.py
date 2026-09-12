@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import sys
 
+import pytest
 from typer.testing import CliRunner
 
 from swyngora_ai.cli import (
@@ -13,15 +14,18 @@ from swyngora_ai.cli import (
     _CTRL_P,
     ActivityBarState,
     ReplCompleteState,
+    _activity_model_id,
     _bind_clear_line,
     _bind_cycle_nav_keys,
     _bind_tab_complete,
+    _chat,
     _completion_source,
     _completion_wants_reverse,
     _readline_uses_libedit,
     _status_text,
     _tools_label,
     activity_recap_lines,
+    activity_summary,
     advance_repl_cycle,
     advance_repl_nav,
     app,
@@ -104,13 +108,49 @@ def test_apply_activity_event_updates_description_and_tool_count() -> None:
         "Planning…",
         "prefetch → get_ticker",
         "get_indicators failed",
-        "1 tool · 0:12",
+        "1 tool · 0 llm · 0:12",
     ]
-    again = ActivityBarState()
+    assert apply_activity_event(state, {"type": "llm", "text": "qwen2.5"})
+    assert apply_activity_event(state, {"type": "llm", "text": "qwen2.5"})
+    assert state.llm == 2
+    assert state.steps[-1] == "get_indicators failed"
+    composing = ActivityBarState(model="qwen2.5")
+    apply_activity_event(composing, {"type": "status", "text": "Composing answer…"})
+    assert composing.llm == 0
+    assert activity_summary(composing) == "0 tools · 0 llm · qwen2.5"
+    again = ActivityBarState(model="qwen2.5")
     apply_activity_event(again, {"type": "status", "text": "Planning…"})
     apply_activity_event(again, {"type": "status", "text": "Planning…"})
     assert again.steps == ["Planning…"]
-    assert activity_recap_lines(again, 75)[-1] == "0 tools · 1:15"
+    assert activity_recap_lines(again, 75)[-1] == "0 tools · 0 llm · qwen2.5 · 1:15"
+
+
+def test_chat_prints_recap_when_orchestrator_raises(monkeypatch) -> None:
+    from swyngora_ai import cli as cli_mod
+
+    recap: list[tuple[ActivityBarState, float]] = []
+    monkeypatch.setattr(type(cli_mod._console), "is_terminal", property(lambda self: True))
+    monkeypatch.setattr(
+        cli_mod, "_print_activity_recap", lambda state, elapsed: recap.append((state, elapsed))
+    )
+    with pytest.raises(RuntimeError, match="backend down"):
+        _chat(_BoomOrch(), "Hi", "s1")
+    assert recap
+    assert recap[0][1] >= 0
+
+
+def test_activity_model_id_follows_provider() -> None:
+    from types import SimpleNamespace
+
+    assert _activity_model_id(None) == ""
+    assert (
+        _activity_model_id(SimpleNamespace(llm_provider="ollama", ollama_model="qwen2.5"))
+        == "qwen2.5"
+    )
+    assert (
+        _activity_model_id(SimpleNamespace(llm_provider="grok", grok_model="grok-4.3"))
+        == "grok-4.3"
+    )
 
 
 def test_help() -> None:

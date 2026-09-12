@@ -529,6 +529,7 @@ _STATUS_TYPES = frozenset({"status", "tool", "thinking", "tool_error"})
 # Count the start event. Prefetch only emits "tool" (no tool_result on success);
 # orchestrator also emits tool_result later — do not count both.
 _TOOL_TICK_TYPES = frozenset({"tool"})
+_LLM_TICK_TYPES = frozenset({"llm"})
 _STATUS_MAX = 88
 
 
@@ -547,9 +548,28 @@ def _tools_label(count: int) -> str:
     return "1 tool" if count == 1 else f"{count} tools"
 
 
+def _llm_label(count: int) -> str:
+    return "1 llm" if count == 1 else f"{count} llm"
+
+
+def _activity_model_id(settings: Any) -> str:
+    if settings is None:
+        return ""
+    if getattr(settings, "llm_provider", "") == "grok":
+        return str(getattr(settings, "grok_model", "") or "")
+    return str(getattr(settings, "ollama_model", "") or "")
+
+
 def _format_elapsed(seconds: float) -> str:
     total = max(0, int(seconds))
     return f"{total // 60}:{total % 60:02d}"
+
+
+def activity_summary(state: ActivityBarState) -> str:
+    parts = [_tools_label(state.tools), _llm_label(state.llm)]
+    if state.model:
+        parts.append(state.model)
+    return " · ".join(parts)
 
 
 @dataclass
@@ -558,14 +578,20 @@ class ActivityBarState:
 
     description: str = "Planning…"
     tools: int = 0
+    llm: int = 0
+    model: str = ""
     steps: list[str] = field(default_factory=lambda: ["Planning…"])
 
 
 def apply_activity_event(state: ActivityBarState, ev: dict[str, Any]) -> bool:
-    """Update description, steps, and tool count. True if the bar should refresh."""
+    """Update description, steps, and counters. True if the bar should refresh."""
     changed = False
-    if (ev.get("type") or "") in _TOOL_TICK_TYPES:
+    kind = ev.get("type") or ""
+    if kind in _TOOL_TICK_TYPES:
         state.tools += 1
+        changed = True
+    if kind in _LLM_TICK_TYPES:
+        state.llm += 1
         changed = True
     text = _status_text(ev)
     if text is not None:
@@ -577,7 +603,7 @@ def apply_activity_event(state: ActivityBarState, ev: dict[str, Any]) -> bool:
 
 
 def activity_recap_lines(state: ActivityBarState, elapsed: float) -> list[str]:
-    return [*state.steps, f"{_tools_label(state.tools)} · {_format_elapsed(elapsed)}"]
+    return [*state.steps, f"{activity_summary(state)} · {_format_elapsed(elapsed)}"]
 
 
 def _print_activity_recap(state: ActivityBarState, elapsed: float) -> None:
@@ -591,29 +617,32 @@ def _chat(orch: Orchestrator, message: str, session_id: str) -> ChatResult:
         return orch.chat(message, session_id=session_id)
 
     started = time.monotonic()
-    state = ActivityBarState()
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[cyan]{task.description}[/]"),
-        TextColumn("[dim]{task.fields[tools]}[/]"),
-        TimeElapsedColumn(),
-        console=_console,
-        transient=True,
-    ) as progress:
-        task_id = progress.add_task(escape(state.description), total=None, tools=_tools_label(0))
-
-        def on_event(ev: dict[str, Any]) -> None:
-            if not apply_activity_event(state, ev):
-                return
-            progress.update(
-                task_id,
-                description=escape(state.description),
-                tools=_tools_label(state.tools),
+    state = ActivityBarState(model=_activity_model_id(getattr(orch, "settings", None)))
+    try:
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[cyan]{task.description}[/]"),
+            TextColumn("[dim]{task.fields[summary]}[/]"),
+            TimeElapsedColumn(),
+            console=_console,
+            transient=True,
+        ) as progress:
+            task_id = progress.add_task(
+                escape(state.description), total=None, summary=activity_summary(state)
             )
 
-        result = orch.chat(message, session_id=session_id, on_event=on_event)
-    _print_activity_recap(state, time.monotonic() - started)
-    return result
+            def on_event(ev: dict[str, Any]) -> None:
+                if not apply_activity_event(state, ev):
+                    return
+                progress.update(
+                    task_id,
+                    description=escape(state.description),
+                    summary=activity_summary(state),
+                )
+
+            return orch.chat(message, session_id=session_id, on_event=on_event)
+    finally:
+        _print_activity_recap(state, time.monotonic() - started)
 
 
 def _one_shot(orch: Orchestrator, message: str, session_id: str) -> int:
