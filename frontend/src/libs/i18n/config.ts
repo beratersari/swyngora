@@ -22,6 +22,7 @@ export const I18N_NAMESPACES = [
   'forensics',
   'options',
   'settings',
+  'arb',
 ] as const;
 export type I18nNamespace = (typeof I18N_NAMESPACES)[number];
 

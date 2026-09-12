@@ -198,6 +198,37 @@ export {
   useRepayMarginDebtMutation,
 } from './endpoints/portfolioApi';
 export {
+  useScanPriceDiffQuotesQuery,
+  useLazyScanPriceDiffQuotesQuery,
+  useListPriceDiffWatchesQuery,
+  useCreatePriceDiffWatchMutation,
+  usePausePriceDiffWatchMutation,
+  useResumePriceDiffWatchMutation,
+  useDeletePriceDiffWatchMutation,
+  useListPriceDiffOpportunitiesQuery,
+  useScanMarketFundingArbQuery,
+  useLazyScanMarketFundingArbQuery,
+  useListFundingArbWatchesQuery,
+  useCreateFundingArbWatchMutation,
+  useDeleteFundingArbWatchMutation,
+  useGetMarketSnapshotQuery,
+} from './endpoints/arbApi';
+export type {
+  PriceDiffQuote,
+  PriceDiffQuoteScan,
+  PriceDiffWatch,
+  PriceDiffOpportunity,
+  PriceDiffScanQuery,
+  CreatePriceDiffWatchArg,
+  MarketFundingArbScan,
+  MarketFundingArbHit,
+  FundingArbWatch,
+  FundingArbScanQuery,
+  MarketSnapshot,
+  MarketSnapshotVenue,
+  MarketSnapshotWindow,
+} from './endpoints/arbApi';
+export {
   useListAccountAPIKeysQuery,
   useCreateAccountAPIKeyMutation,
   useRevokeAccountAPIKeyMutation,

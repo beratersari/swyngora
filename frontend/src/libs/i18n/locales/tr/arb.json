@@ -1,0 +1,52 @@
+{
+  "title": "Çapraz borsa masası",
+  "subtitle": "Ücret sonrası canlı defter farkları ve fonlama taşımaları. Yalnızca bilgi amaçlıdır — yatırım tavsiyesi değildir.",
+  "tabs": {
+    "price": "Fiyat farkları",
+    "funding": "Fonlama"
+  },
+  "price": {
+    "hint": "Bir büyüklük için Binance, Coinbase ve Bybit defterlerini yürü. Kâr ücret ve kaymadan sonradır.",
+    "symbol": "Sembol",
+    "notional": "Boyut (quote)",
+    "scan": "Kitapları tara",
+    "best": "En iyi rota {{route}} · ücret sonrası {{profit}}",
+    "route": "Al → sat",
+    "profit": "Kâr",
+    "profitPct": "Kâr %",
+    "used": "Kullanılabilir",
+    "executable": "Tam boyut",
+    "yes": "Evet",
+    "no": "Hayır",
+    "empty": "Çiftleri sıralamak için bir sembol tarayın.",
+    "follow": "Bu coini izle",
+    "watch": "Fark için izle",
+    "watchCreated": "İzleme oluşturuldu",
+    "noWatches": "Henüz fiyat farkı izlemesi yok.",
+    "openOpps": "Açık fırsatlar",
+    "noOpps": "Şu anda açık defter farkı yok.",
+    "netPct": "Net %",
+    "status": "Durum",
+    "remove": "Kaldır",
+    "resource": "fiyat farkı taraması"
+  },
+  "funding": {
+    "hint": "Daha ucuz tahmini fonlamayı long, daha pahalıyı short. Yalnızca ücret sonrası kazananlar listelenir.",
+    "notional": "Boyut (quote)",
+    "scan": "Fonlamayı tara",
+    "empty": "Ücret sonrası fonlama taşımalarını görmek için tarayın.",
+    "symbol": "Sembol",
+    "long": "Long",
+    "short": "Short",
+    "spread": "Yayılım",
+    "net": "Ücret sonrası net",
+    "read": "Okuma",
+    "followScan": "Taramayı izle",
+    "watchCreated": "Fonlama takibi oluşturuldu",
+    "follows": "Fonlama takipleri",
+    "noWatches": "Henüz fonlama takibi yok.",
+    "scope": "Kapsam",
+    "remove": "Kaldır",
+    "resource": "fonlama taraması"
+  }
+}

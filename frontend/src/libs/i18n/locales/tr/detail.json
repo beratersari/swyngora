@@ -147,7 +147,11 @@
     "incomplete": "Pencere eksik — geçmiş hâlâ doluyor.",
     "liqIncomplete": "Likidasyon toplamları yalnızca bu sürecin bu coini izlediği süreyi kapsar.",
     "unsupported": "Bu borsada perpetual bant yok. Aynı baz Binance + Bybit’te varsa o gösterilir.",
-    "none": "Bu sembol için Binance veya Bybit’te perpetual defter yok."
+    "none": "Bu sembol için Binance veya Bybit’te perpetual defter yok.",
+    "positioning": "Konumlanma",
+    "longPct": "Hesap long %",
+    "taker1h": "1s taker",
+    "takerShare": "1s alış payı"
   },
   "orderBook": {
     "title": "Emir defteri",

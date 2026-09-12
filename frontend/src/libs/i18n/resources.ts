@@ -13,6 +13,7 @@ import liquidationsEn from './locales/en/liquidations.json';
 import forensicsEn from './locales/en/forensics.json';
 import optionsEn from './locales/en/options.json';
 import settingsEn from './locales/en/settings.json';
+import arbEn from './locales/en/arb.json';
 import commonTr from './locales/tr/common.json';
 import marketsTr from './locales/tr/markets.json';
 import detailTr from './locales/tr/detail.json';
@@ -28,6 +29,7 @@ import liquidationsTr from './locales/tr/liquidations.json';
 import forensicsTr from './locales/tr/forensics.json';
 import optionsTr from './locales/tr/options.json';
 import settingsTr from './locales/tr/settings.json';
+import arbTr from './locales/tr/arb.json';
 
 /**
  * Bundled translation catalogs.
@@ -50,6 +52,7 @@ export const resources = {
     forensics: forensicsEn,
     options: optionsEn,
     settings: settingsEn,
+    arb: arbEn,
   },
   tr: {
     common: commonTr,
@@ -67,6 +70,7 @@ export const resources = {
     forensics: forensicsTr,
     options: optionsTr,
     settings: settingsTr,
+    arb: arbTr,
   },
 } as const;
 

@@ -30,6 +30,9 @@ vi.mock('@/components/pages/OptionsPage', () => ({
 vi.mock('@/components/pages/SettingsPage', () => ({
   SettingsPage: () => <div data-testid="settings-page">Settings</div>,
 }));
+vi.mock('@/components/pages/ArbPage', () => ({
+  ArbPage: () => <div data-testid="arb-page">Arb</div>,
+}));
 
 describe('AppRoutes', () => {
   it('redirects / to /markets', () => {
@@ -64,6 +67,8 @@ describe('AppRoutes', () => {
     expect(screen.getByTestId('options-page')).toBeInTheDocument();
     renderWithProviders(<AppRoutes />, { routerEntries: ['/settings'] });
     expect(screen.getByTestId('settings-page')).toBeInTheDocument();
+    renderWithProviders(<AppRoutes />, { routerEntries: ['/arb'] });
+    expect(screen.getByTestId('arb-page')).toBeInTheDocument();
   });
 
   it('redirects unknown paths to markets', () => {

@@ -43,6 +43,9 @@ export const baseApi = createApi({
     'SwingSetup',
     'CustomSignalProfile',
     'CustomSignalScan',
+    'PriceDiffWatch',
+    'PriceDiffOpportunity',
+    'FundingArbWatch',
   ],
   endpoints: () => ({}),
 });

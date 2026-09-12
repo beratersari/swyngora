@@ -1,5 +1,5 @@
 import type { WithLoadingProps } from '@/components/types';
-import type { MarketCvd, MarketLiquidations, MarketOpenInterest } from '@/libs/api';
+import type { MarketCvd, MarketLiquidations, MarketOpenInterest, MarketSnapshot } from '@/libs/api';
 
 export type TapePanelProps = WithLoadingProps & {
   openInterest?: MarketOpenInterest | null;
@@ -8,4 +8,6 @@ export type TapePanelProps = WithLoadingProps & {
   liquidationsError?: string | null;
   cvd?: MarketCvd | null;
   cvdError?: string | null;
+  snapshot?: MarketSnapshot | null;
+  snapshotError?: string | null;
 };

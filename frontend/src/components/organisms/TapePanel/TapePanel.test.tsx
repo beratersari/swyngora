@@ -17,6 +17,10 @@ describe('TapePanel', () => {
           windows: [{ window: '1h', totalNotional: '25000000', complete: true }],
         }}
         cvd={{ combined: { lastCvd: '12.5', summary: 'buy flow' } }}
+        snapshot={{
+          summary: 'Volume building ahead of price',
+          combined: { longPct: '55.2', windows: [{ window: '1h', taker: { dominant: 'buy', buyShare: '0.58' } }] },
+        }}
       />,
     );
     expect(screen.getByText('Futures tape')).toBeInTheDocument();
@@ -24,6 +28,7 @@ describe('TapePanel', () => {
     expect(screen.getByText('0.0100%')).toBeInTheDocument();
     expect(screen.getByText('25.00M')).toBeInTheDocument();
     expect(screen.getByText('buy flow')).toBeInTheDocument();
+    expect(screen.getByText('Volume building ahead of price')).toBeInTheDocument();
   });
 
   it('explains a missing perp book', () => {

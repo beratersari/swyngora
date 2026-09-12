@@ -1,0 +1,52 @@
+{
+  "title": "Cross-exchange desk",
+  "subtitle": "Live book gaps and funding-rate carries after fees. Informational only — not financial advice.",
+  "tabs": {
+    "price": "Price gaps",
+    "funding": "Funding"
+  },
+  "price": {
+    "hint": "Walk live Binance, Coinbase, and Bybit books for one size. Profit is after fees and slippage.",
+    "symbol": "Symbol",
+    "notional": "Size (quote)",
+    "scan": "Scan books",
+    "best": "Best route {{route}} · {{profit}} after fees",
+    "route": "Buy → sell",
+    "profit": "Profit",
+    "profitPct": "Profit %",
+    "used": "Usable size",
+    "executable": "Full size",
+    "yes": "Yes",
+    "no": "No",
+    "empty": "Scan a symbol to rank venue pairs.",
+    "follow": "Follow this coin",
+    "watch": "Watch for gaps",
+    "watchCreated": "Watch created",
+    "noWatches": "No price-gap watches yet.",
+    "openOpps": "Open opportunities",
+    "noOpps": "No open book gaps right now.",
+    "netPct": "Net %",
+    "status": "Status",
+    "remove": "Remove",
+    "resource": "price-gap scan"
+  },
+  "funding": {
+    "hint": "Long the cheaper predicted funding venue and short the richer one. Only after-fee winners are listed.",
+    "notional": "Size (quote)",
+    "scan": "Scan funding",
+    "empty": "Scan to list after-fee funding carries.",
+    "symbol": "Symbol",
+    "long": "Long",
+    "short": "Short",
+    "spread": "Spread",
+    "net": "Net after fees",
+    "read": "Read",
+    "followScan": "Follow the scan",
+    "watchCreated": "Funding follow created",
+    "follows": "Funding follows",
+    "noWatches": "No funding follows yet.",
+    "scope": "Scope",
+    "remove": "Remove",
+    "resource": "funding-arb scan"
+  }
+}

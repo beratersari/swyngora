@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AiChatPage } from '@/components/pages/AiChatPage';
 import { AlertsPage } from '@/components/pages/AlertsPage';
+import { ArbPage } from '@/components/pages/ArbPage';
 import { CoinDetailPage } from '@/components/pages/CoinDetailPage';
 import { ComparePage } from '@/components/pages/ComparePage';
 import { ForensicsPage } from '@/components/pages/ForensicsPage';
@@ -27,6 +28,7 @@ export function AppRoutes() {
       <Route path="/signals" element={<SignalsPage />} />
       <Route path="/pumps" element={<PumpsPage />} />
       <Route path="/alerts" element={<AlertsPage />} />
+      <Route path="/arb" element={<ArbPage />} />
       <Route path="/compare" element={<ComparePage />} />
       <Route path="/forensics" element={<ForensicsPage />} />
       <Route path="/heatmap" element={<HeatmapPage />} />

@@ -33,6 +33,8 @@ export function TapePanel({
   liquidationsError,
   cvd,
   cvdError,
+  snapshot,
+  snapshotError,
   isLoading = false,
 }: TapePanelProps) {
   const { t } = useTranslation('detail');
@@ -42,6 +44,8 @@ export function TapePanel({
   const liq24h = windowByName(liquidations?.windows, '24h');
   const funding = openInterest?.funding?.current;
   const cvdRow = cvd?.combined ?? cvd?.venues?.[0];
+  const snap = snapshot?.combined ?? snapshot?.venues?.[0];
+  const snap1h = snap?.windows?.find((w) => w.window === '1h');
 
   return (
     <Panel>
@@ -183,6 +187,38 @@ export function TapePanel({
         {cvdRow?.error ? (
           <Text variant="caption" color="secondary">
             {cvdRow.error}
+          </Text>
+        ) : null}
+      </Block>
+
+      <Block>
+        <Text variant="label" color="primary">
+          {t('tape.positioning')}
+        </Text>
+        {snapshotError ? (
+          <Alert type="info" showIcon message={t('tape.positioning')} description={snapshotError} />
+        ) : (
+          <StatsGrid>
+            <Stat
+              label={t('tape.longPct')}
+              value={snap?.longPct ? `${snap.longPct}%` : '—'}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.taker1h')}
+              value={snap1h?.taker?.dominant ?? '—'}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.takerShare')}
+              value={snap1h?.taker?.buyShare ?? '—'}
+              isLoading={isLoading}
+            />
+          </StatsGrid>
+        )}
+        {snapshot?.summary ? (
+          <Text variant="caption" color="secondary">
+            {snapshot.summary}
           </Text>
         ) : null}
       </Block>

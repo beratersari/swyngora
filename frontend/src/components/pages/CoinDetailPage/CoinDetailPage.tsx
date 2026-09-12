@@ -41,6 +41,7 @@ import {
   useGetOpenInterestQuery,
   useGetMarketLiquidationsQuery,
   useGetMarketCvdQuery,
+  useGetMarketSnapshotQuery,
   useGetTicker24hQuery,
   useGetSpotOrderBookQuery,
   useGetSpotOrderBookHeatmapQuery,
@@ -385,6 +386,11 @@ export function CoinDetailPage() {
     refetchOnFocus: true,
   });
   const cvdQuery = useGetMarketCvdQuery(tapeQueryArg, {
+    skip: skipTape,
+    pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
+    refetchOnFocus: true,
+  });
+  const snapshotQuery = useGetMarketSnapshotQuery(tapeQueryArg, {
     skip: skipTape,
     pollingInterval: visible ? DEFAULT_DETAIL_SERIES_POLL_MS : 0,
     refetchOnFocus: true,
@@ -1081,10 +1087,22 @@ export function CoinDetailPage() {
                               })
                             : null
                         }
+                        snapshot={rtkCurrent(snapshotQuery)}
+                        snapshotError={
+                          snapshotQuery.isError
+                            ? rtkErrorMessage(snapshotQuery.error, {
+                                resource: t('detail:resource.tape'),
+                                statusMessages: {
+                                  400: t('detail:tape.unsupported'),
+                                },
+                              })
+                            : null
+                        }
                         isLoading={
                           rtkCurrentPending(openInterestQuery) ||
                           rtkCurrentPending(liquidationsQuery) ||
-                          rtkCurrentPending(cvdQuery)
+                          rtkCurrentPending(cvdQuery) ||
+                          rtkCurrentPending(snapshotQuery)
                         }
                       />
                     </TabStack>

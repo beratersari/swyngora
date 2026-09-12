@@ -23,6 +23,8 @@ Fee at a clock: `notional × rate` (long pays when the rate is positive; short
 receives). A hold window with **no** clock in `(now, now+holdHours]` has
 **funding 0**.
 
+Web: `/arb` (Funding tab).
+
 `GET /api/v1/market/funding-arb?symbol=BTCUSDT&notional=10000`
 
 - Long the cheaper predicted rate, short the richer one

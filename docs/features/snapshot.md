@@ -9,6 +9,8 @@ with current values and 1h / 4h / 24h changes.
 
 ## Behavior
 
+Web: coin desk Tape tab (`/markets/:exchange/:symbol`).
+
 `GET /api/v1/market/snapshot?symbol=SOLUSDT`
 
 - `spot`: last price, 24h quote volume, circulating market cap, plus per-window

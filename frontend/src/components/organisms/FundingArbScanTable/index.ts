@@ -1,0 +1,1 @@
+export { FundingArbScanTable } from './FundingArbScanTable';

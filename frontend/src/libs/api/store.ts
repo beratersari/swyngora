@@ -12,6 +12,7 @@ import './endpoints/exportApi';
 import './endpoints/recurringApi';
 import './endpoints/scannerApi';
 import './endpoints/swingApi';
+import './endpoints/arbApi';
 
 export const store = configureStore({
   reducer: {

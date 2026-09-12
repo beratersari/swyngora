@@ -4,6 +4,8 @@
 
 Users want to know when the same coin trades at a meaningful price gap across **Binance**, **Coinbase**, and **Bybit** after fees. The system should open durable opportunities (buy venue / sell venue) without flooding duplicates, and re-open only after the edge has gone away and returns.
 
+Web: `/arb` (Price gaps tab).
+
 ## Behavior
 
 1. **Create a watch**: coin (`symbol`, e.g. `BTCUSDT`), **`notional`**, **`minProfit`**, optional **`exchanges`** (at least two of `binance` / `coinbase` / `bybit`; default all three), optional **`minDurationSec`**, optional `minNetDiffPct`, and per-exchange fees.

@@ -81,6 +81,7 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetMarketLiquidationsQuery: () => empty,
     useGetMarketLiquidationHuntHeatmapQuery: () => empty,
     useGetMarketCvdQuery: () => empty,
+    useGetMarketSnapshotQuery: () => empty,
     useGetPumpEventsQuery: () => empty,
     useGetWatchlistQuery: () => ({ data: { items: [] }, isLoading: false }),
     // RTK arg-change: previous venue's schedule is still in `.data` while
