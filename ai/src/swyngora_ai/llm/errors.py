@@ -110,6 +110,8 @@ class NoteToolError(BaseCallbackHandler):
 
     def _emit_status(self, name: str, attempts: int) -> None:
         if attempts < _TOOL_TRY_BUDGET:
+            # Same as llm retries: each new invoke is a start Activity should count.
+            emit("tool_retry", name)
             emit("status", f"Retrying {name} ({attempts + 1}/{_TOOL_TRY_BUDGET})…")
             return
         emit("status", f"{name} failed after {_TOOL_TRY_BUDGET} tries")

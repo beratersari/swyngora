@@ -539,7 +539,7 @@ def _full_width_rule(title: str = "") -> None:
         flush()
 
 
-def _print_result(result: ChatResult, activity: str = "") -> None:
+def _print_result(result: ChatResult, activity: str | Sequence[str] = "") -> None:
     _console.print()
     _console.print(Markdown(result.reply))
     _console.print()
@@ -549,7 +549,13 @@ def _print_result(result: ChatResult, activity: str = "") -> None:
 _DETAILS_LABEL_WIDTH = 8  # "Activity" and "thinking" — values share one left column
 
 
-def _print_details(result: ChatResult, activity: str = "") -> None:
+def _activity_detail_rows(activity: str | Sequence[str]) -> list[str]:
+    if isinstance(activity, str):
+        return [activity] if activity else []
+    return [row for row in activity if row]
+
+
+def _print_details(result: ChatResult, activity: str | Sequence[str] = "") -> None:
     extras = Table.grid(padding=(0, 3))
     extras.add_column(
         style="bold dim",
@@ -562,8 +568,11 @@ def _print_details(result: ChatResult, activity: str = "") -> None:
     def _add(label: str, value: str) -> None:
         extras.add_row(label, value)
 
-    if activity:
-        _add("Activity", escape(activity))
+    rows = _activity_detail_rows(activity)
+    if rows:
+        _add("Activity", escape(rows[0]))
+        for row in rows[1:]:
+            _add("", escape(row))
         _add("", "")
     first = True
     for step in result.thinking:
@@ -594,7 +603,7 @@ def _print_error(exc: BaseException) -> None:
 _STATUS_TYPES = frozenset({"status", "tool", "thinking", "tool_error"})
 # Count the start event. Prefetch only emits "tool" (no tool_result on success);
 # orchestrator also emits tool_result later — do not count both.
-_TOOL_TICK_TYPES = frozenset({"tool"})
+_TOOL_TICK_TYPES = frozenset({"tool", "tool_retry"})
 _LLM_TICK_TYPES = frozenset({"llm"})
 _STATUS_MAX = 88
 
@@ -612,6 +621,14 @@ def _status_text(ev: dict[str, Any]) -> str | None:
 
 def _tools_label(count: int) -> str:
     return "1 tool call" if count == 1 else f"{count} tool calls"
+
+
+def tool_activity_name(text: str) -> str:
+    """Stable tool name from a type=tool emit (`prefetch → get_ticker(...)` → get_ticker)."""
+    base = (text or "").strip().split("(", 1)[0].strip()
+    if "→" in base:
+        base = base.rsplit("→", 1)[-1].strip()
+    return base or "unknown"
 
 
 def _llm_label(count: int) -> str:
@@ -632,7 +649,8 @@ def _format_elapsed(seconds: float) -> str:
 
 
 def activity_summary(state: ActivityBarState) -> str:
-    parts = [_tools_label(state.tools)]
+    """One-line live bar: total tool starts plus per-model llm counts."""
+    parts = [_tools_label(sum(state.tools_by_name.values()))]
     if state.llm_by_model:
         parts.extend(f"{_llm_label(n)} {name}" for name, n in state.llm_by_model.items())
     elif state.fallback_model:
@@ -642,12 +660,41 @@ def activity_summary(state: ActivityBarState) -> str:
     return " · ".join(parts)
 
 
+def activity_headline(state: ActivityBarState, elapsed: float) -> str:
+    """First details Activity row: llm (and 0 tool calls) plus elapsed."""
+    parts: list[str] = []
+    if not state.tools_by_name:
+        parts.append(_tools_label(0))
+    if state.llm_by_model:
+        parts.extend(f"{_llm_label(n)} {name}" for name, n in state.llm_by_model.items())
+    elif state.fallback_model:
+        parts.append(f"{_llm_label(0)} {state.fallback_model}")
+    else:
+        parts.append(_llm_label(0))
+    parts.append(f"{_format_elapsed(elapsed)} elapsed")
+    return " · ".join(parts)
+
+
+def _tool_row(state: ActivityBarState, name: str, count: int) -> str:
+    line = f"{_tools_label(count)} {name}"
+    if state.tool_retries_by_name.get(name, 0):
+        return f"{line} (includes retries)"
+    return line
+
+
+def activity_rows(state: ActivityBarState, elapsed: float) -> list[str]:
+    rows = [activity_headline(state, elapsed)]
+    rows.extend(_tool_row(state, name, n) for name, n in state.tools_by_name.items())
+    return rows
+
+
 @dataclass
 class ActivityBarState:
-    """Live CLI activity line: status text plus per-model llm counts."""
+    """Live CLI activity line: status text plus per-name tool and llm counts."""
 
     description: str = "Planning…"
-    tools: int = 0
+    tools_by_name: dict[str, int] = field(default_factory=dict)
+    tool_retries_by_name: dict[str, int] = field(default_factory=dict)
     llm_by_model: dict[str, int] = field(default_factory=dict)
     fallback_model: str = ""
 
@@ -657,7 +704,10 @@ def apply_activity_event(state: ActivityBarState, ev: dict[str, Any]) -> bool:
     changed = False
     kind = ev.get("type") or ""
     if kind in _TOOL_TICK_TYPES:
-        state.tools += 1
+        name = tool_activity_name(str(ev.get("text") or ""))
+        state.tools_by_name[name] = state.tools_by_name.get(name, 0) + 1
+        if kind == "tool_retry":
+            state.tool_retries_by_name[name] = state.tool_retries_by_name.get(name, 0) + 1
         changed = True
     if kind in _LLM_TICK_TYPES:
         label = (ev.get("text") or "").strip() or state.fallback_model or "unknown"
@@ -671,12 +721,12 @@ def apply_activity_event(state: ActivityBarState, ev: dict[str, Any]) -> bool:
 
 
 def activity_line(state: ActivityBarState, elapsed: float) -> str:
-    return f"{activity_summary(state)} · {_format_elapsed(elapsed)} elapsed"
+    return activity_headline(state, elapsed)
 
 
-def _chat(orch: Any, message: str, session_id: str) -> tuple[ChatResult, str]:
+def _chat(orch: Any, message: str, session_id: str) -> tuple[ChatResult, list[str]]:
     if not _console.is_terminal:
-        return orch.chat(message, session_id=session_id), ""
+        return orch.chat(message, session_id=session_id), []
 
     started = time.monotonic()
     state = ActivityBarState(fallback_model=_activity_model_id(getattr(orch, "settings", None)))
@@ -708,10 +758,10 @@ def _chat(orch: Any, message: str, session_id: str) -> tuple[ChatResult, str]:
 
         _print_details(
             _ChatResult(reply="", session_id=session_id),
-            activity_line(state, time.monotonic() - started),
+            activity_rows(state, time.monotonic() - started),
         )
         raise
-    return result, activity_line(state, time.monotonic() - started)
+    return result, activity_rows(state, time.monotonic() - started)
 
 
 def _one_shot(orch: Orchestrator, message: str, session_id: str) -> int:

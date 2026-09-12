@@ -44,6 +44,10 @@ def prefetch_tape(
             emit("tool_error", f"get_ticker failed: {e}")
         if indicators is None:
             continue
+        emit(
+            "tool",
+            f"prefetch → get_indicators(symbol={inst.symbol}, exchange={inst.exchange}, interval=1h)",
+        )
         try:
             ind = indicators.invoke(
                 {

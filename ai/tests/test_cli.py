@@ -25,6 +25,7 @@ from swyngora_ai.cli import (
     _status_text,
     _tools_label,
     activity_line,
+    activity_rows,
     activity_summary,
     advance_repl_cycle,
     advance_repl_nav,
@@ -38,6 +39,7 @@ from swyngora_ai.cli import (
     persist_repl_readline,
     readline_prompt,
     ring_step_history,
+    tool_activity_name,
     write_history_lines,
 )
 from swyngora_ai.graph.orchestrator import ChatResult
@@ -85,16 +87,16 @@ def test_apply_activity_event_updates_description_and_tool_count() -> None:
     state = ActivityBarState()
     assert apply_activity_event(state, {"type": "status", "text": "Planning…"})
     assert state.description == "Planning…"
-    assert state.tools == 0
+    assert state.tools_by_name == {}
     assert apply_activity_event(state, {"type": "tool", "text": "prefetch → get_ticker"})
     assert state.description == "prefetch → get_ticker"
-    assert state.tools == 1
+    assert state.tools_by_name == {"get_ticker": 1}
     assert not apply_activity_event(state, {"type": "final", "text": "done"})
     assert not apply_activity_event(state, {"type": "tool_result", "text": "get_ticker ✓ 100"})
-    assert state.tools == 1
+    assert state.tools_by_name == {"get_ticker": 1}
     assert state.description == "prefetch → get_ticker"
     assert apply_activity_event(state, {"type": "tool_error", "text": "get_indicators failed"})
-    assert state.tools == 1
+    assert state.tools_by_name == {"get_ticker": 1}
     assert state.description == "get_indicators failed"
     assert _tools_label(0) == "0 tool calls"
     assert _tools_label(1) == "1 tool call"
@@ -109,7 +111,44 @@ def test_apply_activity_event_updates_description_and_tool_count() -> None:
     again = ActivityBarState(fallback_model="qwen2.5")
     apply_activity_event(again, {"type": "tool", "text": "prefetch → get_ticker"})
     apply_activity_event(again, {"type": "llm", "text": "qwen2.5"})
-    assert activity_line(again, 75) == "1 tool call · 1 llm call qwen2.5 · 1:15 elapsed"
+    assert activity_line(again, 75) == "1 llm call qwen2.5 · 1:15 elapsed"
+    assert activity_rows(again, 75) == [
+        "1 llm call qwen2.5 · 1:15 elapsed",
+        "1 tool call get_ticker",
+    ]
+
+
+def test_tool_activity_name_strips_prefetch_and_args() -> None:
+    assert tool_activity_name("prefetch → get_ticker(symbol=BTCUSDT, exchange=binance)") == (
+        "get_ticker"
+    )
+    assert tool_activity_name("market_tape_agent → get_indicators(interval=1h)") == (
+        "get_indicators"
+    )
+    assert tool_activity_name("market_tape_agent(task=What is BTC RSI?)") == "market_tape_agent"
+
+
+def test_activity_counts_tools_per_name() -> None:
+    state = ActivityBarState()
+    apply_activity_event(state, {"type": "tool", "text": "prefetch → get_ticker(symbol=BTC)"})
+    apply_activity_event(
+        state, {"type": "tool", "text": "market_tape_agent → get_ticker(symbol=BTC)"}
+    )
+    apply_activity_event(state, {"type": "tool", "text": "prefetch → get_indicators(interval=1h)"})
+    apply_activity_event(state, {"type": "tool", "text": "market_tape_agent(task=rsi)"})
+    apply_activity_event(state, {"type": "llm", "text": "grok-4.4 (low)"})
+    assert activity_rows(state, 14) == [
+        "1 llm call grok-4.4 (low) · 0:14 elapsed",
+        "2 tool calls get_ticker",
+        "1 tool call get_indicators",
+        "1 tool call market_tape_agent",
+    ]
+    assert activity_summary(state) == ("4 tool calls · 1 llm call grok-4.4 (low)")
+    apply_activity_event(state, {"type": "tool_retry", "text": "get_ticker"})
+    apply_activity_event(state, {"type": "tool_retry", "text": "get_ticker"})
+    assert state.tools_by_name["get_ticker"] == 4
+    assert activity_rows(state, 14)[1] == "4 tool calls get_ticker (includes retries)"
+    assert activity_rows(state, 14)[2] == "1 tool call get_indicators"
 
 
 def test_activity_counts_llm_calls_per_model() -> None:
@@ -148,9 +187,10 @@ def test_chat_prints_details_activity_when_orchestrator_raises(monkeypatch) -> N
     assert seen
     result, activity = seen[0]
     assert result.session_id == "s1"
-    assert "llm call" in activity
-    assert "tool call" in activity
-    assert "elapsed" in activity
+    rows = list(activity) if not isinstance(activity, str) else [activity]
+    assert any("llm call" in row for row in rows)
+    assert any("tool call" in row for row in rows)
+    assert any("elapsed" in row for row in rows)
 
 
 def test_print_details_starts_with_activity_subsection(monkeypatch) -> None:
@@ -169,10 +209,14 @@ def test_print_details_starts_with_activity_subsection(monkeypatch) -> None:
             thinking=["Planning…"],
             tools=["prefetch → get_ticker"],
         ),
-        "1 tool call · 2 llm calls qwen2.5 · 0:03 elapsed",
+        [
+            "2 llm calls qwen2.5 · 0:03 elapsed",
+            "2 tool calls get_ticker",
+        ],
     )
     text = buf.getvalue()
-    assert "1 tool call · 2 llm calls qwen2.5 · 0:03 elapsed" in text
+    assert "2 llm calls qwen2.5 · 0:03 elapsed" in text
+    assert "2 tool calls get_ticker" in text
     assert "Activity" in text
     assert text.find("Activity") < text.find("thinking")
     assert text.find("Activity") < text.find("prefetch")
