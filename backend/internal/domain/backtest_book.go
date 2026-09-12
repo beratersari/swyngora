@@ -90,6 +90,7 @@ type BacktestBookFill struct {
 	StopToEntry    bool
 	TrailStops     []BacktestTrailStop
 	FeeRate        float64
+	SlipRate       float64
 }
 
 // NormalizeBacktestStartBalance applies the Lab default and a hard cap.
@@ -126,8 +127,9 @@ func NormalizeBacktestMaxOpenRiskPct(v float64) float64 {
 }
 
 // SimulateSharedBacktestBook walks fills in time order against one cash pot.
-// Each taken trade is sized so a full stop loses about riskPct of current
-// mark-to-market equity (cash + open margin + open unrealized). Combined open
+// Each taken trade is sized so a full stop — including fees and slippage —
+// loses about riskPct of current mark-to-market equity (cash + open margin +
+// open unrealized). Combined open
 // stop risk cannot exceed maxOpenRisk of that equity; skipped signals stay
 // skipped. When a fill closes or scales at TP1, later signals can use the free
 // risk. A new fill at the same timestamp as a TP1 scale does not take that
@@ -273,7 +275,7 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 				continue
 			}
 			p.stop = e.stop
-			p.risk = remainingStopRisk(fills[e.i].Side, fills[e.i].Entry, e.stop, p.notional)
+			p.risk = remainingStopRisk(fills[e.i].Side, fills[e.i].Entry, e.stop, p.notional, fills[e.i].FeeRate, fills[e.i].SlipRate)
 			open[e.i] = p
 			mark(e.at)
 			continue
@@ -295,10 +297,8 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 			p.margin -= closedM
 			if f.StopToEntry && len(f.TrailStops) == 0 {
 				p.stop = f.Entry
-				p.risk = 0
-			} else {
-				p.risk *= 1 - pct
 			}
+			p.risk = remainingStopRisk(f.Side, f.Entry, p.stop, p.notional, f.FeeRate, f.SlipRate)
 			open[e.i] = p
 			mark(e.at)
 			continue
@@ -331,7 +331,7 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 			out.SkippedSameCoin++
 			continue
 		}
-		stopF := stopFrac(f.Entry, f.StopLoss)
+		stopF := adverseStopFrac(f.Side, f.Entry, f.StopLoss, f.FeeRate, f.SlipRate, f.FeeRate)
 		if stopF <= 0 {
 			out.TradesSkipped++
 			continue
@@ -521,6 +521,9 @@ func BookFillsFromSignals(sigs []ScannerBacktestSignal, rangeEnd time.Time) []Ba
 		}
 		if tr.FeePct > 0 {
 			fill.FeeRate = tr.FeePct / 100
+		}
+		if tr.SlipPct > 0 {
+			fill.SlipRate = tr.SlipPct / 100
 		}
 		out = append(out, fill)
 	}

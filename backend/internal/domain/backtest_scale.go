@@ -222,20 +222,43 @@ func favorableExtreme(bar OHLC, side string) float64 {
 	return bar.Close
 }
 
-func remainingStopRisk(side string, entry, stop, notional float64) float64 {
-	if entry <= 0 || notional <= 0 || stop <= 0 {
+func remainingStopRisk(side string, entry, stop, notional, feeRate, slipRate float64) float64 {
+	if notional <= 0 {
 		return 0
 	}
-	if side == BacktestTradeSideShort {
-		if stop <= entry {
+	// Entry fee is already sunk. Only price move + exit fee remain if this stop hits.
+	return notional * adverseStopFrac(side, entry, stop, 0, slipRate, feeRate)
+}
+
+// adverseStopFrac is the share of entry notional lost if the stop hits, after
+// adverse slippage and fees. entryFeeRate is the open-leg fee (0 once sunk).
+func adverseStopFrac(side string, entry, stop, entryFeeRate, slipRate, exitFeeRate float64) float64 {
+	if entry <= 0 || stop <= 0 {
+		return 0
+	}
+	exit := labSlip(NormalizeTradeSide(side), false, stop, slipRate)
+	if exit <= 0 {
+		return 0
+	}
+	var move float64
+	if NormalizeTradeSide(side) == BacktestTradeSideShort {
+		if exit <= entry {
 			return 0
 		}
-		return notional * (stop - entry) / entry
+		move = (exit - entry) / entry
+	} else {
+		if exit >= entry {
+			return 0
+		}
+		move = (entry - exit) / entry
 	}
-	if stop >= entry {
-		return 0
+	if entryFeeRate < 0 {
+		entryFeeRate = 0
 	}
-	return notional * (entry - stop) / entry
+	if exitFeeRate < 0 {
+		exitFeeRate = 0
+	}
+	return move + entryFeeRate + exitFeeRate*(exit/entry)
 }
 
 func stopAtOrThroughEntry(side string, entry, stop float64) bool {

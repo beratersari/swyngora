@@ -198,9 +198,24 @@ func TestSimulateSharedBacktestBook_FeesCutBalance(t *testing.T) {
 			Entry: 100, StopLoss: 99, ExitPrice: 100, RangeExitPrice: 100, Leverage: 10,
 			HasExit: true, ClosedInRange: true, Outcome: BacktestTradeOutcomeTP, FeeRate: 0.001},
 	}, t0.Add(24*time.Hour))
-	// 1% risk / 1% stop → notional 10000. Entry fee 10 + exit fee 10.
-	if math.Abs(got.EndingBalance-9980) > 0.2 {
-		t.Fatalf("fees on both legs: %+v", got)
+	// Sized so a 1% stop plus 0.10% fees is 1% equity. Flat scratch still pays both fees
+	// on the smaller notional: 100 / (0.01+0.001+0.001*0.99) ≈ 8340, fees ≈ 16.6.
+	if got.EndingBalance > 9984 || got.EndingBalance < 9982 {
+		t.Fatalf("fees on both legs after net sizing: %+v", got)
+	}
+}
+
+func TestSimulateSharedBacktestBook_StopLossIsNetOfCosts(t *testing.T) {
+	t.Parallel()
+	t0 := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+	got := SimulateSharedBacktestBook(10000, 1, 3, []BacktestBookFill{
+		{Symbol: "ETHUSDT", Side: BacktestTradeSideLong, EntryAt: t0, ExitAt: t0.Add(time.Hour),
+			Entry: 100.05, StopLoss: 99, ExitPrice: 98.9505, RangeExitPrice: 98.9505, Leverage: 10,
+			HasExit: true, ClosedInRange: true, Outcome: BacktestTradeOutcomeSL,
+			FeeRate: 0.001, SlipRate: 0.0005},
+	}, t0.Add(24*time.Hour))
+	if math.Abs(got.EndingBalance-9900) > 0.6 {
+		t.Fatalf("full stop must lose about 1%% net of fee+slip: %+v", got)
 	}
 }
 
