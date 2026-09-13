@@ -178,6 +178,8 @@ type DataPort interface {
 	DeletePortfolioBasket(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	PreviewPortfolioRebalance(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	RebalancePortfolioBasket(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	ListPortfolioRebalances(ctx context.Context, clientID, basketID string, limit, offset int) (json.RawMessage, error)
+	GetPortfolioRebalance(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	PlaceMarginOrder(ctx context.Context, clientID, exchange, symbol, side, orderType string, quantity float64, leverage int, limitPrice float64, stopLoss, takeProfit *float64) (json.RawMessage, error)
 	ListMarginPositions(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetMarginPosition(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -3381,7 +3383,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("rebalance_portfolio_basket",
-		mcp.WithDescription("USER-TRIGGERED paper rebalance toward a basket (sell overweight, buy underweight at last price). Drift is allowed until this is called. Simulated only."),
+		mcp.WithDescription("USER-TRIGGERED paper rebalance toward a basket (sell overweight, buy underweight at last price). Stores a result with filled/failed legs and leftover mix drift. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("basketId", mcp.Required(), mcp.Description("Basket id")),
@@ -3396,6 +3398,48 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.RebalancePortfolioBasket(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("list_portfolio_rebalances",
+		mcp.WithDescription("List stored paper rebalance results for a book (optional basket). Shows filled vs failed legs and leftover mix drift. Does not trade."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
+		mcp.WithString("basketId", mcp.Description("Optional basket id")),
+		mcp.WithNumber("limit", mcp.Description("Max rows default 20")),
+		mcp.WithNumber("offset", mcp.Description("Offset default 0")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		raw, err := api.ListPortfolioRebalances(ctx, clientID, req.GetString("basketId", ""), req.GetInt("limit", 20), req.GetInt("offset", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_portfolio_rebalance",
+		mcp.WithDescription("Get one stored paper rebalance result: which legs filled or failed, leftover drift vs target, and sleeve before/after weights."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
+		mcp.WithString("rebalanceId", mcp.Required(), mcp.Description("Rebalance result id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		id, err := req.RequireString("rebalanceId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetPortfolioRebalance(ctx, clientID, id)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

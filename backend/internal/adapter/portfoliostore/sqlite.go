@@ -285,6 +285,66 @@ CREATE TABLE IF NOT EXISTS allocation_targets (
 	PRIMARY KEY (basket_id, asset),
 	FOREIGN KEY (basket_id) REFERENCES allocation_baskets(id) ON DELETE CASCADE
 );
+CREATE TABLE IF NOT EXISTS allocation_rebalances (
+	id                      TEXT PRIMARY KEY NOT NULL,
+	client_id               TEXT NOT NULL,
+	basket_id               TEXT NOT NULL,
+	basket_name             TEXT NOT NULL,
+	currency                TEXT NOT NULL,
+	status                  TEXT NOT NULL,
+	planned_legs            INTEGER NOT NULL,
+	filled_legs             INTEGER NOT NULL,
+	failed_legs             INTEGER NOT NULL,
+	before_equity           REAL NOT NULL,
+	after_equity            REAL NOT NULL,
+	before_cash             REAL NOT NULL,
+	after_cash              REAL NOT NULL,
+	remaining_abs_drift_pct REAL NOT NULL,
+	max_sleeve_drift_pct    REAL NOT NULL,
+	remaining_notional      REAL NOT NULL,
+	summary                 TEXT NOT NULL DEFAULT '',
+	note                    TEXT NOT NULL DEFAULT '',
+	created_at              TEXT NOT NULL,
+	FOREIGN KEY (basket_id) REFERENCES allocation_baskets(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_allocation_rebalances_client ON allocation_rebalances(client_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_allocation_rebalances_basket ON allocation_rebalances(basket_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS allocation_rebalance_legs (
+	rebalance_id      TEXT NOT NULL,
+	seq               INTEGER NOT NULL,
+	side              TEXT NOT NULL,
+	asset             TEXT NOT NULL,
+	exchange          TEXT NOT NULL,
+	symbol            TEXT NOT NULL,
+	reason            TEXT NOT NULL DEFAULT '',
+	planned_qty       REAL NOT NULL,
+	planned_price     REAL NOT NULL,
+	planned_notional  REAL NOT NULL,
+	status            TEXT NOT NULL,
+	trade_id          TEXT NOT NULL DEFAULT '',
+	filled_qty        REAL NOT NULL DEFAULT 0,
+	fill_price        REAL NOT NULL DEFAULT 0,
+	fill_notional     REAL NOT NULL DEFAULT 0,
+	error             TEXT NOT NULL DEFAULT '',
+	PRIMARY KEY (rebalance_id, seq),
+	FOREIGN KEY (rebalance_id) REFERENCES allocation_rebalances(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS allocation_rebalance_lines (
+	rebalance_id  TEXT NOT NULL,
+	asset         TEXT NOT NULL,
+	exchange      TEXT NOT NULL DEFAULT '',
+	symbol        TEXT NOT NULL DEFAULT '',
+	is_cash       INTEGER NOT NULL DEFAULT 0,
+	target_pct    REAL NOT NULL,
+	before_pct    REAL NOT NULL,
+	after_pct     REAL NOT NULL,
+	before_value  REAL NOT NULL,
+	after_value   REAL NOT NULL,
+	target_value  REAL NOT NULL,
+	after_delta   REAL NOT NULL,
+	PRIMARY KEY (rebalance_id, asset),
+	FOREIGN KEY (rebalance_id) REFERENCES allocation_rebalances(id) ON DELETE CASCADE
+);
 CREATE TABLE IF NOT EXISTS risk_limits (
 	client_id             TEXT PRIMARY KEY NOT NULL,
 	max_daily_loss_pct    REAL,
@@ -578,6 +638,9 @@ func (s *SQLite) DeletePortfolio(ctx context.Context, clientID, id string) error
 		`DELETE FROM cash_movements WHERE client_id = ?`,
 		`DELETE FROM portfolio_equity_snapshots WHERE client_id = ?`,
 		`DELETE FROM risk_limits WHERE client_id = ?`,
+		`DELETE FROM allocation_rebalance_legs WHERE rebalance_id IN (SELECT id FROM allocation_rebalances WHERE client_id = ?)`,
+		`DELETE FROM allocation_rebalance_lines WHERE rebalance_id IN (SELECT id FROM allocation_rebalances WHERE client_id = ?)`,
+		`DELETE FROM allocation_rebalances WHERE client_id = ?`,
 		`DELETE FROM allocation_targets WHERE basket_id IN (SELECT id FROM allocation_baskets WHERE client_id = ?)`,
 		`DELETE FROM allocation_baskets WHERE client_id = ?`,
 		`DELETE FROM recurring_buy_runs WHERE client_id = ?`,
@@ -2337,10 +2400,27 @@ func (s *SQLite) UpdateAllocationBasket(ctx context.Context, clientID, id string
 	return s.GetAllocationBasket(ctx, clientID, id)
 }
 
-// DeleteAllocationBasket removes a basket and its targets.
+// DeleteAllocationBasket removes a basket, its targets, and stored rebalance runs.
 func (s *SQLite) DeleteAllocationBasket(ctx context.Context, clientID, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, err := s.db.ExecContext(ctx, `
+		DELETE FROM allocation_rebalance_legs WHERE rebalance_id IN (
+			SELECT id FROM allocation_rebalances WHERE basket_id = ? AND client_id = ?
+		)
+	`, id, clientID); err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `
+		DELETE FROM allocation_rebalance_lines WHERE rebalance_id IN (
+			SELECT id FROM allocation_rebalances WHERE basket_id = ? AND client_id = ?
+		)
+	`, id, clientID); err != nil {
+		return err
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM allocation_rebalances WHERE basket_id = ? AND client_id = ?`, id, clientID); err != nil {
+		return err
+	}
 	res, err := s.db.ExecContext(ctx, `DELETE FROM allocation_baskets WHERE id = ? AND client_id = ?`, id, clientID)
 	if err != nil {
 		return err
@@ -2350,6 +2430,206 @@ func (s *SQLite) DeleteAllocationBasket(ctx context.Context, clientID, id string
 		return domain.ErrNotFound
 	}
 	return nil
+}
+
+const rebalanceCols = `id, client_id, basket_id, basket_name, currency, status, planned_legs, filled_legs, failed_legs,
+	before_equity, after_equity, before_cash, after_cash, remaining_abs_drift_pct, max_sleeve_drift_pct,
+	remaining_notional, summary, note, created_at`
+
+func scanRebalance(row scannable) (*domain.RebalanceResult, error) {
+	var r domain.RebalanceResult
+	var created string
+	if err := row.Scan(
+		&r.ID, &r.ClientID, &r.BasketID, &r.BasketName, &r.Currency, &r.Status,
+		&r.PlannedLegs, &r.FilledLegs, &r.FailedLegs,
+		&r.BeforeEquity, &r.AfterEquity, &r.BeforeCash, &r.AfterCash,
+		&r.RemainingAbsDriftPct, &r.MaxSleeveDriftPct, &r.RemainingNotional,
+		&r.Summary, &r.Note, &created,
+	); err != nil {
+		return nil, err
+	}
+	r.CreatedAt = parseTime(created)
+	return &r, nil
+}
+
+// CreateRebalanceResult stores a run and prunes old rows for the basket.
+func (s *SQLite) CreateRebalanceResult(ctx context.Context, r domain.RebalanceResult) (*domain.RebalanceResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO allocation_rebalances (`+rebalanceCols+`)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, r.ID, r.ClientID, r.BasketID, r.BasketName, r.Currency, r.Status,
+		r.PlannedLegs, r.FilledLegs, r.FailedLegs,
+		r.BeforeEquity, r.AfterEquity, r.BeforeCash, r.AfterCash,
+		r.RemainingAbsDriftPct, r.MaxSleeveDriftPct, r.RemainingNotional,
+		r.Summary, r.Note, r.CreatedAt.UTC().Format(time.RFC3339Nano)); err != nil {
+		return nil, err
+	}
+	for i, leg := range r.Legs {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO allocation_rebalance_legs (
+				rebalance_id, seq, side, asset, exchange, symbol, reason,
+				planned_qty, planned_price, planned_notional, status,
+				trade_id, filled_qty, fill_price, fill_notional, error
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, r.ID, i, string(leg.Side), leg.Asset, string(leg.Exchange), leg.Symbol, leg.Reason,
+			leg.PlannedQty, leg.PlannedPrice, leg.PlannedNotional, leg.Status,
+			leg.TradeID, leg.FilledQty, leg.FillPrice, leg.FillNotional, leg.Error); err != nil {
+			return nil, err
+		}
+	}
+	for _, ln := range r.Lines {
+		cash := 0
+		if ln.IsCash {
+			cash = 1
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO allocation_rebalance_lines (
+				rebalance_id, asset, exchange, symbol, is_cash, target_pct,
+				before_pct, after_pct, before_value, after_value, target_value, after_delta
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, r.ID, ln.Asset, string(ln.Exchange), ln.Symbol, cash, ln.TargetPct,
+			ln.BeforePct, ln.AfterPct, ln.BeforeValue, ln.AfterValue, ln.TargetValue, ln.AfterDelta); err != nil {
+			return nil, err
+		}
+	}
+	var n int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM allocation_rebalances WHERE basket_id = ?`, r.BasketID).Scan(&n); err != nil {
+		return nil, err
+	}
+	if n > domain.MaxAllocationRebalancesPerBasket {
+		drop := n - domain.MaxAllocationRebalancesPerBasket
+		if _, err := tx.ExecContext(ctx, `
+			DELETE FROM allocation_rebalances WHERE id IN (
+				SELECT id FROM allocation_rebalances WHERE basket_id = ? ORDER BY created_at ASC LIMIT ?
+			)
+		`, r.BasketID, drop); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return s.getRebalanceUnlocked(ctx, r.ClientID, r.ID)
+}
+
+func (s *SQLite) getRebalanceUnlocked(ctx context.Context, clientID, id string) (*domain.RebalanceResult, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT `+rebalanceCols+` FROM allocation_rebalances WHERE id = ? AND client_id = ?
+	`, id, clientID)
+	r, err := scanRebalance(row)
+	if err == sql.ErrNoRows {
+		return nil, domain.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := s.loadRebalanceChildren(ctx, r); err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+func (s *SQLite) loadRebalanceChildren(ctx context.Context, r *domain.RebalanceResult) error {
+	legRows, err := s.db.QueryContext(ctx, `
+		SELECT side, asset, exchange, symbol, reason, planned_qty, planned_price, planned_notional,
+			status, trade_id, filled_qty, fill_price, fill_notional, error
+		FROM allocation_rebalance_legs WHERE rebalance_id = ? ORDER BY seq ASC
+	`, r.ID)
+	if err != nil {
+		return err
+	}
+	defer legRows.Close()
+	for legRows.Next() {
+		var o domain.RebalanceLegOutcome
+		var side, ex string
+		if err := legRows.Scan(&side, &o.Asset, &ex, &o.Symbol, &o.Reason, &o.PlannedQty, &o.PlannedPrice, &o.PlannedNotional,
+			&o.Status, &o.TradeID, &o.FilledQty, &o.FillPrice, &o.FillNotional, &o.Error); err != nil {
+			return err
+		}
+		o.Side = domain.TradeSide(side)
+		o.Exchange = domain.Exchange(ex)
+		r.Legs = append(r.Legs, o)
+	}
+	if err := legRows.Err(); err != nil {
+		return err
+	}
+	lineRows, err := s.db.QueryContext(ctx, `
+		SELECT asset, exchange, symbol, is_cash, target_pct, before_pct, after_pct,
+			before_value, after_value, target_value, after_delta
+		FROM allocation_rebalance_lines WHERE rebalance_id = ? ORDER BY asset ASC
+	`, r.ID)
+	if err != nil {
+		return err
+	}
+	defer lineRows.Close()
+	for lineRows.Next() {
+		var ln domain.RebalanceLineSnapshot
+		var ex string
+		var cash int
+		if err := lineRows.Scan(&ln.Asset, &ex, &ln.Symbol, &cash, &ln.TargetPct, &ln.BeforePct, &ln.AfterPct,
+			&ln.BeforeValue, &ln.AfterValue, &ln.TargetValue, &ln.AfterDelta); err != nil {
+			return err
+		}
+		ln.Exchange = domain.Exchange(ex)
+		ln.IsCash = cash != 0
+		r.Lines = append(r.Lines, ln)
+	}
+	return lineRows.Err()
+}
+
+// GetRebalanceResult returns one stored run.
+func (s *SQLite) GetRebalanceResult(ctx context.Context, clientID, id string) (*domain.RebalanceResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.getRebalanceUnlocked(ctx, clientID, id)
+}
+
+// ListRebalanceResults lists newest-first runs. basketID empty = all books' baskets.
+func (s *SQLite) ListRebalanceResults(ctx context.Context, clientID, basketID string, limit, offset int) ([]domain.RebalanceResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > domain.MaxAllocationRebalanceList {
+		limit = domain.MaxAllocationRebalanceList
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	var rows *sql.Rows
+	var err error
+	if strings.TrimSpace(basketID) == "" {
+		rows, err = s.db.QueryContext(ctx, `
+			SELECT `+rebalanceCols+` FROM allocation_rebalances
+			WHERE client_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+		`, clientID, limit, offset)
+	} else {
+		rows, err = s.db.QueryContext(ctx, `
+			SELECT `+rebalanceCols+` FROM allocation_rebalances
+			WHERE client_id = ? AND basket_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?
+		`, clientID, basketID, limit, offset)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.RebalanceResult
+	for rows.Next() {
+		r, err := scanRebalance(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *r)
+	}
+	return out, rows.Err()
 }
 
 func scanRiskLimits(row scannable) (*domain.RiskLimits, error) {

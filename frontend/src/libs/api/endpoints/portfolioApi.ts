@@ -15,6 +15,9 @@ export type TaxLot = components['schemas']['TaxLot'];
 export type PortfolioShare = components['schemas']['PortfolioShare'];
 export type SharedPortfolioSummary = components['schemas']['SharedPortfolioSummary'];
 export type PaperTrade = components['schemas']['PaperTrade'];
+export type RebalanceResult = components['schemas']['RebalanceResult'];
+export type RebalanceLegOutcome = components['schemas']['RebalanceLegOutcome'];
+export type RebalanceLineSnapshot = components['schemas']['RebalanceLineSnapshot'];
 export type PendingOrder = components['schemas']['PendingOrder'];
 
 /** Spot position row (OpenAPI codegen flattens positions to `Record<string, never>[]`). */
@@ -468,6 +471,28 @@ export const portfolioApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ['Portfolio'],
     }),
+    listPortfolioRebalances: build.query<
+      { rebalances?: RebalanceResult[]; count?: number },
+      ({ basketId?: string; limit?: number; offset?: number } & BookArg) | void
+    >({
+      query: (arg) => ({
+        url: '/api/v1/portfolio/rebalances',
+        params: {
+          basketId: arg?.basketId,
+          limit: arg?.limit ?? 20,
+          offset: arg?.offset ?? 0,
+          ...bookParams(arg?.portfolioId),
+        },
+      }),
+      providesTags: ['Portfolio'],
+    }),
+    getPortfolioRebalance: build.query<RebalanceResult, { id: string } & BookArg>({
+      query: ({ id, portfolioId }) => ({
+        url: `/api/v1/portfolio/rebalances/${encodeURIComponent(id)}`,
+        params: bookParams(portfolioId),
+      }),
+      providesTags: ['Portfolio'],
+    }),
   }),
 });
 
@@ -493,6 +518,8 @@ export const {
   useAmendPortfolioOrderMutation,
   useCancelPortfolioOrderMutation,
   useListPortfolioTradesQuery,
+  useListPortfolioRebalancesQuery,
+  useGetPortfolioRebalanceQuery,
   useSetMarginModeMutation,
   usePlaceMarginOrderMutation,
   useListMarginPositionsQuery,

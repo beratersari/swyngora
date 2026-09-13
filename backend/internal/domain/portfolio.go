@@ -466,6 +466,9 @@ type PortfolioPort interface {
 	CountAllocationBaskets(ctx context.Context, clientID string) (int, error)
 	UpdateAllocationBasket(ctx context.Context, clientID, id string, b AllocationBasket) (*AllocationBasket, error)
 	DeleteAllocationBasket(ctx context.Context, clientID, id string) error
+	CreateRebalanceResult(ctx context.Context, r RebalanceResult) (*RebalanceResult, error)
+	GetRebalanceResult(ctx context.Context, clientID, id string) (*RebalanceResult, error)
+	ListRebalanceResults(ctx context.Context, clientID, basketID string, limit, offset int) ([]RebalanceResult, error)
 
 	// Risk limits (optional user brakes; no auto-close).
 	GetRiskLimits(ctx context.Context, clientID string) (*RiskLimits, error)

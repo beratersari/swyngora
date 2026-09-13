@@ -45,12 +45,23 @@ func TestAllocationBasket_CreatePreviewRebalance(t *testing.T) {
 	if math.Abs(v1.CashBalance-2000) > 1 {
 		t.Fatalf("preview mutated cash=%v", v1.CashBalance)
 	}
-	view, trades, err := svc.ExecuteAllocationRebalance(ctx, "bsk-1", b.ID)
+	run, err := svc.ExecuteAllocationRebalance(ctx, "bsk-1", b.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(trades) == 0 {
-		t.Fatalf("expected trades note=%s legs=%+v", view.Note, view.Plan.Legs)
+	if run == nil || run.FilledLegs == 0 {
+		t.Fatalf("expected fills %+v", run)
+	}
+	if run.Status != domain.RebalanceResultCompleted && run.Status != domain.RebalanceResultPartial {
+		t.Fatalf("status %s", run.Status)
+	}
+	got, err := svc.GetRebalanceResult(ctx, "bsk-1", run.ID)
+	if err != nil || got.ID != run.ID || len(got.Legs) == 0 {
+		t.Fatalf("stored %+v %v", got, err)
+	}
+	list, err := svc.ListRebalanceResults(ctx, "bsk-1", b.ID, 10, 0)
+	if err != nil || len(list) != 1 || list[0].ID != run.ID {
+		t.Fatalf("list %+v %v", list, err)
 	}
 	v2, _ := svc.View(ctx, "bsk-1")
 	// BTC should be closer to 50% of ~10k = 5000 → qty ~50

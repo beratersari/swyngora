@@ -164,7 +164,9 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `update_portfolio_basket` | Update name/targets (no trades) |
 | `delete_portfolio_basket` | Delete basket |
 | `preview_portfolio_rebalance` | Proposed sells/buys (no trades) |
-| `rebalance_portfolio_basket` | User-triggered rebalance |
+| `rebalance_portfolio_basket` | User-triggered rebalance (stores a result) |
+| `list_portfolio_rebalances` | Stored rebalance runs (filled / failed / leftover drift) |
+| `get_portfolio_rebalance` | One stored run with legs and sleeve before/after |
 | `set_margin_mode` | Set isolated or cross (locked if open pos/orders) |
 | `place_margin_order` | Paper margin long/short open (market/limit, 1x–10x; optional idempotencyKey) |
 | `list_margin_positions` | Open margin positions |

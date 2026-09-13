@@ -158,45 +158,74 @@ func (s *Service) PreviewAllocationRebalance(ctx context.Context, clientID, bask
 }
 
 // ExecuteAllocationRebalance places market sells then buys to move toward targets.
-// Manual only: nothing auto-rebalances in the background.
-func (s *Service) ExecuteAllocationRebalance(ctx context.Context, clientID, basketID string, portfolioID ...string) (*AllocationBasketView, []domain.Trade, error) {
+// Manual only: nothing auto-rebalances in the background. The run is stored.
+func (s *Service) ExecuteAllocationRebalance(ctx context.Context, clientID, basketID string, portfolioID ...string) (*domain.RebalanceResult, error) {
 	if _, err := s.requireAccessErr(ctx, clientID, domain.PortfolioRoleTrader, portfolioID...); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	plan, basket, err := s.buildAllocationPlan(ctx, clientID, basketID, portfolioID...)
+	before, basket, err := s.buildAllocationPlan(ctx, clientID, basketID, portfolioID...)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	pfID, ownerID := bookRefs(portfolioID)
-	var trades []domain.Trade
-	var failed []string
-	for _, leg := range plan.Legs {
+	outcomes := make([]domain.RebalanceLegOutcome, 0, len(before.Legs))
+	for _, leg := range before.Legs {
+		out := domain.RebalanceLegOutcome{
+			Side: leg.Side, Asset: leg.Asset, Exchange: leg.Exchange, Symbol: leg.Symbol, Reason: leg.Reason,
+			PlannedQty: leg.Quantity, PlannedPrice: leg.Price, PlannedNotional: leg.Notional,
+			Status: domain.RebalanceLegFailed,
+		}
 		tr, _, err := s.PlaceOrder(ctx, OrderInput{
 			ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID,
 			Exchange: string(leg.Exchange), Symbol: leg.Symbol,
 			Side: string(leg.Side), Quantity: leg.Quantity,
 		})
 		if err != nil {
-			failed = append(failed, fmt.Sprintf("%s %s: %s", leg.Side, leg.Asset, err.Error()))
+			out.Error = err.Error()
+			outcomes = append(outcomes, out)
 			continue
 		}
+		out.Status = domain.RebalanceLegFilled
 		if tr != nil {
-			trades = append(trades, *tr)
+			out.TradeID = tr.ID
+			out.FilledQty = tr.Quantity
+			out.FillPrice = tr.Price
+			out.FillNotional = tr.Notional
 		}
+		outcomes = append(outcomes, out)
 	}
-	view, err := s.PreviewAllocationRebalance(ctx, clientID, basketID, portfolioID...)
+	after, _, err := s.buildAllocationPlan(ctx, clientID, basketID, portfolioID...)
 	if err != nil {
-		return nil, trades, err
+		return nil, err
 	}
-	view.Note = "Rebalance executed at last prices. Drift is allowed until you run rebalance again. Paper trading; not real money."
-	if len(failed) > 0 {
-		view.Note += " Some legs skipped: " + strings.Join(failed, "; ")
+	res := domain.BuildRebalanceResult(uuid.NewString(), *basket, before, after, outcomes, time.Now().UTC())
+	stored, err := s.store.CreateRebalanceResult(ctx, res)
+	if err != nil {
+		return nil, err
 	}
-	if len(trades) == 0 && len(plan.Legs) == 0 {
-		view.Note = "Already near targets (or deltas below min notional). No trades. Paper trading; not real money."
+	return stored, nil
+}
+
+// ListRebalanceResults lists stored runs for the book (optional basket filter).
+func (s *Service) ListRebalanceResults(ctx context.Context, clientID, basketID string, limit, offset int, portfolioID ...string) ([]domain.RebalanceResult, error) {
+	p, err := s.requireAccessErr(ctx, clientID, domain.PortfolioRoleViewer, portfolioID...)
+	if err != nil {
+		return nil, err
 	}
-	_ = basket
-	return view, trades, nil
+	return s.store.ListRebalanceResults(ctx, p.BookID(), strings.TrimSpace(basketID), limit, offset)
+}
+
+// GetRebalanceResult returns one stored run with legs and leftover mix.
+func (s *Service) GetRebalanceResult(ctx context.Context, clientID, id string, portfolioID ...string) (*domain.RebalanceResult, error) {
+	p, err := s.requireAccessErr(ctx, clientID, domain.PortfolioRoleViewer, portfolioID...)
+	if err != nil {
+		return nil, err
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, fmt.Errorf("%w: rebalance id is required", domain.ErrInvalidArgument)
+	}
+	return s.store.GetRebalanceResult(ctx, p.BookID(), id)
 }
 
 func (s *Service) buildAllocationPlan(ctx context.Context, clientID, basketID string, portfolioID ...string) (domain.RebalancePlan, *domain.AllocationBasket, error) {

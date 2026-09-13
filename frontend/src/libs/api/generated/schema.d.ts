@@ -6389,6 +6389,64 @@ export interface components {
             /** Format: date-time */
             updatedAt?: string;
         };
+        /** @description Stored paper rebalance run — fills, failures, leftover mix */
+        RebalanceResult: {
+            id?: string;
+            clientId?: string;
+            basketId?: string;
+            basketName?: string;
+            currency?: string;
+            /** @enum {string} */
+            status?: "completed" | "partial" | "failed" | "no_trades";
+            plannedLegs?: number;
+            filledLegs?: number;
+            failedLegs?: number;
+            beforeEquity?: number;
+            afterEquity?: number;
+            beforeCash?: number;
+            afterCash?: number;
+            /** @description Sum of |afterPct − targetPct| */
+            remainingAbsDriftPct?: number;
+            maxSleeveDriftPct?: number;
+            remainingNotional?: number;
+            summary?: string;
+            note?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            legs?: components["schemas"]["RebalanceLegOutcome"][];
+            lines?: components["schemas"]["RebalanceLineSnapshot"][];
+        };
+        RebalanceLegOutcome: {
+            /** @enum {string} */
+            side?: "buy" | "sell";
+            asset?: string;
+            exchange?: string;
+            symbol?: string;
+            reason?: string;
+            plannedQuantity?: number;
+            plannedPrice?: number;
+            plannedNotional?: number;
+            /** @enum {string} */
+            status?: "filled" | "failed";
+            tradeId?: string;
+            filledQuantity?: number;
+            fillPrice?: number;
+            fillNotional?: number;
+            error?: string;
+        };
+        RebalanceLineSnapshot: {
+            asset?: string;
+            exchange?: string;
+            symbol?: string;
+            isCash?: boolean;
+            targetPct?: number;
+            beforePct?: number;
+            afterPct?: number;
+            beforeValue?: number;
+            afterValue?: number;
+            targetValue?: number;
+            afterDelta?: number;
+        };
         /** @description Settings screen DTO — current rules plus live daily PnL and per-asset weights */
         RiskLimitsView: {
             clientId?: string;

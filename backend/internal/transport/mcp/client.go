@@ -2128,6 +2128,27 @@ func (c *APIClient) RebalancePortfolioBasket(ctx context.Context, clientID, id s
 	return c.sendJSON(ctx, http.MethodPost, path, map[string]any{})
 }
 
+func (c *APIClient) ListPortfolioRebalances(ctx context.Context, clientID, basketID string, limit, offset int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	if basketID != "" {
+		q.Set("basketId", basketID)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", strconv.Itoa(offset))
+	}
+	return c.get(ctx, "/api/v1/portfolio/rebalances", q)
+}
+
+func (c *APIClient) GetPortfolioRebalance(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/portfolio/rebalances/"+url.PathEscape(id), q)
+}
+
 // DeleteRecurringBuyPlan deletes a plan.
 func (c *APIClient) DeleteRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	q := url.Values{}

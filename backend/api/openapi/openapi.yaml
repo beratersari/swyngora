@@ -5370,7 +5370,8 @@ paths:
       summary: Execute a paper basket rebalance
       description: |
         User-triggered only. Sells overweight (and coins not in the basket), then buys
-        underweight sleeves at last price. Drift is allowed until this is called.
+        underweight sleeves at last price. Stores a **rebalance result** (filled vs
+        failed legs, leftover mix vs target) that can be listed later.
         Paper trading — not real money. Not financial advice.
       operationId: rebalancePortfolioBasket
       tags: [Portfolio]
@@ -5387,9 +5388,90 @@ paths:
           schema: { type: string }
       responses:
         '200':
-          description: Trades plus updated drift
+          description: Stored rebalance result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RebalanceResult' }
         '400':
           $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/baskets/{id}/rebalances:
+    get:
+      summary: List stored rebalance results for a basket
+      operationId: listPortfolioBasketRebalances
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Result summaries (no legs/lines)
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/rebalances:
+    get:
+      summary: List stored paper rebalance results
+      operationId: listPortfolioRebalances
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: basketId
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Result summaries
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/rebalances/{id}:
+    get:
+      summary: Get one stored paper rebalance result
+      description: Filled vs failed legs, leftover mix vs target, and sleeve before/after weights.
+      operationId: getPortfolioRebalance
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Full rebalance result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RebalanceResult' }
         '404':
           $ref: '#/components/responses/Error'
   /api/v1/portfolio/baskets/{id}:
@@ -10234,6 +10316,66 @@ components:
           items: { $ref: '#/components/schemas/AllocationTarget' }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    RebalanceResult:
+      type: object
+      description: Stored paper rebalance run — fills, failures, leftover mix
+      properties:
+        id: { type: string }
+        clientId: { type: string }
+        basketId: { type: string }
+        basketName: { type: string }
+        currency: { type: string }
+        status: { type: string, enum: [completed, partial, failed, no_trades] }
+        plannedLegs: { type: integer }
+        filledLegs: { type: integer }
+        failedLegs: { type: integer }
+        beforeEquity: { type: number }
+        afterEquity: { type: number }
+        beforeCash: { type: number }
+        afterCash: { type: number }
+        remainingAbsDriftPct: { type: number, description: Sum of |afterPct − targetPct| }
+        maxSleeveDriftPct: { type: number }
+        remainingNotional: { type: number, description: Sum of leftover |target − after| value }
+        summary: { type: string }
+        note: { type: string }
+        createdAt: { type: string, format: date-time }
+        legs:
+          type: array
+          items: { $ref: '#/components/schemas/RebalanceLegOutcome' }
+        lines:
+          type: array
+          items: { $ref: '#/components/schemas/RebalanceLineSnapshot' }
+    RebalanceLegOutcome:
+      type: object
+      properties:
+        side: { type: string, enum: [buy, sell] }
+        asset: { type: string }
+        exchange: { type: string }
+        symbol: { type: string }
+        reason: { type: string }
+        plannedQuantity: { type: number }
+        plannedPrice: { type: number }
+        plannedNotional: { type: number }
+        status: { type: string, enum: [filled, failed] }
+        tradeId: { type: string }
+        filledQuantity: { type: number }
+        fillPrice: { type: number }
+        fillNotional: { type: number }
+        error: { type: string }
+    RebalanceLineSnapshot:
+      type: object
+      properties:
+        asset: { type: string }
+        exchange: { type: string }
+        symbol: { type: string }
+        isCash: { type: boolean }
+        targetPct: { type: number }
+        beforePct: { type: number }
+        afterPct: { type: number }
+        beforeValue: { type: number }
+        afterValue: { type: number }
+        targetValue: { type: number }
+        afterDelta: { type: number, description: targetValue − afterValue }
     RiskLimitsView:
       type: object
       description: Settings screen DTO — current rules plus live daily PnL and per-asset weights

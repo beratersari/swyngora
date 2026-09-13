@@ -46,6 +46,7 @@ Do **not** reintroduce `src/features/` for product UI until multiple product are
 | `AlertsTable` / `CreateAlertForm` | AlertsPage |
 | `SignalsSetupGrid` / `SignalsHitsTable` / `SignalsRuleForm` / `SignalsRulesTable` / `SignalsBacktestPanel` / `SignalsCustomPanel` | SignalsPage |
 | `PriceDiffScanTable` / `PriceDiffOpportunityTable` / `FundingArbScanTable` | ArbPage |
+| `RebalanceResultsTable` | PortfolioPage |
 
 Motion molecules used by organisms: `WatchStar`, `FlashValue` (live ticks). Page enter lives in `App` (`PageEnter`).
 

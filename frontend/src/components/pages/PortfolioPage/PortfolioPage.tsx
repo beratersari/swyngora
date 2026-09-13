@@ -14,6 +14,7 @@ import { PortfolioOrdersTable } from '@/components/organisms/PortfolioOrdersTabl
 import { PortfolioPositionsTable } from '@/components/organisms/PortfolioPositionsTable';
 import { PortfolioSummaryStrip } from '@/components/organisms/PortfolioSummaryStrip';
 import { PortfolioTradesTable } from '@/components/organisms/PortfolioTradesTable';
+import { RebalanceResultsTable } from '@/components/organisms/RebalanceResultsTable';
 import {
   rtkErrorMessage,
   useAmendPortfolioOrderMutation,
@@ -26,6 +27,8 @@ import {
   useListMarginPositionsQuery,
   useListPortfolioCashMovementsQuery,
   useListPortfolioOrdersQuery,
+  useGetPortfolioRebalanceQuery,
+  useListPortfolioRebalancesQuery,
   useListPortfolioTradesQuery,
   useListPortfoliosQuery,
   usePlaceMarginOrderMutation,
@@ -105,6 +108,15 @@ export function PortfolioPage() {
   const tradesQuery = useListPortfolioTradesQuery(
     { limit: 50, portfolioId: bookId },
     { skip: !bookId && books.length !== 1, refetchOnFocus: true },
+  );
+  const [expandedRebalance, setExpandedRebalance] = useState<string | undefined>();
+  const rebalancesQuery = useListPortfolioRebalancesQuery(
+    { limit: 20, portfolioId: bookId },
+    { skip: !bookId && books.length !== 1, refetchOnFocus: true },
+  );
+  const rebalanceDetail = useGetPortfolioRebalanceQuery(
+    { id: expandedRebalance ?? '', portfolioId: bookId },
+    { skip: !expandedRebalance },
   );
   const cashQuery = useListPortfolioCashMovementsQuery(
     { limit: 30, portfolioId: bookId },
@@ -403,6 +415,20 @@ export function PortfolioPage() {
                       }).unwrap();
                       void message.success(t('portfolio:margin.closeSuccess'));
                     }}
+                  />
+                ),
+              },
+              {
+                key: 'rebalances',
+                label: t('portfolio:rebalance.title'),
+                children: (
+                  <RebalanceResultsTable
+                    results={rtkCurrent(rebalancesQuery)?.rebalances ?? []}
+                    isLoading={rtkCurrentPending(rebalancesQuery)}
+                    expandedId={expandedRebalance}
+                    onExpand={setExpandedRebalance}
+                    detail={rebalanceDetail.data}
+                    detailLoading={rebalanceDetail.isFetching}
                   />
                 ),
               },

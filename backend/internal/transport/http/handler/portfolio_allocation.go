@@ -3,6 +3,7 @@ package handler
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
@@ -58,6 +59,96 @@ func allocationBasketToDTO(b *domain.AllocationBasket) allocationBasketDTO {
 		CreatedAt: b.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: b.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
+}
+
+type rebalanceLegOutcomeDTO struct {
+	Side            string  `json:"side"`
+	Asset           string  `json:"asset"`
+	Exchange        string  `json:"exchange"`
+	Symbol          string  `json:"symbol"`
+	Reason          string  `json:"reason,omitempty"`
+	PlannedQty      float64 `json:"plannedQuantity"`
+	PlannedPrice    float64 `json:"plannedPrice"`
+	PlannedNotional float64 `json:"plannedNotional"`
+	Status          string  `json:"status"`
+	TradeID         string  `json:"tradeId,omitempty"`
+	FilledQty       float64 `json:"filledQuantity,omitempty"`
+	FillPrice       float64 `json:"fillPrice,omitempty"`
+	FillNotional    float64 `json:"fillNotional,omitempty"`
+	Error           string  `json:"error,omitempty"`
+}
+
+type rebalanceLineDTO struct {
+	Asset       string  `json:"asset"`
+	Exchange    string  `json:"exchange,omitempty"`
+	Symbol      string  `json:"symbol,omitempty"`
+	IsCash      bool    `json:"isCash"`
+	TargetPct   float64 `json:"targetPct"`
+	BeforePct   float64 `json:"beforePct"`
+	AfterPct    float64 `json:"afterPct"`
+	BeforeValue float64 `json:"beforeValue"`
+	AfterValue  float64 `json:"afterValue"`
+	TargetValue float64 `json:"targetValue"`
+	AfterDelta  float64 `json:"afterDelta"`
+}
+
+type rebalanceResultDTO struct {
+	ID                   string                   `json:"id"`
+	ClientID             string                   `json:"clientId"`
+	BasketID             string                   `json:"basketId"`
+	BasketName           string                   `json:"basketName"`
+	Currency             string                   `json:"currency"`
+	Status               string                   `json:"status"`
+	PlannedLegs          int                      `json:"plannedLegs"`
+	FilledLegs           int                      `json:"filledLegs"`
+	FailedLegs           int                      `json:"failedLegs"`
+	BeforeEquity         float64                  `json:"beforeEquity"`
+	AfterEquity          float64                  `json:"afterEquity"`
+	BeforeCash           float64                  `json:"beforeCash"`
+	AfterCash            float64                  `json:"afterCash"`
+	RemainingAbsDriftPct float64                  `json:"remainingAbsDriftPct"`
+	MaxSleeveDriftPct    float64                  `json:"maxSleeveDriftPct"`
+	RemainingNotional    float64                  `json:"remainingNotional"`
+	Summary              string                   `json:"summary"`
+	Note                 string                   `json:"note"`
+	CreatedAt            string                   `json:"createdAt"`
+	Legs                 []rebalanceLegOutcomeDTO `json:"legs,omitempty"`
+	Lines                []rebalanceLineDTO       `json:"lines,omitempty"`
+}
+
+func rebalanceResultToDTO(r *domain.RebalanceResult, includeKids bool) rebalanceResultDTO {
+	d := rebalanceResultDTO{
+		ID: r.ID, ClientID: r.ClientID, BasketID: r.BasketID, BasketName: r.BasketName,
+		Currency: r.Currency, Status: r.Status,
+		PlannedLegs: r.PlannedLegs, FilledLegs: r.FilledLegs, FailedLegs: r.FailedLegs,
+		BeforeEquity: r.BeforeEquity, AfterEquity: r.AfterEquity,
+		BeforeCash: r.BeforeCash, AfterCash: r.AfterCash,
+		RemainingAbsDriftPct: r.RemainingAbsDriftPct, MaxSleeveDriftPct: r.MaxSleeveDriftPct,
+		RemainingNotional: r.RemainingNotional, Summary: r.Summary, Note: r.Note,
+		CreatedAt: r.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if !includeKids {
+		return d
+	}
+	d.Legs = make([]rebalanceLegOutcomeDTO, 0, len(r.Legs))
+	for _, l := range r.Legs {
+		d.Legs = append(d.Legs, rebalanceLegOutcomeDTO{
+			Side: string(l.Side), Asset: l.Asset, Exchange: string(l.Exchange), Symbol: l.Symbol, Reason: l.Reason,
+			PlannedQty: l.PlannedQty, PlannedPrice: l.PlannedPrice, PlannedNotional: l.PlannedNotional,
+			Status: l.Status, TradeID: l.TradeID, FilledQty: l.FilledQty, FillPrice: l.FillPrice,
+			FillNotional: l.FillNotional, Error: l.Error,
+		})
+	}
+	d.Lines = make([]rebalanceLineDTO, 0, len(r.Lines))
+	for _, ln := range r.Lines {
+		d.Lines = append(d.Lines, rebalanceLineDTO{
+			Asset: ln.Asset, Exchange: string(ln.Exchange), Symbol: ln.Symbol, IsCash: ln.IsCash,
+			TargetPct: ln.TargetPct, BeforePct: ln.BeforePct, AfterPct: ln.AfterPct,
+			BeforeValue: ln.BeforeValue, AfterValue: ln.AfterValue, TargetValue: ln.TargetValue,
+			AfterDelta: ln.AfterDelta,
+		})
+	}
+	return d
 }
 
 func allocationViewDTO(v *portfolio.AllocationBasketView, trades []domain.Trade) map[string]any {
@@ -214,10 +305,59 @@ func (h *PortfolioHandler) PreviewBasketRebalance(w http.ResponseWriter, r *http
 
 // RebalanceBasket handles POST /api/v1/portfolio/baskets/{id}/rebalance
 func (h *PortfolioHandler) RebalanceBasket(w http.ResponseWriter, r *http.Request) {
-	v, trades, err := h.svc.ExecuteAllocationRebalance(r.Context(), clientIDFrom(r), r.PathValue("id"), portfolioIDFrom(r))
+	res, err := h.svc.ExecuteAllocationRebalance(r.Context(), clientIDFrom(r), r.PathValue("id"), portfolioIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, allocationViewDTO(v, trades))
+	writeJSON(w, http.StatusOK, rebalanceResultToDTO(res, true))
+}
+
+// ListBasketRebalances handles GET /api/v1/portfolio/baskets/{id}/rebalances
+func (h *PortfolioHandler) ListBasketRebalances(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+	list, err := h.svc.ListRebalanceResults(r.Context(), clientIDFrom(r), r.PathValue("id"), limit, offset, portfolioIDFrom(r))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	items := make([]rebalanceResultDTO, 0, len(list))
+	for i := range list {
+		items = append(items, rebalanceResultToDTO(&list[i], false))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"clientId": clientIDFrom(r), "basketId": r.PathValue("id"),
+		"rebalances": items, "count": len(items),
+	})
+}
+
+// ListRebalances handles GET /api/v1/portfolio/rebalances
+func (h *PortfolioHandler) ListRebalances(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+	list, err := h.svc.ListRebalanceResults(r.Context(), clientIDFrom(r), r.URL.Query().Get("basketId"), limit, offset, portfolioIDFrom(r))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	items := make([]rebalanceResultDTO, 0, len(list))
+	for i := range list {
+		items = append(items, rebalanceResultToDTO(&list[i], false))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"clientId": clientIDFrom(r), "rebalances": items, "count": len(items),
+	})
+}
+
+// GetRebalance handles GET /api/v1/portfolio/rebalances/{id}
+func (h *PortfolioHandler) GetRebalance(w http.ResponseWriter, r *http.Request) {
+	res, err := h.svc.GetRebalanceResult(r.Context(), clientIDFrom(r), r.PathValue("id"), portfolioIDFrom(r))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rebalanceResultToDTO(res, true))
 }

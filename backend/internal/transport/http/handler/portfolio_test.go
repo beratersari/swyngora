@@ -676,8 +676,23 @@ func TestPortfolioHTTP_AllocationBasketRebalance(t *testing.T) {
 	}
 	var out map[string]any
 	_ = json.Unmarshal(rr.Body.Bytes(), &out)
-	if int(out["tradeCount"].(float64)) == 0 {
-		t.Fatalf("expected trades %v", out)
+	if int(out["filledLegs"].(float64)) == 0 {
+		t.Fatalf("expected fills %v", out)
+	}
+	rid := out["id"].(string)
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/portfolio/rebalances/"+rid+"?clientId=http-bsk", nil)
+	req.SetPathValue("id", rid)
+	rr = httptest.NewRecorder()
+	h.GetRebalance(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("get result %d %s", rr.Code, rr.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/portfolio/baskets/"+id+"/rebalances?clientId=http-bsk", nil)
+	req.SetPathValue("id", id)
+	rr = httptest.NewRecorder()
+	h.ListBasketRebalances(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("list %d %s", rr.Code, rr.Body.String())
 	}
 }
 

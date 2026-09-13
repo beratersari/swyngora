@@ -3584,11 +3584,75 @@ func (b *Backend) RebalancePortfolioBasket(ctx context.Context, clientID, id str
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
-	v, trades, err := b.Portfolio.ExecuteAllocationRebalance(ctx, clientID, id)
+	res, err := b.Portfolio.ExecuteAllocationRebalance(ctx, clientID, id)
 	if err != nil {
 		return nil, err
 	}
-	return mustJSON(allocationViewMap(v, trades))
+	return mustJSON(rebalanceResultMap(res, true))
+}
+
+func (b *Backend) ListPortfolioRebalances(ctx context.Context, clientID, basketID string, limit, offset int) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	list, err := b.Portfolio.ListRebalanceResults(ctx, clientID, basketID, limit, offset, PortfolioIDFrom(ctx))
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, rebalanceResultMap(&list[i], false))
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "basketId": basketID, "rebalances": items, "count": len(items)})
+}
+
+func (b *Backend) GetPortfolioRebalance(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	res, err := b.Portfolio.GetRebalanceResult(ctx, clientID, id, PortfolioIDFrom(ctx))
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(rebalanceResultMap(res, true))
+}
+
+func rebalanceResultMap(r *domain.RebalanceResult, kids bool) map[string]any {
+	m := map[string]any{
+		"id": r.ID, "clientId": r.ClientID, "basketId": r.BasketID, "basketName": r.BasketName,
+		"currency": r.Currency, "status": r.Status,
+		"plannedLegs": r.PlannedLegs, "filledLegs": r.FilledLegs, "failedLegs": r.FailedLegs,
+		"beforeEquity": r.BeforeEquity, "afterEquity": r.AfterEquity,
+		"beforeCash": r.BeforeCash, "afterCash": r.AfterCash,
+		"remainingAbsDriftPct": r.RemainingAbsDriftPct, "maxSleeveDriftPct": r.MaxSleeveDriftPct,
+		"remainingNotional": r.RemainingNotional, "summary": r.Summary, "note": r.Note,
+		"createdAt": r.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if !kids {
+		return m
+	}
+	legs := make([]map[string]any, 0, len(r.Legs))
+	for _, l := range r.Legs {
+		legs = append(legs, map[string]any{
+			"side": string(l.Side), "asset": l.Asset, "exchange": string(l.Exchange), "symbol": l.Symbol,
+			"reason": l.Reason, "plannedQuantity": l.PlannedQty, "plannedPrice": l.PlannedPrice,
+			"plannedNotional": l.PlannedNotional, "status": l.Status, "tradeId": l.TradeID,
+			"filledQuantity": l.FilledQty, "fillPrice": l.FillPrice, "fillNotional": l.FillNotional,
+			"error": l.Error,
+		})
+	}
+	lines := make([]map[string]any, 0, len(r.Lines))
+	for _, ln := range r.Lines {
+		lines = append(lines, map[string]any{
+			"asset": ln.Asset, "exchange": string(ln.Exchange), "symbol": ln.Symbol, "isCash": ln.IsCash,
+			"targetPct": ln.TargetPct, "beforePct": ln.BeforePct, "afterPct": ln.AfterPct,
+			"beforeValue": ln.BeforeValue, "afterValue": ln.AfterValue, "targetValue": ln.TargetValue,
+			"afterDelta": ln.AfterDelta,
+		})
+	}
+	m["legs"] = legs
+	m["lines"] = lines
+	return m
 }
 
 func (b *Backend) DeleteRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error) {
