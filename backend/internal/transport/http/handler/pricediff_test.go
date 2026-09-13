@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/pricediffstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
@@ -103,6 +104,28 @@ func TestQuoteScan_OK(t *testing.T) {
 		if u.Exchange == "coinbase" && u.Message == "" {
 			t.Fatalf("missing-book message empty: %+v", u)
 		}
+	}
+}
+
+func TestOppDTO_IncludesReview(t *testing.T) {
+	t0 := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
+	closed := t0.Add(10 * time.Minute)
+	fade := t0.Add(3 * time.Minute)
+	o := &domain.PriceDiffOpportunity{
+		ID: "o1", WatchID: "w1", ClientID: "c1", Symbol: "BTCUSDT",
+		BuyExchange: domain.ExchangeBinance, SellExchange: domain.ExchangeBybit,
+		Status: domain.PriceDiffOppClosed, OpenedAt: t0, LastSeenAt: closed, ClosedAt: &closed,
+		OpenNetDiffPct: 0.40, PeakNetDiffPct: 0.81, PeakAt: t0.Add(2 * time.Minute),
+		FadeStartedAt: &fade, CloseReason: domain.PriceDiffCloseBelowMinProfit,
+		CloseNetDiffPct: 0.08, NetDiffPct: 0.08,
+		Ticks: []domain.PriceDiffOppTick{{At: t0, NetDiffPct: 0.40}, {At: closed, NetDiffPct: 0.08}},
+	}
+	d := oppDTO(o)
+	if d.CloseReason != string(domain.PriceDiffCloseBelowMinProfit) || d.Review.Summary == "" {
+		t.Fatalf("%+v", d)
+	}
+	if d.Review.OpenDurationSec < 599 || len(d.Ticks) != 2 {
+		t.Fatalf("%+v", d)
 	}
 }
 

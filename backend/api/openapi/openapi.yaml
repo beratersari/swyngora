@@ -6434,6 +6434,10 @@ paths:
   /api/v1/price-diff/opportunities/{id}:
     get:
       summary: Get a price difference opportunity
+      description: |
+        Returns the opportunity plus a review of what happened after it opened
+        (duration, peak edge, when it started fading, why it closed) and the
+        sampled book-walk path (`ticks`). Informational only.
       operationId: getPriceDiffOpportunity
       tags: [PriceDiff]
       parameters:
@@ -10304,12 +10308,59 @@ components:
         buyPrice: { type: number }
         sellPrice: { type: number }
         grossDiffPct: { type: number }
-        netDiffPct: { type: number }
+        netDiffPct: { type: number, description: Latest after-fee edge percent }
         minNetDiffPct: { type: number }
         status: { type: string, enum: [open, closed] }
         openedAt: { type: string, format: date-time }
         lastSeenAt: { type: string, format: date-time }
         closedAt: { type: string, format: date-time, nullable: true }
+        openNetDiffPct: { type: number, description: After-fee edge when the opportunity opened }
+        openProfit: { type: number }
+        peakNetDiffPct: { type: number, description: Highest after-fee edge while open }
+        peakProfit: { type: number }
+        peakAt: { type: string, format: date-time }
+        fadeStartedAt: { type: string, format: date-time, description: First sample at least 0.01% below the peak }
+        closeReason:
+          type: string
+          enum: [below_min_profit, below_min_net, thin_book, paused, venues_changed]
+        closeNetDiffPct: { type: number }
+        closeProfit: { type: number }
+        review:
+          $ref: '#/components/schemas/PriceDiffOppReview'
+        ticks:
+          type: array
+          description: Sampled path (GET one opportunity only)
+          items:
+            $ref: '#/components/schemas/PriceDiffOppTick'
+    PriceDiffOppReview:
+      type: object
+      description: How the gap moved after it opened
+      properties:
+        openDurationSec: { type: number }
+        openNetDiffPct: { type: number }
+        openProfit: { type: number }
+        peakNetDiffPct: { type: number }
+        peakProfit: { type: number }
+        peakAt: { type: string, format: date-time }
+        peakDeltaPct: { type: number, description: peak minus open net % }
+        fadeStartedAt: { type: string, format: date-time }
+        fadeFromPeakSec: { type: number }
+        lastNetDiffPct: { type: number }
+        lastProfit: { type: number }
+        closeReason:
+          type: string
+          enum: [below_min_profit, below_min_net, thin_book, paused, venues_changed]
+        summary: { type: string }
+    PriceDiffOppTick:
+      type: object
+      properties:
+        at: { type: string, format: date-time }
+        buyPrice: { type: number }
+        sellPrice: { type: number }
+        grossDiffPct: { type: number }
+        netDiffPct: { type: number }
+        profit: { type: number }
+        executable: { type: boolean }
     PriceDiffQuote:
       type: object
       description: Simulated two-venue market buy/sell from live spot books

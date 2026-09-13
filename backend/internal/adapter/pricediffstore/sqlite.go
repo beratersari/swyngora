@@ -164,6 +164,66 @@ CREATE TABLE IF NOT EXISTS price_diff_route_arms (
 		if err := sqliteutil.SetUserVersion(s.db, 4); err != nil {
 			return err
 		}
+		v = 4
+	}
+	if v < 5 {
+		for _, stmt := range []string{
+			`ALTER TABLE price_diff_opportunities ADD COLUMN open_buy_price REAL NOT NULL DEFAULT 0`,
+			`ALTER TABLE price_diff_opportunities ADD COLUMN open_sell_price REAL NOT NULL DEFAULT 0`,
+			`ALTER TABLE price_diff_opportunities ADD COLUMN open_gross_diff_pct REAL NOT NULL DEFAULT 0`,
+			`ALTER TABLE price_diff_opportunities ADD COLUMN open_net_diff_pct REAL NOT NULL DEFAULT 0`,
+			`ALTER TABLE price_diff_opportunities ADD COLUMN open_profit REAL NOT NULL DEFAULT 0`,
+			`ALTER TABLE price_diff_opportunities ADD COLUMN peak_buy_price REAL NOT NULL DEFAULT 0`,
+			`ALTER TABLE price_diff_opportunities ADD COLUMN peak_sell_price REAL NOT NULL DEFAULT 0`,
+			`ALTER TABLE price_diff_opportunities ADD COLUMN peak_gross_diff_pct REAL NOT NULL DEFAULT 0`,
+			`ALTER TABLE price_diff_opportunities ADD COLUMN peak_net_diff_pct REAL NOT NULL DEFAULT 0`,
+			`ALTER TABLE price_diff_opportunities ADD COLUMN peak_profit REAL NOT NULL DEFAULT 0`,
+			`ALTER TABLE price_diff_opportunities ADD COLUMN peak_at TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE price_diff_opportunities ADD COLUMN fade_started_at TEXT`,
+			`ALTER TABLE price_diff_opportunities ADD COLUMN close_reason TEXT NOT NULL DEFAULT ''`,
+			`ALTER TABLE price_diff_opportunities ADD COLUMN close_net_diff_pct REAL NOT NULL DEFAULT 0`,
+			`ALTER TABLE price_diff_opportunities ADD COLUMN close_profit REAL NOT NULL DEFAULT 0`,
+		} {
+			if err := sqliteutil.ExecAllowExists(s.db, stmt); err != nil {
+				return err
+			}
+		}
+		if _, err := s.db.Exec(`
+UPDATE price_diff_opportunities SET
+	open_buy_price = buy_price,
+	open_sell_price = sell_price,
+	open_gross_diff_pct = gross_diff_pct,
+	open_net_diff_pct = net_diff_pct,
+	peak_buy_price = buy_price,
+	peak_sell_price = sell_price,
+	peak_gross_diff_pct = gross_diff_pct,
+	peak_net_diff_pct = net_diff_pct,
+	peak_at = opened_at
+WHERE peak_at = '' OR peak_at IS NULL
+`); err != nil {
+			return err
+		}
+		if _, err := s.db.Exec(`
+CREATE TABLE IF NOT EXISTS price_diff_opp_ticks (
+	opportunity_id TEXT NOT NULL,
+	at TEXT NOT NULL,
+	buy_price REAL NOT NULL,
+	sell_price REAL NOT NULL,
+	gross_diff_pct REAL NOT NULL,
+	net_diff_pct REAL NOT NULL,
+	profit REAL NOT NULL,
+	executable INTEGER NOT NULL,
+	PRIMARY KEY (opportunity_id, at),
+	FOREIGN KEY (opportunity_id) REFERENCES price_diff_opportunities(id) ON DELETE CASCADE
+)`); err != nil {
+			return err
+		}
+		if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_pd_opp_ticks ON price_diff_opp_ticks(opportunity_id, at)`); err != nil {
+			return err
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 5); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -321,15 +381,21 @@ func (s *SQLite) CountWatches(ctx context.Context, clientID string) (int, error)
 }
 
 const oppCols = `id, watch_id, client_id, symbol, buy_exchange, sell_exchange, buy_price, sell_price,
-	gross_diff_pct, net_diff_pct, min_net_diff_pct, status, opened_at, last_seen_at, closed_at`
+	gross_diff_pct, net_diff_pct, min_net_diff_pct, status, opened_at, last_seen_at, closed_at,
+	open_buy_price, open_sell_price, open_gross_diff_pct, open_net_diff_pct, open_profit,
+	peak_buy_price, peak_sell_price, peak_gross_diff_pct, peak_net_diff_pct, peak_profit, peak_at,
+	fade_started_at, close_reason, close_net_diff_pct, close_profit`
 
 func scanOpp(row scannable) (*domain.PriceDiffOpportunity, error) {
 	var o domain.PriceDiffOpportunity
-	var buyEx, sellEx, st, opened, last string
-	var closed sql.NullString
+	var buyEx, sellEx, st, opened, last, peakAt, closeReason string
+	var closed, fade sql.NullString
 	if err := row.Scan(
 		&o.ID, &o.WatchID, &o.ClientID, &o.Symbol, &buyEx, &sellEx, &o.BuyPrice, &o.SellPrice,
 		&o.GrossDiffPct, &o.NetDiffPct, &o.MinNetDiffPct, &st, &opened, &last, &closed,
+		&o.OpenBuyPrice, &o.OpenSellPrice, &o.OpenGrossDiffPct, &o.OpenNetDiffPct, &o.OpenProfit,
+		&o.PeakBuyPrice, &o.PeakSellPrice, &o.PeakGrossDiffPct, &o.PeakNetDiffPct, &o.PeakProfit, &peakAt,
+		&fade, &closeReason, &o.CloseNetDiffPct, &o.CloseProfit,
 	); err != nil {
 		return nil, err
 	}
@@ -338,11 +404,28 @@ func scanOpp(row scannable) (*domain.PriceDiffOpportunity, error) {
 	o.Status = domain.PriceDiffOppStatus(st)
 	o.OpenedAt = parseTime(opened)
 	o.LastSeenAt = parseTime(last)
+	o.PeakAt = parseTime(peakAt)
+	o.CloseReason = domain.PriceDiffCloseReason(closeReason)
 	if closed.Valid && closed.String != "" {
 		t := parseTime(closed.String)
 		o.ClosedAt = &t
 	}
+	if fade.Valid && fade.String != "" {
+		t := parseTime(fade.String)
+		o.FadeStartedAt = &t
+	}
 	return &o, nil
+}
+
+func oppInsertArgs(o domain.PriceDiffOpportunity) []any {
+	return []any{
+		o.ID, o.WatchID, o.ClientID, o.Symbol, string(o.BuyExchange), string(o.SellExchange),
+		o.BuyPrice, o.SellPrice, o.GrossDiffPct, o.NetDiffPct, o.MinNetDiffPct, string(o.Status),
+		o.OpenedAt.UTC().Format(time.RFC3339Nano), o.LastSeenAt.UTC().Format(time.RFC3339Nano), nullTime(o.ClosedAt),
+		o.OpenBuyPrice, o.OpenSellPrice, o.OpenGrossDiffPct, o.OpenNetDiffPct, o.OpenProfit,
+		o.PeakBuyPrice, o.PeakSellPrice, o.PeakGrossDiffPct, o.PeakNetDiffPct, o.PeakProfit, textTime(o.PeakAt),
+		nullTime(o.FadeStartedAt), string(o.CloseReason), o.CloseNetDiffPct, o.CloseProfit,
+	}
 }
 
 // GetOpenOpportunity returns the open opportunity for a route.
@@ -362,14 +445,12 @@ func (s *SQLite) GetOpenOpportunity(ctx context.Context, watchID string, buy, se
 func (s *SQLite) CreateOpportunity(ctx context.Context, o domain.PriceDiffOpportunity) (*domain.PriceDiffOpportunity, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	args := append(oppInsertArgs(o), o.WatchID)
 	res, err := s.db.ExecContext(ctx, `
 		INSERT INTO price_diff_opportunities (`+oppCols+`)
-		SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+		SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 		WHERE EXISTS (SELECT 1 FROM price_diff_watches WHERE id = ? AND status = 'active')
-	`, o.ID, o.WatchID, o.ClientID, o.Symbol, string(o.BuyExchange), string(o.SellExchange),
-		o.BuyPrice, o.SellPrice, o.GrossDiffPct, o.NetDiffPct, o.MinNetDiffPct, string(o.Status),
-		o.OpenedAt.UTC().Format(time.RFC3339Nano), o.LastSeenAt.UTC().Format(time.RFC3339Nano), nullTime(o.ClosedAt),
-		o.WatchID)
+	`, args...)
 	if err != nil {
 		msg := strings.ToLower(err.Error())
 		if strings.Contains(msg, "unique") {
@@ -382,6 +463,10 @@ func (s *SQLite) CreateOpportunity(ctx context.Context, o domain.PriceDiffOpport
 	if n == 0 {
 		return nil, domain.ErrConflict
 	}
+	_ = s.appendTickUnlocked(ctx, o.ID, domain.PriceDiffOppSample{
+		At: o.OpenedAt, BuyPrice: o.BuyPrice, SellPrice: o.SellPrice,
+		GrossDiffPct: o.GrossDiffPct, NetDiffPct: o.NetDiffPct, Profit: o.OpenProfit, Executable: true,
+	})
 	return s.getOppByID(ctx, o.ID)
 }
 
@@ -401,42 +486,138 @@ func nullTime(t *time.Time) any {
 	return t.UTC().Format(time.RFC3339Nano)
 }
 
-// TouchOpportunity updates live fields on an open opportunity.
-func (s *SQLite) TouchOpportunity(ctx context.Context, id string, buyPrice, sellPrice, grossPct, netPct float64, at time.Time) (*domain.PriceDiffOpportunity, error) {
+func textTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339Nano)
+}
+
+// TouchOpportunity records a live sample on an open opportunity.
+func (s *SQLite) TouchOpportunity(ctx context.Context, id string, sample domain.PriceDiffOppSample) (*domain.PriceDiffOpportunity, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	res, err := s.db.ExecContext(ctx, `
-		UPDATE price_diff_opportunities
-		SET buy_price = ?, sell_price = ?, gross_diff_pct = ?, net_diff_pct = ?, last_seen_at = ?
-		WHERE id = ? AND status = 'open'
-	`, buyPrice, sellPrice, grossPct, netPct, at.UTC().Format(time.RFC3339Nano), id)
+	o, err := s.getOppByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
+	if o.Status != domain.PriceDiffOppOpen {
 		return nil, domain.ErrNotFound
 	}
+	domain.ApplyPriceDiffOppTick(o, sample)
+	if err := s.updateOppUnlocked(ctx, *o); err != nil {
+		return nil, err
+	}
+	_ = s.appendTickUnlocked(ctx, o.ID, sample)
 	return s.getOppByID(ctx, id)
 }
 
 // CloseOpportunity marks an open opportunity closed.
-func (s *SQLite) CloseOpportunity(ctx context.Context, id string, at time.Time) (*domain.PriceDiffOpportunity, error) {
+func (s *SQLite) CloseOpportunity(ctx context.Context, id string, at time.Time, reason domain.PriceDiffCloseReason, last *domain.PriceDiffOppSample) (*domain.PriceDiffOpportunity, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	res, err := s.db.ExecContext(ctx, `
-		UPDATE price_diff_opportunities
-		SET status = 'closed', closed_at = ?, last_seen_at = ?
-		WHERE id = ? AND status = 'open'
-	`, at.UTC().Format(time.RFC3339Nano), at.UTC().Format(time.RFC3339Nano), id)
+	o, err := s.getOppByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	n, _ := res.RowsAffected()
-	if n == 0 {
+	if o.Status != domain.PriceDiffOppOpen {
 		return nil, domain.ErrNotFound
 	}
+	domain.ClosePriceDiffOpportunity(o, at, reason, last)
+	if err := s.updateOppUnlocked(ctx, *o); err != nil {
+		return nil, err
+	}
+	if last != nil {
+		_ = s.appendTickUnlocked(ctx, o.ID, *last)
+	}
 	return s.getOppByID(ctx, id)
+}
+
+func (s *SQLite) updateOppUnlocked(ctx context.Context, o domain.PriceDiffOpportunity) error {
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE price_diff_opportunities SET
+			buy_price = ?, sell_price = ?, gross_diff_pct = ?, net_diff_pct = ?,
+			last_seen_at = ?, closed_at = ?, status = ?,
+			open_buy_price = ?, open_sell_price = ?, open_gross_diff_pct = ?, open_net_diff_pct = ?, open_profit = ?,
+			peak_buy_price = ?, peak_sell_price = ?, peak_gross_diff_pct = ?, peak_net_diff_pct = ?, peak_profit = ?, peak_at = ?,
+			fade_started_at = ?, close_reason = ?, close_net_diff_pct = ?, close_profit = ?
+		WHERE id = ?
+	`, o.BuyPrice, o.SellPrice, o.GrossDiffPct, o.NetDiffPct,
+		textTime(o.LastSeenAt), nullTime(o.ClosedAt), string(o.Status),
+		o.OpenBuyPrice, o.OpenSellPrice, o.OpenGrossDiffPct, o.OpenNetDiffPct, o.OpenProfit,
+		o.PeakBuyPrice, o.PeakSellPrice, o.PeakGrossDiffPct, o.PeakNetDiffPct, o.PeakProfit, textTime(o.PeakAt),
+		nullTime(o.FadeStartedAt), string(o.CloseReason), o.CloseNetDiffPct, o.CloseProfit, o.ID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (s *SQLite) appendTickUnlocked(ctx context.Context, oppID string, sample domain.PriceDiffOppSample) error {
+	if oppID == "" || sample.At.IsZero() {
+		return nil
+	}
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT OR REPLACE INTO price_diff_opp_ticks
+			(opportunity_id, at, buy_price, sell_price, gross_diff_pct, net_diff_pct, profit, executable)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`, oppID, sample.At.UTC().Format(time.RFC3339Nano), sample.BuyPrice, sample.SellPrice,
+		sample.GrossDiffPct, sample.NetDiffPct, sample.Profit, boolInt(sample.Executable)); err != nil {
+		return err
+	}
+	var n int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM price_diff_opp_ticks WHERE opportunity_id = ?`, oppID).Scan(&n); err != nil {
+		return err
+	}
+	if n <= domain.MaxPriceDiffOppTicks {
+		return nil
+	}
+	drop := n - domain.MaxPriceDiffOppTicks
+	_, err := s.db.ExecContext(ctx, `
+		DELETE FROM price_diff_opp_ticks WHERE opportunity_id = ? AND at IN (
+			SELECT at FROM price_diff_opp_ticks WHERE opportunity_id = ? ORDER BY at ASC LIMIT ?
+		)
+	`, oppID, oppID, drop)
+	return err
+}
+
+func boolInt(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
+}
+
+// ListOpportunityTicks returns oldest-first samples for one opportunity.
+func (s *SQLite) ListOpportunityTicks(ctx context.Context, opportunityID string, limit int) ([]domain.PriceDiffOppTick, error) {
+	if limit <= 0 || limit > domain.MaxPriceDiffOppTicks {
+		limit = domain.MaxPriceDiffOppTicks
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT opportunity_id, at, buy_price, sell_price, gross_diff_pct, net_diff_pct, profit, executable
+		FROM price_diff_opp_ticks WHERE opportunity_id = ? ORDER BY at ASC LIMIT ?
+	`, opportunityID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.PriceDiffOppTick
+	for rows.Next() {
+		var t domain.PriceDiffOppTick
+		var at string
+		var exec int
+		if err := rows.Scan(&t.OpportunityID, &at, &t.BuyPrice, &t.SellPrice, &t.GrossDiffPct, &t.NetDiffPct, &t.Profit, &exec); err != nil {
+			return nil, err
+		}
+		t.At = parseTime(at)
+		t.Executable = exec != 0
+		out = append(out, t)
+	}
+	return out, rows.Err()
 }
 
 // ListOpenOpportunitiesForWatch lists open opps for a watch.

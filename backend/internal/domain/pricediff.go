@@ -72,6 +72,7 @@ type PriceDiffRouteArm struct {
 // While status=open, the same (watch_id, buy_ex, sell_ex) must not be recreated.
 // When net edge falls below the watch threshold the opportunity is closed;
 // a later re-cross creates a new opportunity row.
+// Buy/Sell/Net on the row are the latest sample. Open* / Peak* / Close* keep the path.
 type PriceDiffOpportunity struct {
 	ID            string
 	WatchID       string
@@ -88,6 +89,24 @@ type PriceDiffOpportunity struct {
 	OpenedAt      time.Time
 	LastSeenAt    time.Time
 	ClosedAt      *time.Time
+
+	OpenBuyPrice     float64
+	OpenSellPrice    float64
+	OpenGrossDiffPct float64
+	OpenNetDiffPct   float64
+	OpenProfit       float64
+	PeakBuyPrice     float64
+	PeakSellPrice    float64
+	PeakGrossDiffPct float64
+	PeakNetDiffPct   float64
+	PeakProfit       float64
+	PeakAt           time.Time
+	FadeStartedAt    *time.Time
+	CloseReason      PriceDiffCloseReason
+	CloseNetDiffPct  float64
+	CloseProfit      float64
+	// Ticks is the sampled path; store fills this on GET only.
+	Ticks []PriceDiffOppTick
 }
 
 // PriceDiffRoute is one directional arb evaluation (buy on A, sell on B).
@@ -378,14 +397,15 @@ type PriceDiffPort interface {
 	GetOpenOpportunity(ctx context.Context, watchID string, buy, sell Exchange) (*PriceDiffOpportunity, error)
 	// CreateOpportunity inserts a new open opportunity.
 	CreateOpportunity(ctx context.Context, o PriceDiffOpportunity) (*PriceDiffOpportunity, error)
-	// TouchOpportunity updates prices/net/last_seen for an open opportunity.
-	TouchOpportunity(ctx context.Context, id string, buyPrice, sellPrice, grossPct, netPct float64, at time.Time) (*PriceDiffOpportunity, error)
-	// CloseOpportunity sets status closed if still open.
-	CloseOpportunity(ctx context.Context, id string, at time.Time) (*PriceDiffOpportunity, error)
+	// TouchOpportunity records a live sample on an open opportunity (last, peak, fade, tick).
+	TouchOpportunity(ctx context.Context, id string, sample PriceDiffOppSample) (*PriceDiffOpportunity, error)
+	// CloseOpportunity sets status closed if still open and stores the close reason.
+	CloseOpportunity(ctx context.Context, id string, at time.Time, reason PriceDiffCloseReason, last *PriceDiffOppSample) (*PriceDiffOpportunity, error)
 	// ListOpenOpportunitiesForWatch returns all open opps for a watch.
 	ListOpenOpportunitiesForWatch(ctx context.Context, watchID string) ([]PriceDiffOpportunity, error)
 	ListOpportunities(ctx context.Context, clientID string, status PriceDiffOppStatus, limit, offset int) ([]PriceDiffOpportunity, error)
 	GetOpportunity(ctx context.Context, clientID, id string) (*PriceDiffOpportunity, error)
+	ListOpportunityTicks(ctx context.Context, opportunityID string, limit int) ([]PriceDiffOppTick, error)
 
 	// Route arms remember when a qualifying fill first appeared so min duration can elapse.
 	ListRouteArms(ctx context.Context, watchID string) ([]PriceDiffRouteArm, error)

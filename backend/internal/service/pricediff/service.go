@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -373,7 +372,7 @@ func (s *Service) closeOpenAndClearArms(ctx context.Context, watchID string, now
 		return err
 	}
 	for i := range open {
-		if _, e := s.store.CloseOpportunity(ctx, open[i].ID, now); e != nil && !errors.Is(e, domain.ErrNotFound) {
+		if _, e := s.store.CloseOpportunity(ctx, open[i].ID, now, domain.PriceDiffClosePaused, nil); e != nil && !errors.Is(e, domain.ErrNotFound) {
 			return e
 		}
 	}
@@ -392,7 +391,7 @@ func (s *Service) closeRoutesOutside(ctx context.Context, w *domain.PriceDiffWat
 		if w.AllowsExchange(open[i].BuyExchange) && w.AllowsExchange(open[i].SellExchange) {
 			continue
 		}
-		if _, e := s.store.CloseOpportunity(ctx, open[i].ID, now); e != nil && !errors.Is(e, domain.ErrNotFound) {
+		if _, e := s.store.CloseOpportunity(ctx, open[i].ID, now, domain.PriceDiffCloseVenuesChanged, nil); e != nil && !errors.Is(e, domain.ErrNotFound) {
 			return e
 		}
 		_ = s.store.ClearRouteArm(ctx, w.ID, open[i].BuyExchange, open[i].SellExchange)
@@ -448,7 +447,15 @@ func (s *Service) GetOpportunity(ctx context.Context, clientID, id string) (*dom
 	if id == "" {
 		return nil, fmt.Errorf("%w: opportunity id is required", domain.ErrInvalidArgument)
 	}
-	return s.store.GetOpportunity(ctx, clientID, id)
+	o, err := s.store.GetOpportunity(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	ticks, terr := s.store.ListOpportunityTicks(ctx, o.ID, domain.MaxPriceDiffOppTicks)
+	if terr == nil {
+		o.Ticks = ticks
+	}
+	return o, nil
 }
 
 // ProcessActiveWatches evaluates all active watches once (worker).
@@ -579,13 +586,15 @@ func (s *Service) processWatch(ctx context.Context, w *domain.PriceDiffWatch, no
 		}
 		if _, ok := active[k]; !ok {
 			_ = s.store.ClearRouteArm(ctx, w.ID, open[i].BuyExchange, open[i].SellExchange)
-			if _, e := s.store.CloseOpportunity(ctx, open[i].ID, now); e == nil {
+			sample := domain.PriceDiffOppSampleFromQuote(q, now)
+			reason := domain.PriceDiffCloseReasonFromQuote(q, w)
+			if _, e := s.store.CloseOpportunity(ctx, open[i].ID, now, reason, &sample); e == nil {
 				closed++
 			}
 			continue
 		}
-		buyP, sellP := quoteFillPrices(q)
-		if _, e := s.store.TouchOpportunity(ctx, open[i].ID, buyP, sellP, q.GrossPct, q.ProfitPct, now); e == nil {
+		sample := domain.PriceDiffOppSampleFromQuote(q, now)
+		if _, e := s.store.TouchOpportunity(ctx, open[i].ID, sample); e == nil {
 			touched++
 		}
 	}
@@ -606,15 +615,13 @@ func (s *Service) processWatch(ctx context.Context, w *domain.PriceDiffWatch, no
 				continue
 			}
 		}
-		buyP, sellP := quoteFillPrices(q)
+		sample := domain.PriceDiffOppSampleFromQuote(q, now)
 		opp := domain.PriceDiffOpportunity{
 			ID: uuid.NewString(), WatchID: w.ID, ClientID: w.ClientID, Symbol: w.Symbol,
 			BuyExchange: q.BuyExchange, SellExchange: q.SellExchange,
-			BuyPrice: buyP, SellPrice: sellP,
-			GrossDiffPct: q.GrossPct, NetDiffPct: q.ProfitPct,
 			MinNetDiffPct: w.MinNetDiffPct, Status: domain.PriceDiffOppOpen,
-			OpenedAt: now, LastSeenAt: now,
 		}
+		domain.InitPriceDiffOpportunity(&opp, sample)
 		if _, e := s.store.CreateOpportunity(ctx, opp); e == nil {
 			created++
 			_ = s.store.ClearRouteArm(ctx, w.ID, q.BuyExchange, q.SellExchange)
@@ -642,15 +649,6 @@ func bookRouteQualifies(q *domain.PriceDiffQuote, w *domain.PriceDiffWatch) bool
 		return false
 	}
 	return true
-}
-
-func quoteFillPrices(q *domain.PriceDiffQuote) (buy, sell float64) {
-	if q == nil {
-		return 0, 0
-	}
-	buy, _ = strconv.ParseFloat(q.AverageBuyPrice, 64)
-	sell, _ = strconv.ParseFloat(q.AverageSellPrice, 64)
-	return buy, sell
 }
 
 // Quote walks live books for a buy/sell venue pair.

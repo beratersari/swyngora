@@ -230,6 +230,75 @@ func TestOpportunity_OpenTouchCloseReopen(t *testing.T) {
 	}
 }
 
+func TestOpportunity_TracksPeakFadeAndCloseReason(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	m := &fakeTicker{data: map[string]*domain.Ticker24h{
+		"binance|BTCUSDT":  freshTicker("100", now),
+		"coinbase|BTC-USD": freshTicker("102", now),
+		"bybit|BTCUSDT":    freshTicker("100.2", now),
+	}}
+	books := booksAt(now, 100, 102, 100.2)
+	svc := newSvc(t, m).WithBooks(books)
+	svc.MaxPriceAge = 2 * time.Minute
+	ctx := context.Background()
+	if _, err := svc.CreateWatch(ctx, CreateInput{
+		ClientID: "path", Symbol: "BTCUSDT", Notional: 10000, MinProfit: 10,
+		FeeBinancePct: 0.1, FeeCoinbasePct: 0.1, FeeBybitPct: 0.1,
+		Exchanges: []string{"binance", "coinbase"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if c, _, _, err := svc.ProcessActiveWatches(ctx, now); err != nil || c < 1 {
+		t.Fatalf("open created=%d err=%v", c, err)
+	}
+	books.data["coinbase|BTC-USD"] = venueBook(104, 104, 1000, now)
+	if _, _, tch, err := svc.ProcessActiveWatches(ctx, now.Add(30*time.Second)); err != nil || tch < 1 {
+		t.Fatalf("peak touch=%d err=%v", tch, err)
+	}
+	books.data["coinbase|BTC-USD"] = venueBook(102.2, 102.2, 1000, now)
+	if _, _, tch, err := svc.ProcessActiveWatches(ctx, now.Add(60*time.Second)); err != nil || tch < 1 {
+		t.Fatalf("fade touch=%d err=%v", tch, err)
+	}
+	books.data["coinbase|BTC-USD"] = venueBook(100.25, 100.25, 1000, now)
+	if _, cl, _, err := svc.ProcessActiveWatches(ctx, now.Add(90*time.Second)); err != nil || cl < 1 {
+		t.Fatalf("close=%d err=%v", cl, err)
+	}
+	opps, err := svc.ListOpportunities(ctx, "path", "closed", 20, 0)
+	if err != nil || len(opps) == 0 {
+		t.Fatalf("%+v %v", opps, err)
+	}
+	var row *domain.PriceDiffOpportunity
+	for i := range opps {
+		if opps[i].BuyExchange == domain.ExchangeBinance && opps[i].SellExchange == domain.ExchangeCoinbase {
+			row = &opps[i]
+			break
+		}
+	}
+	if row == nil {
+		t.Fatalf("missing route %+v", opps)
+	}
+	got, err := svc.GetOpportunity(ctx, "path", row.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CloseReason != domain.PriceDiffCloseBelowMinProfit {
+		t.Fatalf("reason %s", got.CloseReason)
+	}
+	if got.PeakNetDiffPct <= got.OpenNetDiffPct {
+		t.Fatalf("peak %.4f open %.4f", got.PeakNetDiffPct, got.OpenNetDiffPct)
+	}
+	if got.FadeStartedAt == nil {
+		t.Fatal("expected fade start")
+	}
+	if len(got.Ticks) < 3 {
+		t.Fatalf("ticks %d", len(got.Ticks))
+	}
+	rev := domain.BuildPriceDiffOppReview(*got, now.Add(90*time.Second))
+	if rev.Summary == "" || rev.OpenDurationSec < 89 {
+		t.Fatalf("%+v", rev)
+	}
+}
+
 func TestSkipMissingBook(t *testing.T) {
 	now := time.Now().UTC()
 	svc := newSvc(t, &fakeTicker{}).WithBooks(&fakeBooks{data: map[string]*domain.RawOrderBook{

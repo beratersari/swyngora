@@ -45,6 +45,7 @@ Do **not** reintroduce `src/features/` for product UI until multiple product are
 | `RSIHeatmap` | HeatmapPage (`?view=rsi`) — ranked scatter |
 | `AlertsTable` / `CreateAlertForm` | AlertsPage |
 | `SignalsSetupGrid` / `SignalsHitsTable` / `SignalsRuleForm` / `SignalsRulesTable` / `SignalsBacktestPanel` / `SignalsCustomPanel` | SignalsPage |
+| `PriceDiffScanTable` / `PriceDiffOpportunityTable` / `FundingArbScanTable` | ArbPage |
 
 Motion molecules used by organisms: `WatchStar`, `FlashValue` (live ticks). Page enter lives in `App` (`PageEnter`).
 

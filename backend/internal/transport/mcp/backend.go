@@ -4923,17 +4923,66 @@ func priceDiffScanMap(s *domain.PriceDiffQuoteScan) map[string]any {
 }
 
 func priceDiffOppMap(o *domain.PriceDiffOpportunity) map[string]any {
+	rev := domain.BuildPriceDiffOppReview(*o, time.Now().UTC())
 	m := map[string]any{
 		"id": o.ID, "watchId": o.WatchID, "clientId": o.ClientID, "symbol": o.Symbol,
 		"buyExchange": string(o.BuyExchange), "sellExchange": string(o.SellExchange),
 		"buyPrice": o.BuyPrice, "sellPrice": o.SellPrice,
 		"grossDiffPct": o.GrossDiffPct, "netDiffPct": o.NetDiffPct, "minNetDiffPct": o.MinNetDiffPct,
-		"status":     string(o.Status),
-		"openedAt":   o.OpenedAt.UTC().Format(time.RFC3339Nano),
-		"lastSeenAt": o.LastSeenAt.UTC().Format(time.RFC3339Nano),
+		"status":         string(o.Status),
+		"openedAt":       o.OpenedAt.UTC().Format(time.RFC3339Nano),
+		"lastSeenAt":     o.LastSeenAt.UTC().Format(time.RFC3339Nano),
+		"openNetDiffPct": o.OpenNetDiffPct,
+		"openProfit":     o.OpenProfit,
+		"peakNetDiffPct": o.PeakNetDiffPct,
+		"peakProfit":     o.PeakProfit,
+		"review": map[string]any{
+			"openDurationSec": rev.OpenDurationSec,
+			"openNetDiffPct":  rev.OpenNetDiffPct,
+			"openProfit":      rev.OpenProfit,
+			"peakNetDiffPct":  rev.PeakNetDiffPct,
+			"peakProfit":      rev.PeakProfit,
+			"peakDeltaPct":    rev.PeakDeltaPct,
+			"lastNetDiffPct":  rev.LastNetDiffPct,
+			"lastProfit":      rev.LastProfit,
+			"closeReason":     string(rev.CloseReason),
+			"summary":         rev.Summary,
+		},
 	}
 	if o.ClosedAt != nil {
 		m["closedAt"] = o.ClosedAt.UTC().Format(time.RFC3339Nano)
+	}
+	if !o.PeakAt.IsZero() {
+		m["peakAt"] = o.PeakAt.UTC().Format(time.RFC3339Nano)
+		if rm, ok := m["review"].(map[string]any); ok {
+			rm["peakAt"] = o.PeakAt.UTC().Format(time.RFC3339Nano)
+		}
+	}
+	if o.FadeStartedAt != nil {
+		m["fadeStartedAt"] = o.FadeStartedAt.UTC().Format(time.RFC3339Nano)
+		if rm, ok := m["review"].(map[string]any); ok {
+			rm["fadeStartedAt"] = o.FadeStartedAt.UTC().Format(time.RFC3339Nano)
+			if rev.FadeFromPeakSec != nil {
+				rm["fadeFromPeakSec"] = *rev.FadeFromPeakSec
+			}
+		}
+	}
+	if o.CloseReason != "" {
+		m["closeReason"] = string(o.CloseReason)
+		m["closeNetDiffPct"] = o.CloseNetDiffPct
+		m["closeProfit"] = o.CloseProfit
+	}
+	if len(o.Ticks) > 0 {
+		ticks := make([]map[string]any, 0, len(o.Ticks))
+		for _, tick := range o.Ticks {
+			ticks = append(ticks, map[string]any{
+				"at": tick.At.UTC().Format(time.RFC3339Nano),
+				"buyPrice": tick.BuyPrice, "sellPrice": tick.SellPrice,
+				"grossDiffPct": tick.GrossDiffPct, "netDiffPct": tick.NetDiffPct,
+				"profit": tick.Profit, "executable": tick.Executable,
+			})
+		}
+		m["ticks"] = ticks
 	}
 	return m
 }

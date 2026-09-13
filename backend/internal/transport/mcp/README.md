@@ -182,8 +182,8 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `pause_price_diff_watch` | Pause; close open opportunities; stop searching |
 | `resume_price_diff_watch` | Resume; duration timer starts from zero |
 | `delete_price_diff_watch` | Delete watch and opportunities |
-| `list_price_diff_opportunities` | List open/closed opportunities |
-| `get_price_diff_opportunity` | Get one opportunity |
+| `list_price_diff_opportunities` | List open/closed opportunities (duration, peak, fade, close reason, review) |
+| `get_price_diff_opportunity` | Get one opportunity plus sampled ticks |
 | `quote_price_diff` | Walk two live spot books for a size: avg buy/sell, slippage, profit after fees, usable money, max size |
 | `quote_price_diff_opportunity` | Same quote for a stored opportunity (uses that watch's fees) |
 | `scan_price_diff_quotes` | Rank every venue pair at one size; missing books listed as unavailable; optional minProfitPct / minProfitAmount |

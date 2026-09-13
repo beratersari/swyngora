@@ -13,9 +13,9 @@ Web: `/arb` (Price gaps tab).
 3. For each buy A / sell B pair it walks the **buy asks** and **sell bids** for that `notional` (fees + slippage).
 4. A route **qualifies** when the full size **fills on both books** and after-fee profit is at least `minProfit` (and `minNetDiffPct` when set). Ticker last-price gaps alone do **not** count.
 5. If `minDurationSec` is set, the route must **stay qualifying** that long before an opportunity opens. If it breaks, the timer **resets**. `0` (default) opens on the first qualifying tick.
-6. **While open**: same `(watch, buy, sell)` is only updated (average fill prices / lastSeenAt), not recreated.
-7. When the book fill no longer qualifies (thin book, or profit too small) and both books are fresh: opportunity is **closed**.
-8. When a qualifying fill later holds for `minDurationSec` again: a **new** opportunity is created.
+6. **While open**: same `(watch, buy, sell)` is only updated (latest fill prices / lastSeenAt), not recreated. Each checker tick is stored as a **sample**. The row keeps the **open** edge, the **peak** edge (and when it printed), and the first time the edge dropped at least **0.01%** from that peak (`fadeStartedAt`). A later new high clears the fade clock.
+7. When the book fill no longer qualifies (thin book, or profit too small) and both books are fresh: opportunity is **closed** with a **reason** (`below_min_profit`, `below_min_net`, `thin_book`). Pause closes with `paused`; dropping a venue from the watch closes that route with `venues_changed`. Incomplete/stale books still do **not** close.
+8. When a qualifying fill later holds for `minDurationSec` again: a **new** opportunity is created. The closed row keeps its path (open / peak / fade / close / ticks).
 9. If a venue **book is missing or stale**: that venue is skipped; incomplete data does **not** open, close, or reset the timer.
 10. Open opportunities live in SQLite and **survive worker restarts**.
 11. **Edit settings** (`PATCH /watches/{id}`): change `notional`, `minProfit`, `minDurationSec`, `minNetDiffPct`, `exchanges`, and/or fees. The duration timer **resets** so the next hold starts from zero. Status is unchanged. Routes that use a dropped venue are closed.
@@ -35,8 +35,8 @@ Web: `/arb` (Price gaps tab).
 | `POST` | `/api/v1/price-diff/watches/{id}/pause` | Pause (close open opps, stop searching) |
 | `POST` | `/api/v1/price-diff/watches/{id}/resume` | Resume (duration timer starts from zero) |
 | `DELETE` | `/api/v1/price-diff/watches/{id}` | Delete watch (+ opportunities) |
-| `GET` | `/api/v1/price-diff/opportunities?status=open\|closed\|all` | List opportunities |
-| `GET` | `/api/v1/price-diff/opportunities/{id}` | Get opportunity |
+| `GET` | `/api/v1/price-diff/opportunities?status=open\|closed\|all` | List opportunities (includes review: duration, peak, fade, close reason) |
+| `GET` | `/api/v1/price-diff/opportunities/{id}` | Get opportunity plus sampled `ticks` |
 | `GET` | `/api/v1/price-diff/opportunities/{id}/quote?notional=10000` | Executable quote for a stored opportunity (uses watch fees) |
 | `GET` | `/api/v1/price-diff/quote?symbol=BTCUSDT&buyExchange=binance&sellExchange=bybit&notional=10000&feeBuyPct=0.1&feeSellPct=0.1` | Executable quote without a stored opportunity |
 | `GET` | `/api/v1/price-diff/quote/scan?symbol=BTCUSDT&notional=10000&feeBinancePct=0.1&feeCoinbasePct=0.6&feeBybitPct=0.1&minProfitPct=0.5` | Rank every venue pair at one size |
@@ -46,7 +46,7 @@ Web: `/arb` (Price gaps tab).
 
 | Layer | Path |
 |-------|------|
-| Domain | `backend/internal/domain/pricediff.go`, `pricediff_quote.go` |
+| Domain | `backend/internal/domain/pricediff.go`, `pricediff_quote.go`, `pricediff_review.go` |
 | Store | `backend/internal/adapter/pricediffstore` |
 | Service | `backend/internal/service/pricediff` |
 | Worker | `backend/internal/service/pricediff/checker.go` |
@@ -64,7 +64,7 @@ Web: `/arb` (Price gaps tab).
 
 ```bash
 cd backend
-go test ./internal/domain/ ./internal/service/pricediff/ ./internal/transport/http/handler/ -run 'PriceDiff|NetDiff|Fresh|Opportunity|Skip|Persist|Quote|Pause|Resume|UpdateWatch' -count=1
+go test ./internal/domain/ ./internal/service/pricediff/ ./internal/adapter/pricediffstore/ ./internal/transport/http/handler/ -run 'PriceDiff|NetDiff|Fresh|Opportunity|Skip|Persist|Quote|Pause|Resume|UpdateWatch|OppDTO|PeakFade' -count=1
 ```
 
 ## Limitations

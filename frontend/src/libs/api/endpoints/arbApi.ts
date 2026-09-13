@@ -6,6 +6,8 @@ export type PriceDiffQuote = components['schemas']['PriceDiffQuote'];
 export type PriceDiffQuoteScan = components['schemas']['PriceDiffQuoteScan'];
 export type PriceDiffWatch = components['schemas']['PriceDiffWatch'];
 export type PriceDiffOpportunity = components['schemas']['PriceDiffOpportunity'];
+export type PriceDiffOppReview = components['schemas']['PriceDiffOppReview'];
+export type PriceDiffOppTick = components['schemas']['PriceDiffOppTick'];
 export type PriceDiffScanQuery = NonNullable<
   operations['scanPriceDiffQuotes']['parameters']['query']
 >;
@@ -162,6 +164,10 @@ export const arbApi = baseApi.injectEndpoints({
         params: compactParams({ status: arg && 'status' in arg ? arg.status : 'open' }),
       }),
       providesTags: ['PriceDiffOpportunity'],
+    }),
+    getPriceDiffOpportunity: build.query<PriceDiffOpportunity, string>({
+      query: (id) => `/api/v1/price-diff/opportunities/${id}`,
+      providesTags: (_r, _e, id) => [{ type: 'PriceDiffOpportunity', id }],
     }),
     scanMarketFundingArb: build.query<MarketFundingArbScan, FundingArbScanQuery | void>({
       query: (arg) => ({

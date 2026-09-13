@@ -4518,7 +4518,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("list_price_diff_opportunities",
-		mcp.WithDescription("List cross-exchange price opportunities (status open|closed|all). Open opportunities persist across restarts."),
+		mcp.WithDescription("List cross-exchange price opportunities (status open|closed|all). Each row includes open/peak/last edge, duration, fade start, close reason, and a review summary. Open opportunities persist across restarts."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("status", mcp.Description("open | closed | all")),
 		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),
@@ -4536,7 +4536,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_price_diff_opportunity",
-		mcp.WithDescription("Get one price-diff opportunity by id."),
+		mcp.WithDescription("Get one price-diff opportunity by id, including how long it stayed open, the peak after-fee edge, when it started fading, why it closed, and the sampled path (ticks)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("opportunityId", mcp.Required(), mcp.Description("Opportunity id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

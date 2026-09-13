@@ -6457,6 +6457,7 @@ export interface components {
             buyPrice?: number;
             sellPrice?: number;
             grossDiffPct?: number;
+            /** @description Latest after-fee edge percent */
             netDiffPct?: number;
             minNetDiffPct?: number;
             /** @enum {string} */
@@ -6467,6 +6468,56 @@ export interface components {
             lastSeenAt?: string;
             /** Format: date-time */
             closedAt?: string | null;
+            /** @description After-fee edge when the opportunity opened */
+            openNetDiffPct?: number;
+            openProfit?: number;
+            /** @description Highest after-fee edge while open */
+            peakNetDiffPct?: number;
+            peakProfit?: number;
+            /** Format: date-time */
+            peakAt?: string;
+            /**
+             * Format: date-time
+             * @description First sample at least 0.01% below the peak
+             */
+            fadeStartedAt?: string;
+            /** @enum {string} */
+            closeReason?: "below_min_profit" | "below_min_net" | "thin_book" | "paused" | "venues_changed";
+            closeNetDiffPct?: number;
+            closeProfit?: number;
+            review?: components["schemas"]["PriceDiffOppReview"];
+            /** @description Sampled path (GET one opportunity only) */
+            ticks?: components["schemas"]["PriceDiffOppTick"][];
+        };
+        /** @description How the gap moved after it opened */
+        PriceDiffOppReview: {
+            openDurationSec?: number;
+            openNetDiffPct?: number;
+            openProfit?: number;
+            peakNetDiffPct?: number;
+            peakProfit?: number;
+            /** Format: date-time */
+            peakAt?: string;
+            /** @description peak minus open net % */
+            peakDeltaPct?: number;
+            /** Format: date-time */
+            fadeStartedAt?: string;
+            fadeFromPeakSec?: number;
+            lastNetDiffPct?: number;
+            lastProfit?: number;
+            /** @enum {string} */
+            closeReason?: "below_min_profit" | "below_min_net" | "thin_book" | "paused" | "venues_changed";
+            summary?: string;
+        };
+        PriceDiffOppTick: {
+            /** Format: date-time */
+            at?: string;
+            buyPrice?: number;
+            sellPrice?: number;
+            grossDiffPct?: number;
+            netDiffPct?: number;
+            profit?: number;
+            executable?: boolean;
         };
         /** @description Simulated two-venue market buy/sell from live spot books */
         PriceDiffQuote: {

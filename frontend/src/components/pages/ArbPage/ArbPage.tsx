@@ -5,6 +5,7 @@ import { Text } from '@/components/atoms/Text';
 import { PageHeader } from '@/components/molecules/PageHeader';
 import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
 import { FundingArbScanTable } from '@/components/organisms/FundingArbScanTable';
+import { PriceDiffOpportunityTable, type PriceDiffOppStatusFilter } from '@/components/organisms/PriceDiffOpportunityTable';
 import { PriceDiffScanTable } from '@/components/organisms/PriceDiffScanTable';
 import {
   rtkErrorMessage,
@@ -16,6 +17,7 @@ import {
   useLazyScanPriceDiffQuotesQuery,
   useListFundingArbWatchesQuery,
   useListFundingArbSignalsQuery,
+  useGetPriceDiffOpportunityQuery,
   useListPriceDiffOpportunitiesQuery,
   useListPriceDiffWatchesQuery,
 } from '@/libs/api';
@@ -49,9 +51,12 @@ function PricePane() {
   const { t } = useTranslation(['arb', 'common']);
   const [symbol, setSymbol] = useState('BTCUSDT');
   const [notional, setNotional] = useState(10000);
+  const [oppStatus, setOppStatus] = useState<PriceDiffOppStatusFilter>('all');
+  const [expandedOpp, setExpandedOpp] = useState<string | undefined>();
   const [scan, scanState] = useLazyScanPriceDiffQuotesQuery();
   const watches = useListPriceDiffWatchesQuery();
-  const opps = useListPriceDiffOpportunitiesQuery({ status: 'open' });
+  const opps = useListPriceDiffOpportunitiesQuery({ status: oppStatus });
+  const detail = useGetPriceDiffOpportunityQuery(expandedOpp ?? '', { skip: !expandedOpp });
   const [createWatch, createState] = useCreatePriceDiffWatchMutation();
   const [delWatch] = useDeletePriceDiffWatchMutation();
 
@@ -134,21 +139,15 @@ function PricePane() {
 
       <Section>
         <Text variant="label">{t('arb:price.openOpps')}</Text>
-        <Table
-          size="small"
-          rowKey={(r) => r.id ?? `${r.symbol}-${r.buyExchange}`}
-          pagination={false}
-          dataSource={opps.data?.opportunities ?? []}
-          locale={{ emptyText: t('arb:price.noOpps') }}
-          columns={[
-            { title: t('arb:price.symbol'), dataIndex: 'symbol' },
-            {
-              title: t('arb:price.route'),
-              render: (_, r) => `${r.buyExchange ?? ''} → ${r.sellExchange ?? ''}`,
-            },
-            { title: t('arb:price.netPct'), dataIndex: 'netDiffPct' },
-            { title: t('arb:price.status'), dataIndex: 'status' },
-          ]}
+        <PriceDiffOpportunityTable
+          opportunities={opps.data?.opportunities ?? []}
+          isLoading={opps.isFetching}
+          status={oppStatus}
+          onStatusChange={setOppStatus}
+          expandedId={expandedOpp}
+          onExpand={setExpandedOpp}
+          detail={detail.data}
+          detailLoading={detail.isFetching}
         />
       </Section>
     </>

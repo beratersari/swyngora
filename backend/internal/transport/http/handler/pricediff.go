@@ -37,22 +37,59 @@ type priceDiffWatchDTO struct {
 	UpdatedAt      string   `json:"updatedAt"`
 }
 
+type priceDiffOppTickDTO struct {
+	At           string  `json:"at"`
+	BuyPrice     float64 `json:"buyPrice"`
+	SellPrice    float64 `json:"sellPrice"`
+	GrossDiffPct float64 `json:"grossDiffPct"`
+	NetDiffPct   float64 `json:"netDiffPct"`
+	Profit       float64 `json:"profit"`
+	Executable   bool    `json:"executable"`
+}
+
+type priceDiffOppReviewDTO struct {
+	OpenDurationSec float64  `json:"openDurationSec"`
+	OpenNetDiffPct  float64  `json:"openNetDiffPct"`
+	OpenProfit      float64  `json:"openProfit"`
+	PeakNetDiffPct  float64  `json:"peakNetDiffPct"`
+	PeakProfit      float64  `json:"peakProfit"`
+	PeakAt          *string  `json:"peakAt,omitempty"`
+	PeakDeltaPct    float64  `json:"peakDeltaPct"`
+	FadeStartedAt   *string  `json:"fadeStartedAt,omitempty"`
+	FadeFromPeakSec *float64 `json:"fadeFromPeakSec,omitempty"`
+	LastNetDiffPct  float64  `json:"lastNetDiffPct"`
+	LastProfit      float64  `json:"lastProfit,omitempty"`
+	CloseReason     string   `json:"closeReason,omitempty"`
+	Summary         string   `json:"summary"`
+}
+
 type priceDiffOppDTO struct {
-	ID            string  `json:"id"`
-	WatchID       string  `json:"watchId"`
-	ClientID      string  `json:"clientId"`
-	Symbol        string  `json:"symbol"`
-	BuyExchange   string  `json:"buyExchange"`
-	SellExchange  string  `json:"sellExchange"`
-	BuyPrice      float64 `json:"buyPrice"`
-	SellPrice     float64 `json:"sellPrice"`
-	GrossDiffPct  float64 `json:"grossDiffPct"`
-	NetDiffPct    float64 `json:"netDiffPct"`
-	MinNetDiffPct float64 `json:"minNetDiffPct"`
-	Status        string  `json:"status"`
-	OpenedAt      string  `json:"openedAt"`
-	LastSeenAt    string  `json:"lastSeenAt"`
-	ClosedAt      *string `json:"closedAt,omitempty"`
+	ID               string                 `json:"id"`
+	WatchID          string                 `json:"watchId"`
+	ClientID         string                 `json:"clientId"`
+	Symbol           string                 `json:"symbol"`
+	BuyExchange      string                 `json:"buyExchange"`
+	SellExchange     string                 `json:"sellExchange"`
+	BuyPrice         float64                `json:"buyPrice"`
+	SellPrice        float64                `json:"sellPrice"`
+	GrossDiffPct     float64                `json:"grossDiffPct"`
+	NetDiffPct       float64                `json:"netDiffPct"`
+	MinNetDiffPct    float64                `json:"minNetDiffPct"`
+	Status           string                 `json:"status"`
+	OpenedAt         string                 `json:"openedAt"`
+	LastSeenAt       string                 `json:"lastSeenAt"`
+	ClosedAt         *string                `json:"closedAt,omitempty"`
+	OpenNetDiffPct   float64                `json:"openNetDiffPct"`
+	OpenProfit       float64                `json:"openProfit"`
+	PeakNetDiffPct   float64                `json:"peakNetDiffPct"`
+	PeakProfit       float64                `json:"peakProfit"`
+	PeakAt           *string                `json:"peakAt,omitempty"`
+	FadeStartedAt    *string                `json:"fadeStartedAt,omitempty"`
+	CloseReason      string                 `json:"closeReason,omitempty"`
+	CloseNetDiffPct  float64                `json:"closeNetDiffPct,omitempty"`
+	CloseProfit      float64                `json:"closeProfit,omitempty"`
+	Review           priceDiffOppReviewDTO  `json:"review"`
+	Ticks            []priceDiffOppTickDTO  `json:"ticks,omitempty"`
 }
 
 func watchDTO(w *domain.PriceDiffWatch) priceDiffWatchDTO {
@@ -81,19 +118,72 @@ func watchExchangeIDs(w *domain.PriceDiffWatch) []string {
 }
 
 func oppDTO(o *domain.PriceDiffOpportunity) priceDiffOppDTO {
+	rev := domain.BuildPriceDiffOppReview(*o, time.Now().UTC())
 	d := priceDiffOppDTO{
 		ID: o.ID, WatchID: o.WatchID, ClientID: o.ClientID, Symbol: o.Symbol,
 		BuyExchange: string(o.BuyExchange), SellExchange: string(o.SellExchange),
 		BuyPrice: o.BuyPrice, SellPrice: o.SellPrice,
 		GrossDiffPct: o.GrossDiffPct, NetDiffPct: o.NetDiffPct, MinNetDiffPct: o.MinNetDiffPct,
-		Status:     string(o.Status),
-		OpenedAt:   o.OpenedAt.UTC().Format(time.RFC3339Nano),
-		LastSeenAt: o.LastSeenAt.UTC().Format(time.RFC3339Nano),
+		Status:         string(o.Status),
+		OpenedAt:       o.OpenedAt.UTC().Format(time.RFC3339Nano),
+		LastSeenAt:     o.LastSeenAt.UTC().Format(time.RFC3339Nano),
+		OpenNetDiffPct: o.OpenNetDiffPct,
+		OpenProfit:     o.OpenProfit,
+		PeakNetDiffPct: o.PeakNetDiffPct,
+		PeakProfit:     o.PeakProfit,
+		CloseReason:    string(o.CloseReason),
+		CloseNetDiffPct: o.CloseNetDiffPct,
+		CloseProfit:    o.CloseProfit,
+		Review:         reviewDTO(rev),
 	}
 	if o.ClosedAt != nil {
 		s := o.ClosedAt.UTC().Format(time.RFC3339Nano)
 		d.ClosedAt = &s
 	}
+	if !o.PeakAt.IsZero() {
+		s := o.PeakAt.UTC().Format(time.RFC3339Nano)
+		d.PeakAt = &s
+	}
+	if o.FadeStartedAt != nil {
+		s := o.FadeStartedAt.UTC().Format(time.RFC3339Nano)
+		d.FadeStartedAt = &s
+	}
+	if len(o.Ticks) > 0 {
+		d.Ticks = make([]priceDiffOppTickDTO, 0, len(o.Ticks))
+		for _, tick := range o.Ticks {
+			d.Ticks = append(d.Ticks, priceDiffOppTickDTO{
+				At: tick.At.UTC().Format(time.RFC3339Nano),
+				BuyPrice: tick.BuyPrice, SellPrice: tick.SellPrice,
+				GrossDiffPct: tick.GrossDiffPct, NetDiffPct: tick.NetDiffPct,
+				Profit: tick.Profit, Executable: tick.Executable,
+			})
+		}
+	}
+	return d
+}
+
+func reviewDTO(r domain.PriceDiffOppReview) priceDiffOppReviewDTO {
+	d := priceDiffOppReviewDTO{
+		OpenDurationSec: r.OpenDurationSec,
+		OpenNetDiffPct:  r.OpenNetDiffPct,
+		OpenProfit:      r.OpenProfit,
+		PeakNetDiffPct:  r.PeakNetDiffPct,
+		PeakProfit:      r.PeakProfit,
+		PeakDeltaPct:    r.PeakDeltaPct,
+		LastNetDiffPct:  r.LastNetDiffPct,
+		LastProfit:      r.LastProfit,
+		CloseReason:     string(r.CloseReason),
+		Summary:         r.Summary,
+	}
+	if r.PeakAt != nil {
+		s := r.PeakAt.UTC().Format(time.RFC3339Nano)
+		d.PeakAt = &s
+	}
+	if r.FadeStartedAt != nil {
+		s := r.FadeStartedAt.UTC().Format(time.RFC3339Nano)
+		d.FadeStartedAt = &s
+	}
+	d.FadeFromPeakSec = r.FadeFromPeakSec
 	return d
 }
 
