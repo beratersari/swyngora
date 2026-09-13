@@ -26,6 +26,7 @@ describe('LiquidationsPage helpers', () => {
     expect(parseLiqWindow('12h')).toBe('12h');
     expect(parseLiqWindow('5m')).toBe('24h');
     expect(parseLiqExchange('bybit')).toBe('bybit');
+    expect(parseLiqExchange('okx')).toBe('okx');
     expect(parseLiqExchange('coinbase')).toBe('all');
     expect(parseLiqSymbol('btc-usd')).toBe('BTCUSDT');
     expect(parseLiqSymbol('')).toBe('BTCUSDT');

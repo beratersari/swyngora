@@ -9,8 +9,8 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
 ## Behavior
 
 - `GET /api/v1/market/liquidations?symbol=BTCUSDT`
-  - `exchange=all` (default) sums **Binance USD-M** and **Bybit linear perpetual**
-  - `exchange=binance` or `bybit` for one venue
+  - `exchange=all` (default) sums **Binance USD-M**, **Bybit linear perpetual**, and **OKX USDT-swap**
+  - `exchange=binance`, `bybit`, or `okx` for one venue
 - `GET /api/v1/market/liquidations/overview`
   - Market-wide **1h / 4h / 12h / 24h** totals (no symbol)
   - `window` (default `24h`) ranks `coins` by total notional for a treemap
@@ -21,12 +21,13 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
   - `biggest` (side, price, qty, notional, venue, time)
   - `complete` — false until **this coin on this venue** has had a **live websocket**
     for the full window. Time does not count if the socket never connects or drops.
-    Combined `all` uses the shorter live coverage **and requires both venues**.
-    A venue that never started or is down is listed in `feed.missing` and is
-    **not** replaced by the other exchange.
+    Combined `all` uses the shorter live coverage **and requires every futures
+    venue** (Binance, Bybit, OKX). A venue that never started or is down is
+    listed in `feed.missing` and is **not** replaced by another exchange.
 - Streams (background, always on):
   - Binance: `wss://fstream.binance.com/ws/!forceOrder@arr` (all USD-M symbols). At most the **largest** liquidation per symbol per ~1s.
   - Bybit: `wss://stream.bybit.com/v5/public/linear` topic `allLiquidation.{symbol}`. Seed majors + top linear USDT by 24h turnover; querying a symbol also subscribes it.
+  - OKX: `wss://ws.okx.com:8443/ws/v5/public` channel `liquidation-orders` `instType=SWAP` (all USDT-swap). Contract size (`ctVal`) converts `sz` to base quantity.
 - `feed` on coin, overview, and chart responses:
   - per venue `live`, `lastEventAt` (last print), `lastSeenAt` (last websocket
     payload), `coverageSeconds`, `missingSeconds`, and `gaps` (still-unfilled

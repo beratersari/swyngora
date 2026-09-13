@@ -516,7 +516,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_liquidations",
-		mcp.WithDescription("Futures liquidations for a coin over the last 5 minutes, 1 hour, 4 hours, and 24 hours. Returns long vs short notional, count, the biggest hit, and feed health (lastEventAt, lastSeenAt, gaps in the last 6h, missingSeconds still unfilled after history backfill, missing venues). After a reconnect each venue fills its own hole from history when available; overlapping prints are not counted twice. exchange=all (default) sums both but never substitutes one venue for the other; combined live/complete require both streams. Prefer this for 'how much BTC was liquidated' or 'is the Bybit feed down'."),
+		mcp.WithDescription("Futures liquidations for a coin over the last 5 minutes, 1 hour, 4 hours, and 24 hours. Returns long vs short notional, count, the biggest hit, and feed health (lastEventAt, lastSeenAt, gaps in the last 6h, missingSeconds still unfilled after history backfill, missing venues). After a reconnect each venue fills its own hole from history when available; overlapping prints are not counted twice. exchange=all (default) sums Binance USD-M, Bybit linear, and OKX USDT-swap but never substitutes one venue for another; combined live/complete require every stream. Prefer this for 'how much BTC was liquidated' or 'is the Bybit feed down'."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -598,7 +598,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_open_interest",
-		mcp.WithDescription("Futures open interest for a coin: current outstanding size plus how much it increased or decreased in the last 5 minutes, 1 hour, 4 hours, and 24 hours. Also includes funding (predicted next rate + recent settlements) on the funding field. contracts is base-asset size (e.g. BTC); value is USDT notional. Binance USD-M + Bybit linear perpetual. exchange=all (default) sums OI. Prefer this for 'is OI rising or falling'."),
+		mcp.WithDescription("Futures open interest for a coin: current outstanding size plus how much it increased or decreased in the last 5 minutes, 1 hour, 4 hours, and 24 hours. Also includes funding (predicted next rate + recent settlements) on the funding field. contracts is base-asset size (e.g. BTC); value is USDT notional. Binance USD-M + Bybit linear + OKX USDT-swap. exchange=all (default) sums OI. Prefer this for 'is OI rising or falling'."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -614,7 +614,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_funding_rate",
-		mcp.WithDescription("Perpetual futures funding rate: predicted next payment plus recent settled history. rate is decimal (0.0001 = 0.01%); ratePct is percent. payer=long means longs pay shorts at settlement. Binance USD-M + Bybit linear. exchange=all (default) returns each venue separately (rates are not averaged). Prefer this for 'what is the funding rate' or carry analysis."),
+		mcp.WithDescription("Perpetual futures funding rate: predicted next payment plus recent settled history. rate is decimal (0.0001 = 0.01%); ratePct is percent. payer=long means longs pay shorts at settlement. Binance USD-M + Bybit linear + OKX USDT-swap. exchange=all (default) returns each venue separately (rates are not averaged). Prefer this for 'what is the funding rate' or carry analysis."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 		mcp.WithNumber("limit", mcp.Description("Settled history size 1–30 (default 12)")),

@@ -27,7 +27,7 @@ const RADAR_KINDS = new Set<AlertKind>([
   'liquidation_notional',
   'setup_radar',
 ]);
-const RADAR_EXCHANGES = new Set(['binance', 'bybit', 'all']);
+const RADAR_EXCHANGES = new Set(['binance', 'bybit', 'okx', 'all']);
 
 function parsePrefillKind(raw: string | null): AlertKind {
   const v = (raw ?? '').trim().toLowerCase();

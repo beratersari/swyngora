@@ -94,10 +94,7 @@ func (s *Service) GetSnapshot(ctx context.Context, exchange, symbol string) (*do
 		Windows: spotWins,
 	}
 
-	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
-	if ex != "all" {
-		want = []domain.Exchange{domain.Exchange(ex)}
-	}
+	want := s.futuresWant(ex)
 	venues := make([]domain.SnapshotVenue, 0, len(want))
 	var mu sync.Mutex
 	var vwg sync.WaitGroup

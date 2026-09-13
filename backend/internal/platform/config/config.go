@@ -39,6 +39,8 @@ type Config struct {
 	BybitBaseURL            string
 	BybitWSURL              string
 	BybitLinearWSURL        string
+	OKXBaseURL              string
+	OKXWSURL                string
 	HTTPClientTimeout       time.Duration
 	CandleCacheTTL          time.Duration
 	CandleCacheMaxEntries   int
@@ -227,6 +229,8 @@ func Load() Config {
 		BybitBaseURL:            getenv("BYBIT_BASE_URL", "https://api.bybit.com"),
 		BybitWSURL:              getenv("BYBIT_WS_URL", "wss://stream.bybit.com/v5/public/spot"),
 		BybitLinearWSURL:        getenv("BYBIT_LINEAR_WS_URL", "wss://stream.bybit.com/v5/public/linear"),
+		OKXBaseURL:              getenv("OKX_BASE_URL", "https://www.okx.com"),
+		OKXWSURL:                getenv("OKX_WS_URL", "wss://ws.okx.com:8443/ws/v5/public"),
 		HTTPClientTimeout:       positiveDurationEnv("HTTP_CLIENT_TIMEOUT", 15*time.Second),
 		CandleCacheTTL:          positiveDurationEnv("CANDLE_CACHE_TTL", 30*time.Second),
 		CandleCacheMaxEntries:   positiveIntEnv("CANDLE_CACHE_MAX_ENTRIES", 512),

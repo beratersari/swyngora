@@ -2,6 +2,38 @@ package domain
 
 import "testing"
 
+func TestFuturesVenuesIncludesOKX(t *testing.T) {
+	got := FuturesVenues()
+	if len(got) != 3 || got[2] != ExchangeOKX {
+		t.Fatalf("%v", got)
+	}
+	if !IsFuturesVenue(ExchangeOKX) || IsFuturesVenue(ExchangeCoinbase) {
+		t.Fatal("futures venue set")
+	}
+	ex, err := ParseLiquidationExchange("OKX")
+	if err != nil || ex != "okx" {
+		t.Fatalf("%s %v", ex, err)
+	}
+	if _, err := ParseLiquidationExchange("coinbase"); err == nil {
+		t.Fatal("coinbase is not a futures book")
+	}
+}
+
+func TestLiquidationSideFromOKX(t *testing.T) {
+	s, err := LiquidationSideFromOKX("long", "sell")
+	if err != nil || s != LiquidationSideLong {
+		t.Fatal(s, err)
+	}
+	s, err = LiquidationSideFromOKX("short", "buy")
+	if err != nil || s != LiquidationSideShort {
+		t.Fatal(s, err)
+	}
+	s, err = LiquidationSideFromOKX("", "SELL")
+	if err != nil || s != LiquidationSideLong {
+		t.Fatal("order-side fallback", s, err)
+	}
+}
+
 func TestParseExchange(t *testing.T) {
 	if ParseExchange("") != ExchangeBinance {
 		t.Fatal("default")

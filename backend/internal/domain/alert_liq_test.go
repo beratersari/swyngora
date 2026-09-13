@@ -89,6 +89,7 @@ func TestFeedAlertObservation_AllAnyVenue(t *testing.T) {
 	feed := LiquidationFeed{Venues: []LiquidationVenueHealth{
 		{Exchange: "binance", Live: true, LastSeenAt: now},
 		{Exchange: "bybit", Live: false, LastSeenAt: now.Add(-2 * time.Minute)},
+		{Exchange: "okx", Live: true, LastSeenAt: now},
 	}}
 	met, _, d := FeedAlertObservation(a, feed, now)
 	if !met || len(d.Missing) != 1 || d.Missing[0] != "bybit" {

@@ -1,6 +1,9 @@
 package domain
 
-import "math"
+import (
+	"math"
+	"strings"
+)
 
 // TradingCost is paper taker fee and slippage for one venue (fractions, not percent).
 // Example: FeeRate 0.001 = 0.10% of fill notional.
@@ -23,6 +26,9 @@ const (
 
 // TradingCostFor returns paper fee/slippage for an exchange.
 func TradingCostFor(ex Exchange) TradingCost {
+	if Exchange(strings.ToLower(string(ex))) == ExchangeOKX {
+		return TradingCost{FeeRate: BybitFeeRate, SlippageRate: BybitSlippageRate}
+	}
 	switch ParseExchange(string(ex)) {
 	case ExchangeCoinbase:
 		return TradingCost{FeeRate: CoinbaseFeeRate, SlippageRate: CoinbaseSlippageRate}

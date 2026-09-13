@@ -1,4 +1,4 @@
-export type ForensicsExchange = 'all' | 'binance' | 'bybit';
+export type ForensicsExchange = 'all' | 'binance' | 'bybit' | 'okx';
 export type ForensicsWindow = '15m' | '30m' | '1h' | '2h' | '4h';
 export type ForensicsDuring = '5m' | '15m' | '30m' | '1h';
 export type ForensicsView = 'event' | 'now' | 'review';

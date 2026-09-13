@@ -25,10 +25,7 @@ func (s *Service) GetLiquidationMaxPain(ctx context.Context, exchange, symbol st
 	if s.liqWatch != nil {
 		s.liqWatch.Watch(symbol)
 	}
-	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
-	if ex != "all" {
-		want = []domain.Exchange{domain.Exchange(ex)}
-	}
+	want := s.futuresWant(ex)
 	now := time.Now().UTC()
 	out := &domain.MaxPainReport{
 		Symbol:      symbol,

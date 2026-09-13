@@ -43,7 +43,7 @@ import type {
   LiquidationHeatmapProps,
 } from './LiquidationHeatmap.types';
 
-const VENUES: LiqHeatVenue[] = ['combined', 'binance', 'bybit'];
+const VENUES: LiqHeatVenue[] = ['combined', 'binance', 'bybit', 'okx'];
 const SIDES: LiqHeatSide[] = ['totals', 'longs', 'shorts'];
 
 /**

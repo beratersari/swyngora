@@ -1406,7 +1406,7 @@ func TestGetLiquidationCascade_OK(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body.Symbol != "BTCUSDT" || len(body.Venues) != 2 || body.Note == "" || body.Episodes == nil {
+	if body.Symbol != "BTCUSDT" || len(body.Venues) != 3 || body.Note == "" || body.Episodes == nil {
 		t.Fatalf("%+v", body)
 	}
 }
@@ -1447,7 +1447,7 @@ func TestScanLiquidationCascades_OK(t *testing.T) {
 
 func TestGetLiquidationCascade_BadExchange(t *testing.T) {
 	h := newTestHandler()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-cascade?symbol=BTCUSDT&exchange=okx", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-cascade?symbol=BTCUSDT&exchange=kraken", nil)
 	rr := httptest.NewRecorder()
 	h.GetLiquidationCascade(rr, req)
 	if rr.Code != http.StatusBadRequest {

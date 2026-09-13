@@ -31,6 +31,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/geckoterminal"
 	holderresolve "gitlab.com/trace-analysis/swyngora/backend/internal/adapter/holders"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/importstore"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/okx"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/optionsstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/portfoliostore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/pricediffstore"
@@ -96,6 +97,7 @@ func main() {
 	bybitBooks := cache.NewWithOptions[*domain.RawOrderBook](cfg.OrderBookCacheTTL, cache.Options{MaxEntries: 256})
 	bybitSpot := cache.New[[]domain.SpotMarket](cfg.SpotMarketCacheTTL)
 	bybitOI := cache.New[*domain.OpenInterestSeries](cfg.OpenInterestCacheTTL)
+	okxOI := cache.New[*domain.OpenInterestSeries](cfg.OpenInterestCacheTTL)
 
 	// Supply: Binance marketing list only (asset-level, used for all venues' mcap enrichment).
 	supplyCache := cache.New[*domain.AssetSupply](cfg.SupplyCacheTTL)
@@ -131,6 +133,7 @@ func main() {
 				bybitSpot.Cleanup()
 				binanceOI.Cleanup()
 				bybitOI.Cleanup()
+				okxOI.Cleanup()
 				// Supply/catalog are daily snapshots replaced atomically on
 				// successful Refresh. Do not evict last-good on TTL.
 				holdersCache.Cleanup()
@@ -188,6 +191,11 @@ func main() {
 		OpenInterestCache: bybitOI,
 	})
 	defer bybitClient.Close()
+	okxClient := okx.NewClient(okx.Options{
+		BaseURL:           cfg.OKXBaseURL,
+		HTTPClient:        httpClient,
+		OpenInterestCache: okxOI,
+	})
 
 	delistStore := deliststore.NewMemory()
 	binanceDelist := cfg.BinanceAPIKey != ""
@@ -208,12 +216,16 @@ func main() {
 	futuresHist := &futureshist.Service{
 		Store:      futuresStore,
 		TakerStore: futuresStore,
-		OI:         map[domain.Exchange]domain.OpenInterestPort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
-		Funding:    map[domain.Exchange]domain.FundingRatePort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
-		LS:         map[domain.Exchange]domain.LongShortRatioPort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
-		Taker:      map[domain.Exchange]domain.TakerBucketPort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
-		Logger:     logger,
-		Seeds:      histSeeds,
+		OI: map[domain.Exchange]domain.OpenInterestPort{
+			domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient, domain.ExchangeOKX: okxClient,
+		},
+		Funding: map[domain.Exchange]domain.FundingRatePort{
+			domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient, domain.ExchangeOKX: okxClient,
+		},
+		LS:     map[domain.Exchange]domain.LongShortRatioPort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
+		Taker:  map[domain.Exchange]domain.TakerBucketPort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
+		Logger: logger,
+		Seeds:  histSeeds,
 	}
 	liqSink := futureshist.NewPersistSink(liqBook, futuresHist)
 	liqSink.Backfill = &futureshist.Backfiller{
@@ -222,6 +234,7 @@ func main() {
 		Sources: map[domain.Exchange]domain.LiquidationHistoryPort{
 			domain.ExchangeBinance: binanceClient,
 			domain.ExchangeBybit:   bybitClient,
+			domain.ExchangeOKX:     okxClient,
 		},
 		Seeds:  histSeeds,
 		Logger: logger,
@@ -236,11 +249,17 @@ func main() {
 		HTTP:    httpClient,
 		Sink:    liqSink,
 	})
+	okxLiq := okx.NewLiquidationHub(okx.LiquidationOptions{
+		WSURL:  cfg.OKXWSURL,
+		Sink:   liqSink,
+		Client: okxClient,
+	})
 	if liqSink.Backfill != nil {
 		liqSink.Backfill.Watch = bybitLiq.Watch
 	}
 	defer binanceLiq.Close()
 	defer bybitLiq.Close()
+	defer okxLiq.Close()
 
 	geckoClient := coingecko.New(coingecko.Options{
 		HTTPClient: httpClient,
@@ -272,9 +291,11 @@ func main() {
 	marketSvc = marketSvc.WithHolders(holdersCascade).WithHoldersFallback(cryptoid.New(cryptoid.Options{})).WithAssetProfile(cmcClient).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,
+		domain.ExchangeOKX:     okxClient,
 	}).WithFundingRate(map[domain.Exchange]domain.FundingRatePort{
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,
+		domain.ExchangeOKX:     okxClient,
 	}).WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,
@@ -736,6 +757,8 @@ func main() {
 
 	go binanceLiq.Start(ctx)
 	go bybitLiq.Start(ctx)
+	go okxLiq.Start(ctx)
+	go okxClient.StartInstrumentRefresh(ctx)
 	go marketSvc.StartWallSampler(ctx)
 	go marketSvc.StartHeatmapWarmer(ctx)
 	logger.Info("order heatmap warmer started", "venues", []string{"binance", "coinbase", "bybit"})

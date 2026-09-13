@@ -207,7 +207,7 @@ func resolveFundingArbSizing(notional, holdHours float64, feeBinancePct, feeBybi
 }
 
 func (s *Service) fundingArbLegs(ctx context.Context, symbol string, fees fundingArbFees) []domain.FundingArbVenueInput {
-	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
+	want := domain.FuturesVenues()
 	out := make([]domain.FundingArbVenueInput, len(want))
 	var wg sync.WaitGroup
 	for i, ex := range want {
@@ -273,7 +273,7 @@ func (s *Service) fundingArbOne(ctx context.Context, ex domain.Exchange, symbol 
 }
 
 func feeForFundingArb(ex domain.Exchange, fees fundingArbFees) float64 {
-	if ex == domain.ExchangeBybit {
+	if ex == domain.ExchangeBybit || ex == domain.ExchangeOKX {
 		return fees.bybit
 	}
 	return fees.binance

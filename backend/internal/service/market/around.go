@@ -45,10 +45,7 @@ func (s *Service) getAround(ctx context.Context, exchange, symbol, window, durin
 		return nil, err
 	}
 	s.noteFutures(symbol)
-	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
-	if ex != "all" {
-		want = []domain.Exchange{domain.Exchange(ex)}
-	}
+	want := aroundCandleWant(ex)
 	interval := domain.ProfileBarInterval(plan.To.Sub(plan.From.Add(-time.Duration(domain.AroundTypicalPriors) * plan.WindowDur)))
 
 	out := &domain.AroundReport{
@@ -75,16 +72,42 @@ func (s *Service) getAround(ctx context.Context, exchange, symbol, window, durin
 	for _, f := range got {
 		out.Venues = append(out.Venues, f.ven)
 	}
+	tape := append([]domain.AroundVenue(nil), out.Venues...)
+	if ex == "all" {
+		okxVen := s.aroundVenue(ctx, domain.ExchangeOKX, symbol, plan, interval)
+		if aroundVenueHasFutures(okxVen) {
+			out.Venues = append(out.Venues, okxVen)
+		}
+	}
 	sort.Slice(out.Venues, func(i, j int) bool {
 		return string(out.Venues[i].Exchange) < string(out.Venues[j].Exchange)
 	})
-	if ex == "all" && len(out.Venues) > 0 {
-		out.Combined = domain.CombineAroundVenues(symbol, out.Venues, plan, interval)
+	if ex == "all" && len(tape) > 0 {
+		out.Combined = domain.CombineAroundVenues(symbol, tape, plan, interval)
 		out.VenueTiming = domain.CompareAroundVenueTiming(out.Venues)
 	}
 	s.attachAroundOptions(ctx, symbol, plan, out)
 	out.Summary = domain.ExplainAroundReport(*out)
 	return out, nil
+}
+
+func aroundVenueHasFutures(v domain.AroundVenue) bool {
+	for _, ph := range v.Phases {
+		if ph.Futures != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func aroundCandleWant(exchange string) []domain.Exchange {
+	if exchange == string(domain.ExchangeOKX) {
+		return []domain.Exchange{domain.ExchangeOKX}
+	}
+	if exchange != "" && exchange != "all" {
+		return []domain.Exchange{domain.Exchange(exchange)}
+	}
+	return []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
 }
 
 const aroundCompareDisclaimer = "Compares two moves of the same coin: each time is an around-the-move tape (before / during / after). Differences cover price level, the move itself (net %, range, volume, vs typical, takers, POC), stored order-book mid/liquidity, and stored futures (OI, funding, long %, liquidations) when those archives have samples. from and to are the two event times — they do not have to be in order. Informational only — not financial advice."
@@ -191,6 +214,14 @@ func domainDir(pct float64) string {
 }
 
 func (s *Service) aroundVenue(ctx context.Context, ex domain.Exchange, symbol string, plan domain.AroundPlan, interval domain.CandleInterval) domain.AroundVenue {
+	if s == nil || s.markets == nil || s.markets[ex] == nil {
+		ven := domain.AroundVenue{Exchange: ex, Symbol: symbol, Interval: string(interval), Phases: []domain.AroundPhase{}}
+		s.attachAroundFutures(ctx, ex, symbol, plan, &ven)
+		if ven.Summary == "" {
+			ven.Summary = domain.ExplainAroundVenue(ven)
+		}
+		return ven
+	}
 	lookbackFrom := plan.BeforeFrom.Add(-time.Duration(domain.AroundTypicalPriors) * plan.WindowDur)
 	var (
 		candles []domain.Candle

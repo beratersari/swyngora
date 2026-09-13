@@ -34,7 +34,9 @@ Liquidity sweeps whose poke sits in the span are attached as events.
 `changes` compares the three windows (continued / reversed / faded).
 
 `exchange=all` (default) returns Binance and Bybit separately plus
-`combined` (volume-weighted). `venueTiming` says whether those two
+`combined` (volume-weighted). OKX stored futures (OI, funding, liquidations)
+attach as a third venue when those samples exist; OKX is not in the spot
+candle combine. `venueTiming` says whether those two
 venues started the during-move together, which printed first, whether
 the other followed later or the move stayed on one venue, and whether
 OI or taker flow had already changed before the laggard's real start

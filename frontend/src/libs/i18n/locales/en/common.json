@@ -28,6 +28,7 @@
     "binance": "Binance",
     "coinbase": "Coinbase",
     "bybit": "Bybit",
+    "okx": "OKX",
     "nasdaq": "Nasdaq",
     "bist": "BIST"
   },

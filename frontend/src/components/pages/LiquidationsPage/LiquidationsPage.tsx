@@ -227,6 +227,7 @@ export function LiquidationsPage() {
               { value: 'all', label: t('liquidations:exchangeAll') },
               { value: 'binance', label: t('common:exchanges.binance') },
               { value: 'bybit', label: t('common:exchanges.bybit') },
+              { value: 'okx', label: t('common:exchanges.okx') },
             ]}
             onChange={(next: LiqPageExchange) =>
               patchParams({ exchange: next === 'all' ? null : next })

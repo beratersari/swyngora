@@ -282,7 +282,7 @@ func BuildLiquidationLevelsFromHunt(rep HuntReport) LiquidationLevelsReport {
 		Missing:    []string{},
 		Note:       "Estimated liquidation notional at each price from that venue's own last price, open interest, and a 10x/25x/50x/100x leverage mix. Longs sit below last (price drop); shorts sit above (price rise). Combined sums independently modeled venues and does not borrow a missing venue's last price. Informational only.",
 	}
-	want := []Exchange{ExchangeBinance, ExchangeBybit}
+	want := FuturesVenues()
 	if rep.Exchange != "" && rep.Exchange != "all" {
 		want = []Exchange{Exchange(rep.Exchange)}
 	}

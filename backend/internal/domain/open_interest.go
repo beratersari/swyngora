@@ -75,7 +75,7 @@ type OpenInterestSnapshot struct {
 	LongShort  *LongShortSnapshot // account long/short ratio when available
 }
 
-// ParseOpenInterestExchange accepts binance, bybit, or all (empty = all).
+// ParseOpenInterestExchange accepts binance, bybit, okx, or all (empty = all).
 func ParseOpenInterestExchange(raw string) (string, error) {
 	return ParseLiquidationExchange(raw)
 }

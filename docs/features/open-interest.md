@@ -9,8 +9,8 @@ can ask “is BTC open interest rising?”
 ## Behavior
 
 - `GET /api/v1/market/open-interest?symbol=BTCUSDT`
-  - `exchange=all` (default) sums **Binance USD-M** and **Bybit linear perpetual**
-  - `exchange=binance` or `bybit` for one venue
+  - `exchange=all` (default) sums **Binance USD-M**, **Bybit linear perpetual**, and **OKX USDT-swap**
+  - `exchange=binance`, `bybit`, or `okx` for one venue
 - Current reading:
   - `contracts` — venue-published outstanding size in the **base asset** (e.g. BTC)
   - `value` — USDT notional
@@ -27,6 +27,7 @@ Sources (public REST, no API key):
 
 - Binance: `GET /fapi/v1/openInterest` + mark price + `/futures/data/openInterestHist?period=5m`
 - Bybit: `GET /v5/market/tickers?category=linear` + `/v5/market/open-interest` (5min, paged) + 5m klines for hist notional.
+- OKX: `GET /api/v5/public/open-interest?instId=BTC-USDT-SWAP` (`oiCcy` / `oiUsd`) + rubik `open-interest-history` period `5m`.
   **Single-sided only:** Bybit still publishes bilateral `openInterest` (~2×) and unilateral `singleOpenInterest`. Current and history use `singleOpenInterest` / `singleOpenInterestValue`. If the single field is missing, the bilateral figure is halved.
 
 Unlike liquidations, history comes from the exchange — 24h change is available
@@ -40,7 +41,7 @@ Durable samples (5m, both venues) are also stored in SQLite. Query them with
 | Layer | Path |
 |---|---|
 | Domain | `backend/internal/domain/open_interest.go` |
-| Adapters | `adapter/binance/openinterest.go`, `adapter/bybit/openinterest.go` |
+| Adapters | `adapter/binance/openinterest.go`, `adapter/bybit/openinterest.go`, `adapter/okx/openinterest.go` |
 | Service | `GetOpenInterest` |
 | HTTP | `GET /api/v1/market/open-interest` |
 | MCP / AI | `get_open_interest` |

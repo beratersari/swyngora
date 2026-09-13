@@ -3,14 +3,14 @@
 ## Goal
 
 Keep **open interest**, **funding rate**, **long/short ratio**, and **liquidation**
-history for Binance USD-M and Bybit linear so values survive a server restart
-and can be queried later by users or the AI.
+history for Binance USD-M, Bybit linear, and OKX USDT-swap so values survive a
+server restart and can be queried later by users or the AI.
 
 ## Behavior
 
 - Background worker (default every **5 minutes**) samples configured + recently
-  requested symbols on **each venue independently**. If Bybit errors, Binance
-  is still saved (and the reverse).
+  requested symbols on **each venue independently**. If one venue errors, the
+  others are still saved.
 - Liquidation events are written as they arrive on the websocket (async queue,
   flushed on shutdown; overflow writes synchronously). The last **24 hours**
   are reloaded into the in-memory book on startup, **per venue**, with

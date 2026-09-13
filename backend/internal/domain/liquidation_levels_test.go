@@ -112,7 +112,14 @@ func TestBuildLiquidationLevelsFromHunt_MissingVenue(t *testing.T) {
 			}},
 		},
 	})
-	if len(got.Missing) != 1 || got.Missing[0] != "bybit" {
+	if len(got.Missing) != 2 {
+		t.Fatalf("missing %+v", got.Missing)
+	}
+	seen := map[string]bool{}
+	for _, m := range got.Missing {
+		seen[m] = true
+	}
+	if !seen["bybit"] || !seen["okx"] {
 		t.Fatalf("missing %+v", got.Missing)
 	}
 }

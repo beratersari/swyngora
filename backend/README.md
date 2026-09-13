@@ -1,6 +1,6 @@
 # Swyngora Backend
 
-Go HTTP API for market data across **Binance**, **Coinbase**, **Bybit** (crypto spot), **Nasdaq**, and **BIST** (cash equities). Crypto circulating supply remains from the Binance daily snapshot and is **not** applied to stocks. Equity market caps come from the Nasdaq.com screener (USD) and the public TradingView Turkey scanner (TRY).
+Go HTTP API for market data across **Binance**, **Coinbase**, **Bybit** (crypto spot), **Nasdaq**, and **BIST** (cash equities). Futures liquidations / open interest / funding also include **OKX** USDT-swap (not a spot listing venue). Crypto circulating supply remains from the Binance daily snapshot and is **not** applied to stocks. Equity market caps come from the Nasdaq.com screener (USD) and the public TradingView Turkey scanner (TRY).
 
 ## Architecture (N-layered)
 
@@ -11,7 +11,7 @@ Go HTTP API for market data across **Binance**, **Coinbase**, **Bybit** (crypto 
 | Application | `internal/service/market` | Validation + use-case orchestration |
 | Application | `internal/service/realtime` | WebSocket hub: price pump + portfolio event fan-out |
 | Domain | `internal/domain` | Entities, ports, sentinel errors |
-| Infrastructure | `internal/adapter/*` | Binance (market + supply), Coinbase, Bybit, **Deribit (BTC/ETH options)**, **equities (Nasdaq screener + BIST TradingView scanner; Yahoo for candles)**, TTL cache, **SQLite watchlist** |
+| Infrastructure | `internal/adapter/*` | Binance (market + supply), Coinbase, Bybit, **OKX (USDT-swap OI / funding / liquidations)**, **Deribit (BTC/ETH options)**, **equities (Nasdaq screener + BIST TradingView scanner; Yahoo for candles)**, TTL cache, **SQLite watchlist** |
 | Platform | `internal/platform/config` | Env config |
 
 OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).

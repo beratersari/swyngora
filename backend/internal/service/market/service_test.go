@@ -882,6 +882,25 @@ func TestGetOpenInterest_Combined(t *testing.T) {
 	}
 }
 
+func TestGetOpenInterest_IncludesOKXWhenWired(t *testing.T) {
+	now := time.Now().UTC()
+	okx := &fakeOI{ser: &domain.OpenInterestSeries{
+		Exchange: domain.ExchangeOKX, Symbol: "BTCUSDT",
+		Current: domain.OpenInterestPoint{Time: now, Contracts: 7, Value: 700},
+		History: []domain.OpenInterestPoint{{Time: now.Add(-time.Hour), Contracts: 5, Value: 500}},
+	}}
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+		domain.ExchangeOKX: okx,
+	})
+	got, err := svc.GetOpenInterest(context.Background(), "all", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.VenueCount != 1 || len(got.Venues) != 1 || got.Venues[0].Exchange != "okx" {
+		t.Fatalf("%+v", got)
+	}
+}
+
 func TestGetOpenInterest_BadExchange(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{})
 	_, err := svc.GetOpenInterest(context.Background(), "coinbase", "BTCUSDT")

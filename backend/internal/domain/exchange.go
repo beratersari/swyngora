@@ -11,9 +11,28 @@ const (
 	ExchangeBybit    Exchange = "bybit"
 	ExchangeNasdaq   Exchange = "nasdaq"
 	ExchangeBist     Exchange = "bist"
+	// ExchangeOKX is a USDT-swap futures venue (liquidations, OI, funding).
+	// It is not a spot listing venue — see FuturesVenues.
+	ExchangeOKX Exchange = "okx"
 	// ExchangeDeribit is options-only (not a spot list venue).
 	ExchangeDeribit Exchange = "deribit"
 )
+
+// FuturesVenues are the USD-M / linear / USDT-swap books used for
+// liquidations, open interest, funding, and the desks that compose them.
+func FuturesVenues() []Exchange {
+	return []Exchange{ExchangeBinance, ExchangeBybit, ExchangeOKX}
+}
+
+// IsFuturesVenue reports whether ex is a perpetual-futures book we sample.
+func IsFuturesVenue(ex Exchange) bool {
+	switch Exchange(strings.ToLower(strings.TrimSpace(string(ex)))) {
+	case ExchangeBinance, ExchangeBybit, ExchangeOKX:
+		return true
+	default:
+		return false
+	}
+}
 
 // SupportedExchanges is the ordered list of venues exposed by the API.
 var SupportedExchanges = []Exchange{

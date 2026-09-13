@@ -81,7 +81,7 @@ func TestBuildCascadeScan_MarketAndCoins(t *testing.T) {
 	if len(scan.Hits) == 0 || scan.Hits[0].Symbol != "SOLUSDT" {
 		t.Fatalf("hits %+v", scan.Hits)
 	}
-	if scan.Market.Symbol != "all" || len(scan.Market.Venues) != 2 {
+	if scan.Market.Symbol != "all" || len(scan.Market.Venues) != len(FuturesVenues()) {
 		t.Fatalf("market %+v", scan.Market)
 	}
 }

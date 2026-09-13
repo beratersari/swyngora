@@ -264,5 +264,5 @@ func mergeGaps(a, b []LiquidationGap) []LiquidationGap {
 }
 
 func liquidationVenues() []Exchange {
-	return []Exchange{ExchangeBinance, ExchangeBybit}
+	return FuturesVenues()
 }

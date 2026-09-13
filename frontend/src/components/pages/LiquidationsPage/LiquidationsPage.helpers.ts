@@ -3,7 +3,7 @@ import { isCardWindow, type LiqCardWindowId } from '@/components/organisms/Liqui
 import { DEFAULT_LIQ_SYMBOL, DEFAULT_LIQ_WINDOW } from './LiquidationsPage.constants';
 
 export type LiqPageView = 'overview' | 'heatmap' | 'chart' | 'cascade' | 'hunt' | 'max-pain';
-export type LiqPageExchange = 'all' | 'binance' | 'bybit';
+export type LiqPageExchange = 'all' | 'binance' | 'bybit' | 'okx';
 export type LiqChartRange = '12h' | '24h';
 export type LiqHuntPanel = HuntPanel;
 
@@ -40,7 +40,7 @@ export function parseLiqWindow(raw: string | null): LiqCardWindowId {
 }
 
 export function parseLiqExchange(raw: string | null): LiqPageExchange {
-  if (raw === 'binance' || raw === 'bybit' || raw === 'all') return raw;
+  if (raw === 'binance' || raw === 'bybit' || raw === 'okx' || raw === 'all') return raw;
   return 'all';
 }
 

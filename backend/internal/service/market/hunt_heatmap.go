@@ -30,10 +30,7 @@ func (s *Service) GetLiquidationHuntHeatmap(ctx context.Context, exchange, symbo
 	}
 	now := time.Now().UTC()
 	from := now.Add(-spec.Window)
-	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
-	if ex != "all" {
-		want = []domain.Exchange{domain.Exchange(ex)}
-	}
+	want := s.futuresWant(ex)
 	venues := make([]domain.HuntHeatmapVenueSeries, 0, len(want))
 	var mu sync.Mutex
 	var wg sync.WaitGroup

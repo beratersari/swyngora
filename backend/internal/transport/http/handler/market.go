@@ -849,7 +849,7 @@ func liquidationOverviewToDTO(a *domain.LiquidationOverview) liquidationOverview
 	return liquidationOverviewResponse{
 		Exchange: a.Exchange, CoinWindow: a.CoinWindow, CollectingSince: since,
 		Live: a.Live, VenueCount: a.VenueCount, Windows: wins, Coins: coins, Feed: feedToDTO(a.Feed),
-		Note: "Market-wide Binance USD-M and Bybit linear perpetual liquidations. windows are 1h/4h/12h/24h totals. coins are ranked by total notional in coinWindow. Combined complete/live require both venues; a missing venue is listed in feed.missing and is never replaced by the other. feed.missingSeconds is still-unfilled disconnect time. Notional is quote (USDT). Informational only.",
+		Note: "Market-wide Binance USD-M, Bybit linear, and OKX USDT-swap liquidations. windows are 1h/4h/12h/24h totals. coins are ranked by total notional in coinWindow. Combined complete/live require every futures venue; a missing venue is listed in feed.missing and is never replaced. feed.missingSeconds is still-unfilled disconnect time. Notional is quote (USDT). Informational only.",
 	}
 }
 

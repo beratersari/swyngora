@@ -60,7 +60,7 @@ func (w *Worker) RunOnce(ctx context.Context) {
 	inserted := 0
 	failed := 0
 	for _, sym := range w.Hist.Symbols() {
-		for _, ex := range []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit} {
+		for _, ex := range domain.FuturesVenues() {
 			if ctx.Err() != nil {
 				return
 			}

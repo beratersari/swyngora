@@ -112,7 +112,7 @@ func (s *Service) WithLiquidations(book *domain.LiquidationBook, watch Liquidati
 	return s
 }
 
-// WithOpenInterest attaches Binance USD-M / Bybit linear open-interest ports.
+// WithOpenInterest attaches Binance USD-M / Bybit linear / OKX SWAP open-interest ports.
 func (s *Service) WithOpenInterest(ports map[domain.Exchange]domain.OpenInterestPort) *Service {
 	if s == nil {
 		return s
@@ -127,7 +127,7 @@ func (s *Service) WithOpenInterest(ports map[domain.Exchange]domain.OpenInterest
 	return s
 }
 
-// WithFundingRate attaches Binance USD-M / Bybit linear funding ports.
+// WithFundingRate attaches Binance USD-M / Bybit linear / OKX SWAP funding ports.
 func (s *Service) WithFundingRate(ports map[domain.Exchange]domain.FundingRatePort) *Service {
 	if s == nil {
 		return s
@@ -859,10 +859,7 @@ func (s *Service) GetOpenInterest(ctx context.Context, exchange, symbol string) 
 		return nil, err
 	}
 	s.noteFutures(symbol)
-	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
-	if ex != "all" {
-		want = []domain.Exchange{domain.Exchange(ex)}
-	}
+	want := s.futuresWant(ex)
 	type job struct {
 		ex domain.Exchange
 		p  domain.OpenInterestPort
@@ -937,10 +934,7 @@ func (s *Service) GetLongShortRatio(ctx context.Context, exchange, symbol string
 	}
 	limit = domain.ClampLongShortHistoryLimit(limit)
 	s.noteFutures(symbol)
-	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
-	if ex != "all" {
-		want = []domain.Exchange{domain.Exchange(ex)}
-	}
+	want := s.futuresWant(ex)
 	type job struct {
 		ex domain.Exchange
 		p  domain.LongShortRatioPort
@@ -1006,10 +1000,7 @@ func (s *Service) GetFundingRate(ctx context.Context, exchange, symbol string, l
 	}
 	limit = domain.ClampFundingHistoryLimit(limit)
 	s.noteFutures(symbol)
-	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
-	if ex != "all" {
-		want = []domain.Exchange{domain.Exchange(ex)}
-	}
+	want := s.futuresWant(ex)
 	type job struct {
 		ex domain.Exchange
 		p  domain.FundingRatePort
@@ -1068,6 +1059,22 @@ func (s *Service) oiPort(ex domain.Exchange) domain.OpenInterestPort {
 		return nil
 	}
 	return s.oi[ex]
+}
+
+func (s *Service) futuresWant(exchange string) []domain.Exchange {
+	if exchange != "" && exchange != "all" {
+		return []domain.Exchange{domain.Exchange(exchange)}
+	}
+	var out []domain.Exchange
+	for _, ex := range domain.FuturesVenues() {
+		if s != nil && (s.oiPort(ex) != nil || s.fundingPort(ex) != nil) {
+			out = append(out, ex)
+		}
+	}
+	if len(out) == 0 {
+		return []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
+	}
+	return out
 }
 
 // EstimateOrderBookImpact walks live asks (buy) or bids (sell) for a market size.

@@ -10,7 +10,7 @@ so a user or the AI can ask “are longs paying to hold BTC?”
 
 - `GET /api/v1/market/funding-rate?symbol=BTCUSDT`
   - `exchange=all` (default) returns **each venue separately** (rates are not averaged)
-  - `exchange=binance` or `bybit` hoists `current` + `history` to the top level
+  - `exchange=binance`, `bybit`, or `okx` hoists `current` + `history` to the top level
   - `limit` settled prints (default 12, max 30)
 - `GET /api/v1/market/funding-arb` sizes a long-one-venue / short-the-other trade
   from the funding gap, after fees and spot-perp. See [`funding-arb.md`](funding-arb.md).
@@ -27,13 +27,14 @@ Sources (public REST, no API key):
 
 - Binance: `GET /fapi/v1/premiumIndex` + `GET /fapi/v1/fundingRate`
 - Bybit: `GET /v5/market/tickers?category=linear` + `GET /v5/market/funding/history`
+- OKX: `GET /api/v5/public/funding-rate` + `GET /api/v5/public/funding-rate-history` (`BTC-USDT-SWAP`)
 
 ## Where the code lives
 
 | Layer | Path |
 |---|---|
 | Domain | `backend/internal/domain/funding.go` |
-| Adapters | `adapter/binance/funding.go`, `adapter/bybit/funding.go` |
+| Adapters | `adapter/binance/funding.go`, `adapter/bybit/funding.go`, `adapter/okx/funding.go` |
 | Service | `GetFundingRate` (also attached by `GetOpenInterest`) |
 | HTTP | `GET /api/v1/market/funding-rate` |
 | MCP / AI | `get_funding_rate` (also on `get_open_interest.funding`) |

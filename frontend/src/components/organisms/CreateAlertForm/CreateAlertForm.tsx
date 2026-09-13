@@ -53,7 +53,7 @@ export function CreateAlertForm({
   const isRadar = kind === 'setup_radar';
   const isLiq = isFeed || isCascade || isNotional;
   const venueWide = isLiq || isRadar;
-  const liqExchanges = ['binance', 'bybit', 'all'];
+  const liqExchanges = ['binance', 'bybit', 'okx', 'all'];
   const spotExchanges = ['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'];
 
   useEffect(() => {
@@ -133,7 +133,7 @@ export function CreateAlertForm({
                   setCondition('any');
                   setTargetPrice(60);
                 }
-                if (!['binance', 'bybit', 'all'].includes(exchange)) setExchange('all');
+                if (!['binance', 'bybit', 'okx', 'all'].includes(exchange)) setExchange('all');
               } else {
                 setCondition('above');
                 if (exchange === 'all') setExchange('binance');

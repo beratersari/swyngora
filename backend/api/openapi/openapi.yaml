@@ -916,7 +916,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all)
+          description: binance | bybit | okx | all (default all)
           schema: { type: string, default: all, example: all }
       responses:
         '200':
@@ -934,15 +934,15 @@ paths:
         CoinGlass-style **market desk**: long/short liquidation notional for the last
         **1 hour, 4 hours, 12 hours, and 24 hours**, plus coins ranked by total
         notional in `window` (default 24h) for a treemap. Fed by the same Binance
-        USD-M and Bybit linear streams as `/liquidations`. `exchange=all` (default)
-        sums both venues. `complete` uses the all-market Binance live clock when
+        USD-M, Bybit linear, and OKX USDT-swap streams as `/liquidations`. `exchange=all` (default)
+        sums all three venues. `complete` uses the all-market Binance live clock when
         `exchange` is `all` or `binance`. Informational only.
       operationId: getMarketLiquidationOverview
       tags: [Market]
       parameters:
         - name: exchange
           in: query
-          description: binance | bybit | all (default all)
+          description: binance | bybit | okx | all (default all)
           schema: { type: string, default: all, example: all }
         - name: window
           in: query
@@ -985,7 +985,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all)
+          description: binance | bybit | okx | all (default all)
           schema: { type: string, default: all, example: all }
       responses:
         '200':
@@ -1071,7 +1071,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all)
+          description: binance | bybit | okx | all (default all)
           schema: { type: string, default: all, example: all }
         - name: limit
           in: query
@@ -1524,7 +1524,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all)
+          description: binance | bybit | okx | all (default all)
           schema: { type: string, default: all, example: all }
         - name: limit
           in: query
@@ -1604,7 +1604,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all = both + agreement)
+          description: binance | bybit | okx | all (default all = all futures venues + agreement)
           schema: { type: string, default: all }
       responses:
         '200':
@@ -1726,7 +1726,7 @@ paths:
           schema: { type: string, example: SOLUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all)
+          description: binance | bybit | okx | all (default all)
           schema: { type: string, default: all }
       responses:
         '200':
@@ -1792,7 +1792,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all)
+          description: binance | bybit | okx | all (default all)
           schema: { type: string, default: all }
         - name: minNotional
           in: query
@@ -1831,7 +1831,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all = both + combined)
+          description: binance | bybit | okx | all (default all = all futures venues + combined)
           schema: { type: string, default: all }
       responses:
         '200':
@@ -1872,7 +1872,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all = both + combined)
+          description: binance | bybit | okx | all (default all = all futures venues + combined)
           schema: { type: string, default: all }
       responses:
         '200':
@@ -1903,7 +1903,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all)
+          description: binance | bybit | okx | all (default all)
           schema: { type: string, default: all }
       responses:
         '200':
@@ -1975,7 +1975,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all)
+          description: binance | bybit | okx | all (default all)
           schema: { type: string, default: all }
       responses:
         '200':
@@ -2010,7 +2010,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all = both + combined)
+          description: binance | bybit | okx | all (default all = all futures venues + combined)
           schema: { type: string, default: all }
       responses:
         '200':
@@ -2065,7 +2065,7 @@ paths:
           schema: { type: string, example: "2026-08-20T14:00:00Z" }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all = both + combined)
+          description: binance | bybit | okx | all (default all = all futures venues + combined)
           schema: { type: string, default: all }
         - name: window
           in: query
@@ -2117,7 +2117,7 @@ paths:
           schema: { type: string, example: "2026-08-20T16:00:00Z" }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all = both + combined)
+          description: binance | bybit | okx | all (default all = all futures venues + combined)
           schema: { type: string, default: all }
         - name: window
           in: query
@@ -2157,7 +2157,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all)
+          description: binance | bybit | okx | all (default all)
           schema: { type: string, default: all }
         - name: lookback
           in: query
@@ -2219,7 +2219,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all)
+          description: binance | bybit | okx | all (default all)
           schema: { type: string, default: all }
         - name: lookback
           in: query
@@ -2293,7 +2293,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all)
+          description: binance | bybit | okx | all (default all)
           schema: { type: string, default: all }
         - name: lookback
           in: query
@@ -2401,7 +2401,7 @@ paths:
           schema: { type: string, example: "2026-08-20T14:10:00Z" }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all = both + combined)
+          description: binance | bybit | okx | all (default all = all futures venues + combined)
           schema: { type: string, default: all }
         - name: window
           in: query
@@ -2586,7 +2586,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all = both + combined)
+          description: binance | bybit | okx | all (default all = all futures venues + combined)
           schema: { type: string, default: all }
         - name: window
           in: query
@@ -2635,7 +2635,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all = both + combined)
+          description: binance | bybit | okx | all (default all = all futures venues + combined)
           schema: { type: string, default: all }
         - name: window
           in: query
@@ -2709,7 +2709,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all = both + combined)
+          description: binance | bybit | okx | all (default all = all futures venues + combined)
           schema: { type: string, default: all }
       responses:
         '200':
@@ -2742,7 +2742,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all = both + combined)
+          description: binance | bybit | okx | all (default all = all futures venues + combined)
           schema: { type: string, default: all }
       responses:
         '200':
@@ -2784,7 +2784,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all = both, never averaged)
+          description: binance | bybit | okx | all (default all = all futures venues, never averaged)
           schema: { type: string, default: all }
         - name: weightProximity
           in: query
@@ -2835,7 +2835,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all = both, never averaged)
+          description: binance | bybit | okx | all (default all = all futures venues, never averaged)
           schema: { type: string, default: all }
       responses:
         '200':
@@ -2877,7 +2877,7 @@ paths:
           schema: { type: string, default: 24h, enum: [12h, 24h, 3d, 7d] }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all = both + combined)
+          description: binance | bybit | okx | all (default all = all futures venues + combined)
           schema: { type: string, default: all }
       responses:
         '200':
@@ -2899,7 +2899,7 @@ paths:
         - `symbol=BTCUSDT` (or ETHUSDT, …): estimated **price levels** —
           long/short notional at each price bin (hunt model summed over `range`).
         - `symbol=all`: **total** observed liquidations for every tracked coin
-          as time bars (last 24h max). `exchange=binance|bybit|all`.
+          as time bars (last 24h max). `exchange=binance|bybit|okx|all`.
 
         Informational only.
       operationId: getMarketLiquidationLevels
@@ -2911,7 +2911,7 @@ paths:
           schema: { type: string, default: all, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all = combined)
+          description: binance | bybit | okx | all (default all = combined)
           schema: { type: string, default: all, example: all }
         - name: range
           in: query
@@ -2950,7 +2950,7 @@ paths:
           schema: { type: string, default: all, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all)
+          description: binance | bybit | okx | all (default all)
           schema: { type: string, default: all, example: all }
       responses:
         '200':
@@ -2974,7 +2974,7 @@ paths:
       parameters:
         - name: exchange
           in: query
-          description: binance | bybit | all (default all)
+          description: binance | bybit | okx | all (default all)
           schema: { type: string, default: all, example: all }
       responses:
         '200':
@@ -3945,9 +3945,9 @@ paths:
         kind=imbalance: live book imbalance (buy=above, sell=below) vs targetPrice in 0.05–0.95.
         kind=wall: a large bid/ask/any wall appears (targetPrice is optional min share 0–1).
         kind=liquidation_feed: Binance/Bybit liquidation socket down or stalled longer than
-        targetPrice seconds (default 300). symbol is ignored. exchange=binance|bybit|all.
+        targetPrice seconds (default 300). symbol is ignored. exchange=binance|bybit|okx|all.
         kind=liquidation_cascade: a coin's cascade grade reaches condition (cascade default,
-        or extreme/elevated). symbol=BTCUSDT or all. exchange=binance|bybit|all.
+        or extreme/elevated). symbol=BTCUSDT or all. exchange=binance|bybit|okx|all.
         kind=liquidation_notional: a coin's long/short/total notional in window (1m|5m|15m|1h,
         default 5m via window or rangePct minutes) reaches targetPrice USDT. condition=long|short|both.
         Repeating fires once when the wave crosses, stays quiet while that window stays above,
@@ -3955,7 +3955,7 @@ paths:
         kind=setup_radar: a coin's current tape looks close enough to the setup before that
         coin's own important past moves. targetPrice is min similarity 40–100 (0 = 60).
         condition=any (default) | up | down (after-path lean). symbol=BTCUSDT or all (any
-        scanned coin). exchange=binance|bybit|all. Repeating by default: one fire when the
+        scanned coin). exchange=binance|bybit|okx|all. Repeating by default: one fire when the
         match appears, quiet while still similar, re-arm when it clears. Informational only.
       operationId: createPriceAlert
       tags: [Alerts]

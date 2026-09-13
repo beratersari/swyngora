@@ -167,6 +167,18 @@ func LiquidationSideFromBybit(positionSide string) (string, error) {
 	}
 }
 
+// LiquidationSideFromOKX maps OKX SWAP liquidation posSide (preferred) or
+// the liquidation order side. posSide=long / side=sell means a long was closed.
+func LiquidationSideFromOKX(posSide, orderSide string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(posSide)) {
+	case "long":
+		return LiquidationSideLong, nil
+	case "short":
+		return LiquidationSideShort, nil
+	}
+	return LiquidationSideFromBinanceOrder(orderSide)
+}
+
 // LiquidationBaseAsset strips a linear quote suffix (BTCUSDT → BTC).
 func LiquidationBaseAsset(symbol string) string {
 	s := NormalizeLiquidationSymbol(symbol)
@@ -218,16 +230,16 @@ func LiquidationWindowDuration(id string) time.Duration {
 	return 0
 }
 
-// ParseLiquidationExchange accepts binance, bybit, or all (empty = all).
+// ParseLiquidationExchange accepts binance, bybit, okx, or all (empty = all).
 func ParseLiquidationExchange(raw string) (string, error) {
 	s := strings.ToLower(strings.TrimSpace(raw))
 	if s == "" || s == "all" || s == "combined" {
 		return "all", nil
 	}
-	if s == string(ExchangeBinance) || s == string(ExchangeBybit) {
+	if IsFuturesVenue(Exchange(s)) {
 		return s, nil
 	}
-	return "", fmt.Errorf("%w: exchange must be binance, bybit, or all", ErrInvalidArgument)
+	return "", fmt.Errorf("%w: exchange must be binance, bybit, okx, or all", ErrInvalidArgument)
 }
 
 // SummarizeLiquidations folds events since cut into one window.

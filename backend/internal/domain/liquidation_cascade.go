@@ -230,7 +230,7 @@ func BuildCascadeReport(symbol, exchange string, events []LiquidationEvent, now 
 	if ex == "" {
 		ex = "all"
 	}
-	want := []Exchange{ExchangeBinance, ExchangeBybit}
+	want := FuturesVenues()
 	if ex != "all" {
 		want = []Exchange{Exchange(ex)}
 	}
@@ -316,7 +316,7 @@ func BuildCascadeScan(exchange string, events []LiquidationEvent, now time.Time)
 	return out
 }
 
-const cascadeNote = "A cascade is a short burst of long or short liquidations far above that stream's own typical rate (1m / 5m / 15m vs the prior 6 hours). Episodes list each wave in the last 24h: start, duration, long/short notional, and price move. Binance and Bybit are scored separately; a combined episode is the same-side wave on both venues at once. Informational only."
+const cascadeNote = "A cascade is a short burst of long or short liquidations far above that stream's own typical rate (1m / 5m / 15m vs the prior 6 hours). Episodes list each wave in the last 24h: start, duration, long/short notional, and price move. Binance, Bybit, and OKX are scored separately; a combined episode is the same-side wave on more than one venue at once. Informational only."
 
 type cascadeBucket struct {
 	start time.Time
