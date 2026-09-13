@@ -219,6 +219,7 @@ export const {
   useResumePriceDiffWatchMutation,
   useDeletePriceDiffWatchMutation,
   useListPriceDiffOpportunitiesQuery,
+  useGetPriceDiffOpportunityQuery,
   useScanMarketFundingArbQuery,
   useLazyScanMarketFundingArbQuery,
   useListFundingArbWatchesQuery,
