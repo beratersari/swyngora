@@ -1670,7 +1670,23 @@ func (c *APIClient) TransferPortfolioCash(ctx context.Context, clientID, fromPor
 	if note != "" {
 		body["note"] = note
 	}
+	if k := IdempotencyKeyFrom(ctx); k != "" {
+		body["idempotencyKey"] = k
+	}
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/transfers", body)
+}
+
+// ListTransferAttempts lists completed / replayed / conflict transfer tries.
+func (c *APIClient) ListTransferAttempts(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", strconv.Itoa(offset))
+	}
+	return c.get(ctx, "/api/v1/portfolio/transfers/attempts", q)
 }
 
 // ListPortfolioCashMovements lists deposit/withdraw history.

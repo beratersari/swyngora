@@ -117,7 +117,21 @@
     "amount": "Tutar",
     "note": "Not",
     "depositSuccess": "Yatırma kaydedildi",
-    "withdrawSuccess": "Çekim kaydedildi"
+    "withdrawSuccess": "Çekim kaydedildi",
+    "transfer": "Aktar",
+    "toBook": "Hedef defter",
+    "transferSuccess": "Aktarım kaydedildi",
+    "transferReplayed": "Aynı aktarım zaten tamamlandı — nakit yeniden taşınmadı"
+  },
+  "transfers": {
+    "requests": "Aktarım istekleri",
+    "attempt": "#",
+    "status": "Ne oldu",
+    "completed": "Tamamlandı",
+    "replayed": "Tekrar geldi",
+    "conflict": "Aynı anahtar, farklı istek",
+    "from": "Kaynak",
+    "to": "Hedef"
   },
   "positions": {
     "title": "Pozisyonlar",

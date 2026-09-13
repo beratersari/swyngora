@@ -2911,18 +2911,18 @@ func (b *Backend) TransferPortfolioCash(ctx context.Context, clientID, fromPortf
 	if fromPortfolioID == "" {
 		fromPortfolioID = PortfolioIDFrom(ctx)
 	}
-	out, in, fromV, toV, err := b.Portfolio.Transfer(ctx, portfolio.TransferInput{
+	res, err := b.Portfolio.Transfer(ctx, portfolio.TransferInput{
 		ClientID: clientID, FromPortfolioID: fromPortfolioID, ToPortfolioID: toPortfolioID,
-		Amount: amount, Note: note,
+		Amount: amount, Note: note, IdempotencyKey: IdempotencyKeyFrom(ctx),
 	})
 	if err != nil {
 		return nil, err
 	}
-	fromJSON, err := cashMoveJSON(out, fromV)
+	fromJSON, err := cashMoveJSON(res.Out, res.From)
 	if err != nil {
 		return nil, err
 	}
-	toJSON, err := cashMoveJSON(in, toV)
+	toJSON, err := cashMoveJSON(res.In, res.To)
 	if err != nil {
 		return nil, err
 	}
@@ -2931,8 +2931,33 @@ func (b *Backend) TransferPortfolioCash(ctx context.Context, clientID, fromPortf
 	_ = json.Unmarshal(toJSON, &toMap)
 	return mustJSON(map[string]any{
 		"from": fromMap, "to": toMap,
-		"note": "Internal transfer between your paper portfolios. Not a deposit or withdrawal.",
+		"replayed":       res.Replayed,
+		"attempt":        res.Attempt,
+		"idempotencyKey": res.IdempotencyKey,
+		"note":           "Internal transfer between your paper portfolios. Not a deposit or withdrawal.",
 	})
+}
+
+func (b *Backend) ListTransferAttempts(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	list, total, err := b.Portfolio.ListTransferAttempts(ctx, clientID, limit, offset, PortfolioIDFrom(ctx))
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		a := list[i]
+		items = append(items, map[string]any{
+			"id": a.ID, "idempotencyKey": a.IdempotencyKey, "status": a.Status, "attempt": a.Attempt,
+			"fromPortfolioId": a.FromPortfolioID, "toPortfolioId": a.ToPortfolioID,
+			"fromPortfolioName": a.FromPortfolioName, "toPortfolioName": a.ToPortfolioName,
+			"amount": a.Amount, "note": a.Note, "outMovementId": a.OutMovementID, "inMovementId": a.InMovementID,
+			"createdAt": a.CreatedAt.UTC().Format(time.RFC3339Nano),
+		})
+	}
+	return mustJSON(map[string]any{"clientId": clientID, "attempts": items, "count": len(items), "total": total})
 }
 
 func cashMoveJSON(m *domain.CashMovement, v *domain.PortfolioView) (json.RawMessage, error) {

@@ -40,6 +40,8 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetPortfolioRebalanceQuery: () => ({ data: undefined, isFetching: false }),
     useContinuePortfolioRebalanceMutation: () => [vi.fn(), { isLoading: false }],
     useListPortfolioCashMovementsQuery: () => ({ data: { movements: [] }, isLoading: false }),
+    useListTransferAttemptsQuery: () => ({ data: { attempts: [] }, isLoading: false }),
+    useTransferPortfolioCashMutation: () => [vi.fn(), { isLoading: false, isError: false }],
     useCreatePortfolioMutation: () => [vi.fn(), { isLoading: false }],
     usePlacePortfolioOrderMutation: () => [
       placeOrder,

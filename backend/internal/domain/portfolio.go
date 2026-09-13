@@ -372,6 +372,11 @@ type PortfolioPort interface {
 	ListTrades(ctx context.Context, clientID string, limit, offset int) ([]Trade, error)
 	CountTrades(ctx context.Context, clientID string) (int, error)
 	GetIdempotency(ctx context.Context, clientID, key string) (*IdempotencyRecord, error)
+	GetCashMovement(ctx context.Context, bookID, id string) (*CashMovement, error)
+	InsertTransferAttempt(ctx context.Context, a TransferAttempt) (*TransferAttempt, error)
+	ListTransferAttempts(ctx context.Context, ownerClientID string, limit, offset int) ([]TransferAttempt, error)
+	CountTransferAttempts(ctx context.Context, ownerClientID string) (int, error)
+	NextTransferAttempt(ctx context.Context, ownerClientID, key string) (int, error)
 
 	ListOpenTaxLots(ctx context.Context, clientID string, exchange Exchange, symbol string) ([]TaxLot, error)
 	ListTaxLots(ctx context.Context, clientID string, exchange Exchange, symbol string, openOnly bool) ([]TaxLot, error)

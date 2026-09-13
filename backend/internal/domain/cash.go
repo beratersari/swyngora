@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"strings"
@@ -56,6 +57,54 @@ type CashMovement struct {
 	// PeerMovementID is the matching ledger row on the other book.
 	PeerMovementID string
 	CreatedAt      time.Time
+}
+
+// Transfer attempt outcomes for a client retry key.
+const (
+	TransferAttemptCompleted = "completed"
+	TransferAttemptReplayed  = "replayed"
+	TransferAttemptConflict  = "conflict"
+)
+
+// TransferAttempt is one POST /transfers try (first fill or a later retry).
+type TransferAttempt struct {
+	ID                string
+	OwnerClientID     string
+	IdempotencyKey    string
+	RequestHash       string
+	FromPortfolioID   string
+	ToPortfolioID     string
+	FromPortfolioName string
+	ToPortfolioName   string
+	Amount            float64
+	Note              string
+	Status            string
+	Attempt           int
+	OutMovementID     string
+	InMovementID      string
+	CreatedAt         time.Time
+}
+
+type transferAttemptCtxKey struct{}
+
+// ContextWithTransferAttempt attaches a completed-attempt row for the transfer write tx.
+func ContextWithTransferAttempt(ctx context.Context, a *TransferAttempt) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if a == nil || a.IdempotencyKey == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, transferAttemptCtxKey{}, a)
+}
+
+// TransferAttemptFromContext returns the attempt attached for the current write, if any.
+func TransferAttemptFromContext(ctx context.Context) *TransferAttempt {
+	if ctx == nil {
+		return nil
+	}
+	a, _ := ctx.Value(transferAttemptCtxKey{}).(*TransferAttempt)
+	return a
 }
 
 // ContributedCapital is opening cash plus later net deposits (external money in).

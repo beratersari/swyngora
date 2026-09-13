@@ -2,6 +2,7 @@ package portfoliostore
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -118,6 +119,12 @@ func (s *SQLite) ApplyInternalTransfer(ctx context.Context, from, to *domain.Por
 		in.CounterpartyPortfolioID, in.CounterpartyPortfolioName, in.PeerMovementID, at); err != nil {
 		return nil, nil, fmt.Errorf("transfer in insert: %w", err)
 	}
+	if err := s.txInsertIdempotency(ctx, tx); err != nil {
+		return nil, nil, err
+	}
+	if err := txInsertTransferAttempt(ctx, tx); err != nil {
+		return nil, nil, err
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, nil, err
 	}
@@ -165,4 +172,166 @@ func (s *SQLite) CountCashMovements(ctx context.Context, clientID string) (int, 
 	var n int
 	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM cash_movements WHERE client_id = ?`, clientID).Scan(&n)
 	return n, err
+}
+
+func (s *SQLite) migrateTransferAttempts() error {
+	_, err := s.db.Exec(`
+CREATE TABLE IF NOT EXISTS transfer_attempts (
+	id                   TEXT PRIMARY KEY NOT NULL,
+	owner_client_id      TEXT NOT NULL,
+	idempotency_key      TEXT NOT NULL,
+	request_hash         TEXT NOT NULL,
+	from_portfolio_id    TEXT NOT NULL,
+	to_portfolio_id      TEXT NOT NULL,
+	from_portfolio_name  TEXT NOT NULL DEFAULT '',
+	to_portfolio_name    TEXT NOT NULL DEFAULT '',
+	amount               REAL NOT NULL,
+	note                 TEXT NOT NULL DEFAULT '',
+	status               TEXT NOT NULL,
+	attempt              INTEGER NOT NULL,
+	out_movement_id      TEXT NOT NULL DEFAULT '',
+	in_movement_id       TEXT NOT NULL DEFAULT '',
+	created_at           TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_transfer_attempts_owner ON transfer_attempts(owner_client_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_transfer_attempts_key ON transfer_attempts(owner_client_id, idempotency_key, attempt);
+`)
+	return err
+}
+
+func txInsertTransferAttempt(ctx context.Context, tx *sql.Tx) error {
+	a := domain.TransferAttemptFromContext(ctx)
+	if a == nil || a.IdempotencyKey == "" {
+		return nil
+	}
+	if a.CreatedAt.IsZero() {
+		a.CreatedAt = time.Now().UTC()
+	}
+	if a.Attempt <= 0 {
+		a.Attempt = 1
+	}
+	if a.ID == "" {
+		return fmt.Errorf("transfer attempt id required")
+	}
+	_, err := tx.ExecContext(ctx, `
+		INSERT INTO transfer_attempts (
+			id, owner_client_id, idempotency_key, request_hash, from_portfolio_id, to_portfolio_id,
+			from_portfolio_name, to_portfolio_name, amount, note, status, attempt,
+			out_movement_id, in_movement_id, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, a.ID, a.OwnerClientID, a.IdempotencyKey, a.RequestHash, a.FromPortfolioID, a.ToPortfolioID,
+		a.FromPortfolioName, a.ToPortfolioName, a.Amount, a.Note, a.Status, a.Attempt,
+		a.OutMovementID, a.InMovementID, fmtTime(a.CreatedAt))
+	return err
+}
+
+// GetCashMovement returns one ledger row for a book.
+func (s *SQLite) GetCashMovement(ctx context.Context, bookID, id string) (*domain.CashMovement, error) {
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, client_id, kind, amount, cash_after, net_deposits_after, note,
+			COALESCE(counterparty_portfolio_id, ''), COALESCE(counterparty_portfolio_name, ''),
+			COALESCE(peer_movement_id, ''), created_at
+		FROM cash_movements WHERE client_id = ? AND id = ?
+	`, bookID, id)
+	m, err := scanCashMovement(row)
+	if err == sql.ErrNoRows {
+		return nil, domain.ErrNotFound
+	}
+	return m, err
+}
+
+func scanCashMovement(row scannable) (*domain.CashMovement, error) {
+	var m domain.CashMovement
+	var kind, cAt string
+	if err := row.Scan(&m.ID, &m.ClientID, &kind, &m.Amount, &m.CashAfter, &m.NetDepositsAfter, &m.Note,
+		&m.CounterpartyPortfolioID, &m.CounterpartyPortfolioName, &m.PeerMovementID, &cAt); err != nil {
+		return nil, err
+	}
+	m.Kind = domain.CashMovementKind(kind)
+	m.CreatedAt = parseTime(cAt)
+	return &m, nil
+}
+
+// InsertTransferAttempt records a completed, replayed, or conflict try.
+func (s *SQLite) InsertTransferAttempt(ctx context.Context, a domain.TransferAttempt) (*domain.TransferAttempt, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if a.CreatedAt.IsZero() {
+		a.CreatedAt = time.Now().UTC()
+	}
+	if a.Attempt <= 0 {
+		a.Attempt = 1
+	}
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT INTO transfer_attempts (
+			id, owner_client_id, idempotency_key, request_hash, from_portfolio_id, to_portfolio_id,
+			from_portfolio_name, to_portfolio_name, amount, note, status, attempt,
+			out_movement_id, in_movement_id, created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, a.ID, a.OwnerClientID, a.IdempotencyKey, a.RequestHash, a.FromPortfolioID, a.ToPortfolioID,
+		a.FromPortfolioName, a.ToPortfolioName, a.Amount, a.Note, a.Status, a.Attempt,
+		a.OutMovementID, a.InMovementID, fmtTime(a.CreatedAt)); err != nil {
+		return nil, err
+	}
+	return &a, nil
+}
+
+// ListTransferAttempts returns newest-first tries for an owner.
+func (s *SQLite) ListTransferAttempts(ctx context.Context, ownerClientID string, limit, offset int) ([]domain.TransferAttempt, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, owner_client_id, idempotency_key, request_hash, from_portfolio_id, to_portfolio_id,
+			from_portfolio_name, to_portfolio_name, amount, note, status, attempt,
+			out_movement_id, in_movement_id, created_at
+		FROM transfer_attempts WHERE owner_client_id = ?
+		ORDER BY created_at DESC LIMIT ? OFFSET ?
+	`, ownerClientID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.TransferAttempt
+	for rows.Next() {
+		a, err := scanTransferAttempt(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *a)
+	}
+	return out, rows.Err()
+}
+
+// CountTransferAttempts counts tries for an owner.
+func (s *SQLite) CountTransferAttempts(ctx context.Context, ownerClientID string) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM transfer_attempts WHERE owner_client_id = ?`, ownerClientID).Scan(&n)
+	return n, err
+}
+
+// NextTransferAttempt is 1 + max attempt for this owner key.
+func (s *SQLite) NextTransferAttempt(ctx context.Context, ownerClientID, key string) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `
+		SELECT COALESCE(MAX(attempt), 0) FROM transfer_attempts WHERE owner_client_id = ? AND idempotency_key = ?
+	`, ownerClientID, key).Scan(&n)
+	if err != nil {
+		return 0, err
+	}
+	return n + 1, nil
+}
+
+func scanTransferAttempt(row scannable) (*domain.TransferAttempt, error) {
+	var a domain.TransferAttempt
+	var created string
+	if err := row.Scan(
+		&a.ID, &a.OwnerClientID, &a.IdempotencyKey, &a.RequestHash, &a.FromPortfolioID, &a.ToPortfolioID,
+		&a.FromPortfolioName, &a.ToPortfolioName, &a.Amount, &a.Note, &a.Status, &a.Attempt,
+		&a.OutMovementID, &a.InMovementID, &created,
+	); err != nil {
+		return nil, err
+	}
+	a.CreatedAt = parseTime(created)
+	return &a, nil
 }

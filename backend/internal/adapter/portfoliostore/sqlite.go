@@ -435,6 +435,9 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_
 	if err := s.migrateIdempotency(); err != nil {
 		return err
 	}
+	if err := s.migrateTransferAttempts(); err != nil {
+		return err
+	}
 	// Additive migrations for DBs created before reservations/partial fills.
 	alters := []string{
 		`ALTER TABLE trades ADD COLUMN pending_order_id TEXT NOT NULL DEFAULT ''`,

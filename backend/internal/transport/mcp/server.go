@@ -148,6 +148,7 @@ type DataPort interface {
 	WithdrawPortfolioCash(ctx context.Context, clientID string, amount float64, note string) (json.RawMessage, error)
 	ListPortfolioCashMovements(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	TransferPortfolioCash(ctx context.Context, clientID, fromPortfolioID, toPortfolioID string, amount float64, note string) (json.RawMessage, error)
+	ListTransferAttempts(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
 	PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct *float64) (json.RawMessage, error)
 	DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
@@ -2541,12 +2542,13 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("transfer_portfolio_cash",
-		mcp.WithDescription("Move virtual cash from one of your paper portfolios to another. Owner only. Recorded as transfer_out/transfer_in, not deposit/withdrawal. Simulated only."),
+		mcp.WithDescription("Move virtual cash from one of your paper portfolios to another. Owner only. Recorded as transfer_out/transfer_in, not deposit/withdrawal. Pass idempotencyKey so a dropped retry returns the original pair instead of a second move. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithString("fromPortfolioId", mcp.Description("Source book id or name")),
 		mcp.WithString("toPortfolioId", mcp.Required(), mcp.Description("Destination book id or name")),
 		mcp.WithNumber("amount", mcp.Required(), mcp.Description("Positive cash to move")),
 		mcp.WithString("note", mcp.Description("Optional label")),
+		mcp.WithString("idempotencyKey", mcp.Description("Retry key; same key + same request returns the original transfer")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -2560,7 +2562,27 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
+		ctx = WithIdempotencyKey(ctx, req.GetString("idempotencyKey", ""))
 		raw, err := api.TransferPortfolioCash(ctx, clientID, req.GetString("fromPortfolioId", ""), toID, amt, req.GetString("note", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("list_transfer_attempts",
+		mcp.WithDescription("List paper transfer requests for this owner: completed (cash moved), replayed (same key came again), or conflict (same key, different amount/books)."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
+		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),
+		mcp.WithNumber("offset", mcp.Description("Offset default 0")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		raw, err := api.ListTransferAttempts(ctx, clientID, req.GetInt("limit", 50), req.GetInt("offset", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

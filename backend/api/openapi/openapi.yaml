@@ -4695,6 +4695,9 @@ paths:
         Owner only. Moves available cash from one of your books to another.
         Recorded as transfer_out / transfer_in (not deposit/withdrawal) on both histories.
         Contributed capital moves with the cash so trading P&L is unchanged.
+        Optional Idempotency-Key / idempotencyKey: a retry with the same key and same
+        from/to/amount/note returns the original pair (`replayed=true`) instead of a second move.
+        The same key with a different request returns 409. Attempts are listed at GET /transfers/attempts.
         Shared traders/viewers cannot transfer. Paper trading only — not real money.
       operationId: transferPortfolioCash
       tags: [Portfolio]
@@ -4711,6 +4714,10 @@ paths:
                 toPortfolioId: { type: string }
                 amount: { type: number, exclusiveMinimum: 0, example: 500 }
                 note: { type: string, maxLength: 200 }
+                idempotencyKey:
+                  type: string
+                  maxLength: 128
+                  description: Retry key (also accepted as Idempotency-Key header)
       responses:
         '200':
           description: Paired movements and both portfolio snapshots
@@ -4722,6 +4729,49 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/transfers/attempts:
+    get:
+      summary: List paper transfer request attempts
+      description: |
+        Newest first. Each row is one POST /transfers try for this owner.
+        status=completed is the cash move; replayed is the same key coming again;
+        conflict is the same key with a different from/to/amount/note.
+      operationId: listTransferAttempts
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Attempt list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clientId: { type: string }
+                  attempts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TransferAttempt'
+                  count: { type: integer }
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
         '404':
           $ref: '#/components/responses/Error'
   /api/v1/portfolio/cash-movements:
@@ -10130,7 +10180,30 @@ components:
           $ref: '#/components/schemas/PortfolioCashMoveResponse'
         to:
           $ref: '#/components/schemas/PortfolioCashMoveResponse'
+        replayed:
+          type: boolean
+          description: True when this POST reused a prior idempotency key and did not move cash again
+        attempt: { type: integer }
+        idempotencyKey: { type: string }
         note: { type: string }
+    TransferAttempt:
+      type: object
+      properties:
+        id: { type: string }
+        idempotencyKey: { type: string }
+        fromPortfolioId: { type: string }
+        toPortfolioId: { type: string }
+        fromPortfolioName: { type: string }
+        toPortfolioName: { type: string }
+        amount: { type: number }
+        note: { type: string }
+        status:
+          type: string
+          enum: [completed, replayed, conflict]
+        attempt: { type: integer }
+        outMovementId: { type: string }
+        inMovementId: { type: string }
+        createdAt: { type: string, format: date-time }
     PortfolioPerformance:
       type: object
       description: Period P&L plus equity time series for a paper portfolio chart

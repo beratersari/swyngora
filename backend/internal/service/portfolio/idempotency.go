@@ -19,6 +19,8 @@ type idempIDs struct {
 	StopLossID   string `json:"stopLossId,omitempty"`
 	EntryID      string `json:"entryId,omitempty"`
 	PositionID   string `json:"positionId,omitempty"`
+	OutID        string `json:"outId,omitempty"`
+	InID         string `json:"inId,omitempty"`
 }
 
 func hashParts(parts ...any) string {

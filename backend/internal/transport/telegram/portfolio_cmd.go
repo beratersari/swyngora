@@ -328,13 +328,13 @@ func (r *Router) cmdPortfolioTransfer(ctx context.Context, userID int64, args []
 		}
 		return textReply(friendlyErr(err))
 	}
-	out, in, fromV, toV, err := r.portfolio.Transfer(ctx, portfolio.TransferInput{
+	res, err := r.portfolio.Transfer(ctx, portfolio.TransferInput{
 		ClientID: clientID, FromPortfolioID: fromID, ToPortfolioID: toRef, Amount: amt,
 	})
 	if err != nil {
 		return textReply(friendlyErr(err))
 	}
-	return textReply(FormatCashTransferred(out, in, fromV, toV))
+	return textReply(FormatCashTransferred(res.Out, res.In, res.From, res.To))
 }
 
 func (r *Router) cmdCashMove(ctx context.Context, userID int64, kind domain.CashMovementKind, args []string) Reply {

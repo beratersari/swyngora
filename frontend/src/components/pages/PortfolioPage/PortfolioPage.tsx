@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, message } from 'antd';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -16,12 +16,14 @@ import { PortfolioSummaryStrip } from '@/components/organisms/PortfolioSummarySt
 import { PortfolioTradesTable } from '@/components/organisms/PortfolioTradesTable';
 import { RebalanceResultsTable } from '@/components/organisms/RebalanceResultsTable';
 import {
+  getRtkErrorStatus,
   rtkErrorMessage,
   useAmendPortfolioOrderMutation,
   useCancelPortfolioOrderMutation,
   useCloseMarginPositionMutation,
   useCreatePortfolioMutation,
   useDepositPortfolioCashMutation,
+  useListTransferAttemptsQuery,
   useGetPortfolioPerformanceQuery,
   useGetPortfolioQuery,
   useListMarginPositionsQuery,
@@ -35,6 +37,7 @@ import {
   usePlaceMarginOrderMutation,
   usePlacePortfolioOrderMutation,
   useSetMarginModeMutation,
+  useTransferPortfolioCashMutation,
   useWithdrawPortfolioCashMutation,
   type PortfolioPerformancePeriod,
 } from '@/libs/api';
@@ -123,6 +126,10 @@ export function PortfolioPage() {
     { limit: 30, portfolioId: bookId },
     { skip: !bookId && books.length !== 1, refetchOnFocus: true },
   );
+  const attemptsQuery = useListTransferAttemptsQuery(
+    { limit: 20, portfolioId: bookId },
+    { skip: !bookId && books.length !== 1, refetchOnFocus: true },
+  );
   const marginPosQuery = useListMarginPositionsQuery(
     { portfolioId: bookId },
     { skip: !bookId && books.length !== 1, pollingInterval: visible ? 12_000 : 0, refetchOnFocus: true },
@@ -134,6 +141,8 @@ export function PortfolioPage() {
   const [cancelOrder, cancelState] = useCancelPortfolioOrderMutation();
   const [deposit, depositState] = useDepositPortfolioCashMutation();
   const [withdraw, withdrawState] = useWithdrawPortfolioCashMutation();
+  const [transfer, transferState] = useTransferPortfolioCashMutation();
+  const transferKeyRef = useRef<string | null>(null);
   const [setMarginMode, marginModeState] = useSetMarginModeMutation();
   const [placeMargin, placeMarginState] = usePlaceMarginOrderMutation();
   const [closeMargin, closeMarginState] = useCloseMarginPositionMutation();
@@ -232,6 +241,51 @@ export function PortfolioPage() {
     [t],
   );
 
+  const attemptColumns = useMemo(
+    () => [
+      {
+        title: t('portfolio:transfers.attempt'),
+        dataIndex: 'attempt',
+        key: 'attempt',
+      },
+      {
+        title: t('portfolio:transfers.status'),
+        dataIndex: 'status',
+        key: 'status',
+        render: (v: string | undefined) => {
+          if (v === 'completed') return t('portfolio:transfers.completed');
+          if (v === 'replayed') return t('portfolio:transfers.replayed');
+          if (v === 'conflict') return t('portfolio:transfers.conflict');
+          return v ?? '—';
+        },
+      },
+      {
+        title: t('portfolio:transfers.from'),
+        dataIndex: 'fromPortfolioName',
+        key: 'from',
+      },
+      {
+        title: t('portfolio:transfers.to'),
+        dataIndex: 'toPortfolioName',
+        key: 'to',
+      },
+      {
+        title: t('portfolio:movements.amount'),
+        dataIndex: 'amount',
+        key: 'amount',
+        align: 'right' as const,
+        render: (v: number | undefined) => formatPrice(v),
+      },
+      {
+        title: t('portfolio:movements.time'),
+        dataIndex: 'createdAt',
+        key: 't',
+        render: (v: string | undefined) => formatDateTime(v),
+      },
+    ],
+    [t],
+  );
+
   return (
     <PageStack>
       <PageHeader title={t('portfolio:title')} />
@@ -307,9 +361,14 @@ export function PortfolioPage() {
               <PortfolioCashPanel
                 isDepositing={depositState.isLoading}
                 isWithdrawing={withdrawState.isLoading}
+                isTransferring={transferState.isLoading}
                 disabled={needBook}
                 depositError={depositState.isError ? depositState.error : undefined}
                 withdrawError={withdrawState.isError ? withdrawState.error : undefined}
+                transferError={transferState.isError ? transferState.error : undefined}
+                transferBooks={books
+                  .filter((b) => b.id && b.id !== bookId)
+                  .map((b) => ({ id: b.id as string, name: b.name }))}
                 onDeposit={async (amount, note) => {
                   if (needBook) return;
                   await deposit({ amount, note, portfolioId: bookId }).unwrap();
@@ -319,6 +378,31 @@ export function PortfolioPage() {
                   if (needBook) return;
                   await withdraw({ amount, note, portfolioId: bookId }).unwrap();
                   void message.success(t('portfolio:cash.withdrawSuccess'));
+                }}
+                onTransfer={async (toPortfolioId, amount, note) => {
+                  if (needBook || !bookId) return;
+                  if (!transferKeyRef.current) {
+                    transferKeyRef.current = newPaperIdempotencyKey('xfer');
+                  }
+                  try {
+                    const got = await transfer({
+                      fromPortfolioId: bookId,
+                      toPortfolioId,
+                      amount,
+                      note,
+                      idempotencyKey: transferKeyRef.current,
+                    }).unwrap();
+                    transferKeyRef.current = null;
+                    void message.success(
+                      got.replayed ? t('portfolio:cash.transferReplayed') : t('portfolio:cash.transferSuccess'),
+                    );
+                  } catch (err) {
+                    const status = getRtkErrorStatus(err);
+                    if (status && status >= 400 && status < 500 && status !== 408) {
+                      transferKeyRef.current = null;
+                    }
+                    throw err;
+                  }
                 }}
               />
             </PanelCard>
@@ -457,24 +541,45 @@ export function PortfolioPage() {
               {
                 key: 'cash',
                 label: t('portfolio:movements.title'),
-                children:
-                  !rtkCurrentPending(cashQuery) && (rtkCurrent(cashQuery)?.movements?.length ?? 0) === 0 ? (
-                    <Text variant="body" color="secondary">
-                      {t('portfolio:movements.empty')}
-                    </Text>
-                  ) : (
-                    <DataTableCard>
-                      <DataTable
-                        rowKey={(r) => (r as { id?: string }).id ?? Math.random().toString()}
-                        size="small"
-                        loading={rtkCurrentPending(cashQuery)}
-                        pagination={{ pageSize: 8, hideOnSinglePage: true, simple: isPhone }}
-                        columns={cashColumns}
-                        dataSource={rtkCurrent(cashQuery)?.movements ?? []}
-                        scroll={{ x: 480 }}
-                      />
-                    </DataTableCard>
-                  ),
+                children: (
+                  <>
+                    {!rtkCurrentPending(cashQuery) && (rtkCurrent(cashQuery)?.movements?.length ?? 0) === 0 ? (
+                      <Text variant="body" color="secondary">
+                        {t('portfolio:movements.empty')}
+                      </Text>
+                    ) : (
+                      <DataTableCard>
+                        <DataTable
+                          rowKey={(r) => (r as { id?: string }).id ?? Math.random().toString()}
+                          size="small"
+                          loading={rtkCurrentPending(cashQuery)}
+                          pagination={{ pageSize: 8, hideOnSinglePage: true, simple: isPhone }}
+                          columns={cashColumns}
+                          dataSource={rtkCurrent(cashQuery)?.movements ?? []}
+                          scroll={{ x: 480 }}
+                        />
+                      </DataTableCard>
+                    )}
+                    {(rtkCurrent(attemptsQuery)?.attempts?.length ?? 0) > 0 ? (
+                      <>
+                        <Text variant="h4" color="primary">
+                          {t('portfolio:transfers.requests')}
+                        </Text>
+                        <DataTableCard>
+                          <DataTable
+                            rowKey={(r) => (r as { id?: string }).id ?? Math.random().toString()}
+                            size="small"
+                            loading={rtkCurrentPending(attemptsQuery)}
+                            pagination={{ pageSize: 8, hideOnSinglePage: true, simple: isPhone }}
+                            columns={attemptColumns}
+                            dataSource={rtkCurrent(attemptsQuery)?.attempts ?? []}
+                            scroll={{ x: 560 }}
+                          />
+                        </DataTableCard>
+                      </>
+                    ) : null}
+                  </>
+                ),
               },
             ]}
           />

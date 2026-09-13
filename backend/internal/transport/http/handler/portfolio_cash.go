@@ -112,6 +112,7 @@ type transferBody struct {
 	ToPortfolioID   string  `json:"toPortfolioId"`
 	Amount          float64 `json:"amount"`
 	Note            string  `json:"note"`
+	IdempotencyKey  string  `json:"idempotencyKey"`
 }
 
 // Transfer handles POST /api/v1/portfolio/transfers (owner only).
@@ -129,17 +130,71 @@ func (h *PortfolioHandler) Transfer(w http.ResponseWriter, r *http.Request) {
 	if fromID == "" {
 		fromID = portfolioIDFrom(r)
 	}
-	out, in, fromV, toV, err := h.svc.Transfer(r.Context(), portfolio.TransferInput{
+	res, err := h.svc.Transfer(r.Context(), portfolio.TransferInput{
 		ClientID: clientID, FromPortfolioID: fromID, ToPortfolioID: body.ToPortfolioID,
-		Amount: body.Amount, Note: body.Note,
+		Amount: body.Amount, Note: body.Note, IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
 	})
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"from": map[string]any{"movement": cashMovementToDTO(out), "portfolio": portfolioViewDTO(fromV)},
-		"to":   map[string]any{"movement": cashMovementToDTO(in), "portfolio": portfolioViewDTO(toV)},
-		"note": "Internal transfer between your paper portfolios. Not a deposit or withdrawal. Simulated only.",
+		"from":           map[string]any{"movement": cashMovementToDTO(res.Out), "portfolio": portfolioViewDTO(res.From)},
+		"to":             map[string]any{"movement": cashMovementToDTO(res.In), "portfolio": portfolioViewDTO(res.To)},
+		"replayed":       res.Replayed,
+		"attempt":        res.Attempt,
+		"idempotencyKey": res.IdempotencyKey,
+		"note":           "Internal transfer between your paper portfolios. Not a deposit or withdrawal. Simulated only.",
+	})
+}
+
+type transferAttemptDTO struct {
+	ID                string  `json:"id"`
+	IdempotencyKey    string  `json:"idempotencyKey"`
+	FromPortfolioID   string  `json:"fromPortfolioId"`
+	ToPortfolioID     string  `json:"toPortfolioId"`
+	FromPortfolioName string  `json:"fromPortfolioName,omitempty"`
+	ToPortfolioName   string  `json:"toPortfolioName,omitempty"`
+	Amount            float64 `json:"amount"`
+	Note              string  `json:"note,omitempty"`
+	Status            string  `json:"status"`
+	Attempt           int     `json:"attempt"`
+	OutMovementID     string  `json:"outMovementId,omitempty"`
+	InMovementID      string  `json:"inMovementId,omitempty"`
+	CreatedAt         string  `json:"createdAt"`
+}
+
+func transferAttemptToDTO(a *domain.TransferAttempt) transferAttemptDTO {
+	return transferAttemptDTO{
+		ID: a.ID, IdempotencyKey: a.IdempotencyKey,
+		FromPortfolioID: a.FromPortfolioID, ToPortfolioID: a.ToPortfolioID,
+		FromPortfolioName: a.FromPortfolioName, ToPortfolioName: a.ToPortfolioName,
+		Amount: a.Amount, Note: a.Note, Status: a.Status, Attempt: a.Attempt,
+		OutMovementID: a.OutMovementID, InMovementID: a.InMovementID,
+		CreatedAt:     a.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
+}
+
+// ListTransferAttempts handles GET /api/v1/portfolio/transfers/attempts
+func (h *PortfolioHandler) ListTransferAttempts(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+	list, total, err := h.svc.ListTransferAttempts(r.Context(), clientIDFrom(r), limit, offset, portfolioIDFrom(r))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	items := make([]transferAttemptDTO, 0, len(list))
+	for i := range list {
+		items = append(items, transferAttemptToDTO(&list[i]))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"clientId":  clientIDFrom(r),
+		"attempts":  items,
+		"count":     len(items),
+		"total":     total,
+		"limit":     limit,
+		"offset":    offset,
 	})
 }

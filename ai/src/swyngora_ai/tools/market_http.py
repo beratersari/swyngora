@@ -1394,6 +1394,17 @@ class PortfolioTransferInput(BaseModel):
     amount: float = Field(gt=0, description="Positive cash to move")
     from_portfolio_id: str = ""
     note: str = ""
+    idempotency_key: str = Field(
+        default="",
+        description="Retry key; same key + same request returns the original transfer",
+    )
+
+
+class TransferAttemptsInput(BaseModel):
+    client_id: str
+    limit: int = 50
+    offset: int = 0
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
 class PortfolioCashListInput(BaseModel):
@@ -3304,6 +3315,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         amount: float,
         from_portfolio_id: str = "",
         note: str = "",
+        idempotency_key: str = "",
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -3314,7 +3326,21 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["fromPortfolioId"] = from_portfolio_id
         if note:
             body["note"] = note
+        if idempotency_key:
+            body["idempotencyKey"] = idempotency_key
         return http.post("/api/v1/portfolio/transfers", body)
+
+    def list_transfer_attempts(
+        client_id: str, limit: int = 50, offset: int = 0, portfolio_id: str = ""
+    ) -> str:
+        q: dict[str, Any] = {
+            "clientId": client_id,
+            "limit": str(limit),
+            "offset": str(offset),
+        }
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.get("/api/v1/portfolio/transfers/attempts", q)
 
     def withdraw_portfolio_cash(
         client_id: str, amount: float, note: str = "", portfolio_id: str = ""
@@ -5317,8 +5343,14 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         StructuredTool.from_function(
             transfer_portfolio_cash,
             name="transfer_portfolio_cash",
-            description="Move virtual cash between your own paper portfolios. Owner only. Not a deposit or withdrawal.",
+            description="Move virtual cash between your own paper portfolios. Owner only. Pass idempotency_key so a dropped retry does not move cash twice.",
             args_schema=PortfolioTransferInput,
+        ),
+        StructuredTool.from_function(
+            list_transfer_attempts,
+            name="list_transfer_attempts",
+            description="List transfer requests: completed (cash moved), replayed (same key came again), or conflict (same key, different request).",
+            args_schema=TransferAttemptsInput,
         ),
         StructuredTool.from_function(
             list_portfolio_cash_movements,

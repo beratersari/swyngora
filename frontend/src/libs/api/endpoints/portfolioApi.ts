@@ -11,6 +11,7 @@ export type PortfolioPerformancePeriod = NonNullable<
 export type PortfolioCashMovement = components['schemas']['PortfolioCashMovement'];
 export type PortfolioCashMoveResponse = components['schemas']['PortfolioCashMoveResponse'];
 export type PortfolioTransferResponse = components['schemas']['PortfolioTransferResponse'];
+export type TransferAttempt = components['schemas']['TransferAttempt'];
 export type TaxLot = components['schemas']['TaxLot'];
 export type PortfolioShare = components['schemas']['PortfolioShare'];
 export type SharedPortfolioSummary = components['schemas']['SharedPortfolioSummary'];
@@ -219,10 +220,26 @@ export const portfolioApi = baseApi.injectEndpoints({
     }),
     transferPortfolioCash: build.mutation<
       PortfolioTransferResponse,
-      { fromPortfolioId?: string; toPortfolioId: string; amount: number; note?: string }
+      {
+        fromPortfolioId?: string;
+        toPortfolioId: string;
+        amount: number;
+        note?: string;
+        idempotencyKey?: string;
+      }
     >({
       query: (body) => ({ url: '/api/v1/portfolio/transfers', method: 'POST', body }),
       invalidatesTags: ['Portfolio'],
+    }),
+    listTransferAttempts: build.query<
+      { attempts?: TransferAttempt[]; count?: number; total?: number },
+      ({ limit?: number; offset?: number } & BookArg) | void
+    >({
+      query: (arg) => ({
+        url: '/api/v1/portfolio/transfers/attempts',
+        params: { limit: arg?.limit ?? 50, offset: arg?.offset ?? 0, ...bookParams(arg?.portfolioId) },
+      }),
+      providesTags: ['Portfolio'],
     }),
     listPortfolioLots: build.query<
       { lots?: TaxLot[]; count?: number },
@@ -515,6 +532,7 @@ export const {
   useDepositPortfolioCashMutation,
   useWithdrawPortfolioCashMutation,
   useTransferPortfolioCashMutation,
+  useListTransferAttemptsQuery,
   useListPortfolioLotsQuery,
   useListPortfolioSharesQuery,
   useListSharedPortfoliosQuery,

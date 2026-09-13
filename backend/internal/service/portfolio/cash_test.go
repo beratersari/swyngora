@@ -2,6 +2,7 @@ package portfolio
 
 import (
 	"context"
+	"errors"
 	"math"
 	"sync"
 	"testing"
@@ -103,12 +104,13 @@ func TestCash_TransferBetweenOwnBooks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, in, fromV, toV, err := svc.Transfer(ctx, TransferInput{
+	res, err := svc.Transfer(ctx, TransferInput{
 		ClientID: "xfer1", FromPortfolioID: main.ID, ToPortfolioID: risky.ID, Amount: 2500, Note: "seed risky",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	out, in, fromV, toV := res.Out, res.In, res.From, res.To
 	if out.Kind != domain.CashMovementTransferOut || in.Kind != domain.CashMovementTransferIn {
 		t.Fatalf("kinds %s %s", out.Kind, in.Kind)
 	}
@@ -135,7 +137,7 @@ func TestCash_TransferBetweenOwnBooks(t *testing.T) {
 	if err != nil || hist2[0].Kind != domain.CashMovementTransferIn {
 		t.Fatalf("risky hist %+v err=%v", hist2, err)
 	}
-	if _, _, _, _, err := svc.Transfer(ctx, TransferInput{
+	if _, err := svc.Transfer(ctx, TransferInput{
 		ClientID: "xfer1", FromPortfolioID: main.ID, ToPortfolioID: main.ID, Amount: 10,
 	}); err == nil {
 		t.Fatal("same book")
@@ -153,12 +155,13 @@ func TestCash_TransferAllowsUSDTUSDAlias(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, fromV, toV, err := svc.Transfer(ctx, TransferInput{
+	res, err := svc.Transfer(ctx, TransferInput{
 		ClientID: "xfer-usd", FromPortfolioID: usdt.ID, ToPortfolioID: usd.ID, Amount: 400,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	fromV, toV := res.From, res.To
 	if math.Abs(fromV.CashBalance-4600) > 1e-9 || math.Abs(toV.CashBalance-500) > 1e-9 {
 		t.Fatalf("usdt=%v usd=%v", fromV.CashBalance, toV.CashBalance)
 	}
@@ -181,14 +184,73 @@ func TestCash_TransferOwnerOnlyAndNotOtherClient(t *testing.T) {
 	if _, err := svc.Share(ctx, "alice-x", alice.ID, "bob-x", "trader"); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, _, err := svc.Transfer(ctx, TransferInput{
+	if _, err := svc.Transfer(ctx, TransferInput{
 		ClientID: "bob-x", FromPortfolioID: alice.ID, ToPortfolioID: risky.ID, Amount: 10,
 	}); err == nil {
 		t.Fatal("trader must not transfer")
 	}
-	if _, _, _, _, err := svc.Transfer(ctx, TransferInput{
+	if _, err := svc.Transfer(ctx, TransferInput{
 		ClientID: "alice-x", FromPortfolioID: alice.ID, ToPortfolioID: "bob-x", Amount: 10,
 	}); err == nil {
 		t.Fatal("must not transfer to another client's book")
+	}
+}
+
+func TestCash_TransferIdempotentRetryAndHistory(t *testing.T) {
+	svc := newSvc(t, nil)
+	ctx := context.Background()
+	main, err := svc.Create(ctx, CreateInput{ClientID: "xfer-idemp", StartingBalance: 10000, Name: "Main"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	alt, err := svc.Create(ctx, CreateInput{ClientID: "xfer-idemp", StartingBalance: 100, Name: "Alt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := svc.Transfer(ctx, TransferInput{
+		ClientID: "xfer-idemp", FromPortfolioID: main.ID, ToPortfolioID: alt.ID, Amount: 400,
+		Note: "retry-me", IdempotencyKey: "xfer-1",
+	})
+	if err != nil || first.Replayed || first.Out == nil {
+		t.Fatalf("first %+v %v", first, err)
+	}
+	second, err := svc.Transfer(ctx, TransferInput{
+		ClientID: "xfer-idemp", FromPortfolioID: main.ID, ToPortfolioID: alt.ID, Amount: 400,
+		Note: "retry-me", IdempotencyKey: "xfer-1",
+	})
+	if err != nil || !second.Replayed {
+		t.Fatalf("retry %+v %v", second, err)
+	}
+	if second.Out.ID != first.Out.ID || second.In.ID != first.In.ID {
+		t.Fatalf("replayed different movements %s/%s vs %s/%s", second.Out.ID, second.In.ID, first.Out.ID, first.In.ID)
+	}
+	mainView, _ := svc.View(ctx, "xfer-idemp", main.ID)
+	altView, _ := svc.View(ctx, "xfer-idemp", alt.ID)
+	if math.Abs(mainView.CashBalance-9600) > 1e-9 || math.Abs(altView.CashBalance-500) > 1e-9 {
+		t.Fatalf("duplicate transfer cash main=%v alt=%v", mainView.CashBalance, altView.CashBalance)
+	}
+	if _, err := svc.Transfer(ctx, TransferInput{
+		ClientID: "xfer-idemp", FromPortfolioID: main.ID, ToPortfolioID: alt.ID, Amount: 50,
+		IdempotencyKey: "xfer-1",
+	}); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("want conflict on reused key, got %v", err)
+	}
+	list, total, err := svc.ListTransferAttempts(ctx, "xfer-idemp", 20, 0, main.ID)
+	if err != nil || total < 3 {
+		t.Fatalf("attempts total=%d err=%v list=%+v", total, err, list)
+	}
+	var completed, replayed, conflict int
+	for _, a := range list {
+		switch a.Status {
+		case domain.TransferAttemptCompleted:
+			completed++
+		case domain.TransferAttemptReplayed:
+			replayed++
+		case domain.TransferAttemptConflict:
+			conflict++
+		}
+	}
+	if completed != 1 || replayed != 1 || conflict != 1 {
+		t.Fatalf("status counts completed=%d replayed=%d conflict=%d %+v", completed, replayed, conflict, list)
 	}
 }

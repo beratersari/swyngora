@@ -117,7 +117,21 @@
     "amount": "Amount",
     "note": "Note",
     "depositSuccess": "Deposit recorded",
-    "withdrawSuccess": "Withdrawal recorded"
+    "withdrawSuccess": "Withdrawal recorded",
+    "transfer": "Transfer",
+    "toBook": "To book",
+    "transferSuccess": "Transfer recorded",
+    "transferReplayed": "Same transfer already completed — cash was not moved again"
+  },
+  "transfers": {
+    "requests": "Transfer requests",
+    "attempt": "#",
+    "status": "What happened",
+    "completed": "Completed",
+    "replayed": "Came again",
+    "conflict": "Different request, same key",
+    "from": "From",
+    "to": "To"
   },
   "positions": {
     "title": "Positions",

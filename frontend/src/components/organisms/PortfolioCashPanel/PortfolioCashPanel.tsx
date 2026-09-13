@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Alert, Button, Input, InputNumber } from 'antd';
+import { Alert, Button, Input, InputNumber, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { rtkErrorMessage } from '@/libs/api';
@@ -9,28 +9,36 @@ import type { PortfolioCashPanelProps } from './PortfolioCashPanel.types';
 export function PortfolioCashPanel({
   isDepositing,
   isWithdrawing,
+  isTransferring,
   disabled = false,
   depositError,
   withdrawError,
+  transferError,
+  transferBooks = [],
   onDeposit,
   onWithdraw,
+  onTransfer,
 }: PortfolioCashPanelProps) {
   const { t } = useTranslation(['portfolio', 'common']);
   const [amount, setAmount] = useState<number | null>(null);
   const [note, setNote] = useState('');
+  const [toBook, setToBook] = useState<string | undefined>(transferBooks[0]?.id);
   const [localBusy, setLocalBusy] = useState(false);
   const inFlightRef = useRef(false);
 
-  const busy = isDepositing || isWithdrawing || localBusy;
+  const busy = isDepositing || isWithdrawing || isTransferring || localBusy;
+  const canTransfer = Boolean(onTransfer) && transferBooks.length > 0;
 
-  const run = async (kind: 'deposit' | 'withdraw') => {
+  const run = async (kind: 'deposit' | 'withdraw' | 'transfer') => {
     if (disabled || amount == null || amount <= 0) return;
-    if (isDepositing || isWithdrawing || inFlightRef.current) return;
+    if (kind === 'transfer' && (!onTransfer || !toBook)) return;
+    if (isDepositing || isWithdrawing || isTransferring || inFlightRef.current) return;
     inFlightRef.current = true;
     setLocalBusy(true);
     try {
       if (kind === 'deposit') await onDeposit(amount, note || undefined);
-      else await onWithdraw(amount, note || undefined);
+      else if (kind === 'withdraw') await onWithdraw(amount, note || undefined);
+      else if (toBook) await onTransfer?.(toBook, amount, note || undefined);
       setAmount(null);
       setNote('');
     } catch {
@@ -81,11 +89,37 @@ export function PortfolioCashPanel({
           </Button>
         </Actions>
       </FieldRow>
-      {depositError || withdrawError ? (
+      {canTransfer ? (
+        <FieldRow>
+          <Field>
+            <Text variant="caption" color="secondary">
+              {t('portfolio:cash.toBook')}
+            </Text>
+            <Select
+              value={toBook}
+              onChange={setToBook}
+              options={transferBooks.map((b) => ({
+                value: b.id,
+                label: b.name || b.id,
+              }))}
+            />
+          </Field>
+          <Actions>
+            <Button
+              loading={isTransferring}
+              disabled={disabled || busy || !toBook}
+              onClick={() => void run('transfer')}
+            >
+              {t('portfolio:cash.transfer')}
+            </Button>
+          </Actions>
+        </FieldRow>
+      ) : null}
+      {depositError || withdrawError || transferError ? (
         <Alert
           type="error"
           showIcon
-          message={rtkErrorMessage(depositError ?? withdrawError, {
+          message={rtkErrorMessage(depositError ?? withdrawError ?? transferError, {
             resource: t('portfolio:resource'),
           })}
         />

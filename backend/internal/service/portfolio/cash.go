@@ -183,30 +183,47 @@ type TransferInput struct {
 	ToPortfolioID   string
 	Amount          float64
 	Note            string
+	IdempotencyKey  string
+}
+
+// TransferResult is one transfer or a replay of the same client key.
+type TransferResult struct {
+	Out            *domain.CashMovement
+	In             *domain.CashMovement
+	From           *domain.PortfolioView
+	To             *domain.PortfolioView
+	Replayed       bool
+	Attempt        int
+	IdempotencyKey string
 }
 
 // Transfer moves available cash from one owned book to another. Not a deposit/withdrawal.
 // Contributed capital moves with the cash so neither book's trading P&L changes.
-func (s *Service) Transfer(ctx context.Context, in TransferInput) (fromMov, toMov *domain.CashMovement, fromView, toView *domain.PortfolioView, err error) {
+// The same Idempotency-Key + same request returns the original pair instead of a second move.
+func (s *Service) Transfer(ctx context.Context, in TransferInput) (*TransferResult, error) {
 	if s.store == nil {
-		return nil, nil, nil, nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+		return nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
 	from, err := s.requireBook(ctx, in.ClientID, in.FromPortfolioID)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, err
 	}
 	to, err := s.requireBook(ctx, in.ClientID, in.ToPortfolioID)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, err
 	}
 	if from.BookID() == to.BookID() {
-		return nil, nil, nil, nil, fmt.Errorf("%w: from and to portfolios must be different", domain.ErrInvalidArgument)
+		return nil, fmt.Errorf("%w: from and to portfolios must be different", domain.ErrInvalidArgument)
 	}
 	if from.ClientID != to.ClientID {
-		return nil, nil, nil, nil, fmt.Errorf("%w: can only transfer between your own portfolios", domain.ErrForbidden)
+		return nil, fmt.Errorf("%w: can only transfer between your own portfolios", domain.ErrForbidden)
 	}
 	if domain.AliasFxCode(from.Currency) != domain.AliasFxCode(to.Currency) {
-		return nil, nil, nil, nil, fmt.Errorf("%w: cannot transfer %s to a %s book", domain.ErrInvalidArgument, from.Currency, to.Currency)
+		return nil, fmt.Errorf("%w: cannot transfer %s to a %s book", domain.ErrInvalidArgument, from.Currency, to.Currency)
+	}
+	idempKey, err := domain.NormalizeIdempotencyKey(in.IdempotencyKey)
+	if err != nil {
+		return nil, err
 	}
 	// Ordered locks avoid deadlock when two transfers reverse the book pair.
 	idA, idB := from.BookID(), to.BookID()
@@ -219,36 +236,45 @@ func (s *Service) Transfer(ctx context.Context, in TransferInput) (fromMov, toMo
 	defer unlockB()
 	from, err = s.requireBook(ctx, in.ClientID, from.ID)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, err
 	}
 	to, err = s.requireBook(ctx, in.ClientID, to.ID)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, err
 	}
 	if err := domain.ValidateCashMovementAmount(in.Amount); err != nil {
-		return nil, nil, nil, nil, err
+		return nil, err
 	}
 	note, err := normalizeCashNote(in.Note)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, err
+	}
+	idempHash := hashParts("transfer", from.BookID(), to.BookID(), in.Amount, note)
+	if rec, err := s.checkIdempotency(ctx, from.BookID(), idempKey, idempHash); err != nil {
+		if idempKey != "" {
+			s.recordTransferAttempt(ctx, in, from, to, note, idempKey, idempHash, domain.TransferAttemptConflict, "", "")
+		}
+		return nil, err
+	} else if rec != nil {
+		return s.replayTransfer(ctx, rec, from, to, in, note, idempKey, idempHash)
 	}
 	reservedCash, err := s.store.SumReservedCash(ctx, from.BookID())
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, err
 	}
 	reservedMargin, err := s.store.SumReservedMargin(ctx, from.BookID())
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, err
 	}
 	avail := domain.AvailableCash(from.CashBalance, reservedCash+reservedMargin)
 	if in.Amount > avail+1e-9 {
-		return nil, nil, nil, nil, fmt.Errorf("%w: insufficient available cash (have %g)", domain.ErrInvalidArgument, avail)
+		return nil, fmt.Errorf("%w: insufficient available cash (have %g)", domain.ErrInvalidArgument, avail)
 	}
 	if err := s.guardCrossWithdrawMaint(ctx, from, in.Amount); err != nil {
-		return nil, nil, nil, nil, err
+		return nil, err
 	}
 	if to.CashBalance+in.Amount > domain.MaxCashBalance {
-		return nil, nil, nil, nil, fmt.Errorf("%w: destination cash balance would exceed %g", domain.ErrInvalidArgument, domain.MaxCashBalance)
+		return nil, fmt.Errorf("%w: destination cash balance would exceed %g", domain.ErrInvalidArgument, domain.MaxCashBalance)
 	}
 	now := time.Now().UTC()
 	from.CashBalance -= in.Amount
@@ -270,21 +296,101 @@ func (s *Service) Transfer(ctx context.Context, in TransferInput) (fromMov, toMo
 		CounterpartyPortfolioID: from.BookID(), CounterpartyPortfolioName: from.Name,
 		PeerMovementID: outID, CreatedAt: now,
 	}
-	fromMov, toMov, err = s.store.ApplyInternalTransfer(ctx, from, to, out, inRow)
-	if err != nil {
-		return nil, nil, nil, nil, err
+	if idempKey != "" {
+		ctx = s.withIdempotency(ctx, from.BookID(), idempKey, idempHash, domain.IdempotencyKindTransfer, idempIDs{
+			OutID: outID, InID: inID,
+		})
+		ctx = domain.ContextWithTransferAttempt(ctx, &domain.TransferAttempt{
+			ID: uuid.NewString(), OwnerClientID: from.ClientID, IdempotencyKey: idempKey, RequestHash: idempHash,
+			FromPortfolioID: from.BookID(), ToPortfolioID: to.BookID(),
+			FromPortfolioName: from.Name, ToPortfolioName: to.Name, Amount: in.Amount, Note: note,
+			Status: domain.TransferAttemptCompleted, Attempt: 1, OutMovementID: outID, InMovementID: inID, CreatedAt: now,
+		})
 	}
-	fromView, err = s.View(ctx, from.ClientID, from.ID)
+	fromMov, toMov, err := s.store.ApplyInternalTransfer(ctx, from, to, out, inRow)
 	if err != nil {
-		return fromMov, toMov, nil, nil, err
+		return nil, err
 	}
-	toView, err = s.View(ctx, to.ClientID, to.ID)
+	fromView, err := s.View(ctx, from.ClientID, from.ID)
 	if err != nil {
-		return fromMov, toMov, fromView, nil, err
+		return &TransferResult{Out: fromMov, In: toMov, IdempotencyKey: idempKey, Attempt: 1}, err
+	}
+	toView, err := s.View(ctx, to.ClientID, to.ID)
+	if err != nil {
+		return &TransferResult{Out: fromMov, In: toMov, From: fromView, IdempotencyKey: idempKey, Attempt: 1}, err
 	}
 	_ = s.recordViewSnapshot(ctx, fromView, now)
 	_ = s.recordViewSnapshot(ctx, toView, now)
 	s.notifyChange(ctx, from.ID, domain.PortfolioChangeCash, nil, nil, fromView)
 	s.notifyChange(ctx, to.ID, domain.PortfolioChangeCash, nil, nil, toView)
-	return fromMov, toMov, fromView, toView, nil
+	return &TransferResult{
+		Out: fromMov, In: toMov, From: fromView, To: toView,
+		Attempt: 1, IdempotencyKey: idempKey,
+	}, nil
+}
+
+func (s *Service) replayTransfer(ctx context.Context, rec *domain.IdempotencyRecord, from, to *domain.Portfolio, in TransferInput, note, key, hash string) (*TransferResult, error) {
+	ids := parseIdempIDs(rec.ResultJSON)
+	outMov, err := s.store.GetCashMovement(ctx, from.BookID(), ids.OutID)
+	if err != nil {
+		return nil, err
+	}
+	inMov, err := s.store.GetCashMovement(ctx, to.BookID(), ids.InID)
+	if err != nil {
+		return nil, err
+	}
+	n := s.recordTransferAttempt(ctx, in, from, to, note, key, hash, domain.TransferAttemptReplayed, ids.OutID, ids.InID)
+	fromView, err := s.View(ctx, from.ClientID, from.ID)
+	if err != nil {
+		return &TransferResult{Out: outMov, In: inMov, Replayed: true, Attempt: n, IdempotencyKey: key}, err
+	}
+	toView, err := s.View(ctx, to.ClientID, to.ID)
+	if err != nil {
+		return &TransferResult{Out: outMov, In: inMov, From: fromView, Replayed: true, Attempt: n, IdempotencyKey: key}, err
+	}
+	return &TransferResult{
+		Out: outMov, In: inMov, From: fromView, To: toView,
+		Replayed: true, Attempt: n, IdempotencyKey: key,
+	}, nil
+}
+
+func (s *Service) recordTransferAttempt(ctx context.Context, in TransferInput, from, to *domain.Portfolio, note, key, hash, status, outID, inID string) int {
+	n, err := s.store.NextTransferAttempt(ctx, from.ClientID, key)
+	if err != nil || n <= 0 {
+		n = 2
+	}
+	_, _ = s.store.InsertTransferAttempt(ctx, domain.TransferAttempt{
+		ID: uuid.NewString(), OwnerClientID: from.ClientID, IdempotencyKey: key, RequestHash: hash,
+		FromPortfolioID: from.BookID(), ToPortfolioID: to.BookID(),
+		FromPortfolioName: from.Name, ToPortfolioName: to.Name, Amount: in.Amount, Note: note,
+		Status: status, Attempt: n, OutMovementID: outID, InMovementID: inID, CreatedAt: time.Now().UTC(),
+	})
+	return n
+}
+
+// ListTransferAttempts returns newest-first retry history for the owner.
+func (s *Service) ListTransferAttempts(ctx context.Context, clientID string, limit, offset int, portfolioID ...string) ([]domain.TransferAttempt, int, error) {
+	p, err := s.requireBook(ctx, clientID, portfolioID...)
+	if err != nil {
+		return nil, 0, err
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	owner := p.ClientID
+	total, err := s.store.CountTransferAttempts(ctx, owner)
+	if err != nil {
+		return nil, 0, err
+	}
+	list, err := s.store.ListTransferAttempts(ctx, owner, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	return list, total, nil
 }

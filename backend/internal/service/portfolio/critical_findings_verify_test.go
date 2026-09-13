@@ -32,12 +32,12 @@ func TestVerify_TransferRejectsDifferentBookCurrency(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, fromV, toV, err := svc.Transfer(ctx, TransferInput{
+	res, err := svc.Transfer(ctx, TransferInput{
 		ClientID: "fx-xfer", FromPortfolioID: usdt.ID, ToPortfolioID: tryB.ID, Amount: 2000,
 	})
 	if err == nil {
 		reportFinding(t, "F1", "cross-currency transfer", true,
-			fmt.Sprintf("credited 2000 TRY from 2000 USDT; dest cash=%g src=%g", toV.CashBalance, fromV.CashBalance))
+			fmt.Sprintf("credited 2000 TRY from 2000 USDT; dest cash=%g src=%g", res.To.CashBalance, res.From.CashBalance))
 		return
 	}
 	if !errors.Is(err, domain.ErrInvalidArgument) {
@@ -82,7 +82,7 @@ func TestVerify_TransferHonorsCrossMaintenance(t *testing.T) {
 	if werr == nil {
 		t.Fatal("precondition: withdraw of unused cash should be rejected")
 	}
-	_, _, _, _, xerr := svc.Transfer(ctx, TransferInput{
+	_, xerr := svc.Transfer(ctx, TransferInput{
 		ClientID: "x-xfer-m", FromPortfolioID: main.ID, ToPortfolioID: other.ID, Amount: view.CashBalance,
 	})
 	after, err := svc.View(ctx, "x-xfer-m", main.ID)

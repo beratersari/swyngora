@@ -25,6 +25,7 @@ const (
 	IdempotencyKindBracket     = "bracket"
 	IdempotencyKindMarginOpen  = "margin_open"
 	IdempotencyKindMarginClose = "margin_close"
+	IdempotencyKindTransfer    = "transfer"
 )
 
 // IdempotencyRecord stores one client key for a paper book.

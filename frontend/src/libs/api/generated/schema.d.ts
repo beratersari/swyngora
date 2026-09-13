@@ -2481,6 +2481,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portfolio/transfers/attempts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List paper transfer request attempts
+         * @description Newest first. Each row is one POST /transfers try for this owner.
+         *     status=completed is the cash move; replayed is the same key coming again;
+         *     conflict is the same key with a different from/to/amount/note.
+         */
+        get: operations["listTransferAttempts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portfolio/cash-movements": {
         parameters: {
             query?: never;
@@ -6153,9 +6175,30 @@ export interface components {
             movement?: components["schemas"]["PortfolioCashMovement"];
             portfolio?: components["schemas"]["PortfolioView"];
         };
+        TransferAttempt: {
+            id?: string;
+            idempotencyKey?: string;
+            fromPortfolioId?: string;
+            toPortfolioId?: string;
+            fromPortfolioName?: string;
+            toPortfolioName?: string;
+            amount?: number;
+            note?: string;
+            /** @enum {string} */
+            status?: "completed" | "replayed" | "conflict";
+            attempt?: number;
+            outMovementId?: string;
+            inMovementId?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
         PortfolioTransferResponse: {
             from?: components["schemas"]["PortfolioCashMoveResponse"];
             to?: components["schemas"]["PortfolioCashMoveResponse"];
+            /** @description True when this POST reused a prior idempotency key and did not move cash again */
+            replayed?: boolean;
+            attempt?: number;
+            idempotencyKey?: string;
             note?: string;
         };
         /** @description Period P&L plus equity time series for a paper portfolio chart */
@@ -11083,6 +11126,8 @@ export interface operations {
                     /** @example 500 */
                     amount: number;
                     note?: string;
+                    /** @description Retry key (also accepted as Idempotency-Key header) */
+                    idempotencyKey?: string;
                 };
             };
         };
@@ -11098,6 +11143,41 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    listTransferAttempts: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Attempt list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        clientId?: string;
+                        attempts?: components["schemas"]["TransferAttempt"][];
+                        count?: number;
+                        total?: number;
+                        limit?: number;
+                        offset?: number;
+                    };
+                };
+            };
             404: components["responses"]["Error"];
         };
     };

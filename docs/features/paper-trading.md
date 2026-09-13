@@ -16,7 +16,9 @@ Backup and restore owned books with the user data export/import jobs (`sections=
 
 ### Idempotency keys
 
-`POST /orders` (market, pending, OCO, bracket), `POST /margin/orders`, and `POST /margin/positions/{id}/close` accept `Idempotency-Key` (or `X-Idempotency-Key`) header or `idempotencyKey` in the JSON body. A retry with the **same key and same request** returns the original trade/order instead of creating a second one. The same key with a **different** request returns **409**. Keys are scoped to the paper book, last **24 hours**, and may use letters, digits, `-`, `_`, `.`, `:` (max 128). MCP tools take `idempotencyKey` the same way.
+`POST /orders` (market, pending, OCO, bracket), `POST /margin/orders`, `POST /margin/positions/{id}/close`, and **`POST /transfers`** accept `Idempotency-Key` (or `X-Idempotency-Key`) header or `idempotencyKey` in the JSON body. A retry with the **same key and same request** returns the original trade/order/transfer instead of creating a second one (`replayed=true` on transfers). The same key with a **different** request returns **409**. Keys are scoped to the paper book, last **24 hours**, and may use letters, digits, `-`, `_`, `.`, `:` (max 128). MCP tools take `idempotencyKey` the same way.
+
+Transfer tries are stored so you can see which request **completed** and which **came again**: `GET /api/v1/portfolio/transfers/attempts` (`completed` / `replayed` / `conflict`). The web cash panel sends a new key per click and reuses it if the connection drops before a success response.
 
 ## API
 
@@ -29,7 +31,8 @@ Backup and restore owned books with the user data export/import jobs (`sections=
 | `GET` | `/api/v1/portfolio` | Snapshot of the selected book (`portfolioId` / `X-Portfolio-Id`) |
 | `POST` | `/api/v1/portfolio/deposits` | Add virtual cash (`amount`, optional `note`) |
 | `POST` | `/api/v1/portfolio/withdrawals` | Withdraw available cash (`amount`, optional `note`) |
-| `POST` | `/api/v1/portfolio/transfers` | Move cash between your own books (`fromPortfolioId`, `toPortfolioId`, `amount`) — owner only |
+| `POST` | `/api/v1/portfolio/transfers` | Move cash between your own books (`fromPortfolioId`, `toPortfolioId`, `amount`, optional `idempotencyKey`) — owner only |
+| `GET` | `/api/v1/portfolio/transfers/attempts` | Transfer request tries (completed / replayed / conflict) |
 | `GET` | `/api/v1/portfolio/cash-movements` | Deposit / withdraw / transfer history (newest first; includes opening) |
 | `GET` | `/api/v1/portfolio/performance` | Equity series + period P&L (`period=1d\|1w\|1m\|3m`) |
 | `GET`/`PUT`/`DELETE` | `/api/v1/portfolio/risk-limits` | Optional daily-loss % and max coin weight % (block new buys/margin only) |
