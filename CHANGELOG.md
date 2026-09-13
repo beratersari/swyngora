@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Cross-exchange desk:** web `/arb` scans live book gaps and after-fee funding carries, and can follow them (`docs/features/price-diff.md`, `docs/features/funding-arb.md`)
 - **Coin tape snapshot:** detail Tape tab shows account long % and 1h taker lean from `GET /api/v1/market/snapshot` (`docs/features/snapshot.md`)
 - **Forensics timeline:** `/forensics` and `GET /api/v1/market/forensics` `timeline` lists OI, takers, venue price, follow-through, liquidations, options, and sweeps in time order (`docs/features/forensics.md`)
+- **AI pytest-xdist:** `cd ai && pytest -q` runs workers in parallel (`-n auto`); `pytest -n0` is serial
 - **Lab fees and slippage:** Lab jobs accept `feePct` and `slipPct`. Entry, TP1, TP2, stop, and trail fills are slipped against the trader; each slice pays its own taker fee. Trade PnL and the shared pot are net. A 1% risk stop is sized so the net loss after those costs is still about 1% (`docs/features/indicator-scanner.md`)
 - **Lab TP1 / TP2:** signals plan a 1R first target and a farther runner. Lab can close part of the fill at TP1, leave the rest for TP2, and keep the stop, move it to entry, or trail it with price. The partial close hits cash/PnL; remaining shared risk follows the live stop (`docs/features/indicator-scanner.md`)
 
