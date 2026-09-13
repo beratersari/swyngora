@@ -459,6 +459,36 @@ func TestImport_PortfoliosMergeAndReplace(t *testing.T) {
 				"shares": []map[string]any{
 					{"granteeClientId": "viewer1", "role": "viewer", "createdAt": now.Format(time.RFC3339Nano), "updatedAt": now.Format(time.RFC3339Nano)},
 				},
+				"baskets": []map[string]any{
+					{
+						"id": "b1", "name": "Core 60/40", "createdAt": now.Format(time.RFC3339Nano), "updatedAt": now.Format(time.RFC3339Nano),
+						"targets": []map[string]any{
+							{"asset": "BTC", "exchange": "binance", "weightPct": 60},
+							{"asset": "USDT", "weightPct": 40},
+						},
+					},
+				},
+				"rebalances": []map[string]any{
+					{
+						"id": "rb1", "basketId": "b1", "basketName": "Core 60/40", "currency": "USDT",
+						"status": "partial", "plannedLegs": 1, "filledLegs": 1, "failedLegs": 0,
+						"beforeEquity": 10000, "afterEquity": 9980, "beforeCash": 8700, "afterCash": 4000,
+						"remainingNotional": 50, "attemptCount": 1,
+						"createdAt": now.Format(time.RFC3339Nano), "updatedAt": now.Format(time.RFC3339Nano),
+						"legs": []map[string]any{
+							{"side": "sell", "asset": "BTC", "exchange": "binance", "symbol": "BTCUSDT", "reason": "overweight",
+								"plannedQty": 0.1, "plannedPrice": 100, "plannedNotional": 10, "status": "filled",
+								"tradeId": "t1", "filledQty": 0.1, "fillPrice": 100, "fillNotional": 10, "attempt": 1},
+						},
+						"lines": []map[string]any{
+							{"asset": "BTC", "exchange": "binance", "symbol": "BTCUSDT", "targetPct": 60, "beforePct": 70, "afterPct": 65, "attempt": 1},
+						},
+					},
+				},
+				"riskLimits": map[string]any{
+					"maxDailyLossPct": 5, "maxAssetWeightPct": 30, "dayKey": "2026-09-13", "dayStartEquity": 10000,
+					"updatedAt": now.Format(time.RFC3339Nano),
+				},
 			},
 		},
 	})
@@ -495,6 +525,23 @@ func TestImport_PortfoliosMergeAndReplace(t *testing.T) {
 	shares, err := pf.ListPortfolioSharesByBook(ctx, "carol")
 	if err != nil || len(shares) != 1 || shares[0].GranteeClientID != "viewer1" {
 		t.Fatalf("shares %+v %v", shares, err)
+	}
+	baskets, err := pf.ListAllocationBaskets(ctx, "carol")
+	if err != nil || len(baskets) != 1 || baskets[0].Name != "Core 60/40" || len(baskets[0].Targets) != 2 {
+		t.Fatalf("baskets %+v %v", baskets, err)
+	}
+	rbs, err := pf.ListRebalanceResults(ctx, "carol", baskets[0].ID, 10, 0)
+	if err != nil || len(rbs) != 1 || rbs[0].Status != domain.RebalanceResultPartial {
+		t.Fatalf("rebalances %+v %v", rbs, err)
+	}
+	full, err := pf.GetRebalanceResult(ctx, "carol", rbs[0].ID)
+	if err != nil || len(full.Legs) != 1 || full.Legs[0].Asset != "BTC" {
+		t.Fatalf("rebalance %+v %v", full, err)
+	}
+	lim, err := pf.GetRiskLimits(ctx, "carol")
+	if err != nil || lim.MaxDailyLossPct == nil || *lim.MaxDailyLossPct != 5 ||
+		lim.MaxAssetWeightPct == nil || *lim.MaxAssetWeightPct != 30 {
+		t.Fatalf("risk %+v %v", lim, err)
 	}
 
 	// Merge should skip existing remapped main book
@@ -868,6 +915,47 @@ func TestImport_CustomSignalsPreviewAddAndUpdate(t *testing.T) {
 	}
 	if byName["Trend mix"].ID == "" || byName["Trend mix"].ID == "old-2" {
 		t.Fatalf("new profile should be reminted %+v", byName["Trend mix"])
+	}
+}
+
+func TestImport_PortfolioBasketsRiskCSV(t *testing.T) {
+	csv := `# meta,exportedAt,2026-01-01T00:00:00Z,clientId,alice
+# section:portfolios
+id,name,currency,startingBalance,cashBalance,realizedPnLTotal,netDeposits,marginMode,createdAt,updatedAt
+alice,Main,USDT,10000,8700,0,0,isolated,2026-01-01T00:00:00Z,2026-01-01T00:00:00Z
+# section:portfolio_baskets
+portfolioId,id,name,createdAt,updatedAt
+alice,b1,Core 60/40,2026-01-01T00:00:00Z,2026-01-01T00:00:00Z
+# section:portfolio_basket_targets
+portfolioId,basketId,asset,exchange,weightPct
+alice,b1,BTC,binance,60
+alice,b1,USDT,,40
+# section:portfolio_rebalances
+portfolioId,id,basketId,basketName,currency,status,plannedLegs,filledLegs,failedLegs,beforeEquity,afterEquity,beforeCash,afterCash,remainingAbsDriftPct,maxSleeveDriftPct,remainingNotional,totalFee,totalSlippage,totalCost,summary,note,createdAt,updatedAt,attemptCount
+alice,rb1,b1,Core 60/40,USDT,partial,1,1,0,10000,9980,8700,4000,0,0,50,0,0,0,,,2026-01-01T00:00:00Z,2026-01-01T00:00:00Z,1
+# section:portfolio_rebalance_legs
+portfolioId,rebalanceId,side,asset,exchange,symbol,reason,plannedQty,plannedPrice,plannedNotional,status,tradeId,filledQty,fillPrice,fillNotional,lastPrice,fee,slippage,error,attempt
+alice,rb1,sell,BTC,binance,BTCUSDT,overweight,0.1,100,10,filled,t1,0.1,100,10,100,0,0,,1
+# section:portfolio_risk_limits
+portfolioId,maxDailyLossPct,maxAssetWeightPct,dayKey,dayStartEquity,updatedAt
+alice,5,30,2026-09-13,10000,2026-01-01T00:00:00Z
+`
+	parsed, err := parseExportFile(domain.ExportFormatCSV, []byte(csv), "carol")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(parsed.Payload.Portfolios) != 1 {
+		t.Fatalf("books=%d invalid=%v", len(parsed.Payload.Portfolios), parsed.Invalid)
+	}
+	snap := parsed.Payload.Portfolios[0]
+	if len(snap.Baskets) != 1 || snap.Baskets[0].Name != "Core 60/40" || len(snap.Baskets[0].Targets) != 2 {
+		t.Fatalf("baskets %+v", snap.Baskets)
+	}
+	if len(snap.Rebalances) != 1 || snap.Rebalances[0].Status != domain.RebalanceResultPartial || len(snap.Rebalances[0].Legs) != 1 {
+		t.Fatalf("rebalances %+v", snap.Rebalances)
+	}
+	if snap.RiskLimits == nil || snap.RiskLimits.MaxDailyLossPct == nil || *snap.RiskLimits.MaxDailyLossPct != 5 {
+		t.Fatalf("risk %+v", snap.RiskLimits)
 	}
 }
 

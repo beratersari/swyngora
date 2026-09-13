@@ -196,11 +196,11 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `update_scanner_rule` | Enable/disable a rule or edit conditions, periods, and thresholds |
 | `delete_scanner_rule` | Delete scanner rule |
 | `list_scanner_results` | Scanner match history, confluence setups, hits24h |
-| `start_export` | Start JSON/CSV export of watchlist, shares, alerts, backtests, portfolios, customSignals |
+| `start_export` | Start JSON/CSV export of watchlist, shares, alerts, backtests, portfolios (baskets, rebalance history, risk limits), customSignals |
 | `get_export` | Export job status / progress |
 | `list_exports` | List recent export jobs |
 | `cancel_export` | Cancel pending/running export |
-| `preview_import` | Preview restore of an export file (counts plus custom-signal addNames / updateNames / conflicts) |
+| `preview_import` | Preview restore of an export file (paper books include baskets, rebalance history, and risk limits; counts plus custom-signal addNames / updateNames / conflicts) |
 | `confirm_import` | Apply preview with merge or replace |
 | `get_import` | Import job status / progress |
 | `list_imports` | List recent import jobs |

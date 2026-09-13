@@ -35,7 +35,7 @@ Users should be able to take their own product data offline: **watchlist**, **sh
 | shares | Shares granted by the owner |
 | alerts | All price alerts for the client (active + triggered) |
 | backtests | Backtest jobs + all signals (paged) |
-| portfolios | Owned paper books: cash/balance, positions, trades, open orders, tax lots, recurring buys, margin positions/orders/trades, outgoing shares |
+| portfolios | Owned paper books: cash/balance, positions, trades, open orders, tax lots, recurring buys, margin positions/orders/trades, outgoing shares, **allocation baskets**, **rebalance history** (legs, leftover mix, attempts), and **risk limits** |
 | customSignals | Named custom swing mixes (factor weights + which mix is the Custom tab default) |
 
 ## Where the code lives
@@ -80,4 +80,5 @@ curl -X POST http://localhost:8080/api/v1/export \
 - No real auth (clientId spoofing possible, same as other demo APIs).
 - Export is always asynchronous (small jobs finish almost immediately).
 - CSV is a single multi-section file, not a ZIP of sheets.
+- Paper books include baskets, stored rebalance runs, and risk limits. Cash-movement history and equity snapshots are not exported.
 - Telegram has no export commands yet.

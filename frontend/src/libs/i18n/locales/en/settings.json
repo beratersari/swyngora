@@ -23,7 +23,7 @@
     "loadFailed": "Could not load API keys"
   },
   "export": {
-    "hint": "Download your watchlist, shares, alerts, scanner backtests, paper books, and custom signal mixes as JSON or CSV.",
+    "hint": "Download your watchlist, shares, alerts, scanner backtests, paper books (baskets, rebalance history, and risk limits), and custom signal mixes as JSON or CSV.",
     "format": "Format",
     "start": "Start export",
     "started": "Export queued",
@@ -33,7 +33,7 @@
     "loadFailed": "Could not load exports"
   },
   "import": {
-    "hint": "Restore a previous export. Preview first so you can see which custom signal mixes will be added as new and which will update a saved mix.",
+    "hint": "Restore a previous export, including paper-book baskets, rebalance history, and risk limits. Preview first so you can see which custom signal mixes will be added as new and which will update a saved mix.",
     "preview": "Preview",
     "previewed": "Preview ready",
     "previewFailed": "Could not preview this file",

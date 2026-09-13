@@ -29,6 +29,116 @@ type portfolioBookPayload struct {
 	MarginOrders     []portfolioMarginOrdPayload `json:"marginOrders,omitempty"`
 	MarginTrades     []portfolioMarginTrPayload `json:"marginTrades,omitempty"`
 	Shares           []portfolioSharePayload    `json:"shares,omitempty"`
+	Baskets          []portfolioBasketPayload   `json:"baskets,omitempty"`
+	Rebalances       []portfolioRebalancePayload `json:"rebalances,omitempty"`
+	RiskLimits       *portfolioRiskPayload      `json:"riskLimits,omitempty"`
+}
+
+type portfolioBasketPayload struct {
+	ID        string                       `json:"id"`
+	Name      string                       `json:"name"`
+	Targets   []portfolioBasketTargetPayload `json:"targets"`
+	CreatedAt string                       `json:"createdAt"`
+	UpdatedAt string                       `json:"updatedAt"`
+}
+
+type portfolioBasketTargetPayload struct {
+	Asset     string  `json:"asset"`
+	Exchange  string  `json:"exchange,omitempty"`
+	WeightPct float64 `json:"weightPct"`
+}
+
+type portfolioRebalancePayload struct {
+	ID                   string                         `json:"id"`
+	BasketID             string                         `json:"basketId"`
+	BasketName           string                         `json:"basketName"`
+	Currency             string                         `json:"currency"`
+	Status               string                         `json:"status"`
+	PlannedLegs          int                            `json:"plannedLegs"`
+	FilledLegs           int                            `json:"filledLegs"`
+	FailedLegs           int                            `json:"failedLegs"`
+	BeforeEquity         float64                        `json:"beforeEquity"`
+	AfterEquity          float64                        `json:"afterEquity"`
+	BeforeCash           float64                        `json:"beforeCash"`
+	AfterCash            float64                        `json:"afterCash"`
+	RemainingAbsDriftPct float64                        `json:"remainingAbsDriftPct"`
+	MaxSleeveDriftPct    float64                        `json:"maxSleeveDriftPct"`
+	RemainingNotional    float64                        `json:"remainingNotional"`
+	TotalFee             float64                        `json:"totalFee"`
+	TotalSlippage        float64                        `json:"totalSlippage"`
+	TotalCost            float64                        `json:"totalCost"`
+	Summary              string                         `json:"summary,omitempty"`
+	Note                 string                         `json:"note,omitempty"`
+	CreatedAt            string                         `json:"createdAt"`
+	UpdatedAt            string                         `json:"updatedAt"`
+	AttemptCount         int                            `json:"attemptCount"`
+	CanContinue          bool                           `json:"canContinue"`
+	Legs                 []portfolioRebalanceLegPayload `json:"legs,omitempty"`
+	Lines                []portfolioRebalanceLinePayload `json:"lines,omitempty"`
+	Attempts             []portfolioRebalanceAttemptPayload `json:"attempts,omitempty"`
+}
+
+type portfolioRebalanceLegPayload struct {
+	Side            string  `json:"side"`
+	Asset           string  `json:"asset"`
+	Exchange        string  `json:"exchange,omitempty"`
+	Symbol          string  `json:"symbol,omitempty"`
+	Reason          string  `json:"reason,omitempty"`
+	PlannedQty      float64 `json:"plannedQty"`
+	PlannedPrice    float64 `json:"plannedPrice"`
+	PlannedNotional float64 `json:"plannedNotional"`
+	Status          string  `json:"status"`
+	TradeID         string  `json:"tradeId,omitempty"`
+	FilledQty       float64 `json:"filledQty"`
+	FillPrice       float64 `json:"fillPrice"`
+	FillNotional    float64 `json:"fillNotional"`
+	LastPrice       float64 `json:"lastPrice,omitempty"`
+	Fee             float64 `json:"fee"`
+	Slippage        float64 `json:"slippage"`
+	Error           string  `json:"error,omitempty"`
+	Attempt         int     `json:"attempt"`
+}
+
+type portfolioRebalanceLinePayload struct {
+	Asset       string  `json:"asset"`
+	Exchange    string  `json:"exchange,omitempty"`
+	Symbol      string  `json:"symbol,omitempty"`
+	IsCash      bool    `json:"isCash"`
+	TargetPct   float64 `json:"targetPct"`
+	BeforePct   float64 `json:"beforePct"`
+	AfterPct    float64 `json:"afterPct"`
+	BeforeValue float64 `json:"beforeValue"`
+	AfterValue  float64 `json:"afterValue"`
+	TargetValue float64 `json:"targetValue"`
+	AfterDelta  float64 `json:"afterDelta"`
+	Attempt     int     `json:"attempt"`
+}
+
+type portfolioRebalanceAttemptPayload struct {
+	Seq           int                             `json:"seq"`
+	Status        string                          `json:"status"`
+	PlannedLegs   int                             `json:"plannedLegs"`
+	FilledLegs    int                             `json:"filledLegs"`
+	FailedLegs    int                             `json:"failedLegs"`
+	BeforeEquity  float64                         `json:"beforeEquity"`
+	AfterEquity   float64                         `json:"afterEquity"`
+	BeforeCash    float64                         `json:"beforeCash"`
+	AfterCash     float64                         `json:"afterCash"`
+	TotalFee      float64                         `json:"totalFee"`
+	TotalSlippage float64                         `json:"totalSlippage"`
+	TotalCost     float64                         `json:"totalCost"`
+	Summary       string                          `json:"summary,omitempty"`
+	CreatedAt     string                          `json:"createdAt"`
+	Legs          []portfolioRebalanceLegPayload  `json:"legs,omitempty"`
+	Lines         []portfolioRebalanceLinePayload `json:"lines,omitempty"`
+}
+
+type portfolioRiskPayload struct {
+	MaxDailyLossPct   *float64 `json:"maxDailyLossPct,omitempty"`
+	MaxAssetWeightPct *float64 `json:"maxAssetWeightPct,omitempty"`
+	DayKey            string   `json:"dayKey,omitempty"`
+	DayStartEquity    float64  `json:"dayStartEquity,omitempty"`
+	UpdatedAt         string   `json:"updatedAt"`
 }
 
 type portfolioPosPayload struct {
@@ -314,7 +424,83 @@ func snapshotToPayload(snap domain.PortfolioSnapshot) portfolioBookPayload {
 			CreatedAt: rfcNano(sh.CreatedAt), UpdatedAt: rfcNano(sh.UpdatedAt),
 		})
 	}
+	for _, b := range snap.Baskets {
+		bp := portfolioBasketPayload{
+			ID: b.ID, Name: b.Name, CreatedAt: rfcNano(b.CreatedAt), UpdatedAt: rfcNano(b.UpdatedAt),
+		}
+		for _, t := range b.Targets {
+			bp.Targets = append(bp.Targets, portfolioBasketTargetPayload{
+				Asset: t.Asset, Exchange: string(t.Exchange), WeightPct: t.WeightPct,
+			})
+		}
+		p.Baskets = append(p.Baskets, bp)
+	}
+	for _, r := range snap.Rebalances {
+		p.Rebalances = append(p.Rebalances, rebalanceToPayload(r))
+	}
+	if snap.RiskLimits != nil {
+		p.RiskLimits = &portfolioRiskPayload{
+			MaxDailyLossPct: snap.RiskLimits.MaxDailyLossPct, MaxAssetWeightPct: snap.RiskLimits.MaxAssetWeightPct,
+			DayKey: snap.RiskLimits.DayKey, DayStartEquity: snap.RiskLimits.DayStartEquity,
+			UpdatedAt: rfcNano(snap.RiskLimits.UpdatedAt),
+		}
+	}
 	return p
+}
+
+func rebalanceToPayload(r domain.RebalanceResult) portfolioRebalancePayload {
+	out := portfolioRebalancePayload{
+		ID: r.ID, BasketID: r.BasketID, BasketName: r.BasketName, Currency: r.Currency, Status: r.Status,
+		PlannedLegs: r.PlannedLegs, FilledLegs: r.FilledLegs, FailedLegs: r.FailedLegs,
+		BeforeEquity: r.BeforeEquity, AfterEquity: r.AfterEquity, BeforeCash: r.BeforeCash, AfterCash: r.AfterCash,
+		RemainingAbsDriftPct: r.RemainingAbsDriftPct, MaxSleeveDriftPct: r.MaxSleeveDriftPct,
+		RemainingNotional: r.RemainingNotional, TotalFee: r.TotalFee, TotalSlippage: r.TotalSlippage,
+		TotalCost: r.TotalCost, Summary: r.Summary, Note: r.Note,
+		CreatedAt: rfcNano(r.CreatedAt), UpdatedAt: rfcNano(r.UpdatedAt),
+		AttemptCount: r.AttemptCount, CanContinue: r.CanContinue,
+	}
+	for _, leg := range r.Legs {
+		out.Legs = append(out.Legs, rebalanceLegToPayload(leg))
+	}
+	for _, ln := range r.Lines {
+		out.Lines = append(out.Lines, rebalanceLineToPayload(ln))
+	}
+	for _, att := range r.Attempts {
+		ap := portfolioRebalanceAttemptPayload{
+			Seq: att.Seq, Status: att.Status, PlannedLegs: att.PlannedLegs, FilledLegs: att.FilledLegs,
+			FailedLegs: att.FailedLegs, BeforeEquity: att.BeforeEquity, AfterEquity: att.AfterEquity,
+			BeforeCash: att.BeforeCash, AfterCash: att.AfterCash, TotalFee: att.TotalFee,
+			TotalSlippage: att.TotalSlippage, TotalCost: att.TotalCost, Summary: att.Summary,
+			CreatedAt: rfcNano(att.CreatedAt),
+		}
+		for _, leg := range att.Legs {
+			ap.Legs = append(ap.Legs, rebalanceLegToPayload(leg))
+		}
+		for _, ln := range att.Lines {
+			ap.Lines = append(ap.Lines, rebalanceLineToPayload(ln))
+		}
+		out.Attempts = append(out.Attempts, ap)
+	}
+	return out
+}
+
+func rebalanceLegToPayload(leg domain.RebalanceLegOutcome) portfolioRebalanceLegPayload {
+	return portfolioRebalanceLegPayload{
+		Side: string(leg.Side), Asset: leg.Asset, Exchange: string(leg.Exchange), Symbol: leg.Symbol,
+		Reason: leg.Reason, PlannedQty: leg.PlannedQty, PlannedPrice: leg.PlannedPrice,
+		PlannedNotional: leg.PlannedNotional, Status: leg.Status, TradeID: leg.TradeID,
+		FilledQty: leg.FilledQty, FillPrice: leg.FillPrice, FillNotional: leg.FillNotional,
+		LastPrice: leg.LastPrice, Fee: leg.Fee, Slippage: leg.Slippage, Error: leg.Error, Attempt: leg.Attempt,
+	}
+}
+
+func rebalanceLineToPayload(ln domain.RebalanceLineSnapshot) portfolioRebalanceLinePayload {
+	return portfolioRebalanceLinePayload{
+		Asset: ln.Asset, Exchange: string(ln.Exchange), Symbol: ln.Symbol, IsCash: ln.IsCash,
+		TargetPct: ln.TargetPct, BeforePct: ln.BeforePct, AfterPct: ln.AfterPct,
+		BeforeValue: ln.BeforeValue, AfterValue: ln.AfterValue, TargetValue: ln.TargetValue,
+		AfterDelta: ln.AfterDelta, Attempt: ln.Attempt,
+	}
 }
 
 func f64(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }

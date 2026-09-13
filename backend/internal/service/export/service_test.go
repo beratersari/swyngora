@@ -362,6 +362,22 @@ func TestExport_PortfoliosSectionJSON(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := pf.CreateAllocationBasket(ctx, domain.AllocationBasket{
+		ID: "b1", ClientID: "user1", Name: "Core 60/40",
+		Targets: []domain.AllocationTarget{
+			{Asset: "BTC", Exchange: domain.ExchangeBinance, WeightPct: 60},
+			{Asset: "USDT", WeightPct: 40},
+		},
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	loss := 5.0
+	if _, err := pf.UpsertRiskLimits(ctx, domain.RiskLimits{
+		ClientID: "user1", MaxDailyLossPct: &loss, DayKey: "2026-09-13", DayStartEquity: 5000, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	svc, err := New(exportstore.NewMemory(), DataSources{Portfolio: pf}, Options{FileDir: filepath.Join(dir, "out"), FileTTL: time.Hour})
 	if err != nil {
 		t.Fatal(err)
@@ -392,6 +408,14 @@ func TestExport_PortfoliosSectionJSON(t *testing.T) {
 	book := list[0].(map[string]any)
 	if book["id"] != "user1" || book["cashBalance"].(float64) != 4500 {
 		t.Fatalf("%v", book)
+	}
+	baskets, _ := book["baskets"].([]any)
+	if len(baskets) != 1 {
+		t.Fatalf("baskets=%v", book["baskets"])
+	}
+	risk, _ := book["riskLimits"].(map[string]any)
+	if risk == nil || risk["maxDailyLossPct"].(float64) != 5 {
+		t.Fatalf("riskLimits=%v", book["riskLimits"])
 	}
 }
 

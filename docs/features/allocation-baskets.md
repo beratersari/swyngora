@@ -66,5 +66,6 @@ go test ./internal/domain/ ./internal/service/portfolio/ ./internal/transport/ht
 ## Limitations
 
 - Paper market orders only; no limit rebalance. Rebalance legs use the same fee and slippage as other paper market fills. The stored result shows preview price vs fill, per-leg fee/slippage, and run totals.
+- Baskets and stored rebalance runs (legs, leftover mix, continue attempts) are included when a paper book is exported and restored (`docs/features/user-data-export.md`).
 - Only pairs quoted in the portfolio currency count toward the mix.
 - Reserved open-order size cannot be sold until released.

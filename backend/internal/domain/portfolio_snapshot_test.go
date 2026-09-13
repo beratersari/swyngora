@@ -77,3 +77,63 @@ func TestValidatePortfolioSnapshot(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestRemapPortfolioSnapshot_BasketsRebalancesAndRisk(t *testing.T) {
+	loss := 5.0
+	snap := PortfolioSnapshot{
+		Book: Portfolio{ID: "alice", ClientID: "alice", Name: "Main", Currency: "USDT"},
+		Baskets: []AllocationBasket{{ID: "b1", ClientID: "alice", Name: "Core"}},
+		Rebalances: []RebalanceResult{{ID: "r1", ClientID: "alice", BasketID: "b1", Status: RebalanceResultCompleted}},
+		RiskLimits: &RiskLimits{ClientID: "alice", MaxDailyLossPct: &loss, DayKey: "2026-09-13"},
+	}
+	got := RemapPortfolioSnapshot(snap, "alice", "carol")
+	if got.Baskets[0].ClientID != "carol" || got.Rebalances[0].ClientID != "carol" {
+		t.Fatalf("book-scoped children %+v %+v", got.Baskets, got.Rebalances)
+	}
+	if got.Baskets[0].ID != "b1" || got.Rebalances[0].BasketID != "b1" {
+		t.Fatalf("basket ids remapped unexpectedly")
+	}
+	if got.RiskLimits == nil || got.RiskLimits.ClientID != "carol" || got.RiskLimits.MaxDailyLossPct == nil || *got.RiskLimits.MaxDailyLossPct != 5 {
+		t.Fatalf("risk %+v", got.RiskLimits)
+	}
+	if snap.RiskLimits.ClientID != "alice" {
+		t.Fatal("remap mutated original risk limits")
+	}
+}
+
+func TestRekeyPortfolioSnapshot_BasketsRebalancesAndTradeIDs(t *testing.T) {
+	n := 0
+	newID := func() string {
+		n++
+		return "n" + string(rune('0'+n))
+	}
+	snap := PortfolioSnapshot{
+		Book:   Portfolio{ID: "carol", ClientID: "carol", Name: "Main"},
+		Trades: []Trade{{ID: "t1", ClientID: "carol"}},
+		Baskets: []AllocationBasket{{ID: "b1", ClientID: "carol", Name: "Core"}},
+		Rebalances: []RebalanceResult{{
+			ID: "rb1", ClientID: "carol", BasketID: "b1",
+			Legs: []RebalanceLegOutcome{{TradeID: "t1", Status: RebalanceLegFilled}},
+			Attempts: []RebalanceAttempt{{
+				Seq: 1,
+				Legs: []RebalanceLegOutcome{{TradeID: "t1", Status: RebalanceLegFilled}},
+			}},
+		}},
+	}
+	got := RekeyPortfolioSnapshot(snap, newID)
+	if got.Baskets[0].ID == "b1" || got.Rebalances[0].ID == "rb1" {
+		t.Fatalf("ids not reminted: basket=%s rebalance=%s", got.Baskets[0].ID, got.Rebalances[0].ID)
+	}
+	if got.Rebalances[0].BasketID != got.Baskets[0].ID {
+		t.Fatalf("rebalance basket %s != %s", got.Rebalances[0].BasketID, got.Baskets[0].ID)
+	}
+	if got.Trades[0].ID == "t1" {
+		t.Fatal("trade id not reminted")
+	}
+	if got.Rebalances[0].Legs[0].TradeID != got.Trades[0].ID {
+		t.Fatalf("leg trade %s != %s", got.Rebalances[0].Legs[0].TradeID, got.Trades[0].ID)
+	}
+	if got.Rebalances[0].Attempts[0].Legs[0].TradeID != got.Trades[0].ID {
+		t.Fatalf("attempt trade %s != %s", got.Rebalances[0].Attempts[0].Legs[0].TradeID, got.Trades[0].ID)
+	}
+}

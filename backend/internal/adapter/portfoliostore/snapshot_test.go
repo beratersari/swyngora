@@ -74,6 +74,46 @@ func TestSnapshot_ExportImportRoundTripAndMerge(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := st.CreateAllocationBasket(ctx, domain.AllocationBasket{
+		ID: "b1", ClientID: "alice", Name: "Core 60/40",
+		Targets: []domain.AllocationTarget{
+			{Asset: "BTC", Exchange: domain.ExchangeBinance, WeightPct: 60},
+			{Asset: "USDT", WeightPct: 40},
+		},
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.CreateRebalanceResult(ctx, domain.RebalanceResult{
+		ID: "rb1", ClientID: "alice", BasketID: "b1", BasketName: "Core 60/40",
+		Currency: "USDT", Status: domain.RebalanceResultPartial,
+		PlannedLegs: 1, FilledLegs: 1, FailedLegs: 0,
+		BeforeEquity: 10000, AfterEquity: 9980, BeforeCash: 8800, AfterCash: 4000,
+		RemainingNotional: 50, AttemptCount: 1, CreatedAt: now, UpdatedAt: now,
+		Legs: []domain.RebalanceLegOutcome{{
+			Side: domain.TradeSideSell, Asset: "BTC", Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT",
+			Reason: "overweight", PlannedQty: 0.1, PlannedPrice: 100, PlannedNotional: 10,
+			Status: domain.RebalanceLegFilled, TradeID: "t1", FilledQty: 0.1, FillPrice: 100, FillNotional: 10,
+			Attempt: 1,
+		}},
+		Lines: []domain.RebalanceLineSnapshot{{
+			Asset: "BTC", Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT",
+			TargetPct: 60, BeforePct: 70, AfterPct: 65, Attempt: 1,
+		}},
+		Attempts: []domain.RebalanceAttempt{{
+			Seq: 1, Status: domain.RebalanceResultPartial, PlannedLegs: 1, FilledLegs: 1,
+			CreatedAt: now,
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	loss, weight := 5.0, 30.0
+	if _, err := st.UpsertRiskLimits(ctx, domain.RiskLimits{
+		ClientID: "alice", MaxDailyLossPct: &loss, MaxAssetWeightPct: &weight,
+		DayKey: "2026-09-13", DayStartEquity: 10000, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	snaps, err := st.ExportOwnedPortfolios(ctx, "alice")
 	if err != nil || len(snaps) != 1 {
@@ -81,7 +121,8 @@ func TestSnapshot_ExportImportRoundTripAndMerge(t *testing.T) {
 	}
 	if len(snaps[0].Positions) != 1 || len(snaps[0].Trades) != 1 || len(snaps[0].OpenOrders) != 1 ||
 		len(snaps[0].Lots) != 1 || len(snaps[0].RecurringPlans) != 1 || len(snaps[0].MarginPositions) != 1 ||
-		len(snaps[0].Shares) != 1 {
+		len(snaps[0].Shares) != 1 || len(snaps[0].Baskets) != 1 || len(snaps[0].Rebalances) != 1 ||
+		snaps[0].RiskLimits == nil {
 		t.Fatalf("incomplete snapshot %+v", snaps[0])
 	}
 
@@ -116,6 +157,26 @@ func TestSnapshot_ExportImportRoundTripAndMerge(t *testing.T) {
 	shares, err := st.ListPortfolioSharesByBook(ctx, "carol")
 	if err != nil || len(shares) != 1 || shares[0].GranteeClientID != "bob" || shares[0].OwnerClientID != "carol" {
 		t.Fatalf("shares %+v %v", shares, err)
+	}
+	baskets, err := st.ListAllocationBaskets(ctx, "carol")
+	if err != nil || len(baskets) != 1 || baskets[0].Name != "Core 60/40" || len(baskets[0].Targets) != 2 {
+		t.Fatalf("baskets %+v %v", baskets, err)
+	}
+	rbs, err := st.ListRebalanceResults(ctx, "carol", baskets[0].ID, 10, 0)
+	if err != nil || len(rbs) != 1 {
+		t.Fatalf("rebalances %+v %v", rbs, err)
+	}
+	full, err := st.GetRebalanceResult(ctx, "carol", rbs[0].ID)
+	if err != nil || full.Status != domain.RebalanceResultPartial || len(full.Legs) != 1 {
+		t.Fatalf("rebalance %+v %v", full, err)
+	}
+	if full.Legs[0].TradeID == "t1" {
+		t.Fatal("rebalance trade id was not reminted")
+	}
+	lim, err := st.GetRiskLimits(ctx, "carol")
+	if err != nil || lim.MaxDailyLossPct == nil || *lim.MaxDailyLossPct != 5 ||
+		lim.MaxAssetWeightPct == nil || *lim.MaxAssetWeightPct != 30 || lim.DayKey != "2026-09-13" {
+		t.Fatalf("risk %+v %v", lim, err)
 	}
 
 	// Merge again: skip

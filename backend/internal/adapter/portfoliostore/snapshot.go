@@ -3,6 +3,7 @@ package portfoliostore
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -80,7 +81,43 @@ func (s *SQLite) exportBook(ctx context.Context, book domain.Portfolio) (domain.
 	if snap.Shares, err = s.ListPortfolioSharesByBook(ctx, id); err != nil {
 		return snap, err
 	}
+	if snap.Baskets, err = s.ListAllocationBaskets(ctx, id); err != nil {
+		return snap, err
+	}
+	if snap.Rebalances, err = s.listFullRebalances(ctx, id); err != nil {
+		return snap, err
+	}
+	lim, err := s.GetRiskLimits(ctx, id)
+	if err != nil && !errors.Is(err, domain.ErrNotFound) {
+		return snap, err
+	}
+	if err == nil {
+		snap.RiskLimits = lim
+	}
 	return snap, nil
+}
+
+func (s *SQLite) listFullRebalances(ctx context.Context, bookID string) ([]domain.RebalanceResult, error) {
+	var all []domain.RebalanceResult
+	off := 0
+	const page = domain.MaxAllocationRebalanceList
+	for {
+		rows, err := s.ListRebalanceResults(ctx, bookID, "", page, off)
+		if err != nil {
+			return nil, err
+		}
+		for i := range rows {
+			full, err := s.GetRebalanceResult(ctx, bookID, rows[i].ID)
+			if err != nil {
+				return nil, err
+			}
+			all = append(all, *full)
+		}
+		if len(rows) < page {
+			return all, nil
+		}
+		off += page
+	}
 }
 
 func (s *SQLite) listAllTrades(ctx context.Context, bookID string) ([]domain.Trade, error) {
@@ -451,6 +488,115 @@ func (s *SQLite) txInsertSnapshot(ctx context.Context, tx *sql.Tx, snap domain.P
 			if strings.Contains(strings.ToLower(err.Error()), "unique") {
 				continue
 			}
+			return err
+		}
+	}
+	basketIDs := map[string]struct{}{}
+	nBaskets := 0
+	for _, b := range snap.Baskets {
+		if nBaskets >= domain.MaxAllocationBasketsPerClient {
+			break
+		}
+		if strings.TrimSpace(b.ID) == "" {
+			continue
+		}
+		name, err := domain.NormalizeAllocationName(b.Name)
+		if err != nil {
+			continue
+		}
+		targets := append([]domain.AllocationTarget(nil), b.Targets...)
+		if err := domain.ValidateAllocationTargets(targets, p.Currency); err != nil {
+			continue
+		}
+		if b.ClientID == "" {
+			b.ClientID = p.ID
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO allocation_baskets (id, client_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
+		`, b.ID, b.ClientID, name, fmtTime(b.CreatedAt), fmtTime(b.UpdatedAt)); err != nil {
+			return err
+		}
+		if err := s.replaceAllocationTargetsTx(ctx, tx, b.ID, targets); err != nil {
+			return err
+		}
+		basketIDs[b.ID] = struct{}{}
+		nBaskets++
+	}
+	perBasket := map[string]int{}
+	for _, r := range snap.Rebalances {
+		if strings.TrimSpace(r.ID) == "" || strings.TrimSpace(r.BasketID) == "" {
+			continue
+		}
+		if _, ok := basketIDs[r.BasketID]; !ok {
+			continue
+		}
+		if perBasket[r.BasketID] >= domain.MaxAllocationRebalancesPerBasket {
+			continue
+		}
+		if r.ClientID == "" {
+			r.ClientID = p.ID
+		}
+		if r.Status == "" {
+			r.Status = domain.RebalanceResultCompleted
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO allocation_rebalances (`+rebalanceCols+`)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, r.ID, r.ClientID, r.BasketID, r.BasketName, r.Currency, r.Status,
+			r.PlannedLegs, r.FilledLegs, r.FailedLegs,
+			r.BeforeEquity, r.AfterEquity, r.BeforeCash, r.AfterCash,
+			r.RemainingAbsDriftPct, r.MaxSleeveDriftPct, r.RemainingNotional,
+			r.TotalFee, r.TotalSlippage, r.Summary, r.Note, fmtTime(r.CreatedAt),
+			textOrNow(r.UpdatedAt, r.CreatedAt), maxInt(r.AttemptCount, 1)); err != nil {
+			return err
+		}
+		for i, leg := range r.Legs {
+			if _, err := tx.ExecContext(ctx, `
+				INSERT INTO allocation_rebalance_legs (
+					rebalance_id, seq, attempt, side, asset, exchange, symbol, reason,
+					planned_qty, planned_price, planned_notional, status,
+					trade_id, filled_qty, fill_price, fill_notional, last_price, fee, slippage, error
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			`, r.ID, i, attemptOf(leg.Attempt), string(leg.Side), leg.Asset, string(leg.Exchange), leg.Symbol, leg.Reason,
+				leg.PlannedQty, leg.PlannedPrice, leg.PlannedNotional, leg.Status,
+				leg.TradeID, leg.FilledQty, leg.FillPrice, leg.FillNotional, leg.LastPrice, leg.Fee, leg.Slippage, leg.Error); err != nil {
+				return err
+			}
+		}
+		if len(r.Attempts) > 0 {
+			for _, att := range r.Attempts {
+				if err := upsertRebalanceAttemptTx(ctx, tx, r.ID, att); err != nil {
+					return err
+				}
+				lines := att.Lines
+				if len(lines) == 0 && att.Seq == r.AttemptCount {
+					lines = r.Lines
+				}
+				if err := replaceAttemptLinesTx(ctx, tx, r.ID, att.Seq, lines); err != nil {
+					return err
+				}
+			}
+		} else if err := replaceAttemptLinesTx(ctx, tx, r.ID, 1, r.Lines); err != nil {
+			return err
+		}
+		perBasket[r.BasketID]++
+	}
+	if snap.RiskLimits != nil {
+		lim := *snap.RiskLimits
+		if lim.ClientID == "" {
+			lim.ClientID = p.ID
+		}
+		if err := domain.ValidateOptionalRiskPct(lim.MaxDailyLossPct, "maxDailyLossPct"); err != nil {
+			return nil
+		}
+		if err := domain.ValidateOptionalRiskPct(lim.MaxAssetWeightPct, "maxAssetWeightPct"); err != nil {
+			return nil
+		}
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO risk_limits (client_id, max_daily_loss_pct, max_asset_weight_pct, day_key, day_start_equity, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?)
+		`, lim.ClientID, nullFloatPtr(lim.MaxDailyLossPct), nullFloatPtr(lim.MaxAssetWeightPct),
+			lim.DayKey, lim.DayStartEquity, fmtTime(lim.UpdatedAt)); err != nil {
 			return err
 		}
 	}

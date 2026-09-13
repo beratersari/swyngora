@@ -5,7 +5,8 @@ import (
 	"strings"
 )
 
-// PortfolioSnapshot is a full paper-book backup (balance, positions, history, orders, lots, margin, shares).
+// PortfolioSnapshot is a full paper-book backup (balance, positions, history, orders, lots, margin, shares,
+// allocation baskets, rebalance runs, and optional risk limits).
 type PortfolioSnapshot struct {
 	Book            Portfolio
 	Positions       []Position
@@ -19,6 +20,9 @@ type PortfolioSnapshot struct {
 	MarginOrders    []MarginOrder
 	MarginTrades    []MarginTrade
 	Shares          []PortfolioShare
+	Baskets         []AllocationBasket
+	Rebalances      []RebalanceResult
+	RiskLimits      *RiskLimits
 }
 
 // RemapPortfolioSnapshot rewrites ownership to importerClientID.
@@ -111,6 +115,17 @@ func rebindPortfolioSnapshotBook(snap PortfolioSnapshot, oldBook, newBook, owner
 			snap.Shares[i].OwnerClientID = ownerClientID
 		}
 	}
+	for i := range snap.Baskets {
+		snap.Baskets[i].ClientID = newBook
+	}
+	for i := range snap.Rebalances {
+		snap.Rebalances[i].ClientID = newBook
+	}
+	if snap.RiskLimits != nil {
+		lim := *snap.RiskLimits
+		lim.ClientID = newBook
+		snap.RiskLimits = &lim
+	}
 	return snap
 }
 
@@ -172,6 +187,21 @@ func RekeyPortfolioSnapshot(snap PortfolioSnapshot, newID func() string) Portfol
 	for i := range snap.MarginTrades {
 		snap.MarginTrades[i].ID = mapID(snap.MarginTrades[i].ID)
 		snap.MarginTrades[i].PositionID = mapID(snap.MarginTrades[i].PositionID)
+	}
+	for i := range snap.Baskets {
+		snap.Baskets[i].ID = mapID(snap.Baskets[i].ID)
+	}
+	for i := range snap.Rebalances {
+		snap.Rebalances[i].ID = mapID(snap.Rebalances[i].ID)
+		snap.Rebalances[i].BasketID = mapID(snap.Rebalances[i].BasketID)
+		for j := range snap.Rebalances[i].Legs {
+			snap.Rebalances[i].Legs[j].TradeID = mapID(snap.Rebalances[i].Legs[j].TradeID)
+		}
+		for j := range snap.Rebalances[i].Attempts {
+			for k := range snap.Rebalances[i].Attempts[j].Legs {
+				snap.Rebalances[i].Attempts[j].Legs[k].TradeID = mapID(snap.Rebalances[i].Attempts[j].Legs[k].TradeID)
+			}
+		}
 	}
 	return snap
 }

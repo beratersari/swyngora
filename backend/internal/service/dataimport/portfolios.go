@@ -33,6 +33,115 @@ type wirePortfolioBook struct {
 	MarginOrders     []wirePFMarginOrd         `json:"marginOrders"`
 	MarginTrades     []wirePFMarginTr          `json:"marginTrades"`
 	Shares           []wirePFShare             `json:"shares"`
+	Baskets          []wirePFBasket            `json:"baskets"`
+	Rebalances       []wirePFRebalance         `json:"rebalances"`
+	RiskLimits       *wirePFRisk               `json:"riskLimits"`
+}
+
+type wirePFBasket struct {
+	ID        string              `json:"id"`
+	Name      string              `json:"name"`
+	Targets   []wirePFBasketTarget `json:"targets"`
+	CreatedAt string              `json:"createdAt"`
+	UpdatedAt string              `json:"updatedAt"`
+}
+
+type wirePFBasketTarget struct {
+	Asset     string  `json:"asset"`
+	Exchange  string  `json:"exchange"`
+	WeightPct float64 `json:"weightPct"`
+}
+
+type wirePFRebalance struct {
+	ID                   string                `json:"id"`
+	BasketID             string                `json:"basketId"`
+	BasketName           string                `json:"basketName"`
+	Currency             string                `json:"currency"`
+	Status               string                `json:"status"`
+	PlannedLegs          int                   `json:"plannedLegs"`
+	FilledLegs           int                   `json:"filledLegs"`
+	FailedLegs           int                   `json:"failedLegs"`
+	BeforeEquity         float64               `json:"beforeEquity"`
+	AfterEquity          float64               `json:"afterEquity"`
+	BeforeCash           float64               `json:"beforeCash"`
+	AfterCash            float64               `json:"afterCash"`
+	RemainingAbsDriftPct float64               `json:"remainingAbsDriftPct"`
+	MaxSleeveDriftPct    float64               `json:"maxSleeveDriftPct"`
+	RemainingNotional    float64               `json:"remainingNotional"`
+	TotalFee             float64               `json:"totalFee"`
+	TotalSlippage        float64               `json:"totalSlippage"`
+	TotalCost            float64               `json:"totalCost"`
+	Summary              string                `json:"summary"`
+	Note                 string                `json:"note"`
+	CreatedAt            string                `json:"createdAt"`
+	UpdatedAt            string                `json:"updatedAt"`
+	AttemptCount         int                   `json:"attemptCount"`
+	Legs                 []wirePFRebalanceLeg  `json:"legs"`
+	Lines                []wirePFRebalanceLine `json:"lines"`
+	Attempts             []wirePFRebalanceAtt  `json:"attempts"`
+}
+
+type wirePFRebalanceLeg struct {
+	Side            string  `json:"side"`
+	Asset           string  `json:"asset"`
+	Exchange        string  `json:"exchange"`
+	Symbol          string  `json:"symbol"`
+	Reason          string  `json:"reason"`
+	PlannedQty      float64 `json:"plannedQty"`
+	PlannedPrice    float64 `json:"plannedPrice"`
+	PlannedNotional float64 `json:"plannedNotional"`
+	Status          string  `json:"status"`
+	TradeID         string  `json:"tradeId"`
+	FilledQty       float64 `json:"filledQty"`
+	FillPrice       float64 `json:"fillPrice"`
+	FillNotional    float64 `json:"fillNotional"`
+	LastPrice       float64 `json:"lastPrice"`
+	Fee             float64 `json:"fee"`
+	Slippage        float64 `json:"slippage"`
+	Error           string  `json:"error"`
+	Attempt         int     `json:"attempt"`
+}
+
+type wirePFRebalanceLine struct {
+	Asset       string  `json:"asset"`
+	Exchange    string  `json:"exchange"`
+	Symbol      string  `json:"symbol"`
+	IsCash      bool    `json:"isCash"`
+	TargetPct   float64 `json:"targetPct"`
+	BeforePct   float64 `json:"beforePct"`
+	AfterPct    float64 `json:"afterPct"`
+	BeforeValue float64 `json:"beforeValue"`
+	AfterValue  float64 `json:"afterValue"`
+	TargetValue float64 `json:"targetValue"`
+	AfterDelta  float64 `json:"afterDelta"`
+	Attempt     int     `json:"attempt"`
+}
+
+type wirePFRebalanceAtt struct {
+	Seq           int                   `json:"seq"`
+	Status        string                `json:"status"`
+	PlannedLegs   int                   `json:"plannedLegs"`
+	FilledLegs    int                   `json:"filledLegs"`
+	FailedLegs    int                   `json:"failedLegs"`
+	BeforeEquity  float64               `json:"beforeEquity"`
+	AfterEquity   float64               `json:"afterEquity"`
+	BeforeCash    float64               `json:"beforeCash"`
+	AfterCash     float64               `json:"afterCash"`
+	TotalFee      float64               `json:"totalFee"`
+	TotalSlippage float64               `json:"totalSlippage"`
+	TotalCost     float64               `json:"totalCost"`
+	Summary       string                `json:"summary"`
+	CreatedAt     string                `json:"createdAt"`
+	Legs          []wirePFRebalanceLeg  `json:"legs"`
+	Lines         []wirePFRebalanceLine `json:"lines"`
+}
+
+type wirePFRisk struct {
+	MaxDailyLossPct   *float64 `json:"maxDailyLossPct"`
+	MaxAssetWeightPct *float64 `json:"maxAssetWeightPct"`
+	DayKey            string   `json:"dayKey"`
+	DayStartEquity    float64  `json:"dayStartEquity"`
+	UpdatedAt         string   `json:"updatedAt"`
 }
 
 type wirePFPos struct {
@@ -401,11 +510,161 @@ func normalizePortfolioBook(w wirePortfolioBook, fileOwner, importer string) (do
 			Role: role, CreatedAt: parseTimeOrNow(sh.CreatedAt), UpdatedAt: parseTimeOrNow(sh.UpdatedAt),
 		})
 	}
+	for _, b := range w.Baskets {
+		basket, ok := normalizeImportedBasket(b, id, cur)
+		if !ok {
+			continue
+		}
+		if len(snap.Baskets) >= domain.MaxAllocationBasketsPerClient {
+			break
+		}
+		snap.Baskets = append(snap.Baskets, basket)
+	}
+	for _, r := range w.Rebalances {
+		rb, ok := normalizeImportedRebalance(r, id)
+		if !ok {
+			continue
+		}
+		snap.Rebalances = append(snap.Rebalances, rb)
+	}
+	if w.RiskLimits != nil {
+		if lim, ok := normalizeImportedRisk(*w.RiskLimits, id); ok {
+			snap.RiskLimits = &lim
+		}
+	}
 	mapped := domain.RemapPortfolioSnapshot(snap, fileOwner, importer)
 	if err := domain.ValidatePortfolioSnapshot(mapped); err != nil {
 		return domain.PortfolioSnapshot{}, err
 	}
 	return mapped, nil
+}
+
+func normalizeImportedBasket(b wirePFBasket, bookID, currency string) (domain.AllocationBasket, bool) {
+	id := strings.TrimSpace(b.ID)
+	if id == "" {
+		return domain.AllocationBasket{}, false
+	}
+	name, err := domain.NormalizeAllocationName(b.Name)
+	if err != nil {
+		return domain.AllocationBasket{}, false
+	}
+	var targets []domain.AllocationTarget
+	for _, t := range b.Targets {
+		a := domain.NormalizeAllocationAsset(t.Asset)
+		if a == "" {
+			continue
+		}
+		ex := domain.Exchange("")
+		if strings.TrimSpace(t.Exchange) != "" {
+			ex = domain.ParseExchange(t.Exchange)
+		}
+		targets = append(targets, domain.AllocationTarget{Asset: a, Exchange: ex, WeightPct: t.WeightPct})
+	}
+	if err := domain.ValidateAllocationTargets(targets, currency); err != nil {
+		return domain.AllocationBasket{}, false
+	}
+	return domain.AllocationBasket{
+		ID: id, ClientID: bookID, Name: name, Targets: targets,
+		CreatedAt: parseTimeOrNow(b.CreatedAt), UpdatedAt: parseTimeOrNow(b.UpdatedAt),
+	}, true
+}
+
+func normalizeImportedRebalance(r wirePFRebalance, bookID string) (domain.RebalanceResult, bool) {
+	id := strings.TrimSpace(r.ID)
+	basketID := strings.TrimSpace(r.BasketID)
+	if id == "" || basketID == "" {
+		return domain.RebalanceResult{}, false
+	}
+	status := strings.TrimSpace(r.Status)
+	if status == "" {
+		status = domain.RebalanceResultCompleted
+	}
+	out := domain.RebalanceResult{
+		ID: id, ClientID: bookID, BasketID: basketID, BasketName: strings.TrimSpace(r.BasketName),
+		Currency: strings.ToUpper(strings.TrimSpace(r.Currency)), Status: status,
+		PlannedLegs: r.PlannedLegs, FilledLegs: r.FilledLegs, FailedLegs: r.FailedLegs,
+		BeforeEquity: r.BeforeEquity, AfterEquity: r.AfterEquity, BeforeCash: r.BeforeCash, AfterCash: r.AfterCash,
+		RemainingAbsDriftPct: r.RemainingAbsDriftPct, MaxSleeveDriftPct: r.MaxSleeveDriftPct,
+		RemainingNotional: r.RemainingNotional, TotalFee: r.TotalFee, TotalSlippage: r.TotalSlippage,
+		TotalCost: r.TotalCost, Summary: r.Summary, Note: r.Note,
+		CreatedAt: parseTimeOrNow(r.CreatedAt), UpdatedAt: parseTimeOrNow(r.UpdatedAt),
+		AttemptCount: r.AttemptCount,
+	}
+	if out.TotalCost == 0 && (out.TotalFee != 0 || out.TotalSlippage != 0) {
+		out.TotalCost = out.TotalFee + out.TotalSlippage
+	}
+	for _, leg := range r.Legs {
+		out.Legs = append(out.Legs, normalizeImportedRebalanceLeg(leg))
+	}
+	for _, ln := range r.Lines {
+		out.Lines = append(out.Lines, normalizeImportedRebalanceLine(ln))
+	}
+	for _, att := range r.Attempts {
+		a := domain.RebalanceAttempt{
+			Seq: att.Seq, Status: att.Status, PlannedLegs: att.PlannedLegs, FilledLegs: att.FilledLegs,
+			FailedLegs: att.FailedLegs, BeforeEquity: att.BeforeEquity, AfterEquity: att.AfterEquity,
+			BeforeCash: att.BeforeCash, AfterCash: att.AfterCash, TotalFee: att.TotalFee,
+			TotalSlippage: att.TotalSlippage, TotalCost: att.TotalCost, Summary: att.Summary,
+			CreatedAt: parseTimeOrNow(att.CreatedAt),
+		}
+		if a.Seq <= 0 {
+			a.Seq = 1
+		}
+		if a.TotalCost == 0 && (a.TotalFee != 0 || a.TotalSlippage != 0) {
+			a.TotalCost = a.TotalFee + a.TotalSlippage
+		}
+		for _, leg := range att.Legs {
+			a.Legs = append(a.Legs, normalizeImportedRebalanceLeg(leg))
+		}
+		for _, ln := range att.Lines {
+			a.Lines = append(a.Lines, normalizeImportedRebalanceLine(ln))
+		}
+		out.Attempts = append(out.Attempts, a)
+	}
+	if out.AttemptCount <= 0 {
+		if n := len(out.Attempts); n > 0 {
+			out.AttemptCount = n
+		} else {
+			out.AttemptCount = 1
+		}
+	}
+	return out, true
+}
+
+func normalizeImportedRebalanceLeg(leg wirePFRebalanceLeg) domain.RebalanceLegOutcome {
+	side := domain.TradeSide(strings.ToLower(strings.TrimSpace(leg.Side)))
+	return domain.RebalanceLegOutcome{
+		Side: side, Asset: domain.NormalizeAllocationAsset(leg.Asset),
+		Exchange: domain.ParseExchange(leg.Exchange), Symbol: strings.TrimSpace(leg.Symbol),
+		Reason: strings.TrimSpace(leg.Reason), PlannedQty: leg.PlannedQty, PlannedPrice: leg.PlannedPrice,
+		PlannedNotional: leg.PlannedNotional, Status: strings.TrimSpace(leg.Status), TradeID: strings.TrimSpace(leg.TradeID),
+		FilledQty: leg.FilledQty, FillPrice: leg.FillPrice, FillNotional: leg.FillNotional,
+		LastPrice: leg.LastPrice, Fee: leg.Fee, Slippage: leg.Slippage, Error: strings.TrimSpace(leg.Error),
+		Attempt: leg.Attempt,
+	}
+}
+
+func normalizeImportedRebalanceLine(ln wirePFRebalanceLine) domain.RebalanceLineSnapshot {
+	return domain.RebalanceLineSnapshot{
+		Asset: domain.NormalizeAllocationAsset(ln.Asset), Exchange: domain.ParseExchange(ln.Exchange),
+		Symbol: strings.TrimSpace(ln.Symbol), IsCash: ln.IsCash, TargetPct: ln.TargetPct,
+		BeforePct: ln.BeforePct, AfterPct: ln.AfterPct, BeforeValue: ln.BeforeValue,
+		AfterValue: ln.AfterValue, TargetValue: ln.TargetValue, AfterDelta: ln.AfterDelta, Attempt: ln.Attempt,
+	}
+}
+
+func normalizeImportedRisk(w wirePFRisk, bookID string) (domain.RiskLimits, bool) {
+	if err := domain.ValidateOptionalRiskPct(w.MaxDailyLossPct, "maxDailyLossPct"); err != nil {
+		return domain.RiskLimits{}, false
+	}
+	if err := domain.ValidateOptionalRiskPct(w.MaxAssetWeightPct, "maxAssetWeightPct"); err != nil {
+		return domain.RiskLimits{}, false
+	}
+	return domain.RiskLimits{
+		ClientID: bookID, MaxDailyLossPct: w.MaxDailyLossPct, MaxAssetWeightPct: w.MaxAssetWeightPct,
+		DayKey: strings.TrimSpace(w.DayKey), DayStartEquity: w.DayStartEquity,
+		UpdatedAt: parseTimeOrNow(w.UpdatedAt),
+	}, true
 }
 
 func parseTimeOrNow(s string) time.Time {

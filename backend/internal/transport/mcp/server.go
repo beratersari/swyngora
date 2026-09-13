@@ -4224,7 +4224,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("start_export",
-		mcp.WithDescription("Start a background export of the user's watchlist, shares, alerts, backtests, paper portfolios, and/or custom signal profiles as json or csv. Only one active export per client. Poll get_export for progress; download via HTTP when completed."),
+		mcp.WithDescription("Start a background export of the user's watchlist, shares, alerts, backtests, paper portfolios (including allocation baskets, rebalance history, and risk limits), and/or custom signal profiles as json or csv. Only one active export per client. Poll get_export for progress; download via HTTP when completed."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithString("format", mcp.Description("json (default) or csv")),
 		mcp.WithString("sections", mcp.Description("Comma-separated: watchlist,shares,alerts,backtests,portfolios,customSignals (default all)")),
@@ -4307,7 +4307,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("preview_import",
-		mcp.WithDescription("Preview restoring a prior JSON export of watchlist/shares/alerts/backtests/portfolios/customSignals. Returns valid/invalid/willAdd/willUpdate/willConflict counts without applying. customSignals includes addNames, updateNames, and conflicts (same name on more than one file row or saved mix). Unresolved conflicts are skipped. Pass export JSON as content. Then call confirm_import."),
+		mcp.WithDescription("Preview restoring a prior JSON export of watchlist/shares/alerts/backtests/portfolios/customSignals. Paper books include allocation baskets, rebalance history, and risk limits. Returns valid/invalid/willAdd/willUpdate/willConflict counts without applying. customSignals includes addNames, updateNames, and conflicts (same name on more than one file row or saved mix). Unresolved conflicts are skipped. Pass export JSON as content. Then call confirm_import."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Owner client id")),
 		mcp.WithString("content", mcp.Required(), mcp.Description("Full export file text (JSON preferred)")),
 		mcp.WithString("format", mcp.Description("json (default) or csv")),

@@ -70,5 +70,6 @@ go test ./internal/domain/ ./internal/service/portfolio/ ./internal/transport/ht
 
 ## Limitations
 
+- Saved limits (caps + UTC day baseline) are included when a paper book is exported and restored (`docs/features/user-data-export.md`).
 - Daily window is **UTC calendar date**; baseline is first observation that day, not a 00:00 mark-to-market (can add `timeZone` / midnight snapshot later).
 - Informational paper trading — not financial advice, not real money.

@@ -2,7 +2,7 @@
 
 ## Problem / goal
 
-Users who exported watchlist, shares, alerts, backtests, paper portfolios, and custom signal profiles (JSON/CSV) should be able to **restore** that file. Before any write, the API shows how many records are valid, invalid, would be added, and (for custom signal profiles) **which named mixes would be added vs updated**. Users choose **merge** (keep current data, skip duplicates; same-name custom mixes are overwritten) or **replace** (clear section data, then import). Large applies run in the background with progress and cancel.
+Users who exported watchlist, shares, alerts, backtests, paper portfolios (including baskets, rebalance history, and risk limits), and custom signal profiles (JSON/CSV) should be able to **restore** that file. Before any write, the API shows how many records are valid, invalid, would be added, and (for custom signal profiles) **which named mixes would be added vs updated**. Users choose **merge** (keep current data, skip duplicates; same-name custom mixes are overwritten) or **replace** (clear section data, then import). Large applies run in the background with progress and cancel.
 
 ## Behavior
 
@@ -84,5 +84,5 @@ go test ./internal/service/dataimport/... ./internal/adapter/importstore/... -co
 
 - MCP preview expects file content as a string (JSON best; large CSV may be awkward).
 - Scanner **rules** are not restored (only backtest results/history).
-- Paper portfolio restore does not include cash-movement history, equity snapshots, allocation baskets, or risk limits (balance/positions/trades/orders/lots/recurring/margin/shares are restored).
+- Paper portfolio restore includes allocation baskets, rebalance history (legs, leftover mix, continue attempts), and risk limits, plus balance/positions/trades/orders/lots/recurring/margin/shares. Cash-movement history and equity snapshots are still omitted.
 - No real auth (clientId model same as export).

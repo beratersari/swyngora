@@ -3520,6 +3520,7 @@ export interface paths {
          * Start a user data export
          * @description Queues an export of the caller's own data as JSON or CSV.
          *     Sections default to all of: watchlist, shares, alerts, backtests, portfolios, customSignals.
+         *     The portfolios section includes allocation baskets, stored rebalance runs, and risk limits.
          *     Only one pending/running export is allowed per clientId (409 conflict otherwise).
          *     Jobs run in the background; poll GET /api/v1/export/{id} for progressPct and status.
          */
@@ -3701,7 +3702,7 @@ export interface paths {
         /**
          * Upload an export file and get a restore preview
          * @description Accepts multipart form field `file` (or raw JSON/CSV body).
-         *     Parses watchlist, shares, alerts, backtests, paper portfolios, and custom signal profiles; returns counts of valid, invalid,
+         *     Parses watchlist, shares, alerts, backtests, paper portfolios (including allocation baskets, rebalance history, and risk limits), and custom signal profiles; returns counts of valid, invalid,
          *     willAdd, willUpdate, willConflict, and duplicates. customSignals includes addNames (new mixes),
          *     updateNames (exactly one saved mix), and conflicts (more than one file row or saved mix with
          *     the same name). Confirm with customSignalResolutions to pick which saved mix to update;

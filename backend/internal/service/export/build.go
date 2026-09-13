@@ -445,6 +445,7 @@ func buildCSV(pl *payload) ([]byte, error) {
 		bookRows := make([][]string, 0, len(pl.Portfolios))
 		posRows, tradeRows, orderRows, lotRows, fillRows := [][]string{}, [][]string{}, [][]string{}, [][]string{}, [][]string{}
 		recRows, runRows, mposRows, mordRows, mtrRows, shRows := [][]string{}, [][]string{}, [][]string{}, [][]string{}, [][]string{}, [][]string{}
+		basketRows, targetRows, rbRows, rbLegRows, rbLineRows, rbAttRows, riskRows := [][]string{}, [][]string{}, [][]string{}, [][]string{}, [][]string{}, [][]string{}, [][]string{}
 		for _, b := range pl.Portfolios {
 			bookRows = append(bookRows, []string{
 				b.ID, b.Name, b.Currency, f64(b.StartingBalance), f64(b.CashBalance),
@@ -512,6 +513,41 @@ func buildCSV(pl *payload) ([]byte, error) {
 			for _, sh := range b.Shares {
 				shRows = append(shRows, []string{b.ID, sh.GranteeClientID, sh.Role, sh.CreatedAt, sh.UpdatedAt})
 			}
+			for _, bk := range b.Baskets {
+				basketRows = append(basketRows, []string{b.ID, bk.ID, bk.Name, bk.CreatedAt, bk.UpdatedAt})
+				for _, t := range bk.Targets {
+					targetRows = append(targetRows, []string{b.ID, bk.ID, t.Asset, t.Exchange, f64(t.WeightPct)})
+				}
+			}
+			for _, r := range b.Rebalances {
+				rbRows = append(rbRows, []string{
+					b.ID, r.ID, r.BasketID, r.BasketName, r.Currency, r.Status,
+					i64(r.PlannedLegs), i64(r.FilledLegs), i64(r.FailedLegs),
+					f64(r.BeforeEquity), f64(r.AfterEquity), f64(r.BeforeCash), f64(r.AfterCash),
+					f64(r.RemainingAbsDriftPct), f64(r.MaxSleeveDriftPct), f64(r.RemainingNotional),
+					f64(r.TotalFee), f64(r.TotalSlippage), f64(r.TotalCost), r.Summary, r.Note,
+					r.CreatedAt, r.UpdatedAt, i64(r.AttemptCount),
+				})
+				for _, leg := range r.Legs {
+					rbLegRows = append(rbLegRows, csvRebalanceLeg(b.ID, r.ID, leg))
+				}
+				for _, ln := range r.Lines {
+					rbLineRows = append(rbLineRows, csvRebalanceLine(b.ID, r.ID, ln))
+				}
+				for _, att := range r.Attempts {
+					rbAttRows = append(rbAttRows, []string{
+						b.ID, r.ID, i64(att.Seq), att.Status, i64(att.PlannedLegs), i64(att.FilledLegs), i64(att.FailedLegs),
+						f64(att.BeforeEquity), f64(att.AfterEquity), f64(att.BeforeCash), f64(att.AfterCash),
+						f64(att.TotalFee), f64(att.TotalSlippage), f64(att.TotalCost), att.Summary, att.CreatedAt,
+					})
+				}
+			}
+			if b.RiskLimits != nil {
+				riskRows = append(riskRows, []string{
+					b.ID, derefF64(b.RiskLimits.MaxDailyLossPct), derefF64(b.RiskLimits.MaxAssetWeightPct),
+					b.RiskLimits.DayKey, f64(b.RiskLimits.DayStartEquity), b.RiskLimits.UpdatedAt,
+				})
+			}
 		}
 		if err := writeSection("portfolios", []string{
 			"id", "name", "currency", "startingBalance", "cashBalance", "realizedPnLTotal", "netDeposits", "marginMode", "createdAt", "updatedAt",
@@ -552,6 +588,31 @@ func buildCSV(pl *payload) ([]byte, error) {
 			"realizedPnL", "marginDelta", "principalPaid", "interestPaid", "leverage", "fee", "createdAt",
 		}, mtrRows)
 		_ = writeSection("portfolio_shares", []string{"portfolioId", "granteeClientId", "role", "createdAt", "updatedAt"}, shRows)
+		_ = writeSection("portfolio_baskets", []string{"portfolioId", "id", "name", "createdAt", "updatedAt"}, basketRows)
+		_ = writeSection("portfolio_basket_targets", []string{"portfolioId", "basketId", "asset", "exchange", "weightPct"}, targetRows)
+		_ = writeSection("portfolio_rebalances", []string{
+			"portfolioId", "id", "basketId", "basketName", "currency", "status",
+			"plannedLegs", "filledLegs", "failedLegs", "beforeEquity", "afterEquity", "beforeCash", "afterCash",
+			"remainingAbsDriftPct", "maxSleeveDriftPct", "remainingNotional", "totalFee", "totalSlippage", "totalCost",
+			"summary", "note", "createdAt", "updatedAt", "attemptCount",
+		}, rbRows)
+		_ = writeSection("portfolio_rebalance_legs", []string{
+			"portfolioId", "rebalanceId", "side", "asset", "exchange", "symbol", "reason",
+			"plannedQty", "plannedPrice", "plannedNotional", "status", "tradeId",
+			"filledQty", "fillPrice", "fillNotional", "lastPrice", "fee", "slippage", "error", "attempt",
+		}, rbLegRows)
+		_ = writeSection("portfolio_rebalance_lines", []string{
+			"portfolioId", "rebalanceId", "asset", "exchange", "symbol", "isCash",
+			"targetPct", "beforePct", "afterPct", "beforeValue", "afterValue", "targetValue", "afterDelta", "attempt",
+		}, rbLineRows)
+		_ = writeSection("portfolio_rebalance_attempts", []string{
+			"portfolioId", "rebalanceId", "seq", "status", "plannedLegs", "filledLegs", "failedLegs",
+			"beforeEquity", "afterEquity", "beforeCash", "afterCash", "totalFee", "totalSlippage", "totalCost",
+			"summary", "createdAt",
+		}, rbAttRows)
+		_ = writeSection("portfolio_risk_limits", []string{
+			"portfolioId", "maxDailyLossPct", "maxAssetWeightPct", "dayKey", "dayStartEquity", "updatedAt",
+		}, riskRows)
 	}
 	if pl.CustomSignals != nil {
 		rows := make([][]string, 0, len(pl.CustomSignals))
@@ -572,6 +633,27 @@ func buildCSV(pl *payload) ([]byte, error) {
 		return nil, err
 	}
 	return []byte(buf.String()), nil
+}
+
+func csvRebalanceLeg(bookID, rebalanceID string, leg portfolioRebalanceLegPayload) []string {
+	return []string{
+		bookID, rebalanceID, leg.Side, leg.Asset, leg.Exchange, leg.Symbol, leg.Reason,
+		f64(leg.PlannedQty), f64(leg.PlannedPrice), f64(leg.PlannedNotional), leg.Status, leg.TradeID,
+		f64(leg.FilledQty), f64(leg.FillPrice), f64(leg.FillNotional), f64(leg.LastPrice),
+		f64(leg.Fee), f64(leg.Slippage), leg.Error, i64(leg.Attempt),
+	}
+}
+
+func csvRebalanceLine(bookID, rebalanceID string, ln portfolioRebalanceLinePayload) []string {
+	cash := "false"
+	if ln.IsCash {
+		cash = "true"
+	}
+	return []string{
+		bookID, rebalanceID, ln.Asset, ln.Exchange, ln.Symbol, cash,
+		f64(ln.TargetPct), f64(ln.BeforePct), f64(ln.AfterPct),
+		f64(ln.BeforeValue), f64(ln.AfterValue), f64(ln.TargetValue), f64(ln.AfterDelta), i64(ln.Attempt),
+	}
 }
 
 func fmtPtr(p *float64) string {

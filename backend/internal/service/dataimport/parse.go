@@ -510,6 +510,76 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 					GranteeClientID: row["granteeClientId"], Role: row["role"], CreatedAt: row["createdAt"], UpdatedAt: row["updatedAt"],
 				})
 			}
+		case "portfolio_baskets":
+			if b := csvBooks[row["portfolioId"]]; b != nil {
+				id := strings.TrimSpace(row["id"])
+				if id == "" {
+					res.Invalid[domain.ExportSectionPortfolios]++
+					continue
+				}
+				b.Baskets = append(b.Baskets, wirePFBasket{
+					ID: id, Name: row["name"], CreatedAt: row["createdAt"], UpdatedAt: row["updatedAt"],
+				})
+			}
+		case "portfolio_basket_targets":
+			if b := csvBooks[row["portfolioId"]]; b != nil {
+				if i := csvBasketIndex(b, row["basketId"]); i >= 0 {
+					b.Baskets[i].Targets = append(b.Baskets[i].Targets, wirePFBasketTarget{
+						Asset: row["asset"], Exchange: row["exchange"], WeightPct: csvF64(row, "weightPct"),
+					})
+				}
+			}
+		case "portfolio_rebalances":
+			if b := csvBooks[row["portfolioId"]]; b != nil {
+				id := strings.TrimSpace(row["id"])
+				if id == "" {
+					res.Invalid[domain.ExportSectionPortfolios]++
+					continue
+				}
+				b.Rebalances = append(b.Rebalances, wirePFRebalance{
+					ID: id, BasketID: row["basketId"], BasketName: row["basketName"], Currency: row["currency"],
+					Status: row["status"], PlannedLegs: csvI(row, "plannedLegs"), FilledLegs: csvI(row, "filledLegs"),
+					FailedLegs: csvI(row, "failedLegs"), BeforeEquity: csvF64(row, "beforeEquity"),
+					AfterEquity: csvF64(row, "afterEquity"), BeforeCash: csvF64(row, "beforeCash"),
+					AfterCash: csvF64(row, "afterCash"), RemainingAbsDriftPct: csvF64(row, "remainingAbsDriftPct"),
+					MaxSleeveDriftPct: csvF64(row, "maxSleeveDriftPct"), RemainingNotional: csvF64(row, "remainingNotional"),
+					TotalFee: csvF64(row, "totalFee"), TotalSlippage: csvF64(row, "totalSlippage"),
+					TotalCost: csvF64(row, "totalCost"), Summary: row["summary"], Note: row["note"],
+					CreatedAt: row["createdAt"], UpdatedAt: row["updatedAt"], AttemptCount: csvI(row, "attemptCount"),
+				})
+			}
+		case "portfolio_rebalance_legs":
+			if b := csvBooks[row["portfolioId"]]; b != nil {
+				if i := csvRebalanceIndex(b, row["rebalanceId"]); i >= 0 {
+					b.Rebalances[i].Legs = append(b.Rebalances[i].Legs, csvWireRebalanceLeg(row))
+				}
+			}
+		case "portfolio_rebalance_lines":
+			if b := csvBooks[row["portfolioId"]]; b != nil {
+				if i := csvRebalanceIndex(b, row["rebalanceId"]); i >= 0 {
+					b.Rebalances[i].Lines = append(b.Rebalances[i].Lines, csvWireRebalanceLine(row))
+				}
+			}
+		case "portfolio_rebalance_attempts":
+			if b := csvBooks[row["portfolioId"]]; b != nil {
+				if i := csvRebalanceIndex(b, row["rebalanceId"]); i >= 0 {
+					b.Rebalances[i].Attempts = append(b.Rebalances[i].Attempts, wirePFRebalanceAtt{
+						Seq: csvI(row, "seq"), Status: row["status"], PlannedLegs: csvI(row, "plannedLegs"),
+						FilledLegs: csvI(row, "filledLegs"), FailedLegs: csvI(row, "failedLegs"),
+						BeforeEquity: csvF64(row, "beforeEquity"), AfterEquity: csvF64(row, "afterEquity"),
+						BeforeCash: csvF64(row, "beforeCash"), AfterCash: csvF64(row, "afterCash"),
+						TotalFee: csvF64(row, "totalFee"), TotalSlippage: csvF64(row, "totalSlippage"),
+						TotalCost: csvF64(row, "totalCost"), Summary: row["summary"], CreatedAt: row["createdAt"],
+					})
+				}
+			}
+		case "portfolio_risk_limits":
+			if b := csvBooks[row["portfolioId"]]; b != nil {
+				b.RiskLimits = &wirePFRisk{
+					MaxDailyLossPct: csvOptF64(row, "maxDailyLossPct"), MaxAssetWeightPct: csvOptF64(row, "maxAssetWeightPct"),
+					DayKey: row["dayKey"], DayStartEquity: csvF64(row, "dayStartEquity"), UpdatedAt: row["updatedAt"],
+				}
+			}
 		case "customSignals":
 			var weights map[string]float64
 			if raw := strings.TrimSpace(row["weights"]); raw != "" {
@@ -545,6 +615,46 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 		res.Payload.Portfolios = append(res.Payload.Portfolios, snap)
 	}
 	return res, nil
+}
+
+func csvBasketIndex(b *wirePortfolioBook, id string) int {
+	id = strings.TrimSpace(id)
+	for i := range b.Baskets {
+		if b.Baskets[i].ID == id {
+			return i
+		}
+	}
+	return -1
+}
+
+func csvRebalanceIndex(b *wirePortfolioBook, id string) int {
+	id = strings.TrimSpace(id)
+	for i := range b.Rebalances {
+		if b.Rebalances[i].ID == id {
+			return i
+		}
+	}
+	return -1
+}
+
+func csvWireRebalanceLeg(row map[string]string) wirePFRebalanceLeg {
+	return wirePFRebalanceLeg{
+		Side: row["side"], Asset: row["asset"], Exchange: row["exchange"], Symbol: row["symbol"],
+		Reason: row["reason"], PlannedQty: csvF64(row, "plannedQty"), PlannedPrice: csvF64(row, "plannedPrice"),
+		PlannedNotional: csvF64(row, "plannedNotional"), Status: row["status"], TradeID: row["tradeId"],
+		FilledQty: csvF64(row, "filledQty"), FillPrice: csvF64(row, "fillPrice"), FillNotional: csvF64(row, "fillNotional"),
+		LastPrice: csvF64(row, "lastPrice"), Fee: csvF64(row, "fee"), Slippage: csvF64(row, "slippage"),
+		Error: row["error"], Attempt: csvI(row, "attempt"),
+	}
+}
+
+func csvWireRebalanceLine(row map[string]string) wirePFRebalanceLine {
+	return wirePFRebalanceLine{
+		Asset: row["asset"], Exchange: row["exchange"], Symbol: row["symbol"], IsCash: parseCSVBool(row["isCash"]),
+		TargetPct: csvF64(row, "targetPct"), BeforePct: csvF64(row, "beforePct"), AfterPct: csvF64(row, "afterPct"),
+		BeforeValue: csvF64(row, "beforeValue"), AfterValue: csvF64(row, "afterValue"),
+		TargetValue: csvF64(row, "targetValue"), AfterDelta: csvF64(row, "afterDelta"), Attempt: csvI(row, "attempt"),
+	}
 }
 
 func parseCSVBool(s string) bool {

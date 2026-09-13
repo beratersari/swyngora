@@ -23,7 +23,7 @@
     "loadFailed": "API anahtarları yüklenemedi"
   },
   "export": {
-    "hint": "İzleme listesi, paylaşımlar, uyarılar, geriye dönük testler, kâğıt defterler ve özel sinyal karışımlarını JSON veya CSV olarak indirin.",
+    "hint": "İzleme listesi, paylaşımlar, uyarılar, geriye dönük testler, kâğıt defterler (sepetler, yeniden dengeleme geçmişi ve risk limitleri) ve özel sinyal karışımlarını JSON veya CSV olarak indirin.",
     "format": "Biçim",
     "start": "Dışa aktarmayı başlat",
     "started": "Dışa aktarma kuyruğa alındı",
@@ -33,7 +33,7 @@
     "loadFailed": "Dışa aktarmalar yüklenemedi"
   },
   "import": {
-    "hint": "Önceki bir dışa aktarmayı geri yükleyin. Önizlemede hangi özel sinyal karışımlarının yeni ekleneceği ve hangilerinin güncelleneceği görünür.",
+    "hint": "Önceki bir dışa aktarmayı geri yükleyin; kâğıt defter sepetleri, yeniden dengeleme geçmişi ve risk limitleri de gelir. Önizlemede hangi özel sinyal karışımlarının yeni ekleneceği ve hangilerinin güncelleneceği görünür.",
     "preview": "Önizle",
     "previewed": "Önizleme hazır",
     "previewFailed": "Bu dosya önizlenemedi",
