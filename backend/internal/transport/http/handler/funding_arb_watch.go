@@ -41,18 +41,57 @@ type fundingArbWatchDTO struct {
 }
 
 type fundingArbSignalDTO struct {
-	ID            string  `json:"id"`
-	WatchID       string  `json:"watchId"`
-	ClientID      string  `json:"clientId"`
-	Symbol        string  `json:"symbol"`
-	LongExchange  string  `json:"longExchange"`
-	ShortExchange string  `json:"shortExchange"`
-	NetAfterFees  float64 `json:"netAfterFees"`
-	MinProfit     float64 `json:"minProfit"`
-	Status        string  `json:"status"`
-	OpenedAt      string  `json:"openedAt"`
-	LastSeenAt    string  `json:"lastSeenAt"`
-	ClosedAt      *string `json:"closedAt,omitempty"`
+	ID            string                 `json:"id"`
+	WatchID       string                 `json:"watchId"`
+	ClientID      string                 `json:"clientId"`
+	Symbol        string                 `json:"symbol"`
+	LongExchange  string                 `json:"longExchange"`
+	ShortExchange string                 `json:"shortExchange"`
+	NetAfterFees  float64                `json:"netAfterFees"`
+	MinProfit     float64                `json:"minProfit"`
+	Status        string                 `json:"status"`
+	OpenedAt      string                 `json:"openedAt"`
+	LastSeenAt    string                 `json:"lastSeenAt"`
+	ClosedAt      *string                `json:"closedAt,omitempty"`
+	Expected      *fundingArbExpectedDTO `json:"expected,omitempty"`
+	Review        *fundingArbReviewDTO   `json:"review,omitempty"`
+}
+
+type fundingArbExpectedDTO struct {
+	Notional       float64                      `json:"notional"`
+	HoldHours      float64                      `json:"holdHours"`
+	HorizonFunding float64                      `json:"horizonFunding"`
+	RoundTripFee   float64                      `json:"roundTripFee"`
+	ExpectedNet    float64                      `json:"expectedNet"`
+	Payments       []fundingArbReviewPaymentDTO `json:"payments"`
+}
+
+type fundingArbReviewPaymentDTO struct {
+	Time            string `json:"time"`
+	Exchange        string `json:"exchange"`
+	ExpectedRate    string `json:"expectedRate,omitempty"`
+	ExpectedRatePct string `json:"expectedRatePct,omitempty"`
+	ActualRate      string `json:"actualRate,omitempty"`
+	ActualRatePct   string `json:"actualRatePct,omitempty"`
+	ExpectedAmount  string `json:"expectedAmount,omitempty"`
+	ActualAmount    string `json:"actualAmount,omitempty"`
+	Status          string `json:"status"`
+}
+
+type fundingArbReviewDTO struct {
+	AsOf            string                       `json:"asOf"`
+	PendingCount    int                          `json:"pendingCount"`
+	SettledCount    int                          `json:"settledCount"`
+	MissingCount    int                          `json:"missingCount"`
+	Complete        bool                         `json:"complete"`
+	ExpectedFunding float64                      `json:"expectedFunding"`
+	ActualFunding   float64                      `json:"actualFunding"`
+	ExpectedNet     float64                      `json:"expectedNet"`
+	ActualNet       float64                      `json:"actualNet"`
+	DeltaNet        float64                      `json:"deltaNet"`
+	StillWorthIt    bool                         `json:"stillWorthIt"`
+	Payments        []fundingArbReviewPaymentDTO `json:"payments"`
+	Summary         string                       `json:"summary"`
 }
 
 func faWatchDTO(w *domain.FundingArbWatch) fundingArbWatchDTO {
@@ -88,7 +127,62 @@ func faSignalDTO(s *domain.FundingArbSignal) fundingArbSignalDTO {
 		t := s.ClosedAt.UTC().Format(time.RFC3339Nano)
 		d.ClosedAt = &t
 	}
+	if s.Expected != nil {
+		d.Expected = faExpectedDTO(s.Expected)
+	}
+	if s.Review != nil {
+		d.Review = faReviewDTO(s.Review)
+	}
 	return d
+}
+
+func faExpectedDTO(e *domain.FundingArbExpected) *fundingArbExpectedDTO {
+	if e == nil {
+		return nil
+	}
+	pays := make([]fundingArbReviewPaymentDTO, 0, len(e.Payments))
+	for _, p := range e.Payments {
+		dec, pct := domain.FormatFundingRate(p.Rate)
+		pays = append(pays, fundingArbReviewPaymentDTO{
+			Time: p.Time.UTC().Format(time.RFC3339Nano), Exchange: string(p.Exchange),
+			ExpectedRate: dec, ExpectedRatePct: pct, ExpectedAmount: domain.FormatSignedQty(p.Amount),
+			Status: "expected",
+		})
+	}
+	return &fundingArbExpectedDTO{
+		Notional: e.Notional, HoldHours: e.HoldHours,
+		HorizonFunding: e.HorizonFunding, RoundTripFee: e.RoundTripFee,
+		ExpectedNet: e.ExpectedNet, Payments: pays,
+	}
+}
+
+func faReviewDTO(r *domain.FundingArbReview) *fundingArbReviewDTO {
+	if r == nil {
+		return nil
+	}
+	pays := make([]fundingArbReviewPaymentDTO, 0, len(r.Payments))
+	for _, p := range r.Payments {
+		ed, ep := domain.FormatFundingRate(p.ExpectedRate)
+		row := fundingArbReviewPaymentDTO{
+			Time: p.Time.UTC().Format(time.RFC3339Nano), Exchange: string(p.Exchange),
+			ExpectedRate: ed, ExpectedRatePct: ep,
+			ExpectedAmount: domain.FormatSignedQty(p.ExpectedAmount),
+			Status:         p.Status,
+		}
+		if p.Status == domain.FundingArbReviewSettled {
+			ad, ap := domain.FormatFundingRate(p.ActualRate)
+			row.ActualRate, row.ActualRatePct = ad, ap
+			row.ActualAmount = domain.FormatSignedQty(p.ActualAmount)
+		}
+		pays = append(pays, row)
+	}
+	return &fundingArbReviewDTO{
+		AsOf:         r.AsOf.UTC().Format(time.RFC3339Nano),
+		PendingCount: r.PendingCount, SettledCount: r.SettledCount, MissingCount: r.MissingCount,
+		Complete: r.Complete, ExpectedFunding: r.ExpectedFunding, ActualFunding: r.ActualFunding,
+		ExpectedNet: r.ExpectedNet, ActualNet: r.ActualNet, DeltaNet: r.DeltaNet,
+		StillWorthIt: r.StillWorthIt, Payments: pays, Summary: r.Summary,
+	}
 }
 
 type createFundingArbWatchBody struct {
@@ -240,4 +334,14 @@ func (h *FundingArbWatchHandler) ListSignals(w http.ResponseWriter, r *http.Requ
 		out = append(out, faSignalDTO(&list[i]))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"signals": out})
+}
+
+// GetSignal handles GET /api/v1/funding-arb/signals/{id}
+func (h *FundingArbWatchHandler) GetSignal(w http.ResponseWriter, r *http.Request) {
+	got, err := h.svc.GetSignal(r.Context(), clientIDFrom(r), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, faSignalDTO(got))
 }

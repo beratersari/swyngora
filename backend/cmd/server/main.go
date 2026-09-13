@@ -417,6 +417,7 @@ func main() {
 		}
 	}()
 	fundingArbSvc := fundingarb.New(fundingArbStore, marketSvc)
+	fundingArbSvc.SetSettledFunding(marketSvc)
 	logger.Info("funding-arb watch store ready", "driver", "sqlite", "path", fundingArbStore.Path())
 
 	radarStore, err := radarstore.Open(cfg.RadarDBPath)

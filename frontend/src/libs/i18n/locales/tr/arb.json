@@ -47,6 +47,17 @@
     "noWatches": "Henüz fonlama takibi yok.",
     "scope": "Kapsam",
     "remove": "Kaldır",
-    "resource": "fonlama taraması"
+    "resource": "fonlama taraması",
+    "signals": "Açılan fırsatlar",
+    "signalsHint": "Açılıştaki beklenen kâr ile o saatler geçtikten sonra gerçekleşen fonlama. Pencere basılana kadar bekler.",
+    "noSignals": "Henüz açılmış fonlama fırsatı yok. Önce taramayı izleyin.",
+    "sides": "Long / short",
+    "expected": "Beklenen net",
+    "actual": "Gerçek net",
+    "delta": "Fark",
+    "result": "Ödeme sonrası",
+    "pending": "Bekliyor",
+    "stillGood": "Hâlâ kârlı",
+    "notGood": "Kârlı değil"
   }
 }

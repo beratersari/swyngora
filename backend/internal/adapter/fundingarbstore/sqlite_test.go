@@ -46,9 +46,16 @@ func TestWatchAndSignalLifecycle(t *testing.T) {
 		LongExchange: domain.ExchangeBinance, ShortExchange: domain.ExchangeBybit,
 		NetAfterFees: 12, MinProfit: 5, Status: domain.FundingArbSignalOpen,
 		OpenedAt: now, LastSeenAt: now,
+		Expected: &domain.FundingArbExpected{Notional: 10000, ExpectedNet: 12, Payments: []domain.FundingArbExpectedPayment{
+			{Time: now.Add(8 * time.Hour), Exchange: domain.ExchangeBinance, Rate: 0.0001, Amount: -1},
+		}},
 	})
 	if err != nil || sig.Status != domain.FundingArbSignalOpen {
 		t.Fatalf("%+v %v", sig, err)
+	}
+	loaded, err := s.GetSignal(ctx, "c1", "s1")
+	if err != nil || loaded.Expected == nil || loaded.Expected.ExpectedNet != 12 || len(loaded.Expected.Payments) != 1 {
+		t.Fatalf("expected persist %+v %v", loaded, err)
 	}
 	if err := s.TouchSignal(ctx, "s1", 13, now.Add(time.Minute)); err != nil {
 		t.Fatal(err)

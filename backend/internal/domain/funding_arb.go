@@ -137,6 +137,8 @@ type FundingArbReport struct {
 	Note      string                  `json:"note"`
 	// HorizonNet is the raw after-fee hold-window payout used to rank scans.
 	HorizonNet float64 `json:"-"`
+	// Expected is the predicted schedule at quote time (not on the wire).
+	Expected *FundingArbExpected `json:"-"`
 }
 
 // FundingArbHit is one ranked scan row.
@@ -646,6 +648,7 @@ func BuildFundingArbReport(symbol string, legs []FundingArbVenueInput, notional,
 	raw := computeFundingArbTrade(long, short, notional, holdHours, now)
 	out.Payments = formatFundingArbPayments(raw.pays)
 	out.HorizonNet = raw.netHorizon
+	out.Expected = FundingArbExpectedFromRaw(raw)
 	if !raw.worthIt {
 		if len(raw.pays) == 0 {
 			out.Summary = fmt.Sprintf("Not an opportunity: no Binance or Bybit funding payment falls in the next %s hours, so funding is 0 after fees of %s.",

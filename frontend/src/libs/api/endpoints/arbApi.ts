@@ -45,6 +45,51 @@ export type FundingArbWatchList = {
   count?: number;
 };
 
+export type FundingArbReviewPayment = {
+  time?: string;
+  exchange?: string;
+  expectedRate?: string;
+  expectedRatePct?: string;
+  actualRate?: string;
+  actualRatePct?: string;
+  expectedAmount?: string;
+  actualAmount?: string;
+  status?: string;
+};
+
+export type FundingArbReview = {
+  asOf?: string;
+  pendingCount?: number;
+  settledCount?: number;
+  missingCount?: number;
+  complete?: boolean;
+  expectedFunding?: number;
+  actualFunding?: number;
+  expectedNet?: number;
+  actualNet?: number;
+  deltaNet?: number;
+  stillWorthIt?: boolean;
+  summary?: string;
+  payments?: FundingArbReviewPayment[];
+};
+
+export type FundingArbSignal = {
+  id?: string;
+  watchId?: string;
+  symbol?: string;
+  longExchange?: string;
+  shortExchange?: string;
+  netAfterFees?: number;
+  status?: string;
+  openedAt?: string;
+  expected?: { expectedNet?: number; payments?: FundingArbReviewPayment[] };
+  review?: FundingArbReview;
+};
+
+export type FundingArbSignalList = {
+  signals?: FundingArbSignal[];
+};
+
 export type MarketSnapshotWindow = {
   window?: string;
   price?: { changePct?: string; direction?: string; complete?: boolean };
@@ -136,6 +181,20 @@ export const arbApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `/api/v1/funding-arb/watches/${id}`, method: 'DELETE' }),
       invalidatesTags: ['FundingArbWatch'],
     }),
+    listFundingArbSignals: build.query<FundingArbSignalList, { status?: string; limit?: number } | void>({
+      query: (arg) => ({
+        url: '/api/v1/funding-arb/signals',
+        params: compactParams({
+          status: arg && 'status' in arg ? arg.status : 'all',
+          limit: arg && 'limit' in arg ? arg.limit : 20,
+        }),
+      }),
+      providesTags: ['FundingArbWatch'],
+    }),
+    getFundingArbSignal: build.query<FundingArbSignal, string>({
+      query: (id) => `/api/v1/funding-arb/signals/${id}`,
+      providesTags: ['FundingArbWatch'],
+    }),
     getMarketSnapshot: build.query<MarketSnapshot, { symbol: string; exchange?: string }>({
       query: (arg) => ({
         url: '/api/v1/market/snapshot',
@@ -159,5 +218,7 @@ export const {
   useListFundingArbWatchesQuery,
   useCreateFundingArbWatchMutation,
   useDeleteFundingArbWatchMutation,
+  useListFundingArbSignalsQuery,
+  useGetFundingArbSignalQuery,
   useGetMarketSnapshotQuery,
 } = arbApi;

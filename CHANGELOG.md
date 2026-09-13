@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
 
 ### Added
+- **Funding-arb predicted vs settled:** a watch signal stores the expected payment schedule at open. After those clocks pass, `GET /api/v1/funding-arb/signals` and `GET /api/v1/funding-arb/signals/{id}` show actual net versus expected, the difference, and whether it was still profitable (`docs/features/funding-arb.md`)
 - **Cross-exchange desk:** web `/arb` scans live book gaps and after-fee funding carries, and can follow them (`docs/features/price-diff.md`, `docs/features/funding-arb.md`)
 - **Coin tape snapshot:** detail Tape tab shows account long % and 1h taker lean from `GET /api/v1/market/snapshot` (`docs/features/snapshot.md`)
 - **Forensics timeline:** `/forensics` and `GET /api/v1/market/forensics` `timeline` lists OI, takers, venue price, follow-through, liquidations, options, and sweeps in time order (`docs/features/forensics.md`)

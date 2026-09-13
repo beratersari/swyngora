@@ -14,6 +14,7 @@ vi.mock('@/libs/api', async () => {
     useDeletePriceDiffWatchMutation: () => [vi.fn()],
     useLazyScanMarketFundingArbQuery: () => [vi.fn(), { data: undefined, isFetching: false }],
     useListFundingArbWatchesQuery: () => ({ data: { watches: [] } }),
+    useListFundingArbSignalsQuery: () => ({ data: { signals: [] } }),
     useCreateFundingArbWatchMutation: () => [vi.fn(), { isLoading: false }],
     useDeleteFundingArbWatchMutation: () => [vi.fn()],
   };

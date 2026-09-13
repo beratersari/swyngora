@@ -88,6 +88,8 @@ type FundingArbSignal struct {
 	OpenedAt      time.Time
 	LastSeenAt    time.Time
 	ClosedAt      *time.Time
+	Expected      *FundingArbExpected
+	Review        *FundingArbReview `json:"-"`
 }
 
 // ResolveFundingArbMinProfit requires a positive finite profit floor.
@@ -139,6 +141,7 @@ type FundingArbWatchPort interface {
 	GetOpenSignal(ctx context.Context, watchID, symbol string) (*FundingArbSignal, error)
 	ListOpenSignals(ctx context.Context, watchID string) ([]FundingArbSignal, error)
 	CreateSignal(ctx context.Context, s FundingArbSignal) (*FundingArbSignal, error)
+	GetSignal(ctx context.Context, clientID, id string) (*FundingArbSignal, error)
 	TouchSignal(ctx context.Context, id string, net float64, at time.Time) error
 	CloseSignal(ctx context.Context, id string, at time.Time) error
 	ListSignals(ctx context.Context, clientID string, status FundingArbSignalStatus, limit int) ([]FundingArbSignal, error)

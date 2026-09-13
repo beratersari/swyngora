@@ -1476,6 +1476,35 @@ paths:
                     items: { $ref: '#/components/schemas/FundingArbSignal' }
         '400':
           $ref: '#/components/responses/Error'
+  /api/v1/funding-arb/signals/{id}:
+    get:
+      summary: Get one funding-arb crossing with predicted-vs-settled review
+      description: >
+        Returns the stored expected schedule (the quote at open) and, when
+        settlement clocks have passed, the actual funding prints versus that
+        prediction. Pending clocks are marked pending. Informational only.
+      operationId: getFundingArbSignal
+      tags: [FundingArb]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Signal with optional review
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FundingArbSignal'
+        '404':
+          $ref: '#/components/responses/Error'
   /api/v1/market/long-short-ratio:
     get:
       summary: Long/short account ratio and recent history
@@ -9126,6 +9155,53 @@ components:
         openedAt: { type: string, format: date-time }
         lastSeenAt: { type: string, format: date-time }
         closedAt: { type: string, format: date-time, nullable: true }
+        expected:
+          $ref: '#/components/schemas/FundingArbExpected'
+        review:
+          $ref: '#/components/schemas/FundingArbReview'
+    FundingArbExpected:
+      type: object
+      description: Predicted funding schedule stored when the opportunity opened
+      properties:
+        notional: { type: number }
+        holdHours: { type: number }
+        horizonFunding: { type: number }
+        roundTripFee: { type: number }
+        expectedNet: { type: number }
+        payments:
+          type: array
+          items: { $ref: '#/components/schemas/FundingArbReviewPayment' }
+    FundingArbReviewPayment:
+      type: object
+      properties:
+        time: { type: string, format: date-time }
+        exchange: { type: string }
+        expectedRate: { type: string }
+        expectedRatePct: { type: string }
+        actualRate: { type: string }
+        actualRatePct: { type: string }
+        expectedAmount: { type: string }
+        actualAmount: { type: string }
+        status: { type: string, enum: [expected, pending, settled, missing] }
+    FundingArbReview:
+      type: object
+      description: Predicted schedule versus settled funding after those clocks
+      properties:
+        asOf: { type: string, format: date-time }
+        pendingCount: { type: integer }
+        settledCount: { type: integer }
+        missingCount: { type: integer }
+        complete: { type: boolean }
+        expectedFunding: { type: number }
+        actualFunding: { type: number }
+        expectedNet: { type: number }
+        actualNet: { type: number }
+        deltaNet: { type: number }
+        stillWorthIt: { type: boolean }
+        summary: { type: string }
+        payments:
+          type: array
+          items: { $ref: '#/components/schemas/FundingArbReviewPayment' }
     LongShortLevel:
       type: object
       properties:

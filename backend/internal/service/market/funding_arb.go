@@ -106,6 +106,15 @@ func (s *Service) GetFundingArbHistory(ctx context.Context, in FundingArbHistory
 	return domain.BuildFundingArbHistory(symbol, bin, byb, notional, fees.binance, fees.bybit, from, to), nil
 }
 
+// ListSettledFunding returns settled prints for one venue in [from, to].
+func (s *Service) ListSettledFunding(ctx context.Context, ex domain.Exchange, symbol string, from, to time.Time) ([]domain.FundingPoint, error) {
+	p := s.fundingPort(ex)
+	if p == nil {
+		return nil, nil
+	}
+	return p.ListFundingHistory(ctx, symbol, from, to)
+}
+
 // ScanFundingArb ranks top-volume USDT pairs by after-fee horizon payout.
 func (s *Service) ScanFundingArb(ctx context.Context, in FundingArbScanParams) (*domain.FundingArbScan, error) {
 	notional, hold, fees, err := resolveFundingArbSizing(in.Notional, in.HoldHours, in.FeeBinancePct, in.FeeBybitPct)

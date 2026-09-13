@@ -279,6 +279,7 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("GET /api/v1/funding-arb/watches/{id}", fah.GetWatch)
 		mux.HandleFunc("DELETE /api/v1/funding-arb/watches/{id}", fah.DeleteWatch)
 		mux.HandleFunc("GET /api/v1/funding-arb/signals", fah.ListSignals)
+		mux.HandleFunc("GET /api/v1/funding-arb/signals/{id}", fah.GetSignal)
 	}
 
 	if opts.Swing != nil {

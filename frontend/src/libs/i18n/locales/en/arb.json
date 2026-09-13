@@ -47,6 +47,17 @@
     "noWatches": "No funding follows yet.",
     "scope": "Scope",
     "remove": "Remove",
-    "resource": "funding-arb scan"
+    "resource": "funding-arb scan",
+    "signals": "Opened opportunities",
+    "signalsHint": "Expected profit at open versus settled funding after those clocks. Pending until the hold window prints.",
+    "noSignals": "No funding opportunities opened yet. Follow a scan first.",
+    "sides": "Long / short",
+    "expected": "Expected net",
+    "actual": "Actual net",
+    "delta": "Difference",
+    "result": "After settle",
+    "pending": "Pending",
+    "stillGood": "Still profitable",
+    "notGood": "Not profitable"
   }
 }

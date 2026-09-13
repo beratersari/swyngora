@@ -6,6 +6,8 @@ A watch with `symbol=*` follows the funding-arb scan (one open signal per
 coin). Schema v2 unique-indexes open signals on `(watch_id, symbol)`.
 `UpdateWatch` writes min profit and other settings; `status` is `active`,
 `paused`, or `expired`. Optional `expires_at` ends the follow.
+Schema v4 stores `expected_json` on each signal (the predicted payment
+schedule at open) so later reviews can compare settled rates.
 
 ## Layout
 

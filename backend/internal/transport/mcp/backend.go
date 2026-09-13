@@ -1222,6 +1222,17 @@ func (b *Backend) ListFundingArbSignals(ctx context.Context, clientID, status st
 	return mustJSON(map[string]any{"signals": items, "count": len(items)})
 }
 
+func (b *Backend) GetFundingArbSignal(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.FundingArb == nil {
+		return nil, fmt.Errorf("%w: funding-arb watches not configured", domain.ErrUpstream)
+	}
+	got, err := b.FundingArb.GetSignal(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(fundingArbSignalMap(got))
+}
+
 func fundingArbWatchMap(w *domain.FundingArbWatch) map[string]any {
 	if w == nil {
 		return map[string]any{}
@@ -1258,6 +1269,17 @@ func fundingArbSignalMap(s *domain.FundingArbSignal) map[string]any {
 	}
 	if s.ClosedAt != nil {
 		m["closedAt"] = s.ClosedAt.UTC().Format(time.RFC3339Nano)
+	}
+	if s.Expected != nil {
+		m["expectedNet"] = s.Expected.ExpectedNet
+	}
+	if s.Review != nil {
+		m["review"] = map[string]any{
+			"complete": s.Review.Complete, "stillWorthIt": s.Review.StillWorthIt,
+			"expectedNet": s.Review.ExpectedNet, "actualNet": s.Review.ActualNet,
+			"deltaNet": s.Review.DeltaNet, "summary": s.Review.Summary,
+			"pendingCount": s.Review.PendingCount, "settledCount": s.Review.SettledCount,
+		}
 	}
 	return m
 }

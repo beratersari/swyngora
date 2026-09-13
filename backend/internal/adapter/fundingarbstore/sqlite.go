@@ -3,6 +3,7 @@ package fundingarbstore
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -146,8 +147,28 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_fa_sig_open ON funding_arb_signals(watch_i
 		if err := sqliteutil.SetUserVersion(s.db, 3); err != nil {
 			return err
 		}
+		v = 3
+	}
+	if v < 4 {
+		if err := sqliteutil.ExecAllowExists(s.db, `ALTER TABLE funding_arb_signals ADD COLUMN expected_json TEXT`); err != nil {
+			return err
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 4); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+func encodeExpected(exp *domain.FundingArbExpected) (any, error) {
+	if exp == nil {
+		return nil, nil
+	}
+	b, err := json.Marshal(exp)
+	if err != nil {
+		return nil, err
+	}
+	return string(b), nil
 }
 
 func parseTime(s string) time.Time {
@@ -330,14 +351,14 @@ func (s *SQLite) SetWatchArmed(ctx context.Context, id string, armed bool, at ti
 	return err
 }
 
-const sigCols = `id, watch_id, client_id, symbol, long_exchange, short_exchange, net_after_fees, min_profit, status, opened_at, last_seen_at, closed_at`
+const sigCols = `id, watch_id, client_id, symbol, long_exchange, short_exchange, net_after_fees, min_profit, status, opened_at, last_seen_at, closed_at, expected_json`
 
 func scanSignal(row scannable) (*domain.FundingArbSignal, error) {
 	var s domain.FundingArbSignal
 	var longEx, shortEx, st, opened, last string
-	var closed sql.NullString
+	var closed, expJSON sql.NullString
 	if err := row.Scan(&s.ID, &s.WatchID, &s.ClientID, &s.Symbol, &longEx, &shortEx,
-		&s.NetAfterFees, &s.MinProfit, &st, &opened, &last, &closed); err != nil {
+		&s.NetAfterFees, &s.MinProfit, &st, &opened, &last, &closed, &expJSON); err != nil {
 		return nil, err
 	}
 	s.LongExchange = domain.Exchange(longEx)
@@ -348,6 +369,12 @@ func scanSignal(row scannable) (*domain.FundingArbSignal, error) {
 	if closed.Valid && closed.String != "" {
 		t := parseTime(closed.String)
 		s.ClosedAt = &t
+	}
+	if expJSON.Valid && expJSON.String != "" {
+		var exp domain.FundingArbExpected
+		if err := json.Unmarshal([]byte(expJSON.String), &exp); err == nil {
+			s.Expected = &exp
+		}
 	}
 	return &s, nil
 }
@@ -380,16 +407,30 @@ func (s *SQLite) ListOpenSignals(ctx context.Context, watchID string) ([]domain.
 	return out, rows.Err()
 }
 
+// GetSignal returns one signal owned by the client.
+func (s *SQLite) GetSignal(ctx context.Context, clientID, id string) (*domain.FundingArbSignal, error) {
+	row := s.db.QueryRowContext(ctx, `SELECT `+sigCols+` FROM funding_arb_signals WHERE id = ? AND client_id = ?`, id, clientID)
+	sig, err := scanSignal(row)
+	if err == sql.ErrNoRows {
+		return nil, domain.ErrNotFound
+	}
+	return sig, err
+}
+
 // CreateSignal inserts an open signal.
 func (s *SQLite) CreateSignal(ctx context.Context, sig domain.FundingArbSignal) (*domain.FundingArbSignal, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	_, err := s.db.ExecContext(ctx, `
+	expRaw, err := encodeExpected(sig.Expected)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO funding_arb_signals (`+sigCols+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, sig.ID, sig.WatchID, sig.ClientID, sig.Symbol, string(sig.LongExchange), string(sig.ShortExchange),
 		sig.NetAfterFees, sig.MinProfit, string(sig.Status),
-		sig.OpenedAt.UTC().Format(time.RFC3339Nano), sig.LastSeenAt.UTC().Format(time.RFC3339Nano), nil)
+		sig.OpenedAt.UTC().Format(time.RFC3339Nano), sig.LastSeenAt.UTC().Format(time.RFC3339Nano), nil, expRaw)
 	if err != nil {
 		return nil, err
 	}

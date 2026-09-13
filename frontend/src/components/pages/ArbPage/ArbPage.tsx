@@ -15,6 +15,7 @@ import {
   useLazyScanMarketFundingArbQuery,
   useLazyScanPriceDiffQuotesQuery,
   useListFundingArbWatchesQuery,
+  useListFundingArbSignalsQuery,
   useListPriceDiffOpportunitiesQuery,
   useListPriceDiffWatchesQuery,
 } from '@/libs/api';
@@ -159,6 +160,7 @@ function FundingPane() {
   const [notional, setNotional] = useState(10000);
   const [scan, scanState] = useLazyScanMarketFundingArbQuery();
   const watches = useListFundingArbWatchesQuery();
+  const signals = useListFundingArbSignalsQuery({ status: 'all', limit: 20 });
   const [createWatch, createState] = useCreateFundingArbWatchMutation();
   const [delWatch] = useDeleteFundingArbWatchMutation();
 
@@ -197,6 +199,46 @@ function FundingPane() {
           </Button>
         </Toolbar>
         <FundingArbScanTable scan={scanState.data} isLoading={scanState.isFetching} />
+      </Section>
+      <Section>
+        <Text variant="label">{t('arb:funding.signals')}</Text>
+        <Text variant="caption" color="secondary">
+          {t('arb:funding.signalsHint')}
+        </Text>
+        <Table
+          size="small"
+          rowKey={(r) => r.id ?? `${r.symbol}-${r.openedAt}`}
+          pagination={false}
+          dataSource={signals.data?.signals ?? []}
+          locale={{ emptyText: t('arb:funding.noSignals') }}
+          columns={[
+            { title: t('arb:funding.symbol'), dataIndex: 'symbol' },
+            {
+              title: t('arb:funding.sides'),
+              render: (_, r) => `${r.longExchange ?? ''} / ${r.shortExchange ?? ''}`,
+            },
+            {
+              title: t('arb:funding.expected'),
+              render: (_, r) => r.review?.expectedNet ?? r.expected?.expectedNet ?? r.netAfterFees ?? '—',
+            },
+            {
+              title: t('arb:funding.actual'),
+              render: (_, r) =>
+                r.review?.complete ? (r.review.actualNet ?? '—') : t('arb:funding.pending'),
+            },
+            {
+              title: t('arb:funding.delta'),
+              render: (_, r) => (r.review?.complete ? (r.review.deltaNet ?? '—') : '—'),
+            },
+            {
+              title: t('arb:funding.result'),
+              render: (_, r) => {
+                if (!r.review?.complete) return t('arb:funding.pending');
+                return r.review.stillWorthIt ? t('arb:funding.stillGood') : t('arb:funding.notGood');
+              },
+            },
+          ]}
+        />
       </Section>
       <Section>
         <Text variant="label">{t('arb:funding.follows')}</Text>

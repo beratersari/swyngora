@@ -34,7 +34,8 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `pause_funding_arb_watch` | Pause a follow without deleting it |
 | `resume_funding_arb_watch` | Resume a paused follow |
 | `delete_funding_arb_watch` | Delete watch and its signals |
-| `list_funding_arb_signals` | List min-profit crossings (open/closed/all) |
+| `list_funding_arb_signals` | List min-profit crossings (open/closed/all) with predicted-vs-settled review when clocks have passed |
+| `get_funding_arb_signal` | One crossing plus predicted-vs-settled review |
 | `get_long_short_ratio` | Account long/short ratio plus recent 5m history (Binance USD-M + Bybit linear) |
 | `get_futures_history` | Durable stored OI / funding / long-short / liquidation history |
 | `get_liquidation_max_pain` | Largest estimated liquidation pockets above (shorts) and below (longs) last price — not the hunt target |

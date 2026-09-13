@@ -54,7 +54,8 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET`/`PATCH`/`DELETE` | `/api/v1/funding-arb/watches/{id}` | Get / edit settings / delete a funding-arb follow |
 | `POST` | `/api/v1/funding-arb/watches/{id}/pause` | Pause a follow without deleting it |
 | `POST` | `/api/v1/funding-arb/watches/{id}/resume` | Resume a paused follow |
-| `GET` | `/api/v1/funding-arb/signals` | Open/closed min-profit crossings |
+| `GET` | `/api/v1/funding-arb/signals` | Open/closed min-profit crossings (predicted vs settled when clocks have passed) |
+| `GET` | `/api/v1/funding-arb/signals/{id}` | One crossing plus predicted-vs-settled review |
 | `GET` | `/api/v1/market/long-short-ratio` | Account long/short ratio + recent 5m history (Binance USD-M + Bybit linear) |
 | `GET` | `/api/v1/market/futures-history` | Durable stored OI / funding / long-short / liquidation history |
 | `GET` | `/api/v1/market/liquidation-max-pain` | Largest estimated liquidation pockets above (shorts) and below (longs) last price — not the hunt target |

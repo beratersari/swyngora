@@ -20,6 +20,11 @@ type QuoteFetcher interface {
 	ScanFundingArb(ctx context.Context, in market.FundingArbScanParams) (*domain.FundingArbScan, error)
 }
 
+// SettledFunding loads historical funding prints for predicted-vs-actual review.
+type SettledFunding interface {
+	ListSettledFunding(ctx context.Context, exchange domain.Exchange, symbol string, from, to time.Time) ([]domain.FundingPoint, error)
+}
+
 // AccountChecker reports whether a tenant is closed.
 type AccountChecker interface {
 	IsClosed(ctx context.Context, clientID string) (bool, *domain.Account, error)
@@ -48,6 +53,7 @@ type CreateInput struct {
 type Service struct {
 	store   domain.FundingArbWatchPort
 	quotes  QuoteFetcher
+	settled SettledFunding
 	account AccountChecker
 	notify  Notifier
 }
@@ -68,6 +74,13 @@ func (s *Service) SetAccountChecker(a AccountChecker) {
 func (s *Service) SetNotifier(n Notifier) {
 	if s != nil {
 		s.notify = n
+	}
+}
+
+// SetSettledFunding attaches settled-rate history for signal review.
+func (s *Service) SetSettledFunding(h SettledFunding) {
+	if s != nil {
+		s.settled = h
 	}
 }
 
@@ -328,7 +341,34 @@ func (s *Service) ListSignals(ctx context.Context, clientID, status string, limi
 	default:
 		return nil, fmt.Errorf("%w: status must be open, closed, or all", domain.ErrInvalidArgument)
 	}
-	return s.store.ListSignals(ctx, clientID, st, limit)
+	list, err := s.store.ListSignals(ctx, clientID, st, limit)
+	if err != nil {
+		return nil, err
+	}
+	s.attachReviews(ctx, list, time.Now().UTC())
+	return list, nil
+}
+
+// GetSignal returns one crossing and, when possible, predicted-vs-settled review.
+func (s *Service) GetSignal(ctx context.Context, clientID, id string) (*domain.FundingArbSignal, error) {
+	if s.store == nil {
+		return nil, fmt.Errorf("%w: funding-arb store not configured", domain.ErrUpstream)
+	}
+	clientID, err := domain.NormalizeClientID(clientID)
+	if err != nil {
+		return nil, err
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return nil, fmt.Errorf("%w: signal id is required", domain.ErrInvalidArgument)
+	}
+	sig, err := s.store.GetSignal(ctx, clientID, id)
+	if err != nil {
+		return nil, err
+	}
+	out := []domain.FundingArbSignal{*sig}
+	s.attachReviews(ctx, out, time.Now().UTC())
+	return &out[0], nil
 }
 
 func tenantClosed(ctx context.Context, accounts AccountChecker, clientID string) bool {
@@ -506,6 +546,7 @@ func (s *Service) applyHit(ctx context.Context, w domain.FundingArbWatch, symbol
 			LongExchange: long, ShortExchange: short,
 			NetAfterFees: net, MinProfit: w.MinProfit,
 			Status: domain.FundingArbSignalOpen, OpenedAt: now, LastSeenAt: now,
+			Expected: s.snapshotExpected(ctx, w, symbol),
 		}
 		if _, err := s.store.CreateSignal(ctx, sig); err != nil {
 			return opened, closed, err
@@ -516,6 +557,64 @@ func (s *Service) applyHit(ctx context.Context, w domain.FundingArbWatch, symbol
 	}
 	_ = s.store.TouchSignal(ctx, open.ID, net, now)
 	return 0, closed, nil
+}
+
+func (s *Service) snapshotExpected(ctx context.Context, w domain.FundingArbWatch, symbol string) *domain.FundingArbExpected {
+	if s == nil || s.quotes == nil {
+		return nil
+	}
+	fb, fy := w.FeeBinancePct, w.FeeBybitPct
+	rep, err := s.quotes.GetFundingArb(ctx, market.FundingArbParams{
+		Symbol: symbol, Notional: w.Notional, HoldHours: w.HoldHours,
+		FeeBinancePct: &fb, FeeBybitPct: &fy,
+	})
+	if err != nil || rep == nil {
+		return nil
+	}
+	return rep.Expected
+}
+
+func (s *Service) attachReviews(ctx context.Context, sigs []domain.FundingArbSignal, now time.Time) {
+	if s == nil || s.settled == nil || len(sigs) == 0 {
+		return
+	}
+	type span struct{ from, to time.Time }
+	ranges := map[string]span{}
+	for i := range sigs {
+		exp := sigs[i].Expected
+		if exp == nil || len(exp.Payments) == 0 {
+			continue
+		}
+		from := sigs[i].OpenedAt.UTC().Add(-time.Hour)
+		to := exp.LastExpectedClock().Add(time.Hour)
+		if to.IsZero() || !to.After(from) {
+			to = now.Add(time.Hour)
+		}
+		if to.After(now) {
+			to = now
+		}
+		cur, ok := ranges[sigs[i].Symbol]
+		if !ok || from.Before(cur.from) {
+			cur.from = from
+		}
+		if !ok || to.After(cur.to) {
+			cur.to = to
+		}
+		ranges[sigs[i].Symbol] = cur
+	}
+	hist := map[string][2][]domain.FundingPoint{}
+	for symbol, sp := range ranges {
+		if !sp.to.After(sp.from) {
+			continue
+		}
+		bin, _ := s.settled.ListSettledFunding(ctx, domain.ExchangeBinance, symbol, sp.from, sp.to)
+		byb, _ := s.settled.ListSettledFunding(ctx, domain.ExchangeBybit, symbol, sp.from, sp.to)
+		hist[symbol] = [2][]domain.FundingPoint{bin, byb}
+	}
+	for i := range sigs {
+		pts := hist[sigs[i].Symbol]
+		sigs[i].Review = domain.BuildFundingArbReview(sigs[i].Expected, pts[0], pts[1], now)
+	}
 }
 
 func (s *Service) fire(ctx context.Context, w domain.FundingArbWatch, symbol, long, short string, net float64, summary string) {

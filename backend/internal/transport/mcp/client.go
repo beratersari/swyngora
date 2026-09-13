@@ -521,6 +521,13 @@ func (c *APIClient) ListFundingArbSignals(ctx context.Context, clientID, status 
 	return c.get(ctx, "/api/v1/funding-arb/signals", q)
 }
 
+// GetFundingArbSignal returns one crossing with predicted-vs-settled review.
+func (c *APIClient) GetFundingArbSignal(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/funding-arb/signals/"+id, q)
+}
+
 // GetLongShortRatio returns the latest account long/short ratio plus recent history.
 func (c *APIClient) GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error) {
 	q := url.Values{}

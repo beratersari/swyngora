@@ -211,6 +211,8 @@ export {
   useListFundingArbWatchesQuery,
   useCreateFundingArbWatchMutation,
   useDeleteFundingArbWatchMutation,
+  useListFundingArbSignalsQuery,
+  useGetFundingArbSignalQuery,
   useGetMarketSnapshotQuery,
 } from './endpoints/arbApi';
 export type {
@@ -224,6 +226,8 @@ export type {
   MarketFundingArbHit,
   FundingArbWatch,
   FundingArbScanQuery,
+  FundingArbSignal,
+  FundingArbReview,
   MarketSnapshot,
   MarketSnapshotVenue,
   MarketSnapshotWindow,

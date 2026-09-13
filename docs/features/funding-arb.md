@@ -65,6 +65,13 @@ follow should run; when that time is over, checking stops, open signals
 close, and status becomes `expired`. Omit it to keep running. Max 20
 watches per client.
 
+When a watch opens a signal, the **predicted** payment schedule at that
+moment is stored. After those settlement clocks pass,
+`GET /api/v1/funding-arb/signals` and `GET /api/v1/funding-arb/signals/{id}`
+include `review`: actual settled rates versus that prediction, whether
+the trade was still profitable after fees, and the difference
+(`deltaNet`). Clocks that have not printed yet are `pending`.
+
 This is **not** an executable arb and **not** financial advice.
 
 ## Where the code lives
@@ -74,8 +81,8 @@ This is **not** an executable arb and **not** financial advice.
 | Domain | `backend/internal/domain/funding_arb.go`, `funding_arb_history.go`, `funding_arb_watch.go` |
 | Quote | `backend/internal/service/market/funding_arb.go` |
 | Watches | `backend/internal/service/fundingarb/`, `backend/internal/adapter/fundingarbstore/` |
-| HTTP | `GET /api/v1/market/funding-arb`, `/scan`, `/history`; `POST /api/v1/funding-arb/watches` (omit `symbol` = scan follow) |
-| MCP / AI | `get_funding_arb`, `scan_funding_arb`, `get_funding_arb_history`, `create_funding_arb_watch`, `list_funding_arb_watches`, `get_funding_arb_watch`, `delete_funding_arb_watch`, `list_funding_arb_signals` |
+| HTTP | `GET /api/v1/market/funding-arb`, `/scan`, `/history`; `POST /api/v1/funding-arb/watches` (omit `symbol` = scan follow); `GET /api/v1/funding-arb/signals`, `GET /api/v1/funding-arb/signals/{id}` (predicted vs settled) |
+| MCP / AI | `get_funding_arb`, `scan_funding_arb`, `get_funding_arb_history`, `create_funding_arb_watch`, `list_funding_arb_watches`, `get_funding_arb_watch`, `delete_funding_arb_watch`, `list_funding_arb_signals`, `get_funding_arb_signal` |
 | Telegram | `/fundingarb`, `/fundingarb scan`, `/fundingarb hist <sym> <from> <to>` |
 
 ## How to verify

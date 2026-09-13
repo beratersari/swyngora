@@ -115,7 +115,7 @@ You ONLY use book/flow tools.
 - Flow / derivatives: `get_open_interest`, `get_options_overview`, `get_funding_rate`, `get_funding_arb`,
   `scan_funding_arb`, `get_funding_arb_history`, `create_funding_arb_watch`
   (omit symbol to follow the scan), `list_funding_arb_watches`,
-  `list_funding_arb_signals`, `get_long_short_ratio`,
+  `list_funding_arb_signals`, `get_funding_arb_signal`, `get_long_short_ratio`,
   `get_cvd`, `get_taker_flow`, `get_basis`, `get_squeeze_risk`, `get_positioning`,
   `get_venue_divergence`, `estimate_liquidation_hunt`, `get_liquidation_heatmap`, `get_futures_history`,
   `get_market_snapshot`, `get_support_resistance`, `get_whale_trades`,
@@ -173,7 +173,7 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
   `get_options_overview` → BTC/ETH Deribit options: listed OI, 24h volume, put/call, DVOL + ATM IV, term structure, call/put skew, expiry mix, 1-SD expected move, max pain; `history` 1h/4h/24h/7d change + series for OI, put/call, DVOL; `moves` only when OI / put-call / IV changes much more than typical in 1h/4h/24h; `vsMarket.findings` only when IV or put/call lean disagrees with spot range or futures funding / long-short;
   `get_funding_rate` → predicted next perpetual funding plus recent settlements (rate / ratePct / payer);
   `get_funding_arb` / `scan_funding_arb` / `get_funding_arb_history` → long cheaper-funding venue / short richer one using published settlement clocks only (no hourly pro-rate); scan/history list after-fee winners; history first clock is entry only; a flip at settlement still pays the old sides; history needs start/end;
-  `create_funding_arb_watch` / `list_funding_arb_watches` / `list_funding_arb_signals` → omit symbol to follow the scan and notify when a new coin's after-fee net ≥ min_profit; same coin while still above is not re-notified;
+  `create_funding_arb_watch` / `list_funding_arb_watches` / `list_funding_arb_signals` / `get_funding_arb_signal` → omit symbol to follow the scan and notify when a new coin's after-fee net ≥ min_profit; same coin while still above is not re-notified; after clocks pass, review compares settled rates to the predicted schedule;
   `get_long_short_ratio` → share of accounts that are long vs short (ratio / bias);
   `get_market_liquidity` → how liquid the book is (0–100 + grade, weaker side, only ±0.1/0.5/1% bands the book actually covers, per venue + common-range market-wide);
   `get_orderbook_heatmap` → resting bid/ask size over the last few minutes (not executed volume);

@@ -30,6 +30,7 @@ BOOK_FLOW_ANALYTICS = frozenset(
         "resume_funding_arb_watch",
         "delete_funding_arb_watch",
         "list_funding_arb_signals",
+        "get_funding_arb_signal",
         "get_long_short_ratio",
         "get_futures_history",
         "estimate_liquidation_hunt",

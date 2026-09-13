@@ -26,6 +26,17 @@ func (f *fakeQuotes) ScanFundingArb(context.Context, market.FundingArbScanParams
 	return f.scan, f.err
 }
 
+type fakeSettled struct {
+	pts map[string][]domain.FundingPoint
+}
+
+func (f *fakeSettled) ListSettledFunding(_ context.Context, ex domain.Exchange, symbol string, _, _ time.Time) ([]domain.FundingPoint, error) {
+	if f == nil || f.pts == nil {
+		return nil, nil
+	}
+	return f.pts[string(ex)+":"+symbol], nil
+}
+
 type fakeNotify struct {
 	n int
 }
@@ -323,5 +334,53 @@ func TestCreateWatch_BadMinProfit(t *testing.T) {
 	_, err = svc.CreateWatch(context.Background(), CreateInput{ClientID: "c1", Symbol: "BTCUSDT", MinProfit: 0})
 	if err == nil {
 		t.Fatal("minProfit")
+	}
+}
+
+func TestGetSignal_ReviewComparesSettledRates(t *testing.T) {
+	st, err := fundingarbstore.Open(filepath.Join(t.TempDir(), "fa.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	clk := time.Date(2026, 8, 20, 8, 0, 0, 0, time.UTC)
+	q := &fakeQuotes{rep: &domain.FundingArbReport{
+		Symbol: "BTCUSDT", HorizonNet: 12,
+		Trade: &domain.FundingArbTradeView{LongExchange: "binance", ShortExchange: "bybit", WorthIt: true},
+		Expected: &domain.FundingArbExpected{
+			Notional: 10_000, HoldHours: 24, ExpectedNet: 12, HorizonFunding: 52, RoundTripFee: 40,
+			LongExchange: domain.ExchangeBinance, ShortExchange: domain.ExchangeBybit,
+			Payments: []domain.FundingArbExpectedPayment{
+				{Time: clk, Exchange: domain.ExchangeBinance, Rate: 0.0001, Amount: -1},
+				{Time: clk, Exchange: domain.ExchangeBybit, Rate: 0.0013, Amount: 13},
+			},
+		},
+	}}
+	svc := New(st, q)
+	svc.SetSettledFunding(&fakeSettled{pts: map[string][]domain.FundingPoint{
+		"binance:BTCUSDT": {{Time: clk, Rate: 0.0001}},
+		"bybit:BTCUSDT":   {{Time: clk, Rate: 0.0004}},
+	}})
+	if _, err := svc.CreateWatch(context.Background(), CreateInput{
+		ClientID: "client-a", Symbol: "BTCUSDT", Notional: 10000, HoldHours: 24, MinProfit: 5,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := svc.ProcessActiveWatches(context.Background(), clk.Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	sigs, err := svc.ListSignals(context.Background(), "client-a", "open", 10)
+	if err != nil || len(sigs) != 1 || sigs[0].Expected == nil {
+		t.Fatalf("expected snapshot %+v %v", sigs, err)
+	}
+	got, err := svc.GetSignal(context.Background(), "client-a", sigs[0].ID)
+	if err != nil || got.Review == nil || !got.Review.Complete {
+		t.Fatalf("review %+v %v", got, err)
+	}
+	if got.Review.ActualFunding != 3 { // -1 + 4
+		t.Fatalf("actual funding %g", got.Review.ActualFunding)
+	}
+	if got.Review.StillWorthIt {
+		t.Fatalf("should not be worth it after weaker settle: %+v", got.Review)
 	}
 }

@@ -1090,6 +1090,11 @@ class FundingArbSignalListInput(BaseModel):
     limit: int = 50
 
 
+class FundingArbSignalIdInput(BaseModel):
+    client_id: str
+    signal_id: str
+
+
 class MarketLiquidityInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
     exchange: str = Field(
@@ -2629,6 +2634,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if limit:
             params["limit"] = limit
         return http.get("/api/v1/funding-arb/signals", params)
+
+    def get_funding_arb_signal(client_id: str, signal_id: str) -> str:
+        return http.get(
+            f"/api/v1/funding-arb/signals/{signal_id}",
+            {"clientId": client_id},
+        )
 
     def get_market_liquidity(symbol: str, exchange: str = "all") -> str:
         return http.get(
@@ -4465,8 +4476,14 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         StructuredTool.from_function(
             list_funding_arb_signals,
             name="list_funding_arb_signals",
-            description="List funding-arb crossings above minProfit (status open|closed|all).",
+            description="List funding-arb crossings above minProfit (status open|closed|all). Includes predicted-vs-settled review when clocks have passed.",
             args_schema=FundingArbSignalListInput,
+        ),
+        StructuredTool.from_function(
+            get_funding_arb_signal,
+            name="get_funding_arb_signal",
+            description="One funding-arb crossing plus predicted-vs-settled review after funding clocks pass.",
+            args_schema=FundingArbSignalIdInput,
         ),
         StructuredTool.from_function(
             get_long_short_ratio,

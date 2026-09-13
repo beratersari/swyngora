@@ -56,6 +56,7 @@ type DataPort interface {
 	ResumeFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	DeleteFundingArbWatch(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListFundingArbSignals(ctx context.Context, clientID, status string, limit int) (json.RawMessage, error)
+	GetFundingArbSignal(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error)
 	GetLiquidationHunt(ctx context.Context, exchange, symbol string, weights domain.HuntScoreWeights) (json.RawMessage, error)
@@ -853,8 +854,28 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
+	addTool(mcp.NewTool("get_funding_arb_signal",
+		mcp.WithDescription("One funding-arb crossing plus predicted-vs-settled review after funding clocks pass."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("id", mcp.Required(), mcp.Description("Signal id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		id, err := req.RequireString("id")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetFundingArbSignal(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
 	addTool(mcp.NewTool("list_funding_arb_signals",
-		mcp.WithDescription("List funding-arb crossings above minProfit (status open|closed|all)."),
+		mcp.WithDescription("List funding-arb crossings above minProfit (status open|closed|all). Includes predicted-vs-settled review when clocks have passed."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("status", mcp.Description("open | closed | all")),
 		mcp.WithNumber("limit", mcp.Description("Max rows (default 50)")),
