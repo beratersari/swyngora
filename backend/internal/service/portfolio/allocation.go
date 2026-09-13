@@ -186,12 +186,7 @@ func (s *Service) ExecuteAllocationRebalance(ctx context.Context, clientID, bask
 			continue
 		}
 		out.Status = domain.RebalanceLegFilled
-		if tr != nil {
-			out.TradeID = tr.ID
-			out.FilledQty = tr.Quantity
-			out.FillPrice = tr.Price
-			out.FillNotional = tr.Notional
-		}
+		domain.ApplyRebalanceFill(&out, tr)
 		outcomes = append(outcomes, out)
 	}
 	after, _, err := s.buildAllocationPlan(ctx, clientID, basketID, portfolioID...)

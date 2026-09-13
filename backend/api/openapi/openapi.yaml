@@ -10336,6 +10336,9 @@ components:
         remainingAbsDriftPct: { type: number, description: Sum of |afterPct − targetPct| }
         maxSleeveDriftPct: { type: number }
         remainingNotional: { type: number, description: Sum of leftover |target − after| value }
+        totalFee: { type: number, description: Sum of paper taker fees (quote) }
+        totalSlippage: { type: number, description: Sum of adverse fill vs last (quote) }
+        totalCost: { type: number, description: totalFee + totalSlippage }
         summary: { type: string }
         note: { type: string }
         createdAt: { type: string, format: date-time }
@@ -10361,6 +10364,9 @@ components:
         filledQuantity: { type: number }
         fillPrice: { type: number }
         fillNotional: { type: number }
+        lastPrice: { type: number, description: Venue last before paper slippage }
+        fee: { type: number, description: Quote-currency taker fee }
+        slippage: { type: number, description: Adverse quote impact vs last }
         error: { type: string }
     RebalanceLineSnapshot:
       type: object

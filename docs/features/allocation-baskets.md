@@ -10,7 +10,7 @@ Investors think in mixes (“50% BTC, 30% ETH, 20% USDT”). Prices drift. Users
 2. Cash sleeve uses the portfolio currency (`USDT` by default). Coins trade as `{ASSET}{currency}` on the target exchange (default binance).
 3. **GET** a basket to see live `actualPct` vs `targetPct`. Drift is allowed indefinitely.
 4. **Preview** lists proposed market sells (overweight + coins not in the basket) then buys (underweight). No trades.
-5. **POST rebalance** is the only path that trades — sells first, then buys at last price, using available (unreserved) cash/qty. Tiny deltas under 1 USDT are skipped. Each run is **stored** as a result (filled vs failed legs, leftover mix vs target). List/get later.
+5. **POST rebalance** is the only path that trades — sells first, then buys at last price **plus paper fee and slippage**, using available (unreserved) cash/qty. Tiny deltas under 1 USDT are skipped. Each run is **stored** as a result (filled vs failed legs, leftover mix vs target, **per-leg planned/fill/fee/slippage** and totals). List/get later.
 6. Changing the basket name/targets **does not trade**. There is **no worker** and no auto-rebalance.
 
 Spot equity only (`cash + spot marks` in the portfolio quote). Margin positions are ignored. Out-of-basket coins are treated as 0% target and **sold on rebalance** (shown in preview as `reason=not_in_basket`).
@@ -64,6 +64,6 @@ go test ./internal/domain/ ./internal/service/portfolio/ ./internal/transport/ht
 
 ## Limitations
 
-- Paper market orders only; no limit rebalance. Rebalance legs use the same fee and slippage as other paper market fills.
+- Paper market orders only; no limit rebalance. Rebalance legs use the same fee and slippage as other paper market fills. The stored result shows preview price vs fill, per-leg fee/slippage, and run totals.
 - Only pairs quoted in the portfolio currency count toward the mix.
 - Reserved open-order size cannot be sold until released.

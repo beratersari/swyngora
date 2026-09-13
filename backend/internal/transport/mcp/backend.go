@@ -3625,7 +3625,9 @@ func rebalanceResultMap(r *domain.RebalanceResult, kids bool) map[string]any {
 		"beforeEquity": r.BeforeEquity, "afterEquity": r.AfterEquity,
 		"beforeCash": r.BeforeCash, "afterCash": r.AfterCash,
 		"remainingAbsDriftPct": r.RemainingAbsDriftPct, "maxSleeveDriftPct": r.MaxSleeveDriftPct,
-		"remainingNotional": r.RemainingNotional, "summary": r.Summary, "note": r.Note,
+		"remainingNotional": r.RemainingNotional,
+		"totalFee": r.TotalFee, "totalSlippage": r.TotalSlippage, "totalCost": r.TotalCost,
+		"summary": r.Summary, "note": r.Note,
 		"createdAt": r.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 	if !kids {
@@ -3638,6 +3640,7 @@ func rebalanceResultMap(r *domain.RebalanceResult, kids bool) map[string]any {
 			"reason": l.Reason, "plannedQuantity": l.PlannedQty, "plannedPrice": l.PlannedPrice,
 			"plannedNotional": l.PlannedNotional, "status": l.Status, "tradeId": l.TradeID,
 			"filledQuantity": l.FilledQty, "fillPrice": l.FillPrice, "fillNotional": l.FillNotional,
+			"lastPrice": l.LastPrice, "fee": l.Fee, "slippage": l.Slippage,
 			"error": l.Error,
 		})
 	}

@@ -118,3 +118,53 @@ func TestAllocationBasket_ListDelete(t *testing.T) {
 		t.Fatalf("left %v", list)
 	}
 }
+
+func TestAllocationRebalance_RecordsFeeAndSlippage(t *testing.T) {
+	px := &fakePx{prices: map[string]string{
+		"binance|BTCUSDT": "100",
+		"binance|ETHUSDT": "50",
+	}}
+	svc := newSvcWithCosts(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "bsk-cost", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "bsk-cost", Symbol: "BTCUSDT", Side: "buy", Quantity: 80}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := svc.CreateAllocationBasket(ctx, AllocationBasketCreateInput{
+		ClientID: "bsk-cost", Name: "Core",
+		Targets: []domain.AllocationTarget{
+			{Asset: "BTC", WeightPct: 50},
+			{Asset: "ETH", WeightPct: 30},
+			{Asset: "USDT", WeightPct: 20},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := svc.ExecuteAllocationRebalance(ctx, "bsk-cost", b.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.TotalFee <= 0 || run.TotalSlippage <= 0 || run.TotalCost < run.TotalFee {
+		t.Fatalf("want paper costs %+v", run)
+	}
+	var sawSell bool
+	for _, leg := range run.Legs {
+		if leg.Status != domain.RebalanceLegFilled || leg.Side != domain.TradeSideSell {
+			continue
+		}
+		if leg.Fee <= 0 || leg.Slippage <= 0 || leg.LastPrice <= 0 || leg.FillPrice >= leg.LastPrice {
+			t.Fatalf("sell cost %+v", leg)
+		}
+		sawSell = true
+	}
+	if !sawSell {
+		t.Fatal("expected a filled sell with fee and slippage")
+	}
+	got, err := svc.GetRebalanceResult(ctx, "bsk-cost", run.ID)
+	if err != nil || got.TotalFee != run.TotalFee {
+		t.Fatalf("stored costs %+v %v", got, err)
+	}
+}

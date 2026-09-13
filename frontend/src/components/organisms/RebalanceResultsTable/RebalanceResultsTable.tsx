@@ -38,6 +38,13 @@ export function RebalanceResultsTable({
           return (
             <Detail>
               <Text variant="bodySm">{body.summary || t('rebalance.noSummary')}</Text>
+              <Text variant="caption" color="secondary">
+                {t('rebalance.costLine', {
+                  fee: formatRebalanceMoney(body.totalFee, body.currency),
+                  slip: formatRebalanceMoney(body.totalSlippage, body.currency),
+                  total: formatRebalanceMoney(body.totalCost, body.currency),
+                })}
+              </Text>
               {detailLoading && expandedId === row.id ? (
                 <Text variant="caption" color="secondary">
                   {t('rebalance.loadingDetail')}
@@ -57,13 +64,22 @@ export function RebalanceResultsTable({
                     render: (_, l) => t(legStatusKey(l.status)),
                   },
                   {
-                    title: t('rebalance.planned'),
-                    render: (_, l) => formatRebalanceMoney(l.plannedNotional, body.currency),
+                    title: t('rebalance.plannedPrice'),
+                    render: (_, l) => formatRebalanceMoney(l.plannedPrice),
                   },
                   {
-                    title: t('rebalance.filled'),
+                    title: t('rebalance.fillPrice'),
+                    render: (_, l) => (l.status === 'filled' ? formatRebalanceMoney(l.fillPrice) : '—'),
+                  },
+                  {
+                    title: t('rebalance.fee'),
                     render: (_, l) =>
-                      l.status === 'filled' ? formatRebalanceMoney(l.fillNotional, body.currency) : '—',
+                      l.status === 'filled' ? formatRebalanceMoney(l.fee, body.currency) : '—',
+                  },
+                  {
+                    title: t('rebalance.slippage'),
+                    render: (_, l) =>
+                      l.status === 'filled' ? formatRebalanceMoney(l.slippage, body.currency) : '—',
                   },
                   {
                     title: t('rebalance.error'),
@@ -106,6 +122,10 @@ export function RebalanceResultsTable({
         {
           title: t('rebalance.leftoverPct'),
           render: (_, r) => formatRebalancePct(r.remainingAbsDriftPct),
+        },
+        {
+          title: t('rebalance.costs'),
+          render: (_, r) => formatRebalanceMoney(r.totalCost, r.currency),
         },
       ]}
     />

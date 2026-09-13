@@ -75,6 +75,9 @@ type rebalanceLegOutcomeDTO struct {
 	FilledQty       float64 `json:"filledQuantity,omitempty"`
 	FillPrice       float64 `json:"fillPrice,omitempty"`
 	FillNotional    float64 `json:"fillNotional,omitempty"`
+	LastPrice       float64 `json:"lastPrice,omitempty"`
+	Fee             float64 `json:"fee,omitempty"`
+	Slippage        float64 `json:"slippage,omitempty"`
 	Error           string  `json:"error,omitempty"`
 }
 
@@ -109,6 +112,9 @@ type rebalanceResultDTO struct {
 	RemainingAbsDriftPct float64                  `json:"remainingAbsDriftPct"`
 	MaxSleeveDriftPct    float64                  `json:"maxSleeveDriftPct"`
 	RemainingNotional    float64                  `json:"remainingNotional"`
+	TotalFee             float64                  `json:"totalFee"`
+	TotalSlippage        float64                  `json:"totalSlippage"`
+	TotalCost            float64                  `json:"totalCost"`
 	Summary              string                   `json:"summary"`
 	Note                 string                   `json:"note"`
 	CreatedAt            string                   `json:"createdAt"`
@@ -124,7 +130,9 @@ func rebalanceResultToDTO(r *domain.RebalanceResult, includeKids bool) rebalance
 		BeforeEquity: r.BeforeEquity, AfterEquity: r.AfterEquity,
 		BeforeCash: r.BeforeCash, AfterCash: r.AfterCash,
 		RemainingAbsDriftPct: r.RemainingAbsDriftPct, MaxSleeveDriftPct: r.MaxSleeveDriftPct,
-		RemainingNotional: r.RemainingNotional, Summary: r.Summary, Note: r.Note,
+		RemainingNotional: r.RemainingNotional,
+		TotalFee: r.TotalFee, TotalSlippage: r.TotalSlippage, TotalCost: r.TotalCost,
+		Summary: r.Summary, Note: r.Note,
 		CreatedAt: r.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 	if !includeKids {
@@ -136,7 +144,7 @@ func rebalanceResultToDTO(r *domain.RebalanceResult, includeKids bool) rebalance
 			Side: string(l.Side), Asset: l.Asset, Exchange: string(l.Exchange), Symbol: l.Symbol, Reason: l.Reason,
 			PlannedQty: l.PlannedQty, PlannedPrice: l.PlannedPrice, PlannedNotional: l.PlannedNotional,
 			Status: l.Status, TradeID: l.TradeID, FilledQty: l.FilledQty, FillPrice: l.FillPrice,
-			FillNotional: l.FillNotional, Error: l.Error,
+			FillNotional: l.FillNotional, LastPrice: l.LastPrice, Fee: l.Fee, Slippage: l.Slippage, Error: l.Error,
 		})
 	}
 	d.Lines = make([]rebalanceLineDTO, 0, len(r.Lines))

@@ -6409,6 +6409,12 @@ export interface components {
             remainingAbsDriftPct?: number;
             maxSleeveDriftPct?: number;
             remainingNotional?: number;
+            /** @description Sum of paper taker fees (quote) */
+            totalFee?: number;
+            /** @description Sum of adverse fill vs last (quote) */
+            totalSlippage?: number;
+            /** @description totalFee + totalSlippage */
+            totalCost?: number;
             summary?: string;
             note?: string;
             /** Format: date-time */
@@ -6432,6 +6438,12 @@ export interface components {
             filledQuantity?: number;
             fillPrice?: number;
             fillNotional?: number;
+            /** @description Venue last before paper slippage */
+            lastPrice?: number;
+            /** @description Quote-currency taker fee */
+            fee?: number;
+            /** @description Adverse quote impact vs last */
+            slippage?: number;
             error?: string;
         };
         RebalanceLineSnapshot: {

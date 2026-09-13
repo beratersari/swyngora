@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
 
 ### Added
-- **Paper rebalance results:** each basket rebalance stores filled vs failed legs, leftover mix vs target, and sleeve before/after weights. List/get later (`GET /api/v1/portfolio/rebalances`, web `/portfolio`) (`docs/features/allocation-baskets.md`)
+- **Paper rebalance results:** each basket rebalance stores filled vs failed legs, leftover mix vs target, sleeve before/after weights, and paper **fee + slippage** (per leg and totals). List/get later (`GET /api/v1/portfolio/rebalances`, web `/portfolio`) (`docs/features/allocation-baskets.md`)
 - **Price-diff opportunity path:** each gap keeps how long it stayed open, the peak after-fee edge, when it started fading, why it closed, and sampled book-walk ticks (`GET /api/v1/price-diff/opportunities/{id}`, web `/arb`) (`docs/features/price-diff.md`)
 - **Funding-arb predicted vs settled:** a watch signal stores the expected payment schedule at open. After those clocks pass, `GET /api/v1/funding-arb/signals` and `GET /api/v1/funding-arb/signals/{id}` show actual net versus expected, the difference, and whether it was still profitable (`docs/features/funding-arb.md`)
 - **Cross-exchange desk:** web `/arb` scans live book gaps and after-fee funding carries, and can follow them (`docs/features/price-diff.md`, `docs/features/funding-arb.md`)

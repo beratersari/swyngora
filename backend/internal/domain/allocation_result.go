@@ -38,6 +38,9 @@ type RebalanceLegOutcome struct {
 	FilledQty       float64
 	FillPrice       float64
 	FillNotional    float64
+	LastPrice       float64 // venue last before paper slippage
+	Fee             float64 // quote-currency taker fee
+	Slippage        float64 // adverse quote impact vs last
 	Error           string
 }
 
@@ -74,6 +77,9 @@ type RebalanceResult struct {
 	RemainingAbsDriftPct float64
 	MaxSleeveDriftPct    float64
 	RemainingNotional    float64
+	TotalFee             float64
+	TotalSlippage        float64
+	TotalCost            float64 // fee + slippage
 	Summary              string
 	Note                 string
 	CreatedAt            time.Time
@@ -87,10 +93,14 @@ func BuildRebalanceResult(id string, basket AllocationBasket, before, after Reba
 		now = time.Now().UTC()
 	}
 	filled, failed := 0, 0
+	var totalFee, totalSlip float64
 	for i := range legs {
 		switch legs[i].Status {
 		case RebalanceLegFilled:
 			filled++
+			FinishRebalanceLegCosts(&legs[i])
+			totalFee += legs[i].Fee
+			totalSlip += legs[i].Slippage
 		case RebalanceLegFailed:
 			failed++
 		}
@@ -137,6 +147,7 @@ func BuildRebalanceResult(id string, basket AllocationBasket, before, after Reba
 		BeforeEquity: before.Equity, AfterEquity: after.Equity,
 		BeforeCash: before.Cash, AfterCash: after.Cash,
 		RemainingAbsDriftPct: remAbs, MaxSleeveDriftPct: maxDrift, RemainingNotional: remNotional,
+		TotalFee: totalFee, TotalSlippage: totalSlip, TotalCost: totalFee + totalSlip,
 		CreatedAt: now, Legs: legs, Lines: lines,
 	}
 	r.Summary = rebalanceResultSummary(r)
@@ -161,8 +172,58 @@ func rebalanceResultSummary(r RebalanceResult) string {
 	if r.Status != RebalanceResultNoTrades {
 		fmt.Fprintf(&b, " Remaining mix drift %.2f%% (largest sleeve %.2f%%, leftover %.2f %s).",
 			r.RemainingAbsDriftPct, r.MaxSleeveDriftPct, r.RemainingNotional, r.Currency)
+		if r.TotalCost > 0 {
+			fmt.Fprintf(&b, " Paper costs %.2f %s (fees %.2f, slippage %.2f).",
+				r.TotalCost, r.Currency, r.TotalFee, r.TotalSlippage)
+		}
 	}
 	return b.String()
+}
+
+// ApplyRebalanceFill copies a paper trade onto a planned leg and derives costs.
+func ApplyRebalanceFill(o *RebalanceLegOutcome, tr *Trade) {
+	if o == nil || tr == nil {
+		return
+	}
+	o.TradeID = tr.ID
+	o.FilledQty = tr.Quantity
+	o.FillPrice = tr.Price
+	o.FillNotional = tr.Notional
+	o.LastPrice = tr.LastPrice
+	o.Fee = tr.Fee
+	FinishRebalanceLegCosts(o)
+}
+
+// FinishRebalanceLegCosts fills slippage from last vs fill when missing.
+func FinishRebalanceLegCosts(o *RebalanceLegOutcome) {
+	if o == nil || o.FilledQty <= 0 || o.FillPrice <= 0 {
+		return
+	}
+	last := o.LastPrice
+	if last <= 0 {
+		last = o.PlannedPrice
+	}
+	if o.Slippage <= 0 {
+		o.Slippage = AdverseSlippageNotional(o.Side, last, o.FillPrice, o.FilledQty)
+	}
+}
+
+// AdverseSlippageNotional is the quote-currency cost of fill vs last (buys pay more, sells receive less).
+func AdverseSlippageNotional(side TradeSide, last, fill, qty float64) float64 {
+	if qty <= 0 || last <= 0 || fill <= 0 || math.IsNaN(last) || math.IsNaN(fill) {
+		return 0
+	}
+	switch side {
+	case TradeSideBuy:
+		if fill > last {
+			return (fill - last) * qty
+		}
+	case TradeSideSell:
+		if last > fill {
+			return (last - fill) * qty
+		}
+	}
+	return 0
 }
 
 func rebalanceResultNote(r RebalanceResult) string {

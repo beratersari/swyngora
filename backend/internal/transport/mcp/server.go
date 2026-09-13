@@ -3425,7 +3425,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_portfolio_rebalance",
-		mcp.WithDescription("Get one stored paper rebalance result: which legs filled or failed, leftover drift vs target, and sleeve before/after weights."),
+		mcp.WithDescription("Get one stored paper rebalance result: which legs filled or failed, leftover drift vs target, sleeve before/after, and paper fee plus slippage (per leg and totals)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("rebalanceId", mcp.Required(), mcp.Description("Rebalance result id")),
