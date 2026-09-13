@@ -59,6 +59,27 @@ func TestBuildRebalanceResult_NoTrades(t *testing.T) {
 	}
 }
 
+func TestRebalanceCanContinue_LeftoverAndAttempts(t *testing.T) {
+	r := BuildRebalanceResult("r3", AllocationBasket{ID: "b", ClientID: "c", Name: "Core"},
+		RebalancePlan{Currency: "USDT", Equity: 10000, Cash: 1500, Lines: []AllocationLine{
+			{Asset: "BTC", TargetPct: 50, ActualPct: 65, CurrentValue: 6500, TargetValue: 5000, DeltaValue: -1500},
+		}},
+		RebalancePlan{Currency: "USDT", Equity: 10000, Cash: 2200, Lines: []AllocationLine{
+			{Asset: "BTC", TargetPct: 50, ActualPct: 52, CurrentValue: 5200, TargetValue: 5000, DeltaValue: -200},
+		}},
+		[]RebalanceLegOutcome{{Side: TradeSideSell, Asset: "BTC", Status: RebalanceLegFilled, FilledQty: 13, FillPrice: 100}},
+		time.Now().UTC())
+	if r.Status != RebalanceResultPartial || !r.CanContinue || r.AttemptCount != 1 {
+		t.Fatalf("%+v", r)
+	}
+	done := r
+	done.RemainingNotional = 0.5
+	done.Status = RebalanceAttemptStatus(done.RemainingNotional, done.FilledLegs, done.FailedLegs, done.PlannedLegs)
+	if RebalanceCanContinue(done) {
+		t.Fatal("tiny leftover should not continue")
+	}
+}
+
 func TestAdverseSlippageNotional(t *testing.T) {
 	if got := AdverseSlippageNotional(TradeSideSell, 100, 99.8, 10); got < 1.99 || got > 2.01 {
 		t.Fatalf("sell slip %v", got)

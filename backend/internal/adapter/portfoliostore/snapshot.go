@@ -263,6 +263,7 @@ func (s *SQLite) txDeleteBook(ctx context.Context, tx *sql.Tx, id string) error 
 		`DELETE FROM risk_limits WHERE client_id = ?`,
 		`DELETE FROM allocation_rebalance_legs WHERE rebalance_id IN (SELECT id FROM allocation_rebalances WHERE client_id = ?)`,
 		`DELETE FROM allocation_rebalance_lines WHERE rebalance_id IN (SELECT id FROM allocation_rebalances WHERE client_id = ?)`,
+		`DELETE FROM allocation_rebalance_attempts WHERE rebalance_id IN (SELECT id FROM allocation_rebalances WHERE client_id = ?)`,
 		`DELETE FROM allocation_rebalances WHERE client_id = ?`,
 		`DELETE FROM allocation_targets WHERE basket_id IN (SELECT id FROM allocation_baskets WHERE client_id = ?)`,
 		`DELETE FROM allocation_baskets WHERE client_id = ?`,

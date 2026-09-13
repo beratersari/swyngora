@@ -5449,6 +5449,36 @@ paths:
           description: Result summaries
         '404':
           $ref: '#/components/responses/Error'
+  /api/v1/portfolio/rebalances/{id}/continue:
+    post:
+      summary: Continue a stored paper rebalance
+      description: |
+        Re-plans leftover mix from the **current** book and appends a new attempt.
+        Does not replay legs that already filled. Use after partial, failed, or
+        interrupted runs. Paper trading — not real money.
+      operationId: continuePortfolioRebalance
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Updated rebalance result with the new attempt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RebalanceResult' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /api/v1/portfolio/rebalances/{id}:
     get:
       summary: Get one stored paper rebalance result
@@ -10325,7 +10355,7 @@ components:
         basketId: { type: string }
         basketName: { type: string }
         currency: { type: string }
-        status: { type: string, enum: [completed, partial, failed, no_trades] }
+        status: { type: string, enum: [completed, partial, failed, no_trades, running, interrupted] }
         plannedLegs: { type: integer }
         filledLegs: { type: integer }
         failedLegs: { type: integer }
@@ -10342,6 +10372,12 @@ components:
         summary: { type: string }
         note: { type: string }
         createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        attemptCount: { type: integer }
+        canContinue: { type: boolean }
+        attempts:
+          type: array
+          items: { $ref: '#/components/schemas/RebalanceAttempt' }
         legs:
           type: array
           items: { $ref: '#/components/schemas/RebalanceLegOutcome' }
@@ -10368,6 +10404,20 @@ components:
         fee: { type: number, description: Quote-currency taker fee }
         slippage: { type: number, description: Adverse quote impact vs last }
         error: { type: string }
+        attempt: { type: integer }
+    RebalanceAttempt:
+      type: object
+      properties:
+        seq: { type: integer }
+        status: { type: string }
+        plannedLegs: { type: integer }
+        filledLegs: { type: integer }
+        failedLegs: { type: integer }
+        totalFee: { type: number }
+        totalSlippage: { type: number }
+        totalCost: { type: number }
+        summary: { type: string }
+        createdAt: { type: string, format: date-time }
     RebalanceLineSnapshot:
       type: object
       properties:

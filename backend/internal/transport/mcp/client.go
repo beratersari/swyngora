@@ -2149,6 +2149,18 @@ func (c *APIClient) GetPortfolioRebalance(ctx context.Context, clientID, id stri
 	return c.get(ctx, "/api/v1/portfolio/rebalances/"+url.PathEscape(id), q)
 }
 
+func (c *APIClient) ContinuePortfolioRebalance(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/portfolio/rebalances/" + url.PathEscape(id) + "/continue"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodPost, path, map[string]any{})
+}
+
 // DeleteRecurringBuyPlan deletes a plan.
 func (c *APIClient) DeleteRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error) {
 	q := url.Values{}

@@ -6397,7 +6397,9 @@ export interface components {
             basketName?: string;
             currency?: string;
             /** @enum {string} */
-            status?: "completed" | "partial" | "failed" | "no_trades";
+            status?: "completed" | "partial" | "failed" | "no_trades" | "running" | "interrupted";
+            attemptCount?: number;
+            canContinue?: boolean;
             plannedLegs?: number;
             filledLegs?: number;
             failedLegs?: number;

@@ -10,7 +10,7 @@ Investors think in mixes (“50% BTC, 30% ETH, 20% USDT”). Prices drift. Users
 2. Cash sleeve uses the portfolio currency (`USDT` by default). Coins trade as `{ASSET}{currency}` on the target exchange (default binance).
 3. **GET** a basket to see live `actualPct` vs `targetPct`. Drift is allowed indefinitely.
 4. **Preview** lists proposed market sells (overweight + coins not in the basket) then buys (underweight). No trades.
-5. **POST rebalance** is the only path that trades — sells first, then buys at last price **plus paper fee and slippage**, using available (unreserved) cash/qty. Tiny deltas under 1 USDT are skipped. Each run is **stored** as a result (filled vs failed legs, leftover mix vs target, **per-leg planned/fill/fee/slippage** and totals). List/get later.
+5. **POST rebalance** is the only path that trades — sells first, then buys at last price **plus paper fee and slippage**, using available (unreserved) cash/qty. Tiny deltas under 1 USDT are skipped. Legs are stored as they fill. If a run stops mid-way, **POST continue** re-plans leftover mix from the **current** book (does not replay filled legs) and appends a new **attempt**. List/get later to see attempt 1 vs later continues.
 6. Changing the basket name/targets **does not trade**. There is **no worker** and no auto-rebalance.
 
 Spot equity only (`cash + spot marks` in the portfolio quote). Margin positions are ignored. Out-of-basket coins are treated as 0% target and **sold on rebalance** (shown in preview as `reason=not_in_basket`).
@@ -30,7 +30,8 @@ Informational simulation — not financial advice, not real money.
 | `POST` | `/api/v1/portfolio/baskets/{id}/rebalance` | **Yes** (user click only) — returns and stores a result |
 | `GET` | `/api/v1/portfolio/baskets/{id}/rebalances` | No (run summaries) |
 | `GET` | `/api/v1/portfolio/rebalances` | No (book-wide summaries) |
-| `GET` | `/api/v1/portfolio/rebalances/{id}` | No (full result: legs + leftover mix) |
+| `GET` | `/api/v1/portfolio/rebalances/{id}` | No (full result: legs + leftover mix + attempts) |
+| `POST` | `/api/v1/portfolio/rebalances/{id}/continue` | **Yes** — leftover mix only, new attempt |
 
 Example create:
 
@@ -53,7 +54,7 @@ Example create:
 | Store | `backend/internal/adapter/portfoliostore` (`allocation_baskets`, `allocation_targets`) |
 | Service | `backend/internal/service/portfolio/allocation.go` |
 | HTTP | `backend/internal/transport/http/handler/portfolio_allocation.go` |
-| MCP | `create_portfolio_basket`, `preview_portfolio_rebalance`, `rebalance_portfolio_basket`, `list_portfolio_rebalances`, `get_portfolio_rebalance`, … |
+| MCP | `create_portfolio_basket`, `preview_portfolio_rebalance`, `rebalance_portfolio_basket`, `list_portfolio_rebalances`, `get_portfolio_rebalance`, `continue_portfolio_rebalance`, … |
 
 ## How to test
 

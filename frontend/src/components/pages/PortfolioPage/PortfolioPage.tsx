@@ -27,6 +27,7 @@ import {
   useListMarginPositionsQuery,
   useListPortfolioCashMovementsQuery,
   useListPortfolioOrdersQuery,
+  useContinuePortfolioRebalanceMutation,
   useGetPortfolioRebalanceQuery,
   useListPortfolioRebalancesQuery,
   useListPortfolioTradesQuery,
@@ -136,6 +137,7 @@ export function PortfolioPage() {
   const [setMarginMode, marginModeState] = useSetMarginModeMutation();
   const [placeMargin, placeMarginState] = usePlaceMarginOrderMutation();
   const [closeMargin, closeMarginState] = useCloseMarginPositionMutation();
+  const [continueRebalance, continueRebalanceState] = useContinuePortfolioRebalanceMutation();
 
   const view = rtkCurrent(portfolioQuery);
   const positions = view?.positions ?? [];
@@ -429,6 +431,15 @@ export function PortfolioPage() {
                     onExpand={setExpandedRebalance}
                     detail={rebalanceDetail.data}
                     detailLoading={rebalanceDetail.isFetching}
+                    continueLoading={continueRebalanceState.isLoading}
+                    onContinue={async (id) => {
+                      try {
+                        await continueRebalance({ id, portfolioId: bookId }).unwrap();
+                        void message.success(t('portfolio:rebalance.continueSuccess'));
+                      } catch (err) {
+                        void message.error(rtkErrorMessage(err, { resource: t('portfolio:rebalance.title') }));
+                      }
+                    }}
                   />
                 ),
               },

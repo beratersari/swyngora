@@ -180,6 +180,7 @@ type DataPort interface {
 	RebalancePortfolioBasket(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListPortfolioRebalances(ctx context.Context, clientID, basketID string, limit, offset int) (json.RawMessage, error)
 	GetPortfolioRebalance(ctx context.Context, clientID, id string) (json.RawMessage, error)
+	ContinuePortfolioRebalance(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	PlaceMarginOrder(ctx context.Context, clientID, exchange, symbol, side, orderType string, quantity float64, leverage int, limitPrice float64, stopLoss, takeProfit *float64) (json.RawMessage, error)
 	ListMarginPositions(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetMarginPosition(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -3424,8 +3425,30 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
+	addTool(mcp.NewTool("continue_portfolio_rebalance",
+		mcp.WithDescription("Continue a stored paper rebalance. Re-plans leftover mix from the current book (does not replay filled legs) and appends a new attempt. Use after a partial, failed, or interrupted run."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
+		mcp.WithString("rebalanceId", mcp.Required(), mcp.Description("Rebalance result id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		id, err := req.RequireString("rebalanceId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.ContinuePortfolioRebalance(ctx, clientID, id)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
 	addTool(mcp.NewTool("get_portfolio_rebalance",
-		mcp.WithDescription("Get one stored paper rebalance result: which legs filled or failed, leftover drift vs target, sleeve before/after, and paper fee plus slippage (per leg and totals)."),
+		mcp.WithDescription("Get one stored paper rebalance result: which legs filled or failed, leftover drift vs target, sleeve before/after, paper fee plus slippage, and each attempt if the run was continued."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("rebalanceId", mcp.Required(), mcp.Description("Rebalance result id")),

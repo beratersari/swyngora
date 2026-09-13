@@ -3617,6 +3617,17 @@ func (b *Backend) GetPortfolioRebalance(ctx context.Context, clientID, id string
 	return mustJSON(rebalanceResultMap(res, true))
 }
 
+func (b *Backend) ContinuePortfolioRebalance(ctx context.Context, clientID, id string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	res, err := b.Portfolio.ContinueAllocationRebalance(ctx, clientID, id, PortfolioIDFrom(ctx))
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(rebalanceResultMap(res, true))
+}
+
 func rebalanceResultMap(r *domain.RebalanceResult, kids bool) map[string]any {
 	m := map[string]any{
 		"id": r.ID, "clientId": r.ClientID, "basketId": r.BasketID, "basketName": r.BasketName,
@@ -3629,6 +3640,7 @@ func rebalanceResultMap(r *domain.RebalanceResult, kids bool) map[string]any {
 		"totalFee": r.TotalFee, "totalSlippage": r.TotalSlippage, "totalCost": r.TotalCost,
 		"summary": r.Summary, "note": r.Note,
 		"createdAt": r.CreatedAt.UTC().Format(time.RFC3339Nano),
+		"attemptCount": r.AttemptCount, "canContinue": r.CanContinue,
 	}
 	if !kids {
 		return m

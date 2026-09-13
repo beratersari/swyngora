@@ -7,4 +7,6 @@ export type RebalanceResultsTableProps = {
   onExpand: (id: string | undefined) => void;
   detail?: RebalanceResult;
   detailLoading?: boolean;
+  onContinue?: (id: string) => void;
+  continueLoading?: boolean;
 };

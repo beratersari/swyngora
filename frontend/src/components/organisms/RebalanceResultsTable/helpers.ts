@@ -30,6 +30,10 @@ export function rebalanceStatusKey(status: RebalanceResult['status']): string {
       return 'rebalance.statusFailed';
     case 'no_trades':
       return 'rebalance.statusNone';
+    case 'interrupted':
+      return 'rebalance.statusInterrupted';
+    case 'running':
+      return 'rebalance.statusRunning';
     default:
       return 'rebalance.statusUnknown';
   }

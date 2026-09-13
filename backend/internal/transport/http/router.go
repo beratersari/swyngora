@@ -237,6 +237,7 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("POST /api/v1/portfolio/baskets/{id}/rebalance", ph.RebalanceBasket)
 		mux.HandleFunc("GET /api/v1/portfolio/baskets/{id}/rebalances", ph.ListBasketRebalances)
 		mux.HandleFunc("GET /api/v1/portfolio/rebalances", ph.ListRebalances)
+		mux.HandleFunc("POST /api/v1/portfolio/rebalances/{id}/continue", ph.ContinueRebalance)
 		mux.HandleFunc("GET /api/v1/portfolio/rebalances/{id}", ph.GetRebalance)
 		mux.HandleFunc("GET /api/v1/portfolio/baskets/{id}", ph.GetBasket)
 		mux.HandleFunc("PATCH /api/v1/portfolio/baskets/{id}", ph.UpdateBasket)

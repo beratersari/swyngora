@@ -190,6 +190,7 @@ export {
   useListPortfolioTradesQuery,
   useListPortfolioRebalancesQuery,
   useGetPortfolioRebalanceQuery,
+  useContinuePortfolioRebalanceMutation,
   useSetMarginModeMutation,
   usePlaceMarginOrderMutation,
   useListMarginPositionsQuery,

@@ -1,4 +1,4 @@
-import { Table } from 'antd';
+import { Button, Table } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import {
@@ -18,6 +18,8 @@ export function RebalanceResultsTable({
   onExpand,
   detail,
   detailLoading,
+  onContinue,
+  continueLoading,
 }: RebalanceResultsTableProps) {
   const { t } = useTranslation('portfolio');
   const open = detail && detail.id === expandedId ? detail : undefined;
@@ -38,6 +40,21 @@ export function RebalanceResultsTable({
           return (
             <Detail>
               <Text variant="bodySm">{body.summary || t('rebalance.noSummary')}</Text>
+              {body.canContinue && onContinue && body.id ? (
+                <Button
+                  type="primary"
+                  size="small"
+                  loading={continueLoading}
+                  onClick={() => onContinue(body.id!)}
+                >
+                  {t('rebalance.continue')}
+                </Button>
+              ) : null}
+              {(body.attempts ?? []).map((att) => (
+                <Text key={att.seq} variant="caption" color="secondary">
+                  {att.summary || t('rebalance.attemptN', { n: att.seq })}
+                </Text>
+              ))}
               <Text variant="caption" color="secondary">
                 {t('rebalance.costLine', {
                   fee: formatRebalanceMoney(body.totalFee, body.currency),

@@ -467,6 +467,9 @@ type PortfolioPort interface {
 	UpdateAllocationBasket(ctx context.Context, clientID, id string, b AllocationBasket) (*AllocationBasket, error)
 	DeleteAllocationBasket(ctx context.Context, clientID, id string) error
 	CreateRebalanceResult(ctx context.Context, r RebalanceResult) (*RebalanceResult, error)
+	StartRebalanceResult(ctx context.Context, r RebalanceResult) error
+	AppendRebalanceLeg(ctx context.Context, rebalanceID string, attempt, seq int, leg RebalanceLegOutcome) error
+	FinishRebalanceResult(ctx context.Context, r RebalanceResult) error
 	GetRebalanceResult(ctx context.Context, clientID, id string) (*RebalanceResult, error)
 	ListRebalanceResults(ctx context.Context, clientID, basketID string, limit, offset int) ([]RebalanceResult, error)
 

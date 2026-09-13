@@ -493,6 +493,14 @@ export const portfolioApi = baseApi.injectEndpoints({
       }),
       providesTags: ['Portfolio'],
     }),
+    continuePortfolioRebalance: build.mutation<RebalanceResult, { id: string } & BookArg>({
+      query: ({ id, portfolioId }) => ({
+        url: `/api/v1/portfolio/rebalances/${encodeURIComponent(id)}/continue`,
+        method: 'POST',
+        params: bookParams(portfolioId),
+      }),
+      invalidatesTags: ['Portfolio'],
+    }),
   }),
 });
 
@@ -520,6 +528,7 @@ export const {
   useListPortfolioTradesQuery,
   useListPortfolioRebalancesQuery,
   useGetPortfolioRebalanceQuery,
+  useContinuePortfolioRebalanceMutation,
   useSetMarginModeMutation,
   usePlaceMarginOrderMutation,
   useListMarginPositionsQuery,

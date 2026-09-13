@@ -168,3 +168,65 @@ func TestAllocationRebalance_RecordsFeeAndSlippage(t *testing.T) {
 		t.Fatalf("stored costs %+v %v", got, err)
 	}
 }
+
+func TestAllocationRebalance_ContinueDoesNotReplayFilledSells(t *testing.T) {
+	px := &fakePx{prices: map[string]string{
+		"binance|BTCUSDT": "100",
+		"binance|ETHUSDT": "50",
+	}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "bsk-cont", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "bsk-cont", Symbol: "BTCUSDT", Side: "buy", Quantity: 80}); err != nil {
+		t.Fatal(err)
+	}
+	pending, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "bsk-cont", Symbol: "BTCUSDT", Type: "limit_sell", Quantity: 70, TriggerPrice: 200,
+	})
+	if err != nil || pending == nil {
+		t.Fatalf("reserve %v %v", pending, err)
+	}
+	b, err := svc.CreateAllocationBasket(ctx, AllocationBasketCreateInput{
+		ClientID: "bsk-cont", Name: "Cash",
+		Targets: []domain.AllocationTarget{{Asset: "USDT", WeightPct: 100}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := svc.ExecuteAllocationRebalance(ctx, "bsk-cont", b.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !first.CanContinue {
+		t.Fatalf("expected leftover reserved BTC %+v", first)
+	}
+	v1, _ := svc.View(ctx, "bsk-cont")
+	var btcAfterFirst float64
+	for _, p := range v1.Positions {
+		if p.Symbol == "BTCUSDT" {
+			btcAfterFirst = p.Quantity
+		}
+	}
+	if _, err := svc.CancelPendingOrder(ctx, "bsk-cont", pending.ID); err != nil {
+		t.Fatal(err)
+	}
+	second, err := svc.ContinueAllocationRebalance(ctx, "bsk-cont", first.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.AttemptCount < 2 {
+		t.Fatalf("want attempt 2 %+v", second)
+	}
+	v2, _ := svc.View(ctx, "bsk-cont")
+	var btcAfter float64
+	for _, p := range v2.Positions {
+		if p.Symbol == "BTCUSDT" {
+			btcAfter = p.Quantity
+		}
+	}
+	if btcAfter >= btcAfterFirst {
+		t.Fatalf("continue should sell leftover BTC first=%v after=%v", btcAfterFirst, btcAfter)
+	}
+}

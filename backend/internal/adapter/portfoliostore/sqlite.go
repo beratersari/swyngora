@@ -307,6 +307,8 @@ CREATE TABLE IF NOT EXISTS allocation_rebalances (
 	summary                 TEXT NOT NULL DEFAULT '',
 	note                    TEXT NOT NULL DEFAULT '',
 	created_at              TEXT NOT NULL,
+	updated_at              TEXT NOT NULL DEFAULT '',
+	attempt_count           INTEGER NOT NULL DEFAULT 1,
 	FOREIGN KEY (basket_id) REFERENCES allocation_baskets(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_allocation_rebalances_client ON allocation_rebalances(client_id, created_at DESC);
@@ -331,11 +333,31 @@ CREATE TABLE IF NOT EXISTS allocation_rebalance_legs (
 	fee               REAL NOT NULL DEFAULT 0,
 	slippage          REAL NOT NULL DEFAULT 0,
 	error             TEXT NOT NULL DEFAULT '',
+	attempt           INTEGER NOT NULL DEFAULT 1,
+	PRIMARY KEY (rebalance_id, attempt, seq),
+	FOREIGN KEY (rebalance_id) REFERENCES allocation_rebalances(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS allocation_rebalance_attempts (
+	rebalance_id    TEXT NOT NULL,
+	seq             INTEGER NOT NULL,
+	status          TEXT NOT NULL,
+	planned_legs    INTEGER NOT NULL,
+	filled_legs     INTEGER NOT NULL,
+	failed_legs     INTEGER NOT NULL,
+	before_equity   REAL NOT NULL,
+	after_equity    REAL NOT NULL,
+	before_cash     REAL NOT NULL,
+	after_cash      REAL NOT NULL,
+	total_fee       REAL NOT NULL DEFAULT 0,
+	total_slippage  REAL NOT NULL DEFAULT 0,
+	summary         TEXT NOT NULL DEFAULT '',
+	created_at      TEXT NOT NULL,
 	PRIMARY KEY (rebalance_id, seq),
 	FOREIGN KEY (rebalance_id) REFERENCES allocation_rebalances(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS allocation_rebalance_lines (
 	rebalance_id  TEXT NOT NULL,
+	attempt       INTEGER NOT NULL DEFAULT 1,
 	asset         TEXT NOT NULL,
 	exchange      TEXT NOT NULL DEFAULT '',
 	symbol        TEXT NOT NULL DEFAULT '',
@@ -347,7 +369,7 @@ CREATE TABLE IF NOT EXISTS allocation_rebalance_lines (
 	after_value   REAL NOT NULL,
 	target_value  REAL NOT NULL,
 	after_delta   REAL NOT NULL,
-	PRIMARY KEY (rebalance_id, asset),
+	PRIMARY KEY (rebalance_id, attempt, asset),
 	FOREIGN KEY (rebalance_id) REFERENCES allocation_rebalances(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS risk_limits (
@@ -490,6 +512,9 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_
 		}
 	}
 	if err := sqliteutil.SetUserVersion(s.db, 1); err != nil {
+		return err
+	}
+	if err := s.migrateRebalanceAttempts(); err != nil {
 		return err
 	}
 	// Backfill remaining_quantity for legacy open orders that only had quantity.
@@ -650,6 +675,7 @@ func (s *SQLite) DeletePortfolio(ctx context.Context, clientID, id string) error
 		`DELETE FROM risk_limits WHERE client_id = ?`,
 		`DELETE FROM allocation_rebalance_legs WHERE rebalance_id IN (SELECT id FROM allocation_rebalances WHERE client_id = ?)`,
 		`DELETE FROM allocation_rebalance_lines WHERE rebalance_id IN (SELECT id FROM allocation_rebalances WHERE client_id = ?)`,
+		`DELETE FROM allocation_rebalance_attempts WHERE rebalance_id IN (SELECT id FROM allocation_rebalances WHERE client_id = ?)`,
 		`DELETE FROM allocation_rebalances WHERE client_id = ?`,
 		`DELETE FROM allocation_targets WHERE basket_id IN (SELECT id FROM allocation_baskets WHERE client_id = ?)`,
 		`DELETE FROM allocation_baskets WHERE client_id = ?`,
@@ -2428,6 +2454,13 @@ func (s *SQLite) DeleteAllocationBasket(ctx context.Context, clientID, id string
 	`, id, clientID); err != nil {
 		return err
 	}
+	if _, err := s.db.ExecContext(ctx, `
+		DELETE FROM allocation_rebalance_attempts WHERE rebalance_id IN (
+			SELECT id FROM allocation_rebalances WHERE basket_id = ? AND client_id = ?
+		)
+	`, id, clientID); err != nil {
+		return err
+	}
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM allocation_rebalances WHERE basket_id = ? AND client_id = ?`, id, clientID); err != nil {
 		return err
 	}
@@ -2444,22 +2477,24 @@ func (s *SQLite) DeleteAllocationBasket(ctx context.Context, clientID, id string
 
 const rebalanceCols = `id, client_id, basket_id, basket_name, currency, status, planned_legs, filled_legs, failed_legs,
 	before_equity, after_equity, before_cash, after_cash, remaining_abs_drift_pct, max_sleeve_drift_pct,
-	remaining_notional, total_fee, total_slippage, summary, note, created_at`
+	remaining_notional, total_fee, total_slippage, summary, note, created_at, updated_at, attempt_count`
 
 func scanRebalance(row scannable) (*domain.RebalanceResult, error) {
 	var r domain.RebalanceResult
-	var created string
+	var created, updated string
 	if err := row.Scan(
 		&r.ID, &r.ClientID, &r.BasketID, &r.BasketName, &r.Currency, &r.Status,
 		&r.PlannedLegs, &r.FilledLegs, &r.FailedLegs,
 		&r.BeforeEquity, &r.AfterEquity, &r.BeforeCash, &r.AfterCash,
 		&r.RemainingAbsDriftPct, &r.MaxSleeveDriftPct, &r.RemainingNotional,
-		&r.TotalFee, &r.TotalSlippage, &r.Summary, &r.Note, &created,
+		&r.TotalFee, &r.TotalSlippage, &r.Summary, &r.Note, &created, &updated, &r.AttemptCount,
 	); err != nil {
 		return nil, err
 	}
 	r.TotalCost = r.TotalFee + r.TotalSlippage
 	r.CreatedAt = parseTime(created)
+	r.UpdatedAt = parseTime(updated)
+	r.CanContinue = domain.RebalanceCanContinue(r)
 	return &r, nil
 }
 
@@ -2474,22 +2509,23 @@ func (s *SQLite) CreateRebalanceResult(ctx context.Context, r domain.RebalanceRe
 	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO allocation_rebalances (`+rebalanceCols+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, r.ID, r.ClientID, r.BasketID, r.BasketName, r.Currency, r.Status,
 		r.PlannedLegs, r.FilledLegs, r.FailedLegs,
 		r.BeforeEquity, r.AfterEquity, r.BeforeCash, r.AfterCash,
 		r.RemainingAbsDriftPct, r.MaxSleeveDriftPct, r.RemainingNotional,
-		r.TotalFee, r.TotalSlippage, r.Summary, r.Note, r.CreatedAt.UTC().Format(time.RFC3339Nano)); err != nil {
+		r.TotalFee, r.TotalSlippage, r.Summary, r.Note, r.CreatedAt.UTC().Format(time.RFC3339Nano),
+		textOrNow(r.UpdatedAt, r.CreatedAt), maxInt(r.AttemptCount, 1)); err != nil {
 		return nil, err
 	}
 	for i, leg := range r.Legs {
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO allocation_rebalance_legs (
-				rebalance_id, seq, side, asset, exchange, symbol, reason,
+				rebalance_id, seq, attempt, side, asset, exchange, symbol, reason,
 				planned_qty, planned_price, planned_notional, status,
 				trade_id, filled_qty, fill_price, fill_notional, last_price, fee, slippage, error
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, r.ID, i, string(leg.Side), leg.Asset, string(leg.Exchange), leg.Symbol, leg.Reason,
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, r.ID, i, attemptOf(leg.Attempt), string(leg.Side), leg.Asset, string(leg.Exchange), leg.Symbol, leg.Reason,
 			leg.PlannedQty, leg.PlannedPrice, leg.PlannedNotional, leg.Status,
 			leg.TradeID, leg.FilledQty, leg.FillPrice, leg.FillNotional, leg.LastPrice, leg.Fee, leg.Slippage, leg.Error); err != nil {
 			return nil, err
@@ -2502,10 +2538,10 @@ func (s *SQLite) CreateRebalanceResult(ctx context.Context, r domain.RebalanceRe
 		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO allocation_rebalance_lines (
-				rebalance_id, asset, exchange, symbol, is_cash, target_pct,
+				rebalance_id, attempt, asset, exchange, symbol, is_cash, target_pct,
 				before_pct, after_pct, before_value, after_value, target_value, after_delta
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, r.ID, ln.Asset, string(ln.Exchange), ln.Symbol, cash, ln.TargetPct,
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, r.ID, attemptOf(ln.Attempt), ln.Asset, string(ln.Exchange), ln.Symbol, cash, ln.TargetPct,
 			ln.BeforePct, ln.AfterPct, ln.BeforeValue, ln.AfterValue, ln.TargetValue, ln.AfterDelta); err != nil {
 			return nil, err
 		}
@@ -2544,14 +2580,17 @@ func (s *SQLite) getRebalanceUnlocked(ctx context.Context, clientID, id string) 
 	if err := s.loadRebalanceChildren(ctx, r); err != nil {
 		return nil, err
 	}
+	if err := s.loadRebalanceAttempts(ctx, r); err != nil {
+		return nil, err
+	}
 	return r, nil
 }
 
 func (s *SQLite) loadRebalanceChildren(ctx context.Context, r *domain.RebalanceResult) error {
 	legRows, err := s.db.QueryContext(ctx, `
 		SELECT side, asset, exchange, symbol, reason, planned_qty, planned_price, planned_notional,
-			status, trade_id, filled_qty, fill_price, fill_notional, last_price, fee, slippage, error
-		FROM allocation_rebalance_legs WHERE rebalance_id = ? ORDER BY seq ASC
+			status, trade_id, filled_qty, fill_price, fill_notional, last_price, fee, slippage, error, attempt
+		FROM allocation_rebalance_legs WHERE rebalance_id = ? ORDER BY attempt ASC, seq ASC
 	`, r.ID)
 	if err != nil {
 		return err
@@ -2561,7 +2600,7 @@ func (s *SQLite) loadRebalanceChildren(ctx context.Context, r *domain.RebalanceR
 		var o domain.RebalanceLegOutcome
 		var side, ex string
 		if err := legRows.Scan(&side, &o.Asset, &ex, &o.Symbol, &o.Reason, &o.PlannedQty, &o.PlannedPrice, &o.PlannedNotional,
-			&o.Status, &o.TradeID, &o.FilledQty, &o.FillPrice, &o.FillNotional, &o.LastPrice, &o.Fee, &o.Slippage, &o.Error); err != nil {
+			&o.Status, &o.TradeID, &o.FilledQty, &o.FillPrice, &o.FillNotional, &o.LastPrice, &o.Fee, &o.Slippage, &o.Error, &o.Attempt); err != nil {
 			return err
 		}
 		o.Side = domain.TradeSide(side)
@@ -2573,8 +2612,8 @@ func (s *SQLite) loadRebalanceChildren(ctx context.Context, r *domain.RebalanceR
 	}
 	lineRows, err := s.db.QueryContext(ctx, `
 		SELECT asset, exchange, symbol, is_cash, target_pct, before_pct, after_pct,
-			before_value, after_value, target_value, after_delta
-		FROM allocation_rebalance_lines WHERE rebalance_id = ? ORDER BY asset ASC
+			before_value, after_value, target_value, after_delta, attempt
+		FROM allocation_rebalance_lines WHERE rebalance_id = ? ORDER BY attempt ASC, asset ASC
 	`, r.ID)
 	if err != nil {
 		return err
@@ -2585,7 +2624,7 @@ func (s *SQLite) loadRebalanceChildren(ctx context.Context, r *domain.RebalanceR
 		var ex string
 		var cash int
 		if err := lineRows.Scan(&ln.Asset, &ex, &ln.Symbol, &cash, &ln.TargetPct, &ln.BeforePct, &ln.AfterPct,
-			&ln.BeforeValue, &ln.AfterValue, &ln.TargetValue, &ln.AfterDelta); err != nil {
+			&ln.BeforeValue, &ln.AfterValue, &ln.TargetValue, &ln.AfterDelta, &ln.Attempt); err != nil {
 			return err
 		}
 		ln.Exchange = domain.Exchange(ex)

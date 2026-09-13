@@ -158,7 +158,7 @@ func (s *Service) PreviewAllocationRebalance(ctx context.Context, clientID, bask
 }
 
 // ExecuteAllocationRebalance places market sells then buys to move toward targets.
-// Manual only: nothing auto-rebalances in the background. The run is stored.
+// Manual only. Legs are stored as they fill so a crash can be continued.
 func (s *Service) ExecuteAllocationRebalance(ctx context.Context, clientID, basketID string, portfolioID ...string) (*domain.RebalanceResult, error) {
 	if _, err := s.requireAccessErr(ctx, clientID, domain.PortfolioRoleTrader, portfolioID...); err != nil {
 		return nil, err
@@ -167,13 +167,108 @@ func (s *Service) ExecuteAllocationRebalance(ctx context.Context, clientID, bask
 	if err != nil {
 		return nil, err
 	}
+	now := time.Now().UTC()
+	res := domain.RebalanceResult{
+		ID: uuid.NewString(), ClientID: basket.ClientID, BasketID: basket.ID, BasketName: basket.Name,
+		Currency: before.Currency, Status: domain.RebalanceResultRunning,
+		BeforeEquity: before.Equity, BeforeCash: before.Cash,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if err := s.store.StartRebalanceResult(ctx, res); err != nil {
+		return nil, err
+	}
+	outcomes := s.runRebalanceLegs(ctx, clientID, res.ID, 1, before.Legs, portfolioID...)
+	after, _, aerr := s.buildAllocationPlan(ctx, clientID, basketID, portfolioID...)
+	if aerr != nil {
+		after = before
+	}
+	att := domain.BuildRebalanceAttempt(1, before, after, outcomes, time.Now().UTC())
+	domain.ApplyRebalanceAttempt(&res, att)
+	if aerr != nil {
+		res.Status = domain.RebalanceResultInterrupted
+		res.CanContinue = true
+	}
+	if err := s.store.FinishRebalanceResult(ctx, res); err != nil {
+		return nil, err
+	}
+	return s.store.GetRebalanceResult(ctx, res.ClientID, res.ID)
+}
+
+// ContinueAllocationRebalance re-plans leftover mix from the current book and appends an attempt.
+func (s *Service) ContinueAllocationRebalance(ctx context.Context, clientID, id string, portfolioID ...string) (*domain.RebalanceResult, error) {
+	if _, err := s.requireAccessErr(ctx, clientID, domain.PortfolioRoleTrader, portfolioID...); err != nil {
+		return nil, err
+	}
+	res, err := s.GetRebalanceResult(ctx, clientID, id, portfolioID...)
+	if err != nil {
+		return nil, err
+	}
+	if res.Status == domain.RebalanceResultRunning {
+		res, err = s.finalizeInterruptedRebalance(ctx, res, portfolioID...)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if !domain.RebalanceCanContinue(*res) {
+		return nil, fmt.Errorf("%w: nothing left to continue (already near targets or max attempts)", domain.ErrInvalidArgument)
+	}
+	before, _, err := s.buildAllocationPlan(ctx, clientID, res.BasketID, portfolioID...)
+	if err != nil {
+		return nil, err
+	}
+	seq := res.AttemptCount + 1
+	outcomes := s.runRebalanceLegs(ctx, clientID, res.ID, seq, before.Legs, portfolioID...)
+	after, _, err := s.buildAllocationPlan(ctx, clientID, res.BasketID, portfolioID...)
+	if err != nil {
+		return nil, err
+	}
+	att := domain.BuildRebalanceAttempt(seq, before, after, outcomes, time.Now().UTC())
+	domain.ApplyRebalanceAttempt(res, att)
+	if err := s.store.FinishRebalanceResult(ctx, *res); err != nil {
+		return nil, err
+	}
+	return s.store.GetRebalanceResult(ctx, res.ClientID, res.ID)
+}
+
+func (s *Service) finalizeInterruptedRebalance(ctx context.Context, res *domain.RebalanceResult, portfolioID ...string) (*domain.RebalanceResult, error) {
+	after, _, err := s.buildAllocationPlan(ctx, res.ClientID, res.BasketID, portfolioID...)
+	if err != nil {
+		return nil, err
+	}
+	seq := res.AttemptCount
+	if seq <= 0 {
+		seq = 1
+	}
+	legs := legsForAttempt(res.Legs, seq)
+	before := domain.RebalancePlan{Currency: res.Currency, Equity: res.BeforeEquity, Cash: res.BeforeCash}
+	att := domain.BuildRebalanceAttempt(seq, before, after, legs, time.Now().UTC())
+	att.Status = domain.RebalanceResultInterrupted
+	rebuilt := domain.RebalanceResult{
+		ID: res.ID, ClientID: res.ClientID, BasketID: res.BasketID, BasketName: res.BasketName,
+		Currency: res.Currency, CreatedAt: res.CreatedAt,
+	}
+	for _, prev := range res.Attempts {
+		if prev.Seq < seq {
+			domain.ApplyRebalanceAttempt(&rebuilt, prev)
+		}
+	}
+	domain.ApplyRebalanceAttempt(&rebuilt, att)
+	rebuilt.Status = domain.RebalanceResultInterrupted
+	rebuilt.CanContinue = domain.RebalanceCanContinue(rebuilt)
+	if err := s.store.FinishRebalanceResult(ctx, rebuilt); err != nil {
+		return nil, err
+	}
+	return s.store.GetRebalanceResult(ctx, rebuilt.ClientID, rebuilt.ID)
+}
+
+func (s *Service) runRebalanceLegs(ctx context.Context, clientID, rebalanceID string, attempt int, legs []domain.RebalanceLeg, portfolioID ...string) []domain.RebalanceLegOutcome {
 	pfID, ownerID := bookRefs(portfolioID)
-	outcomes := make([]domain.RebalanceLegOutcome, 0, len(before.Legs))
-	for _, leg := range before.Legs {
-		out := domain.RebalanceLegOutcome{
+	out := make([]domain.RebalanceLegOutcome, 0, len(legs))
+	for i, leg := range legs {
+		row := domain.RebalanceLegOutcome{
 			Side: leg.Side, Asset: leg.Asset, Exchange: leg.Exchange, Symbol: leg.Symbol, Reason: leg.Reason,
 			PlannedQty: leg.Quantity, PlannedPrice: leg.Price, PlannedNotional: leg.Notional,
-			Status: domain.RebalanceLegFailed,
+			Status: domain.RebalanceLegFailed, Attempt: attempt,
 		}
 		tr, _, err := s.PlaceOrder(ctx, OrderInput{
 			ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID,
@@ -181,24 +276,31 @@ func (s *Service) ExecuteAllocationRebalance(ctx context.Context, clientID, bask
 			Side: string(leg.Side), Quantity: leg.Quantity,
 		})
 		if err != nil {
-			out.Error = err.Error()
-			outcomes = append(outcomes, out)
-			continue
+			row.Error = err.Error()
+		} else {
+			row.Status = domain.RebalanceLegFilled
+			domain.ApplyRebalanceFill(&row, tr)
 		}
-		out.Status = domain.RebalanceLegFilled
-		domain.ApplyRebalanceFill(&out, tr)
-		outcomes = append(outcomes, out)
+		if rebalanceID != "" {
+			_ = s.store.AppendRebalanceLeg(ctx, rebalanceID, attempt, i, row)
+		}
+		out = append(out, row)
 	}
-	after, _, err := s.buildAllocationPlan(ctx, clientID, basketID, portfolioID...)
-	if err != nil {
-		return nil, err
+	return out
+}
+
+func legsForAttempt(legs []domain.RebalanceLegOutcome, seq int) []domain.RebalanceLegOutcome {
+	var out []domain.RebalanceLegOutcome
+	for _, l := range legs {
+		a := l.Attempt
+		if a <= 0 {
+			a = 1
+		}
+		if a == seq {
+			out = append(out, l)
+		}
 	}
-	res := domain.BuildRebalanceResult(uuid.NewString(), *basket, before, after, outcomes, time.Now().UTC())
-	stored, err := s.store.CreateRebalanceResult(ctx, res)
-	if err != nil {
-		return nil, err
-	}
-	return stored, nil
+	return out
 }
 
 // ListRebalanceResults lists stored runs for the book (optional basket filter).
@@ -220,7 +322,14 @@ func (s *Service) GetRebalanceResult(ctx context.Context, clientID, id string, p
 	if id == "" {
 		return nil, fmt.Errorf("%w: rebalance id is required", domain.ErrInvalidArgument)
 	}
-	return s.store.GetRebalanceResult(ctx, p.BookID(), id)
+	res, err := s.store.GetRebalanceResult(ctx, p.BookID(), id)
+	if err != nil {
+		return nil, err
+	}
+	if res.Status == domain.RebalanceResultRunning {
+		return s.finalizeInterruptedRebalance(ctx, res, portfolioID...)
+	}
+	return res, nil
 }
 
 func (s *Service) buildAllocationPlan(ctx context.Context, clientID, basketID string, portfolioID ...string) (domain.RebalancePlan, *domain.AllocationBasket, error) {

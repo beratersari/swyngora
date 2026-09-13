@@ -79,6 +79,7 @@ type rebalanceLegOutcomeDTO struct {
 	Fee             float64 `json:"fee,omitempty"`
 	Slippage        float64 `json:"slippage,omitempty"`
 	Error           string  `json:"error,omitempty"`
+	Attempt         int     `json:"attempt,omitempty"`
 }
 
 type rebalanceLineDTO struct {
@@ -118,8 +119,27 @@ type rebalanceResultDTO struct {
 	Summary              string                   `json:"summary"`
 	Note                 string                   `json:"note"`
 	CreatedAt            string                   `json:"createdAt"`
+	UpdatedAt            string                   `json:"updatedAt,omitempty"`
+	AttemptCount         int                      `json:"attemptCount"`
+	CanContinue          bool                     `json:"canContinue"`
 	Legs                 []rebalanceLegOutcomeDTO `json:"legs,omitempty"`
 	Lines                []rebalanceLineDTO       `json:"lines,omitempty"`
+	Attempts             []rebalanceAttemptDTO    `json:"attempts,omitempty"`
+}
+
+type rebalanceAttemptDTO struct {
+	Seq           int                      `json:"seq"`
+	Status        string                   `json:"status"`
+	PlannedLegs   int                      `json:"plannedLegs"`
+	FilledLegs    int                      `json:"filledLegs"`
+	FailedLegs    int                      `json:"failedLegs"`
+	TotalFee      float64                  `json:"totalFee"`
+	TotalSlippage float64                  `json:"totalSlippage"`
+	TotalCost     float64                  `json:"totalCost"`
+	Summary       string                   `json:"summary"`
+	CreatedAt     string                   `json:"createdAt"`
+	Legs          []rebalanceLegOutcomeDTO `json:"legs,omitempty"`
+	Lines         []rebalanceLineDTO       `json:"lines,omitempty"`
 }
 
 func rebalanceResultToDTO(r *domain.RebalanceResult, includeKids bool) rebalanceResultDTO {
@@ -134,6 +154,10 @@ func rebalanceResultToDTO(r *domain.RebalanceResult, includeKids bool) rebalance
 		TotalFee: r.TotalFee, TotalSlippage: r.TotalSlippage, TotalCost: r.TotalCost,
 		Summary: r.Summary, Note: r.Note,
 		CreatedAt: r.CreatedAt.UTC().Format(time.RFC3339Nano),
+		AttemptCount: r.AttemptCount, CanContinue: r.CanContinue,
+	}
+	if !r.UpdatedAt.IsZero() {
+		d.UpdatedAt = r.UpdatedAt.UTC().Format(time.RFC3339Nano)
 	}
 	if !includeKids {
 		return d
@@ -145,6 +169,7 @@ func rebalanceResultToDTO(r *domain.RebalanceResult, includeKids bool) rebalance
 			PlannedQty: l.PlannedQty, PlannedPrice: l.PlannedPrice, PlannedNotional: l.PlannedNotional,
 			Status: l.Status, TradeID: l.TradeID, FilledQty: l.FilledQty, FillPrice: l.FillPrice,
 			FillNotional: l.FillNotional, LastPrice: l.LastPrice, Fee: l.Fee, Slippage: l.Slippage, Error: l.Error,
+			Attempt: l.Attempt,
 		})
 	}
 	d.Lines = make([]rebalanceLineDTO, 0, len(r.Lines))
@@ -155,6 +180,25 @@ func rebalanceResultToDTO(r *domain.RebalanceResult, includeKids bool) rebalance
 			BeforeValue: ln.BeforeValue, AfterValue: ln.AfterValue, TargetValue: ln.TargetValue,
 			AfterDelta: ln.AfterDelta,
 		})
+	}
+	d.Attempts = make([]rebalanceAttemptDTO, 0, len(r.Attempts))
+	for _, att := range r.Attempts {
+		ad := rebalanceAttemptDTO{
+			Seq: att.Seq, Status: att.Status,
+			PlannedLegs: att.PlannedLegs, FilledLegs: att.FilledLegs, FailedLegs: att.FailedLegs,
+			TotalFee: att.TotalFee, TotalSlippage: att.TotalSlippage, TotalCost: att.TotalCost,
+			Summary: att.Summary, CreatedAt: att.CreatedAt.UTC().Format(time.RFC3339Nano),
+		}
+		for _, l := range att.Legs {
+			ad.Legs = append(ad.Legs, rebalanceLegOutcomeDTO{
+				Side: string(l.Side), Asset: l.Asset, Exchange: string(l.Exchange), Symbol: l.Symbol, Reason: l.Reason,
+				PlannedQty: l.PlannedQty, PlannedPrice: l.PlannedPrice, PlannedNotional: l.PlannedNotional,
+				Status: l.Status, TradeID: l.TradeID, FilledQty: l.FilledQty, FillPrice: l.FillPrice,
+				FillNotional: l.FillNotional, LastPrice: l.LastPrice, Fee: l.Fee, Slippage: l.Slippage, Error: l.Error,
+				Attempt: l.Attempt,
+			})
+		}
+		d.Attempts = append(d.Attempts, ad)
 	}
 	return d
 }
@@ -363,6 +407,16 @@ func (h *PortfolioHandler) ListRebalances(w http.ResponseWriter, r *http.Request
 // GetRebalance handles GET /api/v1/portfolio/rebalances/{id}
 func (h *PortfolioHandler) GetRebalance(w http.ResponseWriter, r *http.Request) {
 	res, err := h.svc.GetRebalanceResult(r.Context(), clientIDFrom(r), r.PathValue("id"), portfolioIDFrom(r))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rebalanceResultToDTO(res, true))
+}
+
+// ContinueRebalance handles POST /api/v1/portfolio/rebalances/{id}/continue
+func (h *PortfolioHandler) ContinueRebalance(w http.ResponseWriter, r *http.Request) {
+	res, err := h.svc.ContinueAllocationRebalance(r.Context(), clientIDFrom(r), r.PathValue("id"), portfolioIDFrom(r))
 	if err != nil {
 		writeError(w, err)
 		return

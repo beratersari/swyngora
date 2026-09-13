@@ -10,6 +10,7 @@ import (
 const (
 	MaxAllocationRebalancesPerBasket = 50
 	MaxAllocationRebalanceList       = 50
+	MaxRebalanceAttempts             = 10
 )
 
 // Rebalance leg / run outcomes.
@@ -17,10 +18,12 @@ const (
 	RebalanceLegFilled = "filled"
 	RebalanceLegFailed = "failed"
 
-	RebalanceResultCompleted = "completed"
-	RebalanceResultPartial   = "partial"
-	RebalanceResultFailed    = "failed"
-	RebalanceResultNoTrades  = "no_trades"
+	RebalanceResultCompleted    = "completed"
+	RebalanceResultPartial      = "partial"
+	RebalanceResultFailed       = "failed"
+	RebalanceResultNoTrades     = "no_trades"
+	RebalanceResultRunning      = "running"
+	RebalanceResultInterrupted  = "interrupted"
 )
 
 // RebalanceLegOutcome is one planned market leg after execute.
@@ -42,6 +45,7 @@ type RebalanceLegOutcome struct {
 	Fee             float64 // quote-currency taker fee
 	Slippage        float64 // adverse quote impact vs last
 	Error           string
+	Attempt         int
 }
 
 // RebalanceLineSnapshot is target vs mix before and after one run.
@@ -57,6 +61,27 @@ type RebalanceLineSnapshot struct {
 	AfterValue   float64
 	TargetValue  float64
 	AfterDelta   float64 // target − after; leftover to go
+	Attempt      int
+}
+
+// RebalanceAttempt is one try (first run or a later continue).
+type RebalanceAttempt struct {
+	Seq           int
+	Status        string
+	PlannedLegs   int
+	FilledLegs    int
+	FailedLegs    int
+	BeforeEquity  float64
+	AfterEquity   float64
+	BeforeCash    float64
+	AfterCash     float64
+	TotalFee      float64
+	TotalSlippage float64
+	TotalCost     float64
+	Summary       string
+	CreatedAt     time.Time
+	Legs          []RebalanceLegOutcome
+	Lines         []RebalanceLineSnapshot
 }
 
 // RebalanceResult is a stored run the user can open later.
@@ -83,46 +108,69 @@ type RebalanceResult struct {
 	Summary              string
 	Note                 string
 	CreatedAt            time.Time
-	Legs                 []RebalanceLegOutcome
+	UpdatedAt            time.Time
+	AttemptCount         int
+	CanContinue          bool
+	Legs                 []RebalanceLegOutcome // all attempts, oldest first
 	Lines                []RebalanceLineSnapshot
+	Attempts             []RebalanceAttempt
 }
 
-// BuildRebalanceResult snapshots planned vs filled legs and leftover drift.
+// BuildRebalanceResult snapshots planned vs filled legs and leftover drift (attempt 1).
 func BuildRebalanceResult(id string, basket AllocationBasket, before, after RebalancePlan, legs []RebalanceLegOutcome, now time.Time) RebalanceResult {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	r := RebalanceResult{
+		ID: id, ClientID: basket.ClientID, BasketID: basket.ID, BasketName: basket.Name,
+		Currency: after.Currency, CreatedAt: now, UpdatedAt: now,
+	}
+	att := BuildRebalanceAttempt(1, before, after, legs, now)
+	ApplyRebalanceAttempt(&r, att)
+	return r
+}
+
+// BuildRebalanceAttempt snapshots one try against a before/after plan.
+func BuildRebalanceAttempt(seq int, before, after RebalancePlan, legs []RebalanceLegOutcome, now time.Time) RebalanceAttempt {
+	if seq <= 0 {
+		seq = 1
+	}
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
 	filled, failed := 0, 0
 	var totalFee, totalSlip float64
-	for i := range legs {
-		switch legs[i].Status {
+	outLegs := append([]RebalanceLegOutcome(nil), legs...)
+	for i := range outLegs {
+		outLegs[i].Attempt = seq
+		switch outLegs[i].Status {
 		case RebalanceLegFilled:
 			filled++
-			FinishRebalanceLegCosts(&legs[i])
-			totalFee += legs[i].Fee
-			totalSlip += legs[i].Slippage
+			FinishRebalanceLegCosts(&outLegs[i])
+			totalFee += outLegs[i].Fee
+			totalSlip += outLegs[i].Slippage
 		case RebalanceLegFailed:
 			failed++
 		}
 	}
-	status := RebalanceResultNoTrades
-	switch {
-	case len(legs) == 0:
-		status = RebalanceResultNoTrades
-	case failed == 0:
-		status = RebalanceResultCompleted
-	case filled == 0:
-		status = RebalanceResultFailed
-	default:
-		status = RebalanceResultPartial
+	lines, remAbs, remNotional, maxDrift := rebalanceLineSnapshots(seq, before, after)
+	att := RebalanceAttempt{
+		Seq: seq, PlannedLegs: len(outLegs), FilledLegs: filled, FailedLegs: failed,
+		BeforeEquity: before.Equity, AfterEquity: after.Equity,
+		BeforeCash: before.Cash, AfterCash: after.Cash,
+		TotalFee: totalFee, TotalSlippage: totalSlip, TotalCost: totalFee + totalSlip,
+		CreatedAt: now, Legs: outLegs, Lines: lines,
 	}
+	att.Status = RebalanceAttemptStatus(remNotional, filled, failed, len(outLegs))
+	att.Summary = rebalanceAttemptSummary(att, remAbs, remNotional, maxDrift, after.Currency)
+	return att
+}
 
+func rebalanceLineSnapshots(seq int, before, after RebalancePlan) (lines []RebalanceLineSnapshot, remAbs, remNotional, maxDrift float64) {
 	beforeBy := map[string]AllocationLine{}
 	for _, ln := range before.Lines {
 		beforeBy[ln.Asset] = ln
 	}
-	var remAbs, remNotional, maxDrift float64
-	lines := make([]RebalanceLineSnapshot, 0, len(after.Lines))
 	for _, ln := range after.Lines {
 		drift := ln.ActualPct - ln.TargetPct
 		abs := math.Abs(drift)
@@ -136,23 +184,108 @@ func BuildRebalanceResult(id string, basket AllocationBasket, before, after Reba
 			Asset: ln.Asset, Exchange: ln.Exchange, Symbol: ln.Symbol, IsCash: ln.IsCash,
 			TargetPct: ln.TargetPct, BeforePct: b.ActualPct, AfterPct: ln.ActualPct,
 			BeforeValue: b.CurrentValue, AfterValue: ln.CurrentValue,
-			TargetValue: ln.TargetValue, AfterDelta: ln.DeltaValue,
+			TargetValue: ln.TargetValue, AfterDelta: ln.DeltaValue, Attempt: seq,
 		})
 	}
+	return lines, remAbs, remNotional, maxDrift
+}
 
-	r := RebalanceResult{
-		ID: id, ClientID: basket.ClientID, BasketID: basket.ID, BasketName: basket.Name,
-		Currency: after.Currency, Status: status,
-		PlannedLegs: len(legs), FilledLegs: filled, FailedLegs: failed,
-		BeforeEquity: before.Equity, AfterEquity: after.Equity,
-		BeforeCash: before.Cash, AfterCash: after.Cash,
-		RemainingAbsDriftPct: remAbs, MaxSleeveDriftPct: maxDrift, RemainingNotional: remNotional,
-		TotalFee: totalFee, TotalSlippage: totalSlip, TotalCost: totalFee + totalSlip,
-		CreatedAt: now, Legs: legs, Lines: lines,
+// ApplyRebalanceAttempt rolls an attempt onto the stored job and refreshes leftover mix.
+func ApplyRebalanceAttempt(r *RebalanceResult, att RebalanceAttempt) {
+	if r == nil {
+		return
 	}
-	r.Summary = rebalanceResultSummary(r)
-	r.Note = rebalanceResultNote(r)
-	return r
+	if att.Seq <= 0 {
+		att.Seq = len(r.Attempts) + 1
+	}
+	r.Attempts = append(r.Attempts, att)
+	r.AttemptCount = len(r.Attempts)
+	r.PlannedLegs += att.PlannedLegs
+	r.FilledLegs += att.FilledLegs
+	r.FailedLegs += att.FailedLegs
+	r.TotalFee += att.TotalFee
+	r.TotalSlippage += att.TotalSlippage
+	r.TotalCost = r.TotalFee + r.TotalSlippage
+	if r.BeforeEquity == 0 && r.BeforeCash == 0 && att.Seq == 1 {
+		r.BeforeEquity = att.BeforeEquity
+		r.BeforeCash = att.BeforeCash
+	}
+	r.AfterEquity = att.AfterEquity
+	r.AfterCash = att.AfterCash
+	r.UpdatedAt = att.CreatedAt
+	r.Legs = append(r.Legs, att.Legs...)
+	r.Lines = att.Lines
+	var remAbs, remNotional, maxDrift float64
+	for _, ln := range att.Lines {
+		d := math.Abs(ln.AfterPct - ln.TargetPct)
+		if d > maxDrift {
+			maxDrift = d
+		}
+		remAbs += d
+		remNotional += math.Abs(ln.AfterDelta)
+	}
+	r.RemainingAbsDriftPct = remAbs
+	r.MaxSleeveDriftPct = maxDrift
+	r.RemainingNotional = remNotional
+	r.Status = RebalanceAttemptStatus(remNotional, r.FilledLegs, r.FailedLegs, r.PlannedLegs)
+	r.CanContinue = RebalanceCanContinue(*r)
+	r.Summary = rebalanceResultSummary(*r)
+	r.Note = rebalanceResultNote(*r)
+}
+
+// RebalanceAttemptStatus is leftover-aware: leftover mix can stay partial even if every planned leg filled.
+func RebalanceAttemptStatus(remainingNotional float64, filled, failed, planned int) string {
+	if remainingNotional+1e-9 < MinRebalanceNotional {
+		if planned == 0 && filled == 0 {
+			return RebalanceResultNoTrades
+		}
+		return RebalanceResultCompleted
+	}
+	if planned == 0 {
+		return RebalanceResultPartial
+	}
+	if filled == 0 {
+		return RebalanceResultFailed
+	}
+	if failed > 0 || remainingNotional >= MinRebalanceNotional {
+		return RebalanceResultPartial
+	}
+	return RebalanceResultCompleted
+}
+
+// RebalanceCanContinue reports leftover mix still worth another try.
+func RebalanceCanContinue(r RebalanceResult) bool {
+	if r.AttemptCount >= MaxRebalanceAttempts {
+		return false
+	}
+	switch r.Status {
+	case RebalanceResultRunning, RebalanceResultInterrupted, RebalanceResultPartial, RebalanceResultFailed:
+		return true
+	default:
+		return r.RemainingNotional+1e-9 >= MinRebalanceNotional
+	}
+}
+
+func rebalanceAttemptSummary(att RebalanceAttempt, remAbs, remNotional, maxDrift float64, currency string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Attempt %d: ", att.Seq)
+	switch {
+	case att.PlannedLegs == 0:
+		b.WriteString("no new legs.")
+	case att.FailedLegs == 0:
+		fmt.Fprintf(&b, "filled all %d legs.", att.FilledLegs)
+	case att.FilledLegs == 0:
+		fmt.Fprintf(&b, "none of %d legs filled.", att.PlannedLegs)
+	default:
+		fmt.Fprintf(&b, "filled %d of %d legs; %d failed.", att.FilledLegs, att.PlannedLegs, att.FailedLegs)
+	}
+	if remNotional >= MinRebalanceNotional {
+		fmt.Fprintf(&b, " Leftover %.2f %s (drift %.2f%%).", remNotional, currency, remAbs)
+	}
+	if att.TotalCost > 0 {
+		fmt.Fprintf(&b, " Costs %.2f %s.", att.TotalCost, currency)
+	}
+	return b.String()
 }
 
 func rebalanceResultSummary(r RebalanceResult) string {
@@ -169,6 +302,9 @@ func rebalanceResultSummary(r RebalanceResult) string {
 	default:
 		fmt.Fprintf(&b, "Ran %d planned legs.", r.PlannedLegs)
 	}
+	if r.AttemptCount > 1 {
+		fmt.Fprintf(&b, " %d attempts.", r.AttemptCount)
+	}
 	if r.Status != RebalanceResultNoTrades {
 		fmt.Fprintf(&b, " Remaining mix drift %.2f%% (largest sleeve %.2f%%, leftover %.2f %s).",
 			r.RemainingAbsDriftPct, r.MaxSleeveDriftPct, r.RemainingNotional, r.Currency)
@@ -176,6 +312,9 @@ func rebalanceResultSummary(r RebalanceResult) string {
 			fmt.Fprintf(&b, " Paper costs %.2f %s (fees %.2f, slippage %.2f).",
 				r.TotalCost, r.Currency, r.TotalFee, r.TotalSlippage)
 		}
+	}
+	if r.CanContinue {
+		b.WriteString(" Can continue from the current book.")
 	}
 	return b.String()
 }
@@ -233,7 +372,11 @@ func rebalanceResultNote(r RebalanceResult) string {
 	case RebalanceResultFailed:
 		return "Rebalance ran but no legs filled. Check failed legs. Paper trading; not real money."
 	case RebalanceResultPartial:
-		return "Rebalance partly filled. Remaining drift is allowed until you run it again. Paper trading; not real money."
+		return "Rebalance partly filled. Continue to finish leftover mix from the current book without replaying filled legs. Paper trading; not real money."
+	case RebalanceResultInterrupted:
+		return "Rebalance stopped before every planned leg finished. Continue to re-plan leftover mix from the current book. Paper trading; not real money."
+	case RebalanceResultRunning:
+		return "Rebalance is still running. Paper trading; not real money."
 	default:
 		return "Rebalance executed at last prices. Drift is allowed until you run it again. Paper trading; not real money."
 	}
