@@ -6,7 +6,7 @@ export const Card = styled.section`
   gap: ${({ theme }) => theme.spacing[3]}px;
   min-width: 0;
   padding: ${({ theme }) => theme.spacing[4]}px;
-  background: ${({ theme }) => theme.semantic.bg.surface};
+  background: ${({ theme }) => theme.semantic.bg.elevated};
   border: 1px solid ${({ theme }) => theme.semantic.border.default};
   border-radius: ${({ theme }) => theme.radii.md}px;
 `;

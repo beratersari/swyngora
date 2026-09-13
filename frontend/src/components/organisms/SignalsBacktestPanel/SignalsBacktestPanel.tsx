@@ -618,46 +618,48 @@ export function SignalsBacktestPanel({
           </>
         )}
         {watchlistRun ? (
-          <Field>
-            <Text variant="caption" color="secondary">
-              {t('signals:lab.startingBalance')}
-            </Text>
-            <InputNumber
-              min={1}
-              value={startingBalance}
-              aria-label={t('signals:lab.startingBalance')}
-              style={{ minWidth: 140 }}
-              onChange={(v) => setStartingBalance(typeof v === 'number' ? v : 10000)}
-            />
-          </Field>
-          <Field>
-            <Text variant="caption" color="secondary">
-              {t('signals:lab.riskPct')}
-            </Text>
-            <InputNumber
-              min={0.1}
-              max={25}
-              step={0.1}
-              value={riskPct}
-              aria-label={t('signals:lab.riskPct')}
-              style={{ minWidth: 100 }}
-              onChange={(v) => setRiskPct(typeof v === 'number' ? v : 1)}
-            />
-          </Field>
-          <Field>
-            <Text variant="caption" color="secondary">
-              {t('signals:lab.maxOpenRisk')}
-            </Text>
-            <InputNumber
-              min={0.1}
-              max={100}
-              step={0.5}
-              value={maxOpenRiskPct}
-              aria-label={t('signals:lab.maxOpenRisk')}
-              style={{ minWidth: 100 }}
-              onChange={(v) => setMaxOpenRiskPct(typeof v === 'number' ? v : 3)}
-            />
-          </Field>
+          <>
+            <Field>
+              <Text variant="caption" color="secondary">
+                {t('signals:lab.startingBalance')}
+              </Text>
+              <InputNumber
+                min={1}
+                value={startingBalance}
+                aria-label={t('signals:lab.startingBalance')}
+                style={{ minWidth: 140 }}
+                onChange={(v) => setStartingBalance(typeof v === 'number' ? v : 10000)}
+              />
+            </Field>
+            <Field>
+              <Text variant="caption" color="secondary">
+                {t('signals:lab.riskPct')}
+              </Text>
+              <InputNumber
+                min={0.1}
+                max={25}
+                step={0.1}
+                value={riskPct}
+                aria-label={t('signals:lab.riskPct')}
+                style={{ minWidth: 100 }}
+                onChange={(v) => setRiskPct(typeof v === 'number' ? v : 1)}
+              />
+            </Field>
+            <Field>
+              <Text variant="caption" color="secondary">
+                {t('signals:lab.maxOpenRisk')}
+              </Text>
+              <InputNumber
+                min={0.1}
+                max={100}
+                step={0.5}
+                value={maxOpenRiskPct}
+                aria-label={t('signals:lab.maxOpenRisk')}
+                style={{ minWidth: 100 }}
+                onChange={(v) => setMaxOpenRiskPct(typeof v === 'number' ? v : 3)}
+              />
+            </Field>
+          </>
         ) : null}
         <Field>
           <Text variant="caption" color="secondary">

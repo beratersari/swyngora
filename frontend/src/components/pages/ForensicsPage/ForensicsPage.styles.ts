@@ -26,7 +26,7 @@ export const DatetimeInput = styled.input`
   padding: 4px 11px;
   border: 1px solid ${({ theme }) => theme.semantic.border.default};
   border-radius: ${({ theme }) => theme.radii.md}px;
-  background: ${({ theme }) => theme.semantic.bg.surface};
+  background: ${({ theme }) => theme.semantic.bg.elevated};
   color: ${({ theme }) => theme.semantic.text.primary};
   font: inherit;
 `;

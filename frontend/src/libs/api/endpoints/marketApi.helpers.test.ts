@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { useGetMarketOptionsQuery } from './marketApi';
 import {
   candleTagId,
   compactParams,
@@ -103,5 +104,11 @@ describe('tag ids', () => {
     expect(supplyTagId(undefined)).toBe('unknown');
     expect(indicatorTagId({ symbol: 'BTCUSDT' })).toContain('BTCUSDT');
     expect(liqHeatmapTagId({ symbol: 'BTCUSDT', range: '7d' })).toBe('all:BTCUSDT:7d');
+  });
+});
+
+describe('marketApi hooks', () => {
+  it('exports the options query hook used by the Options page', () => {
+    expect(typeof useGetMarketOptionsQuery).toBe('function');
   });
 });

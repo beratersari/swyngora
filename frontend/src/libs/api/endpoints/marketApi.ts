@@ -515,6 +515,7 @@ export const {
   useGetHoldersQuery,
   useGetAssetProfileQuery,
   useGetOpenInterestQuery,
+  useGetMarketOptionsQuery,
   useGetMarketLiquidationsQuery,
   useGetMarketLiquidationOverviewQuery,
   useGetMarketLiquidationLevelsQuery,

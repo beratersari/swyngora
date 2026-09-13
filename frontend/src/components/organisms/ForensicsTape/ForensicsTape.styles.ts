@@ -22,7 +22,7 @@ export const PhaseCard = styled.section<{ $incomplete?: boolean }>`
   gap: ${({ theme }) => theme.spacing[2]}px;
   min-width: 0;
   padding: ${({ theme }) => theme.spacing[3]}px;
-  background: ${({ theme }) => theme.semantic.bg.surface};
+  background: ${({ theme }) => theme.semantic.bg.elevated};
   border: 1px solid ${({ theme }) => theme.semantic.border.default};
   border-radius: ${({ theme }) => theme.radii.md}px;
   opacity: ${({ $incomplete }) => ($incomplete ? 0.72 : 1)};
