@@ -127,6 +127,7 @@ _SCHEMA_HAS_PORTFOLIO_ID = (
     "list_portfolio_orders",
     "list_portfolio_lots",
     "list_recurring_buys",
+    "complete_recurring_buy_run",
     "list_portfolio_baskets",
     "list_margin_positions",
     "list_margin_orders",

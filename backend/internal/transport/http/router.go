@@ -227,6 +227,7 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("POST /api/v1/portfolio/recurring-buys/{id}/pause", ph.PauseRecurringBuy)
 		mux.HandleFunc("POST /api/v1/portfolio/recurring-buys/{id}/resume", ph.ResumeRecurringBuy)
 		mux.HandleFunc("GET /api/v1/portfolio/recurring-buys/{id}/runs", ph.ListRecurringBuyRuns)
+		mux.HandleFunc("POST /api/v1/portfolio/recurring-buys/{id}/runs/{runId}/complete", ph.CompleteRecurringBuyRun)
 		mux.HandleFunc("GET /api/v1/portfolio/recurring-buys/{id}", ph.GetRecurringBuy)
 		mux.HandleFunc("PATCH /api/v1/portfolio/recurring-buys/{id}", ph.UpdateRecurringBuy)
 		mux.HandleFunc("DELETE /api/v1/portfolio/recurring-buys/{id}", ph.DeleteRecurringBuy)

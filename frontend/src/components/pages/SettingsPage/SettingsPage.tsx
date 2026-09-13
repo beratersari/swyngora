@@ -10,12 +10,14 @@ import {
   useCancelImportMutation,
   useConfirmImportMutation,
   useCreateAccountAPIKeyMutation,
+  useCompleteRecurringBuyRunMutation,
   useCreateRecurringBuyMutation,
   useDeleteRecurringBuyMutation,
   useListAccountAPIKeysQuery,
   useListExportsQuery,
   useListImportsQuery,
   useListPortfolioSharesQuery,
+  useListRecurringBuyRunsQuery,
   useListRecurringBuysQuery,
   useListWatchlistSharesQuery,
   usePauseRecurringBuyMutation,
@@ -607,6 +609,9 @@ function RecurringPane() {
         pagination={false}
         dataSource={list.data?.plans ?? []}
         locale={{ emptyText: t('settings:recurring.empty') }}
+        expandable={{
+          expandedRowRender: (row) => (row.id ? <RecurringRuns planId={row.id} /> : null),
+        }}
         columns={[
           { title: t('settings:recurring.symbol'), dataIndex: 'symbol' },
           { title: t('settings:recurring.amount'), dataIndex: 'amount' },
@@ -637,5 +642,58 @@ function RecurringPane() {
         ]}
       />
     </Section>
+  );
+}
+
+function RecurringRuns({ planId }: { planId: string }) {
+  const { t } = useTranslation(['settings', 'common']);
+  const list = useListRecurringBuyRunsQuery({ id: planId });
+  const [complete, completeState] = useCompleteRecurringBuyRunMutation();
+  return (
+    <Table
+      size="small"
+      rowKey={(r) => r.id ?? ''}
+      pagination={false}
+      loading={list.isLoading}
+      dataSource={list.data?.runs ?? []}
+      locale={{ emptyText: t('settings:recurring.noRuns') }}
+      columns={[
+        { title: t('settings:recurring.scheduled'), dataIndex: 'scheduledFor' },
+        { title: t('settings:recurring.status'), dataIndex: 'status' },
+        {
+          title: t('settings:recurring.timing'),
+          dataIndex: 'timing',
+          render: (v: string | undefined) => {
+            if (v === 'on_time') return t('settings:recurring.onTime');
+            if (v === 'late') return t('settings:recurring.late');
+            return '—';
+          },
+        },
+        { title: t('settings:recurring.amount'), dataIndex: 'amount' },
+        {
+          title: '',
+          key: 'act',
+          render: (_, row) =>
+            row.canComplete && row.id ? (
+              <Button
+                size="small"
+                loading={completeState.isLoading}
+                onClick={() => {
+                  void complete({ planId, runId: row.id as string })
+                    .unwrap()
+                    .then(() => {
+                      void message.success(t('settings:recurring.completed'));
+                    })
+                    .catch((err: unknown) => {
+                      void message.error(rtkErrorMessage(err));
+                    });
+                }}
+              >
+                {t('settings:recurring.complete')}
+              </Button>
+            ) : null,
+        },
+      ]}
+    />
   );
 }

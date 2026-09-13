@@ -182,6 +182,7 @@ CREATE TABLE IF NOT EXISTS recurring_buy_runs (
 	fail_reason   TEXT NOT NULL DEFAULT '',
 	scheduled_for TEXT NOT NULL,
 	executed_at   TEXT NOT NULL,
+	timing        TEXT NOT NULL DEFAULT '',
 	UNIQUE (plan_id, period_key),
 	FOREIGN KEY (plan_id) REFERENCES recurring_buy_plans(id) ON DELETE CASCADE
 );
@@ -473,6 +474,7 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_
 		`ALTER TABLE recurring_buy_plans ADD COLUMN budget REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE recurring_buy_plans ADD COLUMN spent REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE recurring_buy_plans ADD COLUMN ends_at TEXT`,
+		`ALTER TABLE recurring_buy_runs ADD COLUMN timing TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE portfolios ADD COLUMN net_deposits REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE pending_orders ADD COLUMN lot_method TEXT NOT NULL DEFAULT 'fifo'`,
 		`ALTER TABLE trades ADD COLUMN lot_method TEXT NOT NULL DEFAULT ''`,
@@ -2061,11 +2063,12 @@ func (s *SQLite) ClaimRecurringBuyRun(ctx context.Context, run domain.RecurringB
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO recurring_buy_runs (
 			id, plan_id, client_id, period_key, status, amount, quantity, price,
-			trade_id, fail_reason, scheduled_for, executed_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			trade_id, fail_reason, scheduled_for, executed_at, timing
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, run.ID, run.PlanID, run.ClientID, run.PeriodKey, string(run.Status),
 		run.Amount, run.Quantity, run.Price, run.TradeID, run.FailReason,
-		run.ScheduledFor.UTC().Format(time.RFC3339Nano), run.ExecutedAt.UTC().Format(time.RFC3339Nano))
+		run.ScheduledFor.UTC().Format(time.RFC3339Nano), run.ExecutedAt.UTC().Format(time.RFC3339Nano),
+		string(run.Timing))
 	if err != nil {
 		msg := strings.ToLower(err.Error())
 		if strings.Contains(msg, "unique") || strings.Contains(msg, "constraint") {
@@ -2096,11 +2099,18 @@ func applyRecurringFillTx(ctx context.Context, tx *sql.Tx, c *domain.RecurringFi
 	if run.ID == "" {
 		run.ID = run.PlanID + "-" + run.PeriodKey
 	}
+	already, err := recurringPeriodAlreadyFilledTx(ctx, tx, run.PlanID, run.PeriodKey)
+	if err != nil {
+		return err
+	}
+	if already {
+		return domain.ErrRecurringPeriodDone
+	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO recurring_buy_runs (
 			id, plan_id, client_id, period_key, status, amount, quantity, price,
-			trade_id, fail_reason, scheduled_for, executed_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			trade_id, fail_reason, scheduled_for, executed_at, timing
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(plan_id, period_key) DO UPDATE SET
 			status = excluded.status,
 			amount = excluded.amount,
@@ -2109,15 +2119,26 @@ func applyRecurringFillTx(ctx context.Context, tx *sql.Tx, c *domain.RecurringFi
 			trade_id = excluded.trade_id,
 			fail_reason = excluded.fail_reason,
 			scheduled_for = excluded.scheduled_for,
-			executed_at = excluded.executed_at
+			executed_at = excluded.executed_at,
+			timing = excluded.timing
 	`, run.ID, run.PlanID, run.ClientID, run.PeriodKey, string(run.Status),
 		run.Amount, run.Quantity, run.Price, run.TradeID, run.FailReason,
-		run.ScheduledFor.UTC().Format(time.RFC3339Nano), run.ExecutedAt.UTC().Format(time.RFC3339Nano)); err != nil {
+		run.ScheduledFor.UTC().Format(time.RFC3339Nano), run.ExecutedAt.UTC().Format(time.RFC3339Nano),
+		string(run.Timing)); err != nil {
 		return err
 	}
 	spentDelta := 0.0
 	if run.Status == domain.RecurringBuyRunSucceeded && run.Amount > 0 {
 		spentDelta = run.Amount
+	}
+	if c.KeepSchedule {
+		if spentDelta == 0 {
+			return nil
+		}
+		_, err := tx.ExecContext(ctx, `
+			UPDATE recurring_buy_plans SET spent = spent + ?, updated_at = ? WHERE id = ?
+		`, spentDelta, run.ExecutedAt.UTC().Format(time.RFC3339Nano), c.PlanID)
+		return err
 	}
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE recurring_buy_plans SET next_run_at = ?, last_run_at = ?, last_period_key = ?, updated_at = ?,
@@ -2136,7 +2157,7 @@ func applyRecurringFillTx(ctx context.Context, tx *sql.Tx, c *domain.RecurringFi
 func (s *SQLite) GetRecurringBuyRun(ctx context.Context, planID, periodKey string) (*domain.RecurringBuyRun, error) {
 	row := s.db.QueryRowContext(ctx, `
 		SELECT id, plan_id, client_id, period_key, status, amount, quantity, price,
-			trade_id, fail_reason, scheduled_for, executed_at
+			trade_id, fail_reason, scheduled_for, executed_at, timing
 		FROM recurring_buy_runs WHERE plan_id = ? AND period_key = ?
 	`, planID, periodKey)
 	r, err := scanRecurringRun(row)
@@ -2146,18 +2167,37 @@ func (s *SQLite) GetRecurringBuyRun(ctx context.Context, planID, periodKey strin
 	return r, err
 }
 
+// GetRecurringBuyRunByID returns one run for a plan the client owns.
+func (s *SQLite) GetRecurringBuyRunByID(ctx context.Context, clientID, planID, runID string) (*domain.RecurringBuyRun, error) {
+	if _, err := s.GetRecurringBuyPlan(ctx, clientID, planID); err != nil {
+		return nil, err
+	}
+	row := s.db.QueryRowContext(ctx, `
+		SELECT id, plan_id, client_id, period_key, status, amount, quantity, price,
+			trade_id, fail_reason, scheduled_for, executed_at, timing
+		FROM recurring_buy_runs WHERE id = ? AND plan_id = ?
+	`, runID, planID)
+	r, err := scanRecurringRun(row)
+	if err == sql.ErrNoRows {
+		return nil, domain.ErrNotFound
+	}
+	return r, err
+}
+
 func scanRecurringRun(row scannable) (*domain.RecurringBuyRun, error) {
 	var r domain.RecurringBuyRun
-	var st, sched, exec string
+	var st, sched, exec, timing string
 	if err := row.Scan(
 		&r.ID, &r.PlanID, &r.ClientID, &r.PeriodKey, &st, &r.Amount, &r.Quantity, &r.Price,
-		&r.TradeID, &r.FailReason, &sched, &exec,
+		&r.TradeID, &r.FailReason, &sched, &exec, &timing,
 	); err != nil {
 		return nil, err
 	}
 	r.Status = domain.RecurringBuyRunStatus(st)
 	r.ScheduledFor = parseTime(sched)
 	r.ExecutedAt = parseTime(exec)
+	r.Timing = domain.RecurringBuyTiming(timing)
+	domain.NormalizeRecurringRunTiming(&r)
 	return &r, nil
 }
 
@@ -2168,8 +2208,8 @@ func (s *SQLite) PutRecurringBuyRun(ctx context.Context, run domain.RecurringBuy
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO recurring_buy_runs (
 			id, plan_id, client_id, period_key, status, amount, quantity, price,
-			trade_id, fail_reason, scheduled_for, executed_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			trade_id, fail_reason, scheduled_for, executed_at, timing
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(plan_id, period_key) DO UPDATE SET
 			status = excluded.status,
 			amount = excluded.amount,
@@ -2178,10 +2218,12 @@ func (s *SQLite) PutRecurringBuyRun(ctx context.Context, run domain.RecurringBuy
 			trade_id = excluded.trade_id,
 			fail_reason = excluded.fail_reason,
 			scheduled_for = excluded.scheduled_for,
-			executed_at = excluded.executed_at
+			executed_at = excluded.executed_at,
+			timing = excluded.timing
 	`, run.ID, run.PlanID, run.ClientID, run.PeriodKey, string(run.Status),
 		run.Amount, run.Quantity, run.Price, run.TradeID, run.FailReason,
-		run.ScheduledFor.UTC().Format(time.RFC3339Nano), run.ExecutedAt.UTC().Format(time.RFC3339Nano))
+		run.ScheduledFor.UTC().Format(time.RFC3339Nano), run.ExecutedAt.UTC().Format(time.RFC3339Nano),
+		string(run.Timing))
 	return err
 }
 
@@ -2197,8 +2239,8 @@ func (s *SQLite) FinishRecurringBuyRun(ctx context.Context, planID string, run d
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO recurring_buy_runs (
 			id, plan_id, client_id, period_key, status, amount, quantity, price,
-			trade_id, fail_reason, scheduled_for, executed_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			trade_id, fail_reason, scheduled_for, executed_at, timing
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(plan_id, period_key) DO UPDATE SET
 			status = excluded.status,
 			amount = excluded.amount,
@@ -2207,10 +2249,12 @@ func (s *SQLite) FinishRecurringBuyRun(ctx context.Context, planID string, run d
 			trade_id = excluded.trade_id,
 			fail_reason = excluded.fail_reason,
 			scheduled_for = excluded.scheduled_for,
-			executed_at = excluded.executed_at
+			executed_at = excluded.executed_at,
+			timing = excluded.timing
 	`, run.ID, run.PlanID, run.ClientID, run.PeriodKey, string(run.Status),
 		run.Amount, run.Quantity, run.Price, run.TradeID, run.FailReason,
-		run.ScheduledFor.UTC().Format(time.RFC3339Nano), run.ExecutedAt.UTC().Format(time.RFC3339Nano)); err != nil {
+		run.ScheduledFor.UTC().Format(time.RFC3339Nano), run.ExecutedAt.UTC().Format(time.RFC3339Nano),
+		string(run.Timing)); err != nil {
 		return err
 	}
 	spentDelta := 0.0
@@ -2251,7 +2295,7 @@ func (s *SQLite) ListRecurringBuyRuns(ctx context.Context, clientID, planID stri
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, plan_id, client_id, period_key, status, amount, quantity, price,
-			trade_id, fail_reason, scheduled_for, executed_at
+			trade_id, fail_reason, scheduled_for, executed_at, timing
 		FROM recurring_buy_runs WHERE plan_id = ?
 		ORDER BY executed_at DESC LIMIT ? OFFSET ?
 	`, planID, limit, offset)
@@ -2261,18 +2305,11 @@ func (s *SQLite) ListRecurringBuyRuns(ctx context.Context, clientID, planID stri
 	defer rows.Close()
 	var out []domain.RecurringBuyRun
 	for rows.Next() {
-		var r domain.RecurringBuyRun
-		var st, sched, exec string
-		if err := rows.Scan(
-			&r.ID, &r.PlanID, &r.ClientID, &r.PeriodKey, &st, &r.Amount, &r.Quantity, &r.Price,
-			&r.TradeID, &r.FailReason, &sched, &exec,
-		); err != nil {
+		r, err := scanRecurringRun(rows)
+		if err != nil {
 			return nil, err
 		}
-		r.Status = domain.RecurringBuyRunStatus(st)
-		r.ScheduledFor = parseTime(sched)
-		r.ExecutedAt = parseTime(exec)
-		out = append(out, r)
+		out = append(out, *r)
 	}
 	return out, rows.Err()
 }

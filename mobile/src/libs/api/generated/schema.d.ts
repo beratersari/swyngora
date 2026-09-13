@@ -6351,17 +6351,24 @@ export interface components {
             /** @description Calendar period key e.g. 2024-06-15 | 2024-W24 | 2024-06 */
             periodKey?: string;
             /** @enum {string} */
-            status?: "succeeded" | "failed";
+            status?: "succeeded" | "failed" | "missed";
             amount?: number;
             quantity?: number;
             price?: number;
             tradeId?: string;
-            /** @description e.g. insufficient cash balance, market price unavailable, last price above maxPrice, fill would exceed maxPrice after fee and slippage, budget exhausted, plan ended. Temporary reasons are retried on the same period without a second debit. */
+            /** @description e.g. insufficient cash balance, market price unavailable, last price above maxPrice, fill would exceed maxPrice after fee and slippage, budget exhausted, plan ended, missed while offline. Temporary reasons are retried on the same period without a second debit. */
             failReason?: string;
             /** Format: date-time */
             scheduledFor?: string;
             /** Format: date-time */
             executedAt?: string;
+            /**
+             * @description Set on succeeded fills. on_time means the buy landed near the scheduled slot; late means it ran after downtime or was completed later.
+             * @enum {string}
+             */
+            timing?: "on_time" | "late";
+            /** @description True when the user may buy this missed slot now */
+            canComplete?: boolean;
         };
         AllocationTarget: {
             /**

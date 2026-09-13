@@ -471,6 +471,7 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 					ID: row["id"], PlanID: row["planId"], PeriodKey: row["periodKey"], Status: row["status"],
 					Amount: csvF64(row, "amount"), Quantity: csvF64(row, "quantity"), Price: csvF64(row, "price"),
 					TradeID: row["tradeId"], FailReason: row["failReason"], ScheduledFor: row["scheduledFor"], ExecutedAt: row["executedAt"],
+					Timing: row["timing"],
 				})
 			}
 		case "portfolio_margin_positions":

@@ -22,6 +22,10 @@ const (
 	MaxRecurringBuyBudget         = 1e12
 	// RecurringHourUnset means keep the clock from startAt / previous nextRunAt.
 	RecurringHourUnset = -1
+	// RecurringOnTimeSlack is how late a scheduled fill may be and still count as on time.
+	RecurringOnTimeSlack = 5 * time.Minute
+	// MaxRecurringMissedRecord is the most skipped slots written on one catch-up tick.
+	MaxRecurringMissedRecord = 366
 )
 
 // RecurringBuyFrequency is how often a plan executes.
@@ -49,6 +53,16 @@ type RecurringBuyRunStatus string
 const (
 	RecurringBuyRunSucceeded RecurringBuyRunStatus = "succeeded"
 	RecurringBuyRunFailed    RecurringBuyRunStatus = "failed"
+	// RecurringBuyRunMissed is a slot that passed while the worker was down (no fill).
+	RecurringBuyRunMissed RecurringBuyRunStatus = "missed"
+)
+
+// RecurringBuyTiming says whether a succeeded fill happened on schedule.
+type RecurringBuyTiming string
+
+const (
+	RecurringBuyTimingOnTime RecurringBuyTiming = "on_time"
+	RecurringBuyTimingLate   RecurringBuyTiming = "late"
 )
 
 // RecurringBuyPlan is a paper DCA-style buy schedule for a client.
@@ -94,6 +108,7 @@ type RecurringBuyRun struct {
 	FailReason   string
 	ScheduledFor time.Time // the schedule instant this run represents
 	ExecutedAt   time.Time
+	Timing       RecurringBuyTiming // on_time | late; set on succeeded fills
 	// PlanStatus is not stored on the run row. FinishRecurringBuyRun writes it
 	// onto the plan when set (e.g. ended).
 	PlanStatus RecurringBuyPlanStatus
@@ -106,6 +121,8 @@ type RecurringFillCommit struct {
 	Run           RecurringBuyRun
 	NextRunAt     time.Time
 	LastPeriodKey string
+	// KeepSchedule completes a missed slot without moving next_run_at / last_period_key.
+	KeepSchedule bool
 }
 
 type recurringFillCtxKey struct{}
@@ -674,4 +691,68 @@ func LatestDueRunAtPlan(nextRunAt, now time.Time, p RecurringBuyPlan) time.Time 
 		nextRunAt = n
 	}
 	return nextRunAt
+}
+
+// RecurringRunTiming is on_time when the fill is within RecurringOnTimeSlack of the slot.
+func RecurringRunTiming(scheduledFor, executedAt time.Time) RecurringBuyTiming {
+	if scheduledFor.IsZero() || executedAt.IsZero() {
+		return RecurringBuyTimingLate
+	}
+	delta := executedAt.UTC().Sub(scheduledFor.UTC())
+	if delta < 0 {
+		delta = -delta
+	}
+	if delta <= RecurringOnTimeSlack {
+		return RecurringBuyTimingOnTime
+	}
+	return RecurringBuyTimingLate
+}
+
+// RecurringRunCompletable is true when the user may buy a missed slot later.
+func RecurringRunCompletable(r RecurringBuyRun) bool {
+	return r.Status == RecurringBuyRunMissed
+}
+
+// NormalizeRecurringRunTiming fills timing for older succeeded rows that lack it.
+func NormalizeRecurringRunTiming(r *RecurringBuyRun) {
+	if r == nil || r.Status != RecurringBuyRunSucceeded {
+		return
+	}
+	if r.Timing == RecurringBuyTimingOnTime || r.Timing == RecurringBuyTimingLate {
+		return
+	}
+	r.Timing = RecurringRunTiming(r.ScheduledFor, r.ExecutedAt)
+}
+
+// DueRecurringSlots is every scheduled instant from nextRunAt through the latest due slot.
+func DueRecurringSlots(nextRunAt, now time.Time, p RecurringBuyPlan) []time.Time {
+	nextRunAt = nextRunAt.UTC()
+	now = now.UTC()
+	if nextRunAt.After(now) {
+		return nil
+	}
+	var slots []time.Time
+	cur := nextRunAt
+	for i := 0; i < 100_000; i++ {
+		slots = append(slots, cur)
+		n := AdvanceRecurringSchedule(cur, p)
+		if !n.After(cur) || n.After(now) {
+			return slots
+		}
+		cur = n
+	}
+	return slots
+}
+
+// MissedRecurringSlots are due slots before the latest one (the worker still buys the latest).
+// Oldest extras beyond MaxRecurringMissedRecord are omitted from the record list.
+func MissedRecurringSlots(slots []time.Time) []time.Time {
+	if len(slots) <= 1 {
+		return nil
+	}
+	missed := slots[:len(slots)-1]
+	if len(missed) > MaxRecurringMissedRecord {
+		missed = missed[len(missed)-MaxRecurringMissedRecord:]
+	}
+	return append([]time.Time(nil), missed...)
 }

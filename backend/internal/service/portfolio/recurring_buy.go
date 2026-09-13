@@ -435,8 +435,15 @@ func (s *Service) processOneRecurringBuy(ctx context.Context, plan *domain.Recur
 	if plan.Status != domain.RecurringBuyActive {
 		return nil
 	}
-	// Latest missed slot only (skip intermediate catch-up buys).
-	scheduledFor := domain.LatestDueRunAtPlan(plan.NextRunAt, now, *plan)
+	slots := domain.DueRecurringSlots(plan.NextRunAt, now, *plan)
+	if len(slots) == 0 {
+		return nil
+	}
+	for _, slot := range domain.MissedRecurringSlots(slots) {
+		s.recordMissedRecurringSlot(ctx, plan, slot, now)
+	}
+	// Latest due slot only — intermediate slots stay missed until the user completes them.
+	scheduledFor := slots[len(slots)-1]
 	if scheduledFor.After(now) {
 		return nil
 	}
@@ -474,7 +481,7 @@ func (s *Service) processOneRecurringBuy(ctx context.Context, plan *domain.Recur
 		return s.finishOrRetryRecurring(ctx, plan.ID, plan.ClientID, runID, periodKey, scheduledFor, nextAfter, now, fresh, "plan ended")
 	}
 
-	tr, failReason := s.executeRecurringCashBuy(ctx, fresh, scheduledFor, now, periodKey, nextAfter, runID)
+	tr, failReason := s.executeRecurringCashBuy(ctx, fresh, scheduledFor, now, periodKey, nextAfter, runID, false)
 	if tr != nil {
 		// Cash, spent, and succeeded run were committed in the same ExecuteTrade transaction.
 		return nil
@@ -534,12 +541,66 @@ func (s *Service) replayRecurringPeriod(ctx context.Context, bookID string, in O
 // executeRecurringCashBuy spends up to plan.Amount cash at last price (qty = amount/price).
 // It reloads the plan after the last print and again immediately before PlaceOrder so a
 // concurrent maxPrice / budget / pause / end PATCH cannot fill with stale limits.
-func (s *Service) executeRecurringCashBuy(ctx context.Context, plan *domain.RecurringBuyPlan, scheduledFor, now time.Time, periodKey string, nextAfter time.Time, runID string) (*domain.Trade, string) {
+func (s *Service) recordMissedRecurringSlot(ctx context.Context, plan *domain.RecurringBuyPlan, scheduledFor, now time.Time) {
+	periodKey := domain.RecurringPeriodKeyPlan(scheduledFor, *plan)
+	existing, err := s.store.GetRecurringBuyRun(ctx, plan.ID, periodKey)
+	if err != nil && err != domain.ErrNotFound {
+		return
+	}
+	if existing != nil {
+		return
+	}
+	_, _, _ = s.store.ClaimRecurringBuyRun(ctx, domain.RecurringBuyRun{
+		ID: uuid.NewString(), PlanID: plan.ID, ClientID: plan.ClientID, PeriodKey: periodKey,
+		Status: domain.RecurringBuyRunMissed, Amount: plan.Amount, FailReason: "missed while offline",
+		ScheduledFor: scheduledFor, ExecutedAt: now,
+	})
+}
+
+// CompleteRecurringBuyRun buys a missed slot at the current last price (late).
+func (s *Service) CompleteRecurringBuyRun(ctx context.Context, clientID, planID, runID string, portfolioID ...string) (*domain.RecurringBuyRun, *domain.Trade, error) {
+	if s.store == nil {
+		return nil, nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
+	}
+	p, err := s.requireAccessErr(ctx, clientID, domain.PortfolioRoleTrader, portfolioID...)
+	if err != nil {
+		return nil, nil, err
+	}
+	bookID := p.BookID()
+	planID = strings.TrimSpace(planID)
+	runID = strings.TrimSpace(runID)
+	if planID == "" || runID == "" {
+		return nil, nil, fmt.Errorf("%w: plan id and run id are required", domain.ErrInvalidArgument)
+	}
+	plan, err := s.store.GetRecurringBuyPlan(ctx, bookID, planID)
+	if err != nil {
+		return nil, nil, err
+	}
+	run, err := s.store.GetRecurringBuyRunByID(ctx, bookID, planID, runID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !domain.RecurringRunCompletable(*run) {
+		return nil, nil, fmt.Errorf("%w: only missed buys can be completed later", domain.ErrInvalidArgument)
+	}
+	now := time.Now().UTC()
+	tr, failReason := s.executeRecurringCashBuy(ctx, plan, run.ScheduledFor, now, run.PeriodKey, plan.NextRunAt, run.ID, true)
+	if tr == nil {
+		return nil, nil, fmt.Errorf("%w: %s", domain.ErrInvalidArgument, failReason)
+	}
+	got, err := s.store.GetRecurringBuyRunByID(ctx, bookID, planID, run.ID)
+	if err != nil {
+		return nil, tr, err
+	}
+	return got, tr, nil
+}
+
+func (s *Service) executeRecurringCashBuy(ctx context.Context, plan *domain.RecurringBuyPlan, scheduledFor, now time.Time, periodKey string, nextAfter time.Time, runID string, catchUp bool) (*domain.Trade, string) {
 	price, err := s.lastPrice(ctx, string(plan.Exchange), plan.Symbol)
 	if err != nil || price <= 0 {
 		return nil, "market price unavailable"
 	}
-	fresh, reason := s.recurringPlanReadyToBuy(ctx, plan.ClientID, plan.ID, scheduledFor, price)
+	fresh, reason := s.recurringPlanReadyToBuy(ctx, plan.ClientID, plan.ID, scheduledFor, price, catchUp)
 	if reason != "" {
 		return nil, reason
 	}
@@ -558,7 +619,7 @@ func (s *Service) executeRecurringCashBuy(ctx context.Context, plan *domain.Recu
 		return nil, "buy quantity too small for amount"
 	}
 	// Re-check immediately before the fill so a PATCH during sizing still applies.
-	fresh, reason = s.recurringPlanReadyToBuy(ctx, plan.ClientID, plan.ID, scheduledFor, price)
+	fresh, reason = s.recurringPlanReadyToBuy(ctx, plan.ClientID, plan.ID, scheduledFor, price, catchUp)
 	if reason != "" {
 		return nil, reason
 	}
@@ -586,6 +647,7 @@ func (s *Service) executeRecurringCashBuy(ctx context.Context, plan *domain.Recu
 		RecurringPeriodKey:    periodKey,
 		RecurringNextRunAt:    nextAfter,
 		RecurringRunID:        runID,
+		RecurringCatchUp:      catchUp,
 	})
 	if err != nil {
 		msg := err.Error()
@@ -603,12 +665,12 @@ func (s *Service) executeRecurringCashBuy(ctx context.Context, plan *domain.Recu
 	return tr, ""
 }
 
-func (s *Service) recurringPlanReadyToBuy(ctx context.Context, bookID, planID string, scheduledFor time.Time, last float64) (*domain.RecurringBuyPlan, string) {
+func (s *Service) recurringPlanReadyToBuy(ctx context.Context, bookID, planID string, scheduledFor time.Time, last float64, catchUp bool) (*domain.RecurringBuyPlan, string) {
 	fresh, err := s.store.GetRecurringBuyPlan(ctx, bookID, planID)
 	if err != nil || fresh == nil {
 		return nil, "plan unavailable"
 	}
-	if fresh.Status != domain.RecurringBuyActive {
+	if fresh.Status != domain.RecurringBuyActive && !catchUp {
 		if fresh.Status == domain.RecurringBuyEnded {
 			return nil, "plan ended"
 		}

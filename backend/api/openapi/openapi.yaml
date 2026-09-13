@@ -5891,6 +5891,10 @@ paths:
         - name: offset
           in: query
           schema: { type: integer, default: 0 }
+        - name: status
+          in: query
+          schema: { type: string, enum: [succeeded, failed, missed] }
+          description: Optional filter
       responses:
         '200':
           description: Run list
@@ -5905,6 +5909,46 @@ paths:
                     items:
                       $ref: '#/components/schemas/RecurringBuyRun'
                   count: { type: integer }
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/recurring-buys/{id}/runs/{runId}/complete:
+    post:
+      summary: Complete a missed recurring buy at the current last price
+      description: |
+        Buys a slot that was skipped while the worker was down. Does not move the
+        plan's next run. The fill is marked timing=late. Paper trading only.
+      operationId: completeRecurringBuyRun
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: runId
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: portfolioId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Completed run
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run: { $ref: '#/components/schemas/RecurringBuyRun' }
+                  tradeId: { type: string }
+        '400':
+          $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
   /api/v1/portfolio/margin/mode:
@@ -10310,16 +10354,23 @@ components:
           description: Calendar period key e.g. 2024-06-15 | 2024-W24 | 2024-06
         status:
           type: string
-          enum: [succeeded, failed]
+          enum: [succeeded, failed, missed]
         amount: { type: number }
         quantity: { type: number }
         price: { type: number }
         tradeId: { type: string }
         failReason:
           type: string
-          description: e.g. insufficient cash balance, market price unavailable, last price above maxPrice, fill would exceed maxPrice after fee and slippage, budget exhausted, plan ended. Temporary reasons are retried on the same period without a second debit.
+          description: e.g. insufficient cash balance, market price unavailable, last price above maxPrice, fill would exceed maxPrice after fee and slippage, budget exhausted, plan ended, missed while offline. Temporary reasons are retried on the same period without a second debit.
         scheduledFor: { type: string, format: date-time }
         executedAt: { type: string, format: date-time }
+        timing:
+          type: string
+          enum: [on_time, late]
+          description: Set on succeeded fills. on_time means the buy landed near the scheduled slot; late means it ran after downtime or was completed later.
+        canComplete:
+          type: boolean
+          description: True when the user may buy this missed slot now
     AllocationTarget:
       type: object
       required: [asset, weightPct]

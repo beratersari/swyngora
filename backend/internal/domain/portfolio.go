@@ -451,6 +451,8 @@ type PortfolioPort interface {
 	ClaimRecurringBuyRun(ctx context.Context, run RecurringBuyRun) (claimed bool, out *RecurringBuyRun, err error)
 	// GetRecurringBuyRun returns the run for a plan period, or ErrNotFound.
 	GetRecurringBuyRun(ctx context.Context, planID, periodKey string) (*RecurringBuyRun, error)
+	// GetRecurringBuyRunByID returns one run owned by clientID/planID.
+	GetRecurringBuyRunByID(ctx context.Context, clientID, planID, runID string) (*RecurringBuyRun, error)
 	// PutRecurringBuyRun upserts a run row without changing plan spent or next_run_at.
 	PutRecurringBuyRun(ctx context.Context, run RecurringBuyRun) error
 	// FinishRecurringBuyRun updates run outcome and advances the plan schedule.

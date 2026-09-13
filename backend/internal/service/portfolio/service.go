@@ -153,6 +153,8 @@ type OrderInput struct {
 	RecurringPeriodKey    string
 	RecurringNextRunAt    time.Time
 	RecurringRunID        string
+	// RecurringCatchUp buys a missed slot later without moving the plan clock.
+	RecurringCatchUp bool
 }
 
 // requireBook loads a book the caller owns (owner role).
@@ -565,16 +567,21 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	ctx = s.withIdempotency(ctx, clientID, idempKey, idempHash, domain.IdempotencyKindTrade, idempIDs{TradeID: tradeID})
 	if in.RecurringPlanID != "" && in.RecurringPeriodKey != "" {
 		cashOut := tr.Notional + tr.Fee
+		timing := domain.RecurringRunTiming(in.RecurringScheduledFor, now)
+		if in.RecurringCatchUp {
+			timing = domain.RecurringBuyTimingLate
+		}
 		ctx = domain.ContextWithRecurringFill(ctx, &domain.RecurringFillCommit{
 			PlanID:        in.RecurringPlanID,
 			LastPeriodKey: in.RecurringPeriodKey,
 			NextRunAt:     in.RecurringNextRunAt,
+			KeepSchedule:  in.RecurringCatchUp,
 			Run: domain.RecurringBuyRun{
 				ID:     runIDOr(in.RecurringRunID, in.RecurringPlanID, in.RecurringPeriodKey),
 				PlanID: in.RecurringPlanID, ClientID: clientID, PeriodKey: in.RecurringPeriodKey,
 				Status: domain.RecurringBuyRunSucceeded, Amount: cashOut,
 				Quantity: in.Quantity, Price: price, TradeID: tradeID,
-				ScheduledFor: in.RecurringScheduledFor, ExecutedAt: now,
+				ScheduledFor: in.RecurringScheduledFor, ExecutedAt: now, Timing: timing,
 			},
 		})
 	}
@@ -605,7 +612,7 @@ func (s *Service) enforceRecurringLimits(ctx context.Context, bookID string, in 
 	if err != nil || plan == nil {
 		return 0, fmt.Errorf("%w: plan unavailable", domain.ErrInvalidArgument)
 	}
-	if plan.Status != domain.RecurringBuyActive {
+	if plan.Status != domain.RecurringBuyActive && !in.RecurringCatchUp {
 		if plan.Status == domain.RecurringBuyEnded {
 			return 0, fmt.Errorf("%w: plan ended", domain.ErrInvalidArgument)
 		}

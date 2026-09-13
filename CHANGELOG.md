@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Empty env wins over `.env`:** `LoadDotEnv` no longer treats `VAR=` as unset, so operators can disable `TELEGRAM_BOT_TOKEN` / `API_AUTH_TOKEN` without the file putting them back.
 
 ### Added
+- **Missed recurring buys:** if the desk is down across scheduled days, only the latest slot buys automatically. Skipped slots are stored as `missed` so you can see them and complete them later. Succeeded fills show `timing` `on_time` or `late`. Settings → Recurring expands history; `POST /api/v1/portfolio/recurring-buys/{id}/runs/{runId}/complete` and MCP `complete_recurring_buy_run` (`docs/features/recurring-buys.md`)
 - **Paper portfolio backup of baskets and risk:** export/import now restore allocation baskets, stored rebalance runs (legs, leftover mix, continue attempts), and risk limits with the paper book (`docs/features/user-data-export.md`, `docs/features/user-data-import.md`)
 - **Paper rebalance continue:** a run that stops mid-way (failed legs or a crash) can be **continued**. Continue re-plans leftover mix from the current book and does not replay filled legs. Each try is stored as an attempt (`POST /api/v1/portfolio/rebalances/{id}/continue`) (`docs/features/allocation-baskets.md`)
 - **Price-diff opportunity path:** each gap keeps how long it stayed open, the peak after-fee edge, when it started fading, why it closed, and sampled book-walk ticks (`GET /api/v1/price-diff/opportunities/{id}`, web `/arb`) (`docs/features/price-diff.md`)

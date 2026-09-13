@@ -157,7 +157,8 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `pause_recurring_buy` | Pause a plan |
 | `resume_recurring_buy` | Resume a paused plan |
 | `delete_recurring_buy` | Delete a plan and its runs |
-| `list_recurring_buy_runs` | Execution history for a plan |
+| `list_recurring_buy_runs` | Execution history for a plan (succeeded / failed / missed; timing on_time or late) |
+| `complete_recurring_buy_run` | Buy a missed slot now at last price (late; does not move next run) |
 | `create_portfolio_basket` | Named target mix (does not trade) |
 | `list_portfolio_baskets` | List saved baskets |
 | `get_portfolio_basket` | Basket + live drift preview |

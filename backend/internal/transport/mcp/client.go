@@ -2187,6 +2187,17 @@ func (c *APIClient) ListRecurringBuyRuns(ctx context.Context, clientID, planID s
 	return c.get(ctx, "/api/v1/portfolio/recurring-buys/"+url.PathEscape(planID)+"/runs", q)
 }
 
+// CompleteRecurringBuyRun buys a missed slot at the current last price.
+func (c *APIClient) CompleteRecurringBuyRun(ctx context.Context, clientID, planID, runID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	path := "/api/v1/portfolio/recurring-buys/" + url.PathEscape(planID) + "/runs/" + url.PathEscape(runID) + "/complete"
+	if qs := q.Encode(); qs != "" {
+		path += "?" + qs
+	}
+	return c.sendJSON(ctx, http.MethodPost, path, map[string]any{"clientId": clientID})
+}
+
 // SetMarginMode sets isolated|cross.
 func (c *APIClient) SetMarginMode(ctx context.Context, clientID, mode string) (json.RawMessage, error) {
 	return c.sendJSON(ctx, http.MethodPut, "/api/v1/portfolio/margin/mode", map[string]any{

@@ -141,6 +141,7 @@ PAPER_TOOLS: frozenset[str] = frozenset(
         "resume_recurring_buy",
         "delete_recurring_buy",
         "list_recurring_buy_runs",
+        "complete_recurring_buy_run",
         "create_portfolio_basket",
         "list_portfolio_baskets",
         "get_portfolio_basket",

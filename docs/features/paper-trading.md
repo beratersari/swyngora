@@ -49,7 +49,8 @@ Backup and restore owned books with the user data export/import jobs (`sections=
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/pause` | Pause plan |
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/resume` | Resume plan |
 | `DELETE` | `/api/v1/portfolio/recurring-buys/{id}` | Delete plan (+ run history) |
-| `GET` | `/api/v1/portfolio/recurring-buys/{id}/runs` | Execution history |
+| `GET` | `/api/v1/portfolio/recurring-buys/{id}/runs` | Execution history (missed slots + on_time/late) |
+| `POST` | `/api/v1/portfolio/recurring-buys/{id}/runs/{runId}/complete` | Buy a missed slot now |
 | `POST` | `/api/v1/portfolio/baskets` | Create named allocation basket (target % mix; no trades) |
 | `GET` | `/api/v1/portfolio/baskets` | List baskets |
 | `GET` | `/api/v1/portfolio/baskets/{id}` | Basket + live actual vs target |

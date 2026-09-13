@@ -2,6 +2,13 @@ import { baseApi } from '../baseApi';
 import type { components } from '../generated/schema';
 
 export type RecurringBuyPlan = components['schemas']['RecurringBuyPlan'];
+export type RecurringBuyRun = components['schemas']['RecurringBuyRun'];
+
+type RecurringRunsResponse = {
+  planId?: string;
+  count?: number;
+  runs?: RecurringBuyRun[];
+};
 
 type RecurringListResponse = {
   clientId?: string;
@@ -51,6 +58,20 @@ export const recurringApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ['RecurringBuy'],
     }),
+    listRecurringBuyRuns: build.query<RecurringRunsResponse, { id: string }>({
+      query: ({ id }) => `/api/v1/portfolio/recurring-buys/${encodeURIComponent(id)}/runs`,
+      providesTags: (_r, _e, arg) => [{ type: 'RecurringBuy', id: `runs-${arg.id}` }],
+    }),
+    completeRecurringBuyRun: build.mutation<
+      { run?: RecurringBuyRun; tradeId?: string },
+      { planId: string; runId: string }
+    >({
+      query: ({ planId, runId }) => ({
+        url: `/api/v1/portfolio/recurring-buys/${encodeURIComponent(planId)}/runs/${encodeURIComponent(runId)}/complete`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['RecurringBuy', 'Portfolio'],
+    }),
   }),
 });
 
@@ -60,4 +81,6 @@ export const {
   usePauseRecurringBuyMutation,
   useResumeRecurringBuyMutation,
   useDeleteRecurringBuyMutation,
+  useListRecurringBuyRunsQuery,
+  useCompleteRecurringBuyRunMutation,
 } = recurringApi;

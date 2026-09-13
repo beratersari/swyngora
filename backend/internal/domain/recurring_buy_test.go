@@ -234,3 +234,44 @@ func TestRecurringDailyNineIstanbulAfterHour(t *testing.T) {
 		t.Fatalf("got %v want %v", got, want)
 	}
 }
+
+func TestDueAndMissedRecurringSlots(t *testing.T) {
+	mon := time.Date(2024, 6, 3, 10, 0, 0, 0, time.UTC)
+	thu := time.Date(2024, 6, 6, 15, 0, 0, 0, time.UTC)
+	p := RecurringBuyPlan{Frequency: RecurringDaily}
+	slots := DueRecurringSlots(mon, thu, p)
+	if len(slots) != 4 {
+		t.Fatalf("slots=%v", slots)
+	}
+	missed := MissedRecurringSlots(slots)
+	if len(missed) != 3 {
+		t.Fatalf("missed=%v", missed)
+	}
+	if !missed[0].Equal(mon) || !slots[len(slots)-1].Equal(time.Date(2024, 6, 6, 10, 0, 0, 0, time.UTC)) {
+		t.Fatalf("order missed=%v latest=%v", missed, slots[len(slots)-1])
+	}
+	if MissedRecurringSlots(DueRecurringSlots(thu.Add(time.Hour), thu, p)) != nil {
+		t.Fatal("future next should have no due slots")
+	}
+}
+
+func TestRecurringRunTimingAndCompletable(t *testing.T) {
+	sched := time.Date(2024, 6, 6, 10, 0, 0, 0, time.UTC)
+	if RecurringRunTiming(sched, sched.Add(2*time.Minute)) != RecurringBuyTimingOnTime {
+		t.Fatal("expected on_time")
+	}
+	if RecurringRunTiming(sched, sched.Add(10*time.Minute)) != RecurringBuyTimingLate {
+		t.Fatal("expected late")
+	}
+	if RecurringRunCompletable(RecurringBuyRun{Status: RecurringBuyRunSucceeded}) {
+		t.Fatal("succeeded is not completable")
+	}
+	if !RecurringRunCompletable(RecurringBuyRun{Status: RecurringBuyRunMissed}) {
+		t.Fatal("missed should be completable")
+	}
+	r := RecurringBuyRun{Status: RecurringBuyRunSucceeded, ScheduledFor: sched, ExecutedAt: sched.Add(time.Hour)}
+	NormalizeRecurringRunTiming(&r)
+	if r.Timing != RecurringBuyTimingLate {
+		t.Fatalf("timing=%s", r.Timing)
+	}
+}

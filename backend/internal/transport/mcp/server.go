@@ -171,6 +171,7 @@ type DataPort interface {
 	ResumeRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	DeleteRecurringBuyPlan(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	ListRecurringBuyRuns(ctx context.Context, clientID, planID string, limit, offset int) (json.RawMessage, error)
+	CompleteRecurringBuyRun(ctx context.Context, clientID, planID, runID string) (json.RawMessage, error)
 	CreatePortfolioBasket(ctx context.Context, clientID, name, targetsJSON string) (json.RawMessage, error)
 	ListPortfolioBaskets(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetPortfolioBasket(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -3226,7 +3227,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("list_recurring_buy_runs",
-		mcp.WithDescription("List execution history for a paper recurring buy plan (succeeded/failed runs)."),
+		mcp.WithDescription("List execution history for a paper recurring buy plan (succeeded, failed, and missed slots). Succeeded rows include timing on_time or late."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
@@ -3243,6 +3244,33 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.ListRecurringBuyRuns(ctx, clientID, planID, req.GetInt("limit", 50), req.GetInt("offset", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("complete_recurring_buy_run",
+		mcp.WithDescription("Buy a missed paper recurring slot now at the current last price. Marks the fill as late. Does not move the plan's next run. Simulated only."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
+		mcp.WithString("planId", mcp.Required(), mcp.Description("Plan id")),
+		mcp.WithString("runId", mcp.Required(), mcp.Description("Missed run id from list_recurring_buy_runs")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		planID, err := req.RequireString("planId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		runID, err := req.RequireString("runId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CompleteRecurringBuyRun(ctx, clientID, planID, runID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

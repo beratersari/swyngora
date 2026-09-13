@@ -134,7 +134,8 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `POST` | `/api/v1/portfolio/rebalances/{id}/continue` | Continue leftover mix from the current book (new attempt) |
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/pause` | Pause plan |
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/resume` | Resume plan |
-| `GET` | `/api/v1/portfolio/recurring-buys/{id}/runs` | Recurring buy execution history |
+| `GET` | `/api/v1/portfolio/recurring-buys/{id}/runs` | Recurring buy execution history (includes missed slots; `timing` on fills) |
+| `POST` | `/api/v1/portfolio/recurring-buys/{id}/runs/{runId}/complete` | Buy a missed slot now (late; does not move next run) |
 | `POST`/`GET` | `/api/v1/portfolio/margin/orders` | Paper margin open (market/limit long/short 1x–10x; optional `Idempotency-Key`) / list |
 | `DELETE` | `/api/v1/portfolio/margin/orders/{id}` | Cancel margin limit order |
 | `GET` | `/api/v1/portfolio/margin/positions` | Open margin positions |

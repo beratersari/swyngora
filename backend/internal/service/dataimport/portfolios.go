@@ -247,6 +247,7 @@ type wirePFRecurringRun struct {
 	FailReason   string  `json:"failReason"`
 	ScheduledFor string  `json:"scheduledFor"`
 	ExecutedAt   string  `json:"executedAt"`
+	Timing       string  `json:"timing"`
 }
 
 type wirePFMarginPos struct {
@@ -450,7 +451,7 @@ func normalizePortfolioBook(w wirePortfolioBook, fileOwner, importer string) (do
 			ID: r.ID, PlanID: r.PlanID, ClientID: id, PeriodKey: r.PeriodKey,
 			Status: domain.RecurringBuyRunStatus(r.Status), Amount: r.Amount, Quantity: r.Quantity, Price: r.Price,
 			TradeID: r.TradeID, FailReason: r.FailReason, ScheduledFor: parseTimeOrNow(r.ScheduledFor),
-			ExecutedAt: parseTimeOrNow(r.ExecutedAt),
+			ExecutedAt: parseTimeOrNow(r.ExecutedAt), Timing: domain.RecurringBuyTiming(r.Timing),
 		})
 	}
 	for _, m := range w.MarginPositions {

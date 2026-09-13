@@ -3680,6 +3680,21 @@ func (b *Backend) DeleteRecurringBuyPlan(ctx context.Context, clientID, id strin
 	return mustJSON(map[string]any{"deleted": true, "id": id})
 }
 
+func (b *Backend) CompleteRecurringBuyRun(ctx context.Context, clientID, planID, runID string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	run, tr, err := b.Portfolio.CompleteRecurringBuyRun(ctx, clientID, planID, runID, PortfolioIDFrom(ctx))
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]any{"run": recurringRunMap(run)}
+	if tr != nil {
+		out["tradeId"] = tr.ID
+	}
+	return mustJSON(out)
+}
+
 func (b *Backend) ListRecurringBuyRuns(ctx context.Context, clientID, planID string, limit, offset int) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
@@ -3957,6 +3972,8 @@ func recurringRunMap(r *domain.RecurringBuyRun) map[string]any {
 		"failReason":   r.FailReason,
 		"scheduledFor": r.ScheduledFor.UTC().Format(time.RFC3339Nano),
 		"executedAt":   r.ExecutedAt.UTC().Format(time.RFC3339Nano),
+		"timing":       string(r.Timing),
+		"canComplete":  domain.RecurringRunCompletable(*r),
 	}
 }
 

@@ -244,6 +244,7 @@ type portfolioRecurringRunPayload struct {
 	FailReason   string  `json:"failReason,omitempty"`
 	ScheduledFor string  `json:"scheduledFor"`
 	ExecutedAt   string  `json:"executedAt"`
+	Timing       string  `json:"timing,omitempty"`
 }
 
 type portfolioMarginPosPayload struct {
@@ -389,6 +390,7 @@ func snapshotToPayload(snap domain.PortfolioSnapshot) portfolioBookPayload {
 			ID: r.ID, PlanID: r.PlanID, PeriodKey: r.PeriodKey, Status: string(r.Status),
 			Amount: r.Amount, Quantity: r.Quantity, Price: r.Price, TradeID: r.TradeID, FailReason: r.FailReason,
 			ScheduledFor: rfcNano(r.ScheduledFor), ExecutedAt: rfcNano(r.ExecutedAt),
+			Timing: string(r.Timing),
 		})
 	}
 	for _, m := range snap.MarginPositions {

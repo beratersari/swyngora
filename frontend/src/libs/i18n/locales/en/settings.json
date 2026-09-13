@@ -72,7 +72,7 @@
     "loadFailed": "Could not load shares"
   },
   "recurring": {
-    "hint": "Paper market buys on a schedule. Insufficient cash fails that run only. Not real money.",
+    "hint": "Paper market buys on a schedule. If the desk is closed, missed days stay in history so you can complete them later. On-time vs late is shown on each fill. Not real money.",
     "symbol": "Symbol",
     "amount": "Cash amount",
     "frequency": "Frequency",
@@ -85,6 +85,14 @@
     "pause": "Pause",
     "resume": "Resume",
     "delete": "Delete",
-    "loadFailed": "Could not load recurring buys"
+    "loadFailed": "Could not load recurring buys",
+    "noRuns": "No runs yet.",
+    "scheduled": "Scheduled",
+    "status": "Status",
+    "timing": "When",
+    "onTime": "On time",
+    "late": "Completed later",
+    "complete": "Buy now",
+    "completed": "Missed buy completed"
   }
 }

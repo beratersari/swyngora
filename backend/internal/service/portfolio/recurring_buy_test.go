@@ -206,8 +206,75 @@ func TestRecurringBuy_CatchUpOnlyLatest(t *testing.T) {
 		t.Fatal(err)
 	}
 	runs, _ := svc.ListRecurringBuyRuns(ctx, "rb-catch", plan.ID, 20, 0)
-	if len(runs) != 1 {
-		t.Fatalf("want 1 run for latest missed only, got %d", len(runs))
+	var succeeded, missed int
+	for _, r := range runs {
+		switch r.Status {
+		case domain.RecurringBuyRunSucceeded:
+			succeeded++
+			if r.Timing != domain.RecurringBuyTimingOnTime && r.Timing != domain.RecurringBuyTimingLate {
+				t.Fatalf("latest fill missing timing, got %q", r.Timing)
+			}
+		case domain.RecurringBuyRunMissed:
+			missed++
+		}
+	}
+	if succeeded != 1 {
+		t.Fatalf("want 1 succeeded latest buy, got succeeded=%d missed=%d runs=%+v", succeeded, missed, runs)
+	}
+	if missed < 2 {
+		t.Fatalf("want missed slots recorded, got %d %+v", missed, runs)
+	}
+}
+
+func TestRecurringBuy_CompleteMissedLater(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "rb-complete", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now().UTC().Add(-72 * time.Hour)
+	plan, err := svc.CreateRecurringBuyPlan(ctx, RecurringBuyCreateInput{
+		ClientID: "rb-complete", Symbol: "BTCUSDT", Amount: 100, Frequency: "daily", StartAt: &start,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ProcessDueRecurringBuys(ctx, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	afterProcess, err := svc.GetRecurringBuyPlan(ctx, "rb-complete", plan.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs, _ := svc.ListRecurringBuyRuns(ctx, "rb-complete", plan.ID, 20, 0)
+	var missed *domain.RecurringBuyRun
+	for i := range runs {
+		if runs[i].Status == domain.RecurringBuyRunMissed {
+			missed = &runs[i]
+			break
+		}
+	}
+	if missed == nil {
+		t.Fatal("expected a missed run")
+	}
+	before, _ := svc.View(ctx, "rb-complete")
+	got, tr, err := svc.CompleteRecurringBuyRun(ctx, "rb-complete", plan.ID, missed.ID)
+	if err != nil || tr == nil || got == nil {
+		t.Fatalf("complete: %v trade=%v run=%v", err, tr, got)
+	}
+	if got.Status != domain.RecurringBuyRunSucceeded || got.Timing != domain.RecurringBuyTimingLate {
+		t.Fatalf("got %+v", got)
+	}
+	after, _ := svc.View(ctx, "rb-complete")
+	if after.CashBalance >= before.CashBalance {
+		t.Fatalf("cash did not drop: before=%v after=%v", before.CashBalance, after.CashBalance)
+	}
+	planAfter, _ := svc.GetRecurringBuyPlan(ctx, "rb-complete", plan.ID)
+	if !planAfter.NextRunAt.Equal(afterProcess.NextRunAt) {
+		t.Fatalf("completing missed moved next_run_at: %v -> %v", afterProcess.NextRunAt, planAfter.NextRunAt)
+	}
+	if _, _, err := svc.CompleteRecurringBuyRun(ctx, "rb-complete", plan.ID, missed.ID); err == nil {
+		t.Fatal("second complete should fail")
 	}
 }
 

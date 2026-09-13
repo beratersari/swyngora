@@ -486,7 +486,7 @@ func buildCSV(pl *payload) ([]byte, error) {
 			for _, r := range b.RecurringRuns {
 				runRows = append(runRows, []string{
 					b.ID, r.ID, r.PlanID, r.PeriodKey, r.Status, f64(r.Amount), f64(r.Quantity), f64(r.Price),
-					r.TradeID, r.FailReason, r.ScheduledFor, r.ExecutedAt,
+					r.TradeID, r.FailReason, r.ScheduledFor, r.ExecutedAt, r.Timing,
 				})
 			}
 			for _, m := range b.MarginPositions {
@@ -572,7 +572,7 @@ func buildCSV(pl *payload) ([]byte, error) {
 			"status", "nextRunAt", "lastRunAt", "lastPeriodKey", "createdAt", "updatedAt",
 		}, recRows)
 		_ = writeSection("portfolio_recurring_runs", []string{
-			"portfolioId", "id", "planId", "periodKey", "status", "amount", "quantity", "price", "tradeId", "failReason", "scheduledFor", "executedAt",
+			"portfolioId", "id", "planId", "periodKey", "status", "amount", "quantity", "price", "tradeId", "failReason", "scheduledFor", "executedAt", "timing",
 		}, runRows)
 		_ = writeSection("portfolio_margin_positions", []string{
 			"portfolioId", "id", "exchange", "symbol", "side", "mode", "quantity", "entryPrice", "leverage", "margin",

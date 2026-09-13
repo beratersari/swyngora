@@ -144,8 +144,10 @@ export {
   usePauseRecurringBuyMutation,
   useResumeRecurringBuyMutation,
   useDeleteRecurringBuyMutation,
+  useListRecurringBuyRunsQuery,
+  useCompleteRecurringBuyRunMutation,
 } from './endpoints/recurringApi';
-export type { RecurringBuyPlan, CreateRecurringBuyArg } from './endpoints/recurringApi';
+export type { RecurringBuyPlan, RecurringBuyRun, CreateRecurringBuyArg } from './endpoints/recurringApi';
 export { usePostAiChatMutation } from './endpoints/aiApi';
 export type { AiChatRequest, AiChatResponse, PostAiChatArg } from './endpoints/aiApi';
 export { streamAiChat } from './aiChatStream';

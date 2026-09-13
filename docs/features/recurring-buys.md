@@ -23,7 +23,8 @@ Users want scheduled paper buys of a coin without placing each market order by h
 9. **Retries:** temporary failures (`market price unavailable`, `order failed`, `insufficient cash`, `plan unavailable`) leave the period due and retry on the next worker tick. They do not advance the schedule and do not add to `spent`. A retry uses a stable idempotency key for that plan period so a recovered fill is not bought or billed again. Permanent skips (`maxPrice`, budget exhausted, paused, ended) still fail the period and move on.
 10. **`endDate` / `endsAt`:** optional last inclusive run. `endDate` is `YYYY-MM-DD` in the plan timezone (that local day still runs). `endsAt` is an RFC3339 instant. After the last allowed slot the plan status is **`ended`**. Resume requires extending the end first.
 11. **Idempotency:** `UNIQUE(plan_id, period_key)` on run rows — only one succeeded fill per period. Temporary `in_progress` / retryable rows are updated in place.
-12. **Catch-up:** if the server was down across multiple periods, only the **latest** due slot runs once (intermediate slots are skipped).
+12. **Catch-up:** if the server was down across multiple periods, only the **latest** due slot buys automatically (no flood of back-fills). Intermediate slots are stored as **`missed`** so you can see them and **complete them later** (`POST .../runs/{runId}/complete`). Completing a missed slot buys at the current last price, marks the fill **`timing=late`**, and does **not** move `nextRunAt`.
+13. **Timing:** succeeded fills include `timing`: **`on_time`** (within 5 minutes of the scheduled slot) or **`late`** (ran after downtime, or you completed a missed slot later). History also returns `canComplete` on missed rows.
 
 ## API
 
@@ -36,7 +37,8 @@ Users want scheduled paper buys of a coin without placing each market order by h
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/pause` | Pause |
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/resume` | Resume |
 | `DELETE` | `/api/v1/portfolio/recurring-buys/{id}` | Delete |
-| `GET` | `/api/v1/portfolio/recurring-buys/{id}/runs` | Run history |
+| `GET` | `/api/v1/portfolio/recurring-buys/{id}/runs` | Run history (`status=missed` optional; `timing` / `canComplete` on each row) |
+| `POST` | `/api/v1/portfolio/recurring-buys/{id}/runs/{runId}/complete` | Buy a missed slot now (late) |
 
 Requires an existing paper portfolio for the same `clientId`. Max 20 plans per client.
 
@@ -75,4 +77,4 @@ Manual: create portfolio → create a second book → create a plan with `startA
 - Market orders only (cash notional). `maxPrice` skips the period; it does not place a limit order.
 - Name does not compute a percent of wallet — use a fixed `amount`.
 - Weekday / day-of-month / clock use **UTC** unless `timeZone` is set (then DST rules of that zone apply).
-- UI for product web/mobile not in this change.
+- Settings → Recurring expands a plan to show run history, on-time vs later, and **Buy now** on missed slots.

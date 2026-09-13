@@ -413,11 +413,11 @@ func (s *SQLite) txInsertSnapshot(ctx context.Context, tx *sql.Tx, snap domain.P
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO recurring_buy_runs (
 				id, plan_id, client_id, period_key, status, amount, quantity, price,
-				trade_id, fail_reason, scheduled_for, executed_at
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				trade_id, fail_reason, scheduled_for, executed_at, timing
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`, run.ID, run.PlanID, run.ClientID, run.PeriodKey, string(run.Status),
 			run.Amount, run.Quantity, run.Price, run.TradeID, run.FailReason,
-			fmtTime(run.ScheduledFor), fmtTime(run.ExecutedAt)); err != nil {
+			fmtTime(run.ScheduledFor), fmtTime(run.ExecutedAt), string(run.Timing)); err != nil {
 			return err
 		}
 	}

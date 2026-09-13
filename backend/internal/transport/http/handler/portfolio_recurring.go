@@ -67,6 +67,8 @@ type recurringBuyRunDTO struct {
 	FailReason   string  `json:"failReason,omitempty"`
 	ScheduledFor string  `json:"scheduledFor"`
 	ExecutedAt   string  `json:"executedAt"`
+	Timing       string  `json:"timing,omitempty"`
+	CanComplete  bool    `json:"canComplete,omitempty"`
 }
 
 func recurringPlanDTO(p *domain.RecurringBuyPlan) recurringBuyPlanDTO {
@@ -106,6 +108,8 @@ func recurringRunDTO(r *domain.RecurringBuyRun) recurringBuyRunDTO {
 		FailReason:   r.FailReason,
 		ScheduledFor: r.ScheduledFor.UTC().Format(time.RFC3339Nano),
 		ExecutedAt:   r.ExecutedAt.UTC().Format(time.RFC3339Nano),
+		Timing:       string(r.Timing),
+		CanComplete:  domain.RecurringRunCompletable(*r),
 	}
 }
 
@@ -308,11 +312,29 @@ func (h *PortfolioHandler) ListRecurringBuyRuns(w http.ResponseWriter, r *http.R
 		writeError(w, err)
 		return
 	}
+	want := strings.ToLower(strings.TrimSpace(q.Get("status")))
 	items := make([]recurringBuyRunDTO, 0, len(list))
 	for i := range list {
+		if want != "" && string(list[i].Status) != want {
+			continue
+		}
 		items = append(items, recurringRunDTO(&list[i]))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"planId": r.PathValue("id"), "runs": items, "count": len(items),
 	})
+}
+
+// CompleteRecurringBuyRun handles POST /api/v1/portfolio/recurring-buys/{id}/runs/{runId}/complete
+func (h *PortfolioHandler) CompleteRecurringBuyRun(w http.ResponseWriter, r *http.Request) {
+	run, tr, err := h.svc.CompleteRecurringBuyRun(r.Context(), clientIDFrom(r), r.PathValue("id"), r.PathValue("runId"), portfolioIDFrom(r))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	out := map[string]any{"run": recurringRunDTO(run)}
+	if tr != nil {
+		out["tradeId"] = tr.ID
+	}
+	writeJSON(w, http.StatusOK, out)
 }

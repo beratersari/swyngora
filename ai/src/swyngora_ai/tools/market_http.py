@@ -1616,6 +1616,13 @@ class RecurringBuyRunsInput(BaseModel):
     offset: int = 0
 
 
+class RecurringBuyCompleteInput(BaseModel):
+    client_id: str
+    plan_id: str
+    run_id: str
+    portfolio_id: str = ""
+
+
 class MarginOrderInput(BaseModel):
     client_id: str
     symbol: str
@@ -3682,6 +3689,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"clientId": client_id, "limit": str(limit), "offset": str(offset)},
         )
 
+    def complete_recurring_buy_run(
+        client_id: str, plan_id: str, run_id: str, portfolio_id: str = ""
+    ) -> str:
+        q: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.post(
+            f"/api/v1/portfolio/recurring-buys/{plan_id}/runs/{run_id}/complete",
+            q,
+        )
+
     def create_portfolio_basket(
         client_id: str, name: str, targets_json: str, portfolio_id: str = ""
     ) -> str:
@@ -5463,8 +5481,14 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         StructuredTool.from_function(
             list_recurring_buy_runs,
             name="list_recurring_buy_runs",
-            description="List execution history for a paper recurring buy plan.",
+            description="List execution history for a paper recurring buy plan (succeeded, failed, missed). Succeeded rows include timing on_time or late.",
             args_schema=RecurringBuyRunsInput,
+        ),
+        StructuredTool.from_function(
+            complete_recurring_buy_run,
+            name="complete_recurring_buy_run",
+            description="Buy a missed paper recurring slot now at the current last price. Marks the fill as late. Does not move the plan's next run.",
+            args_schema=RecurringBuyCompleteInput,
         ),
         StructuredTool.from_function(
             create_portfolio_basket,

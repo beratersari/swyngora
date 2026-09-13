@@ -72,7 +72,7 @@
     "loadFailed": "Paylaşımlar yüklenemedi"
   },
   "recurring": {
-    "hint": "Zamanlanmış kâğıt piyasa alımları. Yetersiz nakit yalnızca o turu düşürür. Gerçek para değildir.",
+    "hint": "Zamanlanmış kâğıt piyasa alımları. Masa kapalıyken kaçan günler geçmişte kalır; isterseniz sonra tamamlayabilirsiniz. Zamanında / sonra ayrımı her alımda görünür. Gerçek para değildir.",
     "symbol": "Sembol",
     "amount": "Nakit tutar",
     "frequency": "Sıklık",
@@ -85,6 +85,14 @@
     "pause": "Duraklat",
     "resume": "Sürdür",
     "delete": "Sil",
-    "loadFailed": "Düzenli alımlar yüklenemedi"
+    "loadFailed": "Düzenli alımlar yüklenemedi",
+    "noRuns": "Henüz çalıştırma yok.",
+    "scheduled": "Planlanan",
+    "status": "Durum",
+    "timing": "Zaman",
+    "onTime": "Zamanında",
+    "late": "Sonra tamamlandı",
+    "complete": "Şimdi al",
+    "completed": "Kaçırılan alım tamamlandı"
   }
 }
