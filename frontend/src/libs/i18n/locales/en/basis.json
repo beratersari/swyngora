@@ -1,0 +1,44 @@
+{
+  "title": "Basis",
+  "subtitle": "Perpetual vs spot, and how listed futures are priced against each other. Informational only.",
+  "symbol": "Coin",
+  "empty": "No basis for this coin.",
+  "perpVsSpot": "Perpetual vs spot",
+  "curveTitle": "Futures curve",
+  "curveHint": "Near expiry vs far expiry. Contango means the far contract is richer (curve up). Backwardation means the near contract is richer (curve down).",
+  "near": "Near",
+  "far": "Far",
+  "spread": "Far − near",
+  "contract": "Contract",
+  "expiry": "Expiry",
+  "dte": "Days",
+  "mark": "Mark",
+  "vsIndex": "Vs index",
+  "richerFar": "Far expiry is more expensive",
+  "richerNear": "Near expiry is more expensive",
+  "richerFlat": "Near and far are about in line",
+  "shapes": {
+    "contango": "Contango",
+    "backwardation": "Backwardation",
+    "flat": "Flat",
+    "humped": "Humped",
+    "unknown": "Unknown"
+  },
+  "slopes": {
+    "up": "Curve up",
+    "down": "Curve down",
+    "flat": "Curve flat"
+  },
+  "kinds": {
+    "premium": "Premium",
+    "discount": "Discount",
+    "flat": "Flat"
+  },
+  "trends": {
+    "expanding": "Expanding",
+    "shrinking": "Shrinking",
+    "stable": "Stable",
+    "flipped": "Flipped"
+  },
+  "agreement": "Venues"
+}

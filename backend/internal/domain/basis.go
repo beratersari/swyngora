@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -21,6 +22,24 @@ const (
 	// Flat if |basis| < 1 bp of spot (0.01%).
 	basisFlatPct      = 0.01
 	basisTrendMovePct = 0.005 // 0.5 bp change in basis % to call expand/shrink
+
+	BasisContractPerp           = "perp"
+	BasisContractCurrentQuarter = "current_quarter"
+	BasisContractNextQuarter    = "next_quarter"
+	BasisContractDated          = "dated"
+
+	BasisCurveContango      = "contango"      // far richer than near
+	BasisCurveBackwardation = "backwardation" // near richer than far
+	BasisCurveHumped        = "humped"        // not monotonic
+	BasisCurveUnknown       = "unknown"
+
+	BasisSlopeUp   = "up"
+	BasisSlopeDown = "down"
+	BasisSlopeFlat = "flat"
+
+	BasisRicherNear = "near"
+	BasisRicherFar  = "far"
+	BasisRicherNone = "none"
 )
 
 // BasisQuote is one venue's live perp vs spot/index plus 5m history of mark−index.
@@ -35,6 +54,18 @@ type BasisQuote struct {
 	History     []BasisHistPoint // oldest first, 5m mark vs index
 	FundingRate float64
 	OIChange1h  float64 // NaN if unknown
+	// Contracts are listed futures for this pair (perp + dated), when the venue has them.
+	Contracts []BasisContractQuote
+}
+
+// BasisContractQuote is one listed futures contract on a venue.
+type BasisContractQuote struct {
+	Symbol string
+	Kind   string // perp | current_quarter | next_quarter | dated
+	Expiry time.Time
+	Last   float64
+	Mark   float64
+	Index  float64
 }
 
 // BasisHistPoint is mark vs index at one sample time.
@@ -74,8 +105,37 @@ type BasisVenueReport struct {
 	Mark     BasisLevel // mark vs index (what funding uses)
 	Windows  []BasisWindowChange
 	Trend    string // from 1h when present, else 5m
+	Curve    BasisCurve
 	Summary  string
 	Error    string
+}
+
+// BasisContractPoint is one listed contract on the futures curve.
+type BasisContractPoint struct {
+	Symbol       string
+	Kind         string
+	Label        string
+	Expiry       time.Time
+	DaysToExpiry int
+	Last         float64
+	Mark         float64
+	Index        float64
+	VsIndex      float64
+	VsIndexPct   float64
+}
+
+// BasisCurve is how listed futures are priced against each other.
+type BasisCurve struct {
+	Points    []BasisContractPoint
+	Near      *BasisContractPoint
+	Far       *BasisContractPoint
+	Spread    float64 // far mark − near mark
+	SpreadPct float64 // (far−near)/near*100
+	Shape     string  // contango | backwardation | flat | humped | unknown
+	Slope     string  // up | down | flat
+	Richer    string  // near | far | none
+	Summary   string
+	Complete  bool
 }
 
 // BasisAgreement is whether Binance and Bybit tell the same story.
@@ -257,6 +317,7 @@ func BuildBasisVenue(q BasisQuote) BasisVenueReport {
 		out.Windows = append(out.Windows, ch)
 	}
 	out.Trend = pickBasisTrend(out.Windows)
+	out.Curve = BuildBasisCurve(q)
 	out.Summary = ExplainBasis(out, q)
 	return out
 }
@@ -317,10 +378,14 @@ func ExplainBasis(v BasisVenueReport, q BasisQuote) string {
 		bits = append(bits, "OI "+FormatSignedPct(q.OIChange1h)+" over 1h")
 	}
 	meaning := basisMeaning(lv.Kind, v.Trend, q)
-	if len(bits) == 0 {
-		return head + " " + meaning
+	curve := ""
+	if v.Curve.Complete && v.Curve.Summary != "" {
+		curve = " " + v.Curve.Summary
 	}
-	return head + " Together with " + joinAnd(bits) + ": " + meaning
+	if len(bits) == 0 {
+		return head + " " + meaning + curve
+	}
+	return head + " Together with " + joinAnd(bits) + ": " + meaning + curve
 }
 
 func basisMeaning(kind, trend string, q BasisQuote) string {
@@ -400,4 +465,175 @@ func CompareBasisVenues(venues []BasisVenueReport) *BasisAgreement {
 		align = AlignMixed
 	}
 	return &BasisAgreement{Alignment: align, Title: title, Summary: summary}
+}
+
+// BuildBasisCurve ranks listed contracts by days to expiry and says if the
+// far contract is richer (contango / up) or cheaper (backwardation / down).
+func BuildBasisCurve(q BasisQuote) BasisCurve {
+	now := q.Time
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	pts := make([]BasisContractPoint, 0, len(q.Contracts)+1)
+	seen := map[string]bool{}
+	add := func(c BasisContractQuote) {
+		sym := strings.TrimSpace(c.Symbol)
+		if sym == "" || seen[sym] {
+			return
+		}
+		px := c.Mark
+		if px <= 0 {
+			px = c.Last
+		}
+		if px <= 0 {
+			return
+		}
+		idx := c.Index
+		if idx <= 0 {
+			idx = q.SpotIndex
+		}
+		dte := 0
+		if !c.Expiry.IsZero() && c.Kind != BasisContractPerp {
+			dte = int(c.Expiry.UTC().Sub(now).Hours() / 24)
+			if dte < 0 {
+				return
+			}
+		}
+		vs, vsPct, _ := ComputeBasis(px, idx)
+		pts = append(pts, BasisContractPoint{
+			Symbol: sym, Kind: contractKind(c.Kind, c.Expiry),
+			Label: contractLabel(c.Kind, c.Expiry), Expiry: c.Expiry.UTC(),
+			DaysToExpiry: dte, Last: c.Last, Mark: px, Index: idx,
+			VsIndex: vs, VsIndexPct: vsPct,
+		})
+		seen[sym] = true
+	}
+	for _, c := range q.Contracts {
+		add(c)
+	}
+	if q.FuturesMark > 0 || q.FuturesLast > 0 {
+		add(BasisContractQuote{
+			Symbol: q.Symbol, Kind: BasisContractPerp,
+			Last: q.FuturesLast, Mark: q.FuturesMark, Index: q.SpotIndex,
+		})
+	}
+	sort.SliceStable(pts, func(i, j int) bool {
+		if pts[i].DaysToExpiry != pts[j].DaysToExpiry {
+			return pts[i].DaysToExpiry < pts[j].DaysToExpiry
+		}
+		return pts[i].Symbol < pts[j].Symbol
+	})
+	out := BasisCurve{Points: pts, Shape: BasisCurveUnknown, Slope: BasisSlopeFlat, Richer: BasisRicherNone}
+	if len(pts) < 2 {
+		out.Summary = "No dated futures listed to compare against the perpetual."
+		return out
+	}
+	near, far := pickCurveEnds(pts)
+	if near == nil || far == nil || near.Mark <= 0 {
+		out.Summary = "Need two futures prices to read the curve."
+		return out
+	}
+	n, f := *near, *far
+	out.Near, out.Far = &n, &f
+	out.Spread = f.Mark - n.Mark
+	out.SpreadPct = out.Spread / n.Mark * 100
+	_, _, kind := ComputeBasis(f.Mark, n.Mark)
+	switch kind {
+	case BasisKindPremium:
+		out.Shape, out.Slope, out.Richer = BasisCurveContango, BasisSlopeUp, BasisRicherFar
+	case BasisKindDiscount:
+		out.Shape, out.Slope, out.Richer = BasisCurveBackwardation, BasisSlopeDown, BasisRicherNear
+	default:
+		out.Shape, out.Slope, out.Richer = BasisKindFlat, BasisSlopeFlat, BasisRicherNone
+	}
+	out.Complete = true
+	out.Summary = explainBasisCurve(out)
+	if curveIsHumped(pts) && out.Shape != BasisKindFlat {
+		out.Shape = BasisCurveHumped
+		out.Summary += " The path between those two is not a straight slope."
+	}
+	return out
+}
+
+func pickCurveEnds(pts []BasisContractPoint) (near, far *BasisContractPoint) {
+	var dated []BasisContractPoint
+	var perp *BasisContractPoint
+	for i := range pts {
+		p := &pts[i]
+		if p.Kind == BasisContractPerp || p.Expiry.IsZero() {
+			if perp == nil {
+				perp = p
+			}
+			continue
+		}
+		dated = append(dated, *p)
+	}
+	if len(dated) >= 2 {
+		n, f := dated[0], dated[len(dated)-1]
+		return &n, &f
+	}
+	if len(dated) == 1 && perp != nil {
+		d := dated[0]
+		return perp, &d
+	}
+	if len(pts) >= 2 {
+		a, b := pts[0], pts[len(pts)-1]
+		return &a, &b
+	}
+	return nil, nil
+}
+
+func curveIsHumped(pts []BasisContractPoint) bool {
+	if len(pts) < 3 {
+		return false
+	}
+	up, down := false, false
+	for i := 1; i < len(pts); i++ {
+		d := pts[i].Mark - pts[i-1].Mark
+		pct := 0.0
+		if pts[i-1].Mark > 0 {
+			pct = d / pts[i-1].Mark * 100
+		}
+		if pct > basisFlatPct {
+			up = true
+		} else if pct < -basisFlatPct {
+			down = true
+		}
+	}
+	return up && down
+}
+
+func contractKind(kind string, expiry time.Time) string {
+	switch kind {
+	case BasisContractPerp, BasisContractCurrentQuarter, BasisContractNextQuarter, BasisContractDated:
+		return kind
+	default:
+		if expiry.IsZero() {
+			return BasisContractPerp
+		}
+		return BasisContractDated
+	}
+}
+
+func contractLabel(kind string, expiry time.Time) string {
+	if kind == BasisContractPerp || expiry.IsZero() {
+		return "Perp"
+	}
+	return expiry.UTC().Format("02 Jan 2006")
+}
+
+func explainBasisCurve(c BasisCurve) string {
+	if c.Near == nil || c.Far == nil {
+		return ""
+	}
+	near, far := c.Near.Label, c.Far.Label
+	gap := fmt.Sprintf("%s / %s%%", formatQty(math.Abs(c.Spread)), FormatSignedPct(c.SpreadPct))
+	switch c.Richer {
+	case BasisRicherFar:
+		return fmt.Sprintf("Far expiry (%s) is more expensive than near (%s) by %s — the curve is in contango (up).", far, near, gap)
+	case BasisRicherNear:
+		return fmt.Sprintf("Near expiry (%s) is more expensive than far (%s) by %s — the curve is in backwardation (down).", near, far, gap)
+	default:
+		return fmt.Sprintf("Near (%s) and far (%s) expiries are about in line (%s).", near, far, gap)
+	}
 }

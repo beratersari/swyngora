@@ -36,6 +36,32 @@ type basisWindowDTO struct {
 	SampleTime string `json:"sampleTime,omitempty"`
 }
 
+type basisContractDTO struct {
+	Symbol       string `json:"symbol"`
+	Kind         string `json:"kind"`
+	Label        string `json:"label"`
+	Expiry       string `json:"expiry,omitempty"`
+	DaysToExpiry int    `json:"daysToExpiry"`
+	Last         string `json:"last,omitempty"`
+	Mark         string `json:"mark"`
+	Index        string `json:"index,omitempty"`
+	VsIndex      string `json:"vsIndex"`
+	VsIndexPct   string `json:"vsIndexPct"`
+}
+
+type basisCurveDTO struct {
+	Points    []basisContractDTO `json:"points"`
+	Near      *basisContractDTO  `json:"near,omitempty"`
+	Far       *basisContractDTO  `json:"far,omitempty"`
+	Spread    string             `json:"spread,omitempty"`
+	SpreadPct string             `json:"spreadPct,omitempty"`
+	Shape     string             `json:"shape"`
+	Slope     string             `json:"slope"`
+	Richer    string             `json:"richer"`
+	Summary   string             `json:"summary"`
+	Complete  bool               `json:"complete"`
+}
+
 type basisVenueDTO struct {
 	Exchange string           `json:"exchange"`
 	Symbol   string           `json:"symbol"`
@@ -43,6 +69,7 @@ type basisVenueDTO struct {
 	Mark     basisLevelDTO    `json:"mark"`
 	Windows  []basisWindowDTO `json:"windows"`
 	Trend    string           `json:"trend"`
+	Curve    basisCurveDTO    `json:"curve"`
 	Summary  string           `json:"summary"`
 	Error    string           `json:"error,omitempty"`
 }
@@ -98,7 +125,47 @@ func basisVenueToDTO(v domain.BasisVenueReport) basisVenueDTO {
 	return basisVenueDTO{
 		Exchange: string(v.Exchange), Symbol: v.Symbol,
 		Last: basisLevelToDTO(v.Last), Mark: basisLevelToDTO(v.Mark),
-		Windows: wins, Trend: v.Trend, Summary: v.Summary, Error: v.Error,
+		Windows: wins, Trend: v.Trend, Curve: basisCurveToDTO(v.Curve),
+		Summary: v.Summary, Error: v.Error,
+	}
+}
+
+func basisCurveToDTO(c domain.BasisCurve) basisCurveDTO {
+	pts := make([]basisContractDTO, 0, len(c.Points))
+	for _, p := range c.Points {
+		pts = append(pts, basisContractToDTO(p))
+	}
+	out := basisCurveDTO{
+		Points: pts, Shape: c.Shape, Slope: c.Slope, Richer: c.Richer,
+		Summary: c.Summary, Complete: c.Complete,
+	}
+	if c.Complete {
+		out.Spread = domain.FormatSignedQty(c.Spread)
+		out.SpreadPct = domain.FormatSignedPct(c.SpreadPct)
+	}
+	if c.Near != nil {
+		n := basisContractToDTO(*c.Near)
+		out.Near = &n
+	}
+	if c.Far != nil {
+		f := basisContractToDTO(*c.Far)
+		out.Far = &f
+	}
+	return out
+}
+
+func basisContractToDTO(p domain.BasisContractPoint) basisContractDTO {
+	exp := ""
+	if !p.Expiry.IsZero() && p.Kind != domain.BasisContractPerp {
+		exp = p.Expiry.UTC().Format(time.RFC3339)
+	}
+	return basisContractDTO{
+		Symbol: p.Symbol, Kind: p.Kind, Label: p.Label, Expiry: exp,
+		DaysToExpiry: p.DaysToExpiry,
+		Last:         formatHistQty(p.Last), Mark: formatHistQty(p.Mark),
+		Index:      formatHistQty(p.Index),
+		VsIndex:    domain.FormatSignedQty(p.VsIndex),
+		VsIndexPct: domain.FormatSignedPct(p.VsIndexPct),
 	}
 }
 

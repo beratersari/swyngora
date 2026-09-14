@@ -69,6 +69,8 @@ type Client struct {
 	takerSF      singleflight.Group
 	basisCache   *cache.TTL[*domain.BasisQuote]
 	basisSF      singleflight.Group
+	futMeta      *cache.TTL[[]futContractMeta]
+	futMetaSF    singleflight.Group
 	windowCache  *cache.TTL[[]domain.WindowChange]
 	windowSF     singleflight.Group
 	printCache   *cache.TTL[[]domain.TakerPrint]
@@ -154,6 +156,9 @@ func NewClient(opts Options) *Client {
 	}
 	if c.basisCache == nil {
 		c.basisCache = cache.New[*domain.BasisQuote](15 * time.Second)
+	}
+	if c.futMeta == nil {
+		c.futMeta = cache.New[[]futContractMeta](time.Hour)
 	}
 	if c.windowCache == nil {
 		c.windowCache = cache.New[[]domain.WindowChange](20 * time.Second)

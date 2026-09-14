@@ -21,6 +21,7 @@ export const I18N_NAMESPACES = [
   'liquidations',
   'forensics',
   'options',
+  'basis',
   'settings',
   'arb',
 ] as const;

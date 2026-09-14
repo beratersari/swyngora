@@ -4677,6 +4677,83 @@ export interface components {
             priceChangePct?: string;
             summary?: string;
         };
+        MarketBasisLevel: {
+            futures?: string;
+            spot?: string;
+            delta?: string;
+            deltaPct?: string;
+            /** @enum {string} */
+            kind?: "premium" | "discount" | "flat";
+            source?: string;
+        };
+        MarketBasisWindow: {
+            window?: string;
+            pastPct?: string;
+            changePct?: string;
+            /** @enum {string} */
+            trend?: "expanding" | "shrinking" | "stable" | "flipped";
+            complete?: boolean;
+            /** Format: date-time */
+            sampleTime?: string;
+        };
+        /** @description One listed futures contract on the curve */
+        MarketBasisContract: {
+            symbol?: string;
+            /** @enum {string} */
+            kind?: "perp" | "current_quarter" | "next_quarter" | "dated";
+            label?: string;
+            /** Format: date-time */
+            expiry?: string;
+            daysToExpiry?: number;
+            last?: string;
+            mark?: string;
+            index?: string;
+            vsIndex?: string;
+            vsIndexPct?: string;
+        };
+        /** @description How listed futures are priced against each other */
+        MarketBasisCurve: {
+            points?: components["schemas"]["MarketBasisContract"][];
+            near?: components["schemas"]["MarketBasisContract"];
+            far?: components["schemas"]["MarketBasisContract"];
+            /** @description Far mark minus near mark */
+            spread?: string;
+            spreadPct?: string;
+            /** @enum {string} */
+            shape?: "contango" | "backwardation" | "flat" | "humped" | "unknown";
+            /** @enum {string} */
+            slope?: "up" | "down" | "flat";
+            /** @enum {string} */
+            richer?: "near" | "far" | "none";
+            summary?: string;
+            complete?: boolean;
+        };
+        MarketBasisVenue: {
+            exchange?: string;
+            symbol?: string;
+            last?: components["schemas"]["MarketBasisLevel"];
+            mark?: components["schemas"]["MarketBasisLevel"];
+            windows?: components["schemas"]["MarketBasisWindow"][];
+            trend?: string;
+            curve?: components["schemas"]["MarketBasisCurve"];
+            summary?: string;
+            error?: string;
+        };
+        MarketBasisAgreement: {
+            alignment?: string;
+            title?: string;
+            summary?: string;
+        };
+        /** @description Perp vs spot plus the listed futures curve */
+        MarketBasis: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            venues?: components["schemas"]["MarketBasisVenue"][];
+            agreement?: components["schemas"]["MarketBasisAgreement"];
+            note?: string;
+        };
         MarketLiquidationCascadeHit: {
             symbol?: string;
             side?: string;
@@ -8862,7 +8939,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["MarketBasis"];
                 };
             };
             400: components["responses"]["Error"];

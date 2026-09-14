@@ -51,6 +51,8 @@ type Client struct {
 	takerWatch   func(string)
 	basisCache   *cache.TTL[*domain.BasisQuote]
 	basisSF      singleflight.Group
+	linMeta      *cache.TTL[[]linContractMeta]
+	linMetaSF    singleflight.Group
 	printCache   *cache.TTL[[]domain.TakerPrint]
 	printSF      singleflight.Group
 }
@@ -108,6 +110,9 @@ func NewClient(opts Options) *Client {
 	c.taker = domain.NewTakerBook()
 	if c.basisCache == nil {
 		c.basisCache = cache.New[*domain.BasisQuote](15 * time.Second)
+	}
+	if c.linMeta == nil {
+		c.linMeta = cache.New[[]linContractMeta](time.Hour)
 	}
 	if c.printCache == nil {
 		c.printCache = cache.New[[]domain.TakerPrint](15 * time.Second)

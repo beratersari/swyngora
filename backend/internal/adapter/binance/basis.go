@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -95,6 +96,7 @@ func (c *Client) fetchBasis(ctx context.Context, symbol string) (*domain.BasisQu
 		SpotLast:    spot,
 		Time:        at,
 		History:     domain.BuildBasisHistory(marks, indexes),
+		Contracts:   c.fetchBasisContracts(ctx, symbol, last, mark, index),
 	}
 	if out.Time.IsZero() {
 		out.Time = time.Now().UTC()
@@ -195,6 +197,199 @@ func (c *Client) fetchFuturesKlineCloses(ctx context.Context, path, symbol strin
 			continue
 		}
 		out = append(out, domain.PriceSample{Time: time.UnixMilli(ms).UTC(), Price: px})
+	}
+	return out, nil
+}
+
+type futContractMeta struct {
+	Symbol   string
+	Pair     string
+	Type     string
+	Status   string
+	Delivery time.Time
+}
+
+func (c *Client) fetchBasisContracts(ctx context.Context, pair string, perpLast, perpMark, perpIndex float64) []domain.BasisContractQuote {
+	if c == nil {
+		return nil
+	}
+	meta, err := c.listFuturesContracts(ctx)
+	if err != nil || len(meta) == 0 {
+		return []domain.BasisContractQuote{{
+			Symbol: pair, Kind: domain.BasisContractPerp, Last: perpLast, Mark: perpMark, Index: perpIndex,
+		}}
+	}
+	prem, _ := c.fetchAllPremiumIndex(ctx)
+	lasts, _ := c.fetchAllFuturesLast(ctx)
+	out := make([]domain.BasisContractQuote, 0, 4)
+	for _, m := range meta {
+		if m.Status != "" && !strings.EqualFold(m.Status, "TRADING") {
+			continue
+		}
+		if !sameFuturesPair(m.Pair, m.Symbol, pair) {
+			continue
+		}
+		kind := mapBinanceContractKind(m.Type, m.Delivery)
+		px := prem[m.Symbol]
+		last := lasts[m.Symbol]
+		if kind == domain.BasisContractPerp {
+			if last <= 0 {
+				last = perpLast
+			}
+			if px.mark <= 0 {
+				px.mark = perpMark
+			}
+			if px.index <= 0 {
+				px.index = perpIndex
+			}
+		}
+		if last <= 0 && px.mark <= 0 {
+			continue
+		}
+		out = append(out, domain.BasisContractQuote{
+			Symbol: m.Symbol, Kind: kind, Expiry: m.Delivery,
+			Last: last, Mark: px.mark, Index: px.index,
+		})
+	}
+	if len(out) == 0 {
+		out = append(out, domain.BasisContractQuote{
+			Symbol: pair, Kind: domain.BasisContractPerp, Last: perpLast, Mark: perpMark, Index: perpIndex,
+		})
+	}
+	return out
+}
+
+func sameFuturesPair(metaPair, metaSymbol, want string) bool {
+	want = strings.ToUpper(strings.TrimSpace(want))
+	if want == "" {
+		return false
+	}
+	if strings.EqualFold(metaPair, want) || strings.EqualFold(metaSymbol, want) {
+		return true
+	}
+	// Dated USDT-M symbols look like BTCUSDT_250926.
+	if i := strings.IndexByte(metaSymbol, '_'); i > 0 {
+		return strings.EqualFold(metaSymbol[:i], want)
+	}
+	return false
+}
+
+func mapBinanceContractKind(typ string, expiry time.Time) string {
+	switch strings.ToUpper(strings.TrimSpace(typ)) {
+	case "PERPETUAL":
+		return domain.BasisContractPerp
+	case "CURRENT_QUARTER":
+		return domain.BasisContractCurrentQuarter
+	case "NEXT_QUARTER":
+		return domain.BasisContractNextQuarter
+	default:
+		if expiry.IsZero() {
+			return domain.BasisContractPerp
+		}
+		return domain.BasisContractDated
+	}
+}
+
+func (c *Client) listFuturesContracts(ctx context.Context) ([]futContractMeta, error) {
+	if c.futMeta != nil {
+		if cached, ok := c.futMeta.Get("all"); ok {
+			return cached, nil
+		}
+	}
+	v, err, _ := c.futMetaSF.Do("all", func() (any, error) {
+		if c.futMeta != nil {
+			if cached, ok := c.futMeta.Get("all"); ok {
+				return cached, nil
+			}
+		}
+		body, err := c.getFutures(ctx, "/fapi/v1/exchangeInfo", nil)
+		if err != nil {
+			return nil, err
+		}
+		var raw struct {
+			Symbols []struct {
+				Symbol       string `json:"symbol"`
+				Pair         string `json:"pair"`
+				ContractType string `json:"contractType"`
+				Status       string `json:"status"`
+				DeliveryDate int64  `json:"deliveryDate"`
+			} `json:"symbols"`
+		}
+		if err := json.Unmarshal(body, &raw); err != nil {
+			return nil, fmt.Errorf("%w: futures exchangeInfo: %v", domain.ErrUpstream, err)
+		}
+		out := make([]futContractMeta, 0, len(raw.Symbols))
+		for _, s := range raw.Symbols {
+			row := futContractMeta{
+				Symbol: s.Symbol, Pair: s.Pair, Type: s.ContractType, Status: s.Status,
+			}
+			if s.DeliveryDate > 0 && s.DeliveryDate < 4_000_000_000_000 {
+				row.Delivery = time.UnixMilli(s.DeliveryDate).UTC()
+			}
+			out = append(out, row)
+		}
+		if c.futMeta != nil {
+			c.futMeta.Set("all", out)
+		}
+		return out, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	got, _ := v.([]futContractMeta)
+	return got, nil
+}
+
+type premPx struct {
+	mark, index float64
+}
+
+func (c *Client) fetchAllPremiumIndex(ctx context.Context) (map[string]premPx, error) {
+	body, err := c.getFutures(ctx, "/fapi/v1/premiumIndex", nil)
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		Symbol     string `json:"symbol"`
+		MarkPrice  string `json:"markPrice"`
+		IndexPrice string `json:"indexPrice"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, fmt.Errorf("%w: premium list decode", domain.ErrUpstream)
+	}
+	out := make(map[string]premPx, len(rows))
+	for _, r := range rows {
+		if r.Symbol == "" {
+			continue
+		}
+		m, _ := strconv.ParseFloat(r.MarkPrice, 64)
+		ix, _ := strconv.ParseFloat(r.IndexPrice, 64)
+		out[r.Symbol] = premPx{mark: m, index: ix}
+	}
+	return out, nil
+}
+
+func (c *Client) fetchAllFuturesLast(ctx context.Context) (map[string]float64, error) {
+	body, err := c.getFutures(ctx, "/fapi/v1/ticker/price", nil)
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		Symbol string `json:"symbol"`
+		Price  string `json:"price"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, fmt.Errorf("%w: last list decode", domain.ErrUpstream)
+	}
+	out := make(map[string]float64, len(rows))
+	for _, r := range rows {
+		if r.Symbol == "" {
+			continue
+		}
+		px, _ := strconv.ParseFloat(r.Price, 64)
+		if px > 0 {
+			out[r.Symbol] = px
+		}
 	}
 	return out, nil
 }

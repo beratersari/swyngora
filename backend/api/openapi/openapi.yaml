@@ -1598,7 +1598,9 @@ paths:
         How far the perpetual is from spot/index on Binance USD-M and Bybit
         linear. Returns the dollar gap, percent gap, premium/discount, whether
         the gap is expanding or shrinking (5m/1h/4h), a short read with funding
-        and open interest, and whether both venues agree.
+        and open interest, and whether both venues agree. `curve` compares
+        listed dated futures: near vs far expiry, contango (far richer / up)
+        or backwardation (near richer / down).
       operationId: getMarketBasis
       tags: [Market]
       parameters:
@@ -1616,7 +1618,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/MarketBasis'
         '400':
           $ref: '#/components/responses/Error'
         '502':
@@ -8451,6 +8453,86 @@ components:
         priceLow: { type: string }
         priceChangePct: { type: string, description: Signed percent, e.g. -1.24 }
         summary: { type: string }
+    MarketBasisLevel:
+      type: object
+      properties:
+        futures: { type: string }
+        spot: { type: string }
+        delta: { type: string }
+        deltaPct: { type: string }
+        kind: { type: string, enum: [premium, discount, flat] }
+        source: { type: string }
+    MarketBasisWindow:
+      type: object
+      properties:
+        window: { type: string }
+        pastPct: { type: string }
+        changePct: { type: string }
+        trend: { type: string, enum: [expanding, shrinking, stable, flipped] }
+        complete: { type: boolean }
+        sampleTime: { type: string, format: date-time }
+    MarketBasisContract:
+      type: object
+      description: One listed futures contract on the curve
+      properties:
+        symbol: { type: string }
+        kind: { type: string, enum: [perp, current_quarter, next_quarter, dated] }
+        label: { type: string }
+        expiry: { type: string, format: date-time }
+        daysToExpiry: { type: integer }
+        last: { type: string }
+        mark: { type: string }
+        index: { type: string }
+        vsIndex: { type: string }
+        vsIndexPct: { type: string }
+    MarketBasisCurve:
+      type: object
+      description: How listed futures are priced against each other
+      properties:
+        points:
+          type: array
+          items: { $ref: '#/components/schemas/MarketBasisContract' }
+        near: { $ref: '#/components/schemas/MarketBasisContract' }
+        far: { $ref: '#/components/schemas/MarketBasisContract' }
+        spread: { type: string, description: Far mark minus near mark }
+        spreadPct: { type: string }
+        shape: { type: string, enum: [contango, backwardation, flat, humped, unknown] }
+        slope: { type: string, enum: [up, down, flat] }
+        richer: { type: string, enum: [near, far, none] }
+        summary: { type: string }
+        complete: { type: boolean }
+    MarketBasisVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        last: { $ref: '#/components/schemas/MarketBasisLevel' }
+        mark: { $ref: '#/components/schemas/MarketBasisLevel' }
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/MarketBasisWindow' }
+        trend: { type: string }
+        curve: { $ref: '#/components/schemas/MarketBasisCurve' }
+        summary: { type: string }
+        error: { type: string }
+    MarketBasisAgreement:
+      type: object
+      properties:
+        alignment: { type: string }
+        title: { type: string }
+        summary: { type: string }
+    MarketBasis:
+      type: object
+      description: Perp vs spot plus the listed futures curve
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        asOf: { type: string, format: date-time }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/MarketBasisVenue' }
+        agreement: { $ref: '#/components/schemas/MarketBasisAgreement' }
+        note: { type: string }
     MarketLiquidationCascadeHit:
       type: object
       properties:
