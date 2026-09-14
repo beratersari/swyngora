@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { barSide, isLevelsKind, maxSide, toLevelRows, toTimeRows } from './LiquidationBarChart.helpers';
+import {
+  barSide,
+  formatAxisNotional,
+  formatHitRate,
+  isLevelsKind,
+  maxCum,
+  maxSide,
+  pickLevelsReview,
+  toLevelRows,
+  toTimeRows,
+} from './LiquidationBarChart.helpers';
 
 describe('LiquidationBarChart helpers', () => {
   it('maps price levels and time bars', () => {
@@ -12,7 +22,7 @@ describe('LiquidationBarChart helpers', () => {
     });
     expect(levels).toHaveLength(2);
     expect(levels[0]?.longN).toBe(10);
-    expect(levels[0]?.cumTotal).toBe(0);
+    expect(levels[0]?.cumByLeverage).toBeDefined();
     expect(maxSide(levels)).toBe(10);
     expect(isLevelsKind({ kind: 'levels' })).toBe(true);
     const bars = toTimeRows({
@@ -42,5 +52,60 @@ describe('LiquidationBarChart helpers', () => {
     expect(row?.byLeverage[0]?.leverage).toBe(100);
     expect(barSide(row!, 100)).toBe('short');
     expect(barSide({ ...row!, price: 90 }, 100)).toBe('long');
+    expect(row?.cumShort).toBe(40);
+    expect(maxCum([row!])).toBe(40);
+  });
+
+  it('walks cumulative leverage from last when the API omits cumByLeverage', () => {
+    const rows = toLevelRows({
+      kind: 'levels',
+      lastPrice: '100',
+      levels: [
+        {
+          price: '110',
+          longNotional: '0',
+          shortNotional: '80',
+          totalNotional: '80',
+          byLeverage: [{ leverage: 10, longNotional: '0', shortNotional: '80' }],
+        },
+        {
+          price: '101',
+          longNotional: '0',
+          shortNotional: '40',
+          totalNotional: '40',
+          byLeverage: [{ leverage: 100, longNotional: '0', shortNotional: '40' }],
+        },
+        {
+          price: '90',
+          longNotional: '30',
+          shortNotional: '0',
+          totalNotional: '30',
+          byLeverage: [{ leverage: 50, longNotional: '30', shortNotional: '0' }],
+        },
+      ],
+    });
+    const far = rows.find((r) => r.price === 110);
+    const near = rows.find((r) => r.price === 101);
+    expect(near?.cumTotal).toBe(40);
+    expect(far?.cumTotal).toBe(120);
+    expect(far?.cumByLeverage.find((s) => s.leverage === 100)?.shortN).toBe(40);
+    expect(formatAxisNotional(1_250_000)).toBe('1.3M');
+  });
+
+  it('picks combined review and formats hit rate', () => {
+    const venue = pickLevelsReview({
+      kind: 'levels',
+      exchange: 'all',
+      review: {
+        summary: 'ok',
+        combined: {
+          horizons: [{ horizon: '1h', validated: 4, hits: 2, hitRate: 0.5 }],
+          byLeverage: [{ leverage: 100, side: 'short', reliability: 'fair' }],
+        },
+      },
+    });
+    expect(venue?.horizons?.[0]?.hits).toBe(2);
+    expect(formatHitRate(0.5)).toBe('50%');
+    expect(pickLevelsReview({ kind: 'levels' })).toBeUndefined();
   });
 });

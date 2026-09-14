@@ -546,7 +546,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_liquidation_levels",
-		mcp.WithDescription("CoinGlass-style liquidation bar chart. symbol=BTCUSDT returns estimated notional at each price, split by 10x/25x/50x/100x leverage, plus cumulative from last price to that bar. Each venue uses its own last price; combined lastPrice is empty and missing lists a venue with no data. symbol=all returns observed time bars. range=12h|24h|3d|7d (totals clamp to 24h)."),
+		mcp.WithDescription("CoinGlass-style liquidation bar chart. symbol=BTCUSDT returns estimated notional at each price, split by 10x/25x/50x/100x, plus the walk from last to that bar (cumLong/cumShort/cumByLeverage). review rebuilds past maps from stored OI + last and scores later same-venue liquidations in each band (1h/4h/12h hit rate, fill, reliability by leverage). Combined lastPrice is the OI-weighted last of venues that have one. symbol=all returns observed time bars. range=12h|24h|3d|7d (totals clamp to 24h)."),
 		mcp.WithString("symbol", mcp.Description("Pair e.g. BTCUSDT, or all (default all)")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = combined)")),
 		mcp.WithString("range", mcp.Description("12h | 24h | 3d | 7d (default 24h)")),

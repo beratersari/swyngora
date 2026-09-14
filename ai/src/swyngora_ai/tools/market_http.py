@@ -4345,9 +4345,13 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="get_liquidation_levels",
             description=(
                 "CoinGlass-style liquidation bar chart. symbol=BTCUSDT returns "
-                "estimated long/short notional at each price. symbol=all returns "
-                "observed time bars of total liquidations across every coin. "
-                "exchange=binance|bybit|all. range=12h|24h|3d|7d."
+                "estimated long/short notional at each price plus the walk from "
+                "last (cumLong/cumByLeverage). review scores later same-venue "
+                "liquidations against those estimated bands (hit rate, fill, "
+                "reliability by leverage). Combined lastPrice is OI-weighted "
+                "of venues that have a last. symbol=all returns observed time "
+                "bars of total liquidations across every coin. "
+                "exchange=binance|bybit|okx|all. range=12h|24h|3d|7d."
             ),
             args_schema=LiquidationLevelsInput,
         ),

@@ -61,7 +61,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/liquidation-max-pain` | Largest estimated liquidation pockets above (shorts) and below (longs) last price — not the hunt target |
 | `GET` | `/api/v1/market/liquidation-hunt` | Hypothetical per-venue hunt: spot size to reach liq zones + desk result + up/down ease scores (requested percents stay as given; missing factors add 0; `scoreCompare` has separate up/down factor effects and the largest custom-weight mover per side) + cascade paths |
 | `GET` | `/api/v1/market/liquidation-hunt/heatmap` | Price × time liquidation intensity (12h/24h/3d/7d; own-venue prices; Binance, Bybit, combined; 1h/4h/12h review) |
-| `GET` | `/api/v1/market/liquidation-levels` | CoinGlass-style 10x/25x/50x/100x price bars + cumulative to last; or time bars of all-coin totals |
+| `GET` | `/api/v1/market/liquidation-levels` | CoinGlass-style 10x/25x/50x/100x price bars + walk-from-last cumulative + review of later realized liquidations; or time bars of all-coin totals |
 | `GET` | `/api/v1/market/liquidation-cascade` | Short-burst long/short cascade vs typical (1m/5m/15m); one coin or `symbol=all` market |
 | `GET` | `/api/v1/market/liquidation-cascade/scan` | Market cascade plus coins currently bursting (venues stay separate) |
 | `GET` | `/api/v1/market/squeeze-risk` | Long/short squeeze risk scores per venue + OI-weighted combined |

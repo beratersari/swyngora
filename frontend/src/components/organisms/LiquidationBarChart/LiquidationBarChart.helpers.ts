@@ -1,5 +1,6 @@
 import type { MarketLiquidationLevels } from '@/libs/api';
-import type { LevelRow, TimeRow } from './LiquidationBarChart.types';
+import type { LevelRow, LeverageSlice, TimeRow } from './LiquidationBarChart.types';
+import { LIQ_LEVERAGE_ORDER } from './LiquidationBarChart.constants';
 
 export function parseNotional(value: string | undefined): number {
   if (!value) return 0;
@@ -7,8 +8,20 @@ export function parseNotional(value: string | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function parseSlices(
+  raw: NonNullable<NonNullable<MarketLiquidationLevels['levels']>[number]['byLeverage']> | undefined,
+): LeverageSlice[] {
+  return (raw ?? [])
+    .map((sl) => ({
+      leverage: sl.leverage as 10 | 25 | 50 | 100,
+      longN: parseNotional(sl.longNotional),
+      shortN: parseNotional(sl.shortNotional),
+    }))
+    .filter((sl) => sl.leverage === 10 || sl.leverage === 25 || sl.leverage === 50 || sl.leverage === 100);
+}
+
 export function toLevelRows(data?: MarketLiquidationLevels | null): LevelRow[] {
-  return (data?.levels ?? [])
+  const rows = (data?.levels ?? [])
     .map((lv) => ({
       price: parseNotional(lv.price),
       longN: parseNotional(lv.longNotional),
@@ -17,21 +30,100 @@ export function toLevelRows(data?: MarketLiquidationLevels | null): LevelRow[] {
       cumLong: parseNotional(lv.cumLong),
       cumShort: parseNotional(lv.cumShort),
       cumTotal: parseNotional(lv.cumTotal),
-      byLeverage: (lv.byLeverage ?? [])
-        .map((sl) => ({
-          leverage: sl.leverage as 10 | 25 | 50 | 100,
-          longN: parseNotional(sl.longNotional),
-          shortN: parseNotional(sl.shortNotional),
-        }))
-        .filter((sl) => sl.leverage === 10 || sl.leverage === 25 || sl.leverage === 50 || sl.leverage === 100),
+      byLeverage: parseSlices(lv.byLeverage),
+      cumByLeverage: parseSlices(lv.cumByLeverage),
     }))
     .filter((row) => Number.isFinite(row.price) && row.price > 0);
+  return fillCumProfile(rows, parseNotional(data?.lastPrice));
+}
+
+/** Walk from last so the silhouette is the CoinGlass cumulative, even if the API omitted cumByLeverage. */
+export function fillCumProfile(rows: LevelRow[], lastPrice: number): LevelRow[] {
+  if (!rows.length) return rows;
+  const last = lastPrice > 0 ? lastPrice : rows[Math.floor(rows.length / 2)]?.price ?? 0;
+  const accAbove: Record<10 | 25 | 50 | 100, { longN: number; shortN: number }> = {
+    10: { longN: 0, shortN: 0 },
+    25: { longN: 0, shortN: 0 },
+    50: { longN: 0, shortN: 0 },
+    100: { longN: 0, shortN: 0 },
+  };
+  const accBelow = {
+    10: { longN: 0, shortN: 0 },
+    25: { longN: 0, shortN: 0 },
+    50: { longN: 0, shortN: 0 },
+    100: { longN: 0, shortN: 0 },
+  };
+  const above: LevelRow['cumByLeverage'][] = rows.map(() => []);
+  const below: LevelRow['cumByLeverage'][] = rows.map(() => []);
+  for (let i = rows.length - 1; i >= 0; i -= 1) {
+    const row = rows[i];
+    if (!row || (last > 0 && row.price <= last)) continue;
+    for (const lev of LIQ_LEVERAGE_ORDER) {
+      const sl = row.byLeverage.find((s) => s.leverage === lev);
+      accAbove[lev].longN += sl?.longN ?? 0;
+      accAbove[lev].shortN += sl?.shortN ?? 0;
+    }
+    above[i] = LIQ_LEVERAGE_ORDER.map((lev) => ({ leverage: lev, ...accAbove[lev] }));
+  }
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    if (!row || (last > 0 && row.price >= last)) continue;
+    for (const lev of LIQ_LEVERAGE_ORDER) {
+      const sl = row.byLeverage.find((s) => s.leverage === lev);
+      accBelow[lev].longN += sl?.longN ?? 0;
+      accBelow[lev].shortN += sl?.shortN ?? 0;
+    }
+    below[i] = LIQ_LEVERAGE_ORDER.map((lev) => ({ leverage: lev, ...accBelow[lev] }));
+  }
+  return rows.map((row, i) => {
+    const walked = last <= 0 || row.price >= last ? above[i] : below[i];
+    const cumByLeverage =
+      row.cumByLeverage.length === LIQ_LEVERAGE_ORDER.length ? row.cumByLeverage : (walked ?? []);
+    const cumLong = cumByLeverage.reduce((s, sl) => s + sl.longN, 0);
+    const cumShort = cumByLeverage.reduce((s, sl) => s + sl.shortN, 0);
+    return {
+      ...row,
+      cumByLeverage,
+      cumLong: row.cumLong > 0 ? row.cumLong : cumLong,
+      cumShort: row.cumShort > 0 ? row.cumShort : cumShort,
+      cumTotal: row.cumTotal > 0 ? row.cumTotal : cumLong + cumShort,
+    };
+  });
 }
 
 export function sliceNotional(row: LevelRow, leverage: 10 | 25 | 50 | 100, side: 'long' | 'short'): number {
   const sl = row.byLeverage.find((s) => s.leverage === leverage);
   if (!sl) return 0;
   return side === 'long' ? sl.longN : sl.shortN;
+}
+
+export function cumSliceNotional(row: LevelRow, leverage: 10 | 25 | 50 | 100, side: 'long' | 'short'): number {
+  const sl = row.cumByLeverage.find((s) => s.leverage === leverage);
+  if (!sl) return 0;
+  return side === 'long' ? sl.longN : sl.shortN;
+}
+
+export function maxCum(rows: LevelRow[]): number {
+  let m = 0;
+  for (const row of rows) {
+    m = Math.max(m, row.cumTotal, row.totalN);
+  }
+  return m;
+}
+
+export function formatAxisNotional(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '0';
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(n >= 10_000_000_000 ? 0 : 1)}B`;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}K`;
+  return n.toFixed(0);
+}
+
+export function formatAxisPrice(n: number): string {
+  if (!Number.isFinite(n)) return '—';
+  if (n >= 1000) return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
 }
 
 export function barSide(row: LevelRow, lastPrice: number): 'long' | 'short' {
@@ -75,4 +167,35 @@ export function maxTotal(rows: { totalN: number }[]): number {
 
 export function isLevelsKind(data?: MarketLiquidationLevels | null): boolean {
   return data?.kind === 'levels';
+}
+
+export type LevelsReviewVenue = NonNullable<
+  NonNullable<MarketLiquidationLevels['review']>['combined']
+>;
+
+export function pickLevelsReview(data?: MarketLiquidationLevels | null): LevelsReviewVenue | undefined {
+  const review = data?.review;
+  if (!review) return undefined;
+  if (data?.exchange === 'binance') return review.binance;
+  if (data?.exchange === 'bybit') return review.bybit;
+  if (data?.exchange === 'okx') return review.okx;
+  return review.combined ?? review.binance;
+}
+
+export function formatHitRate(n: number | undefined): string {
+  if (n == null || !Number.isFinite(n)) return '—';
+  return `${Math.round(n * 100)}%`;
+}
+
+export function newestLevelSamples(venue?: LevelsReviewVenue): NonNullable<LevelsReviewVenue['samples']> {
+  const rows = [...(venue?.samples ?? [])];
+  rows.sort((a, b) => Date.parse(b.time ?? '') - Date.parse(a.time ?? ''));
+  return rows.slice(0, 8);
+}
+
+export function bandStatusLabel(status: string | undefined): string {
+  if (status === 'hit') return 'hit';
+  if (status === 'miss') return 'miss';
+  if (status === 'pending') return 'pending';
+  return status || '—';
 }

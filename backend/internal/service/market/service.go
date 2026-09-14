@@ -845,6 +845,7 @@ func (s *Service) GetLiquidationLevels(ctx context.Context, exchange, symbol, ra
 			rep.Missing = append([]string{}, rep.Feed.Missing...)
 		}
 	}
+	s.attachLiquidationLevelsReview(ctx, &rep, ex, sym, spec, now)
 	return &rep, nil
 }
 

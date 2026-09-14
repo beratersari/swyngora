@@ -22,6 +22,7 @@ export type LevelRow = {
   cumShort: number;
   cumTotal: number;
   byLeverage: LeverageSlice[];
+  cumByLeverage: LeverageSlice[];
 };
 
 export type TimeRow = {

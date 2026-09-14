@@ -55,9 +55,16 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
 - Live windows are computed from an in-memory 24h book. Every print is written to SQLite (Binance and Bybit in separate rows). On startup the last **24 hours** are reloaded, including live-coverage clocks, so 1h/4h/12h/24h totals stay usable after a restart. A dropped persist queue is written synchronously instead of discarded. Stored rows: `GET /api/v1/market/futures-history?metric=liquidations`. See [`futures-history.md`](futures-history.md).
 - Chart (`GET /liquidation-levels`): CoinGlass-style **horizontal** price bars
   from each venue's own last price, open interest, and a **10x / 25x / 50x / 100x**
-  mix. Each bar includes `byLeverage` plus `cumLong` / `cumShort` / `cumTotal`
-  from last price to that level. Combined does not copy Binance's last as the
-  combined last. Market-wide `symbol=all` stays observed time bars.
+  mix. Each bar includes the mass at that price (`byLeverage`) plus the walk
+  from last to that level (`cumLong` / `cumShort` / `cumTotal` / `cumByLeverage`).
+  Combined aligns venues by **percent from their own last** onto an
+  **OI-weighted reference last** (`lastPrice`); `lastPrices` keeps each venue
+  and a missing venue is never copied. `review` rebuilds those past maps from
+  stored open interest and last price, then scores later **same-venue**
+  liquidations in each 10x / 25x / 50x / 100x band (1h / 4h / 12h). A quiet
+  window is a miss only when the liquidation feed covers the look-ahead;
+  pending / missing tape is not a miss. Combined sums independent venues.
+  Market-wide `symbol=all` stays observed time bars.
 - Max pain (`GET /liquidation-max-pain`): largest estimated pocket **above**
   (shorts) and **below** (longs) last price. Not the hunt target.
   See [`liquidation-max-pain.md`](liquidation-max-pain.md). Web:
@@ -83,7 +90,7 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/liquidation.go`, `liquidation_history.go`, `liquidation_levels.go`, `liquidation_cascade.go`, `liquidation_cascade_episode.go` |
+| Domain | `backend/internal/domain/liquidation.go`, `liquidation_history.go`, `liquidation_levels.go`, `liquidation_levels_review.go`, `liquidation_cascade.go`, `liquidation_cascade_episode.go` |
 | Adapters | `adapter/binance/liqhub.go`, `adapter/binance/liqhist.go`, `adapter/bybit/liqhub.go`, `adapter/bybit/liqhist.go` |
 | Service | `GetLiquidations`, `GetLiquidationOverview`, `GetLiquidationLevels`, `GetLiquidationCascade`, `ScanLiquidationCascades`; reconnect fill in `service/futureshist/backfill.go` |
 | HTTP | `GET /api/v1/market/liquidations`, `/liquidations/overview`, `/liquidation-levels`, `/liquidation-cascade`, `/liquidation-cascade/scan`, `/liquidation-max-pain` |

@@ -804,8 +804,11 @@ func TestGetLiquidationLevels_DoesNotBorrowOtherLastPrice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.LastPrice != "" {
-		t.Fatalf("combined last must stay empty, got %s", got.LastPrice)
+	if got.LastPrice == "" {
+		t.Fatal("combined last should be the OI-weighted last of venues that have one")
+	}
+	if got.LastPrices["bybit"] != "" {
+		t.Fatalf("must not invent Bybit last %+v", got.LastPrices)
 	}
 	found := false
 	for _, m := range got.Missing {

@@ -71,7 +71,22 @@ func TestBuildLiquidationLevelsFromHunt_OwnVenueAndCum(t *testing.T) {
 	}
 	var saw100, saw10, saw50 bool
 	var maxCumShort float64
+	var farShortCum, nearLastCum float64
 	for _, lv := range got.Levels {
+		px, _ := strconv.ParseFloat(lv.Price, 64)
+		cumS, _ := strconv.ParseFloat(lv.CumShort, 64)
+		if cumS > maxCumShort {
+			maxCumShort = cumS
+		}
+		if px >= 108 && cumS > farShortCum {
+			farShortCum = cumS
+		}
+		if px > 100 && px < 103 && (nearLastCum == 0 || cumS < nearLastCum) {
+			nearLastCum = cumS
+		}
+		if len(lv.ByLeverage) != 4 || len(lv.CumByLeverage) != 4 {
+			t.Fatalf("want all 4 leverage slices, got %+v / %+v", lv.ByLeverage, lv.CumByLeverage)
+		}
 		for _, sl := range lv.ByLeverage {
 			if sl.Leverage == 100 && sl.ShortNotional != "0" {
 				saw100 = true
@@ -83,9 +98,6 @@ func TestBuildLiquidationLevelsFromHunt_OwnVenueAndCum(t *testing.T) {
 				saw50 = true
 			}
 		}
-		if v, _ := strconv.ParseFloat(lv.CumShort, 64); v > maxCumShort {
-			maxCumShort = v
-		}
 	}
 	if !saw100 || !saw10 || !saw50 {
 		t.Fatalf("leverage slices missing 100=%v 10=%v 50=%v", saw100, saw10, saw50)
@@ -93,13 +105,46 @@ func TestBuildLiquidationLevelsFromHunt_OwnVenueAndCum(t *testing.T) {
 	if maxCumShort < 100 {
 		t.Fatalf("cum to far short bar should include nearer shorts, got %v", maxCumShort)
 	}
+	if farShortCum+1 < nearLastCum {
+		t.Fatalf("cumulative shorts should grow away from last: near=%v far=%v", nearLastCum, farShortCum)
+	}
 
 	all := BuildLiquidationLevelsFromHunt(HuntReport{Symbol: "BTCUSDT", Exchange: "all", Venues: rep.Venues})
-	if all.LastPrice != "" {
-		t.Fatalf("combined last must stay empty, got %s", all.LastPrice)
+	ref, _ := strconv.ParseFloat(all.LastPrice, 64)
+	if ref < 70 || ref > 80 {
+		t.Fatalf("combined last should be OI-weighted (~75), got %s", all.LastPrice)
 	}
 	if all.LastPrices["binance"] == "" || all.LastPrices["bybit"] == "" {
 		t.Fatalf("combined lastPrices %+v", all.LastPrices)
+	}
+	// Bybit 10x at +10% of its own last maps near +10% of the shared last,
+	// not onto Binance's absolute $110 bin.
+	var bybitMassNearShared, bybitMassAtBinance110 float64
+	for _, lv := range all.Levels {
+		px, _ := strconv.ParseFloat(lv.Price, 64)
+		shortN, _ := strconv.ParseFloat(lv.ShortNotional, 64)
+		if px > ref*1.06 && px < ref*1.14 {
+			bybitMassNearShared += shortN
+		}
+		if px > 108 && px < 112 {
+			bybitMassAtBinance110 += shortN
+		}
+	}
+	if bybitMassNearShared < 400 {
+		t.Fatalf("Bybit 10x should sit at +%% on the shared axis, mass=%v", bybitMassNearShared)
+	}
+	if bybitMassAtBinance110 > bybitMassNearShared {
+		t.Fatalf("must not snap Bybit $55 onto Binance $110: shared=%v abs110=%v", bybitMassNearShared, bybitMassAtBinance110)
+	}
+}
+
+func TestOiWeightedLast_IgnoresMissingVenue(t *testing.T) {
+	got := oiWeightedLast([]HuntVenueReport{
+		{Price: 100, OpenInterestValue: 2},
+		{Price: 0, OpenInterestValue: 9},
+	})
+	if got != 100 {
+		t.Fatalf("got %v", got)
 	}
 }
 

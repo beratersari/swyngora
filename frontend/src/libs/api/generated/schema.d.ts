@@ -1714,8 +1714,15 @@ export interface paths {
          * Liquidation level bar chart
          * @description CoinGlass-style **liquidation map** as bars.
          *
-         *     - `symbol=BTCUSDT` (or ETHUSDT, …): estimated **price levels** —
-         *       long/short notional at each price bin (hunt model summed over `range`).
+         *     - `symbol=BTCUSDT` (or ETHUSDT, …): estimated **price levels** from
+         *       each venue's own last, open interest, and a 10x/25x/50x/100x mix.
+         *       Longs sit below last; shorts sit above. Each bar has the mass at
+         *       that price (`longNotional` / `byLeverage`) and the walk from last
+         *       to that price (`cumLong` / `cumByLeverage`). Combined aligns
+         *       venues by percent from their own last onto an OI-weighted
+         *       reference last — it does not copy a missing venue's last.
+         *       `review` rebuilds those past maps from stored OI + last and scores
+         *       later same-venue liquidations in each 10x/25x/50x/100x band (1h / 4h / 12h).
          *     - `symbol=all`: **total** observed liquidations for every tracked coin
          *       as time bars (last 24h max). `exchange=binance|bybit|okx|all`.
          *
@@ -4456,7 +4463,10 @@ export interface components {
             /** @description Short notional from last price to this bar */
             cumShort?: string;
             cumTotal?: string;
+            /** @description Incremental 10x/25x/50x/100x mass at this price bin */
             byLeverage?: components["schemas"]["MarketLiquidationLeverageSlice"][];
+            /** @description Walk from last price to this bar, split by leverage */
+            cumByLeverage?: components["schemas"]["MarketLiquidationLeverageSlice"][];
         };
         MarketLiquidationTimeBar: {
             /** Format: date-time */
@@ -4477,7 +4487,7 @@ export interface components {
             from?: string;
             /** Format: date-time */
             to?: string;
-            /** @description Set only for a single venue. Combined never copies Binance or Bybit as "the" last price. */
+            /** @description Reference last for the price axis. Single venue is that venue's last. Combined is the OI-weighted last of venues that have one — not a tradeable mid */
             lastPrice?: string;
             /** @description Each venue's own last price */
             lastPrices?: {
@@ -4487,6 +4497,75 @@ export interface components {
             bars?: components["schemas"]["MarketLiquidationTimeBar"][];
             feed?: components["schemas"]["LiquidationFeed"];
             missing?: string[];
+            note?: string;
+            review?: components["schemas"]["MarketLiquidationLevelsReview"];
+        };
+        MarketLiquidationLevelsReviewBand: {
+            /** @enum {integer} */
+            leverage?: 10 | 25 | 50 | 100;
+            /** @enum {string} */
+            side?: "long" | "short";
+            price?: string;
+            predicted?: string;
+            realized?: string;
+            hit?: boolean;
+            fillRate?: number;
+            /** @enum {string} */
+            status?: "hit" | "miss" | "pending" | "liq_gap";
+            validated?: boolean;
+            pending?: boolean;
+            gap?: string;
+            timeToHitSec?: number;
+        };
+        MarketLiquidationLevelsReviewSample: {
+            /** Format: date-time */
+            time?: string;
+            lastPrice?: string;
+            bands?: components["schemas"]["MarketLiquidationLevelsReviewBand"][];
+        };
+        MarketLiquidationLevelsReviewHorizon: {
+            /** @enum {string} */
+            horizon?: "1h" | "4h" | "12h";
+            signals?: number;
+            validated?: number;
+            missing?: number;
+            pending?: number;
+            hits?: number;
+            hitRate?: number;
+            predicted?: string;
+            realized?: string;
+            fillRate?: number;
+            coverage?: number;
+        };
+        MarketLiquidationLevelsReviewBucket: {
+            /** @enum {integer} */
+            leverage?: 10 | 25 | 50 | 100;
+            /** @enum {string} */
+            side?: "long" | "short";
+            horizon?: string;
+            signals?: number;
+            validated?: number;
+            hits?: number;
+            hitRate?: number;
+            predicted?: string;
+            realized?: string;
+            fillRate?: number;
+            /** @enum {string} */
+            reliability?: "high" | "fair" | "low" | "unknown";
+        };
+        MarketLiquidationLevelsReviewVenue: {
+            exchange?: string;
+            horizons?: components["schemas"]["MarketLiquidationLevelsReviewHorizon"][];
+            byLeverage?: components["schemas"]["MarketLiquidationLevelsReviewBucket"][];
+            samples?: components["schemas"]["MarketLiquidationLevelsReviewSample"][];
+        };
+        /** @description Past estimated levels vs later same-venue liquidations */
+        MarketLiquidationLevelsReview: {
+            binance?: components["schemas"]["MarketLiquidationLevelsReviewVenue"];
+            bybit?: components["schemas"]["MarketLiquidationLevelsReviewVenue"];
+            okx?: components["schemas"]["MarketLiquidationLevelsReviewVenue"];
+            combined?: components["schemas"]["MarketLiquidationLevelsReviewVenue"];
+            summary?: string;
             note?: string;
         };
         MarketLiquidationCascadeWindow: {

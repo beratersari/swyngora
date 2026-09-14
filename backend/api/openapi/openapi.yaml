@@ -2900,8 +2900,15 @@ paths:
       description: |
         CoinGlass-style **liquidation map** as bars.
 
-        - `symbol=BTCUSDT` (or ETHUSDT, …): estimated **price levels** —
-          long/short notional at each price bin (hunt model summed over `range`).
+        - `symbol=BTCUSDT` (or ETHUSDT, …): estimated **price levels** from
+          each venue's own last, open interest, and a 10x/25x/50x/100x mix.
+          Longs sit below last; shorts sit above. Each bar has the mass at
+          that price (`longNotional` / `byLeverage`) and the walk from last
+          to that price (`cumLong` / `cumByLeverage`). Combined aligns
+          venues by percent from their own last onto an OI-weighted
+          reference last — it does not copy a missing venue's last.
+          `review` rebuilds those past maps from stored OI + last and scores
+          later same-venue liquidations in each 10x/25x/50x/100x band (1h / 4h / 12h).
         - `symbol=all`: **total** observed liquidations for every tracked coin
           as time bars (last 24h max). `exchange=binance|bybit|okx|all`.
 
@@ -8234,6 +8241,11 @@ components:
         cumTotal: { type: string }
         byLeverage:
           type: array
+          description: Incremental 10x/25x/50x/100x mass at this price bin
+          items: { $ref: '#/components/schemas/MarketLiquidationLeverageSlice' }
+        cumByLeverage:
+          type: array
+          description: Walk from last price to this bar, split by leverage
           items: { $ref: '#/components/schemas/MarketLiquidationLeverageSlice' }
     MarketLiquidationTimeBar:
       type: object
@@ -8253,7 +8265,7 @@ components:
         range: { type: string }
         from: { type: string, format: date-time }
         to: { type: string, format: date-time }
-        lastPrice: { type: string, description: Set only for a single venue. Combined never copies Binance or Bybit as "the" last price. }
+        lastPrice: { type: string, description: Reference last for the price axis. Single venue is that venue's last. Combined is the OI-weighted last of venues that have one — not a tradeable mid, and never a missing venue's last. }
         lastPrices:
           type: object
           additionalProperties: { type: string }
@@ -8268,6 +8280,81 @@ components:
         missing:
           type: array
           items: { type: string }
+        note: { type: string }
+        review: { $ref: '#/components/schemas/MarketLiquidationLevelsReview' }
+    MarketLiquidationLevelsReviewBand:
+      type: object
+      properties:
+        leverage: { type: integer, enum: [10, 25, 50, 100] }
+        side: { type: string, enum: [long, short] }
+        price: { type: string }
+        predicted: { type: string }
+        realized: { type: string }
+        hit: { type: boolean }
+        fillRate: { type: number }
+        status: { type: string, enum: [hit, miss, pending, liq_gap] }
+        validated: { type: boolean }
+        pending: { type: boolean }
+        gap: { type: string }
+        timeToHitSec: { type: number }
+    MarketLiquidationLevelsReviewSample:
+      type: object
+      properties:
+        time: { type: string, format: date-time }
+        lastPrice: { type: string }
+        bands:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationLevelsReviewBand' }
+    MarketLiquidationLevelsReviewHorizon:
+      type: object
+      properties:
+        horizon: { type: string, enum: [1h, 4h, 12h] }
+        signals: { type: integer }
+        validated: { type: integer }
+        missing: { type: integer }
+        pending: { type: integer }
+        hits: { type: integer }
+        hitRate: { type: number }
+        predicted: { type: string }
+        realized: { type: string }
+        fillRate: { type: number }
+        coverage: { type: number }
+    MarketLiquidationLevelsReviewBucket:
+      type: object
+      properties:
+        leverage: { type: integer, enum: [10, 25, 50, 100] }
+        side: { type: string, enum: [long, short] }
+        horizon: { type: string }
+        signals: { type: integer }
+        validated: { type: integer }
+        hits: { type: integer }
+        hitRate: { type: number }
+        predicted: { type: string }
+        realized: { type: string }
+        fillRate: { type: number }
+        reliability: { type: string, enum: [high, fair, low, unknown] }
+    MarketLiquidationLevelsReviewVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        horizons:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationLevelsReviewHorizon' }
+        byLeverage:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationLevelsReviewBucket' }
+        samples:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationLevelsReviewSample' }
+    MarketLiquidationLevelsReview:
+      type: object
+      description: Past estimated levels vs later same-venue liquidations
+      properties:
+        binance: { $ref: '#/components/schemas/MarketLiquidationLevelsReviewVenue' }
+        bybit: { $ref: '#/components/schemas/MarketLiquidationLevelsReviewVenue' }
+        okx: { $ref: '#/components/schemas/MarketLiquidationLevelsReviewVenue' }
+        combined: { $ref: '#/components/schemas/MarketLiquidationLevelsReviewVenue' }
+        summary: { type: string }
         note: { type: string }
     MarketLiquidationCascadeWindow:
       type: object

@@ -6,8 +6,10 @@ import { Text } from '@/components/atoms/Text';
 import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import { useDisplayCurrency } from '@/libs/hooks';
 import {
+  LIQ_BAR_GRID,
   LIQ_BAR_INK,
   LIQ_BAR_LAST,
+  LIQ_BAR_LINE,
   LIQ_BAR_LONG,
   LIQ_BAR_PAD,
   LIQ_BAR_PLOT,
@@ -18,10 +20,16 @@ import {
 } from './LiquidationBarChart.constants';
 import {
   barSide,
+  cumSliceNotional,
+  formatAxisNotional,
+  formatAxisPrice,
+  formatHitRate,
   isLevelsKind,
+  maxCum,
   maxTotal,
+  newestLevelSamples,
   parseNotional,
-  sliceNotional,
+  pickLevelsReview,
   toLevelRows,
   toTimeRows,
 } from './LiquidationBarChart.helpers';
@@ -31,6 +39,9 @@ import {
   LegendRow,
   MapFrame,
   Panel,
+  Reliability,
+  ReviewTable,
+  SignalScroll,
   Swatch,
   TipRow,
   TipTitle,
@@ -58,6 +69,10 @@ export function LiquidationBarChart({
   const times = useMemo(() => toTimeRows(data), [data]);
   const mapMode = isLevelsKind(data);
   const lastPrice = parseNotional(data?.lastPrice);
+  const review = pickLevelsReview(data);
+  const reviewHorizons = review?.horizons ?? [];
+  const reviewBuckets = review?.byLeverage ?? [];
+  const reviewSamples = newestLevelSamples(review);
 
   useEffect(() => {
     const el = frameRef.current;
@@ -109,7 +124,9 @@ export function LiquidationBarChart({
   if (errorMessage) {
     return <Alert type="error" showIcon message={errorMessage} />;
   }
-  const empty = mapMode ? levels.every((row) => row.totalN <= 0) : times.every((row) => row.totalN <= 0);
+  const empty = mapMode
+    ? levels.every((row) => row.totalN <= 0 && row.cumTotal <= 0)
+    : times.every((row) => row.totalN <= 0);
   if (empty) {
     return <DeskEmpty title={t('chart.empty')} hint={t('chart.emptyHint')} />;
   }
@@ -146,6 +163,7 @@ export function LiquidationBarChart({
             </>
           )}
         {mapMode ? <Swatch $tone="last">{t('chart.lastPrice')}</Swatch> : null}
+        {mapMode ? <Swatch $tone="line">{t('chart.cumLine')}</Swatch> : null}
       </LegendRow>
       <MapFrame ref={frameRef} role="img" aria-label={t('chart.aria')}>
         <ChartCanvas
@@ -175,6 +193,18 @@ export function LiquidationBarChart({
                 <span>{formatCompact(hover.cumTotal, 'USDT')}</span>
               </TipRow>
             ) : null}
+            {hover.cumLong != null && hover.cumLong > 0 ? (
+              <TipRow>
+                <span>{t('chart.cumLong')}</span>
+                <span>{formatCompact(hover.cumLong, 'USDT')}</span>
+              </TipRow>
+            ) : null}
+            {hover.cumShort != null && hover.cumShort > 0 ? (
+              <TipRow>
+                <span>{t('chart.cumShort')}</span>
+                <span>{formatCompact(hover.cumShort, 'USDT')}</span>
+              </TipRow>
+            ) : null}
             {hover.byLeverage?.map((sl) => (
               <TipRow key={sl.leverage}>
                 <span>{t('chart.leverage', { lev: sl.leverage })}</span>
@@ -184,8 +214,134 @@ export function LiquidationBarChart({
           </HoverCard>
         ) : null}
       </MapFrame>
+      {mapMode && (reviewHorizons.length > 0 || reviewBuckets.length > 0) ? (
+        <>
+          <Text variant="h4" color="primary">
+            {t('chart.review.title')}
+          </Text>
+          <Text variant="caption" color="secondary">
+            {data?.review?.summary || t('chart.review.hint')}
+          </Text>
+          {reviewHorizons.length > 0 ? (
+            <ReviewTable data-testid="liquidation-levels-review">
+              <thead>
+                <tr>
+                  <th>{t('chart.review.horizon')}</th>
+                  <th>{t('chart.review.signals')}</th>
+                  <th>{t('chart.review.validated')}</th>
+                  <th>{t('chart.review.pending')}</th>
+                  <th>{t('chart.review.hits')}</th>
+                  <th>{t('chart.review.hitRate')}</th>
+                  <th>{t('chart.review.fill')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reviewHorizons.map((row) => (
+                  <tr key={row.horizon ?? 'h'}>
+                    <td>{row.horizon ?? '—'}</td>
+                    <td>{row.signals ?? 0}</td>
+                    <td>{row.validated ?? 0}</td>
+                    <td>{row.pending ?? 0}</td>
+                    <td>{row.hits ?? 0}</td>
+                    <td>{row.validated ? formatHitRate(row.hitRate) : '—'}</td>
+                    <td>{row.validated ? formatHitRate(row.fillRate) : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </ReviewTable>
+          ) : null}
+          {reviewBuckets.length > 0 ? (
+            <>
+              <Text variant="h4" color="primary">
+                {t('chart.review.reliabilityTitle')}
+              </Text>
+              <Text variant="caption" color="secondary">
+                {t('chart.review.reliabilityHint')}
+              </Text>
+              <ReviewTable data-testid="liquidation-levels-reliability">
+                <thead>
+                  <tr>
+                    <th>{t('chart.review.level')}</th>
+                    <th>{t('chart.review.side')}</th>
+                    <th>{t('chart.review.validated')}</th>
+                    <th>{t('chart.review.hitRate')}</th>
+                    <th>{t('chart.review.fill')}</th>
+                    <th>{t('chart.review.reliability')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reviewBuckets.map((row) => (
+                    <tr key={`${row.leverage}-${row.side}`}>
+                      <td>{t('chart.leverage', { lev: row.leverage })}</td>
+                      <td>
+                        {row.side === 'long' ? t('cards.long') : t('cards.short')}
+                      </td>
+                      <td>{row.validated ?? 0}</td>
+                      <td>{row.validated ? formatHitRate(row.hitRate) : '—'}</td>
+                      <td>{row.validated ? formatHitRate(row.fillRate) : '—'}</td>
+                      <td>
+                        <Reliability $tone={row.reliability ?? 'unknown'}>
+                          {t(`chart.review.grades.${row.reliability ?? 'unknown'}`)}
+                        </Reliability>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </ReviewTable>
+            </>
+          ) : null}
+          {reviewSamples.length > 0 ? (
+            <>
+              <Text variant="h4" color="primary">
+                {t('chart.review.samplesTitle')}
+              </Text>
+              <Text variant="caption" color="secondary">
+                {t('chart.review.samplesHint')}
+              </Text>
+              <SignalScroll>
+                <ReviewTable data-testid="liquidation-levels-samples">
+                  <thead>
+                    <tr>
+                      <th>{t('chart.review.when')}</th>
+                      <th>{t('chart.review.last')}</th>
+                      <th>{t('chart.review.level')}</th>
+                      <th>{t('chart.review.side')}</th>
+                      <th>{t('chart.review.predicted')}</th>
+                      <th>{t('chart.review.realized')}</th>
+                      <th>{t('chart.review.result')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reviewSamples.flatMap((sample) =>
+                      (sample.bands ?? []).map((band, i) => (
+                        <tr key={`${sample.time}-${band.leverage}-${band.side}-${i}`}>
+                          <td>{formatSampleTime(sample.time)}</td>
+                          <td>{formatAxisPrice(parseNotional(sample.lastPrice))}</td>
+                          <td>{t('chart.leverage', { lev: band.leverage })}</td>
+                          <td>
+                            {band.side === 'long' ? t('cards.long') : t('cards.short')}
+                          </td>
+                          <td>{formatCompact(parseNotional(band.predicted), 'USDT')}</td>
+                          <td>{formatCompact(parseNotional(band.realized), 'USDT')}</td>
+                          <td>{t(`chart.review.status.${band.status ?? 'unknown'}`)}</td>
+                        </tr>
+                      )),
+                    )}
+                  </tbody>
+                </ReviewTable>
+              </SignalScroll>
+            </>
+          ) : null}
+        </>
+      ) : null}
     </Panel>
   );
+}
+
+function formatSampleTime(raw: string | undefined): string {
+  const t = Date.parse(raw ?? '');
+  if (!Number.isFinite(t)) return '—';
+  return new Date(t).toISOString().slice(5, 16).replace('T', ' ');
 }
 
 function plotBox(w: number, h: number) {
@@ -201,40 +357,84 @@ function drawLevels(
   lastPrice: number,
 ) {
   const box = plotBox(w, h);
-  const peak = maxTotal(rows) || 1;
+  const peak = maxCum(rows) || 1;
   const rowH = box.h / Math.max(rows.length, 1);
+  const plotW = box.w - 8;
+  ctx.font = '11px Inter, Segoe UI, sans-serif';
+
+  const xTicks = 4;
+  for (let t = 1; t <= xTicks; t += 1) {
+    const x = box.x + (t / xTicks) * plotW;
+    ctx.strokeStyle = LIQ_BAR_GRID;
+    ctx.beginPath();
+    ctx.moveTo(x, box.y);
+    ctx.lineTo(x, box.y + box.h);
+    ctx.stroke();
+    ctx.fillStyle = LIQ_BAR_INK;
+    ctx.textAlign = 'center';
+    ctx.fillText(formatAxisNotional((t / xTicks) * peak), x, box.y + box.h + 16);
+  }
+
+  const priceEvery = Math.max(1, Math.ceil(rows.length / 8));
+  rows.forEach((row, i) => {
+    const y = box.y + i * rowH;
+    const bh = Math.max(2, rowH - 1);
+    if (i % priceEvery === 0 || i === rows.length - 1) {
+      ctx.strokeStyle = LIQ_BAR_GRID;
+      ctx.beginPath();
+      ctx.moveTo(box.x, y);
+      ctx.lineTo(box.x + box.w, y);
+      ctx.stroke();
+      ctx.fillStyle = LIQ_BAR_INK;
+      ctx.textAlign = 'right';
+      ctx.fillText(formatAxisPrice(row.price), box.x - 8, y + bh * 0.75);
+    }
+  });
+
   ctx.strokeStyle = LIQ_BAR_SPINE;
   ctx.beginPath();
   ctx.moveTo(box.x, box.y);
   ctx.lineTo(box.x, box.y + box.h);
+  ctx.lineTo(box.x + box.w, box.y + box.h);
   ctx.stroke();
-  ctx.font = '11px Inter, Segoe UI, sans-serif';
+
+  const tips: { x: number; y: number }[] = [];
   rows.forEach((row, i) => {
-    const y = box.y + i * rowH + 1;
-    const bh = Math.max(2, rowH - 2);
+    const y = box.y + i * rowH + 0.5;
+    const bh = Math.max(2, rowH - 1);
     const side = barSide(row, lastPrice);
     let x = box.x + 1;
     for (const lev of LIQ_LEVERAGE_ORDER) {
-      const n = sliceNotional(row, lev, side);
+      const n = cumSliceNotional(row, lev, side);
       if (n <= 0) continue;
-      const bw = (n / peak) * (box.w - 8);
+      const bw = (n / peak) * plotW;
       ctx.fillStyle = LIQ_LEVERAGE_COLOR[lev];
       ctx.fillRect(x, y, Math.max(1, bw), bh);
       x += bw;
     }
-    if (i % Math.ceil(rows.length / 8) === 0 || i === rows.length - 1) {
-      ctx.fillStyle = LIQ_BAR_INK;
-      ctx.textAlign = 'right';
-      ctx.fillText(formatAxisPrice(row.price), box.x - 8, y + bh * 0.7);
-    }
+    const tipX = box.x + 1 + (row.cumTotal / peak) * plotW;
+    tips.push({ x: tipX, y: y + bh / 2 });
   });
+
+  if (tips.length > 1) {
+    ctx.strokeStyle = LIQ_BAR_LINE;
+    ctx.lineWidth = 1.75;
+    ctx.beginPath();
+    tips.forEach((p, i) => {
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    });
+    ctx.stroke();
+    ctx.lineWidth = 1;
+  }
+
   if (lastPrice > 0 && rows.length > 1) {
     const hi = rows[0]!.price;
     const lo = rows[rows.length - 1]!.price;
     const span = hi - lo || 1;
     const y = box.y + ((hi - lastPrice) / span) * box.h;
     ctx.strokeStyle = LIQ_BAR_LAST;
-    ctx.setLineDash([4, 3]);
+    ctx.setLineDash([5, 4]);
     ctx.beginPath();
     ctx.moveTo(box.x, y);
     ctx.lineTo(box.x + box.w, y);
@@ -256,12 +456,13 @@ function drawTotals(
   const peak = maxTotal(rows) || 1;
   const gap = 3;
   const bw = Math.max(3, box.w / Math.max(rows.length, 1) - gap);
-  ctx.strokeStyle = '#E6EAF0';
+  ctx.strokeStyle = LIQ_BAR_SPINE;
   ctx.beginPath();
   ctx.moveTo(box.x, box.y + box.h);
   ctx.lineTo(box.x + box.w, box.y + box.h);
   ctx.stroke();
   ctx.font = '11px Inter, Segoe UI, sans-serif';
+  const tips: { x: number; y: number }[] = [];
   rows.forEach((row, i) => {
     const x = box.x + i * (bw + gap);
     const longH = (row.longN / peak) * box.h;
@@ -272,12 +473,24 @@ function drawTotals(
     ctx.fillRect(x, yShort, bw, shortH);
     ctx.fillStyle = LIQ_BAR_LONG;
     ctx.fillRect(x, yLong, bw, longH);
+    tips.push({ x: x + bw / 2, y: yLong });
     if (i % Math.ceil(rows.length / 6) === 0) {
       ctx.fillStyle = LIQ_BAR_INK;
       ctx.textAlign = 'center';
       ctx.fillText(row.label, x + bw / 2, box.y + box.h + 16);
     }
   });
+  if (tips.length > 1) {
+    ctx.strokeStyle = LIQ_BAR_LINE;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    tips.forEach((p, i) => {
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    });
+    ctx.stroke();
+    ctx.lineWidth = 1;
+  }
 }
 
 function hitLevel(
@@ -333,9 +546,4 @@ function hitTime(
   };
 }
 
-function formatAxisPrice(n: number): string {
-  if (!Number.isFinite(n)) return '—';
-  if (n >= 1000) return n.toLocaleString(undefined, { maximumFractionDigits: 0 });
-  if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
-}
+

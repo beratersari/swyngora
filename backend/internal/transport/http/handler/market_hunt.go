@@ -751,6 +751,7 @@ type liquidationLevelBarDTO struct {
 	CumShort      string                        `json:"cumShort,omitempty"`
 	CumTotal      string                        `json:"cumTotal,omitempty"`
 	ByLeverage    []liquidationLeverageSliceDTO `json:"byLeverage,omitempty"`
+	CumByLeverage []liquidationLeverageSliceDTO `json:"cumByLeverage,omitempty"`
 }
 
 type liquidationTimeBarDTO struct {
@@ -762,19 +763,20 @@ type liquidationTimeBarDTO struct {
 }
 
 type liquidationLevelsResponse struct {
-	Kind       string                   `json:"kind"`
-	Symbol     string                   `json:"symbol"`
-	Exchange   string                   `json:"exchange"`
-	Range      string                   `json:"range"`
-	From       string                   `json:"from,omitempty"`
-	To         string                   `json:"to,omitempty"`
-	LastPrice  string                   `json:"lastPrice,omitempty"`
-	LastPrices map[string]string        `json:"lastPrices,omitempty"`
-	Levels     []liquidationLevelBarDTO `json:"levels"`
-	Bars       []liquidationTimeBarDTO  `json:"bars"`
-	Feed       liquidationFeedDTO       `json:"feed"`
-	Missing    []string                 `json:"missing,omitempty"`
-	Note       string                   `json:"note"`
+	Kind       string                      `json:"kind"`
+	Symbol     string                      `json:"symbol"`
+	Exchange   string                      `json:"exchange"`
+	Range      string                      `json:"range"`
+	From       string                      `json:"from,omitempty"`
+	To         string                      `json:"to,omitempty"`
+	LastPrice  string                      `json:"lastPrice,omitempty"`
+	LastPrices map[string]string           `json:"lastPrices,omitempty"`
+	Levels     []liquidationLevelBarDTO    `json:"levels"`
+	Bars       []liquidationTimeBarDTO     `json:"bars"`
+	Feed       liquidationFeedDTO          `json:"feed"`
+	Missing    []string                    `json:"missing,omitempty"`
+	Note       string                      `json:"note"`
+	Review     *liquidationLevelsReviewDTO `json:"review,omitempty"`
 }
 
 func liquidationLevelsToDTO(a *domain.LiquidationLevelsReport) liquidationLevelsResponse {
@@ -789,10 +791,16 @@ func liquidationLevelsToDTO(a *domain.LiquidationLevelsReport) liquidationLevels
 				Leverage: sl.Leverage, LongNotional: sl.LongNotional, ShortNotional: sl.ShortNotional,
 			})
 		}
+		cumSlices := make([]liquidationLeverageSliceDTO, 0, len(lv.CumByLeverage))
+		for _, sl := range lv.CumByLeverage {
+			cumSlices = append(cumSlices, liquidationLeverageSliceDTO{
+				Leverage: sl.Leverage, LongNotional: sl.LongNotional, ShortNotional: sl.ShortNotional,
+			})
+		}
 		levels = append(levels, liquidationLevelBarDTO{
 			Price: lv.Price, LongNotional: lv.LongNotional, ShortNotional: lv.ShortNotional,
 			TotalNotional: lv.TotalNotional, CumLong: lv.CumLong, CumShort: lv.CumShort,
-			CumTotal: lv.CumTotal, ByLeverage: slices,
+			CumTotal: lv.CumTotal, ByLeverage: slices, CumByLeverage: cumSlices,
 		})
 	}
 	bars := make([]liquidationTimeBarDTO, 0, len(a.Bars))
@@ -814,7 +822,124 @@ func liquidationLevelsToDTO(a *domain.LiquidationLevelsReport) liquidationLevels
 		Kind: a.Kind, Symbol: a.Symbol, Exchange: a.Exchange, Range: a.Range,
 		From: from, To: to, LastPrice: a.LastPrice, LastPrices: a.LastPrices,
 		Levels: levels, Bars: bars, Feed: feedToDTO(a.Feed), Missing: a.Missing, Note: a.Note,
+		Review: levelsReviewToDTO(a.Review),
 	}
+}
+
+type liquidationLevelsReviewBandDTO struct {
+	Leverage     int     `json:"leverage"`
+	Side         string  `json:"side"`
+	Price        string  `json:"price"`
+	Predicted    string  `json:"predicted"`
+	Realized     string  `json:"realized"`
+	Hit          bool    `json:"hit"`
+	FillRate     float64 `json:"fillRate"`
+	Status       string  `json:"status"`
+	Validated    bool    `json:"validated"`
+	Pending      bool    `json:"pending"`
+	Gap          string  `json:"gap,omitempty"`
+	TimeToHitSec float64 `json:"timeToHitSec,omitempty"`
+}
+
+type liquidationLevelsReviewSampleDTO struct {
+	Time      time.Time                        `json:"time"`
+	LastPrice string                           `json:"lastPrice"`
+	Bands     []liquidationLevelsReviewBandDTO `json:"bands"`
+}
+
+type liquidationLevelsReviewHorizonDTO struct {
+	Horizon   string  `json:"horizon"`
+	Signals   int     `json:"signals"`
+	Validated int     `json:"validated"`
+	Missing   int     `json:"missing"`
+	Pending   int     `json:"pending"`
+	Hits      int     `json:"hits"`
+	HitRate   float64 `json:"hitRate"`
+	Predicted string  `json:"predicted"`
+	Realized  string  `json:"realized"`
+	FillRate  float64 `json:"fillRate"`
+	Coverage  float64 `json:"coverage"`
+}
+
+type liquidationLevelsReviewBucketDTO struct {
+	Leverage    int     `json:"leverage"`
+	Side        string  `json:"side"`
+	Horizon     string  `json:"horizon"`
+	Signals     int     `json:"signals"`
+	Validated   int     `json:"validated"`
+	Hits        int     `json:"hits"`
+	HitRate     float64 `json:"hitRate"`
+	Predicted   string  `json:"predicted"`
+	Realized    string  `json:"realized"`
+	FillRate    float64 `json:"fillRate"`
+	Reliability string  `json:"reliability"`
+}
+
+type liquidationLevelsReviewVenueDTO struct {
+	Exchange   string                              `json:"exchange"`
+	Horizons   []liquidationLevelsReviewHorizonDTO `json:"horizons"`
+	ByLeverage []liquidationLevelsReviewBucketDTO  `json:"byLeverage"`
+	Samples    []liquidationLevelsReviewSampleDTO  `json:"samples"`
+}
+
+type liquidationLevelsReviewDTO struct {
+	Binance  liquidationLevelsReviewVenueDTO `json:"binance"`
+	Bybit    liquidationLevelsReviewVenueDTO `json:"bybit"`
+	OKX      liquidationLevelsReviewVenueDTO `json:"okx"`
+	Combined liquidationLevelsReviewVenueDTO `json:"combined"`
+	Summary  string                          `json:"summary"`
+	Note     string                          `json:"note"`
+}
+
+func levelsReviewToDTO(r *domain.LiquidationLevelsReview) *liquidationLevelsReviewDTO {
+	if r == nil {
+		return nil
+	}
+	return &liquidationLevelsReviewDTO{
+		Binance:  levelsReviewVenueToDTO(r.Binance),
+		Bybit:    levelsReviewVenueToDTO(r.Bybit),
+		OKX:      levelsReviewVenueToDTO(r.OKX),
+		Combined: levelsReviewVenueToDTO(r.Combined),
+		Summary:  r.Summary,
+		Note:     r.Note,
+	}
+}
+
+func levelsReviewVenueToDTO(v domain.LiquidationLevelsReviewVenue) liquidationLevelsReviewVenueDTO {
+	hs := make([]liquidationLevelsReviewHorizonDTO, 0, len(v.Horizons))
+	for _, h := range v.Horizons {
+		hs = append(hs, liquidationLevelsReviewHorizonDTO{
+			Horizon: h.Horizon, Signals: h.Signals, Validated: h.Validated,
+			Missing: h.Missing, Pending: h.Pending, Hits: h.Hits, HitRate: h.HitRate,
+			Predicted: formatHistQty(h.Predicted), Realized: formatHistQty(h.Realized),
+			FillRate: h.FillRate, Coverage: h.Coverage,
+		})
+	}
+	bs := make([]liquidationLevelsReviewBucketDTO, 0, len(v.ByLeverage))
+	for _, b := range v.ByLeverage {
+		bs = append(bs, liquidationLevelsReviewBucketDTO{
+			Leverage: b.Leverage, Side: b.Side, Horizon: b.Horizon,
+			Signals: b.Signals, Validated: b.Validated, Hits: b.Hits, HitRate: b.HitRate,
+			Predicted: formatHistQty(b.Predicted), Realized: formatHistQty(b.Realized),
+			FillRate: b.FillRate, Reliability: b.Reliability,
+		})
+	}
+	ss := make([]liquidationLevelsReviewSampleDTO, 0, len(v.Samples))
+	for _, s := range v.Samples {
+		bands := make([]liquidationLevelsReviewBandDTO, 0, len(s.Bands))
+		for _, b := range s.Bands {
+			bands = append(bands, liquidationLevelsReviewBandDTO{
+				Leverage: b.Leverage, Side: b.Side, Price: formatHistQty(b.Price),
+				Predicted: formatHistQty(b.Predicted), Realized: formatHistQty(b.Realized),
+				Hit: b.Hit, FillRate: b.FillRate, Status: b.Status, Validated: b.Validated,
+				Pending: b.Pending, Gap: b.Gap, TimeToHitSec: b.TimeToHitSec,
+			})
+		}
+		ss = append(ss, liquidationLevelsReviewSampleDTO{
+			Time: s.Time.UTC(), LastPrice: formatHistQty(s.LastPrice), Bands: bands,
+		})
+	}
+	return liquidationLevelsReviewVenueDTO{Exchange: v.Exchange, Horizons: hs, ByLeverage: bs, Samples: ss}
 }
 
 type huntHeatmapGridDTO struct {
