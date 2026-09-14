@@ -1003,13 +1003,27 @@ type longShortLevelDTO struct {
 	LongShare string `json:"longShare"`
 }
 
+type longShortSplitDTO struct {
+	Alignment    string `json:"alignment,omitempty"`
+	Important    bool   `json:"important,omitempty"`
+	General      string `json:"general,omitempty"`
+	TopAccounts  string `json:"topAccounts,omitempty"`
+	TopPositions string `json:"topPositions,omitempty"`
+	SizeBias     string `json:"sizeBias,omitempty"`
+	Headline     string `json:"headline,omitempty"`
+	Detail       string `json:"detail,omitempty"`
+}
+
 type longShortVenueDTO struct {
-	Exchange string              `json:"exchange"`
-	Kind     string              `json:"kind"`
-	Period   string              `json:"period"`
-	Current  longShortLevelDTO   `json:"current"`
-	Change   string              `json:"change,omitempty"`
-	History  []longShortLevelDTO `json:"history"`
+	Exchange     string              `json:"exchange"`
+	Kind         string              `json:"kind"`
+	Period       string              `json:"period"`
+	Current      longShortLevelDTO   `json:"current"`
+	Change       string              `json:"change,omitempty"`
+	History      []longShortLevelDTO `json:"history"`
+	TopAccounts  *longShortLevelDTO  `json:"topAccounts,omitempty"`
+	TopPositions *longShortLevelDTO  `json:"topPositions,omitempty"`
+	Split        *longShortSplitDTO  `json:"split,omitempty"`
 }
 
 type longShortResponse struct {
@@ -1155,6 +1169,22 @@ func longShortLevelDTOFrom(p domain.LongShortLevel) longShortLevelDTO {
 	}
 }
 
+func crowdingSplitPtr(s domain.LongShortSplit) *longShortSplitDTO {
+	if s.Alignment == "" || s.Alignment == domain.AlignUnknown {
+		return nil
+	}
+	sp := longShortSplitDTOFrom(s)
+	return &sp
+}
+
+func longShortSplitDTOFrom(s domain.LongShortSplit) longShortSplitDTO {
+	return longShortSplitDTO{
+		Alignment: s.Alignment, Important: s.Important,
+		General: s.General, TopAccounts: s.TopAccounts, TopPositions: s.TopPositions,
+		SizeBias: s.SizeBias, Headline: s.Headline, Detail: s.Detail,
+	}
+}
+
 func longShortToDTO(a *domain.LongShortSnapshot) longShortResponse {
 	if a == nil {
 		return longShortResponse{}
@@ -1165,10 +1195,23 @@ func longShortToDTO(a *domain.LongShortSnapshot) longShortResponse {
 		for _, h := range v.History {
 			hist = append(hist, longShortLevelDTOFrom(h))
 		}
-		venues = append(venues, longShortVenueDTO{
+		row := longShortVenueDTO{
 			Exchange: v.Exchange, Kind: v.Kind, Period: v.Period,
 			Current: longShortLevelDTOFrom(v.Current), Change: v.Change, History: hist,
-		})
+		}
+		if v.TopAccounts != nil {
+			lvl := longShortLevelDTOFrom(*v.TopAccounts)
+			row.TopAccounts = &lvl
+		}
+		if v.TopPositions != nil {
+			lvl := longShortLevelDTOFrom(*v.TopPositions)
+			row.TopPositions = &lvl
+		}
+		if v.Split.Alignment != "" && v.Split.Alignment != domain.AlignUnknown {
+			sp := longShortSplitDTOFrom(v.Split)
+			row.Split = &sp
+		}
+		venues = append(venues, row)
 	}
 	hist := make([]longShortLevelDTO, 0, len(a.History))
 	for _, h := range a.History {
@@ -1181,7 +1224,7 @@ func longShortToDTO(a *domain.LongShortSnapshot) longShortResponse {
 	out := longShortResponse{
 		Symbol: a.Symbol, Exchange: a.Exchange, Kind: a.Kind, Period: a.Period,
 		Venues: venues, History: hist, AsOf: asOf, VenueCount: a.VenueCount,
-		Note: "Share of accounts that are long vs short (not position size). ratio is long/short. bias is long if ratio≥1.05, short if ≤0.95. 5m samples. Combined all does not average venues. Informational only.",
+		Note: "current is all-account long/short (count, not size). On Binance, topAccounts is the top 20% of traders by margin (account count) and topPositions is their position size. split.opposite means the crowd and bigger books lean different ways — analysis then treats size as the positioned side. ratio is long/short. bias is long if ratio≥1.05, short if ≤0.95. 5m samples. Combined all does not average venues. Informational only.",
 	}
 	if a.Current != nil {
 		cur := longShortLevelDTOFrom(*a.Current)

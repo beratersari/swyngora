@@ -23,7 +23,7 @@ Each venue includes:
 | Field | Meaning |
 |---|---|
 | `longSqueeze` / `shortSqueeze` | Score 0–100, level, weighted factors, plain-language reasons |
-| `crowdedSide` | `long` / `short` / `balanced` from account long/short share |
+| `crowdedSide` | `long` / `short` / `balanced` from account long/short share. If Binance top-trader **positions** lean the other way, size is used for the score and `crowdingSplit` explains the disagreement. |
 | `higherRisk` | Which squeeze score is clearly higher |
 | `summary` | One-line read |
 

@@ -587,6 +587,17 @@ func formatLongShortVenues(s *domain.LongShortSnapshot) string {
 		if v.Change != "" && v.Change != "0" {
 			b.WriteString(row("Δ 5m", code(v.Change)))
 		}
+		if v.TopAccounts != nil {
+			fmt.Fprintf(&b, "    top accounts  long %s%% / short %s%%  %s\n",
+				code(v.TopAccounts.LongPct), code(v.TopAccounts.ShortPct), italic(v.TopAccounts.Bias))
+		}
+		if v.TopPositions != nil {
+			fmt.Fprintf(&b, "    top size  long %s%% / short %s%%  %s\n",
+				code(v.TopPositions.LongPct), code(v.TopPositions.ShortPct), italic(v.TopPositions.Bias))
+		}
+		if v.Split.Alignment == domain.AlignOpposite && v.Split.Headline != "" {
+			b.WriteString(row("split", italic(v.Split.Headline)))
+		}
 	}
 	return b.String()
 }

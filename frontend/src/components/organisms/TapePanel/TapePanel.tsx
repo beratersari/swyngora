@@ -46,6 +46,10 @@ export function TapePanel({
   const cvdRow = cvd?.combined ?? cvd?.venues?.[0];
   const snap = snapshot?.combined ?? snapshot?.venues?.[0];
   const snap1h = snap?.windows?.find((w) => w.window === '1h');
+  const lsVenue =
+    openInterest?.longShort?.venues?.find((v) => v.exchange === 'binance') ??
+    openInterest?.longShort?.venues?.[0];
+  const lsSplit = lsVenue?.split;
 
   return (
     <Panel>
@@ -204,6 +208,13 @@ export function TapePanel({
               value={snap?.longPct ? `${snap.longPct}%` : '—'}
               isLoading={isLoading}
             />
+            {lsVenue?.topPositions ? (
+              <Stat
+                label={t('tape.topPosLongPct')}
+                value={`${lsVenue.topPositions.longPct}%`}
+                isLoading={isLoading}
+              />
+            ) : null}
             <Stat
               label={t('tape.taker1h')}
               value={snap1h?.taker?.dominant ?? '—'}
@@ -216,6 +227,12 @@ export function TapePanel({
             />
           </StatsGrid>
         )}
+        {lsSplit?.alignment === 'opposite' && lsSplit.headline ? (
+          <Text variant="caption" color="secondary">
+            {lsSplit.headline}
+            {lsSplit.detail ? ` ${lsSplit.detail}` : ''}
+          </Text>
+        ) : null}
         {snapshot?.summary ? (
           <Text variant="caption" color="secondary">
             {snapshot.summary}

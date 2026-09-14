@@ -64,6 +64,30 @@ func TestBuildPositioningVenue_ShortBuildupReasons(t *testing.T) {
 	}
 }
 
+func TestBuildPositioningVenue_CrowdVsSize(t *testing.T) {
+	got := BuildPositioningVenue(PositioningInputs{
+		Exchange: ExchangeBinance, Symbol: "BTCUSDT",
+		Price: 100, OIValue: 1e6,
+		Price1hPct: 0.5, Price4hPct: 2, Price24hPct: 4,
+		OI1hPct: 1, OI4hPct: 3, OI24hPct: 5,
+		LongShare: 0.68, ShortShare: 0.32,
+		CrowdingSplit: LongShortSplit{
+			Alignment: AlignOpposite, Important: true,
+			General: "long", TopPositions: "short", SizeBias: "short",
+			Detail: "All accounts are long (68% long) while top-trader positions are short (32% long). Size is with the bigger books, not the crowd.",
+		},
+	})
+	found := false
+	for _, r := range got.Reasons {
+		if strings.Contains(r, "bigger books") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("reasons %+v", got.Reasons)
+	}
+}
+
 func TestBuildPositioningVenue_LongBuildup(t *testing.T) {
 	got := BuildPositioningVenue(PositioningInputs{
 		Exchange:    ExchangeBybit,

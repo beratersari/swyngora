@@ -119,6 +119,7 @@ type HuntVenueReport struct {
 	EstShortShare      float64            `json:"estShortShare"`
 	FundingRate        float64            `json:"fundingRate"`
 	FundingPayer       string             `json:"fundingPayer"`
+	CrowdingSplit      LongShortSplit     `json:"crowdingSplit,omitempty"`
 	VisibleBidNotional float64            `json:"visibleBidNotional"`
 	VisibleAskNotional float64            `json:"visibleAskNotional"`
 	UpPressure         []HuntBand         `json:"upPressure"`
@@ -200,16 +201,18 @@ type HuntCoverage struct {
 
 // HuntInputs feeds BuildHuntVenue.
 type HuntInputs struct {
-	Exchange     Exchange
-	Symbol       string
-	Price        float64
-	OIValue      float64
-	LongShare    float64
-	ShortShare   float64
-	FundingRate  float64
-	Asks         []ImpactSourceLevel
-	Bids         []ImpactSourceLevel
-	Liquidations []LiquidationEvent
+	Exchange      Exchange
+	Symbol        string
+	Price         float64
+	OIValue       float64
+	LongShare     float64
+	ShortShare    float64
+	FundingRate   float64
+	CrowdingSplit LongShortSplit
+	SizeLongShare float64
+	Asks          []ImpactSourceLevel
+	Bids          []ImpactSourceLevel
+	Liquidations  []LiquidationEvent
 }
 
 // HuntLiqDistance is isolated distance from entry as a fraction of price:
@@ -378,6 +381,7 @@ func BuildHuntVenue(in HuntInputs) HuntVenueReport {
 		ShortShare:         in.ShortShare,
 		FundingRate:        in.FundingRate,
 		FundingPayer:       FundingPayer(in.FundingRate),
+		CrowdingSplit:      in.CrowdingSplit,
 		VisibleAskNotional: LevelsNotional(in.Asks),
 		VisibleBidNotional: LevelsNotional(in.Bids),
 		UpPressure:         []HuntBand{},
@@ -388,7 +392,11 @@ func BuildHuntVenue(in HuntInputs) HuntVenueReport {
 		in.LongShare, in.ShortShare = 0.5, 0.5
 		out.LongShare, out.ShortShare = 0.5, 0.5
 	}
-	estLong, estShort := BlendAccountShare(in.LongShare)
+	blendFrom := in.LongShare
+	if in.CrowdingSplit.Alignment == AlignOpposite && in.SizeLongShare > 0 {
+		blendFrom = in.SizeLongShare
+	}
+	estLong, estShort := BlendAccountShare(blendFrom)
 	out.EstLongShare, out.EstShortShare = estLong, estShort
 	out.EstLongNotional = in.OIValue * estLong
 	out.EstShortNotional = in.OIValue * estShort

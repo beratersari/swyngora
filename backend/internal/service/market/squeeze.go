@@ -134,6 +134,9 @@ func (s *Service) squeezeOne(ctx context.Context, ex domain.Exchange, symbol str
 	if lsSer != nil {
 		p := domain.NormalizeLongShortPoint(lsSer.Current)
 		in.LongShare, in.ShortShare = p.LongShare, p.ShortShare
+		domain.AttachLongShortSplit(lsSer)
+		in.CrowdingSplit = lsSer.Split
+		in.SizeLongShare = domain.SizeWeightedLongShare(lsSer)
 		if share, ok := domain.LongShareAbout(lsSer.Current, lsSer.History, now.Add(-time.Hour)); ok {
 			in.LongShare1hAgo = share
 			in.HasLSHistory = true

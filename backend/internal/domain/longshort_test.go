@@ -40,6 +40,46 @@ func TestBuildLongShortSnapshot(t *testing.T) {
 	}
 }
 
+func TestCompareLongShortLayers_OppositeSize(t *testing.T) {
+	got := CompareLongShortLayers(
+		LongShortPoint{LongShare: 0.62, ShortShare: 0.38, Ratio: 1.63},
+		LongShortPoint{LongShare: 0.58, ShortShare: 0.42, Ratio: 1.38},
+		LongShortPoint{LongShare: 0.35, ShortShare: 0.65, Ratio: 0.54},
+	)
+	if got.Alignment != AlignOpposite || !got.Important || got.SizeBias != "short" {
+		t.Fatalf("%+v", got)
+	}
+	if got.General != "long" || got.TopPositions != "short" {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestCompareLongShortLayers_Same(t *testing.T) {
+	got := CompareLongShortLayers(
+		LongShortPoint{LongShare: 0.60, ShortShare: 0.40, Ratio: 1.5},
+		LongShortPoint{LongShare: 0.62, ShortShare: 0.38, Ratio: 1.63},
+		LongShortPoint{LongShare: 0.65, ShortShare: 0.35, Ratio: 1.86},
+	)
+	if got.Alignment != AlignSame || got.Important {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestSizeWeightedLongShare_OppositeUsesPositions(t *testing.T) {
+	s := &LongShortSeries{
+		Current: LongShortPoint{LongShare: 0.70, ShortShare: 0.30, Ratio: 2.33},
+		TopPositions: &LongShortSeries{
+			Kind:    LongShortKindTopPositions,
+			Current: LongShortPoint{LongShare: 0.32, ShortShare: 0.68, Ratio: 0.47},
+		},
+	}
+	AttachLongShortSplit(s)
+	got := SizeWeightedLongShare(s)
+	if got < 0.31 || got > 0.33 {
+		t.Fatalf("size share %v", got)
+	}
+}
+
 func TestClampLongShortHistoryLimit(t *testing.T) {
 	if ClampLongShortHistoryLimit(0) != DefaultLongShortHistoryLimit {
 		t.Fatal("default")

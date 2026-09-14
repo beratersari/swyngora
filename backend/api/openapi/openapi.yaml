@@ -1509,12 +1509,16 @@ paths:
     get:
       summary: Long/short account ratio and recent history
       description: |
-        Share of **accounts** that are long vs short (not position size) on
-        **Binance USD-M** (`globalLongShortAccountRatio`) and **Bybit linear**
-        (`/v5/market/account-ratio`). 5-minute samples. `ratio` is long/short
-        (1 = even). `bias` is `long` if ratio ≥ 1.05, `short` if ≤ 0.95.
-        Combined `exchange=all` does not average venues. `limit` default 24
-        (~2 hours). Cached ~30s. Informational only.
+        Share of **accounts** that are long vs short on **Binance USD-M**
+        (`globalLongShortAccountRatio`) and **Bybit linear**
+        (`/v5/market/account-ratio`). On Binance only, also returns
+        `topAccounts` (top 20% of traders by margin, account count) and
+        `topPositions` (same traders, position size). `split.opposite` means
+        the crowd and bigger books lean different ways — hunt / squeeze /
+        positioning then treat size as the positioned side. 5-minute samples.
+        `ratio` is long/short (1 = even). `bias` is `long` if ratio ≥ 1.05,
+        `short` if ≤ 0.95. Combined `exchange=all` does not average venues.
+        `limit` default 24 (~2 hours). Cached ~30s. Informational only.
       operationId: getMarketLongShortRatio
       tags: [Market]
       parameters:
@@ -9422,6 +9426,17 @@ components:
         ratio: { type: string, description: long/short (1 = even) }
         bias: { type: string, enum: [long, short, balanced] }
         longShare: { type: string, description: 0–1 share }
+    LongShortSplit:
+      type: object
+      properties:
+        alignment: { type: string, enum: [same, opposite, mixed, unknown] }
+        important: { type: boolean }
+        general: { type: string, enum: [long, short, balanced] }
+        topAccounts: { type: string, enum: [long, short, balanced] }
+        topPositions: { type: string, enum: [long, short, balanced] }
+        sizeBias: { type: string, enum: [long, short, balanced] }
+        headline: { type: string }
+        detail: { type: string }
     LongShortVenue:
       type: object
       properties:
@@ -9433,9 +9448,12 @@ components:
         history:
           type: array
           items: { $ref: '#/components/schemas/LongShortLevel' }
+        topAccounts: { $ref: '#/components/schemas/LongShortLevel' }
+        topPositions: { $ref: '#/components/schemas/LongShortLevel' }
+        split: { $ref: '#/components/schemas/LongShortSplit' }
     MarketLongShortRatio:
       type: object
-      description: Account long/short ratio plus recent 5m history
+      description: Account long/short ratio plus Binance top-trader layers and recent 5m history
       properties:
         symbol: { type: string }
         exchange: { type: string }

@@ -37,22 +37,23 @@ type PositioningWindow struct {
 
 // PositioningVenueReport is per-exchange positioning.
 type PositioningVenueReport struct {
-	Exchange     Exchange            `json:"exchange"`
-	Symbol       string              `json:"symbol"`
-	Price        float64             `json:"price"`
-	OpenInterest float64             `json:"openInterestValue"`
-	LongShare    float64             `json:"longShare"`
-	ShortShare   float64             `json:"shortShare"`
-	FundingRate  float64             `json:"fundingRate"`
-	FundingPayer string              `json:"fundingPayer"`
-	Primary      PositioningWindow   `json:"primary"` // preferred 4h when available
-	Windows      []PositioningWindow `json:"windows"`
-	Regime       string              `json:"regime"`
-	Label        string              `json:"label"`
-	Confidence   float64             `json:"confidence"`
-	Reasons      []string            `json:"reasons"`
-	Summary      string              `json:"summary"`
-	Error        string              `json:"error,omitempty"`
+	Exchange      Exchange            `json:"exchange"`
+	Symbol        string              `json:"symbol"`
+	Price         float64             `json:"price"`
+	OpenInterest  float64             `json:"openInterestValue"`
+	LongShare     float64             `json:"longShare"`
+	ShortShare    float64             `json:"shortShare"`
+	FundingRate   float64             `json:"fundingRate"`
+	FundingPayer  string              `json:"fundingPayer"`
+	CrowdingSplit LongShortSplit      `json:"crowdingSplit,omitempty"`
+	Primary       PositioningWindow   `json:"primary"` // preferred 4h when available
+	Windows       []PositioningWindow `json:"windows"`
+	Regime        string              `json:"regime"`
+	Label         string              `json:"label"`
+	Confidence    float64             `json:"confidence"`
+	Reasons       []string            `json:"reasons"`
+	Summary       string              `json:"summary"`
+	Error         string              `json:"error,omitempty"`
 }
 
 // PositioningCombined is the general market read across venues.
@@ -88,6 +89,7 @@ type PositioningInputs struct {
 	LongShare                           float64
 	ShortShare                          float64
 	FundingRate                         float64
+	CrowdingSplit                       LongShortSplit
 }
 
 // RegimeLabel is a short English title for the regime id.
@@ -191,15 +193,16 @@ func nan0(v float64) float64 {
 func BuildPositioningVenue(in PositioningInputs) PositioningVenueReport {
 	in.Symbol = NormalizeLiquidationSymbol(in.Symbol)
 	out := PositioningVenueReport{
-		Exchange:     in.Exchange,
-		Symbol:       in.Symbol,
-		Price:        in.Price,
-		OpenInterest: in.OIValue,
-		LongShare:    in.LongShare,
-		ShortShare:   in.ShortShare,
-		FundingRate:  in.FundingRate,
-		FundingPayer: FundingPayer(in.FundingRate),
-		Windows:      []PositioningWindow{},
+		Exchange:      in.Exchange,
+		Symbol:        in.Symbol,
+		Price:         in.Price,
+		OpenInterest:  in.OIValue,
+		LongShare:     in.LongShare,
+		ShortShare:    in.ShortShare,
+		FundingRate:   in.FundingRate,
+		FundingPayer:  FundingPayer(in.FundingRate),
+		CrowdingSplit: in.CrowdingSplit,
+		Windows:       []PositioningWindow{},
 	}
 	if in.LongShare == 0 && in.ShortShare == 0 {
 		in.LongShare, in.ShortShare = 0.5, 0.5
@@ -303,8 +306,10 @@ func positioningReasons(primary PositioningWindow, in PositioningInputs, w1, w24
 			reasons = append(reasons, fmt.Sprintf("Funding is negative (%.4f%%) while price+OI say long buildup — longs may be building against recent short bias.", in.FundingRate*100))
 		}
 	}
-	// Account LS
-	if in.LongShare >= 0.55 {
+	// Account LS — call out when the crowd and bigger books disagree.
+	if in.CrowdingSplit.Alignment == AlignOpposite && in.CrowdingSplit.Detail != "" {
+		reasons = append(reasons, in.CrowdingSplit.Detail)
+	} else if in.LongShare >= 0.55 {
 		reasons = append(reasons, fmt.Sprintf("Account long/short is long-crowded (%.1f%% long).", in.LongShare*100))
 	} else if in.LongShare <= 0.45 && in.LongShare > 0 {
 		reasons = append(reasons, fmt.Sprintf("Account long/short is short-crowded (%.1f%% short).", in.ShortShare*100))

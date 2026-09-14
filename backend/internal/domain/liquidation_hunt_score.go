@@ -1222,6 +1222,9 @@ func huntCrowdingFactor(dir string, v HuntVenueReport) HuntFactor {
 	if payer == "short" || payer == "long" {
 		f.Detail += fmt.Sprintf("; %ss pay funding", payer)
 	}
+	if v.CrowdingSplit.Alignment == AlignOpposite && v.CrowdingSplit.Headline != "" {
+		f.Detail += "; " + v.CrowdingSplit.Headline
+	}
 	return f
 }
 

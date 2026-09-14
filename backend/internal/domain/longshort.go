@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"math"
 	"sort"
 	"time"
@@ -10,7 +11,9 @@ const (
 	DefaultLongShortHistoryLimit = 24
 	MaxLongShortHistoryLimit     = 100
 	LongShortPeriod5m            = "5m"
-	LongShortKindAccounts        = "accounts" // share of accounts that are long vs short
+	LongShortKindAccounts        = "accounts"      // all accounts, count not size
+	LongShortKindTopAccounts     = "top_accounts"  // Binance top 20% by margin, account count
+	LongShortKindTopPositions    = "top_positions" // Binance top 20% by margin, position size
 )
 
 // LongShortPoint is one long/short account-ratio sample.
@@ -25,10 +28,15 @@ type LongShortPoint struct {
 type LongShortSeries struct {
 	Exchange Exchange
 	Symbol   string
-	Kind     string // accounts
+	Kind     string // accounts | top_accounts | top_positions
 	Period   string // 5m
 	Current  LongShortPoint
 	History  []LongShortPoint // newest first, excluding current
+	// TopAccounts / TopPositions are Binance-only extra layers on the
+	// global account series. Nil on Bybit or when the extra feed fails.
+	TopAccounts  *LongShortSeries
+	TopPositions *LongShortSeries
+	Split        LongShortSplit
 }
 
 // LongShortLevel is a formatted ratio print.
@@ -49,6 +57,23 @@ type LongShortVenueSnap struct {
 	Current  LongShortLevel
 	Change   string // signed ratio change vs previous print
 	History  []LongShortLevel
+	// TopAccounts is Binance top-trader account-count ratio (nil elsewhere).
+	TopAccounts *LongShortLevel
+	// TopPositions is Binance top-trader position-size ratio (nil elsewhere).
+	TopPositions *LongShortLevel
+	Split        LongShortSplit
+}
+
+// LongShortSplit is how the crowd (all accounts) lines up with top traders.
+type LongShortSplit struct {
+	Alignment    string `json:"alignment,omitempty"` // same | opposite | mixed | unknown
+	Important    bool   `json:"important,omitempty"`
+	General      string `json:"general,omitempty"`      // long | short | balanced
+	TopAccounts  string `json:"topAccounts,omitempty"`  // long | short | balanced
+	TopPositions string `json:"topPositions,omitempty"` // long | short | balanced
+	SizeBias     string `json:"sizeBias,omitempty"`     // lean of bigger books
+	Headline     string `json:"headline,omitempty"`
+	Detail       string `json:"detail,omitempty"`
 }
 
 // LongShortSnapshot is current long/short ratio plus recent 5m history.
@@ -142,6 +167,7 @@ func venueLongShortSnap(s *LongShortSeries) LongShortVenueSnap {
 		Period:   s.Period,
 		Current:  FormatLongShortLevel(s.Current),
 		History:  make([]LongShortLevel, 0, len(s.History)),
+		Split:    s.Split,
 	}
 	if len(s.History) > 0 {
 		out.Change = FormatSignedQty(s.Current.Ratio - s.History[0].Ratio)
@@ -149,7 +175,106 @@ func venueLongShortSnap(s *LongShortSeries) LongShortVenueSnap {
 	for _, p := range s.History {
 		out.History = append(out.History, FormatLongShortLevel(p))
 	}
+	if s.TopAccounts != nil {
+		lvl := FormatLongShortLevel(s.TopAccounts.Current)
+		out.TopAccounts = &lvl
+	}
+	if s.TopPositions != nil {
+		lvl := FormatLongShortLevel(s.TopPositions.Current)
+		out.TopPositions = &lvl
+	}
 	return out
+}
+
+func oppositeLongShortBias(a, b string) bool {
+	return (a == "long" && b == "short") || (a == "short" && b == "long")
+}
+
+func layerPoint(s *LongShortSeries) LongShortPoint {
+	if s == nil {
+		return LongShortPoint{}
+	}
+	return NormalizeLongShortPoint(s.Current)
+}
+
+// AttachLongShortSplit fills Split from the global print plus any top-trader layers.
+func AttachLongShortSplit(s *LongShortSeries) {
+	if s == nil {
+		return
+	}
+	s.Split = CompareLongShortLayers(s.Current, layerPoint(s.TopAccounts), layerPoint(s.TopPositions))
+}
+
+// CompareLongShortLayers contrasts all-account crowding with top-trader
+// account count and top-trader position size.
+func CompareLongShortLayers(general, topAcc, topPos LongShortPoint) LongShortSplit {
+	g := NormalizeLongShortPoint(general)
+	a := NormalizeLongShortPoint(topAcc)
+	p := NormalizeLongShortPoint(topPos)
+	out := LongShortSplit{General: LongShortBias(g.Ratio)}
+	if a.Ratio > 0 {
+		out.TopAccounts = LongShortBias(a.Ratio)
+	}
+	if p.Ratio > 0 {
+		out.TopPositions = LongShortBias(p.Ratio)
+	}
+	if out.TopAccounts == "" && out.TopPositions == "" {
+		out.Alignment = AlignUnknown
+		return out
+	}
+	out.SizeBias = out.TopPositions
+	if out.SizeBias == "" {
+		out.SizeBias = out.TopAccounts
+	}
+	switch {
+	case oppositeLongShortBias(out.General, out.TopPositions):
+		out.Alignment = AlignOpposite
+		out.Important = true
+		out.Headline = "Crowd accounts and top-trader positions lean opposite."
+		out.Detail = fmt.Sprintf("All accounts are %s (%.0f%% long) while top-trader positions are %s (%.0f%% long). Size is with the bigger books, not the crowd.",
+			out.General, g.LongShare*100, out.TopPositions, p.LongShare*100)
+	case oppositeLongShortBias(out.General, out.TopAccounts) && out.TopPositions == "":
+		out.Alignment = AlignOpposite
+		out.Important = true
+		out.Headline = "Crowd accounts and top-trader accounts lean opposite."
+		out.Detail = fmt.Sprintf("All accounts are %s (%.0f%% long) while top-trader accounts are %s (%.0f%% long).",
+			out.General, g.LongShare*100, out.TopAccounts, a.LongShare*100)
+	case oppositeLongShortBias(out.TopAccounts, out.TopPositions):
+		out.Alignment = AlignMixed
+		out.Headline = "Top traders: more accounts on one side, more size on the other."
+		out.Detail = fmt.Sprintf("Top-trader accounts are %s (%.0f%% long) but their positions are %s (%.0f%% long).",
+			out.TopAccounts, a.LongShare*100, out.TopPositions, p.LongShare*100)
+	case out.General == out.SizeBias || out.General == "balanced" || out.SizeBias == "balanced":
+		out.Alignment = AlignSame
+		out.Headline = "Crowd and top traders lean the same way."
+		out.Detail = fmt.Sprintf("All accounts %s (%.0f%% long); top-trader size %s.",
+			out.General, g.LongShare*100, out.SizeBias)
+	default:
+		out.Alignment = AlignMixed
+		out.Headline = "Crowd and top traders are not a clean match."
+		out.Detail = fmt.Sprintf("All accounts %s; top-trader size %s.", out.General, out.SizeBias)
+	}
+	return out
+}
+
+// SizeWeightedLongShare is the long share analysis should use for "who is
+// actually positioned." When the crowd and top-trader size lean opposite,
+// size wins. Otherwise the all-account print is kept.
+func SizeWeightedLongShare(s *LongShortSeries) float64 {
+	if s == nil {
+		return 0
+	}
+	g := NormalizeLongShortPoint(s.Current)
+	if s.Split.Alignment == "" {
+		AttachLongShortSplit(s)
+	}
+	if s.Split.Alignment == AlignOpposite && s.TopPositions != nil {
+		p := NormalizeLongShortPoint(s.TopPositions.Current)
+		if p.LongShare > 0 || p.ShortShare > 0 {
+			return p.LongShare
+		}
+	}
+	return g.LongShare
 }
 
 // BuildLongShortSnapshot folds one or more venue series.
@@ -181,6 +306,7 @@ func BuildLongShortSnapshot(exchange, symbol string, series []*LongShortSeries, 
 			s.Current = s.History[0]
 			s.History = s.History[1:]
 		}
+		AttachLongShortSplit(s)
 		clean = append(clean, s)
 	}
 	sort.Slice(clean, func(i, j int) bool {

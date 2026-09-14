@@ -145,7 +145,9 @@ estimated liquidation notional** at that price in that column.
 
 Each column uses historical **open interest**, **that venue's own price**
 (spot candles from that exchange only), the same **leverage mix** as the hunt
-(tilted by funding), and blended **account long/short**. Observed liquidation
+(tilted by funding), and blended **account long/short**. If Binance top-trader
+positions lean opposite the crowd, estimated size uses the top-trader print.
+Observed liquidation
 prints in that column are added into the matching price bin.
 
 `binance` and `bybit` are modeled separately and **never borrow each other's

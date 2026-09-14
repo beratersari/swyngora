@@ -140,6 +140,7 @@ type huntVenueDTO struct {
 	EstShortPct        string                `json:"estShortPct"`
 	FundingRate        string                `json:"fundingRate"`
 	FundingPayer       string                `json:"fundingPayer"`
+	CrowdingSplit      *longShortSplitDTO    `json:"crowdingSplit,omitempty"`
 	VisibleBidNotional string                `json:"visibleBidNotional"`
 	VisibleAskNotional string                `json:"visibleAskNotional"`
 	UpPressure         []huntBandDTO         `json:"upPressure"`
@@ -371,6 +372,7 @@ func huntVenueToDTO(v domain.HuntVenueReport) huntVenueDTO {
 		EstShortPct:        formatHistQty(v.EstShortShare * 100),
 		FundingRate:        formatHuntRate(v.FundingRate),
 		FundingPayer:       v.FundingPayer,
+		CrowdingSplit:      crowdingSplitPtr(v.CrowdingSplit),
 		VisibleBidNotional: formatHistQty(v.VisibleBidNotional),
 		VisibleAskNotional: formatHistQty(v.VisibleAskNotional),
 		UpPressure:         huntBandsToDTO(v.UpPressure),

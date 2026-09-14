@@ -150,6 +150,7 @@
     "none": "No perpetual book for this symbol on Binance or Bybit.",
     "positioning": "Positioning",
     "longPct": "Account long %",
+    "topPosLongPct": "Top size long %",
     "taker1h": "1h takers",
     "takerShare": "1h buy share"
   },

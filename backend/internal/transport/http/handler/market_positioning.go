@@ -38,6 +38,7 @@ type positioningVenueDTO struct {
 	ShortPct          string                 `json:"shortPct"`
 	FundingRate       string                 `json:"fundingRate"`
 	FundingPayer      string                 `json:"fundingPayer"`
+	CrowdingSplit     *longShortSplitDTO     `json:"crowdingSplit,omitempty"`
 	Primary           positioningWindowDTO   `json:"primary"`
 	Windows           []positioningWindowDTO `json:"windows"`
 	Regime            string                 `json:"regime"`
@@ -100,7 +101,8 @@ func positioningVenueToDTO(v domain.PositioningVenueReport) positioningVenueDTO 
 		Price: formatHistQty(v.Price), OpenInterestValue: formatHistQty(v.OpenInterest),
 		LongPct: formatHistQty(v.LongShare * 100), ShortPct: formatHistQty(v.ShortShare * 100),
 		FundingRate: formatHuntRate(v.FundingRate), FundingPayer: v.FundingPayer,
-		Primary: positioningWindowToDTO(v.Primary), Windows: wins,
+		CrowdingSplit: crowdingSplitPtr(v.CrowdingSplit),
+		Primary:       positioningWindowToDTO(v.Primary), Windows: wins,
 		Regime: v.Regime, Label: v.Label, Confidence: v.Confidence,
 		Reasons: reasons, Summary: v.Summary, Error: v.Error,
 	}

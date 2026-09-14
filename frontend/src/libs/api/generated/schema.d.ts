@@ -529,8 +529,8 @@ export interface paths {
          * @description CoinGlass-style **market desk**: long/short liquidation notional for the last
          *     **1 hour, 4 hours, 12 hours, and 24 hours**, plus coins ranked by total
          *     notional in `window` (default 24h) for a treemap. Fed by the same Binance
-         *     USD-M and Bybit linear streams as `/liquidations`. `exchange=all` (default)
-         *     sums both venues. `complete` uses the all-market Binance live clock when
+         *     USD-M, Bybit linear, and OKX USDT-swap streams as `/liquidations`. `exchange=all` (default)
+         *     sums all three venues. `complete` uses the all-market Binance live clock when
          *     `exchange` is `all` or `binance`. Informational only.
          */
         get: operations["getMarketLiquidationOverview"];
@@ -818,6 +818,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/funding-arb/signals/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one funding-arb crossing with predicted-vs-settled review
+         * @description Returns the stored expected schedule (the quote at open) and, when settlement clocks have passed, the actual funding prints versus that prediction. Pending clocks are marked pending. Informational only.
+         */
+        get: operations["getFundingArbSignal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/long-short-ratio": {
         parameters: {
             query?: never;
@@ -827,12 +847,16 @@ export interface paths {
         };
         /**
          * Long/short account ratio and recent history
-         * @description Share of **accounts** that are long vs short (not position size) on
-         *     **Binance USD-M** (`globalLongShortAccountRatio`) and **Bybit linear**
-         *     (`/v5/market/account-ratio`). 5-minute samples. `ratio` is long/short
-         *     (1 = even). `bias` is `long` if ratio ≥ 1.05, `short` if ≤ 0.95.
-         *     Combined `exchange=all` does not average venues. `limit` default 24
-         *     (~2 hours). Cached ~30s. Informational only.
+         * @description Share of **accounts** that are long vs short on **Binance USD-M**
+         *     (`globalLongShortAccountRatio`) and **Bybit linear**
+         *     (`/v5/market/account-ratio`). On Binance only, also returns
+         *     `topAccounts` (top 20% of traders by margin, account count) and
+         *     `topPositions` (same traders, position size). `split.opposite` means
+         *     the crowd and bigger books lean different ways — hunt / squeeze /
+         *     positioning then treat size as the positioned side. 5-minute samples.
+         *     `ratio` is long/short (1 = even). `bias` is `long` if ratio ≥ 1.05,
+         *     `short` if ≤ 0.95. Combined `exchange=all` does not average venues.
+         *     `limit` default 24 (~2 hours). Cached ~30s. Informational only.
          */
         get: operations["getMarketLongShortRatio"];
         put?: never;
@@ -1693,7 +1717,7 @@ export interface paths {
          *     - `symbol=BTCUSDT` (or ETHUSDT, …): estimated **price levels** —
          *       long/short notional at each price bin (hunt model summed over `range`).
          *     - `symbol=all`: **total** observed liquidations for every tracked coin
-         *       as time bars (last 24h max). `exchange=binance|bybit|all`.
+         *       as time bars (last 24h max). `exchange=binance|bybit|okx|all`.
          *
          *     Informational only.
          */
@@ -2179,9 +2203,9 @@ export interface paths {
          *     kind=imbalance: live book imbalance (buy=above, sell=below) vs targetPrice in 0.05–0.95.
          *     kind=wall: a large bid/ask/any wall appears (targetPrice is optional min share 0–1).
          *     kind=liquidation_feed: Binance/Bybit liquidation socket down or stalled longer than
-         *     targetPrice seconds (default 300). symbol is ignored. exchange=binance|bybit|all.
+         *     targetPrice seconds (default 300). symbol is ignored. exchange=binance|bybit|okx|all.
          *     kind=liquidation_cascade: a coin's cascade grade reaches condition (cascade default,
-         *     or extreme/elevated). symbol=BTCUSDT or all. exchange=binance|bybit|all.
+         *     or extreme/elevated). symbol=BTCUSDT or all. exchange=binance|bybit|okx|all.
          *     kind=liquidation_notional: a coin's long/short/total notional in window (1m|5m|15m|1h,
          *     default 5m via window or rangePct minutes) reaches targetPrice USDT. condition=long|short|both.
          *     Repeating fires once when the wave crosses, stays quiet while that window stays above,
@@ -2189,7 +2213,7 @@ export interface paths {
          *     kind=setup_radar: a coin's current tape looks close enough to the setup before that
          *     coin's own important past moves. targetPrice is min similarity 40–100 (0 = 60).
          *     condition=any (default) | up | down (after-path lean). symbol=BTCUSDT or all (any
-         *     scanned coin). exchange=binance|bybit|all. Repeating by default: one fire when the
+         *     scanned coin). exchange=binance|bybit|okx|all. Repeating by default: one fire when the
          *     match appears, quiet while still similar, re-arm when it clears. Informational only.
          */
         post: operations["createPriceAlert"];
@@ -2472,6 +2496,9 @@ export interface paths {
          * @description Owner only. Moves available cash from one of your books to another.
          *     Recorded as transfer_out / transfer_in (not deposit/withdrawal) on both histories.
          *     Contributed capital moves with the cash so trading P&L is unchanged.
+         *     Optional Idempotency-Key / idempotencyKey: a retry with the same key and same
+         *     from/to/amount/note returns the original pair (`replayed=true`) instead of a second move.
+         *     The same key with a different request returns 409. Attempts are listed at GET /transfers/attempts.
          *     Shared traders/viewers cannot transfer. Paper trading only — not real money.
          */
         post: operations["transferPortfolioCash"];
@@ -2793,10 +2820,87 @@ export interface paths {
         /**
          * Execute a paper basket rebalance
          * @description User-triggered only. Sells overweight (and coins not in the basket), then buys
-         *     underweight sleeves at last price. Drift is allowed until this is called.
+         *     underweight sleeves at last price. Stores a **rebalance result** (filled vs
+         *     failed legs, leftover mix vs target) that can be listed later.
          *     Paper trading — not real money. Not financial advice.
          */
         post: operations["rebalancePortfolioBasket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/baskets/{id}/rebalances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List stored rebalance results for a basket */
+        get: operations["listPortfolioBasketRebalances"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/rebalances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List stored paper rebalance results */
+        get: operations["listPortfolioRebalances"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/rebalances/{id}/continue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Continue a stored paper rebalance
+         * @description Re-plans leftover mix from the **current** book and appends a new attempt.
+         *     Does not replay legs that already filled. Use after partial, failed, or
+         *     interrupted runs. Paper trading — not real money.
+         */
+        post: operations["continuePortfolioRebalance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/rebalances/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one stored paper rebalance result
+         * @description Filled vs failed legs, leftover mix vs target, and sleeve before/after weights.
+         */
+        get: operations["getPortfolioRebalance"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3307,7 +3411,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get a price difference opportunity */
+        /**
+         * Get a price difference opportunity
+         * @description Returns the opportunity plus a review of what happened after it opened
+         *     (duration, peak edge, when it started fading, why it closed) and the
+         *     sampled book-walk path (`ticks`). Informational only.
+         */
         get: operations["getPriceDiffOpportunity"];
         put?: never;
         post?: never;
@@ -5470,6 +5579,47 @@ export interface components {
             lastSeenAt?: string;
             /** Format: date-time */
             closedAt?: string | null;
+            expected?: components["schemas"]["FundingArbExpected"];
+            review?: components["schemas"]["FundingArbReview"];
+        };
+        /** @description Predicted funding schedule stored when the opportunity opened */
+        FundingArbExpected: {
+            notional?: number;
+            holdHours?: number;
+            horizonFunding?: number;
+            roundTripFee?: number;
+            expectedNet?: number;
+            payments?: components["schemas"]["FundingArbReviewPayment"][];
+        };
+        FundingArbReviewPayment: {
+            /** Format: date-time */
+            time?: string;
+            exchange?: string;
+            expectedRate?: string;
+            expectedRatePct?: string;
+            actualRate?: string;
+            actualRatePct?: string;
+            expectedAmount?: string;
+            actualAmount?: string;
+            /** @enum {string} */
+            status?: "expected" | "pending" | "settled" | "missing";
+        };
+        /** @description Predicted schedule versus settled funding after those clocks */
+        FundingArbReview: {
+            /** Format: date-time */
+            asOf?: string;
+            pendingCount?: number;
+            settledCount?: number;
+            missingCount?: number;
+            complete?: boolean;
+            expectedFunding?: number;
+            actualFunding?: number;
+            expectedNet?: number;
+            actualNet?: number;
+            deltaNet?: number;
+            stillWorthIt?: boolean;
+            summary?: string;
+            payments?: components["schemas"]["FundingArbReviewPayment"][];
         };
         LongShortLevel: {
             /** Format: date-time */
@@ -5484,6 +5634,21 @@ export interface components {
             /** @description 0–1 share */
             longShare?: string;
         };
+        LongShortSplit: {
+            /** @enum {string} */
+            alignment?: "same" | "opposite" | "mixed" | "unknown";
+            important?: boolean;
+            /** @enum {string} */
+            general?: "long" | "short" | "balanced";
+            /** @enum {string} */
+            topAccounts?: "long" | "short" | "balanced";
+            /** @enum {string} */
+            topPositions?: "long" | "short" | "balanced";
+            /** @enum {string} */
+            sizeBias?: "long" | "short" | "balanced";
+            headline?: string;
+            detail?: string;
+        };
         LongShortVenue: {
             exchange?: string;
             /** @description accounts */
@@ -5494,8 +5659,11 @@ export interface components {
             /** @description Signed ratio change vs previous 5m print */
             change?: string;
             history?: components["schemas"]["LongShortLevel"][];
+            topAccounts?: components["schemas"]["LongShortLevel"];
+            topPositions?: components["schemas"]["LongShortLevel"];
+            split?: components["schemas"]["LongShortSplit"];
         };
-        /** @description Account long/short ratio plus recent 5m history */
+        /** @description Account long/short ratio plus Binance top-trader layers and recent 5m history */
         MarketLongShortRatio: {
             symbol?: string;
             exchange?: string;
@@ -6175,6 +6343,15 @@ export interface components {
             movement?: components["schemas"]["PortfolioCashMovement"];
             portfolio?: components["schemas"]["PortfolioView"];
         };
+        PortfolioTransferResponse: {
+            from?: components["schemas"]["PortfolioCashMoveResponse"];
+            to?: components["schemas"]["PortfolioCashMoveResponse"];
+            /** @description True when this POST reused a prior idempotency key and did not move cash again */
+            replayed?: boolean;
+            attempt?: number;
+            idempotencyKey?: string;
+            note?: string;
+        };
         TransferAttempt: {
             id?: string;
             idempotencyKey?: string;
@@ -6191,15 +6368,6 @@ export interface components {
             inMovementId?: string;
             /** Format: date-time */
             createdAt?: string;
-        };
-        PortfolioTransferResponse: {
-            from?: components["schemas"]["PortfolioCashMoveResponse"];
-            to?: components["schemas"]["PortfolioCashMoveResponse"];
-            /** @description True when this POST reused a prior idempotency key and did not move cash again */
-            replayed?: boolean;
-            attempt?: number;
-            idempotencyKey?: string;
-            note?: string;
         };
         /** @description Period P&L plus equity time series for a paper portfolio chart */
         PortfolioPerformance: {
@@ -6470,8 +6638,6 @@ export interface components {
             currency?: string;
             /** @enum {string} */
             status?: "completed" | "partial" | "failed" | "no_trades" | "running" | "interrupted";
-            attemptCount?: number;
-            canContinue?: boolean;
             plannedLegs?: number;
             filledLegs?: number;
             failedLegs?: number;
@@ -6482,6 +6648,7 @@ export interface components {
             /** @description Sum of |afterPct − targetPct| */
             remainingAbsDriftPct?: number;
             maxSleeveDriftPct?: number;
+            /** @description Sum of leftover |target − after| value */
             remainingNotional?: number;
             /** @description Sum of paper taker fees (quote) */
             totalFee?: number;
@@ -6493,6 +6660,11 @@ export interface components {
             note?: string;
             /** Format: date-time */
             createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            attemptCount?: number;
+            canContinue?: boolean;
+            attempts?: components["schemas"]["RebalanceAttempt"][];
             legs?: components["schemas"]["RebalanceLegOutcome"][];
             lines?: components["schemas"]["RebalanceLineSnapshot"][];
         };
@@ -6519,6 +6691,20 @@ export interface components {
             /** @description Adverse quote impact vs last */
             slippage?: number;
             error?: string;
+            attempt?: number;
+        };
+        RebalanceAttempt: {
+            seq?: number;
+            status?: string;
+            plannedLegs?: number;
+            filledLegs?: number;
+            failedLegs?: number;
+            totalFee?: number;
+            totalSlippage?: number;
+            totalCost?: number;
+            summary?: string;
+            /** Format: date-time */
+            createdAt?: string;
         };
         RebalanceLineSnapshot: {
             asset?: string;
@@ -6531,6 +6717,7 @@ export interface components {
             beforeValue?: number;
             afterValue?: number;
             targetValue?: number;
+            /** @description targetValue − afterValue */
             afterDelta?: number;
         };
         /** @description Settings screen DTO — current rules plus live daily PnL and per-asset weights */
@@ -7982,7 +8169,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all) */
+                /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
             };
             header?: never;
@@ -8006,7 +8193,7 @@ export interface operations {
     getMarketLiquidationOverview: {
         parameters: {
             query?: {
-                /** @description binance | bybit | all (default all) */
+                /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
                 /** @description Window used to rank `coins` — 1h | 4h | 12h | 24h (default 24h) */
                 window?: "1h" | "4h" | "12h" | "24h";
@@ -8035,7 +8222,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all) */
+                /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
             };
             header?: never;
@@ -8094,7 +8281,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all) */
+                /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
                 /** @description Settled history size (1–30, default 12) */
                 limit?: number;
@@ -8470,11 +8657,38 @@ export interface operations {
             400: components["responses"]["Error"];
         };
     };
+    getFundingArbSignal: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Signal with optional review */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FundingArbSignal"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
     getMarketLongShortRatio: {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all) */
+                /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
                 /** @description History size (1–100, default 24) */
                 limit?: number;
@@ -8533,7 +8747,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all = both + agreement) */
+                /** @description binance | bybit | okx | all (default all = all futures venues + agreement) */
                 exchange?: string;
             };
             header?: never;
@@ -8638,7 +8852,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all) */
+                /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
             };
             header?: never;
@@ -8691,7 +8905,7 @@ export interface operations {
             query?: {
                 /** @description Pair e.g. BTCUSDT. Omit to scan top liquid USDT coins. */
                 symbol?: string;
-                /** @description binance | bybit | all (default all) */
+                /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
                 /** @description Minimum USD size (default 100000, clamp 10000–10000000) */
                 minNotional?: number;
@@ -8721,7 +8935,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all = both + combined) */
+                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
             };
             header?: never;
@@ -8747,7 +8961,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all = both + combined) */
+                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
             };
             header?: never;
@@ -8773,7 +8987,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all) */
+                /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
             };
             header?: never;
@@ -8829,7 +9043,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all) */
+                /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
             };
             header?: never;
@@ -8855,7 +9069,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all = both + combined) */
+                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
             };
             header?: never;
@@ -8883,7 +9097,7 @@ export interface operations {
                 symbol: string;
                 /** @description Event time (RFC3339 or unix ms) — start of the during window */
                 at: string;
-                /** @description binance | bybit | all (default all = both + combined) */
+                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
                 /** @description Before/after lookback — 15m | 30m | 1h | 2h | 4h (default 1h) */
                 window?: string;
@@ -8917,7 +9131,7 @@ export interface operations {
                 from: string;
                 /** @description Second event time (RFC3339 or unix ms) */
                 to: string;
-                /** @description binance | bybit | all (default all = both + combined) */
+                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
                 /** @description Before/after lookback — 15m | 30m | 1h | 2h | 4h (default 1h) */
                 window?: string;
@@ -8947,7 +9161,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all) */
+                /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
                 /** @description 4h | 12h | 24h | 3d | 7d (default 24h) */
                 lookback?: string;
@@ -8987,7 +9201,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all) */
+                /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
                 /** @description 4h | 12h | 24h | 3d | 7d (default 7d) */
                 lookback?: string;
@@ -9027,7 +9241,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all) */
+                /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
                 /** @description 4h | 12h | 24h | 3d | 7d (default 7d) */
                 lookback?: string;
@@ -9081,7 +9295,7 @@ export interface operations {
                 at: string;
                 /** @description Observer clock (RFC3339 or unix ms). Tape and timeline only include prints at or before this time. Must be at or after `at` and not in the future. Omit to use now (old events keep later prints that have already happened). */
                 asOf?: string;
-                /** @description binance | bybit | all (default all = both + combined) */
+                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
                 /** @description Before/after lookback — 15m | 30m | 1h | 2h | 4h (default 1h) */
                 window?: string;
@@ -9205,7 +9419,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all = both + combined) */
+                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
                 /** @description 1h | 4h | 24h | 7d | 30d (default 24h). Ignored when startTime is set. */
                 window?: string;
@@ -9237,7 +9451,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all = both + combined) */
+                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
                 /** @description 1h | 4h | 24h | 7d | 30d (default 24h). Ignored when startTime/endTime are set. */
                 window?: string;
@@ -9295,7 +9509,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all = both + combined) */
+                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
             };
             header?: never;
@@ -9321,7 +9535,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all = both + combined) */
+                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
             };
             header?: never;
@@ -9347,7 +9561,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all = both, never averaged) */
+                /** @description binance | bybit | okx | all (default all = all futures venues, never averaged) */
                 exchange?: string;
                 /** @description Custom mix percent for distance to zone. If any weight* is sent, omitted factors are 0 and the six must sum to 100. Percents stay as given — a missing factor keeps its percent and adds 0 (neutral 50); remaining factors are not increased. */
                 weightProximity?: number;
@@ -9380,7 +9594,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all = both, never averaged) */
+                /** @description binance | bybit | okx | all (default all = all futures venues, never averaged) */
                 exchange?: string;
             };
             header?: never;
@@ -9408,7 +9622,7 @@ export interface operations {
                 symbol: string;
                 /** @description 12h | 24h | 3d | 7d */
                 range?: "12h" | "24h" | "3d" | "7d";
-                /** @description binance | bybit | all (default all = both + combined) */
+                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
             };
             header?: never;
@@ -9435,7 +9649,7 @@ export interface operations {
             query?: {
                 /** @description Pair (BTCUSDT) or all */
                 symbol?: string;
-                /** @description binance | bybit | all (default all = combined) */
+                /** @description binance | bybit | okx | all (default all = combined) */
                 exchange?: string;
                 /** @description 12h | 24h | 3d | 7d (totals clamp to 24h) */
                 range?: "12h" | "24h" | "3d" | "7d";
@@ -9463,7 +9677,7 @@ export interface operations {
             query?: {
                 /** @description Pair (BTCUSDT) or all for the pooled market */
                 symbol?: string;
-                /** @description binance | bybit | all (default all) */
+                /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
             };
             header?: never;
@@ -9487,7 +9701,7 @@ export interface operations {
     scanMarketLiquidationCascades: {
         parameters: {
             query?: {
-                /** @description binance | bybit | all (default all) */
+                /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
             };
             header?: never;
@@ -11793,14 +12007,124 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Trades plus updated drift */
+            /** @description Stored rebalance result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RebalanceResult"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    listPortfolioBasketRebalances: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Result summaries (no legs/lines) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
+            404: components["responses"]["Error"];
+        };
+    };
+    listPortfolioRebalances: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                basketId?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Result summaries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    continuePortfolioRebalance: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Updated rebalance result with the new attempt */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RebalanceResult"];
+                };
+            };
             400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getPortfolioRebalance: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Full rebalance result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RebalanceResult"];
+                };
+            };
             404: components["responses"]["Error"];
         };
     };
@@ -12182,6 +12506,8 @@ export interface operations {
                 clientId?: string;
                 limit?: number;
                 offset?: number;
+                /** @description Optional filter */
+                status?: "succeeded" | "failed" | "missed";
             };
             header?: {
                 "X-Client-Id"?: string;

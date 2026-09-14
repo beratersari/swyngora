@@ -114,6 +114,9 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 			if ser != nil {
 				pt := domain.NormalizeLongShortPoint(ser.Current)
 				in.LongShare, in.ShortShare = pt.LongShare, pt.ShortShare
+				domain.AttachLongShortSplit(ser)
+				in.CrowdingSplit = ser.Split
+				in.SizeLongShare = domain.SizeWeightedLongShare(ser)
 				sigMu.Lock()
 				sig.HasLongShort = true
 				sigMu.Unlock()

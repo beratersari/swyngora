@@ -150,6 +150,7 @@
     "none": "Bu sembol için Binance veya Bybit’te perpetual defter yok.",
     "positioning": "Konumlanma",
     "longPct": "Hesap long %",
+    "topPosLongPct": "Büyük boy long %",
     "taker1h": "1s taker",
     "takerShare": "1s alış payı"
   },

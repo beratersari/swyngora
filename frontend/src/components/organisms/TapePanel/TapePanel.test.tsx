@@ -31,6 +31,33 @@ describe('TapePanel', () => {
     expect(screen.getByText('Volume building ahead of price')).toBeInTheDocument();
   });
 
+  it('shows top-trader size and a crowd-vs-size split', () => {
+    renderWithTheme(
+      <TapePanel
+        openInterest={{
+          longShort: {
+            venues: [
+              {
+                exchange: 'binance',
+                current: { longPct: '68.0', shortPct: '32.0', bias: 'long' },
+                topPositions: { longPct: '34.0', shortPct: '66.0', bias: 'short' },
+                split: {
+                  alignment: 'opposite',
+                  important: true,
+                  headline: 'Crowd accounts and top-trader positions lean opposite.',
+                  detail: 'Size is with the bigger books, not the crowd.',
+                },
+              },
+            ],
+          },
+        }}
+        snapshot={{ combined: { longPct: '68.0', windows: [] } }}
+      />,
+    );
+    expect(screen.getByText('34.0%')).toBeInTheDocument();
+    expect(screen.getByText(/lean opposite/i)).toBeInTheDocument();
+  });
+
   it('explains a missing perp book', () => {
     renderWithTheme(<TapePanel openInterestError="no perpetual on this venue" />);
     expect(screen.getAllByText('no perpetual on this venue').length).toBeGreaterThan(0);

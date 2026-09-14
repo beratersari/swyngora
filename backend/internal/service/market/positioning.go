@@ -95,6 +95,8 @@ func (s *Service) positioningOne(ctx context.Context, ex domain.Exchange, symbol
 			}
 			pt := domain.NormalizeLongShortPoint(ser.Current)
 			in.LongShare, in.ShortShare = pt.LongShare, pt.ShortShare
+			domain.AttachLongShortSplit(ser)
+			in.CrowdingSplit = ser.Split
 		}
 	}()
 	go func() {

@@ -8,6 +8,8 @@ reason and a **combined market direction**.
 
 This is the classic futures matrix: read price change and open-interest change
 together. Funding and account long/short only **corroborate** the label.
+When Binance top-trader **positions** lean opposite the all-account crowd,
+the reason names that split instead of a single crowding line.
 
 ## Matrix
 

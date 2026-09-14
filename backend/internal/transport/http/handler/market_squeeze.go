@@ -35,23 +35,24 @@ type squeezeSideDTO struct {
 }
 
 type squeezeVenueDTO struct {
-	Exchange          string         `json:"exchange"`
-	Symbol            string         `json:"symbol"`
-	Price             string         `json:"price"`
-	OpenInterestValue string         `json:"openInterestValue"`
-	LongPct           string         `json:"longPct"`
-	ShortPct          string         `json:"shortPct"`
-	FundingRate       string         `json:"fundingRate"`
-	FundingPayer      string         `json:"fundingPayer"`
-	OIChange1hPct     string         `json:"oiChange1hPct,omitempty"`
-	OIChange4hPct     string         `json:"oiChange4hPct,omitempty"`
-	PriceChange24hPct string         `json:"priceChange24hPct,omitempty"`
-	LongSqueeze       squeezeSideDTO `json:"longSqueeze"`
-	ShortSqueeze      squeezeSideDTO `json:"shortSqueeze"`
-	CrowdedSide       string         `json:"crowdedSide"`
-	HigherRisk        string         `json:"higherRisk"`
-	Summary           string         `json:"summary"`
-	Error             string         `json:"error,omitempty"`
+	Exchange          string             `json:"exchange"`
+	Symbol            string             `json:"symbol"`
+	Price             string             `json:"price"`
+	OpenInterestValue string             `json:"openInterestValue"`
+	LongPct           string             `json:"longPct"`
+	ShortPct          string             `json:"shortPct"`
+	FundingRate       string             `json:"fundingRate"`
+	FundingPayer      string             `json:"fundingPayer"`
+	OIChange1hPct     string             `json:"oiChange1hPct,omitempty"`
+	OIChange4hPct     string             `json:"oiChange4hPct,omitempty"`
+	PriceChange24hPct string             `json:"priceChange24hPct,omitempty"`
+	LongSqueeze       squeezeSideDTO     `json:"longSqueeze"`
+	ShortSqueeze      squeezeSideDTO     `json:"shortSqueeze"`
+	CrowdedSide       string             `json:"crowdedSide"`
+	HigherRisk        string             `json:"higherRisk"`
+	CrowdingSplit     *longShortSplitDTO `json:"crowdingSplit,omitempty"`
+	Summary           string             `json:"summary"`
+	Error             string             `json:"error,omitempty"`
 }
 
 type squeezeCombinedDTO struct {
@@ -108,6 +109,7 @@ func squeezeVenueToDTO(v domain.SqueezeVenueReport) squeezeVenueDTO {
 		ShortSqueeze:      squeezeSideToDTO(v.ShortSqueeze),
 		CrowdedSide:       v.CrowdedSide,
 		HigherRisk:        v.HigherRisk,
+		CrowdingSplit:     crowdingSplitPtr(v.CrowdingSplit),
 		Summary:           v.Summary,
 		Error:             v.Error,
 	}

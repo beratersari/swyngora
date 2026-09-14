@@ -897,9 +897,9 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_long_short_ratio",
-		mcp.WithDescription("Futures long/short account ratio: share of accounts that are long vs short (not position size). ratio is long/short (1 = even). bias is long if ratio≥1.05, short if ≤0.95. 5-minute samples. Binance USD-M + Bybit linear. exchange=all returns each venue separately (not averaged). Prefer this for 'are more traders long or short'."),
+		mcp.WithDescription("Futures long/short: current is all-account count (not size). On Binance, topAccounts is the top 20% of traders by margin (account count) and topPositions is their position size. split.opposite means the crowd and bigger books lean different ways — hunt/squeeze/positioning then treat size as who is positioned. ratio is long/short (1 = even). bias is long if ratio≥1.05, short if ≤0.95. 5-minute samples. Binance USD-M + Bybit linear. exchange=all returns each venue separately (not averaged). Prefer this for 'are more traders long or short' or 'are top traders fading the crowd'."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
-		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all)")),
 		mcp.WithNumber("limit", mcp.Description("History size 1–100 (default 24, ~2 hours of 5m prints)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")

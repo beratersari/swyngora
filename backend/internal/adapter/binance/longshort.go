@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"sync"
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
@@ -44,11 +45,44 @@ func (c *Client) GetLongShortSeries(ctx context.Context, symbol string, limit in
 }
 
 func (c *Client) fetchLongShort(ctx context.Context, symbol string, limit int) (*domain.LongShortSeries, error) {
+	var (
+		global, topAcc, topPos *domain.LongShortSeries
+		errG, errA, errP       error
+		wg                     sync.WaitGroup
+	)
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		global, errG = c.fetchLongShortPath(ctx, symbol, limit, "/futures/data/globalLongShortAccountRatio", domain.LongShortKindAccounts)
+	}()
+	go func() {
+		defer wg.Done()
+		topAcc, errA = c.fetchLongShortPath(ctx, symbol, limit, "/futures/data/topLongShortAccountRatio", domain.LongShortKindTopAccounts)
+	}()
+	go func() {
+		defer wg.Done()
+		topPos, errP = c.fetchLongShortPath(ctx, symbol, limit, "/futures/data/topLongShortPositionRatio", domain.LongShortKindTopPositions)
+	}()
+	wg.Wait()
+	if errG != nil {
+		return nil, errG
+	}
+	if errA == nil {
+		global.TopAccounts = topAcc
+	}
+	if errP == nil {
+		global.TopPositions = topPos
+	}
+	domain.AttachLongShortSplit(global)
+	return global, nil
+}
+
+func (c *Client) fetchLongShortPath(ctx context.Context, symbol string, limit int, path, kind string) (*domain.LongShortSeries, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)
 	q.Set("period", "5m")
 	q.Set("limit", strconv.Itoa(limit+1)) // +1 so current can be split off history
-	body, err := c.getFutures(ctx, "/futures/data/globalLongShortAccountRatio", q)
+	body, err := c.getFutures(ctx, path, q)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +110,7 @@ func (c *Client) fetchLongShort(ctx context.Context, symbol string, limit int) (
 	return &domain.LongShortSeries{
 		Exchange: domain.ExchangeBinance,
 		Symbol:   symbol,
-		Kind:     domain.LongShortKindAccounts,
+		Kind:     kind,
 		Period:   domain.LongShortPeriod5m,
 		Current:  pts[0],
 		History:  pts[1:],

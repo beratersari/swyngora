@@ -15,7 +15,8 @@ Web: coin desk Tape tab (`/markets/:exchange/:symbol`).
 
 - `spot`: last price, 24h quote volume, circulating market cap, plus per-window
   price / volume / mcap change
-- `venues`: Binance and Bybit futures — OI, funding, account long %, taker
+- `venues`: Binance, Bybit, and OKX futures — OI, funding, account long %, taker.
+  Binance venues include `crowdingSplit` when top-trader size disagrees with the crowd.
   buy/sell for 1h and 4h (24h taker is not collected yet)
 - `summary`: short read when volume or OI is building ahead of price
 

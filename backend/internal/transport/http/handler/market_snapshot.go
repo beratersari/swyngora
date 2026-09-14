@@ -49,13 +49,14 @@ type snapWindowDTO struct {
 }
 
 type snapVenueDTO struct {
-	Exchange string          `json:"exchange"`
-	OIValue  string          `json:"openInterestValue,omitempty"`
-	Funding  string          `json:"fundingRate,omitempty"`
-	LongPct  string          `json:"longPct,omitempty"`
-	Windows  []snapWindowDTO `json:"windows"`
-	Summary  string          `json:"summary"`
-	Error    string          `json:"error,omitempty"`
+	Exchange      string             `json:"exchange"`
+	OIValue       string             `json:"openInterestValue,omitempty"`
+	Funding       string             `json:"fundingRate,omitempty"`
+	LongPct       string             `json:"longPct,omitempty"`
+	CrowdingSplit *longShortSplitDTO `json:"crowdingSplit,omitempty"`
+	Windows       []snapWindowDTO    `json:"windows"`
+	Summary       string             `json:"summary"`
+	Error         string             `json:"error,omitempty"`
 }
 
 type snapSpotDTO struct {
@@ -107,12 +108,13 @@ func snapshotToDTO(a *domain.SnapshotReport) snapshotResponse {
 
 func snapVenueToDTO(v domain.SnapshotVenue) snapVenueDTO {
 	return snapVenueDTO{
-		Exchange: string(v.Exchange),
-		OIValue:  formatHistQty(v.OIValue),
-		Funding:  domain.FormatSignedQty(v.Funding),
-		LongPct:  formatHistQty(v.LongPct),
-		Windows:  snapWindowsToDTO(v.Windows, true),
-		Summary:  v.Summary, Error: v.Error,
+		Exchange:      string(v.Exchange),
+		OIValue:       formatHistQty(v.OIValue),
+		Funding:       domain.FormatSignedQty(v.Funding),
+		LongPct:       formatHistQty(v.LongPct),
+		CrowdingSplit: crowdingSplitPtr(v.CrowdingSplit),
+		Windows:       snapWindowsToDTO(v.Windows, true),
+		Summary:       v.Summary, Error: v.Error,
 	}
 }
 

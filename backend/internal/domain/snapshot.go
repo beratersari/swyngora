@@ -58,13 +58,14 @@ type SnapshotWindow struct {
 
 // SnapshotVenue is futures metrics on one exchange.
 type SnapshotVenue struct {
-	Exchange Exchange
-	OIValue  float64
-	Funding  float64
-	LongPct  float64
-	Windows  []SnapshotWindow
-	Summary  string
-	Error    string
+	Exchange      Exchange
+	OIValue       float64
+	Funding       float64
+	LongPct       float64
+	CrowdingSplit LongShortSplit
+	Windows       []SnapshotWindow
+	Summary       string
+	Error         string
 }
 
 // SnapshotSpot is price, volume, and market cap (same coin, not per futures venue).
@@ -357,6 +358,8 @@ func BuildSnapshotVenue(ex Exchange, spot []SnapshotWindow, oi *OpenInterestSeri
 	}
 	if ls != nil {
 		out.LongPct = ls.Current.LongShare * 100
+		AttachLongShortSplit(ls)
+		out.CrowdingSplit = ls.Split
 	}
 	for i, w := range SnapshotWindows {
 		row := SnapshotWindow{Window: w.ID}
@@ -407,6 +410,9 @@ func ExplainSnapshotVenue(v SnapshotVenue) string {
 	}
 	if h1.Funding.Complete {
 		bits = append(bits, "funding "+h1.Funding.Direction)
+	}
+	if v.CrowdingSplit.Alignment == AlignOpposite && v.CrowdingSplit.Headline != "" {
+		bits = append(bits, v.CrowdingSplit.Headline)
 	}
 	head := ex + " 1h: "
 	if len(bits) == 0 {

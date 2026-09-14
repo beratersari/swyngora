@@ -54,6 +54,7 @@ type SqueezeVenueReport struct {
 	ShortSqueeze      SqueezeSideRisk `json:"shortSqueeze"`
 	CrowdedSide       string          `json:"crowdedSide"` // long | short | balanced
 	HigherRisk        string          `json:"higherRisk"`  // long | short | balanced
+	CrowdingSplit     LongShortSplit  `json:"crowdingSplit,omitempty"`
 	Summary           string          `json:"summary"`
 	Error             string          `json:"error,omitempty"`
 }
@@ -91,6 +92,8 @@ type SqueezeInputs struct {
 	ShortShare        float64
 	LongShare1hAgo    float64 // 0 if unknown
 	HasLSHistory      bool
+	CrowdingSplit     LongShortSplit
+	SizeLongShare     float64 // top-trader positions when they oppose the crowd
 	FundingRate       float64
 	FundingAvg3       float64 // avg last 3 settlements; 0 if unknown
 	HasFundingAvg     bool
@@ -163,6 +166,7 @@ func BuildSqueezeVenue(in SqueezeInputs) SqueezeVenueReport {
 		OIChange1hPct:     in.OIChange1hPct,
 		OIChange4hPct:     in.OIChange4hPct,
 		PriceChange24hPct: in.PriceChange24hPct,
+		CrowdingSplit:     in.CrowdingSplit,
 	}
 	if in.LongShare == 0 && in.ShortShare == 0 {
 		in.LongShare, in.ShortShare = 0.5, 0.5
@@ -174,9 +178,16 @@ func BuildSqueezeVenue(in SqueezeInputs) SqueezeVenueReport {
 		in.ShortShare /= s
 		out.LongShare, out.ShortShare = in.LongShare, in.ShortShare
 	}
+	if in.CrowdingSplit.Alignment == AlignOpposite && in.SizeLongShare > 0 {
+		in.LongShare, in.ShortShare = in.SizeLongShare, 1-in.SizeLongShare
+	}
 	out.CrowdedSide = CrowdedSideFromShares(in.LongShare)
 	out.LongSqueeze = scoreLongSqueeze(in)
 	out.ShortSqueeze = scoreShortSqueeze(in)
+	if in.CrowdingSplit.Alignment == AlignOpposite && in.CrowdingSplit.Detail != "" {
+		note := SqueezeFactor{ID: "crowd_vs_size", Label: "Crowd vs size", Detail: in.CrowdingSplit.Detail}
+		out.LongSqueeze.Factors = append([]SqueezeFactor{note}, out.LongSqueeze.Factors...)
+	}
 	out.HigherRisk = higherRiskSide(out.LongSqueeze.Score, out.ShortSqueeze.Score)
 	out.Summary = venueSqueezeSummary(out)
 	return out
@@ -243,7 +254,7 @@ func assembleSide(side string, factors []SqueezeFactor) SqueezeSideRisk {
 // sees why risk is high or low (not only factors above an arbitrary cutoff).
 func pickSqueezeReasons(side string, score float64, factors []SqueezeFactor) []string {
 	type ranked struct {
-		f     SqueezeFactor
+		f       SqueezeFactor
 		contrib float64
 	}
 	rows := make([]ranked, 0, len(factors))
