@@ -4657,6 +4657,13 @@ export interface components {
             startedAt?: string;
             /** @description Seconds after the first venue print; 0 if first or tied */
             lagSec?: number;
+            longNotional?: string;
+            shortNotional?: string;
+            /** @description That venue's liquidation notional in the wave */
+            totalNotional?: string;
+            /** @description Percent of the combined wave's total notional */
+            sharePct?: number;
+            count?: number;
         };
         /** @description One liquidation wave (open or finished) in the last 24h */
         MarketLiquidationCascadeEpisode: {
@@ -4692,6 +4699,8 @@ export interface components {
             startedBy?: string;
             /** @description True when two or more venues share the same first-print second */
             orderUnknown?: boolean;
+            /** @description Venue that produced the most notional in a combined wave */
+            largestBy?: string;
             venueStarts?: components["schemas"]["MarketLiquidationCascadeVenueStart"][];
         };
         MarketLiquidationCascadeHit: {

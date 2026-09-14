@@ -1624,13 +1624,20 @@ func cascadeReportJSON(got *domain.CascadeReport) map[string]any {
 		if ep.StartedBy != "" {
 			row["startedBy"] = ep.StartedBy
 		}
+		if ep.LargestBy != "" {
+			row["largestBy"] = ep.LargestBy
+		}
 		if ep.OrderUnknown {
 			row["orderUnknown"] = true
 		}
 		if len(ep.VenueStarts) > 0 {
 			starts := make([]map[string]any, 0, len(ep.VenueStarts))
 			for _, v := range ep.VenueStarts {
-				s := map[string]any{"exchange": v.Exchange, "lagSec": v.LagSec}
+				s := map[string]any{
+					"exchange": v.Exchange, "lagSec": v.LagSec,
+					"longNotional": v.LongNotional, "shortNotional": v.ShortNotional,
+					"totalNotional": v.TotalNotional, "sharePct": v.SharePct, "count": v.Count,
+				}
 				if !v.StartedAt.IsZero() {
 					s["startedAt"] = v.StartedAt.UTC().Format(time.RFC3339Nano)
 				}

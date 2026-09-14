@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -179,7 +180,71 @@ func TestMergeCascadeEpisodes_ThreeVenues(t *testing.T) {
 	}
 }
 
+func TestMergeCascadeEpisodes_VenueShare(t *testing.T) {
+	now := time.Date(2026, 8, 30, 16, 0, 0, 0, time.UTC)
+	var ev []LiquidationEvent
+	ev = append(ev, cascadeQuietThenBurstSized(now, ExchangeBinance, "BTCUSDT", LiquidationSideLong, 20, 8, 5, 64000, 63000, 2000)...)
+	ev = append(ev, cascadeQuietThenBurstSized(now, ExchangeBybit, "BTCUSDT", LiquidationSideLong, 20, 8, 17, 64010, 63020, 8000)...)
+	rep := BuildCascadeReport("BTCUSDT", "all", ev, now)
+	if len(rep.Episodes) == 0 || !rep.Episodes[0].Combined {
+		t.Fatalf("episodes %+v", rep.Episodes)
+	}
+	ep := rep.Episodes[0]
+	if ep.StartedBy != string(ExchangeBinance) || ep.LargestBy != string(ExchangeBybit) {
+		t.Fatalf("lead/largest %+v", ep)
+	}
+	if len(ep.VenueStarts) != 2 {
+		t.Fatalf("venue starts %+v", ep.VenueStarts)
+	}
+	bn, bb := ep.VenueStarts[0], ep.VenueStarts[1]
+	if bn.SharePct < 18 || bn.SharePct > 22 || parseQty(bn.TotalNotional) < 80000 {
+		t.Fatalf("binance share %+v", bn)
+	}
+	if bb.SharePct < 78 || bb.SharePct > 82 || parseQty(bb.TotalNotional) < 300000 {
+		t.Fatalf("bybit share %+v", bb)
+	}
+	if math.Abs(bn.SharePct+bb.SharePct-100) > 0.15 {
+		t.Fatalf("shares should sum to 100 %+v", ep.VenueStarts)
+	}
+	if !strings.Contains(ep.Summary, "Bybit 80%") || !strings.Contains(ep.Summary, "Most of the wave was Bybit") {
+		t.Fatalf("summary %q", ep.Summary)
+	}
+}
+
+func TestCollapseCascadePartsByVenue(t *testing.T) {
+	t1 := time.Date(2026, 8, 30, 15, 21, 5, 0, time.UTC)
+	t2 := t1.Add(3 * time.Minute)
+	got := collapseCascadePartsByVenue([]CascadeEpisode{
+		{Exchange: string(ExchangeBybit), TotalNotional: "100", LongNotional: "100", FirstPrintAt: t1, StartedAt: t1, Count: 2},
+		{Exchange: string(ExchangeOKX), TotalNotional: "50", LongNotional: "50", FirstPrintAt: t1.Add(time.Second), StartedAt: t1, Count: 1},
+		{Exchange: string(ExchangeBybit), TotalNotional: "25", LongNotional: "25", FirstPrintAt: t2, StartedAt: t2, Count: 1},
+	})
+	if len(got) != 2 {
+		t.Fatalf("%+v", got)
+	}
+	if got[0].Exchange != string(ExchangeBybit) || parseQty(got[0].TotalNotional) != 125 || got[0].Count != 3 {
+		t.Fatalf("bybit %+v", got[0])
+	}
+	if !got[0].FirstPrintAt.Equal(t1) {
+		t.Fatalf("kept earlier print %+v", got[0].FirstPrintAt)
+	}
+	if got[1].Exchange != string(ExchangeOKX) || parseQty(got[1].TotalNotional) != 50 {
+		t.Fatalf("okx %+v", got[1])
+	}
+}
+
+func TestCascadeSharePcts_Remainder(t *testing.T) {
+	got := cascadeSharePcts([]float64{1, 1, 1})
+	if len(got) != 3 || got[0]+got[1]+got[2] != 100 {
+		t.Fatalf("%+v", got)
+	}
+}
+
 func cascadeQuietThenBurstOffset(now time.Time, ex Exchange, symbol, side string, burstAgo, burstMins, startOffsetSec int, startPx, endPx float64) []LiquidationEvent {
+	return cascadeQuietThenBurstSized(now, ex, symbol, side, burstAgo, burstMins, startOffsetSec, startPx, endPx, 2000)
+}
+
+func cascadeQuietThenBurstSized(now time.Time, ex Exchange, symbol, side string, burstAgo, burstMins, startOffsetSec int, startPx, endPx, notional float64) []LiquidationEvent {
 	var ev []LiquidationEvent
 	for i := 1; i <= 80; i++ {
 		ev = append(ev, LiquidationEvent{
@@ -194,6 +259,9 @@ func cascadeQuietThenBurstOffset(now time.Time, ex Exchange, symbol, side string
 	if startOffsetSec < 0 {
 		startOffsetSec = 0
 	}
+	if notional <= 0 {
+		notional = 2000
+	}
 	for m := 0; m < burstMins; m++ {
 		t0 := now.Add(-time.Duration(burstAgo+burstMins-1-m) * time.Minute)
 		px := startPx
@@ -205,7 +273,7 @@ func cascadeQuietThenBurstOffset(now time.Time, ex Exchange, symbol, side string
 		for i := 0; i < 6; i++ {
 			ev = append(ev, LiquidationEvent{
 				Exchange: ex, Symbol: symbol, Side: side,
-				Price: px, Quantity: 1, Notional: 2000,
+				Price: px, Quantity: 1, Notional: notional,
 				Time: t0.Add(time.Duration(startOffsetSec+i) * time.Second),
 			})
 		}

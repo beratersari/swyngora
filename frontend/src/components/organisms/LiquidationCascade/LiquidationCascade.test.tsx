@@ -52,9 +52,22 @@ describe('LiquidationCascade', () => {
               priceChangePct: '-1.20',
               open: false,
               startedBy: 'binance',
+              largestBy: 'bybit',
               venueStarts: [
-                { exchange: 'binance', startedAt: '2026-08-30T15:21:05.000Z', lagSec: 0 },
-                { exchange: 'bybit', startedAt: '2026-08-30T15:21:17.000Z', lagSec: 12 },
+                {
+                  exchange: 'binance',
+                  startedAt: '2026-08-30T15:21:05.000Z',
+                  lagSec: 0,
+                  totalNotional: '20000',
+                  sharePct: 20,
+                },
+                {
+                  exchange: 'bybit',
+                  startedAt: '2026-08-30T15:21:17.000Z',
+                  lagSec: 12,
+                  totalNotional: '80000',
+                  sharePct: 80,
+                },
               ],
             },
           ],
@@ -71,6 +84,9 @@ describe('LiquidationCascade', () => {
     expect(screen.getByText(/-1\.20%/)).toBeInTheDocument();
     expect(screen.getByText(/binance first/i)).toBeInTheDocument();
     expect(screen.getByText(/bybit \+12s/i)).toBeInTheDocument();
+    expect(screen.getByText(/20% · 20\.00K USDT/i)).toBeInTheDocument();
+    expect(screen.getByText(/80% · 80\.00K USDT/i)).toBeInTheDocument();
+    expect(screen.getByText(/most of the wave/i)).toBeInTheDocument();
   });
 
   it('opens a bursting coin from the hits list', async () => {

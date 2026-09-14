@@ -66,17 +66,32 @@ export type EpisodeLeadBeat = {
   exchange: string;
   lagSec: number;
   role: 'first' | 'follow' | 'tied';
+  totalNotional: string;
+  sharePct: number;
+  largest: boolean;
 };
+
+export function formatSharePct(value: number | undefined): string {
+  const n = typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  if (n <= 0) return '0%';
+  const rounded = Math.abs(n - Math.round(n)) < 0.05 ? Math.round(n) : Math.round(n * 10) / 10;
+  return `${rounded}%`;
+}
 
 export function episodeLeadBeats(ep: CascadeEpisode | undefined): EpisodeLeadBeat[] {
   const starts = ep?.venueStarts ?? [];
   if (!ep?.combined || starts.length < 2) return [];
   return starts.map((s) => {
     const lagSec = typeof s.lagSec === 'number' && Number.isFinite(s.lagSec) ? Math.max(0, Math.round(s.lagSec)) : 0;
+    const sharePct = typeof s.sharePct === 'number' && Number.isFinite(s.sharePct) ? Math.max(0, s.sharePct) : 0;
+    const exchange = s.exchange ?? '';
     return {
-      exchange: s.exchange ?? '',
+      exchange,
       lagSec,
       role: lagSec > 0 ? 'follow' : ep.orderUnknown ? 'tied' : 'first',
+      totalNotional: s.totalNotional ?? '',
+      sharePct,
+      largest: Boolean(ep.largestBy) && ep.largestBy === exchange,
     };
   });
 }

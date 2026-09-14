@@ -87,9 +87,14 @@ type CascadeBoth struct {
 
 // CascadeVenueStart is when one venue's prints joined a combined wave.
 type CascadeVenueStart struct {
-	Exchange  string
-	StartedAt time.Time
-	LagSec    int64 // seconds after the first venue print; 0 if first or tied
+	Exchange      string
+	StartedAt     time.Time
+	LagSec        int64 // seconds after the first venue print; 0 if first or tied
+	LongNotional  string
+	ShortNotional string
+	TotalNotional string
+	SharePct      float64 // 0–100 of the combined wave's total notional
+	Count         int
 }
 
 // CascadeEpisode is one completed or still-open liquidation wave.
@@ -122,7 +127,10 @@ type CascadeEpisode struct {
 	// Empty when OrderUnknown or the wave is a single venue.
 	StartedBy    string
 	OrderUnknown bool
-	VenueStarts  []CascadeVenueStart
+	// LargestBy is the venue that produced the most notional in a combined wave.
+	// Empty when shares tie or the wave is a single venue.
+	LargestBy   string
+	VenueStarts []CascadeVenueStart
 }
 
 // CascadeReport is one coin (or symbol=all for the pooled market).
@@ -333,7 +341,7 @@ func BuildCascadeScan(exchange string, events []LiquidationEvent, now time.Time)
 	return out
 }
 
-const cascadeNote = "A cascade is a short burst of long or short liquidations far above that stream's own typical rate (1m / 5m / 15m vs the prior 6 hours). Episodes list each wave in the last 24h: start, duration, long/short notional, and price move. Combined waves name which venue printed first and how many seconds later the others followed. Binance, Bybit, and OKX are scored separately; a combined episode is the same-side wave on more than one venue at once. Informational only."
+const cascadeNote = "A cascade is a short burst of long or short liquidations far above that stream's own typical rate (1m / 5m / 15m vs the prior 6 hours). Episodes list each wave in the last 24h: start, duration, long/short notional, and price move. Combined waves name which venue printed first, how many seconds later the others followed, and how much of the wave each venue produced. Binance, Bybit, and OKX are scored separately; a combined episode is the same-side wave on more than one venue at once. Informational only."
 
 type cascadeBucket struct {
 	start time.Time

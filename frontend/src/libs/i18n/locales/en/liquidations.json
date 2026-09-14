@@ -237,7 +237,7 @@
     "coin": "Scope",
     "market": "Whole market",
     "empty": "No liquidation cascade right now.",
-    "hint": "A cascade is a short burst of long or short liquidations far above that stream's own typical rate. Waves list when it started, how long it lasted, and the price move. Combined waves name which venue printed first and how many seconds later the others followed.",
+    "hint": "A cascade is a short burst of long or short liquidations far above that stream's own typical rate. Waves list when it started, how long it lasted, and the price move. Combined waves name which venue printed first, how many seconds later the others followed, and how much of the wave each venue produced.",
     "window": "Window",
     "ratio": "Vs typical",
     "grade": "Grade",
@@ -260,6 +260,8 @@
     "leadFirst": "{{venue}} first",
     "leadFollow": "{{venue}} +{{seconds}}s",
     "leadTogether": "{{venues}} together",
+    "leadShare": "{{pct}} · {{amount}}",
+    "largestShare": "Most of the wave",
     "grades": {
       "quiet": "Quiet",
       "elevated": "Elevated",

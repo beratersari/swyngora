@@ -4,6 +4,7 @@ import {
   formatClock,
   formatDurationSec,
   formatRatio,
+  formatSharePct,
   gradeTone,
   orderedWindows,
   sideTone,
@@ -39,16 +40,17 @@ describe('LiquidationCascade helpers', () => {
     expect(
       episodeLeadBeats({
         combined: true,
+        largestBy: 'bybit',
         venueStarts: [
-          { exchange: 'binance', lagSec: 0 },
-          { exchange: 'bybit', lagSec: 12 },
-          { exchange: 'okx', lagSec: 40 },
+          { exchange: 'binance', lagSec: 0, totalNotional: '20000', sharePct: 20 },
+          { exchange: 'bybit', lagSec: 12, totalNotional: '80000', sharePct: 80 },
+          { exchange: 'okx', lagSec: 40, totalNotional: '0', sharePct: 0 },
         ],
       }),
     ).toEqual([
-      { exchange: 'binance', lagSec: 0, role: 'first' },
-      { exchange: 'bybit', lagSec: 12, role: 'follow' },
-      { exchange: 'okx', lagSec: 40, role: 'follow' },
+      { exchange: 'binance', lagSec: 0, role: 'first', totalNotional: '20000', sharePct: 20, largest: false },
+      { exchange: 'bybit', lagSec: 12, role: 'follow', totalNotional: '80000', sharePct: 80, largest: true },
+      { exchange: 'okx', lagSec: 40, role: 'follow', totalNotional: '0', sharePct: 0, largest: false },
     ]);
     expect(
       episodeLeadBeats({
@@ -60,5 +62,7 @@ describe('LiquidationCascade helpers', () => {
         ],
       }).map((b) => b.role),
     ).toEqual(['tied', 'tied']);
+    expect(formatSharePct(80)).toBe('80%');
+    expect(formatSharePct(12.4)).toBe('12.4%');
   });
 });

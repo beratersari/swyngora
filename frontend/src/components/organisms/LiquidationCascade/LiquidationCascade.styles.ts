@@ -168,10 +168,11 @@ export const EpisodeVenue = styled.span`
   min-width: 0;
 `;
 
-export const EpisodeLead = styled.span`
+export const EpisodeLead = styled.span<{ $hot?: boolean }>`
   font-size: 11px;
-  font-weight: 600;
-  color: ${({ theme }) => theme.semantic.text.secondary};
+  font-weight: ${({ $hot }) => ($hot ? 700 : 600)};
+  color: ${({ theme, $hot }) =>
+    $hot ? theme.semantic.text.primary : theme.semantic.text.secondary};
 `;
 
 export const HitButton = styled.button`

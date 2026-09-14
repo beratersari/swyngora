@@ -2951,8 +2951,10 @@ paths:
         venues. `episodes` lists each wave in the last 24h (start, duration,
         long/short notional, price move). Overlapping same-side waves on two
         or more venues are one `combined` episode with `startedBy`,
-        `venueStarts[].lagSec` (seconds after the first print), and
-        `orderUnknown` when two venues share the same first-print second.
+        `venueStarts[].lagSec` (seconds after the first print),
+        `venueStarts[].totalNotional` / `sharePct` (how much of the wave
+        that venue produced), `largestBy`, and `orderUnknown` when two
+        venues share the same first-print second.
         `symbol=all` pools every tracked coin (market-wide risk; no price).
         Informational only.
       operationId: getMarketLiquidationCascade
@@ -8436,6 +8438,11 @@ components:
         exchange: { type: string, description: binance | bybit | okx }
         startedAt: { type: string, format: date-time, description: First print of that venue in the wave }
         lagSec: { type: integer, description: Seconds after the first venue print; 0 if first or tied }
+        longNotional: { type: string }
+        shortNotional: { type: string }
+        totalNotional: { type: string, description: That venue's liquidation notional in the wave }
+        sharePct: { type: number, description: Percent of the combined wave's total notional }
+        count: { type: integer }
     MarketLiquidationCascadeEpisode:
       type: object
       description: One liquidation wave (open or finished) in the last 24h
@@ -8463,6 +8470,7 @@ components:
         summary: { type: string }
         startedBy: { type: string, description: Venue whose first print started a combined wave }
         orderUnknown: { type: boolean, description: True when two or more venues share the same first-print second }
+        largestBy: { type: string, description: Venue that produced the most notional in a combined wave }
         venueStarts:
           type: array
           items: { $ref: '#/components/schemas/MarketLiquidationCascadeVenueStart' }

@@ -8,6 +8,7 @@ import {
   formatClock,
   formatDurationSec,
   formatRatio,
+  formatSharePct,
   gradeTone,
   orderedWindows,
   priceMoveTone,
@@ -172,17 +173,39 @@ export function LiquidationCascade({
                           {t('liquidations:cascade.leadTogether', { venues: tied.join(' · ') })}
                         </EpisodeLead>
                       ) : null}
+                      {leads
+                        .filter((beat) => beat.role === 'tied')
+                        .map((beat) => (
+                          <EpisodeLead key={`${beat.exchange}-share`} $hot={beat.largest}>
+                            {venueLabel(beat.exchange)}
+                            {' · '}
+                            {t('liquidations:cascade.leadShare', {
+                              pct: formatSharePct(beat.sharePct),
+                              amount: formatCompact(beat.totalNotional, 'USDT'),
+                            })}
+                            {beat.largest ? ` · ${t('liquidations:cascade.largestShare')}` : ''}
+                          </EpisodeLead>
+                        ))}
                       {leads.map((beat) => {
                         if (beat.role === 'tied') return null;
                         const label = venueLabel(beat.exchange);
+                        const when =
+                          beat.role === 'first'
+                            ? t('liquidations:cascade.leadFirst', { venue: label })
+                            : t('liquidations:cascade.leadFollow', {
+                                venue: label,
+                                seconds: beat.lagSec,
+                              });
+                        const share = t('liquidations:cascade.leadShare', {
+                          pct: formatSharePct(beat.sharePct),
+                          amount: formatCompact(beat.totalNotional, 'USDT'),
+                        });
                         return (
-                          <EpisodeLead key={`${beat.exchange}-${beat.lagSec}`}>
-                            {beat.role === 'first'
-                              ? t('liquidations:cascade.leadFirst', { venue: label })
-                              : t('liquidations:cascade.leadFollow', {
-                                  venue: label,
-                                  seconds: beat.lagSec,
-                                })}
+                          <EpisodeLead key={`${beat.exchange}-${beat.lagSec}`} $hot={beat.largest}>
+                            {when}
+                            {' · '}
+                            {share}
+                            {beat.largest ? ` · ${t('liquidations:cascade.largestShare')}` : ''}
                           </EpisodeLead>
                         );
                       })}

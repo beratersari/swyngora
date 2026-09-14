@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Cascade episode share:** combined waves also show how much liquidation each venue produced and its percent of the total (`venueStarts[].totalNotional` / `sharePct`, `largestBy`). Web `/liquidations?view=cascade` (`docs/features/liquidations.md`)
 - **Cascade episode lead:** combined waves name which venue printed first and how many seconds later the others followed (`startedBy`, `venueStarts[].lagSec`; `orderUnknown` when first prints share a second). Web `/liquidations?view=cascade` (`docs/features/liquidations.md`)
 
 ### Added

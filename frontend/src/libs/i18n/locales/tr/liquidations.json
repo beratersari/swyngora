@@ -237,7 +237,7 @@
     "coin": "Kapsam",
     "market": "Tüm piyasa",
     "empty": "Şu anda likidasyon çığı yok.",
-    "hint": "Çığ, o akışın kendi tipik hızının çok üstünde kısa bir long veya short likidasyon patlamasıdır. Dalgalar ne zaman başladığını, ne kadar sürdüğünü ve fiyat hareketini gösterir. Birleşik dalgalar hangi borsanın önce bastığını ve diğerlerinin kaç saniye sonra geldiğini gösterir.",
+    "hint": "Çığ, o akışın kendi tipik hızının çok üstünde kısa bir long veya short likidasyon patlamasıdır. Dalgalar ne zaman başladığını, ne kadar sürdüğünü ve fiyat hareketini gösterir. Birleşik dalgalar hangi borsanın önce bastığını, diğerlerinin kaç saniye sonra geldiğini ve dalganın ne kadarının o borsadan geldiğini gösterir.",
     "window": "Pencere",
     "ratio": "Tiğe göre",
     "grade": "Derece",
@@ -260,6 +260,8 @@
     "leadFirst": "Önce {{venue}}",
     "leadFollow": "{{venue}} +{{seconds}}sn",
     "leadTogether": "{{venues}} birlikte",
+    "leadShare": "{{pct}} · {{amount}}",
+    "largestShare": "Dalgamın çoğu",
     "grades": {
       "quiet": "Sakin",
       "elevated": "Yüksek",

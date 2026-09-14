@@ -68,9 +68,14 @@ type cascadeBothDTO struct {
 }
 
 type cascadeVenueStartDTO struct {
-	Exchange  string `json:"exchange"`
-	StartedAt string `json:"startedAt"`
-	LagSec    int64  `json:"lagSec"`
+	Exchange      string  `json:"exchange"`
+	StartedAt     string  `json:"startedAt"`
+	LagSec        int64   `json:"lagSec"`
+	LongNotional  string  `json:"longNotional"`
+	ShortNotional string  `json:"shortNotional"`
+	TotalNotional string  `json:"totalNotional"`
+	SharePct      float64 `json:"sharePct"`
+	Count         int     `json:"count"`
 }
 
 type cascadeEpisodeDTO struct {
@@ -97,6 +102,7 @@ type cascadeEpisodeDTO struct {
 	Summary        string                 `json:"summary"`
 	StartedBy      string                 `json:"startedBy,omitempty"`
 	OrderUnknown   bool                   `json:"orderUnknown,omitempty"`
+	LargestBy      string                 `json:"largestBy,omitempty"`
 	VenueStarts    []cascadeVenueStartDTO `json:"venueStarts,omitempty"`
 }
 
@@ -194,6 +200,8 @@ func cascadeEpisodeToDTO(ep domain.CascadeEpisode) cascadeEpisodeDTO {
 		}
 		starts = append(starts, cascadeVenueStartDTO{
 			Exchange: v.Exchange, StartedAt: at, LagSec: v.LagSec,
+			LongNotional: v.LongNotional, ShortNotional: v.ShortNotional,
+			TotalNotional: v.TotalNotional, SharePct: v.SharePct, Count: v.Count,
 		})
 	}
 	if len(starts) == 0 {
@@ -207,7 +215,7 @@ func cascadeEpisodeToDTO(ep domain.CascadeEpisode) cascadeEpisodeDTO {
 		Count: ep.Count, PeakRatio: ep.PeakRatio,
 		PriceOpen: ep.PriceOpen, PriceClose: ep.PriceClose, PriceHigh: ep.PriceHigh, PriceLow: ep.PriceLow,
 		PriceChangePct: ep.PriceChangePct, Summary: ep.Summary,
-		StartedBy: ep.StartedBy, OrderUnknown: ep.OrderUnknown, VenueStarts: starts,
+		StartedBy: ep.StartedBy, OrderUnknown: ep.OrderUnknown, LargestBy: ep.LargestBy, VenueStarts: starts,
 	}
 }
 
