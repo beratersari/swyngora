@@ -1754,9 +1754,12 @@ export interface paths {
          *     / cascade / extreme. Binance and Bybit are scored **separately**.
          *     `both.agree` is true only when the **same side** is cascading on both
          *     venues. `episodes` lists each wave in the last 24h (start, duration,
-         *     long/short notional, price move). Overlapping same-side waves on both
-         *     venues are one `combined` episode. `symbol=all` pools every tracked
-         *     coin (market-wide risk; no price). Informational only.
+         *     long/short notional, price move). Overlapping same-side waves on two
+         *     or more venues are one `combined` episode with `startedBy`,
+         *     `venueStarts[].lagSec` (seconds after the first print), and
+         *     `orderUnknown` when two venues share the same first-print second.
+         *     `symbol=all` pools every tracked coin (market-wide risk; no price).
+         *     Informational only.
          */
         get: operations["getMarketLiquidationCascade"];
         put?: never;
@@ -4646,12 +4649,24 @@ export interface components {
             summary?: string;
             note?: string;
         };
+        /** @description When one venue's prints joined a combined cascade wave */
+        MarketLiquidationCascadeVenueStart: {
+            /** @description binance | bybit | okx */
+            exchange?: string;
+            /**
+             * Format: date-time
+             * @description First print of that venue in the wave
+             */
+            startedAt?: string;
+            /** @description Seconds after the first venue print; 0 if first or tied */
+            lagSec?: number;
+        };
         /** @description One liquidation wave (open or finished) in the last 24h */
         MarketLiquidationCascadeEpisode: {
             symbol?: string;
-            /** @description binance | bybit | both */
+            /** @description binance | bybit | okx | both */
             exchange?: string;
-            /** @description Same-side wave on Binance and Bybit at once */
+            /** @description Same-side wave on two or more venues at once */
             combined?: boolean;
             /** @enum {string} */
             side?: "long" | "short" | "both" | "none";
@@ -4676,6 +4691,11 @@ export interface components {
             /** @description Signed percent */
             priceChangePct?: string;
             summary?: string;
+            /** @description Venue whose first print started a combined wave */
+            startedBy?: string;
+            /** @description True when two or more venues share the same first-print second */
+            orderUnknown?: boolean;
+            venueStarts?: components["schemas"]["MarketLiquidationCascadeVenueStart"][];
         };
         MarketLiquidationCascadeHit: {
             symbol?: string;

@@ -560,7 +560,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_liquidation_cascade",
-		mcp.WithDescription("Detect a liquidation cascade: a short burst of long or short liquidations far above that stream's own typical rate (1m / 5m / 15m vs the prior 6 hours). episodes lists each wave in the last 24h (when it started, how long, long/short notional, price move). Binance and Bybit are scored separately; a combined episode is the same-side wave on both venues at once. both.agree is the current snapshot. symbol=all is market-wide (pooled coins). Prefer this for 'when did the BTC liquidation cascade start' or 'how much was liquidated during the wave'."),
+		mcp.WithDescription("Detect a liquidation cascade: a short burst of long or short liquidations far above that stream's own typical rate (1m / 5m / 15m vs the prior 6 hours). episodes lists each wave in the last 24h (when it started, how long, long/short notional, price move). Combined waves include startedBy and venueStarts.lagSec (seconds after the first venue print); orderUnknown when two venues share the same first-print second. Binance, Bybit, and OKX are scored separately; a combined episode is the same-side wave on more than one venue at once. both.agree is the current snapshot. symbol=all is market-wide (pooled coins). Prefer this for 'when did the BTC liquidation cascade start', 'which exchange started first', or 'how much was liquidated during the wave'."),
 		mcp.WithString("symbol", mcp.Description("Pair e.g. BTCUSDT, or all for the market (default all)")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

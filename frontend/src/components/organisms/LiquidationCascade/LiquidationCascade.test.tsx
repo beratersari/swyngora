@@ -51,6 +51,11 @@ describe('LiquidationCascade', () => {
               shortNotional: '100',
               priceChangePct: '-1.20',
               open: false,
+              startedBy: 'binance',
+              venueStarts: [
+                { exchange: 'binance', startedAt: '2026-08-30T15:21:05.000Z', lagSec: 0 },
+                { exchange: 'bybit', startedAt: '2026-08-30T15:21:17.000Z', lagSec: 12 },
+              ],
             },
           ],
         }}
@@ -62,8 +67,10 @@ describe('LiquidationCascade', () => {
     expect(screen.getAllByText(/binance/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/bybit/i).length).toBeGreaterThan(0);
     expect(screen.getByText('SOLUSDT')).toBeInTheDocument();
-    expect(screen.getByText(/15:21/)).toBeInTheDocument();
+    expect(screen.getByText(/15:21:00/)).toBeInTheDocument();
     expect(screen.getByText(/-1\.20%/)).toBeInTheDocument();
+    expect(screen.getByText(/binance first/i)).toBeInTheDocument();
+    expect(screen.getByText(/bybit \+12s/i)).toBeInTheDocument();
   });
 
   it('opens a bursting coin from the hits list', async () => {

@@ -4,6 +4,7 @@ import { Skeleton } from '@/components/atoms/Skeleton';
 import { Text } from '@/components/atoms/Text';
 import { useDisplayCurrency } from '@/libs/hooks';
 import {
+  episodeLeadBeats,
   formatClock,
   formatDurationSec,
   formatRatio,
@@ -17,7 +18,9 @@ import {
   Banner,
   BannerTitle,
   BothNote,
+  EpisodeLead,
   EpisodeTable,
+  EpisodeVenue,
   EpisodeWrap,
   GradeChip,
   HitButton,
@@ -152,12 +155,39 @@ export function LiquidationCascade({
               const g = gradeTone(ep.grade);
               const s = sideTone(ep.side);
               const move = priceMoveTone(ep.priceChangePct);
-              const venue = ep.combined ? t('liquidations:cascade.bothVenues') : venueLabel(ep.exchange);
+              const venue = ep.combined
+                ? t('liquidations:cascade.combinedVenues')
+                : venueLabel(ep.exchange);
+              const leads = episodeLeadBeats(ep);
+              const tied = leads.filter((b) => b.role === 'tied').map((b) => venueLabel(b.exchange));
               return (
                 <span key={`${ep.exchange}-${ep.startedAt}-${i}`} style={{ display: 'contents' }}>
                   <WindowCell $hot={ep.open}>{formatClock(ep.startedAt)}</WindowCell>
                   <WindowCell>{formatDurationSec(ep.durationSec)}</WindowCell>
-                  <WindowCell $hot={ep.combined}>{venue}</WindowCell>
+                  <WindowCell $hot={ep.combined}>
+                    <EpisodeVenue>
+                      <span>{venue}</span>
+                      {tied.length > 0 ? (
+                        <EpisodeLead>
+                          {t('liquidations:cascade.leadTogether', { venues: tied.join(' · ') })}
+                        </EpisodeLead>
+                      ) : null}
+                      {leads.map((beat) => {
+                        if (beat.role === 'tied') return null;
+                        const label = venueLabel(beat.exchange);
+                        return (
+                          <EpisodeLead key={`${beat.exchange}-${beat.lagSec}`}>
+                            {beat.role === 'first'
+                              ? t('liquidations:cascade.leadFirst', { venue: label })
+                              : t('liquidations:cascade.leadFollow', {
+                                  venue: label,
+                                  seconds: beat.lagSec,
+                                })}
+                          </EpisodeLead>
+                        );
+                      })}
+                    </EpisodeVenue>
+                  </WindowCell>
                   <SideChip $tone={s}>{t(`liquidations:cascade.sides.${s}`)}</SideChip>
                   <GradeChip $tone={g}>{t(`liquidations:cascade.grades.${g}`)}</GradeChip>
                   <WindowCell>{formatCompact(ep.longNotional, 'USDT')}</WindowCell>

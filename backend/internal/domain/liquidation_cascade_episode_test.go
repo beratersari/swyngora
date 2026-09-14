@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -85,6 +86,22 @@ func TestMergeCascadeEpisodes_SameSideOverlap(t *testing.T) {
 	if parseQty(rep.Episodes[0].ShortNotional) < 150000 {
 		t.Fatalf("combined short %+v", rep.Episodes[0])
 	}
+	ep := rep.Episodes[0]
+	if ep.StartedBy != string(ExchangeBinance) || ep.OrderUnknown {
+		t.Fatalf("lead %+v", ep)
+	}
+	if len(ep.VenueStarts) != 2 {
+		t.Fatalf("venue starts %+v", ep.VenueStarts)
+	}
+	if ep.VenueStarts[0].Exchange != string(ExchangeBinance) || ep.VenueStarts[0].LagSec != 0 {
+		t.Fatalf("first venue %+v", ep.VenueStarts)
+	}
+	if ep.VenueStarts[1].Exchange != string(ExchangeBybit) || ep.VenueStarts[1].LagSec < 100 || ep.VenueStarts[1].LagSec > 140 {
+		t.Fatalf("follow lag %+v", ep.VenueStarts)
+	}
+	if !strings.Contains(ep.Summary, "Binance first") || !strings.Contains(ep.Summary, "Bybit +") {
+		t.Fatalf("summary %q", ep.Summary)
+	}
 }
 
 func TestMergeCascadeEpisodes_OppositeSidesStaySeparate(t *testing.T) {
@@ -102,6 +119,98 @@ func TestMergeCascadeEpisodes_OppositeSidesStaySeparate(t *testing.T) {
 	if combined != 0 || len(rep.Episodes) < 2 {
 		t.Fatalf("expected two venue waves %+v", rep.Episodes)
 	}
+}
+
+func TestMergeCascadeEpisodes_FollowSeconds(t *testing.T) {
+	now := time.Date(2026, 8, 30, 16, 0, 0, 0, time.UTC)
+	var ev []LiquidationEvent
+	ev = append(ev, cascadeQuietThenBurstOffset(now, ExchangeBinance, "BTCUSDT", LiquidationSideLong, 20, 8, 5, 64000, 63000)...)
+	ev = append(ev, cascadeQuietThenBurstOffset(now, ExchangeBybit, "BTCUSDT", LiquidationSideLong, 20, 8, 17, 64010, 63020)...)
+	rep := BuildCascadeReport("BTCUSDT", "all", ev, now)
+	if len(rep.Episodes) == 0 || !rep.Episodes[0].Combined {
+		t.Fatalf("episodes %+v", rep.Episodes)
+	}
+	ep := rep.Episodes[0]
+	if ep.StartedBy != string(ExchangeBinance) || ep.OrderUnknown {
+		t.Fatalf("lead %+v", ep)
+	}
+	if len(ep.VenueStarts) != 2 || ep.VenueStarts[1].LagSec != 12 {
+		t.Fatalf("lag %+v", ep.VenueStarts)
+	}
+}
+
+func TestMergeCascadeEpisodes_TiedStartIsUnknown(t *testing.T) {
+	now := time.Date(2026, 8, 30, 16, 0, 0, 0, time.UTC)
+	var ev []LiquidationEvent
+	ev = append(ev, cascadeQuietThenBurstOffset(now, ExchangeBinance, "ETHUSDT", LiquidationSideShort, 16, 6, 5, 3000, 2980)...)
+	ev = append(ev, cascadeQuietThenBurstOffset(now, ExchangeBybit, "ETHUSDT", LiquidationSideShort, 16, 6, 5, 3002, 2982)...)
+	rep := BuildCascadeReport("ETHUSDT", "all", ev, now)
+	if len(rep.Episodes) == 0 || !rep.Episodes[0].Combined {
+		t.Fatalf("episodes %+v", rep.Episodes)
+	}
+	ep := rep.Episodes[0]
+	if !ep.OrderUnknown || ep.StartedBy != "" {
+		t.Fatalf("expected unknown order %+v", ep)
+	}
+	if !strings.Contains(ep.Summary, "started together") {
+		t.Fatalf("summary %q", ep.Summary)
+	}
+}
+
+func TestMergeCascadeEpisodes_ThreeVenues(t *testing.T) {
+	now := time.Date(2026, 8, 30, 16, 0, 0, 0, time.UTC)
+	var ev []LiquidationEvent
+	ev = append(ev, cascadeQuietThenBurstOffset(now, ExchangeBinance, "SOLUSDT", LiquidationSideLong, 22, 8, 5, 140, 136)...)
+	ev = append(ev, cascadeQuietThenBurstOffset(now, ExchangeBybit, "SOLUSDT", LiquidationSideLong, 22, 8, 20, 140, 136)...)
+	ev = append(ev, cascadeQuietThenBurstOffset(now, ExchangeOKX, "SOLUSDT", LiquidationSideLong, 22, 8, 45, 140, 136)...)
+	rep := BuildCascadeReport("SOLUSDT", "all", ev, now)
+	if len(rep.Episodes) == 0 || !rep.Episodes[0].Combined {
+		t.Fatalf("episodes %+v", rep.Episodes)
+	}
+	ep := rep.Episodes[0]
+	if ep.StartedBy != string(ExchangeBinance) || len(ep.VenueStarts) != 3 {
+		t.Fatalf("lead %+v", ep)
+	}
+	if ep.VenueStarts[1].Exchange != string(ExchangeBybit) || ep.VenueStarts[1].LagSec != 15 {
+		t.Fatalf("bybit %+v", ep.VenueStarts)
+	}
+	if ep.VenueStarts[2].Exchange != string(ExchangeOKX) || ep.VenueStarts[2].LagSec != 40 {
+		t.Fatalf("okx %+v", ep.VenueStarts)
+	}
+}
+
+func cascadeQuietThenBurstOffset(now time.Time, ex Exchange, symbol, side string, burstAgo, burstMins, startOffsetSec int, startPx, endPx float64) []LiquidationEvent {
+	var ev []LiquidationEvent
+	for i := 1; i <= 80; i++ {
+		ev = append(ev, LiquidationEvent{
+			Exchange: ex, Symbol: symbol, Side: side,
+			Price: startPx, Quantity: 0.01, Notional: 80,
+			Time: now.Add(-time.Duration(i*5) * time.Minute),
+		})
+	}
+	if burstMins < 1 {
+		burstMins = 1
+	}
+	if startOffsetSec < 0 {
+		startOffsetSec = 0
+	}
+	for m := 0; m < burstMins; m++ {
+		t0 := now.Add(-time.Duration(burstAgo+burstMins-1-m) * time.Minute)
+		px := startPx
+		if burstMins > 1 {
+			px = startPx + (endPx-startPx)*float64(m)/float64(burstMins-1)
+		} else {
+			px = endPx
+		}
+		for i := 0; i < 6; i++ {
+			ev = append(ev, LiquidationEvent{
+				Exchange: ex, Symbol: symbol, Side: side,
+				Price: px, Quantity: 1, Notional: 2000,
+				Time: t0.Add(time.Duration(startOffsetSec+i) * time.Second),
+			})
+		}
+	}
+	return ev
 }
 
 func TestApplyCascadeCandlePrices(t *testing.T) {

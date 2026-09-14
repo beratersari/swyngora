@@ -30,7 +30,7 @@ func (s *Service) ListLiquidationEvents(exchange, symbol string, since time.Time
 }
 
 // GetLiquidationCascade scores short-burst long/short liquidations for one coin
-// (or symbol=all for the pooled market) on Binance and Bybit separately.
+// (or symbol=all for the pooled market) on each futures venue separately.
 func (s *Service) GetLiquidationCascade(ctx context.Context, exchange, symbol string) (*domain.CascadeReport, error) {
 	_ = ctx
 	sym, err := domain.ParseLiquidationLevelsSymbol(symbol)

@@ -12,24 +12,24 @@ const (
 	CascadeWindow5m  = "5m"
 	CascadeWindow15m = "15m"
 
-	CascadeGradeQuiet     = "quiet"
-	CascadeGradeElevated  = "elevated"
-	CascadeGradeCascade   = "cascade"
-	CascadeGradeExtreme   = "extreme"
+	CascadeGradeQuiet    = "quiet"
+	CascadeGradeElevated = "elevated"
+	CascadeGradeCascade  = "cascade"
+	CascadeGradeExtreme  = "extreme"
 
 	CascadeSideNone = "none"
 	CascadeSideBoth = "both"
 
-	cascadeLookback         = 6 * time.Hour
-	cascadeEpisodeLookback  = 24 * time.Hour
-	cascadeStep             = time.Minute
-	cascadeMinTypical1m     = 500.0
-	cascadeEpisodeMinPrior  = 20
-	cascadeEpisodeQuietGap  = 2
-	DefaultCascadeMin       = CascadeGradeElevated
-	CascadeScanMaxHits      = 40
-	CascadeEpisodeMax       = 30
-	CascadeExchangeBoth     = "both"
+	cascadeLookback        = 6 * time.Hour
+	cascadeEpisodeLookback = 24 * time.Hour
+	cascadeStep            = time.Minute
+	cascadeMinTypical1m    = 500.0
+	cascadeEpisodeMinPrior = 20
+	cascadeEpisodeQuietGap = 2
+	DefaultCascadeMin      = CascadeGradeElevated
+	CascadeScanMaxHits     = 40
+	CascadeEpisodeMax      = 30
+	CascadeExchangeBoth    = "both"
 )
 
 // CascadeWindows are short bursts compared to that coin/venue's own typical.
@@ -85,10 +85,17 @@ type CascadeBoth struct {
 	Summary string
 }
 
+// CascadeVenueStart is when one venue's prints joined a combined wave.
+type CascadeVenueStart struct {
+	Exchange  string
+	StartedAt time.Time
+	LagSec    int64 // seconds after the first venue print; 0 if first or tied
+}
+
 // CascadeEpisode is one completed or still-open liquidation wave.
 type CascadeEpisode struct {
 	Symbol         string
-	Exchange       string // binance | bybit | both
+	Exchange       string // binance | bybit | okx | both
 	Combined       bool
 	Side           string
 	Grade          string // peak grade in the wave
@@ -108,6 +115,14 @@ type CascadeEpisode struct {
 	PriceLow       string
 	PriceChangePct string
 	Summary        string
+	// FirstPrintAt is the first liquidation print in this venue's wave.
+	// Used to order combined episodes; bucket StartedAt stays minute-aligned.
+	FirstPrintAt time.Time
+	// StartedBy is the venue whose first print began a combined wave.
+	// Empty when OrderUnknown or the wave is a single venue.
+	StartedBy    string
+	OrderUnknown bool
+	VenueStarts  []CascadeVenueStart
 }
 
 // CascadeReport is one coin (or symbol=all for the pooled market).
@@ -250,9 +265,11 @@ func BuildCascadeReport(symbol, exchange string, events []LiquidationEvent, now 
 	})
 	if ex == "all" {
 		out.Both = DetectCascadeBoth(out.Venues)
-		bn := DetectCascadeEpisodes(ExchangeBinance, symbol, events, now)
-		bb := DetectCascadeEpisodes(ExchangeBybit, symbol, events, now)
-		out.Episodes = MergeCascadeEpisodes(bn, bb, now)
+		groups := make([][]CascadeEpisode, 0, len(want))
+		for _, v := range want {
+			groups = append(groups, DetectCascadeEpisodes(v, symbol, events, now))
+		}
+		out.Episodes = MergeCascadeEpisodes(groups, now)
 	} else {
 		out.Episodes = DetectCascadeEpisodes(Exchange(ex), symbol, events, now)
 	}
@@ -316,7 +333,7 @@ func BuildCascadeScan(exchange string, events []LiquidationEvent, now time.Time)
 	return out
 }
 
-const cascadeNote = "A cascade is a short burst of long or short liquidations far above that stream's own typical rate (1m / 5m / 15m vs the prior 6 hours). Episodes list each wave in the last 24h: start, duration, long/short notional, and price move. Binance, Bybit, and OKX are scored separately; a combined episode is the same-side wave on more than one venue at once. Informational only."
+const cascadeNote = "A cascade is a short burst of long or short liquidations far above that stream's own typical rate (1m / 5m / 15m vs the prior 6 hours). Episodes list each wave in the last 24h: start, duration, long/short notional, and price move. Combined waves name which venue printed first and how many seconds later the others followed. Binance, Bybit, and OKX are scored separately; a combined episode is the same-side wave on more than one venue at once. Informational only."
 
 type cascadeBucket struct {
 	start time.Time

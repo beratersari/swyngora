@@ -1,4 +1,10 @@
-import type { CascadeGrade, CascadeSide, CascadeVenue, CascadeWindow } from './LiquidationCascade.types';
+import type {
+  CascadeEpisode,
+  CascadeGrade,
+  CascadeSide,
+  CascadeVenue,
+  CascadeWindow,
+} from './LiquidationCascade.types';
 import { CASCADE_WINDOWS } from './constants';
 
 export function parseRatio(value: number | undefined): number {
@@ -52,7 +58,27 @@ export function formatClock(iso: string | undefined): string {
   if (Number.isNaN(d.getTime())) return '—';
   const hh = String(d.getUTCHours()).padStart(2, '0');
   const mm = String(d.getUTCMinutes()).padStart(2, '0');
-  return `${hh}:${mm}`;
+  const ss = String(d.getUTCSeconds()).padStart(2, '0');
+  return `${hh}:${mm}:${ss}`;
+}
+
+export type EpisodeLeadBeat = {
+  exchange: string;
+  lagSec: number;
+  role: 'first' | 'follow' | 'tied';
+};
+
+export function episodeLeadBeats(ep: CascadeEpisode | undefined): EpisodeLeadBeat[] {
+  const starts = ep?.venueStarts ?? [];
+  if (!ep?.combined || starts.length < 2) return [];
+  return starts.map((s) => {
+    const lagSec = typeof s.lagSec === 'number' && Number.isFinite(s.lagSec) ? Math.max(0, Math.round(s.lagSec)) : 0;
+    return {
+      exchange: s.exchange ?? '',
+      lagSec,
+      role: lagSec > 0 ? 'follow' : ep.orderUnknown ? 'tied' : 'first',
+    };
+  });
 }
 
 export function priceMoveTone(pct: string | undefined): 'long' | 'short' | 'none' {

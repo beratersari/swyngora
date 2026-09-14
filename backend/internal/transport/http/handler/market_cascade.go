@@ -67,28 +67,37 @@ type cascadeBothDTO struct {
 	Summary string  `json:"summary"`
 }
 
+type cascadeVenueStartDTO struct {
+	Exchange  string `json:"exchange"`
+	StartedAt string `json:"startedAt"`
+	LagSec    int64  `json:"lagSec"`
+}
+
 type cascadeEpisodeDTO struct {
-	Symbol         string  `json:"symbol"`
-	Exchange       string  `json:"exchange"`
-	Combined       bool    `json:"combined"`
-	Side           string  `json:"side"`
-	Grade          string  `json:"grade"`
-	Score          float64 `json:"score"`
-	StartedAt      string  `json:"startedAt"`
-	EndedAt        string  `json:"endedAt,omitempty"`
-	Open           bool    `json:"open"`
-	DurationSec    int64   `json:"durationSec"`
-	LongNotional   string  `json:"longNotional"`
-	ShortNotional  string  `json:"shortNotional"`
-	TotalNotional  string  `json:"totalNotional"`
-	Count          int     `json:"count"`
-	PeakRatio      float64 `json:"peakRatio"`
-	PriceOpen      string  `json:"priceOpen,omitempty"`
-	PriceClose     string  `json:"priceClose,omitempty"`
-	PriceHigh      string  `json:"priceHigh,omitempty"`
-	PriceLow       string  `json:"priceLow,omitempty"`
-	PriceChangePct string  `json:"priceChangePct,omitempty"`
-	Summary        string  `json:"summary"`
+	Symbol         string                 `json:"symbol"`
+	Exchange       string                 `json:"exchange"`
+	Combined       bool                   `json:"combined"`
+	Side           string                 `json:"side"`
+	Grade          string                 `json:"grade"`
+	Score          float64                `json:"score"`
+	StartedAt      string                 `json:"startedAt"`
+	EndedAt        string                 `json:"endedAt,omitempty"`
+	Open           bool                   `json:"open"`
+	DurationSec    int64                  `json:"durationSec"`
+	LongNotional   string                 `json:"longNotional"`
+	ShortNotional  string                 `json:"shortNotional"`
+	TotalNotional  string                 `json:"totalNotional"`
+	Count          int                    `json:"count"`
+	PeakRatio      float64                `json:"peakRatio"`
+	PriceOpen      string                 `json:"priceOpen,omitempty"`
+	PriceClose     string                 `json:"priceClose,omitempty"`
+	PriceHigh      string                 `json:"priceHigh,omitempty"`
+	PriceLow       string                 `json:"priceLow,omitempty"`
+	PriceChangePct string                 `json:"priceChangePct,omitempty"`
+	Summary        string                 `json:"summary"`
+	StartedBy      string                 `json:"startedBy,omitempty"`
+	OrderUnknown   bool                   `json:"orderUnknown,omitempty"`
+	VenueStarts    []cascadeVenueStartDTO `json:"venueStarts,omitempty"`
 }
 
 type cascadeReportDTO struct {
@@ -135,7 +144,7 @@ func cascadeReportToDTO(a *domain.CascadeReport) cascadeReportDTO {
 	}
 	out := cascadeReportDTO{
 		Symbol: a.Symbol, Exchange: a.Exchange,
-		AsOf: a.AsOf.UTC().Format(time.RFC3339Nano),
+		AsOf:   a.AsOf.UTC().Format(time.RFC3339Nano),
 		Venues: venues, Episodes: episodes, Summary: a.Summary, Note: a.Note,
 	}
 	if a.Both != nil {
@@ -177,6 +186,19 @@ func cascadeEpisodeToDTO(ep domain.CascadeEpisode) cascadeEpisodeDTO {
 	if !ep.StartedAt.IsZero() {
 		started = ep.StartedAt.UTC().Format(time.RFC3339Nano)
 	}
+	starts := make([]cascadeVenueStartDTO, 0, len(ep.VenueStarts))
+	for _, v := range ep.VenueStarts {
+		at := ""
+		if !v.StartedAt.IsZero() {
+			at = v.StartedAt.UTC().Format(time.RFC3339Nano)
+		}
+		starts = append(starts, cascadeVenueStartDTO{
+			Exchange: v.Exchange, StartedAt: at, LagSec: v.LagSec,
+		})
+	}
+	if len(starts) == 0 {
+		starts = nil
+	}
 	return cascadeEpisodeDTO{
 		Symbol: ep.Symbol, Exchange: ep.Exchange, Combined: ep.Combined,
 		Side: ep.Side, Grade: ep.Grade, Score: ep.Score,
@@ -185,6 +207,7 @@ func cascadeEpisodeToDTO(ep domain.CascadeEpisode) cascadeEpisodeDTO {
 		Count: ep.Count, PeakRatio: ep.PeakRatio,
 		PriceOpen: ep.PriceOpen, PriceClose: ep.PriceClose, PriceHigh: ep.PriceHigh, PriceLow: ep.PriceLow,
 		PriceChangePct: ep.PriceChangePct, Summary: ep.Summary,
+		StartedBy: ep.StartedBy, OrderUnknown: ep.OrderUnknown, VenueStarts: starts,
 	}
 }
 

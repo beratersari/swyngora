@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { formatClock, formatDurationSec, formatRatio, gradeTone, orderedWindows, sideTone } from './helpers';
+import {
+  episodeLeadBeats,
+  formatClock,
+  formatDurationSec,
+  formatRatio,
+  gradeTone,
+  orderedWindows,
+  sideTone,
+} from './helpers';
 
 describe('LiquidationCascade helpers', () => {
   it('formats ratios and grades', () => {
@@ -23,6 +31,34 @@ describe('LiquidationCascade helpers', () => {
     expect(formatDurationSec(600)).toBe('10m');
     expect(formatDurationSec(3600)).toBe('1h');
     expect(formatDurationSec(5400)).toBe('1h 30m');
-    expect(formatClock('2026-08-30T15:21:00.000Z')).toBe('15:21');
+    expect(formatClock('2026-08-30T15:21:00.000Z')).toBe('15:21:00');
+    expect(formatClock('2026-08-30T15:21:17.000Z')).toBe('15:21:17');
+  });
+
+  it('orders combined venue lead and follow seconds', () => {
+    expect(
+      episodeLeadBeats({
+        combined: true,
+        venueStarts: [
+          { exchange: 'binance', lagSec: 0 },
+          { exchange: 'bybit', lagSec: 12 },
+          { exchange: 'okx', lagSec: 40 },
+        ],
+      }),
+    ).toEqual([
+      { exchange: 'binance', lagSec: 0, role: 'first' },
+      { exchange: 'bybit', lagSec: 12, role: 'follow' },
+      { exchange: 'okx', lagSec: 40, role: 'follow' },
+    ]);
+    expect(
+      episodeLeadBeats({
+        combined: true,
+        orderUnknown: true,
+        venueStarts: [
+          { exchange: 'binance', lagSec: 0 },
+          { exchange: 'bybit', lagSec: 0 },
+        ],
+      }).map((b) => b.role),
+    ).toEqual(['tied', 'tied']);
   });
 });
