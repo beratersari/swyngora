@@ -3,6 +3,7 @@ import {
   barSide,
   formatAxisNotional,
   formatHitRate,
+  frozenLevelsView,
   isLevelsKind,
   maxCum,
   maxSide,
@@ -107,5 +108,29 @@ describe('LiquidationBarChart helpers', () => {
     expect(venue?.horizons?.[0]?.hits).toBe(2);
     expect(formatHitRate(0.5)).toBe('50%');
     expect(pickLevelsReview({ kind: 'levels' })).toBeUndefined();
+  });
+
+  it('draws a frozen estimate at that last so shorts stay shorts', () => {
+    const live = {
+      kind: 'levels' as const,
+      lastPrice: '110',
+      levels: [{ price: '101', longNotional: '40', shortNotional: '0', totalNotional: '40' }],
+    };
+    const view = frozenLevelsView(
+      live,
+      [
+        {
+          time: 't1',
+          lastPrice: '100',
+          lean: 'short',
+          levels: [{ price: '101', longNotional: '0', shortNotional: '40', totalNotional: '40' }],
+        },
+      ],
+      't1',
+    );
+    expect(view?.lastPrice).toBe('100');
+    const [row] = toLevelRows(view);
+    expect(barSide(row!, 100)).toBe('short');
+    expect(barSide(toLevelRows(live)[0]!, 110)).toBe('long');
   });
 });

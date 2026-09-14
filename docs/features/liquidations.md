@@ -61,9 +61,14 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
   **OI-weighted reference last** (`lastPrice`); `lastPrices` keeps each venue
   and a missing venue is never copied. `review` rebuilds those past maps from
   stored open interest and last price, then scores later **same-venue**
-  liquidations in each 10x / 25x / 50x / 100x band (1h / 4h / 12h). A quiet
-  window is a miss only when the liquidation feed covers the look-ahead;
-  pending / missing tape is not a miss. Combined sums independent venues.
+  liquidations in each 10x / 25x / 50x / 100x band (1h / 4h / 12h). Each
+  sample keeps a **frozen map** at that last so shorts stay above it (open
+  a past estimate on the chart — today's last does not flip the sides).
+  Frozen maps use the same mix as live hunt: all-account crowding unless
+  Binance crowd vs **top-trader size** are opposite, then size wins.
+  A quiet window is a miss only when the liquidation feed covers the
+  look-ahead; pending / missing tape is not a miss. Combined sums
+  independent venues.
   Market-wide `symbol=all` stays observed time bars.
 - Max pain (`GET /liquidation-max-pain`): largest estimated pocket **above**
   (shorts) and **below** (longs) last price. Not the hunt target.

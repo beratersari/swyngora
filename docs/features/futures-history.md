@@ -20,6 +20,10 @@ server restart and can be queried later by users or the AI.
   - liquidations: `(exchange, symbol, side, time, price, quantity)`
 - Snapshot times are floored to 5 minutes for OI / long-short / predicted funding.
   Settled funding uses the venue settlement timestamp.
+- Long/short rows store the all-account print and, on Binance, **top-trader
+  position** (`sizeLongPct`) and top-trader account (`topAccLongPct`) shares
+  so later hunt / liquidation-level replays can use size when the crowd
+  leans the other way.
 - Rows older than `FUTURES_HISTORY_RETENTION` (default 30 days) are purged.
 
 `GET /api/v1/market/futures-history?metric=open_interest&symbol=BTCUSDT`

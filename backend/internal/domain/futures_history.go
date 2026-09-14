@@ -24,19 +24,21 @@ var DefaultFuturesHistorySymbols = []string{
 
 // FuturesSnapshot is one durable sample of OI, funding, or long/short.
 type FuturesSnapshot struct {
-	Metric        string
-	Exchange      Exchange
-	Symbol        string
-	SampledAt     time.Time
-	Predicted     bool // funding predicted-next vs settled
-	Contracts     float64
-	Value         float64
-	FundingRate   float64
-	IntervalHours int
-	NextFunding   time.Time
-	LongShare     float64
-	ShortShare    float64
-	Ratio         float64
+	Metric          string
+	Exchange        Exchange
+	Symbol          string
+	SampledAt       time.Time
+	Predicted       bool // funding predicted-next vs settled
+	Contracts       float64
+	Value           float64
+	FundingRate     float64
+	IntervalHours   int
+	NextFunding     time.Time
+	LongShare       float64
+	ShortShare      float64
+	Ratio           float64
+	SizeLongShare   float64 // Binance top-trader position long share (0 if unknown)
+	TopAccLongShare float64 // Binance top-trader account-count long share (0 if unknown)
 }
 
 // FuturesHistoryQuery filters durable samples.

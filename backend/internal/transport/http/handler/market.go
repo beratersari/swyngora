@@ -1265,6 +1265,13 @@ func futuresHistoryToDTO(metric, exchange, symbol string, raw any) map[string]an
 				item["shortPct"] = formatHistQty(r.ShortShare * 100)
 				item["ratio"] = formatHistQty(r.Ratio)
 				item["bias"] = domain.LongShortBias(r.Ratio)
+				if r.SizeLongShare > 0 {
+					item["sizeLongPct"] = formatHistQty(r.SizeLongShare * 100)
+					item["blend"] = domain.HuntBlendKind(r.LongShare, r.SizeLongShare)
+				}
+				if r.TopAccLongShare > 0 {
+					item["topAccLongPct"] = formatHistQty(r.TopAccLongShare * 100)
+				}
 			}
 			items = append(items, item)
 		}

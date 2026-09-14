@@ -45,6 +45,9 @@ type LiquidationLevelsReviewBand struct {
 type LiquidationLevelsReviewSample struct {
 	Time      time.Time
 	LastPrice float64
+	Lean      string // short | long | even — heavier predicted side at this last
+	Blend     string // crowd | top_positions — same mix as the live hunt
+	Levels    []LiquidationLevelBar
 	Bands     []LiquidationLevelsReviewBand
 }
 
@@ -96,7 +99,7 @@ type LiquidationLevelsReview struct {
 	Note     string
 }
 
-const liquidationLevelsReviewNote = "Each past estimate is rebuilt from that venue's own last price, open interest, and the same 10x/25x/50x/100x mix as the live map. Later liquidations count only when they print on that venue, on the same side, and inside the band around the predicted price. A quiet window is a miss only when liquidation history covers the look-ahead; pending / price_gap / liq_gap are not misses. Combined sums independent venues and never copies the other book. Informational only."
+const liquidationLevelsReviewNote = "Each past estimate is rebuilt from that venue's own last price, open interest, and the same 10x/25x/50x/100x mix as the live map, and kept as a frozen map (shorts above that last, longs below). Open a past estimate to see the same prediction later — today's last does not re-center it. Later liquidations count only when they print on that venue, on the same side, and inside the band around the predicted price. A quiet window is a miss only when liquidation history covers the look-ahead; pending / missing tape is not a miss. Combined sums independent venues and never copies the other book. Informational only."
 
 // LiquidationLevelsReviewInput is history used to rebuild and score past maps.
 type LiquidationLevelsReviewInput struct {
@@ -130,8 +133,41 @@ func ReviewLiquidationLevels(in LiquidationLevelsReviewInput) LiquidationLevelsR
 		Note:    liquidationLevelsReviewNote,
 	}
 	out.Combined = mergeLevelsReviewVenues("combined", []LiquidationLevelsReviewVenue{out.Binance, out.Bybit, out.OKX})
+	attachFrozenCombinedMaps(&out.Combined, in.Venues, now, step, stale)
 	out.Summary = ExplainLiquidationLevelsReview(out)
 	return out
+}
+
+func attachFrozenCombinedMaps(dst *LiquidationLevelsReviewVenue, venues []HuntHeatmapVenueSeries, now time.Time, step, stale time.Duration) {
+	if dst == nil {
+		return
+	}
+	frozen := rebuildCombinedFrozenSamples(venues, now, step, stale)
+	if len(dst.Samples) == 0 {
+		dst.Samples = frozen
+		return
+	}
+	byT := map[int64]LiquidationLevelsReviewSample{}
+	for _, s := range frozen {
+		byT[TruncateToBucket(s.Time, step).Unix()] = s
+	}
+	for i := range dst.Samples {
+		key := TruncateToBucket(dst.Samples[i].Time, step).Unix()
+		f, ok := byT[key]
+		if !ok {
+			continue
+		}
+		dst.Samples[i].Levels = f.Levels
+		if dst.Samples[i].LastPrice <= 0 {
+			dst.Samples[i].LastPrice = f.LastPrice
+		}
+		if dst.Samples[i].Lean == "" {
+			dst.Samples[i].Lean = f.Lean
+		}
+		if dst.Samples[i].Blend == "" {
+			dst.Samples[i].Blend = f.Blend
+		}
+	}
 }
 
 func reviewLevelsVenue(ex string, ser HuntHeatmapVenueSeries, now time.Time, step, stale time.Duration) LiquidationLevelsReviewVenue {
@@ -190,8 +226,10 @@ func rebuildLevelSamples(ser HuntHeatmapVenueSeries, now time.Time, step, stale 
 		}
 		ls := snapshotAtOrBefore(ser.LongShort, oi.SampledAt, 6*time.Hour)
 		longShare, shortShare := 0.5, 0.5
-		if ls != nil && (ls.LongShare > 0 || ls.ShortShare > 0) {
-			longShare, shortShare = BlendAccountShare(ls.LongShare)
+		blend := "crowd"
+		if ls != nil && (ls.LongShare > 0 || ls.ShortShare > 0 || ls.SizeLongShare > 0) {
+			longShare, shortShare = HuntBlendFromSnapshot(ls)
+			blend = HuntBlendKind(ls.LongShare, ls.SizeLongShare)
 		}
 		var funding float64
 		if f := snapshotAtOrBefore(ser.Funding, oi.SampledAt, 8*time.Hour); f != nil {
@@ -201,7 +239,12 @@ func rebuildLevelSamples(ser HuntHeatmapVenueSeries, now time.Time, step, stale 
 		if len(pred) == 0 {
 			continue
 		}
-		sample := LiquidationLevelsReviewSample{Time: oi.SampledAt.UTC(), LastPrice: last}
+		sample := LiquidationLevelsReviewSample{
+			Time:      oi.SampledAt.UTC(),
+			LastPrice: last,
+			Blend:     blend,
+			Levels:    BuildLiquidationLevelsAt(ser.Exchange, last, oi.Value, longShare, shortShare, funding),
+		}
 		for _, spec := range LiquidationLevelsReviewHorizons {
 			for _, p := range pred {
 				row := scoreLevelBandHorizon(p, spec.Dur, oi.SampledAt, now, liqs)
@@ -216,6 +259,7 @@ func rebuildLevelSamples(ser HuntHeatmapVenueSeries, now time.Time, step, stale 
 				}
 			}
 		}
+		sample.Lean = samplePredictedLean(sample.Bands)
 		samples = append(samples, sample)
 	}
 	hs := make([]LiquidationLevelsReviewHorizon, 0, len(LiquidationLevelsReviewHorizons))
@@ -279,6 +323,128 @@ func PredictDisplayLevelBands(last, oi, longShare, shortShare, funding float64) 
 				})
 			}
 		}
+	}
+	return out
+}
+
+// BuildLiquidationLevelsAt freezes the live map at one last / OI print so a
+// later view keeps shorts above that last and longs below it.
+func BuildLiquidationLevelsAt(ex Exchange, last, oi, longShare, shortShare, funding float64) []LiquidationLevelBar {
+	if last <= 0 || oi <= 0 {
+		return nil
+	}
+	if longShare <= 0 && shortShare <= 0 {
+		longShare, shortShare = 0.5, 0.5
+	}
+	v := HuntVenueReport{
+		Exchange:          ex,
+		Price:             last,
+		OpenInterestValue: oi,
+		EstLongNotional:   oi * longShare,
+		EstShortNotional:  oi * shortShare,
+		FundingRate:       funding,
+	}
+	rep := BuildLiquidationLevelsFromHunt(HuntReport{
+		Exchange: string(ex),
+		Venues:   []HuntVenueReport{v},
+	})
+	return rep.Levels
+}
+
+func samplePredictedLean(bands []LiquidationLevelsReviewBand) string {
+	var longN, shortN float64
+	for _, b := range bands {
+		if b.Side == LiquidationSideShort {
+			shortN += b.Predicted
+		} else {
+			longN += b.Predicted
+		}
+	}
+	switch {
+	case shortN > longN:
+		return LiquidationSideShort
+	case longN > shortN:
+		return LiquidationSideLong
+	default:
+		return "even"
+	}
+}
+
+func rebuildCombinedFrozenSamples(venues []HuntHeatmapVenueSeries, now time.Time, step, stale time.Duration) []LiquidationLevelsReviewSample {
+	type bucket struct {
+		reps  []HuntVenueReport
+		t     time.Time
+		blend string
+	}
+	byT := map[int64]*bucket{}
+	for _, ser := range venues {
+		if ser.Exchange == "" {
+			continue
+		}
+		for _, oi := range downsampleSnapshots(ser.OI, step) {
+			if oi.Value <= 0 || oi.SampledAt.IsZero() || oi.SampledAt.After(now) {
+				continue
+			}
+			last, ok := levelPriceAtOrBefore(ser.Prices, oi.SampledAt, stale)
+			if !ok || last <= 0 {
+				continue
+			}
+			ls := snapshotAtOrBefore(ser.LongShort, oi.SampledAt, 6*time.Hour)
+			longShare, shortShare := 0.5, 0.5
+			blend := "crowd"
+			if ls != nil && (ls.LongShare > 0 || ls.ShortShare > 0 || ls.SizeLongShare > 0) {
+				longShare, shortShare = HuntBlendFromSnapshot(ls)
+				blend = HuntBlendKind(ls.LongShare, ls.SizeLongShare)
+			}
+			var funding float64
+			if f := snapshotAtOrBefore(ser.Funding, oi.SampledAt, 8*time.Hour); f != nil {
+				funding = f.FundingRate
+			}
+			key := TruncateToBucket(oi.SampledAt, step).Unix()
+			b := byT[key]
+			if b == nil {
+				b = &bucket{t: TruncateToBucket(oi.SampledAt, step), blend: "crowd"}
+				byT[key] = b
+			}
+			if blend == "top_positions" {
+				b.blend = blend
+			}
+			b.reps = append(b.reps, HuntVenueReport{
+				Exchange:          ser.Exchange,
+				Price:             last,
+				OpenInterestValue: oi.Value,
+				EstLongNotional:   oi.Value * longShare,
+				EstShortNotional:  oi.Value * shortShare,
+				FundingRate:       funding,
+			})
+		}
+	}
+	out := make([]LiquidationLevelsReviewSample, 0, len(byT))
+	for _, b := range byT {
+		rep := BuildLiquidationLevelsFromHunt(HuntReport{Exchange: "all", Venues: b.reps})
+		last := oiWeightedLast(b.reps)
+		var predN [2]float64
+		for _, v := range b.reps {
+			predN[0] += v.EstLongNotional
+			predN[1] += v.EstShortNotional
+		}
+		lean := "even"
+		if predN[1] > predN[0] {
+			lean = LiquidationSideShort
+		} else if predN[0] > predN[1] {
+			lean = LiquidationSideLong
+		}
+		out = append(out, LiquidationLevelsReviewSample{
+			Time:      b.t.UTC(),
+			LastPrice: last,
+			Lean:      lean,
+			Blend:     b.blend,
+			Levels:    rep.Levels,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Time.Before(out[j].Time) })
+	if len(out) > LiquidationLevelsReviewMaxSamples {
+		out = out[len(out)-LiquidationLevelsReviewMaxSamples:]
 	}
 	return out
 }

@@ -168,6 +168,20 @@ CREATE TABLE IF NOT EXISTS liquidation_coverage (
 		if err := sqliteutil.SetUserVersion(s.db, 4); err != nil {
 			return err
 		}
+		v = 4
+	}
+	if v < 5 {
+		for _, stmt := range []string{
+			`ALTER TABLE futures_snapshots ADD COLUMN size_long_share REAL NOT NULL DEFAULT 0`,
+			`ALTER TABLE futures_snapshots ADD COLUMN top_acc_long_share REAL NOT NULL DEFAULT 0`,
+		} {
+			if err := sqliteutil.ExecAllowExists(s.db, stmt); err != nil {
+				return err
+			}
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 5); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -195,16 +209,29 @@ func (s *SQLite) InsertSnapshot(ctx context.Context, rec domain.FuturesSnapshot)
 INSERT OR IGNORE INTO futures_snapshots (
 	metric, exchange, symbol, sampled_at_ms, predicted,
 	contracts, value, funding_rate, interval_hours, next_funding_ms,
-	long_share, short_share, ratio
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	long_share, short_share, ratio, size_long_share, top_acc_long_share
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		rec.Metric, string(rec.Exchange), rec.Symbol, rec.SampledAt.UTC().UnixMilli(), pred,
 		rec.Contracts, rec.Value, rec.FundingRate, rec.IntervalHours, nextMS,
-		rec.LongShare, rec.ShortShare, rec.Ratio,
+		rec.LongShare, rec.ShortShare, rec.Ratio, rec.SizeLongShare, rec.TopAccLongShare,
 	)
 	if err != nil {
 		return false, err
 	}
 	n, _ := res.RowsAffected()
+	if n == 0 && (rec.SizeLongShare > 0 || rec.TopAccLongShare > 0) {
+		_, err = s.db.ExecContext(ctx, `
+UPDATE futures_snapshots
+SET size_long_share = CASE WHEN ? > 0 THEN ? ELSE size_long_share END,
+    top_acc_long_share = CASE WHEN ? > 0 THEN ? ELSE top_acc_long_share END
+WHERE metric = ? AND exchange = ? AND symbol = ? AND sampled_at_ms = ? AND predicted = ?`,
+			rec.SizeLongShare, rec.SizeLongShare, rec.TopAccLongShare, rec.TopAccLongShare,
+			rec.Metric, string(rec.Exchange), rec.Symbol, rec.SampledAt.UTC().UnixMilli(), pred,
+		)
+		if err != nil {
+			return false, err
+		}
+	}
 	return n > 0, nil
 }
 
@@ -243,7 +270,7 @@ func (s *SQLite) ListSnapshots(ctx context.Context, q domain.FuturesHistoryQuery
 	args := []any{q.Metric, q.Symbol}
 	b.WriteString(`SELECT metric, exchange, symbol, sampled_at_ms, predicted,
 		contracts, value, funding_rate, interval_hours, next_funding_ms,
-		long_share, short_share, ratio
+		long_share, short_share, ratio, size_long_share, top_acc_long_share
 		FROM futures_snapshots WHERE metric = ? AND symbol = ?`)
 	if q.Exchange != "" && q.Exchange != "all" {
 		b.WriteString(` AND exchange = ?`)
@@ -275,7 +302,7 @@ func (s *SQLite) ListSnapshots(ctx context.Context, q domain.FuturesHistoryQuery
 		var pred int
 		if err := rows.Scan(&rec.Metric, &ex, &rec.Symbol, &ms, &pred,
 			&rec.Contracts, &rec.Value, &rec.FundingRate, &rec.IntervalHours, &nextMS,
-			&rec.LongShare, &rec.ShortShare, &rec.Ratio); err != nil {
+			&rec.LongShare, &rec.ShortShare, &rec.Ratio, &rec.SizeLongShare, &rec.TopAccLongShare); err != nil {
 			return nil, err
 		}
 		rec.Exchange = domain.Exchange(ex)

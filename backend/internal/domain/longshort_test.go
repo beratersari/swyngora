@@ -80,6 +80,25 @@ func TestSizeWeightedLongShare_OppositeUsesPositions(t *testing.T) {
 	}
 }
 
+func TestHuntBlendShares_OppositeUsesTopPositions(t *testing.T) {
+	crowdLong, crowdShort := HuntBlendShares(0.70, 0)
+	sizeLong, sizeShort := HuntBlendShares(0.70, 0.32)
+	if sizeLong >= crowdLong {
+		t.Fatalf("opposite size should lean more short: crowd=%v/%v size=%v/%v", crowdLong, crowdShort, sizeLong, sizeShort)
+	}
+	if HuntBlendKind(0.70, 0.32) != "top_positions" {
+		t.Fatal("kind")
+	}
+	if HuntBlendKind(0.70, 0) != "crowd" {
+		t.Fatal("crowd")
+	}
+	ls := &FuturesSnapshot{LongShare: 0.70, SizeLongShare: 0.32}
+	a, b := HuntBlendFromSnapshot(ls)
+	if a != sizeLong || b != sizeShort {
+		t.Fatalf("snapshot %v/%v want %v/%v", a, b, sizeLong, sizeShort)
+	}
+}
+
 func TestClampLongShortHistoryLimit(t *testing.T) {
 	if ClampLongShortHistoryLimit(0) != DefaultLongShortHistoryLimit {
 		t.Fatal("default")

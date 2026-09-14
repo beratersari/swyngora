@@ -168,6 +168,33 @@ func TestSaveSymbol_DuplicateTickIgnored(t *testing.T) {
 	}
 }
 
+func TestSaveLS_StoresTopTraderSize(t *testing.T) {
+	st := &memStore{}
+	now := time.Date(2026, 8, 11, 16, 15, 0, 0, time.UTC)
+	svc := &Service{
+		Store: st,
+		LS: map[domain.Exchange]domain.LongShortRatioPort{
+			domain.ExchangeBinance: &fakeLS{ser: &domain.LongShortSeries{
+				Current: domain.LongShortPoint{Time: now, LongShare: 0.70, ShortShare: 0.30, Ratio: 2.33},
+				TopPositions: &domain.LongShortSeries{
+					Kind:    domain.LongShortKindTopPositions,
+					Current: domain.LongShortPoint{Time: now, LongShare: 0.32, ShortShare: 0.68, Ratio: 0.47},
+				},
+			}},
+		},
+	}
+	n, err := svc.SaveSymbol(context.Background(), domain.ExchangeBinance, "BTCUSDT", now)
+	if err != nil || n < 1 {
+		t.Fatalf("n=%d err=%v", n, err)
+	}
+	got, _ := st.ListSnapshots(context.Background(), domain.FuturesHistoryQuery{
+		Metric: domain.FuturesMetricLongShort, Symbol: "BTCUSDT",
+	})
+	if len(got) != 1 || got[0].SizeLongShare < 0.31 || got[0].SizeLongShare > 0.33 {
+		t.Fatalf("want top-trader size on the LS row, got %+v", got)
+	}
+}
+
 func TestWorker_RunOnceIndependentVenues(t *testing.T) {
 	st := &memStore{}
 	now := time.Date(2026, 8, 11, 16, 15, 0, 0, time.UTC)

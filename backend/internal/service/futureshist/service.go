@@ -192,14 +192,49 @@ func (s *Service) saveLS(ctx context.Context, ex domain.Exchange, symbol string,
 		if at.IsZero() {
 			continue
 		}
+		pt := domain.NormalizeLongShortPoint(p)
 		if ok, _ := s.Store.InsertSnapshot(ctx, domain.FuturesSnapshot{
 			Metric: domain.FuturesMetricLongShort, Exchange: ex, Symbol: symbol,
-			SampledAt: at, LongShare: p.LongShare, ShortShare: p.ShortShare, Ratio: p.Ratio,
+			SampledAt: at, LongShare: pt.LongShare, ShortShare: pt.ShortShare, Ratio: pt.Ratio,
+			SizeLongShare:   layerShareAt(ser.TopPositions, at),
+			TopAccLongShare: layerShareAt(ser.TopAccounts, at),
 		}); ok {
 			n++
 		}
 	}
 	return n
+}
+
+func layerShareAt(layer *domain.LongShortSeries, at time.Time) float64 {
+	if layer == nil {
+		return 0
+	}
+	pts := append([]domain.LongShortPoint{layer.Current}, layer.History...)
+	var best domain.LongShortPoint
+	found := false
+	bestDt := time.Duration(-1)
+	for _, p := range pts {
+		if p.Time.IsZero() {
+			continue
+		}
+		bucket := domain.TruncateToBucket(p.Time, snapshotBucket)
+		dt := at.Sub(bucket)
+		if dt < 0 {
+			dt = -dt
+		}
+		if dt > 10*time.Minute {
+			continue
+		}
+		if !found || dt < bestDt {
+			best = p
+			bestDt = dt
+			found = true
+		}
+	}
+	if !found {
+		return 0
+	}
+	return domain.NormalizeLongShortPoint(best).LongShare
 }
 
 // SaveLiquidation persists one event (ignore duplicates).

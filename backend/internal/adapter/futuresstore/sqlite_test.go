@@ -204,6 +204,32 @@ func TestLiquidationCoverage_Reopen(t *testing.T) {
 	}
 }
 
+func TestInsertSnapshot_BackfillsSizeLongShare(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "futures.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	at := time.Date(2026, 8, 11, 16, 0, 0, 0, time.UTC)
+	rec := domain.FuturesSnapshot{
+		Metric: domain.FuturesMetricLongShort, Exchange: domain.ExchangeBinance,
+		Symbol: "BTCUSDT", SampledAt: at, LongShare: 0.7, ShortShare: 0.3, Ratio: 2.33,
+	}
+	if ok, err := s.InsertSnapshot(context.Background(), rec); err != nil || !ok {
+		t.Fatalf("first %v %v", ok, err)
+	}
+	rec.SizeLongShare = 0.32
+	if _, err := s.InsertSnapshot(context.Background(), rec); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.ListSnapshots(context.Background(), domain.FuturesHistoryQuery{
+		Metric: domain.FuturesMetricLongShort, Symbol: "BTCUSDT",
+	})
+	if err != nil || len(got) != 1 || got[0].SizeLongShare < 0.31 || got[0].SizeLongShare > 0.33 {
+		t.Fatalf("%+v %v", got, err)
+	}
+}
+
 func TestReopenKeepsRows(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "futures.db")

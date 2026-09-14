@@ -779,12 +779,9 @@ type liquidationLevelsResponse struct {
 	Review     *liquidationLevelsReviewDTO `json:"review,omitempty"`
 }
 
-func liquidationLevelsToDTO(a *domain.LiquidationLevelsReport) liquidationLevelsResponse {
-	if a == nil {
-		return liquidationLevelsResponse{Levels: []liquidationLevelBarDTO{}, Bars: []liquidationTimeBarDTO{}}
-	}
-	levels := make([]liquidationLevelBarDTO, 0, len(a.Levels))
-	for _, lv := range a.Levels {
+func levelBarsToDTO(in []domain.LiquidationLevelBar) []liquidationLevelBarDTO {
+	levels := make([]liquidationLevelBarDTO, 0, len(in))
+	for _, lv := range in {
 		slices := make([]liquidationLeverageSliceDTO, 0, len(lv.ByLeverage))
 		for _, sl := range lv.ByLeverage {
 			slices = append(slices, liquidationLeverageSliceDTO{
@@ -803,6 +800,14 @@ func liquidationLevelsToDTO(a *domain.LiquidationLevelsReport) liquidationLevels
 			CumTotal: lv.CumTotal, ByLeverage: slices, CumByLeverage: cumSlices,
 		})
 	}
+	return levels
+}
+
+func liquidationLevelsToDTO(a *domain.LiquidationLevelsReport) liquidationLevelsResponse {
+	if a == nil {
+		return liquidationLevelsResponse{Levels: []liquidationLevelBarDTO{}, Bars: []liquidationTimeBarDTO{}}
+	}
+	levels := levelBarsToDTO(a.Levels)
 	bars := make([]liquidationTimeBarDTO, 0, len(a.Bars))
 	for _, b := range a.Bars {
 		bars = append(bars, liquidationTimeBarDTO{
@@ -844,6 +849,9 @@ type liquidationLevelsReviewBandDTO struct {
 type liquidationLevelsReviewSampleDTO struct {
 	Time      time.Time                        `json:"time"`
 	LastPrice string                           `json:"lastPrice"`
+	Lean      string                           `json:"lean,omitempty"`
+	Blend     string                           `json:"blend,omitempty"`
+	Levels    []liquidationLevelBarDTO         `json:"levels,omitempty"`
 	Bands     []liquidationLevelsReviewBandDTO `json:"bands"`
 }
 
@@ -936,7 +944,8 @@ func levelsReviewVenueToDTO(v domain.LiquidationLevelsReviewVenue) liquidationLe
 			})
 		}
 		ss = append(ss, liquidationLevelsReviewSampleDTO{
-			Time: s.Time.UTC(), LastPrice: formatHistQty(s.LastPrice), Bands: bands,
+			Time: s.Time.UTC(), LastPrice: formatHistQty(s.LastPrice), Lean: s.Lean,
+			Blend: s.Blend, Levels: levelBarsToDTO(s.Levels), Bands: bands,
 		})
 	}
 	return liquidationLevelsReviewVenueDTO{Exchange: v.Exchange, Horizons: hs, ByLeverage: bs, Samples: ss}

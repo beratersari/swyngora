@@ -257,6 +257,61 @@ func CompareLongShortLayers(general, topAcc, topPos LongShortPoint) LongShortSpl
 	return out
 }
 
+// HuntBlendShares is the long/short mix the live hunt map uses: all-account
+// count unless crowd vs top-trader size are opposite, then size wins, then
+// BlendAccountShare. Matches BuildHuntVenue.
+func HuntBlendShares(accountLong, sizeLong float64) (estLong, estShort float64) {
+	ser := &LongShortSeries{
+		Current: LongShortPoint{LongShare: accountLong, ShortShare: 1 - accountLong},
+	}
+	if sizeLong > 0 {
+		ser.TopPositions = &LongShortSeries{
+			Kind:    LongShortKindTopPositions,
+			Current: LongShortPoint{LongShare: sizeLong, ShortShare: 1 - sizeLong},
+		}
+	}
+	AttachLongShortSplit(ser)
+	blend := SizeWeightedLongShare(ser)
+	if blend <= 0 {
+		if accountLong <= 0 && sizeLong <= 0 {
+			return 0.5, 0.5
+		}
+		if accountLong > 0 {
+			blend = accountLong
+		} else {
+			blend = sizeLong
+		}
+	}
+	return BlendAccountShare(blend)
+}
+
+// HuntBlendFromSnapshot rebuilds the live hunt mix from a stored LS print.
+func HuntBlendFromSnapshot(ls *FuturesSnapshot) (estLong, estShort float64) {
+	if ls == nil {
+		return 0.5, 0.5
+	}
+	return HuntBlendShares(ls.LongShare, ls.SizeLongShare)
+}
+
+// HuntBlendKind is crowd or top_positions — what the frozen map used.
+func HuntBlendKind(accountLong, sizeLong float64) string {
+	if sizeLong <= 0 {
+		return "crowd"
+	}
+	ser := &LongShortSeries{
+		Current: LongShortPoint{LongShare: accountLong, ShortShare: 1 - accountLong},
+		TopPositions: &LongShortSeries{
+			Kind:    LongShortKindTopPositions,
+			Current: LongShortPoint{LongShare: sizeLong, ShortShare: 1 - sizeLong},
+		},
+	}
+	AttachLongShortSplit(ser)
+	if ser.Split.Alignment == AlignOpposite {
+		return "top_positions"
+	}
+	return "crowd"
+}
+
 // SizeWeightedLongShare is the long share analysis should use for "who is
 // actually positioned." When the crowd and top-trader size lean opposite,
 // size wins. Otherwise the all-account print is kept.

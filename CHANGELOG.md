@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Frozen liquidation maps keep top-trader size:** later estimates used only all-account long/short. They now persist Binance top-trader position share and rebuild with the same opposite-crowd size blend as the live hunt (`docs/features/liquidations.md`)
+
 ### Added
-- **Liquidation level review:** the chart rebuilds past estimated 10x/25x/50x/100x bands from stored open interest and last price, then scores later same-venue liquidations in those bands (hit rate, realized vs predicted, reliability by leverage). Web `/liquidations?view=chart`, `review` on `GET /api/v1/market/liquidation-levels` (`docs/features/liquidations.md`)
+- **Liquidation level review:** the chart rebuilds past estimated 10x/25x/50x/100x bands from stored open interest and last price, then scores later same-venue liquidations in those bands (hit rate, realized vs predicted, reliability by leverage). Each sample keeps a frozen map at that last so a later view does not flip shorts into longs. Web `/liquidations?view=chart`, `review` on `GET /api/v1/market/liquidation-levels` (`docs/features/liquidations.md`)
 
 ### Changed
 - **Liquidation chart:** the CoinGlass-style map now walks from last price (cumulative stacked bars + a line on the profile), uses an OI-weighted reference last when venues are combined, and aligns each venue by percent from its own last instead of snapping absolute prices (`GET /api/v1/market/liquidation-levels`, web `/liquidations?view=chart`) (`docs/features/liquidations.md`)

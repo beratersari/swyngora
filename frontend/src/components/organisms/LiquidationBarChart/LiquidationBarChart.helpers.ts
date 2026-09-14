@@ -193,6 +193,22 @@ export function newestLevelSamples(venue?: LevelsReviewVenue): NonNullable<Level
   return rows.slice(0, 8);
 }
 
+/** Live map, or a frozen past estimate that keeps shorts above that sample's last. */
+export function frozenLevelsView(
+  data: MarketLiquidationLevels | null | undefined,
+  samples: NonNullable<LevelsReviewVenue['samples']>,
+  asOf: string,
+): MarketLiquidationLevels | null | undefined {
+  if (!data || asOf === 'live') return data;
+  const sample = samples.find((s) => s.time === asOf);
+  if (!sample?.levels?.length) return data;
+  return {
+    ...data,
+    lastPrice: sample.lastPrice,
+    levels: sample.levels,
+  };
+}
+
 export function bandStatusLabel(status: string | undefined): string {
   if (status === 'hit') return 'hit';
   if (status === 'miss') return 'miss';

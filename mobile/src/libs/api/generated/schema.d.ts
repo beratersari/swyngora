@@ -4521,6 +4521,18 @@ export interface components {
             /** Format: date-time */
             time?: string;
             lastPrice?: string;
+            /**
+             * @description Heavier predicted side at this last
+             * @enum {string}
+             */
+            lean?: "long" | "short" | "even";
+            /**
+             * @description Same mix as the live hunt — top_positions when crowd vs size are opposite
+             * @enum {string}
+             */
+            blend?: "crowd" | "top_positions";
+            /** @description Frozen map at this last — shorts stay above it, longs below */
+            levels?: components["schemas"]["MarketLiquidationLevelBar"][];
             bands?: components["schemas"]["MarketLiquidationLevelsReviewBand"][];
         };
         MarketLiquidationLevelsReviewHorizon: {

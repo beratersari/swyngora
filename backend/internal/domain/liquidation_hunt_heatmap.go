@@ -332,9 +332,8 @@ func buildHuntVenueGrid(ex string, ser HuntHeatmapVenueSeries, times []time.Time
 		}
 		g.HasData[i] = true
 		withOI++
-		ls := nearestHuntSnapshotShare(ser.LongShort, t, stale*2)
+		estLong, estShort := nearestHuntBlendShares(ser.LongShort, t, stale*2)
 		fund := nearestHuntFunding(ser.Funding, t, 8*time.Hour)
-		estLong, estShort := BlendAccountShare(ls)
 		longsCrowded := fund > 1e-12
 		shortsCrowded := fund < -1e-12
 		longMix := TiltLeverageMix(DefaultHuntLeverageMix, longsCrowded)
@@ -465,10 +464,16 @@ func nearestHuntSnapshot(rows []FuturesSnapshot, at time.Time, stale time.Durati
 }
 
 func nearestHuntSnapshotShare(rows []FuturesSnapshot, at time.Time, stale time.Duration) float64 {
-	var best float64 = 0.5
+	estLong, _ := nearestHuntBlendShares(rows, at, stale)
+	return estLong
+}
+
+func nearestHuntBlendShares(rows []FuturesSnapshot, at time.Time, stale time.Duration) (estLong, estShort float64) {
+	var best *FuturesSnapshot
 	var bestDt time.Duration = -1
-	for _, r := range rows {
-		if r.LongShare <= 0 && r.ShortShare <= 0 {
+	for i := range rows {
+		r := &rows[i]
+		if r.LongShare <= 0 && r.ShortShare <= 0 && r.SizeLongShare <= 0 {
 			continue
 		}
 		dt := at.Sub(r.SampledAt)
@@ -480,14 +485,13 @@ func nearestHuntSnapshotShare(rows []FuturesSnapshot, at time.Time, stale time.D
 		}
 		if bestDt < 0 || dt < bestDt {
 			bestDt = dt
-			ls := r.LongShare
-			if ls <= 0 && r.ShortShare > 0 {
-				ls = 1 - r.ShortShare
-			}
-			best = ls
+			best = r
 		}
 	}
-	return best
+	if best == nil {
+		return 0.5, 0.5
+	}
+	return HuntBlendFromSnapshot(best)
 }
 
 func nearestHuntFunding(rows []FuturesSnapshot, at time.Time, stale time.Duration) float64 {

@@ -8302,6 +8302,12 @@ components:
       properties:
         time: { type: string, format: date-time }
         lastPrice: { type: string }
+        lean: { type: string, enum: [long, short, even], description: Heavier predicted side at this last }
+        blend: { type: string, enum: [crowd, top_positions], description: Same mix as the live hunt — top_positions when crowd vs size are opposite }
+        levels:
+          type: array
+          description: Frozen map at this last — shorts stay above it, longs below
+          items: { $ref: '#/components/schemas/MarketLiquidationLevelBar' }
         bands:
           type: array
           items: { $ref: '#/components/schemas/MarketLiquidationLevelsReviewBand' }

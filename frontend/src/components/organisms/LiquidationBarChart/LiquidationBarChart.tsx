@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Spin } from 'antd';
+import { Alert, Select, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import { Text } from '@/components/atoms/Text';
@@ -24,6 +24,7 @@ import {
   formatAxisNotional,
   formatAxisPrice,
   formatHitRate,
+  frozenLevelsView,
   isLevelsKind,
   maxCum,
   maxTotal,
@@ -65,14 +66,21 @@ export function LiquidationBarChart({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 720, h: 460 });
   const [hover, setHover] = useState<BarHover | null>(null);
-  const levels = useMemo(() => toLevelRows(data), [data]);
-  const times = useMemo(() => toTimeRows(data), [data]);
-  const mapMode = isLevelsKind(data);
-  const lastPrice = parseNotional(data?.lastPrice);
+  const [asOf, setAsOf] = useState('live');
   const review = pickLevelsReview(data);
   const reviewHorizons = review?.horizons ?? [];
   const reviewBuckets = review?.byLeverage ?? [];
   const reviewSamples = newestLevelSamples(review);
+  const frozen = useMemo(() => frozenLevelsView(data, reviewSamples, asOf), [data, reviewSamples, asOf]);
+  const levels = useMemo(() => toLevelRows(frozen), [frozen]);
+  const times = useMemo(() => toTimeRows(data), [data]);
+  const mapMode = isLevelsKind(data);
+  const lastPrice = parseNotional(frozen?.lastPrice);
+  const viewingPast = asOf !== 'live' && (frozen?.levels?.length ?? 0) > 0;
+
+  useEffect(() => {
+    setAsOf('live');
+  }, [data?.symbol, data?.exchange]);
 
   useEffect(() => {
     const el = frameRef.current;
@@ -139,8 +147,38 @@ export function LiquidationBarChart({
         </Text>
         {isFetching && !isLoading ? <Spin size="small" /> : null}
       </TitleRow>
+      {mapMode && reviewSamples.some((s) => (s.levels?.length ?? 0) > 0) ? (
+        <Select
+          aria-label={t('chart.review.asOfAria')}
+          value={reviewSamples.some((s) => s.time === asOf) ? asOf : 'live'}
+          style={{ maxWidth: 420 }}
+          onChange={setAsOf}
+          options={[
+            { value: 'live', label: t('chart.review.asOfLive') },
+            ...reviewSamples
+              .filter((s) => (s.levels?.length ?? 0) > 0)
+              .map((s) => ({
+                value: s.time ?? '',
+                label: t('chart.review.asOfEstimate', {
+                  time: formatSampleTime(s.time),
+                  last: formatAxisPrice(parseNotional(s.lastPrice)),
+                  lean:
+                    s.lean === 'short'
+                      ? t('chart.review.leanShort')
+                      : s.lean === 'long'
+                        ? t('chart.review.leanLong')
+                        : t('chart.review.leanEven'),
+                  blend:
+                    s.blend === 'top_positions'
+                      ? t('chart.review.blendTop')
+                      : t('chart.review.blendCrowd'),
+                }),
+              })),
+          ]}
+        />
+      ) : null}
       <Text variant="caption" color="secondary">
-        {mapMode ? t('chart.levelsHint') : t('chart.totalsHint')}
+        {viewingPast ? t('chart.review.frozenHint') : mapMode ? t('chart.levelsHint') : t('chart.totalsHint')}
       </Text>
       {data?.missing && data.missing.length > 0 ? (
         <Alert

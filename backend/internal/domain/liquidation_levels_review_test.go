@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strconv"
 	"testing"
 	"time"
 )
@@ -180,6 +181,75 @@ func TestLevelReliability(t *testing.T) {
 	}
 	if levelReliability(4, 0.1, 0) != LiquidationLevelsReliabilityLow {
 		t.Fatal("low")
+	}
+}
+
+func TestReviewUsesTopTraderSizeWhenOpposite(t *testing.T) {
+	t0 := time.Date(2026, 9, 3, 12, 0, 0, 0, time.UTC)
+	base := HuntHeatmapVenueSeries{
+		Exchange: ExchangeBinance,
+		Prices:   []HuntHeatmapPricePoint{{Time: t0, Price: 100}},
+		OI:       []FuturesSnapshot{{SampledAt: t0, Value: 2_000_000}},
+	}
+	crowd := base
+	crowd.LongShort = []FuturesSnapshot{{SampledAt: t0, LongShare: 0.70, ShortShare: 0.30}}
+	size := base
+	size.LongShort = []FuturesSnapshot{{SampledAt: t0, LongShare: 0.70, ShortShare: 0.30, SizeLongShare: 0.32}}
+	in := LiquidationLevelsReviewInput{Now: t0.Add(2 * time.Hour), Step: time.Hour}
+	in.Venues = []HuntHeatmapVenueSeries{crowd}
+	crowdRev := ReviewLiquidationLevels(in)
+	in.Venues = []HuntHeatmapVenueSeries{size}
+	sizeRev := ReviewLiquidationLevels(in)
+	if len(crowdRev.Binance.Samples) == 0 || len(sizeRev.Binance.Samples) == 0 {
+		t.Fatal("no samples")
+	}
+	if sizeRev.Binance.Samples[0].Blend != "top_positions" {
+		t.Fatalf("blend %q", sizeRev.Binance.Samples[0].Blend)
+	}
+	if crowdRev.Binance.Samples[0].Lean == sizeRev.Binance.Samples[0].Lean &&
+		crowdRev.Binance.Samples[0].Lean != "even" {
+		// crowd 70% long vs size 32% long should change which side is heavier
+		t.Fatalf("top-trader size must change the frozen lean: crowd=%s size=%s",
+			crowdRev.Binance.Samples[0].Lean, sizeRev.Binance.Samples[0].Lean)
+	}
+}
+
+func TestBuildLiquidationLevelsAt_KeepsShortsAboveFrozenLast(t *testing.T) {
+	frozenLast := 100.0
+	laterLast := 110.0
+	frozen := BuildLiquidationLevelsAt(ExchangeBinance, frozenLast, 2_000_000, 0.5, 0.5, 0)
+	later := BuildLiquidationLevelsAt(ExchangeBinance, laterLast, 2_000_000, 0.5, 0.5, 0)
+	if len(frozen) == 0 || len(later) == 0 {
+		t.Fatal("empty maps")
+	}
+	shortPx := frozenLast * (1 + HuntLiqDistance(100, HuntMaintenanceMargin))
+	var frozenShort, laterStillShort bool
+	for _, lv := range frozen {
+		px, _ := strconv.ParseFloat(lv.Price, 64)
+		if px < shortPx*0.997 || px > shortPx*1.003 {
+			continue
+		}
+		s, _ := strconv.ParseFloat(lv.ShortNotional, 64)
+		l, _ := strconv.ParseFloat(lv.LongNotional, 64)
+		if s > l {
+			frozenShort = true
+		}
+	}
+	for _, lv := range later {
+		px, _ := strconv.ParseFloat(lv.Price, 64)
+		if px < shortPx*0.997 || px > shortPx*1.003 {
+			continue
+		}
+		s, _ := strconv.ParseFloat(lv.ShortNotional, 64)
+		if s > 0 {
+			laterStillShort = true
+		}
+	}
+	if !frozenShort {
+		t.Fatal("frozen map must keep 100x shorts above the last that was shown")
+	}
+	if laterStillShort {
+		t.Fatal("a later last above that pocket must move the short cluster away — that is why samples keep the frozen map")
 	}
 }
 
