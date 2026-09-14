@@ -33,6 +33,7 @@
     "liquidation_feed": "Liquidation feed",
     "liquidation_cascade": "Liquidation cascade",
     "liquidation_notional": "Liquidation notional",
+    "liquidation_level": "Liquidation level",
     "setup_radar": "Setup Radar",
     "price_above": "Price ≥",
     "price_below": "Price ≤",
@@ -49,6 +50,9 @@
     "both": "Long + short",
     "long": "Longs",
     "short": "Shorts",
+    "levelAny": "Any proven-enough band",
+    "levelFair": "Fair or better",
+    "levelHigh": "High confidence only",
     "any": "Any after-path",
     "up": "Usually rose after",
     "down": "Usually fell after"
@@ -57,6 +61,7 @@
   "symbolOrAll": "BTCUSDT or empty for all",
   "minDownSeconds": "Down for (seconds)",
   "notional": "USDT notional",
+  "minConfidence": "Min confidence (0–1)",
   "window": "Window",
   "modes": {
     "one_time": "One-time",

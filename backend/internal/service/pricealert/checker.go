@@ -27,6 +27,7 @@ type LiquidationAlertSource interface {
 	GetLiquidationCascade(ctx context.Context, exchange, symbol string) (*domain.CascadeReport, error)
 	ScanLiquidationCascades(ctx context.Context, exchange string) (*domain.CascadeScan, error)
 	ListLiquidationEvents(exchange, symbol string, since time.Time) []domain.LiquidationEvent
+	GetLiquidationLevels(ctx context.Context, exchange, symbol, rawRange string) (*domain.LiquidationLevelsReport, error)
 }
 
 // SetupRadarSource compares the current tape to past pre-move setups.
@@ -50,9 +51,9 @@ type radarCoinEntry struct {
 }
 
 type radarScanEntry struct {
-	at   time.Time
-	rep  *domain.ForensicsScanReport
-	err  error
+	at  time.Time
+	rep *domain.ForensicsScanReport
+	err error
 }
 
 func tenantClosed(ctx context.Context, accounts AccountChecker, clientID string) bool {
@@ -146,6 +147,7 @@ func (c *Checker) RunOnce(ctx context.Context) {
 	bookGroups := map[bookKey][]domain.PriceAlert{}
 	var feedAlerts []domain.PriceAlert
 	notionalGroups := map[key][]domain.PriceAlert{}
+	levelGroups := map[key][]domain.PriceAlert{}
 	cascadeCoin := map[key][]domain.PriceAlert{}
 	cascadeScan := map[string][]domain.PriceAlert{}
 	radarCoin := map[key][]domain.PriceAlert{}
@@ -160,6 +162,9 @@ func (c *Checker) RunOnce(ctx context.Context) {
 		case domain.IsLiqNotionalAlert(a.Kind):
 			k := key{ex: string(a.Exchange), sym: a.Symbol}
 			notionalGroups[k] = append(notionalGroups[k], a)
+		case domain.IsLiqLevelAlert(a.Kind):
+			k := key{ex: string(a.Exchange), sym: a.Symbol}
+			levelGroups[k] = append(levelGroups[k], a)
 		case domain.IsLiqCascadeAlert(a.Kind):
 			if strings.EqualFold(a.Symbol, domain.LiqAlertSymbolAll) || strings.EqualFold(a.Symbol, "all") {
 				ex := string(a.Exchange)
@@ -212,6 +217,20 @@ func (c *Checker) RunOnce(ctx context.Context) {
 		}()
 	}
 	c.evalFeedAlerts(ctx, feedAlerts)
+	for k, alerts := range levelGroups {
+		k, alerts := k, alerts
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			select {
+			case <-ctx.Done():
+				return
+			case sem <- struct{}{}:
+			}
+			defer func() { <-sem }()
+			c.evalLevelGroup(ctx, k.ex, k.sym, alerts)
+		}()
+	}
 	for k, alerts := range notionalGroups {
 		k, alerts := k, alerts
 		wg.Add(1)
@@ -420,8 +439,10 @@ func (c *Checker) evalNotionalGroup(ctx context.Context, exchange, symbol string
 		}
 	}
 	ev := c.Liquidations.ListLiquidationEvents(exchange, symbol, since)
+	last, bands := c.levelBands(ctx, exchange, symbol)
 	for _, a := range alerts {
 		met, metric, detail := domain.NotionalAlertObservation(a, ev, now)
+		domain.AnnotateNotionalWithLevels(&detail, last, ev, bands, now)
 		st := domain.EvaluateAlertState(a, met)
 		extra := map[string]any{
 			"exchange":      detail.Exchange,
@@ -433,6 +454,17 @@ func (c *Checker) evalNotionalGroup(ctx context.Context, exchange, symbol string
 			"shortNotional": detail.ShortNotional,
 			"threshold":     detail.Threshold,
 			"count":         detail.Count,
+			"importance":    detail.Importance,
+		}
+		if detail.Level != nil {
+			extra["level"] = map[string]any{
+				"leverage":    detail.Level.Leverage,
+				"side":        detail.Level.Side,
+				"price":       detail.Level.Price,
+				"confidence":  detail.Level.Confidence,
+				"reliability": detail.Level.Reliability,
+				"realized":    detail.Level.Realized,
+			}
 		}
 		updated, fired, err := c.Alerts.ProcessObservationExtra(ctx, a, st, metric, now, extra)
 		if err != nil {
@@ -446,6 +478,63 @@ func (c *Checker) evalNotionalGroup(ctx context.Context, exchange, symbol string
 			"id", updated.ID, "clientId", updated.ClientID,
 			"exchange", detail.Exchange, "symbol", detail.Symbol,
 			"side", detail.Side, "window", detail.Window, "notional", detail.Notional,
+			"importance", detail.Importance,
+		)
+	}
+}
+
+func (c *Checker) levelBands(ctx context.Context, exchange, symbol string) (float64, []domain.LevelAlertBand) {
+	if c == nil || c.Liquidations == nil {
+		return 0, nil
+	}
+	rep, err := c.Liquidations.GetLiquidationLevels(ctx, exchange, symbol, "24h")
+	if err != nil || rep == nil || rep.Review == nil {
+		return 0, nil
+	}
+	last, _ := strconv.ParseFloat(rep.LastPrice, 64)
+	venue := domain.ReviewVenueForLevels(*rep.Review, exchange)
+	if len(venue.ByLeverage) == 0 {
+		venue = rep.Review.Combined
+	}
+	return last, domain.BuildLevelAlertBands(last, venue.ByLeverage)
+}
+
+func (c *Checker) evalLevelGroup(ctx context.Context, exchange, symbol string, alerts []domain.PriceAlert) {
+	if c.Liquidations == nil || len(alerts) == 0 {
+		return
+	}
+	now := c.now().UTC()
+	last, bands := c.levelBands(ctx, exchange, symbol)
+	ev := c.Liquidations.ListLiquidationEvents(exchange, symbol, now.Add(-domain.DefaultLiqNotionalWindow))
+	for _, a := range alerts {
+		met, metric, detail := domain.LevelAlertObservation(a, last, bands, ev, now)
+		st := domain.EvaluateAlertState(a, met)
+		extra := map[string]any{
+			"exchange":      detail.Exchange,
+			"symbol":        detail.Symbol,
+			"side":          detail.Side,
+			"leverage":      detail.Leverage,
+			"levelPrice":    detail.Price,
+			"confidence":    detail.Confidence,
+			"reliability":   detail.Reliability,
+			"importance":    detail.Importance,
+			"reason":        detail.Reason,
+			"realized":      detail.Realized,
+			"minConfidence": detail.MinConfidence,
+		}
+		updated, fired, err := c.Alerts.ProcessObservationExtra(ctx, a, st, metric, now, extra)
+		if err != nil {
+			c.Logger.Debug("process liquidation level alert failed", "id", a.ID, "err", err)
+			continue
+		}
+		if !fired || updated == nil {
+			continue
+		}
+		c.Logger.Info("liquidation level alert triggered",
+			"id", updated.ID, "clientId", updated.ClientID,
+			"exchange", detail.Exchange, "symbol", detail.Symbol,
+			"leverage", detail.Leverage, "side", detail.Side,
+			"importance", detail.Importance, "confidence", detail.Confidence,
 		)
 	}
 }

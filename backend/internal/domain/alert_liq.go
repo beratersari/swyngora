@@ -49,11 +49,6 @@ func IsLiqNotionalAlert(k AlertKind) bool {
 	return ok && k == AlertKindLiqNotional
 }
 
-// IsLiquidationAlert is feed, cascade, or notional.
-func IsLiquidationAlert(k AlertKind) bool {
-	return IsLiqFeedAlert(k) || IsLiqCascadeAlert(k) || IsLiqNotionalAlert(k)
-}
-
 // LiqFeedAlertThreshold is the min unhealthy duration (targetPrice as seconds).
 func LiqFeedAlertThreshold(a PriceAlert) time.Duration {
 	sec := a.TargetPrice
@@ -334,6 +329,8 @@ type LiqNotionalAlertDetail struct {
 	ShortNotional float64
 	Threshold     float64
 	Count         int
+	Importance    string
+	Level         *LiqLevelHit
 }
 
 // NotionalAlertObservation sums prints in the lookback. Met when the chosen
@@ -431,6 +428,8 @@ func validateLiqAlertSpec(kind AlertKind, condition string, target, rangePct flo
 		if _, _, err := ParseLiqNotionalWindow(rangePct, ""); err != nil {
 			return err
 		}
+	case AlertKindLiqLevel:
+		return validateLiqLevelSpec(condition, target)
 	}
 	return nil
 }

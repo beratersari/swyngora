@@ -11,6 +11,7 @@ describe('AlertsTable helpers', () => {
     );
     expect(alertSymbolLabel({ kind: 'liquidation_feed', symbol: 'ALL' })).toBe('all coins');
     expect(alertSymbolLabel({ kind: 'liquidation_cascade', symbol: 'BTCUSDT' })).toBe('BTCUSDT');
+    expect(alertConditionLabel({ kind: 'liquidation_level', condition: 'high' })).toBe('level high');
     expect(alertConditionLabel({ kind: 'liquidation_notional', condition: 'long', targetPrice: 20000000, rangePct: 5 })).toBe(
       'long ≥ 20000000 / 5m',
     );

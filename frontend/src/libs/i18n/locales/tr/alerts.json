@@ -33,6 +33,7 @@
     "liquidation_feed": "Likidasyon akışı",
     "liquidation_cascade": "Likidasyon kaskadı",
     "liquidation_notional": "Likidasyon tutarı",
+    "liquidation_level": "Likidasyon seviyesi",
     "setup_radar": "Kurulum radarı",
     "price_above": "Fiyat ≥",
     "price_below": "Fiyat ≤",
@@ -49,6 +50,9 @@
     "both": "Long + short",
     "long": "Long",
     "short": "Short",
+    "levelAny": "Yeterince kanıtlı bant",
+    "levelFair": "Orta veya daha iyi",
+    "levelHigh": "Yalnız yüksek güven",
     "any": "Herhangi bir sonrası",
     "up": "Sonrasında çoğunlukla yükseldi",
     "down": "Sonrasında çoğunlukla düştü"
@@ -57,6 +61,7 @@
   "symbolOrAll": "BTCUSDT veya tümü için boş",
   "minDownSeconds": "Kesinti (saniye)",
   "notional": "USDT tutar",
+  "minConfidence": "Min güven (0–1)",
   "window": "Pencere",
   "modes": {
     "one_time": "Tek sefer",

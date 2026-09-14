@@ -537,6 +537,7 @@ type fakeLiq struct {
 	rep    *domain.CascadeReport
 	scan   *domain.CascadeScan
 	events []domain.LiquidationEvent
+	levels *domain.LiquidationLevelsReport
 }
 
 func (f *fakeLiq) GetLiquidationFeed(string) domain.LiquidationFeed { return f.feed }
@@ -548,6 +549,59 @@ func (f *fakeLiq) ScanLiquidationCascades(context.Context, string) (*domain.Casc
 }
 func (f *fakeLiq) ListLiquidationEvents(string, string, time.Time) []domain.LiquidationEvent {
 	return f.events
+}
+func (f *fakeLiq) GetLiquidationLevels(context.Context, string, string, string) (*domain.LiquidationLevelsReport, error) {
+	return f.levels, nil
+}
+
+func TestCreate_LiquidationLevel(t *testing.T) {
+	svc, _ := newSvc(t)
+	got, err := svc.Create(context.Background(), CreateInput{
+		ClientID: "lv", Kind: "liquidation_level", Exchange: "binance", Symbol: "BTCUSDT",
+		Condition: "high",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Kind != domain.AlertKindLiqLevel || got.Condition != "high" || !got.Armed {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestChecker_LevelAlertSkipsLowConfidence(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	high, err := svc.Create(ctx, CreateInput{
+		ClientID: "lv", Kind: "liquidation_level", Exchange: "binance", Symbol: "BTCUSDT",
+		Condition: "high",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 14, 15, 0, 0, 0, time.UTC)
+	src := &fakeLiq{
+		events: []domain.LiquidationEvent{{
+			Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Side: domain.LiquidationSideShort,
+			Price: 100.6, Notional: 20_000, Time: now.Add(-time.Minute),
+		}},
+		levels: &domain.LiquidationLevelsReport{
+			LastPrice: "100",
+			Review: &domain.LiquidationLevelsReview{
+				Combined: domain.LiquidationLevelsReviewVenue{
+					ByLeverage: []domain.LiquidationLevelsReviewBucket{
+						{Leverage: 100, Side: domain.LiquidationSideShort, Validated: 20, HitRate: 0.6, Reliability: domain.LiquidationLevelsReliabilityHigh, Confidence: 1},
+						{Leverage: 10, Side: domain.LiquidationSideShort, Validated: 20, HitRate: 0, Reliability: domain.LiquidationLevelsReliabilityLow, Confidence: 0.15},
+					},
+				},
+			},
+		},
+	}
+	c := &Checker{Alerts: svc, Liquidations: src, now: func() time.Time { return now }}
+	c.RunOnce(ctx)
+	got, _ := svc.Get(ctx, "lv", high.ID)
+	if got.Armed {
+		t.Fatalf("high-confidence 100x at last 100.6 should fire %+v", got)
+	}
 }
 
 func TestChecker_LiquidationFeedNoRetrigger(t *testing.T) {

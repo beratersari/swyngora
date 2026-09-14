@@ -122,6 +122,7 @@ type DataPort interface {
 	CreateLiquidationFeedAlert(ctx context.Context, clientID, exchange string, minDownSeconds float64, mode string) (json.RawMessage, error)
 	CreateLiquidationCascadeAlert(ctx context.Context, clientID, exchange, symbol, minGrade, mode string) (json.RawMessage, error)
 	CreateLiquidationNotionalAlert(ctx context.Context, clientID, exchange, symbol, side string, notional float64, window, mode string) (json.RawMessage, error)
+	CreateLiquidationLevelAlert(ctx context.Context, clientID, exchange, symbol, minReliability string, minConfidence float64, mode string) (json.RawMessage, error)
 	CreateSetupRadarAlert(ctx context.Context, clientID, exchange, symbol, lean string, minSimilarity float64, mode string) (json.RawMessage, error)
 	DeletePriceAlert(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	GetAlertWebhook(ctx context.Context, clientID string) (json.RawMessage, error)
@@ -2100,6 +2101,30 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.CreateLiquidationCascadeAlert(ctx, clientID, req.GetString("exchange", "all"), symbol, req.GetString("minGrade", ""), req.GetString("mode", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("create_liquidation_level_alert",
+		mcp.WithDescription("Alert when last price or later prints hit a predicted 10x/25x/50x/100x liquidation band. minReliability=any (default) | fair | high. Low-confidence bands that keep missing later prints do not fire the same alert as bands that keep working. minConfidence 0–1 overrides the default floor (any=0.35, fair=0.45, high=0.80). Payload includes importance, leverage, side, and confidence. Repeating: one fire while in/printing in a qualifying band, re-arms when none qualify."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all)")),
+		mcp.WithString("minReliability", mcp.Description("any (default) | fair | high")),
+		mcp.WithNumber("minConfidence", mcp.Description("0–1 floor; 0 uses the default for minReliability")),
+		mcp.WithString("mode", mcp.Description("repeating (default) | one_time")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CreateLiquidationLevelAlert(ctx, clientID, req.GetString("exchange", "all"), symbol, req.GetString("minReliability", "any"), req.GetFloat("minConfidence", 0), req.GetString("mode", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

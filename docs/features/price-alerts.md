@@ -53,6 +53,7 @@ PUT /api/v1/alerts/webhook
 | `liquidation_feed` | Binance / Bybit liquidation websocket down or stalled | `down` / `gap` / empty | Min down seconds (`0` = 300) | `repeating` |
 | `liquidation_cascade` | A coin (or market `symbol=all`) hits a cascade grade | `cascade` (default) / `extreme` / `elevated` | unused | `repeating` |
 | `liquidation_notional` | Long / short / total USDT liquidated in a window | `long` / `short` / `both` | USDT amount (e.g. 20000000) | `repeating` |
+| `liquidation_level` | Last price or later prints hit a predicted 10x/25x/50x/100x band that clears later-print confidence | `any` (default) / `fair` / `high` | Min confidence 0–1 (`0` = default for that floor) | `repeating` |
 | `setup_radar` | Current tape looks like the setup before that coin's own important past moves (Setup Radar / Forensics Now) | `any` (default) / `up` / `down` | Min similarity 40–100 (`0` = 60) | `repeating` |
 
 Book kinds are evaluated in the background from the same live local books as `GET /api/v1/market/orderbook` (Binance, Coinbase, Bybit). Repeating book alerts fire when the condition **appears**, stay quiet while it remains true, and re-arm after it clears so the next appearance can fire again.
@@ -114,7 +115,19 @@ POST /api/v1/alerts
 }
 ```
 
-`liquidation_notional` sums Binance + Bybit when `exchange=all`. Repeating fires when the rolling window first crosses the dollar line, stays quiet while that wave stays above it, and re-arms when the window drops so the next wave can fire. `window` is `1m` / `5m` / `15m` / `1h` (default 5m).
+`liquidation_notional` sums Binance + Bybit when `exchange=all`. Repeating fires when the rolling window first crosses the dollar line, stays quiet while that wave stays above it, and re-arms when the window drops so the next wave can fire. `window` is `1m` / `5m` / `15m` / `1h` (default 5m). The payload includes `importance` and an optional `level` (leverage / side / confidence) when those prints landed in a predicted band — a high-confidence 100x pocket is not the same alert as a low-confidence 10x miss.
+
+```json
+POST /api/v1/alerts
+{
+  "kind": "liquidation_level",
+  "exchange": "all",
+  "symbol": "BTCUSDT",
+  "condition": "high"
+}
+```
+
+`liquidation_level` fires when last price or later prints sit in a predicted 10x/25x/50x/100x band that clears later-print confidence. `condition=any` (default floor 0.35), `fair` (0.45), or `high` (0.80). An explicit `targetPrice` in 0–1 overrides the floor. Low-confidence bands that keep missing later prints do not fire. The payload `importance` is `high` / `medium` / `low` from that band's confidence.
 
 ```json
 POST /api/v1/alerts

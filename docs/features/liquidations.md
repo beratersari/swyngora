@@ -67,7 +67,9 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
   Frozen maps use the same mix as live hunt: all-account crowding unless
   Binance crowd vs **top-trader size** are opposite, then size wins.
   The **live** map then shrinks 10x/25x/50x/100x bands by that later-print
-  hit rate so weak levels are shorter and faded.
+  hit rate so weak levels are shorter and faded. The same confidence drives
+  `liquidation_level` alerts and tags `liquidation_notional` fires with
+  `importance` (see [`price-alerts.md`](price-alerts.md)).
   A quiet window is a miss only when the liquidation feed covers the
   look-ahead; pending / missing tape is not a miss. Combined sums
   independent venues.

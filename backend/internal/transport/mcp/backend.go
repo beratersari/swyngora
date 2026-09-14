@@ -2469,6 +2469,25 @@ func (b *Backend) CreateLiquidationCascadeAlert(ctx context.Context, clientID, e
 	return alertJSON(a)
 }
 
+func (b *Backend) CreateLiquidationLevelAlert(ctx context.Context, clientID, exchange, symbol, minReliability string, minConfidence float64, mode string) (json.RawMessage, error) {
+	if b.Alerts == nil {
+		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
+	}
+	a, err := b.Alerts.Create(ctx, pricealert.CreateInput{
+		ClientID:    clientID,
+		Exchange:    exchange,
+		Symbol:      symbol,
+		Kind:        string(domain.AlertKindLiqLevel),
+		Condition:   minReliability,
+		TargetPrice: minConfidence,
+		Mode:        mode,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return alertJSON(a)
+}
+
 func (b *Backend) CreateLiquidationNotionalAlert(ctx context.Context, clientID, exchange, symbol, side string, notional float64, window, mode string) (json.RawMessage, error) {
 	if b.Alerts == nil {
 		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
@@ -3662,9 +3681,9 @@ func rebalanceResultMap(r *domain.RebalanceResult, kids bool) map[string]any {
 		"beforeCash": r.BeforeCash, "afterCash": r.AfterCash,
 		"remainingAbsDriftPct": r.RemainingAbsDriftPct, "maxSleeveDriftPct": r.MaxSleeveDriftPct,
 		"remainingNotional": r.RemainingNotional,
-		"totalFee": r.TotalFee, "totalSlippage": r.TotalSlippage, "totalCost": r.TotalCost,
+		"totalFee":          r.TotalFee, "totalSlippage": r.TotalSlippage, "totalCost": r.TotalCost,
 		"summary": r.Summary, "note": r.Note,
-		"createdAt": r.CreatedAt.UTC().Format(time.RFC3339Nano),
+		"createdAt":    r.CreatedAt.UTC().Format(time.RFC3339Nano),
 		"attemptCount": r.AttemptCount, "canContinue": r.CanContinue,
 	}
 	if !kids {
@@ -5097,7 +5116,7 @@ func priceDiffOppMap(o *domain.PriceDiffOpportunity) map[string]any {
 		ticks := make([]map[string]any, 0, len(o.Ticks))
 		for _, tick := range o.Ticks {
 			ticks = append(ticks, map[string]any{
-				"at": tick.At.UTC().Format(time.RFC3339Nano),
+				"at":       tick.At.UTC().Format(time.RFC3339Nano),
 				"buyPrice": tick.BuyPrice, "sellPrice": tick.SellPrice,
 				"grossDiffPct": tick.GrossDiffPct, "netDiffPct": tick.NetDiffPct,
 				"profit": tick.Profit, "executable": tick.Executable,

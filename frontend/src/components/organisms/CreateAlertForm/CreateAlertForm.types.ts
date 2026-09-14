@@ -5,6 +5,7 @@ export type AlertKind =
   | 'liquidation_feed'
   | 'liquidation_cascade'
   | 'liquidation_notional'
+  | 'liquidation_level'
   | 'setup_radar';
 
 export type CreateAlertFormProps = {

@@ -62,7 +62,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 	}
 	kind, ok := domain.NormalizeAlertKind(in.Kind)
 	if !ok {
-		return nil, fmt.Errorf("%w: kind must be price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional, or setup_radar", domain.ErrInvalidArgument)
+		return nil, fmt.Errorf("%w: kind must be price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional, liquidation_level, or setup_radar", domain.ErrInvalidArgument)
 	}
 	ex, sym, err := normalizeExchangeSymbolForKind(kind, in.Exchange, in.Symbol)
 	if err != nil {
@@ -149,6 +149,8 @@ func (s *Service) prepareLiquidationTape(ctx context.Context, a *domain.PriceAle
 		lookback = domain.LiqNotionalWindow(*a)
 	case domain.IsLiqCascadeAlert(a.Kind):
 		lookback = 6 * time.Hour
+	case domain.IsLiqLevelAlert(a.Kind):
+		lookback = domain.DefaultLiqNotionalWindow
 	}
 	s.Tape.Prepare(ctx, string(a.Exchange), sym, lookback)
 }
@@ -548,6 +550,8 @@ func buildAlertWebhookPayload(a *domain.PriceAlert, extra map[string]any) (strin
 		typ = "liquidation_cascade.triggered"
 	case domain.IsLiqNotionalAlert(a.Kind):
 		typ = "liquidation_notional.triggered"
+	case domain.IsLiqLevelAlert(a.Kind):
+		typ = "liquidation_level.triggered"
 	case domain.IsSetupRadarAlert(a.Kind):
 		typ = "setup_radar.triggered"
 	}
@@ -615,7 +619,7 @@ func normalizeExchangeSymbolForKind(kind domain.AlertKind, exchange, symbol stri
 	if kind == domain.AlertKindLiqFeed {
 		return domain.Exchange(ex), domain.LiqAlertSymbolAll, nil
 	}
-	if kind == domain.AlertKindLiqNotional {
+	if kind == domain.AlertKindLiqNotional || kind == domain.AlertKindLiqLevel {
 		sym := domain.NormalizeLiquidationSymbol(symbol)
 		if sym == "" || strings.EqualFold(sym, "all") {
 			return "", "", fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)

@@ -25,6 +25,7 @@ const RADAR_KINDS = new Set<AlertKind>([
   'liquidation_feed',
   'liquidation_cascade',
   'liquidation_notional',
+  'liquidation_level',
   'setup_radar',
 ]);
 const RADAR_EXCHANGES = new Set(['binance', 'bybit', 'okx', 'all']);

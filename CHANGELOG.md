@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Liquidation level alerts:** `kind=liquidation_level` fires when last price or later prints hit a predicted 10x/25x/50x/100x band that clears later-print confidence (`any` / `fair` / `high`). Low-confidence bands do not fire the same alert as bands that keep working. Notional alerts now include `importance` and the matching level when prints land in a predicted pocket (`docs/features/price-alerts.md`)
+
 ### Changed
 - **Liquidation map uses later-print confidence:** live 10x/25x/50x/100x bars shrink and fade when that leverage rarely printed later, and stay full when it did (`GET /api/v1/market/liquidation-levels`, web `/liquidations?view=chart`) (`docs/features/liquidations.md`)
 

@@ -1454,6 +1454,19 @@ func (c *APIClient) CreateLiquidationCascadeAlert(ctx context.Context, clientID,
 	})
 }
 
+// CreateLiquidationLevelAlert alerts when price or prints hit a confident predicted band.
+func (c *APIClient) CreateLiquidationLevelAlert(ctx context.Context, clientID, exchange, symbol, minReliability string, minConfidence float64, mode string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/alerts", map[string]any{
+		"clientId":    clientID,
+		"exchange":    exchange,
+		"symbol":      symbol,
+		"kind":        "liquidation_level",
+		"condition":   minReliability,
+		"targetPrice": minConfidence,
+		"mode":        mode,
+	})
+}
+
 // CreateLiquidationNotionalAlert alerts when window notional crosses a USDT line.
 func (c *APIClient) CreateLiquidationNotionalAlert(ctx context.Context, clientID, exchange, symbol, side string, notional float64, window, mode string) (json.RawMessage, error) {
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/alerts", map[string]any{
