@@ -8229,6 +8229,8 @@ components:
         leverage: { type: integer, enum: [10, 25, 50, 100] }
         longNotional: { type: string }
         shortNotional: { type: string }
+        longConfidence: { type: number, description: 0–1 live-map weight from later-print hit rate }
+        shortConfidence: { type: number }
     MarketLiquidationLevelBar:
       type: object
       properties:
@@ -8339,6 +8341,7 @@ components:
         realized: { type: string }
         fillRate: { type: number }
         reliability: { type: string, enum: [high, fair, low, unknown] }
+        confidence: { type: number, description: 0–1 weight applied to the live map }
     MarketLiquidationLevelsReviewVenue:
       type: object
       properties:

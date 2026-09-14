@@ -33,9 +33,11 @@ var ChartLeverageBuckets = []int{ChartLeverage10, ChartLeverage25, ChartLeverage
 
 // LiquidationLeverageSlice is notional at one display leverage on one bar.
 type LiquidationLeverageSlice struct {
-	Leverage      int
-	LongNotional  string
-	ShortNotional string
+	Leverage        int
+	LongNotional    string
+	ShortNotional   string
+	LongConfidence  float64 // 0–1 display weight from later-print review
+	ShortConfidence float64
 }
 
 // LiquidationLevelBar is estimated long/short notional at one price.

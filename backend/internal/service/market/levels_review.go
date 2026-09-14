@@ -24,4 +24,6 @@ func (s *Service) attachLiquidationLevelsReview(ctx context.Context, rep *domain
 		Now: now, Step: spec.Step, Venues: venues,
 	})
 	rep.Review = &rev
+	venue := domain.ReviewVenueForLevels(rev, ex)
+	rep.Levels = domain.ApplyLevelConfidence(rep.Levels, venue.ByLeverage)
 }

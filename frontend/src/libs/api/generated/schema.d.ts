@@ -4452,6 +4452,9 @@ export interface components {
             leverage?: 10 | 25 | 50 | 100;
             longNotional?: string;
             shortNotional?: string;
+            /** @description 0–1 live-map weight from later-print hit rate */
+            longConfidence?: number;
+            shortConfidence?: number;
         };
         MarketLiquidationLevelBar: {
             price?: string;
@@ -4564,6 +4567,8 @@ export interface components {
             fillRate?: number;
             /** @enum {string} */
             reliability?: "high" | "fair" | "low" | "unknown";
+            /** @description 0–1 weight applied to the live map */
+            confidence?: number;
         };
         MarketLiquidationLevelsReviewVenue: {
             exchange?: string;

@@ -29,8 +29,10 @@ import {
   maxCum,
   maxTotal,
   newestLevelSamples,
+  legendOpacity,
   parseNotional,
   pickLevelsReview,
+  sliceConfidence,
   toLevelRows,
   toTimeRows,
 } from './LiquidationBarChart.helpers';
@@ -190,7 +192,11 @@ export function LiquidationBarChart({
       <LegendRow>
         {mapMode
           ? LIQ_LEVERAGE_ORDER.map((lev) => (
-              <Swatch key={lev} $color={LIQ_LEVERAGE_COLOR[lev]}>
+              <Swatch
+                key={lev}
+                $color={LIQ_LEVERAGE_COLOR[lev]}
+                style={{ opacity: legendOpacity(reviewBuckets, lev) }}
+              >
                 {t('chart.leverage', { lev })}
               </Swatch>
             ))
@@ -305,6 +311,7 @@ export function LiquidationBarChart({
                     <th>{t('chart.review.hitRate')}</th>
                     <th>{t('chart.review.fill')}</th>
                     <th>{t('chart.review.reliability')}</th>
+                    <th>{t('chart.review.confidence')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -322,6 +329,7 @@ export function LiquidationBarChart({
                           {t(`chart.review.grades.${row.reliability ?? 'unknown'}`)}
                         </Reliability>
                       </td>
+                      <td>{row.confidence ? formatHitRate(row.confidence) : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -445,11 +453,14 @@ function drawLevels(
     for (const lev of LIQ_LEVERAGE_ORDER) {
       const n = cumSliceNotional(row, lev, side);
       if (n <= 0) continue;
+      const conf = sliceConfidence(row, lev, side);
       const bw = (n / peak) * plotW;
+      ctx.globalAlpha = 0.28 + 0.72 * conf;
       ctx.fillStyle = LIQ_LEVERAGE_COLOR[lev];
       ctx.fillRect(x, y, Math.max(1, bw), bh);
       x += bw;
     }
+    ctx.globalAlpha = 1;
     const tipX = box.x + 1 + (row.cumTotal / peak) * plotW;
     tips.push({ x: tipX, y: y + bh / 2 });
   });

@@ -169,6 +169,59 @@ func TestReviewLiquidationLevels_WrongSideAndNoPrice(t *testing.T) {
 	}
 }
 
+func TestApplyLevelConfidence_ShrinksWeakBands(t *testing.T) {
+	levels := []LiquidationLevelBar{{
+		Price: "101", LongNotional: "0", ShortNotional: "100", TotalNotional: "100",
+		CumShort: "100", CumTotal: "100",
+		ByLeverage: []LiquidationLeverageSlice{
+			{Leverage: 100, LongNotional: "0", ShortNotional: "100"},
+			{Leverage: 10, LongNotional: "0", ShortNotional: "100"},
+		},
+		CumByLeverage: []LiquidationLeverageSlice{
+			{Leverage: 100, LongNotional: "0", ShortNotional: "100"},
+			{Leverage: 10, LongNotional: "0", ShortNotional: "100"},
+		},
+	}}
+	got := ApplyLevelConfidence(levels, []LiquidationLevelsReviewBucket{
+		{Leverage: 100, Side: LiquidationSideShort, Validated: 20, HitRate: 0.50, Reliability: LiquidationLevelsReliabilityHigh},
+		{Leverage: 10, Side: LiquidationSideShort, Validated: 20, HitRate: 0, Reliability: LiquidationLevelsReliabilityLow},
+	})
+	if len(got) != 1 {
+		t.Fatal(got)
+	}
+	var strong, weak float64
+	for _, sl := range got[0].ByLeverage {
+		n, _ := strconv.ParseFloat(sl.ShortNotional, 64)
+		if sl.Leverage == 100 {
+			strong = n
+			if sl.ShortConfidence < 0.9 {
+				t.Fatalf("100x conf %v", sl.ShortConfidence)
+			}
+		}
+		if sl.Leverage == 10 {
+			weak = n
+			if sl.ShortConfidence > 0.25 {
+				t.Fatalf("10x conf %v", sl.ShortConfidence)
+			}
+		}
+	}
+	if !(strong > weak*2) {
+		t.Fatalf("strong=%v should dwarf weak=%v", strong, weak)
+	}
+}
+
+func TestLevelConfidenceWeight(t *testing.T) {
+	if LevelConfidenceWeight(2, 1) != 0.55 {
+		t.Fatal("unproven")
+	}
+	if LevelConfidenceWeight(10, 0.5) < 0.95 {
+		t.Fatal("high hits")
+	}
+	if LevelConfidenceWeight(10, 0) > 0.16 {
+		t.Fatal("zero hits")
+	}
+}
+
 func TestLevelReliability(t *testing.T) {
 	if levelReliability(2, 1, 1) != LiquidationLevelsReliabilityUnknown {
 		t.Fatal("unknown")

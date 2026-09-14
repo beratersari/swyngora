@@ -11,6 +11,8 @@ export type LeverageSlice = {
   leverage: 10 | 25 | 50 | 100;
   longN: number;
   shortN: number;
+  longConf: number;
+  shortConf: number;
 };
 
 export type LevelRow = {

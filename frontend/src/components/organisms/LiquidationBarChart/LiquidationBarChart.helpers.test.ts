@@ -5,6 +5,7 @@ import {
   formatHitRate,
   frozenLevelsView,
   isLevelsKind,
+  legendOpacity,
   maxCum,
   maxSide,
   pickLevelsReview,
@@ -91,6 +92,9 @@ describe('LiquidationBarChart helpers', () => {
     expect(far?.cumTotal).toBe(120);
     expect(far?.cumByLeverage.find((s) => s.leverage === 100)?.shortN).toBe(40);
     expect(formatAxisNotional(1_250_000)).toBe('1.3M');
+    expect(legendOpacity([{ leverage: 10, confidence: 0.2 }, { leverage: 100, confidence: 1 }], 10)).toBeLessThan(
+      legendOpacity([{ leverage: 10, confidence: 0.2 }, { leverage: 100, confidence: 1 }], 100),
+    );
   });
 
   it('picks combined review and formats hit rate', () => {

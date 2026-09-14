@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -79,6 +81,7 @@ type LiquidationLevelsReviewBucket struct {
 	Realized    float64
 	FillRate    float64
 	Reliability string
+	Confidence  float64 // 0–1 live-map weight from later hits
 }
 
 // LiquidationLevelsReviewVenue is one venue's (or combined) calibration.
@@ -99,7 +102,7 @@ type LiquidationLevelsReview struct {
 	Note     string
 }
 
-const liquidationLevelsReviewNote = "Each past estimate is rebuilt from that venue's own last price, open interest, and the same 10x/25x/50x/100x mix as the live map, and kept as a frozen map (shorts above that last, longs below). Open a past estimate to see the same prediction later — today's last does not re-center it. Later liquidations count only when they print on that venue, on the same side, and inside the band around the predicted price. A quiet window is a miss only when liquidation history covers the look-ahead; pending / missing tape is not a miss. Combined sums independent venues and never copies the other book. Informational only."
+const liquidationLevelsReviewNote = "Each past estimate is rebuilt from that venue's own last price, open interest, and the same 10x/25x/50x/100x mix as the live map, and kept as a frozen map (shorts above that last, longs below). Open a past estimate to see the same prediction later — today's last does not re-center it. Later liquidations count only when they print on that venue, on the same side, and inside the band around the predicted price. A quiet window is a miss only when liquidation history covers the look-ahead; pending / missing tape is not a miss. Combined sums independent venues and never copies the other book. The live map shrinks leverage bands that rarely printed later and keeps full size for bands that did. Informational only."
 
 // LiquidationLevelsReviewInput is history used to rebuild and score past maps.
 type LiquidationLevelsReviewInput struct {
@@ -279,6 +282,7 @@ func rebuildLevelSamples(ser HuntHeatmapVenueSeries, now time.Time, step, stale 
 				Signals: h.Signals, Validated: h.Validated, Hits: h.Hits,
 				HitRate: h.HitRate, Predicted: h.Predicted, Realized: h.Realized,
 				FillRate: h.FillRate, Reliability: levelReliability(h.Validated, h.HitRate, h.FillRate),
+				Confidence: LevelConfidenceWeight(h.Validated, h.HitRate),
 			})
 		}
 	}
@@ -611,13 +615,127 @@ func levelReliability(validated int, hitRate, fillRate float64) string {
 	if validated < LiquidationLevelsReviewMinValidated {
 		return LiquidationLevelsReliabilityUnknown
 	}
-	if hitRate >= 0.55 && fillRate >= 0.10 {
+	// Hit rate is the useful signal. Fill stays tiny because the model
+	// sizes the whole OI mix and only a slice actually prints.
+	_ = fillRate
+	if hitRate >= 0.45 {
 		return LiquidationLevelsReliabilityHigh
 	}
-	if hitRate >= 0.30 {
+	if hitRate >= 0.20 {
 		return LiquidationLevelsReliabilityFair
 	}
 	return LiquidationLevelsReliabilityLow
+}
+
+// LevelConfidenceWeight is how strongly the live map should show a band.
+// Unproven stays mid so we do not invent distrust; proven-low shrinks;
+// proven-high stays full.
+func LevelConfidenceWeight(validated int, hitRate float64) float64 {
+	if validated < LiquidationLevelsReviewMinValidated {
+		return 0.55
+	}
+	w := 0.15 + hitRate/0.45*0.85
+	if w > 1 {
+		return 1
+	}
+	if w < 0.15 {
+		return 0.15
+	}
+	return w
+}
+
+func reviewConfidenceTable(buckets []LiquidationLevelsReviewBucket) map[[2]int]float64 {
+	out := map[[2]int]float64{}
+	for _, b := range buckets {
+		side := 0
+		if b.Side == LiquidationSideShort {
+			side = 1
+		}
+		out[[2]int{b.Leverage, side}] = LevelConfidenceWeight(b.Validated, b.HitRate)
+	}
+	return out
+}
+
+func confidenceFor(table map[[2]int]float64, lev int, side string) float64 {
+	sideN := 0
+	if side == LiquidationSideShort {
+		sideN = 1
+	}
+	if w, ok := table[[2]int{lev, sideN}]; ok {
+		return w
+	}
+	return 0.55
+}
+
+// ReviewVenueForLevels picks the review that matches the live map's exchange.
+func ReviewVenueForLevels(r LiquidationLevelsReview, exchange string) LiquidationLevelsReviewVenue {
+	switch strings.ToLower(strings.TrimSpace(exchange)) {
+	case string(ExchangeBinance):
+		return r.Binance
+	case string(ExchangeBybit):
+		return r.Bybit
+	case string(ExchangeOKX):
+		return r.OKX
+	default:
+		return r.Combined
+	}
+}
+
+// ApplyLevelConfidence scales live bars by later-print hit rate so weak
+// leverage bands shrink and strong ones keep their size.
+func ApplyLevelConfidence(levels []LiquidationLevelBar, buckets []LiquidationLevelsReviewBucket) []LiquidationLevelBar {
+	if len(levels) == 0 {
+		return levels
+	}
+	table := reviewConfidenceTable(buckets)
+	out := make([]LiquidationLevelBar, len(levels))
+	for i, lv := range levels {
+		lv.ByLeverage = scaleConfidenceSlices(lv.ByLeverage, table)
+		lv.CumByLeverage = scaleConfidenceSlices(lv.CumByLeverage, table)
+		lv.LongNotional = formatQty(sumSliceSide(lv.ByLeverage, false))
+		lv.ShortNotional = formatQty(sumSliceSide(lv.ByLeverage, true))
+		lv.TotalNotional = formatQty(sumSliceSide(lv.ByLeverage, false) + sumSliceSide(lv.ByLeverage, true))
+		lv.CumLong = formatQty(sumSliceSide(lv.CumByLeverage, false))
+		lv.CumShort = formatQty(sumSliceSide(lv.CumByLeverage, true))
+		lv.CumTotal = formatQty(sumSliceSide(lv.CumByLeverage, false) + sumSliceSide(lv.CumByLeverage, true))
+		out[i] = lv
+	}
+	return out
+}
+
+func scaleConfidenceSlices(in []LiquidationLeverageSlice, table map[[2]int]float64) []LiquidationLeverageSlice {
+	out := make([]LiquidationLeverageSlice, 0, len(in))
+	for _, sl := range in {
+		wL := confidenceFor(table, sl.Leverage, LiquidationSideLong)
+		wS := confidenceFor(table, sl.Leverage, LiquidationSideShort)
+		longN := parseLevelNotional(sl.LongNotional) * wL
+		shortN := parseLevelNotional(sl.ShortNotional) * wS
+		out = append(out, LiquidationLeverageSlice{
+			Leverage: sl.Leverage, LongNotional: formatQty(longN), ShortNotional: formatQty(shortN),
+			LongConfidence: wL, ShortConfidence: wS,
+		})
+	}
+	return out
+}
+
+func sumSliceSide(in []LiquidationLeverageSlice, short bool) float64 {
+	var n float64
+	for _, sl := range in {
+		if short {
+			n += parseLevelNotional(sl.ShortNotional)
+		} else {
+			n += parseLevelNotional(sl.LongNotional)
+		}
+	}
+	return n
+}
+
+func parseLevelNotional(s string) float64 {
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil || v < 0 {
+		return 0
+	}
+	return v
 }
 
 func mergeLevelsReviewVenues(ex string, in []LiquidationLevelsReviewVenue) LiquidationLevelsReviewVenue {
@@ -678,6 +796,7 @@ func mergeLevelsReviewVenues(ex string, in []LiquidationLevelsReviewVenue) Liqui
 				Signals: h.Signals, Validated: h.Validated, Hits: h.Hits,
 				HitRate: h.HitRate, Predicted: h.Predicted, Realized: h.Realized,
 				FillRate: h.FillRate, Reliability: levelReliability(h.Validated, h.HitRate, h.FillRate),
+				Confidence: LevelConfidenceWeight(h.Validated, h.HitRate),
 			})
 		}
 	}

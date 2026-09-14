@@ -737,9 +737,11 @@ func (h *MarketHandler) GetLiquidationLevels(w http.ResponseWriter, r *http.Requ
 }
 
 type liquidationLeverageSliceDTO struct {
-	Leverage      int    `json:"leverage"`
-	LongNotional  string `json:"longNotional"`
-	ShortNotional string `json:"shortNotional"`
+	Leverage        int     `json:"leverage"`
+	LongNotional    string  `json:"longNotional"`
+	ShortNotional   string  `json:"shortNotional"`
+	LongConfidence  float64 `json:"longConfidence,omitempty"`
+	ShortConfidence float64 `json:"shortConfidence,omitempty"`
 }
 
 type liquidationLevelBarDTO struct {
@@ -779,20 +781,23 @@ type liquidationLevelsResponse struct {
 	Review     *liquidationLevelsReviewDTO `json:"review,omitempty"`
 }
 
+func leverageSliceToDTO(sl domain.LiquidationLeverageSlice) liquidationLeverageSliceDTO {
+	return liquidationLeverageSliceDTO{
+		Leverage: sl.Leverage, LongNotional: sl.LongNotional, ShortNotional: sl.ShortNotional,
+		LongConfidence: sl.LongConfidence, ShortConfidence: sl.ShortConfidence,
+	}
+}
+
 func levelBarsToDTO(in []domain.LiquidationLevelBar) []liquidationLevelBarDTO {
 	levels := make([]liquidationLevelBarDTO, 0, len(in))
 	for _, lv := range in {
 		slices := make([]liquidationLeverageSliceDTO, 0, len(lv.ByLeverage))
 		for _, sl := range lv.ByLeverage {
-			slices = append(slices, liquidationLeverageSliceDTO{
-				Leverage: sl.Leverage, LongNotional: sl.LongNotional, ShortNotional: sl.ShortNotional,
-			})
+			slices = append(slices, leverageSliceToDTO(sl))
 		}
 		cumSlices := make([]liquidationLeverageSliceDTO, 0, len(lv.CumByLeverage))
 		for _, sl := range lv.CumByLeverage {
-			cumSlices = append(cumSlices, liquidationLeverageSliceDTO{
-				Leverage: sl.Leverage, LongNotional: sl.LongNotional, ShortNotional: sl.ShortNotional,
-			})
+			cumSlices = append(cumSlices, leverageSliceToDTO(sl))
 		}
 		levels = append(levels, liquidationLevelBarDTO{
 			Price: lv.Price, LongNotional: lv.LongNotional, ShortNotional: lv.ShortNotional,
@@ -881,6 +886,7 @@ type liquidationLevelsReviewBucketDTO struct {
 	Realized    string  `json:"realized"`
 	FillRate    float64 `json:"fillRate"`
 	Reliability string  `json:"reliability"`
+	Confidence  float64 `json:"confidence"`
 }
 
 type liquidationLevelsReviewVenueDTO struct {
@@ -929,7 +935,7 @@ func levelsReviewVenueToDTO(v domain.LiquidationLevelsReviewVenue) liquidationLe
 			Leverage: b.Leverage, Side: b.Side, Horizon: b.Horizon,
 			Signals: b.Signals, Validated: b.Validated, Hits: b.Hits, HitRate: b.HitRate,
 			Predicted: formatHistQty(b.Predicted), Realized: formatHistQty(b.Realized),
-			FillRate: b.FillRate, Reliability: b.Reliability,
+			FillRate: b.FillRate, Reliability: b.Reliability, Confidence: b.Confidence,
 		})
 	}
 	ss := make([]liquidationLevelsReviewSampleDTO, 0, len(v.Samples))

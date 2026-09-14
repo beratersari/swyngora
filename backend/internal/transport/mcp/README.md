@@ -18,7 +18,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_orderbook_heatmap` | Resting bid/ask size over time (pre-warmed for live crypto pairs; not executed volume) |
 | `get_liquidations` | Rolling 5m/1h/4h/24h long/short futures liquidations + `feed` last print / still-unfilled gaps / `missingSeconds` / missing venues |
 | `get_liquidation_overview` | Market-wide 1h/4h/12h/24h long/short totals + coins ranked for a treemap + `feed` |
-| `get_liquidation_levels` | CoinGlass-style 10x/25x/50x/100x price bars + walk-from-last cumulative; `review` scores later same-venue liquidations vs those estimates; `symbol=all` time bars |
+| `get_liquidation_levels` | CoinGlass-style 10x/25x/50x/100x price bars + walk-from-last cumulative; live bars scaled by later-print confidence; `review` scores later same-venue liquidations; `symbol=all` time bars |
 | `get_liquidation_cascade` | Short-burst long/short cascade vs typical (1m/5m/15m); `episodes` = start, duration, long/short notional, price; combined when both venues fire together |
 | `scan_liquidation_cascades` | Market cascade plus coins currently bursting; `both` when the same side fires on both venues |
 | `get_open_interest` | Current futures OI plus 5m/1h/4h/24h change (Binance USD-M + Bybit linear + OKX USDT-swap); includes `funding` |

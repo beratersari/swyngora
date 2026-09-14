@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Liquidation map uses later-print confidence:** live 10x/25x/50x/100x bars shrink and fade when that leverage rarely printed later, and stay full when it did (`GET /api/v1/market/liquidation-levels`, web `/liquidations?view=chart`) (`docs/features/liquidations.md`)
+
 ### Fixed
 - **Frozen liquidation maps keep top-trader size:** later estimates used only all-account long/short. They now persist Binance top-trader position share and rebuild with the same opposite-crowd size blend as the live hunt (`docs/features/liquidations.md`)
 

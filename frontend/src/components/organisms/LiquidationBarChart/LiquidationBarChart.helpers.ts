@@ -2,6 +2,29 @@ import type { MarketLiquidationLevels } from '@/libs/api';
 import type { LevelRow, LeverageSlice, TimeRow } from './LiquidationBarChart.types';
 import { LIQ_LEVERAGE_ORDER } from './LiquidationBarChart.constants';
 
+function sliceConf(raw: number | undefined): number {
+  if (raw == null || !Number.isFinite(raw) || raw <= 0) return 1;
+  if (raw > 1) return 1;
+  return raw;
+}
+
+export function legendOpacity(
+  buckets: NonNullable<LevelsReviewVenue['byLeverage']> | undefined,
+  lev: 10 | 25 | 50 | 100,
+): number {
+  const rows = (buckets ?? []).filter((b) => b.leverage === lev);
+  const weights = rows.map((b) => b.confidence).filter((c): c is number => c != null && c > 0);
+  if (!weights.length) return 1;
+  const avg = weights.reduce((a, b) => a + b, 0) / weights.length;
+  return 0.28 + 0.72 * avg;
+}
+
+export function sliceConfidence(row: LevelRow, leverage: 10 | 25 | 50 | 100, side: 'long' | 'short'): number {
+  const sl = row.cumByLeverage.find((s) => s.leverage === leverage) ?? row.byLeverage.find((s) => s.leverage === leverage);
+  if (!sl) return 1;
+  return side === 'long' ? sl.longConf : sl.shortConf;
+}
+
 export function parseNotional(value: string | undefined): number {
   if (!value) return 0;
   const n = Number(value);
@@ -16,6 +39,8 @@ function parseSlices(
       leverage: sl.leverage as 10 | 25 | 50 | 100,
       longN: parseNotional(sl.longNotional),
       shortN: parseNotional(sl.shortNotional),
+      longConf: sliceConf(sl.longConfidence),
+      shortConf: sliceConf(sl.shortConfidence),
     }))
     .filter((sl) => sl.leverage === 10 || sl.leverage === 25 || sl.leverage === 50 || sl.leverage === 100);
 }
@@ -63,7 +88,10 @@ export function fillCumProfile(rows: LevelRow[], lastPrice: number): LevelRow[] 
       accAbove[lev].longN += sl?.longN ?? 0;
       accAbove[lev].shortN += sl?.shortN ?? 0;
     }
-    above[i] = LIQ_LEVERAGE_ORDER.map((lev) => ({ leverage: lev, ...accAbove[lev] }));
+    above[i] = LIQ_LEVERAGE_ORDER.map((lev) => {
+      const sl = row.byLeverage.find((s) => s.leverage === lev);
+      return { leverage: lev, ...accAbove[lev], longConf: sl?.longConf ?? 1, shortConf: sl?.shortConf ?? 1 };
+    });
   }
   for (let i = 0; i < rows.length; i += 1) {
     const row = rows[i];
@@ -73,7 +101,10 @@ export function fillCumProfile(rows: LevelRow[], lastPrice: number): LevelRow[] 
       accBelow[lev].longN += sl?.longN ?? 0;
       accBelow[lev].shortN += sl?.shortN ?? 0;
     }
-    below[i] = LIQ_LEVERAGE_ORDER.map((lev) => ({ leverage: lev, ...accBelow[lev] }));
+    below[i] = LIQ_LEVERAGE_ORDER.map((lev) => {
+      const sl = row.byLeverage.find((s) => s.leverage === lev);
+      return { leverage: lev, ...accBelow[lev], longConf: sl?.longConf ?? 1, shortConf: sl?.shortConf ?? 1 };
+    });
   }
   return rows.map((row, i) => {
     const walked = last <= 0 || row.price >= last ? above[i] : below[i];
