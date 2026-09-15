@@ -11,6 +11,63 @@ from langchain_core.callbacks import BaseCallbackHandler
 from swyngora_ai.progress import emit
 from swyngora_ai.tools.errors import ToolTransientError
 
+
+def usage_from_llm_result(response: Any) -> tuple[int, int] | None:
+    """Provider-reported (input, output) tokens, or None if the result has no usage."""
+    found = False
+    in_tok = 0
+    out_tok = 0
+    for group in getattr(response, "generations", None) or []:
+        for gen in group:
+            msg = getattr(gen, "message", None)
+            meta = getattr(msg, "usage_metadata", None) if msg is not None else None
+            if not isinstance(meta, dict):
+                continue
+            if "input_tokens" not in meta and "output_tokens" not in meta:
+                continue
+            in_tok += int(meta.get("input_tokens") or 0)
+            out_tok += int(meta.get("output_tokens") or 0)
+            found = True
+    if found:
+        return in_tok, out_tok
+    extra = getattr(response, "llm_output", None) or {}
+    if not isinstance(extra, dict):
+        return None
+    raw = extra.get("token_usage") or extra.get("usage") or {}
+    if not isinstance(raw, dict):
+        return None
+    if (
+        raw.get("prompt_tokens") is None
+        and raw.get("input_tokens") is None
+        and raw.get("completion_tokens") is None
+        and raw.get("output_tokens") is None
+    ):
+        return None
+    return (
+        int(raw.get("prompt_tokens") or raw.get("input_tokens") or 0),
+        int(raw.get("completion_tokens") or raw.get("output_tokens") or 0),
+    )
+
+
+def format_usage_emit(label: str, input_tokens: int, output_tokens: int) -> str:
+    return f"{label}|in={input_tokens}|out={output_tokens}"
+
+
+def parse_usage_emit(text: str) -> tuple[str, int, int] | None:
+    raw = (text or "").strip()
+    if "|in=" not in raw or "|out=" not in raw:
+        return None
+    try:
+        head, out_s = raw.rsplit("|out=", 1)
+        label, in_s = head.rsplit("|in=", 1)
+    except ValueError:
+        return None
+    try:
+        return (label.strip() or "unknown", int(in_s), int(out_s))
+    except ValueError:
+        return None
+
+
 # Same budget as ModelRetryMiddleware: 1 try + max_retries=3.
 _TRY_BUDGET = 4
 # Same budget as ToolRetryMiddleware: 1 try + max_retries=2.
@@ -40,6 +97,15 @@ class NoteLLMError(BaseCallbackHandler):
         # Real generation start (retries, fallback, specialist, analyze). Not status text.
         del serialized, messages, kwargs
         emit("llm", self.llm_activity_label())
+
+    def on_llm_end(self, response: Any, **kwargs: object) -> None:
+        # LangChain dispatches on_llm_end (there is no on_chat_model_end hook).
+        del kwargs
+        usage = usage_from_llm_result(response)
+        if usage is None:
+            return
+        inn, out = usage
+        emit("usage", format_usage_emit(self.llm_activity_label(), inn, out))
 
     def on_llm_error(self, error: BaseException, **_kwargs: object) -> None:
         self.last_error = error
