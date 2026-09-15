@@ -17,7 +17,7 @@ import re
 import urllib.parse
 from typing import Any
 
-import httpx
+import httpx2
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
@@ -51,7 +51,7 @@ class XSearchInput(BaseModel):
 
 
 def _http_json(url: str, timeout: float = 12.0) -> dict[str, Any]:
-    with httpx.Client(timeout=timeout, headers={"User-Agent": _UA}) as client:
+    with httpx2.Client(timeout=timeout, headers={"User-Agent": _UA}) as client:
         r = client.get(url, headers={"Accept": "application/json"})
         r.raise_for_status()
         data = r.json()
@@ -143,7 +143,7 @@ def _fetch_stocktwits(symbol: str, limit: int) -> list[str]:
     url = f"https://api.stocktwits.com/api/2/streams/symbol/{urllib.parse.quote(symbol)}.json"
     try:
         data = _http_json(url)
-    except httpx.HTTPStatusError as e:
+    except httpx2.HTTPStatusError as e:
         if e.response.status_code == 404:
             return []
         return [f"(StockTwits {symbol}: HTTP {e.response.status_code})"]

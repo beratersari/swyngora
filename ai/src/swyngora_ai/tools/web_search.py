@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutTimeout
 from typing import Any
 
-import httpx
+import httpx2
 from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
@@ -48,14 +48,14 @@ def _ddgs():
 
 
 def _http_bytes(url: str, timeout: float = 12.0) -> bytes:
-    with httpx.Client(timeout=timeout, headers={"User-Agent": _UA}) as client:
+    with httpx2.Client(timeout=timeout, headers={"User-Agent": _UA}) as client:
         r = client.get(url, headers={"Accept": "*/*"})
         r.raise_for_status()
         return r.content
 
 
 def _http_json(url: str, timeout: float = 12.0) -> Any:
-    with httpx.Client(timeout=timeout, headers={"User-Agent": _UA}) as client:
+    with httpx2.Client(timeout=timeout, headers={"User-Agent": _UA}) as client:
         r = client.get(url, headers={"Accept": "application/json"})
         r.raise_for_status()
         return r.json()
@@ -127,7 +127,7 @@ def _wikipedia(topic: str) -> str:
     slug = urllib.parse.quote(topic.replace(" ", "_"))
     try:
         data = _http_json(f"https://en.wikipedia.org/api/rest_v1/page/summary/{slug}", timeout=10)
-    except httpx.HTTPStatusError as e:
+    except httpx2.HTTPStatusError as e:
         if e.response.status_code != 404:
             return f"(Wikipedia: HTTP {e.response.status_code})"
         try:

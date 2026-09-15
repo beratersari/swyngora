@@ -6,7 +6,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-import httpx
+import httpx2
 
 from swyngora_ai.config import Settings
 from swyngora_ai.progress import emit, reset_progress, set_progress
@@ -20,32 +20,32 @@ from swyngora_ai.tools.market_http import (
 )
 
 
-class _RecordingTransport(httpx.BaseTransport):
+class _RecordingTransport(httpx2.BaseTransport):
     def __init__(self) -> None:
-        self.requests: list[httpx.Request] = []
+        self.requests: list[httpx2.Request] = []
         self.lock = threading.Lock()
 
-    def handle_request(self, request: httpx.Request) -> httpx.Response:
+    def handle_request(self, request: httpx2.Request) -> httpx2.Response:
         with self.lock:
             self.requests.append(request)
         # Hold the request so two chat turns stay overlapped on _bind_stack.
         time.sleep(0.15)
-        return httpx.Response(200, json={"ok": True, "path": str(request.url.path)})
+        return httpx2.Response(200, json={"ok": True, "path": str(request.url.path)})
 
 
 def _install(monkeypatch, transport: _RecordingTransport):
-    real = httpx.Client
+    real = httpx2.Client
 
     def fake_client(*args, **kwargs):
         kwargs["transport"] = transport
         kwargs.pop("timeout", None)
         return real(*args, timeout=5.0, transport=transport)
 
-    monkeypatch.setattr(httpx, "Client", fake_client)
+    monkeypatch.setattr(httpx2, "Client", fake_client)
     return {t.name: t for t in build_market_tools(Settings(api_base_url="http://backend.test"))}
 
 
-def _client_id(req: httpx.Request) -> str:
+def _client_id(req: httpx2.Request) -> str:
     return req.headers.get("X-Client-Id") or req.url.params.get("clientId") or ""
 
 

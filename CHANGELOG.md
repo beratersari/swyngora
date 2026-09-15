@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **AI HTTP client:** `ai/` tools use `httpx2` (Pydantic-maintained fork) instead of `httpx`; LangChain may still pull `httpx` transitively
+
 ### Added
 - **AI CLI Activity tokens:** details Activity shows provider `in` / `out` / total tokens and `temperature` from `AI_TEMPERATURE` (no dollar cost)
 - **Liquidation level alerts:** `kind=liquidation_level` fires when last price or later prints hit a predicted 10x/25x/50x/100x band that clears later-print confidence (`any` / `fair` / `high`). Low-confidence bands do not fire the same alert as bands that keep working. Notional alerts now include `importance` and the matching level when prints land in a predicted pocket (`docs/features/price-alerts.md`)
