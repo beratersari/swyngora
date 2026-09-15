@@ -19,7 +19,7 @@ from rich.markup import escape
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
-from swyngora_ai.llm.errors import parse_usage_emit
+from swyngora_ai.llm.errors import TokenUsage, parse_usage_emit
 
 if TYPE_CHECKING:
     from swyngora_ai.graph.orchestrator import ChatResult, Orchestrator
@@ -704,23 +704,40 @@ def _tool_row(state: ActivityBarState, name: str, count: int) -> str:
     return line
 
 
+def _usage_detail_bits(usage: TokenUsage) -> list[str]:
+    bits: list[str] = []
+    if usage.cache_read:
+        bits.append(f"{_format_tokens(usage.cache_read)} cache read")
+    if usage.cache_creation:
+        bits.append(f"{_format_tokens(usage.cache_creation)} cache write")
+    if usage.reasoning:
+        bits.append(f"{_format_tokens(usage.reasoning)} reasoning")
+    if usage.audio_in:
+        bits.append(f"{_format_tokens(usage.audio_in)} audio in")
+    if usage.audio_out:
+        bits.append(f"{_format_tokens(usage.audio_out)} audio out")
+    return bits
+
+
+def _format_usage_line(usage: TokenUsage, *, prefix: str = "") -> str:
+    core = f"{_format_tokens(usage.input_tokens)} input · {_format_tokens(usage.output_tokens)} output"
+    extra = _usage_detail_bits(usage)
+    if extra:
+        core = f"{core} · {' · '.join(extra)}"
+    if prefix:
+        return f"{prefix}  {core}"
+    return core
+
+
 def activity_token_rows(state: ActivityBarState) -> list[str]:
     items = list(state.tokens_by_model.items())
     if not items:
-        return ["0 in · 0 out · 0 tokens"]
-    total_in = sum(pair[0] for pair in state.tokens_by_model.values())
-    total_out = sum(pair[1] for pair in state.tokens_by_model.values())
-    total = total_in + total_out
-    if len(items) == 1:
-        inn, out = items[0][1]
-        return [
-            f"{_format_tokens(inn)} in · {_format_tokens(out)} out · {_format_tokens(inn + out)} tokens"
-        ]
-    rows = [
-        f"{name}  {_format_tokens(inn)} in · {_format_tokens(out)} out"
-        for name, (inn, out) in items
-    ]
-    rows.append(f"{_format_tokens(total)} tokens")
+        return ["0 input · 0 output", "total 0 tokens"]
+    rows = [_format_usage_line(usage, prefix=name if len(items) > 1 else "") for name, usage in items]
+    total = TokenUsage()
+    for usage in state.tokens_by_model.values():
+        total.add(usage)
+    rows.append(f"total {_format_tokens(total.total)} tokens")
     return rows
 
 
@@ -739,7 +756,7 @@ class ActivityBarState:
     tools_by_name: dict[str, int] = field(default_factory=dict)
     tool_retries_by_name: dict[str, int] = field(default_factory=dict)
     llm_by_model: dict[str, int] = field(default_factory=dict)
-    tokens_by_model: dict[str, list[int]] = field(default_factory=dict)
+    tokens_by_model: dict[str, TokenUsage] = field(default_factory=dict)
     fallback_model: str = ""
     temperature: float | None = None
 
@@ -761,13 +778,12 @@ def apply_activity_event(state: ActivityBarState, ev: dict[str, Any]) -> bool:
     if kind in _USAGE_TICK_TYPES:
         parsed = parse_usage_emit(str(ev.get("text") or ""))
         if parsed is not None:
-            label, inn, out = parsed
+            label, piece = parsed
             cur = state.tokens_by_model.get(label)
             if cur is None:
-                state.tokens_by_model[label] = [inn, out]
+                state.tokens_by_model[label] = piece
             else:
-                cur[0] += inn
-                cur[1] += out
+                cur.add(piece)
             changed = True
     text = _status_text(ev)
     if text is not None:

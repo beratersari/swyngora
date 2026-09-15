@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from dataclasses import dataclass, fields
 from typing import Any
 from weakref import WeakSet
 
@@ -12,30 +13,74 @@ from swyngora_ai.progress import emit
 from swyngora_ai.tools.errors import ToolTransientError
 
 
-def usage_from_llm_result(response: Any) -> tuple[int, int] | None:
-    """Provider-reported (input, output) tokens, or None if the result has no usage."""
-    found = False
-    in_tok = 0
-    out_tok = 0
-    for group in getattr(response, "generations", None) or []:
-        for gen in group:
-            msg = getattr(gen, "message", None)
-            meta = getattr(msg, "usage_metadata", None) if msg is not None else None
-            if not isinstance(meta, dict):
-                continue
-            if "input_tokens" not in meta and "output_tokens" not in meta:
-                continue
-            in_tok += int(meta.get("input_tokens") or 0)
-            out_tok += int(meta.get("output_tokens") or 0)
-            found = True
-    if found:
-        return in_tok, out_tok
-    extra = getattr(response, "llm_output", None) or {}
-    if not isinstance(extra, dict):
+@dataclass
+class TokenUsage:
+    """Provider-reported tokens. Extra fields stay 0 when the API omits them."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read: int = 0
+    cache_creation: int = 0
+    reasoning: int = 0
+    audio_in: int = 0
+    audio_out: int = 0
+
+    def add(self, other: TokenUsage) -> None:
+        for f in fields(self):
+            setattr(self, f.name, int(getattr(self, f.name)) + int(getattr(other, f.name)))
+
+    @property
+    def total(self) -> int:
+        return self.input_tokens + self.output_tokens
+
+
+def _as_int(value: object) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            return int(value)
+        except ValueError:
+            return 0
+    return 0
+
+
+def _details_map(raw: object) -> dict[str, Any]:
+    if raw is None:
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    dump = getattr(raw, "model_dump", None)
+    if callable(dump):
+        try:
+            out = dump()
+        except Exception:  # noqa: BLE001
+            return {}
+        return out if isinstance(out, dict) else {}
+    return {}
+
+
+def token_usage_from_metadata(meta: dict[str, Any]) -> TokenUsage | None:
+    if "input_tokens" not in meta and "output_tokens" not in meta:
         return None
-    raw = extra.get("token_usage") or extra.get("usage") or {}
-    if not isinstance(raw, dict):
-        return None
+    inn = _details_map(meta.get("input_token_details"))
+    out = _details_map(meta.get("output_token_details"))
+    # LangChain UsageMetadata / InputTokenDetails / OutputTokenDetails only:
+    # audio, cache_creation, cache_read, reasoning.
+    return TokenUsage(
+        input_tokens=_as_int(meta.get("input_tokens")),
+        output_tokens=_as_int(meta.get("output_tokens")),
+        cache_read=_as_int(inn.get("cache_read")),
+        cache_creation=_as_int(inn.get("cache_creation")),
+        reasoning=_as_int(out.get("reasoning")),
+        audio_in=_as_int(inn.get("audio")),
+        audio_out=_as_int(out.get("audio")),
+    )
+
+
+def token_usage_from_openai_usage(raw: dict[str, Any]) -> TokenUsage | None:
     if (
         raw.get("prompt_tokens") is None
         and raw.get("input_tokens") is None
@@ -43,29 +88,81 @@ def usage_from_llm_result(response: Any) -> tuple[int, int] | None:
         and raw.get("output_tokens") is None
     ):
         return None
-    return (
-        int(raw.get("prompt_tokens") or raw.get("input_tokens") or 0),
-        int(raw.get("completion_tokens") or raw.get("output_tokens") or 0),
+    prompt = _details_map(raw.get("prompt_tokens_details"))
+    completion = _details_map(raw.get("completion_tokens_details"))
+    return TokenUsage(
+        input_tokens=_as_int(raw.get("prompt_tokens") or raw.get("input_tokens")),
+        output_tokens=_as_int(raw.get("completion_tokens") or raw.get("output_tokens")),
+        cache_read=_as_int(prompt.get("cached_tokens") or prompt.get("cache_read")),
+        cache_creation=_as_int(prompt.get("cache_creation") or prompt.get("cache_write")),
+        reasoning=_as_int(completion.get("reasoning_tokens") or completion.get("reasoning")),
+        audio_in=_as_int(prompt.get("audio_tokens") or prompt.get("audio")),
+        audio_out=_as_int(completion.get("audio_tokens") or completion.get("audio")),
     )
 
 
-def format_usage_emit(label: str, input_tokens: int, output_tokens: int) -> str:
-    return f"{label}|in={input_tokens}|out={output_tokens}"
+def usage_from_llm_result(response: Any) -> TokenUsage | None:
+    """Provider-reported tokens, or None if the result has no usage."""
+    acc: TokenUsage | None = None
+    for group in getattr(response, "generations", None) or []:
+        for gen in group:
+            msg = getattr(gen, "message", None)
+            meta = getattr(msg, "usage_metadata", None) if msg is not None else None
+            if not isinstance(meta, dict):
+                continue
+            piece = token_usage_from_metadata(meta)
+            if piece is None:
+                continue
+            if acc is None:
+                acc = TokenUsage()
+            acc.add(piece)
+    if acc is not None:
+        return acc
+    extra = getattr(response, "llm_output", None) or {}
+    if not isinstance(extra, dict):
+        return None
+    raw = extra.get("token_usage") or extra.get("usage") or {}
+    if not isinstance(raw, dict):
+        return None
+    return token_usage_from_openai_usage(raw)
 
 
-def parse_usage_emit(text: str) -> tuple[str, int, int] | None:
+def format_usage_emit(label: str, usage: TokenUsage) -> str:
+    parts = [label, f"in={usage.input_tokens}", f"out={usage.output_tokens}"]
+    extras = (
+        ("cache_read", usage.cache_read),
+        ("cache_write", usage.cache_creation),
+        ("reasoning", usage.reasoning),
+        ("audio_in", usage.audio_in),
+        ("audio_out", usage.audio_out),
+    )
+    parts.extend(f"{key}={n}" for key, n in extras if n)
+    return "|".join(parts)
+
+
+def parse_usage_emit(text: str) -> tuple[str, TokenUsage] | None:
     raw = (text or "").strip()
-    if "|in=" not in raw or "|out=" not in raw:
+    if "|in=" not in raw:
         return None
-    try:
-        head, out_s = raw.rsplit("|out=", 1)
-        label, in_s = head.rsplit("|in=", 1)
-    except ValueError:
-        return None
-    try:
-        return (label.strip() or "unknown", int(in_s), int(out_s))
-    except ValueError:
-        return None
+    label, _, rest = raw.partition("|")
+    usage = TokenUsage()
+    alias = {
+        "in": "input_tokens",
+        "out": "output_tokens",
+        "cache_write": "cache_creation",
+    }
+    for chunk in rest.split("|"):
+        if "=" not in chunk:
+            return None
+        key, _, val = chunk.partition("=")
+        field = alias.get(key, key)
+        if not hasattr(usage, field):
+            continue
+        try:
+            setattr(usage, field, int(val))
+        except ValueError:
+            return None
+    return (label.strip() or "unknown", usage)
 
 
 # Same budget as ModelRetryMiddleware: 1 try + max_retries=3.
@@ -104,8 +201,7 @@ class NoteLLMError(BaseCallbackHandler):
         usage = usage_from_llm_result(response)
         if usage is None:
             return
-        inn, out = usage
-        emit("usage", format_usage_emit(self.llm_activity_label(), inn, out))
+        emit("usage", format_usage_emit(self.llm_activity_label(), usage))
 
     def on_llm_error(self, error: BaseException, **_kwargs: object) -> None:
         self.last_error = error
