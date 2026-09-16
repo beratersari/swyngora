@@ -19,9 +19,19 @@ export function formatHistoryDelta(changePct: string | undefined): string {
   return `${sign}${n.toFixed(1)}%`;
 }
 
-function pointValue(row: MarketOptionsHistoryPoint, metric: OptionsHistoryMetric): number | null {
+function pointValue(row: MarketOptionsHistoryPoint, metric: OptionsHistoryMetric | 'index'): number | null {
   const raw =
-    metric === 'oi' ? (row.openInterestUsd ?? row.openInterest) : metric === 'pcr' ? row.putCallOi : row.dvol;
+    metric === 'oi'
+      ? (row.openInterestUsd ?? row.openInterest)
+      : metric === 'pcr'
+        ? row.putCallOi
+        : metric === 'gex'
+          ? row.gammaNetUsd
+          : metric === 'flip'
+            ? row.gammaFlip
+            : metric === 'index'
+              ? row.indexPrice
+              : row.dvol;
   if (raw == null || raw === '') return null;
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
@@ -29,7 +39,7 @@ function pointValue(row: MarketOptionsHistoryPoint, metric: OptionsHistoryMetric
 
 export function toHistoryLine(
   points: MarketOptionsHistoryPoint[] | undefined,
-  metric: OptionsHistoryMetric,
+  metric: OptionsHistoryMetric | 'index',
   range: OptionsHistoryRange,
   nowMs = Date.now(),
 ): HistoryLinePoint[] {
@@ -57,4 +67,29 @@ export function historyMetricHasData(
   metric: (typeof OPTIONS_HISTORY_METRICS)[number],
 ): boolean {
   return Boolean(points?.some((row) => pointValue(row, metric) != null));
+}
+
+export function windowChipLabel(
+  win: MarketOptionsHistoryWindow | undefined,
+  metric: OptionsHistoryMetric,
+): { delta: string; note?: 'regime' | 'flipSide'; to?: string } {
+  if (metric === 'gex') {
+    if (win?.regime && win.regimeWas && win.regime !== win.regimeWas) {
+      return { delta: win.regime, note: 'regime', to: win.regime };
+    }
+    return { delta: formatHistoryDelta(win?.gamma?.changePct) };
+  }
+  if (metric === 'flip') {
+    if (win?.flipSide && win.flipSideWas && win.flipSide !== win.flipSideWas) {
+      return { delta: win.flipSide, note: 'flipSide', to: win.flipSide };
+    }
+    return { delta: formatHistoryDelta(win?.flip?.changePct) };
+  }
+  const delta =
+    metric === 'oi'
+      ? formatHistoryDelta(win?.oi?.changePct)
+      : metric === 'pcr'
+        ? formatHistoryDelta(win?.putCall?.changePct)
+        : formatHistoryDelta(win?.dvol?.changePct);
+  return { delta };
 }

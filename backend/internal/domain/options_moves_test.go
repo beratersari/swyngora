@@ -54,6 +54,31 @@ func TestDetectOptionsMoves_QuietIsSilent(t *testing.T) {
 	}
 }
 
+func TestDetectOptionsMoves_GammaToShort(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 3, 2, 12, 0, 0, 0, time.UTC)
+	pts := []OptionsHistoryPoint{
+		{Time: now.Add(-5 * time.Hour), HasGamma: true, GammaRegime: GammaRegimeLong, GammaNetUSD: 100},
+		{Time: now.Add(-4 * time.Hour), HasGamma: true, GammaRegime: GammaRegimeLong, GammaNetUSD: 90},
+		{Time: now.Add(-3 * time.Hour), HasGamma: true, GammaRegime: GammaRegimeLong, GammaNetUSD: 80},
+		{Time: now.Add(-2 * time.Hour), HasGamma: true, GammaRegime: GammaRegimeLong, GammaNetUSD: 70},
+		{Time: now, HasGamma: true, GammaRegime: GammaRegimeShort, GammaNetUSD: -80},
+	}
+	got := DetectOptionsMoves(pts, now)
+	if got == nil {
+		t.Fatal("expected gamma flip")
+	}
+	found := false
+	for _, f := range got.Findings {
+		if f.Kind == OptionsMoveGammaToShort && f.Topic == OptionsMoveTopicGamma {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("%+v", got.Findings)
+	}
+}
+
 func TestDetectOptionsMoves_IVDrop(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 3, 2, 12, 0, 0, 0, time.UTC)

@@ -98,13 +98,14 @@
   },
   "moves": {
     "title": "Önemli opsiyon hareketleri",
-    "subtitle": "Yalnızca açık pozisyon, put/call veya ima vol kısa sürede alışılmadık ölçüde değişince gösterilir",
+    "subtitle": "Yalnızca açık pozisyon, put/call, ima vol veya bayi gamma kısa sürede alışılmadık ölçüde değişince gösterilir",
     "watch": "İzle",
     "notable": "Belirgin",
     "topic": {
       "oi": "OI",
       "lean": "Put/call",
-      "vol": "Vol"
+      "vol": "Vol",
+      "gamma": "Gamma"
     },
     "window": {
       "1h": "1 saat",
@@ -114,12 +115,23 @@
   },
   "history": {
     "title": "Zaman içinde",
-    "subtitle": "Açık pozisyon, put/call ve ima vol son saat ve günlerde nasıl değişti",
-    "empty": "Henüz geçmiş yok. İma vol Deribit’ten gelir; açık pozisyon ve put/call masa çalıştıktan sonra birikir.",
+    "subtitle": "Açık pozisyon, put/call, ima vol ve bayi gamma son saat ve günlerde nasıl değişti",
+    "empty": "Henüz geçmiş yok. İma vol Deribit’ten gelir; açık pozisyon, put/call ve gamma masa çalıştıktan sonra birikir.",
     "collecting": "Toplanıyor",
     "collectingSeries": "Bu seri henüz toplanıyor. Masa birkaç saat çalıştıktan sonra bakın.",
     "emptyIv": "İma vol geçmişi yok.",
-    "hint": "OI ve put/call bu sunucu çalışırken örneklenir. İma vol ayrıca Deribit DVOL geçmişini kullanır.",
+    "emptyGamma": "Henüz bayi gamma geçmişi yok. Masa çalıştıktan sonra bakın.",
+    "hint": "OI, put/call ve bayi gamma bu sunucu çalışırken örneklenir. İma vol ayrıca Deribit DVOL geçmişini kullanır. Dönüş grafiği spot’u üstüne koyar; fiyat dönüşü geçtiğinde görünür.",
+    "regimeTo": {
+      "long": "→ daha sakin",
+      "short": "→ daha hızlı",
+      "flat": "→ dengeli"
+    },
+    "spot": {
+      "above": "spot dönüşün üstünde",
+      "below": "spot dönüşün altında",
+      "at": "spot dönüşte"
+    },
     "metricAria": "Opsiyon geçmiş serisi",
     "rangeAria": "Opsiyon geçmiş aralığı",
     "window": {
@@ -131,7 +143,9 @@
     "metric": {
       "oi": "Açık pozisyon",
       "pcr": "Put / call",
-      "iv": "İma vol"
+      "iv": "İma vol",
+      "gex": "Bayi GEX",
+      "flip": "Gamma dönüş"
     },
     "range": {
       "12h": "12s",

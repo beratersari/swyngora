@@ -164,12 +164,18 @@ type optionsHistoryChangeDTO struct {
 }
 
 type optionsHistoryWindowDTO struct {
-	Window   string                   `json:"window"`
-	Oi       *optionsHistoryChangeDTO `json:"oi,omitempty"`
-	PutCall  *optionsHistoryChangeDTO `json:"putCall,omitempty"`
-	Dvol     *optionsHistoryChangeDTO `json:"dvol,omitempty"`
-	AtmIv    *optionsHistoryChangeDTO `json:"atmIv,omitempty"`
-	Complete bool                     `json:"complete,omitempty"`
+	Window      string                   `json:"window"`
+	Oi          *optionsHistoryChangeDTO `json:"oi,omitempty"`
+	PutCall     *optionsHistoryChangeDTO `json:"putCall,omitempty"`
+	Dvol        *optionsHistoryChangeDTO `json:"dvol,omitempty"`
+	AtmIv       *optionsHistoryChangeDTO `json:"atmIv,omitempty"`
+	Gamma       *optionsHistoryChangeDTO `json:"gamma,omitempty"`
+	Flip        *optionsHistoryChangeDTO `json:"flip,omitempty"`
+	Regime      string                   `json:"regime,omitempty"`
+	RegimeWas   string                   `json:"regimeWas,omitempty"`
+	FlipSide    string                   `json:"flipSide,omitempty"`
+	FlipSideWas string                   `json:"flipSideWas,omitempty"`
+	Complete    bool                     `json:"complete,omitempty"`
 }
 
 type optionsHistoryPointDTO struct {
@@ -179,6 +185,11 @@ type optionsHistoryPointDTO struct {
 	PutCallOi       string    `json:"putCallOi,omitempty"`
 	Dvol            string    `json:"dvol,omitempty"`
 	AtmIv           string    `json:"atmIv,omitempty"`
+	IndexPrice      string    `json:"indexPrice,omitempty"`
+	GammaNetUsd     string    `json:"gammaNetUsd,omitempty"`
+	GammaRegime     string    `json:"gammaRegime,omitempty"`
+	GammaFlip       string    `json:"gammaFlip,omitempty"`
+	GammaFlipSide   string    `json:"gammaFlipSide,omitempty"`
 }
 
 type optionsHistoryDTO struct {
@@ -505,6 +516,18 @@ func optionsHistoryToDTO(h *domain.OptionsHistory) *optionsHistoryDTO {
 			c := snapshotChangeToOptionsDTO(w.AtmIV)
 			row.AtmIv = &c
 		}
+		if w.Gamma.Complete {
+			c := snapshotChangeToOptionsDTO(w.Gamma)
+			row.Gamma = &c
+		}
+		if w.Flip.Complete {
+			c := snapshotChangeToOptionsDTO(w.Flip)
+			row.Flip = &c
+		}
+		row.Regime = w.Regime
+		row.RegimeWas = w.RegimeWas
+		row.FlipSide = w.FlipSide
+		row.FlipSideWas = w.FlipSideWas
 		out.Windows = append(out.Windows, row)
 	}
 	for _, p := range h.Points {
@@ -523,6 +546,17 @@ func optionsHistoryToDTO(h *domain.OptionsHistory) *optionsHistoryDTO {
 		}
 		if p.HasAtmIV {
 			row.AtmIv = formatHistQty(p.AtmIV)
+		}
+		if p.HasIndex {
+			row.IndexPrice = formatHistQty(p.IndexPrice)
+		}
+		if p.HasGamma {
+			row.GammaNetUsd = domain.FormatSignedQty(p.GammaNetUSD)
+			row.GammaRegime = p.GammaRegime
+		}
+		if p.HasGammaFlip {
+			row.GammaFlip = formatHistQty(p.GammaFlip)
+			row.GammaFlipSide = p.GammaFlipSide
 		}
 		out.Points = append(out.Points, row)
 	}

@@ -7,16 +7,21 @@ import (
 )
 
 const (
-	OptionsMoveOIJump  = "oi_jump"
-	OptionsMoveOIDrop  = "oi_drop"
-	OptionsMovePCRJump = "pcr_jump"
-	OptionsMovePCRDrop = "pcr_drop"
-	OptionsMoveIVJump  = "iv_jump"
-	OptionsMoveIVDrop  = "iv_drop"
+	OptionsMoveOIJump          = "oi_jump"
+	OptionsMoveOIDrop          = "oi_drop"
+	OptionsMovePCRJump         = "pcr_jump"
+	OptionsMovePCRDrop         = "pcr_drop"
+	OptionsMoveIVJump          = "iv_jump"
+	OptionsMoveIVDrop          = "iv_drop"
+	OptionsMoveGammaToShort    = "gamma_to_short"
+	OptionsMoveGammaToLong     = "gamma_to_long"
+	OptionsMoveFlipCrossedUp   = "flip_crossed_up"
+	OptionsMoveFlipCrossedDown = "flip_crossed_down"
 
-	OptionsMoveTopicOI   = "oi"
-	OptionsMoveTopicLean = "lean"
-	OptionsMoveTopicVol  = "vol"
+	OptionsMoveTopicOI    = "oi"
+	OptionsMoveTopicLean  = "lean"
+	OptionsMoveTopicVol   = "vol"
+	OptionsMoveTopicGamma = "gamma"
 
 	optionsMoveRatioWatch   = 2.0
 	optionsMoveRatioNotable = 3.0
@@ -90,6 +95,7 @@ func DetectOptionsMoves(points []OptionsHistoryPoint, now time.Time) *OptionsMov
 			findings = append(findings, *f)
 		}
 	}
+	findings = append(findings, detectOptionsGammaMoves(points, now)...)
 	if len(findings) == 0 {
 		return nil
 	}
@@ -211,6 +217,62 @@ func optionsMoveChange(topic string, end, start float64) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func detectOptionsGammaMoves(points []OptionsHistoryPoint, now time.Time) []OptionsMove {
+	var regime, flip *OptionsMove
+	for _, w := range optionsMoveWindows {
+		past := optionsHistoryAtOrBefore(points, now.Add(-w.Dur), optionsHistorySlack(w.Dur))
+		latest := optionsHistoryLatest(points)
+		if latest.Time.IsZero() || past.Time.IsZero() {
+			continue
+		}
+		sev := OptionsFindingWatch
+		if w.ID == OptionsHistoryWindow1h || w.ID == OptionsHistoryWindow4h {
+			sev = OptionsFindingNotable
+		}
+		if regime == nil && latest.HasGamma && past.HasGamma &&
+			latest.GammaRegime != "" && past.GammaRegime != "" &&
+			latest.GammaRegime != past.GammaRegime &&
+			(latest.GammaRegime == GammaRegimeShort || latest.GammaRegime == GammaRegimeLong) {
+			kind := OptionsMoveGammaToLong
+			title := fmt.Sprintf("Dealer gamma flipped to long (stabler) in %s", w.ID)
+			detail := fmt.Sprintf("Regime was %s; now %s. Net GEX %s.", past.GammaRegime, latest.GammaRegime, FormatSignedQty(latest.GammaNetUSD))
+			if latest.GammaRegime == GammaRegimeShort {
+				kind = OptionsMoveGammaToShort
+				title = fmt.Sprintf("Dealer gamma flipped to short (faster) in %s", w.ID)
+			}
+			regime = &OptionsMove{
+				Kind: kind, Topic: OptionsMoveTopicGamma, Window: w.ID, Severity: sev,
+				Title: title, Detail: detail,
+			}
+		}
+		if flip == nil && latest.HasGammaFlip && past.HasGammaFlip &&
+			latest.GammaFlipSide != "" && past.GammaFlipSide != "" &&
+			latest.GammaFlipSide != past.GammaFlipSide &&
+			(latest.GammaFlipSide == GammaFlipAbove || latest.GammaFlipSide == GammaFlipBelow) {
+			kind := OptionsMoveFlipCrossedUp
+			title := fmt.Sprintf("Spot moved above the gamma flip in %s", w.ID)
+			detail := fmt.Sprintf("Flip was %s of spot; now %s (flip %.0f, spot %.0f).",
+				past.GammaFlipSide, latest.GammaFlipSide, latest.GammaFlip, latest.IndexPrice)
+			if latest.GammaFlipSide == GammaFlipBelow {
+				kind = OptionsMoveFlipCrossedDown
+				title = fmt.Sprintf("Spot moved below the gamma flip in %s", w.ID)
+			}
+			flip = &OptionsMove{
+				Kind: kind, Topic: OptionsMoveTopicGamma, Window: w.ID, Severity: sev,
+				Title: title, Detail: detail,
+			}
+		}
+	}
+	out := make([]OptionsMove, 0, 2)
+	if regime != nil {
+		out = append(out, *regime)
+	}
+	if flip != nil {
+		out = append(out, *flip)
+	}
+	return out
 }
 
 func optionsMoveTitle(kind, window string, current float64, unit string) string {

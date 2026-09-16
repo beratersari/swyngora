@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/sqliteutil"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 
 	_ "modernc.org/sqlite"
@@ -87,6 +88,21 @@ CREATE INDEX IF NOT EXISTS idx_options_samples_lookup
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("options schema: %w", err)
 	}
+	alters := []string{
+		`ALTER TABLE options_samples ADD COLUMN index_price REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE options_samples ADD COLUMN has_index INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE options_samples ADD COLUMN gamma_net_usd REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE options_samples ADD COLUMN has_gamma INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE options_samples ADD COLUMN gamma_regime TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE options_samples ADD COLUMN gamma_flip REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE options_samples ADD COLUMN has_gamma_flip INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE options_samples ADD COLUMN gamma_flip_side TEXT NOT NULL DEFAULT ''`,
+	}
+	for _, stmt := range alters {
+		if err := sqliteutil.ExecAllowExists(s.db, stmt); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -103,11 +119,15 @@ func (s *SQLite) InsertSample(ctx context.Context, rec domain.OptionsSample) (bo
 	res, err := s.db.ExecContext(ctx, `
 INSERT OR IGNORE INTO options_samples (
 	asset, sampled_at_ms, open_interest, open_interest_usd, call_oi, put_oi,
-	put_call_oi, has_put_call, dvol, has_dvol, atm_iv, has_atm
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	put_call_oi, has_put_call, dvol, has_dvol, atm_iv, has_atm,
+	index_price, has_index, gamma_net_usd, has_gamma, gamma_regime,
+	gamma_flip, has_gamma_flip, gamma_flip_side
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `, asset, ms, rec.OpenInterest, rec.OpenInterestUSD,
 		rec.CallOI, rec.PutOI, rec.PutCallOI, boolInt(rec.HasPutCallOI),
-		rec.DVOL, boolInt(rec.HasDVOL), rec.AtmIV, boolInt(rec.HasAtmIV))
+		rec.DVOL, boolInt(rec.HasDVOL), rec.AtmIV, boolInt(rec.HasAtmIV),
+		rec.IndexPrice, boolInt(rec.HasIndex), rec.GammaNetUSD, boolInt(rec.HasGamma), rec.GammaRegime,
+		rec.GammaFlip, boolInt(rec.HasGammaFlip), rec.GammaFlipSide)
 	if err != nil {
 		return false, err
 	}
@@ -118,11 +138,15 @@ INSERT OR IGNORE INTO options_samples (
 	_, err = s.db.ExecContext(ctx, `
 UPDATE options_samples SET
 	open_interest=?, open_interest_usd=?, call_oi=?, put_oi=?,
-	put_call_oi=?, has_put_call=?, dvol=?, has_dvol=?, atm_iv=?, has_atm=?
+	put_call_oi=?, has_put_call=?, dvol=?, has_dvol=?, atm_iv=?, has_atm=?,
+	index_price=?, has_index=?, gamma_net_usd=?, has_gamma=?, gamma_regime=?,
+	gamma_flip=?, has_gamma_flip=?, gamma_flip_side=?
 WHERE asset=? AND sampled_at_ms=?
 `, rec.OpenInterest, rec.OpenInterestUSD, rec.CallOI, rec.PutOI,
 		rec.PutCallOI, boolInt(rec.HasPutCallOI), rec.DVOL, boolInt(rec.HasDVOL),
-		rec.AtmIV, boolInt(rec.HasAtmIV), asset, ms)
+		rec.AtmIV, boolInt(rec.HasAtmIV),
+		rec.IndexPrice, boolInt(rec.HasIndex), rec.GammaNetUSD, boolInt(rec.HasGamma), rec.GammaRegime,
+		rec.GammaFlip, boolInt(rec.HasGammaFlip), rec.GammaFlipSide, asset, ms)
 	return false, err
 }
 
@@ -144,7 +168,9 @@ func (s *SQLite) ListSamples(ctx context.Context, asset string, from, to time.Ti
 	}
 	rows, err := s.db.QueryContext(ctx, `
 SELECT sampled_at_ms, open_interest, open_interest_usd, call_oi, put_oi,
-	put_call_oi, has_put_call, dvol, has_dvol, atm_iv, has_atm
+	put_call_oi, has_put_call, dvol, has_dvol, atm_iv, has_atm,
+	index_price, has_index, gamma_net_usd, has_gamma, gamma_regime,
+	gamma_flip, has_gamma_flip, gamma_flip_side
 FROM options_samples
 WHERE asset = ? AND sampled_at_ms >= ? AND sampled_at_ms <= ?
 ORDER BY sampled_at_ms ASC
@@ -158,9 +184,11 @@ LIMIT ?
 	for rows.Next() {
 		var rec domain.OptionsSample
 		var ms int64
-		var hasPCR, hasDVOL, hasATM int
+		var hasPCR, hasDVOL, hasATM, hasIndex, hasGamma, hasFlip int
 		if err := rows.Scan(&ms, &rec.OpenInterest, &rec.OpenInterestUSD, &rec.CallOI, &rec.PutOI,
-			&rec.PutCallOI, &hasPCR, &rec.DVOL, &hasDVOL, &rec.AtmIV, &hasATM); err != nil {
+			&rec.PutCallOI, &hasPCR, &rec.DVOL, &hasDVOL, &rec.AtmIV, &hasATM,
+			&rec.IndexPrice, &hasIndex, &rec.GammaNetUSD, &hasGamma, &rec.GammaRegime,
+			&rec.GammaFlip, &hasFlip, &rec.GammaFlipSide); err != nil {
 			return nil, err
 		}
 		rec.Asset = asset
@@ -168,6 +196,9 @@ LIMIT ?
 		rec.HasPutCallOI = hasPCR != 0
 		rec.HasDVOL = hasDVOL != 0
 		rec.HasAtmIV = hasATM != 0
+		rec.HasIndex = hasIndex != 0
+		rec.HasGamma = hasGamma != 0
+		rec.HasGammaFlip = hasFlip != 0
 		out = append(out, rec)
 	}
 	return out, rows.Err()

@@ -439,6 +439,24 @@ func optionsHistoryMap(h *domain.OptionsHistory) map[string]any {
 		if w.AtmIV.Complete {
 			row["atmIv"] = optionsHistoryChangeMap(w.AtmIV)
 		}
+		if w.Gamma.Complete {
+			row["gamma"] = optionsHistoryChangeMap(w.Gamma)
+		}
+		if w.Flip.Complete {
+			row["flip"] = optionsHistoryChangeMap(w.Flip)
+		}
+		if w.Regime != "" {
+			row["regime"] = w.Regime
+		}
+		if w.RegimeWas != "" {
+			row["regimeWas"] = w.RegimeWas
+		}
+		if w.FlipSide != "" {
+			row["flipSide"] = w.FlipSide
+		}
+		if w.FlipSideWas != "" {
+			row["flipSideWas"] = w.FlipSideWas
+		}
 		windows = append(windows, row)
 	}
 	points := make([]map[string]any, 0, len(h.Points))
@@ -458,6 +476,17 @@ func optionsHistoryMap(h *domain.OptionsHistory) map[string]any {
 		}
 		if p.HasAtmIV {
 			row["atmIv"] = p.AtmIV
+		}
+		if p.HasIndex {
+			row["indexPrice"] = p.IndexPrice
+		}
+		if p.HasGamma {
+			row["gammaNetUsd"] = p.GammaNetUSD
+			row["gammaRegime"] = p.GammaRegime
+		}
+		if p.HasGammaFlip {
+			row["gammaFlip"] = p.GammaFlip
+			row["gammaFlipSide"] = p.GammaFlipSide
 		}
 		points = append(points, row)
 	}

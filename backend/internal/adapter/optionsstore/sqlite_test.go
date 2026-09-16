@@ -21,6 +21,9 @@ func TestSQLiteInsertListPurge(t *testing.T) {
 	rec := domain.OptionsSample{
 		Asset: "BTC", SampledAt: now, OpenInterest: 10, OpenInterestUSD: 1000,
 		HasPutCallOI: true, PutCallOI: 1.1, HasDVOL: true, DVOL: 49,
+		HasGamma: true, GammaNetUSD: -8e8, GammaRegime: domain.GammaRegimeShort,
+		HasGammaFlip: true, GammaFlip: 97200, GammaFlipSide: domain.GammaFlipAbove,
+		HasIndex: true, IndexPrice: 100000,
 	}
 	ok, err := s.InsertSample(context.Background(), rec)
 	if err != nil || !ok {
@@ -33,6 +36,9 @@ func TestSQLiteInsertListPurge(t *testing.T) {
 	got, err := s.ListSamples(context.Background(), "BTCUSDT", now.Add(-time.Hour), now.Add(time.Hour), 10)
 	if err != nil || len(got) != 1 || got[0].PutCallOI != 1.1 {
 		t.Fatalf("list %+v %v", got, err)
+	}
+	if !got[0].HasGamma || got[0].GammaNetUSD != -8e8 || got[0].GammaFlip != 97200 {
+		t.Fatalf("gamma list %+v", got[0])
 	}
 	n, err := s.PurgeOlderThan(context.Background(), now.Add(time.Minute))
 	if err != nil || n != 1 {

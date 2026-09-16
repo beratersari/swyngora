@@ -1017,8 +1017,9 @@ paths:
         long puts) plus the flip level where net GEX crosses zero.
         `history` is
         1h/4h/24h/7d change plus a chart series for open interest, put/call,
-        and implied vol (DVOL from Deribit; OI/PCR sampled while the desk
-        runs). `moves` lists only unusual short-window OI, put/call, or IV
+        implied vol, and dealer gamma / flip (DVOL from Deribit; OI/PCR/GEX
+        sampled while the desk runs). `moves` lists only unusual short-window OI, put/call, IV,
+        or a dealer-gamma / flip-side change
         changes versus that series' own typical. When options implied vol or
         put/call lean disagrees with live
         spot range or futures funding / account long-short, `vsMarket.findings`
@@ -9204,8 +9205,8 @@ components:
       properties:
         kind:
           type: string
-          enum: [oi_jump, oi_drop, pcr_jump, pcr_drop, iv_jump, iv_drop]
-        topic: { type: string, enum: [oi, lean, vol] }
+          enum: [oi_jump, oi_drop, pcr_jump, pcr_drop, iv_jump, iv_drop, gamma_to_short, gamma_to_long, flip_crossed_up, flip_crossed_down]
+        topic: { type: string, enum: [oi, lean, vol, gamma] }
         window: { type: string, enum: [1h, 4h, 24h] }
         severity: { type: string, enum: [watch, notable] }
         title: { type: string }
@@ -9239,6 +9240,12 @@ components:
         putCall: { $ref: '#/components/schemas/MarketOptionsHistoryChange' }
         dvol: { $ref: '#/components/schemas/MarketOptionsHistoryChange' }
         atmIv: { $ref: '#/components/schemas/MarketOptionsHistoryChange' }
+        gamma: { $ref: '#/components/schemas/MarketOptionsHistoryChange', description: Net dealer GEX change (USD per 1% move) }
+        flip: { $ref: '#/components/schemas/MarketOptionsHistoryChange', description: Gamma flip level change }
+        regime: { type: string, enum: [long, short, flat] }
+        regimeWas: { type: string, enum: [long, short, flat], description: Regime at the start of the window when it changed }
+        flipSide: { type: string, enum: [above, below, at] }
+        flipSideWas: { type: string, enum: [above, below, at] }
         complete: { type: boolean }
     MarketOptionsHistoryPoint:
       type: object
@@ -9249,9 +9256,14 @@ components:
         putCallOi: { type: string }
         dvol: { type: string }
         atmIv: { type: string }
+        indexPrice: { type: string }
+        gammaNetUsd: { type: string, description: Signed dealer GEX (USD delta per 1% move) }
+        gammaRegime: { type: string, enum: [long, short, flat] }
+        gammaFlip: { type: string }
+        gammaFlipSide: { type: string, enum: [above, below, at] }
     MarketOptionsHistory:
       type: object
-      description: How listed OI, put/call, and implied vol moved over the last hours and days
+      description: How listed OI, put/call, implied vol, and dealer gamma moved over the last hours and days
       properties:
         windows:
           type: array

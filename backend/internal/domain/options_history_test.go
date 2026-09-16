@@ -13,11 +13,22 @@ func TestOptionsSampleFromSnapshot(t *testing.T) {
 		OpenInterest: 100, OpenInterestUSD: 1e7,
 		PutCallOI: 1.2, HasPutCallOI: true,
 		DVOL: 50, HasDVOL: true,
-		ATM: &OptionsATM{IV: 51},
+		ATM:        &OptionsATM{IV: 51},
+		IndexPrice: 100000,
+		Gamma: &OptionsGamma{
+			NetUSD: -8e8, Regime: GammaRegimeShort, HasFlip: true,
+			Flip: 97200, FlipSide: GammaFlipAbove,
+		},
 	}
 	got, ok := OptionsSampleFromSnapshot(snap)
 	if !ok || got.Asset != "BTC" || got.OpenInterest != 100 || !got.HasAtmIV {
 		t.Fatalf("%+v ok=%v", got, ok)
+	}
+	if !got.HasGamma || got.GammaNetUSD != -8e8 || got.GammaRegime != GammaRegimeShort {
+		t.Fatalf("gamma sample %+v", got)
+	}
+	if !got.HasGammaFlip || got.GammaFlip != 97200 || got.GammaFlipSide != GammaFlipAbove {
+		t.Fatalf("flip sample %+v", got)
 	}
 	if got.SampledAt.Minute() != 5 {
 		t.Fatalf("bucket=%v", got.SampledAt)
@@ -67,6 +78,55 @@ func TestBuildOptionsHistory_WindowsAndPoints(t *testing.T) {
 	}
 	if d7 == nil || !d7.DVOL.Complete || d7.DVOL.Past != 40 {
 		t.Fatalf("7d dvol %+v", d7)
+	}
+}
+
+func TestBuildOptionsHistory_GammaAndFlip(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 3, 2, 12, 0, 0, 0, time.UTC)
+	snap := &OptionsSnapshot{
+		Asset: "BTC", AsOf: now, IndexPrice: 101000,
+		Gamma: &OptionsGamma{
+			NetUSD: -200, Regime: GammaRegimeShort, HasFlip: true,
+			Flip: 98000, FlipSide: GammaFlipAbove,
+		},
+	}
+	samples := []OptionsSample{
+		{
+			Asset: "BTC", SampledAt: now.Add(-25 * time.Hour),
+			HasGamma: true, GammaNetUSD: 400, GammaRegime: GammaRegimeLong,
+			HasGammaFlip: true, GammaFlip: 102000, GammaFlipSide: GammaFlipBelow,
+			HasIndex: true, IndexPrice: 100000,
+		},
+	}
+	got := BuildOptionsHistory(snap, samples, nil, now)
+	if got == nil {
+		t.Fatal("nil history")
+	}
+	var h24 *OptionsHistoryWindow
+	for i := range got.Windows {
+		if got.Windows[i].Window == OptionsHistoryWindow24h {
+			h24 = &got.Windows[i]
+		}
+	}
+	if h24 == nil || !h24.Gamma.Complete || h24.Gamma.Current != -200 || h24.Gamma.Past != 400 {
+		t.Fatalf("24h gamma %+v", h24)
+	}
+	if !h24.HasRegimeChange || h24.Regime != GammaRegimeShort || h24.RegimeWas != GammaRegimeLong {
+		t.Fatalf("regime %+v", h24)
+	}
+	if !h24.Flip.Complete || !h24.HasFlipSideChange || h24.FlipSide != GammaFlipAbove {
+		t.Fatalf("flip %+v", h24)
+	}
+	var sawGamma bool
+	for _, p := range got.Points {
+		if p.HasGamma {
+			sawGamma = true
+			break
+		}
+	}
+	if !sawGamma {
+		t.Fatalf("points missing gamma %+v", got.Points)
 	}
 }
 

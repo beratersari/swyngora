@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Options gamma history:** net GEX, regime, and flip vs index are sampled with the options desk and shown on the Over time chart (Dealer GEX / Gamma flip). Windows say when the book flipped to short/long gamma or spot crossed the flip. `history` on `GET /api/v1/market/options` (`docs/features/options.md`)
 - **Options dealer gamma:** net GEX (USD delta per 1% spot move), call vs put split, regime (long = stabler, short = faster), and the gamma flip level from a re-gammad strike profile. `gamma` on `GET /api/v1/market/options`, web `/options` (`docs/features/options.md`)
 - **Liquidation level alerts:** `kind=liquidation_level` fires when last price or later prints hit a predicted 10x/25x/50x/100x band that clears later-print confidence (`any` / `fair` / `high`). Low-confidence bands do not fire the same alert as bands that keep working. Notional alerts now include `importance` and the matching level when prints land in a predicted pocket (`docs/features/price-alerts.md`)
 

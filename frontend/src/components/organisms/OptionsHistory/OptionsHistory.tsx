@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/atoms/Skeleton';
 import { Text } from '@/components/atoms/Text';
 import { semanticColors } from '@/styles/tokens';
 import { OPTIONS_HISTORY_METRICS, OPTIONS_HISTORY_RANGES } from './constants';
-import { formatHistoryDelta, historyMetricHasData, historyWindow, toHistoryLine } from './helpers';
+import { historyMetricHasData, historyWindow, toHistoryLine, windowChipLabel } from './helpers';
 import { ChartBox, Chip, Chips, Stack, Toolbar } from './OptionsHistory.styles';
 import type { OptionsHistoryMetric, OptionsHistoryProps, OptionsHistoryRange } from './OptionsHistory.types';
 
@@ -17,14 +17,21 @@ export function OptionsHistory({ data, isLoading }: OptionsHistoryProps) {
   const boxRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const compareRef = useRef<ISeriesApi<'Line'> | null>(null);
   const lineRef = useRef<ReturnType<typeof toHistoryLine>>([]);
+  const compareLineRef = useRef<ReturnType<typeof toHistoryLine>>([]);
 
   const history = data?.history;
   const line = useMemo(
     () => toHistoryLine(history?.points, metric, range),
     [history?.points, metric, range],
   );
+  const compareLine = useMemo(
+    () => (metric === 'flip' ? toHistoryLine(history?.points, 'index', range) : []),
+    [history?.points, metric, range],
+  );
   lineRef.current = line;
+  compareLineRef.current = compareLine;
   const ready = line.length > 0;
   const win24 = historyWindow(history?.windows, '24h');
 
@@ -58,11 +65,24 @@ export function OptionsHistory({ data, isLoading }: OptionsHistoryProps) {
       lastValueVisible: true,
       priceLineVisible: false,
     });
+    const compare = chart.addSeries(LineSeries, {
+      color: semanticColors.chart.neutral,
+      lineWidth: 2,
+      lastValueVisible: true,
+      priceLineVisible: false,
+    });
     chartRef.current = chart;
     seriesRef.current = series;
+    compareRef.current = compare;
     const initial = lineRef.current;
     if (initial.length > 0) {
       series.setData(initial.map((p) => ({ time: p.time as Time, value: p.value })));
+    }
+    const overlay = compareLineRef.current;
+    if (overlay.length > 0) {
+      compare.setData(overlay.map((p) => ({ time: p.time as Time, value: p.value })));
+    }
+    if (initial.length > 0 || overlay.length > 0) {
       chart.timeScale().fitContent();
     }
     const ro = new ResizeObserver(() => {
@@ -80,16 +100,21 @@ export function OptionsHistory({ data, isLoading }: OptionsHistoryProps) {
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
+      compareRef.current = null;
     };
-  }, [ready, range]);
+  }, [ready, range, metric]);
 
   useEffect(() => {
     const series = seriesRef.current;
+    const compare = compareRef.current;
     const chart = chartRef.current;
     if (!series || !chart || line.length === 0) return;
     series.setData(line.map((p) => ({ time: p.time as Time, value: p.value })));
+    if (compare) {
+      compare.setData(compareLine.map((p) => ({ time: p.time as Time, value: p.value })));
+    }
     chart.timeScale().fitContent();
-  }, [line]);
+  }, [line, compareLine]);
 
   if (isLoading && !data) {
     return <Skeleton height={240} />;
@@ -109,19 +134,20 @@ export function OptionsHistory({ data, isLoading }: OptionsHistoryProps) {
       <Chips>
         {(['1h', '4h', '24h', '7d'] as const).map((id) => {
           const win = historyWindow(history.windows, id);
-          const delta =
-            metric === 'oi'
-              ? formatHistoryDelta(win?.oi?.changePct)
-              : metric === 'pcr'
-                ? formatHistoryDelta(win?.putCall?.changePct)
-                : formatHistoryDelta(win?.dvol?.changePct);
+          const chip = windowChipLabel(win, metric);
+          let label = chip.delta;
+          if (chip.note === 'regime' && chip.to) {
+            label = t(`history.regimeTo.${chip.to}` as 'history.regimeTo.short');
+          } else if (chip.note === 'flipSide' && chip.to) {
+            label = t(`history.spot.${chip.to}` as 'history.spot.above');
+          }
           return (
             <Chip key={id}>
               <Text variant="caption" color="secondary">
                 {t(`history.window.${id}`)}
               </Text>
               <Text variant="bodySm" color="primary">
-                {delta || t('history.collecting')}
+                {label || t('history.collecting')}
               </Text>
             </Chip>
           );
@@ -153,7 +179,11 @@ export function OptionsHistory({ data, isLoading }: OptionsHistoryProps) {
 
       {!metricReady ? (
         <Text variant="bodySm" color="secondary">
-          {metric === 'iv' ? t('history.emptyIv') : t('history.collectingSeries')}
+          {metric === 'iv'
+            ? t('history.emptyIv')
+            : metric === 'gex' || metric === 'flip'
+              ? t('history.emptyGamma')
+              : t('history.collectingSeries')}
         </Text>
       ) : (
         <ChartBox ref={boxRef} data-testid="options-history-chart" />

@@ -592,8 +592,9 @@ export interface paths {
          *     long puts) plus the flip level where net GEX crosses zero.
          *     `history` is
          *     1h/4h/24h/7d change plus a chart series for open interest, put/call,
-         *     and implied vol (DVOL from Deribit; OI/PCR sampled while the desk
-         *     runs). `moves` lists only unusual short-window OI, put/call, or IV
+         *     implied vol, and dealer gamma / flip (DVOL from Deribit; OI/PCR/GEX
+         *     sampled while the desk runs). `moves` lists only unusual short-window OI, put/call, IV,
+         *     or a dealer-gamma / flip-side change
          *     changes versus that series' own typical. When options implied vol or
          *     put/call lean disagrees with live
          *     spot range or futures funding / account long-short, `vsMarket.findings`
@@ -5426,9 +5427,9 @@ export interface components {
         /** @description One unusual short-window change in OI, put/call, or implied vol */
         MarketOptionsMove: {
             /** @enum {string} */
-            kind?: "oi_jump" | "oi_drop" | "pcr_jump" | "pcr_drop" | "iv_jump" | "iv_drop";
+            kind?: "oi_jump" | "oi_drop" | "pcr_jump" | "pcr_drop" | "iv_jump" | "iv_drop" | "gamma_to_short" | "gamma_to_long" | "flip_crossed_up" | "flip_crossed_down";
             /** @enum {string} */
-            topic?: "oi" | "lean" | "vol";
+            topic?: "oi" | "lean" | "vol" | "gamma";
             /** @enum {string} */
             window?: "1h" | "4h" | "24h";
             /** @enum {string} */
@@ -5465,6 +5466,21 @@ export interface components {
             putCall?: components["schemas"]["MarketOptionsHistoryChange"];
             dvol?: components["schemas"]["MarketOptionsHistoryChange"];
             atmIv?: components["schemas"]["MarketOptionsHistoryChange"];
+            /** @description Net dealer GEX change (USD per 1% move) */
+            gamma?: components["schemas"]["MarketOptionsHistoryChange"];
+            /** @description Gamma flip level change */
+            flip?: components["schemas"]["MarketOptionsHistoryChange"];
+            /** @enum {string} */
+            regime?: "long" | "short" | "flat";
+            /**
+             * @description Regime at the start of the window when it changed
+             * @enum {string}
+             */
+            regimeWas?: "long" | "short" | "flat";
+            /** @enum {string} */
+            flipSide?: "above" | "below" | "at";
+            /** @enum {string} */
+            flipSideWas?: "above" | "below" | "at";
             complete?: boolean;
         };
         MarketOptionsHistoryPoint: {
@@ -5475,8 +5491,16 @@ export interface components {
             putCallOi?: string;
             dvol?: string;
             atmIv?: string;
+            indexPrice?: string;
+            /** @description Signed dealer GEX (USD delta per 1% move) */
+            gammaNetUsd?: string;
+            /** @enum {string} */
+            gammaRegime?: "long" | "short" | "flat";
+            gammaFlip?: string;
+            /** @enum {string} */
+            gammaFlipSide?: "above" | "below" | "at";
         };
-        /** @description How listed OI, put/call, and implied vol moved over the last hours and days */
+        /** @description How listed OI, put/call, implied vol, and dealer gamma moved over the last hours and days */
         MarketOptionsHistory: {
             windows?: components["schemas"]["MarketOptionsHistoryWindow"][];
             points?: components["schemas"]["MarketOptionsHistoryPoint"][];

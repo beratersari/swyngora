@@ -30,7 +30,7 @@ var OptionsHistoryWindows = []struct {
 	{OptionsHistoryWindow7d, 7 * 24 * time.Hour},
 }
 
-// OptionsSample is one persisted desk print (OI, put/call, IV).
+// OptionsSample is one persisted desk print (OI, put/call, IV, dealer gamma).
 type OptionsSample struct {
 	Asset           string
 	SampledAt       time.Time
@@ -44,6 +44,14 @@ type OptionsSample struct {
 	HasDVOL         bool
 	AtmIV           float64
 	HasAtmIV        bool
+	IndexPrice      float64
+	HasIndex        bool
+	GammaNetUSD     float64
+	HasGamma        bool
+	GammaRegime     string
+	GammaFlip       float64
+	HasGammaFlip    bool
+	GammaFlipSide   string
 }
 
 // OptionsDVOLPoint is one Deribit DVOL close.
@@ -64,16 +72,32 @@ type OptionsHistoryPoint struct {
 	HasDVOL         bool
 	AtmIV           float64
 	HasAtmIV        bool
+	IndexPrice      float64
+	HasIndex        bool
+	GammaNetUSD     float64
+	HasGamma        bool
+	GammaRegime     string
+	GammaFlip       float64
+	HasGammaFlip    bool
+	GammaFlipSide   string
 }
 
-// OptionsHistoryWindow is current vs a lookback for OI, PCR, and IV.
+// OptionsHistoryWindow is current vs a lookback for OI, PCR, IV, and dealer gamma.
 type OptionsHistoryWindow struct {
-	Window   string
-	OI       SnapshotChange
-	PutCall  SnapshotChange
-	DVOL     SnapshotChange
-	AtmIV    SnapshotChange
-	Complete bool
+	Window            string
+	OI                SnapshotChange
+	PutCall           SnapshotChange
+	DVOL              SnapshotChange
+	AtmIV             SnapshotChange
+	Gamma             SnapshotChange
+	Flip              SnapshotChange
+	Regime            string
+	RegimeWas         string
+	HasRegimeChange   bool
+	FlipSide          string
+	FlipSideWas       string
+	HasFlipSideChange bool
+	Complete          bool
 }
 
 // OptionsHistory is how the options desk moved over the last hours and days.
@@ -122,7 +146,21 @@ func OptionsSampleFromSnapshot(snap *OptionsSnapshot) (OptionsSample, bool) {
 		out.AtmIV = snap.ATM.IV
 		out.HasAtmIV = true
 	}
-	if out.OpenInterest <= 0 && !out.HasDVOL && !out.HasPutCallOI && !out.HasAtmIV {
+	if snap.IndexPrice > 0 {
+		out.IndexPrice = snap.IndexPrice
+		out.HasIndex = true
+	}
+	if snap.Gamma != nil {
+		out.GammaNetUSD = snap.Gamma.NetUSD
+		out.HasGamma = true
+		out.GammaRegime = snap.Gamma.Regime
+		if snap.Gamma.HasFlip {
+			out.GammaFlip = snap.Gamma.Flip
+			out.HasGammaFlip = true
+			out.GammaFlipSide = snap.Gamma.FlipSide
+		}
+	}
+	if out.OpenInterest <= 0 && !out.HasDVOL && !out.HasPutCallOI && !out.HasAtmIV && !out.HasGamma {
 		return OptionsSample{}, false
 	}
 	return out, true
@@ -140,7 +178,7 @@ func BuildOptionsHistory(snap *OptionsSnapshot, samples []OptionsSample, dvol []
 		Points:  nil,
 		From:    from,
 		To:      now,
-		Note:    "Open interest and put/call are sampled while the desk runs (5-minute buckets). Implied vol also uses Deribit DVOL history. Informational only — not financial advice.",
+		Note:    "Open interest, put/call, and dealer gamma are sampled while the desk runs (5-minute buckets). Implied vol also uses Deribit DVOL history. Informational only — not financial advice.",
 	}
 	merged := mergeOptionsHistory(snap, samples, dvol, from, now)
 	out.Points = downsampleOptionsHistory(merged, OptionsHistoryMaxPoints)
@@ -163,7 +201,28 @@ func BuildOptionsHistory(snap *OptionsSnapshot, samples []OptionsSample, dvol []
 		if latest.HasAtmIV && past.HasAtmIV {
 			win.AtmIV = ChangeFromValues(spec.ID, latest.AtmIV, past.AtmIV, true)
 		}
-		win.Complete = win.OI.Complete || win.PutCall.Complete || win.DVOL.Complete || win.AtmIV.Complete
+		if latest.HasGamma && past.HasGamma {
+			win.Gamma = ChangeFromValues(spec.ID, latest.GammaNetUSD, past.GammaNetUSD, true)
+		}
+		if latest.HasGammaFlip && past.HasGammaFlip {
+			win.Flip = ChangeFromValues(spec.ID, latest.GammaFlip, past.GammaFlip, true)
+		}
+		if latest.GammaRegime != "" {
+			win.Regime = latest.GammaRegime
+			if past.GammaRegime != "" && past.GammaRegime != latest.GammaRegime {
+				win.RegimeWas = past.GammaRegime
+				win.HasRegimeChange = true
+			}
+		}
+		if latest.GammaFlipSide != "" {
+			win.FlipSide = latest.GammaFlipSide
+			if past.GammaFlipSide != "" && past.GammaFlipSide != latest.GammaFlipSide {
+				win.FlipSideWas = past.GammaFlipSide
+				win.HasFlipSideChange = true
+			}
+		}
+		win.Complete = win.OI.Complete || win.PutCall.Complete || win.DVOL.Complete || win.AtmIV.Complete ||
+			win.Gamma.Complete || win.Flip.Complete || win.HasRegimeChange || win.HasFlipSideChange
 		out.Windows = append(out.Windows, win)
 	}
 	if snap != nil {
@@ -219,6 +278,7 @@ func mergeOptionsHistory(snap *OptionsSnapshot, samples []OptionsSample, dvol []
 			p.AtmIV = s.AtmIV
 			p.HasAtmIV = true
 		}
+		copySampleGamma(p, s)
 	}
 	for _, d := range dvol {
 		p := put(d.Time)
@@ -251,11 +311,14 @@ func mergeOptionsHistory(snap *OptionsSnapshot, samples []OptionsSample, dvol []
 				p.AtmIV = snap.ATM.IV
 				p.HasAtmIV = true
 			}
+			if rec, ok := OptionsSampleFromSnapshot(snap); ok {
+				copySampleGamma(p, rec)
+			}
 		}
 	}
 	out := make([]OptionsHistoryPoint, 0, len(byTs))
 	for _, p := range byTs {
-		if p.HasOI || p.HasPutCallOI || p.HasDVOL || p.HasAtmIV {
+		if p.HasOI || p.HasPutCallOI || p.HasDVOL || p.HasAtmIV || p.HasGamma || p.HasGammaFlip {
 			out = append(out, *p)
 		}
 	}
@@ -264,8 +327,28 @@ func mergeOptionsHistory(snap *OptionsSnapshot, samples []OptionsSample, dvol []
 	return out
 }
 
+func copySampleGamma(p *OptionsHistoryPoint, s OptionsSample) {
+	if p == nil {
+		return
+	}
+	if s.HasIndex && s.IndexPrice > 0 {
+		p.IndexPrice = s.IndexPrice
+		p.HasIndex = true
+	}
+	if s.HasGamma {
+		p.GammaNetUSD = s.GammaNetUSD
+		p.HasGamma = true
+		p.GammaRegime = s.GammaRegime
+	}
+	if s.HasGammaFlip && s.GammaFlip > 0 {
+		p.GammaFlip = s.GammaFlip
+		p.HasGammaFlip = true
+		p.GammaFlipSide = s.GammaFlipSide
+	}
+}
+
 func forwardFillOptionsHistory(in []OptionsHistoryPoint) {
-	var oi, pcr, atm OptionsHistoryPoint
+	var oi, pcr, atm, gex OptionsHistoryPoint
 	for i := range in {
 		if in[i].HasOI {
 			oi = in[i]
@@ -285,6 +368,24 @@ func forwardFillOptionsHistory(in []OptionsHistoryPoint) {
 		} else if atm.HasAtmIV {
 			in[i].AtmIV = atm.AtmIV
 			in[i].HasAtmIV = true
+		}
+		if in[i].HasGamma || in[i].HasGammaFlip || in[i].HasIndex {
+			gex = in[i]
+		} else if gex.HasGamma || gex.HasGammaFlip || gex.HasIndex {
+			if gex.HasGamma && !in[i].HasGamma {
+				in[i].GammaNetUSD = gex.GammaNetUSD
+				in[i].HasGamma = true
+				in[i].GammaRegime = gex.GammaRegime
+			}
+			if gex.HasGammaFlip && !in[i].HasGammaFlip {
+				in[i].GammaFlip = gex.GammaFlip
+				in[i].HasGammaFlip = true
+				in[i].GammaFlipSide = gex.GammaFlipSide
+			}
+			if gex.HasIndex && !in[i].HasIndex {
+				in[i].IndexPrice = gex.IndexPrice
+				in[i].HasIndex = true
+			}
 		}
 	}
 }
