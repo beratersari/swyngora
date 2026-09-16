@@ -5,6 +5,7 @@ import { Text } from '@/components/atoms/Text';
 import { PageHeader } from '@/components/molecules/PageHeader';
 import { OptionsExpiryBars } from '@/components/organisms/OptionsExpiryBars';
 import { OptionsExpiryDetail } from '@/components/organisms/OptionsExpiryDetail';
+import { OptionsGammaPanel } from '@/components/organisms/OptionsGammaPanel';
 import { OptionsHistory } from '@/components/organisms/OptionsHistory';
 import { OptionsMoves } from '@/components/organisms/OptionsMoves';
 import { OptionsStatCards } from '@/components/organisms/OptionsStatCards';
@@ -124,6 +125,18 @@ export function OptionsPage() {
           </Text>
         </Toolbar>
         <OptionsVolStructure data={data} isLoading={query.isLoading} />
+      </Panel>
+
+      <Panel>
+        <Toolbar>
+          <Text variant="bodySm" color="primary">
+            {t('gamma.title')}
+          </Text>
+          <Text variant="caption" color="secondary">
+            {t('gamma.subtitle')}
+          </Text>
+        </Toolbar>
+        <OptionsGammaPanel data={data} isLoading={query.isLoading} />
       </Panel>
 
       <Panel>

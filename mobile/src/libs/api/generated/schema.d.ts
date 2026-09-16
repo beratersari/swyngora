@@ -587,7 +587,10 @@ export interface paths {
          *     ATM implied vol near the 30-day tenor, IV term structure (ATM IV by
          *     expiry), call/put skew (ATM put IV minus call IV, plus ~5% OTM wing),
          *     open-interest by expiry, and per-expiry 1-SD expected move plus max
-         *     pain (strike that minimizes call+put intrinsic payout). `history` is
+         *     pain (strike that minimizes call+put intrinsic payout). `gamma` is
+         *     dealer gamma exposure (USD delta per 1% spot move; short calls /
+         *     long puts) plus the flip level where net GEX crosses zero.
+         *     `history` is
          *     1h/4h/24h/7d change plus a chart series for open interest, put/call,
          *     and implied vol (DVOL from Deribit; OI/PCR sampled while the desk
          *     runs). `moves` lists only unusual short-window OI, put/call, or IV
@@ -5249,6 +5252,17 @@ export interface components {
             maxPain?: string;
             /** @description USD intrinsic at max pain */
             maxPainPayout?: string;
+            /** @description Dealer GEX on this expiry (USD delta per 1% spot move) */
+            gammaNetUsd?: string;
+            gammaCallUsd?: string;
+            gammaPutUsd?: string;
+            /** @enum {string} */
+            gammaRegime?: "long" | "short" | "flat";
+            /** @description Spot where this expiry's net GEX crosses zero */
+            gammaFlip?: string;
+            /** @enum {string} */
+            gammaFlipSide?: "above" | "below" | "at";
+            gammaFlipDistPct?: string;
             strikes?: components["schemas"]["MarketOptionsExpiryStrike"][];
         };
         MarketOptionsExpiryStrike: {
@@ -5259,6 +5273,10 @@ export interface components {
             payout?: string;
             isMaxPain?: boolean;
             belowSpot?: boolean;
+            /** @description Dealer GEX at the current index for this strike */
+            gammaNetUsd?: string;
+            gammaCallUsd?: string;
+            gammaPutUsd?: string;
         };
         /** @description ATM implied vol on one expiry */
         MarketOptionsVolPoint: {
@@ -5326,6 +5344,40 @@ export interface components {
             summary?: string;
             findings?: components["schemas"]["MarketOptionsFinding"][];
         };
+        /** @description Dealer GEX if the index were at this spot (book re-gammad) */
+        MarketOptionsGammaLevel: {
+            spot?: string;
+            /** @description Net dealer GEX (USD delta per 1% move) */
+            netUsd?: string;
+            callUsd?: string;
+            putUsd?: string;
+        };
+        /**
+         * @description Dealer gamma exposure from listed inverse options. Assumes market makers
+         *     are short calls and long puts. Units are USD of delta for a 1% spot move.
+         *     Positive net = long gamma (fade / stabler). Negative = short gamma (chase / faster).
+         *     flip is the index where net GEX crosses zero on the re-gammad profile.
+         */
+        MarketOptionsGamma: {
+            netUsd?: string;
+            callUsd?: string;
+            putUsd?: string;
+            /** @enum {string} */
+            regime?: "long" | "short" | "flat";
+            flip?: string;
+            /**
+             * @description Where the index sits vs flip
+             * @enum {string}
+             */
+            flipSide?: "above" | "below" | "at";
+            /** @description Signed percent of index minus flip */
+            flipDistPct?: string;
+            /** @description Contracts with mark IV and OI used for gamma */
+            used?: number;
+            /** @description OI rows skipped (no IV or expired) */
+            skipped?: number;
+            profile?: components["schemas"]["MarketOptionsGammaLevel"][];
+        };
         /** @description Deribit BTC/ETH options overview */
         MarketOptions: {
             /** @enum {string} */
@@ -5365,6 +5417,7 @@ export interface components {
             listed?: number;
             withOi?: number;
             withIv?: number;
+            gamma?: components["schemas"]["MarketOptionsGamma"];
             vsMarket?: components["schemas"]["MarketOptionsVsMarket"];
             history?: components["schemas"]["MarketOptionsHistory"];
             moves?: components["schemas"]["MarketOptionsMoves"];

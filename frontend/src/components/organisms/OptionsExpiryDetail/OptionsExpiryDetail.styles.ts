@@ -9,7 +9,7 @@ export const Stack = styled.div`
 
 export const Cards = styled.div`
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
   gap: ${({ theme }) => theme.spacing[2]}px;
 
   @media (max-width: 720px) {

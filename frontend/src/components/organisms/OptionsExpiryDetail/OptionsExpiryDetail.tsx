@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import { Text } from '@/components/atoms/Text';
 import { formatCompactAmount, formatPrice } from '@/libs/utils';
-import { formatMovePct, maxPayout, payoutPct } from './helpers';
+import { formatMovePct, formatSignedCompact, maxPayout, payoutPct } from './helpers';
 import { Card, Cards, Fill, Stack, StrikeRow, Track } from './OptionsExpiryDetail.styles';
 import type { OptionsExpiryDetailProps } from './OptionsExpiryDetail.types';
 
@@ -62,6 +62,32 @@ export function OptionsExpiryDetail({ expiry, indexPrice, isLoading }: OptionsEx
             {indexPrice
               ? t('detail.maxPainHint', { spot: formatPrice(indexPrice) })
               : t('detail.maxPainEmpty')}
+          </Text>
+        </Card>
+        <Card>
+          <Text variant="caption" color="secondary">
+            {t('detail.gex')}
+          </Text>
+          <Text variant="h3" color="primary">
+            {expiry.gammaNetUsd ? formatSignedCompact(expiry.gammaNetUsd) : '—'}
+          </Text>
+          <Text variant="caption" color="secondary">
+            {expiry.gammaRegime
+              ? t('detail.gexHint', {
+                  regime: t(`gamma.regimeLabel.${expiry.gammaRegime}` as 'gamma.regimeLabel.flat'),
+                })
+              : t('detail.gexEmpty')}
+          </Text>
+        </Card>
+        <Card>
+          <Text variant="caption" color="secondary">
+            {t('detail.flip')}
+          </Text>
+          <Text variant="h3" color="primary">
+            {expiry.gammaFlip ? formatPrice(expiry.gammaFlip) : '—'}
+          </Text>
+          <Text variant="caption" color="secondary">
+            {indexPrice ? t('detail.flipHint', { spot: formatPrice(indexPrice) }) : t('detail.flipEmpty')}
           </Text>
         </Card>
       </Cards>

@@ -32,7 +32,8 @@ This is **not** futures open interest (`/market/open-interest`).
 | `atm` | ATM IV on the expiry nearest 30 days (7–45 DTE preferred); call/put average when both exist |
 | `termStructure` | ATM / call / put mark IV and put−call skew on every live expiry |
 | `skew` | Headline ATM skew (put IV − call IV), term slope (back − front ATM), and ~5% OTM wing skew |
-| `expiries` | OI, volume, PCR, ATM IV, skew, 1-SD expected move, max pain, and strike payouts by expiry |
+| `expiries` | OI, volume, PCR, ATM IV, skew, 1-SD expected move, max pain, dealer GEX / flip, and strike payouts by expiry |
+| `gamma` | Dealer gamma: net / call / put USD delta per 1% spot move, regime (`long` = stabler, `short` = faster), flip level, and a re-gammad profile |
 | `vsMarket` | Best-effort compare vs live spot range and futures funding / account long-short. `findings` is **only** populated when implied vol or put/call lean disagrees |
 | `history` | 1h / 4h / 24h / 7d change plus a chart series for open interest, put/call, and DVOL |
 | `moves` | Unusual short-window OI / put-call / IV vs that series' own typical. Empty when nothing stands out |
@@ -40,7 +41,7 @@ This is **not** futures open interest (`/market/open-interest`).
 Open interest and volume are in the **base coin**. USD is `coin × underlying`
 (or Deribit `volume_usd` when present).
 
-Web: `/options` — BTC / ETH toggle, headline cards, **important moves** (only when OI / put-call / IV jumps much more than typical), **over-time** chart (OI / put-call / IV for 12h, 48h, 7d), term structure + skew, expiry bars. Selecting an expiry (`?expiry=`) shows the 1-SD expected move and max-pain strike. A vs-market panel appears only when options IV or put/call lean disagrees with spot or futures.
+Web: `/options` — BTC / ETH toggle, headline cards, **important moves** (only when OI / put-call / IV jumps much more than typical), **over-time** chart (OI / put-call / IV for 12h, 48h, 7d), term structure + skew, **dealer gamma** (net GEX + flip + profile), expiry bars. Selecting an expiry (`?expiry=`) shows the 1-SD expected move, max-pain strike, and that expiry's GEX / flip. A vs-market panel appears only when options IV or put/call lean disagrees with spot or futures.
 
 MCP: `get_options_overview`.
 
@@ -52,7 +53,7 @@ before / during / after windows and flag unusual prints — see
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/options.go`, `options_history.go`, `options_moves.go` |
+| Domain | `backend/internal/domain/options.go`, `options_gamma.go`, `options_history.go`, `options_moves.go` |
 | Adapter | `backend/internal/adapter/deribit`, `backend/internal/adapter/optionsstore` |
 | Service | `GetOptions` |
 | HTTP | `GET /api/v1/market/options` |
@@ -75,6 +76,7 @@ curl -s 'http://localhost:8080/api/v1/market/options?asset=BTC' | jq .
 - Term structure is ATM mark IV by expiry. Skew is ATM put IV minus ATM call IV (positive = puts richer). Wing skew uses the listed strike nearest 5% below / above spot on the 30-day tenor. Not 25-delta risk reversal (book summary has no delta).
 - Expected move is one standard deviation: `spot × (ATM IV / 100) × √(DTE/365)`. Not a guarantee.
 - Max pain evaluates listed strikes only: payout = Σ callOI × max(S−K, 0) + Σ putOI × max(K−S, 0) using coin OI. Inverse settlement is not modeled.
+- Dealer gamma is Black–Scholes from each contract's mark IV (r = q = 0). Book summary has no venue greeks. Call GEX is signed negative and put GEX positive (dealers short calls / long puts). Units are USD of delta for a 1% spot move (`γ × OI × S² × 0.01`). Same-day tenors are floored at 1 hour. Contracts without mark IV are skipped (`skipped`). The flip is interpolated on a re-gammad profile of listed strikes inside ±20% of the index (plus-to-minus crossing nearest spot preferred). Not a published dealer book.
 - `vsMarket` uses Binance spot 24h high–low (annualized) vs ATM/DVOL, nearest-expiry expected move vs that range, PCR/skew lean vs futures account long% and funding, and max pain vs the Deribit index. Missing tape is skipped — the options snapshot still returns.
 - `history` DVOL series comes from Deribit `get_volatility_index_data` (hourly). Open interest and put/call are sampled every 5 minutes into `data/options.db` while the backend runs — they start empty on a fresh process.
 - `moves` compares the latest 1h / 4h / 24h change to the median of prior same-length windows. A finding fires only when the move is at least a floor (e.g. 5% OI / 0.10 PCR / 1.5 DVOL pts in 1h) **and** at least 2× typical. One finding per series (hottest window).

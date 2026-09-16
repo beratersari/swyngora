@@ -32,40 +32,50 @@ type optionsATMDTO struct {
 }
 
 type optionsExpiryDTO struct {
-	Expiry          time.Time                `json:"expiry"`
-	Label           string                   `json:"label"`
-	DaysToExpiry    int                      `json:"daysToExpiry"`
-	OpenInterest    string                   `json:"openInterest"`
-	OpenInterestUsd string                   `json:"openInterestUsd"`
-	Volume          string                   `json:"volume"`
-	VolumeUsd       string                   `json:"volumeUsd"`
-	CallOi          string                   `json:"callOi"`
-	PutOi           string                   `json:"putOi"`
-	CallVolume      string                   `json:"callVolume"`
-	PutVolume       string                   `json:"putVolume"`
-	PutCallOi       string                   `json:"putCallOi,omitempty"`
-	SharePct        string                   `json:"sharePct"`
-	ContractCount   int                      `json:"contractCount"`
-	AtmIv           string                   `json:"atmIv,omitempty"`
-	CallIv          string                   `json:"callIv,omitempty"`
-	PutIv           string                   `json:"putIv,omitempty"`
-	Skew            string                   `json:"skew,omitempty"`
-	ExpectedMoveAbs string                   `json:"expectedMoveAbs,omitempty"`
-	ExpectedMovePct string                   `json:"expectedMovePct,omitempty"`
-	ExpectedLow     string                   `json:"expectedLow,omitempty"`
-	ExpectedHigh    string                   `json:"expectedHigh,omitempty"`
-	MaxPain         string                   `json:"maxPain,omitempty"`
-	MaxPainPayout   string                   `json:"maxPainPayout,omitempty"`
-	Strikes         []optionsExpiryStrikeDTO `json:"strikes,omitempty"`
+	Expiry           time.Time                `json:"expiry"`
+	Label            string                   `json:"label"`
+	DaysToExpiry     int                      `json:"daysToExpiry"`
+	OpenInterest     string                   `json:"openInterest"`
+	OpenInterestUsd  string                   `json:"openInterestUsd"`
+	Volume           string                   `json:"volume"`
+	VolumeUsd        string                   `json:"volumeUsd"`
+	CallOi           string                   `json:"callOi"`
+	PutOi            string                   `json:"putOi"`
+	CallVolume       string                   `json:"callVolume"`
+	PutVolume        string                   `json:"putVolume"`
+	PutCallOi        string                   `json:"putCallOi,omitempty"`
+	SharePct         string                   `json:"sharePct"`
+	ContractCount    int                      `json:"contractCount"`
+	AtmIv            string                   `json:"atmIv,omitempty"`
+	CallIv           string                   `json:"callIv,omitempty"`
+	PutIv            string                   `json:"putIv,omitempty"`
+	Skew             string                   `json:"skew,omitempty"`
+	ExpectedMoveAbs  string                   `json:"expectedMoveAbs,omitempty"`
+	ExpectedMovePct  string                   `json:"expectedMovePct,omitempty"`
+	ExpectedLow      string                   `json:"expectedLow,omitempty"`
+	ExpectedHigh     string                   `json:"expectedHigh,omitempty"`
+	MaxPain          string                   `json:"maxPain,omitempty"`
+	MaxPainPayout    string                   `json:"maxPainPayout,omitempty"`
+	GammaNetUsd      string                   `json:"gammaNetUsd,omitempty"`
+	GammaCallUsd     string                   `json:"gammaCallUsd,omitempty"`
+	GammaPutUsd      string                   `json:"gammaPutUsd,omitempty"`
+	GammaRegime      string                   `json:"gammaRegime,omitempty"`
+	GammaFlip        string                   `json:"gammaFlip,omitempty"`
+	GammaFlipSide    string                   `json:"gammaFlipSide,omitempty"`
+	GammaFlipDistPct string                   `json:"gammaFlipDistPct,omitempty"`
+	Strikes          []optionsExpiryStrikeDTO `json:"strikes,omitempty"`
 }
 
 type optionsExpiryStrikeDTO struct {
-	Strike    string `json:"strike"`
-	CallOi    string `json:"callOi"`
-	PutOi     string `json:"putOi"`
-	Payout    string `json:"payout"`
-	IsMaxPain bool   `json:"isMaxPain,omitempty"`
-	BelowSpot bool   `json:"belowSpot,omitempty"`
+	Strike       string `json:"strike"`
+	CallOi       string `json:"callOi"`
+	PutOi        string `json:"putOi"`
+	Payout       string `json:"payout"`
+	IsMaxPain    bool   `json:"isMaxPain,omitempty"`
+	BelowSpot    bool   `json:"belowSpot,omitempty"`
+	GammaNetUsd  string `json:"gammaNetUsd,omitempty"`
+	GammaCallUsd string `json:"gammaCallUsd,omitempty"`
+	GammaPutUsd  string `json:"gammaPutUsd,omitempty"`
 }
 
 type optionsVolPointDTO struct {
@@ -119,6 +129,7 @@ type optionsResponse struct {
 	Listed          int                  `json:"listed"`
 	WithOi          int                  `json:"withOi"`
 	WithIv          int                  `json:"withIv"`
+	Gamma           *optionsGammaDTO     `json:"gamma,omitempty"`
 	VsMarket        *optionsVsMarketDTO  `json:"vsMarket,omitempty"`
 	History         *optionsHistoryDTO   `json:"history,omitempty"`
 	Moves           *optionsMovesDTO     `json:"moves,omitempty"`
@@ -176,6 +187,26 @@ type optionsHistoryDTO struct {
 	From    time.Time                 `json:"from"`
 	To      time.Time                 `json:"to"`
 	Note    string                    `json:"note,omitempty"`
+}
+
+type optionsGammaLevelDTO struct {
+	Spot    string `json:"spot"`
+	NetUsd  string `json:"netUsd"`
+	CallUsd string `json:"callUsd,omitempty"`
+	PutUsd  string `json:"putUsd,omitempty"`
+}
+
+type optionsGammaDTO struct {
+	NetUsd      string                 `json:"netUsd"`
+	CallUsd     string                 `json:"callUsd"`
+	PutUsd      string                 `json:"putUsd"`
+	Regime      string                 `json:"regime,omitempty"`
+	Flip        string                 `json:"flip,omitempty"`
+	FlipSide    string                 `json:"flipSide,omitempty"`
+	FlipDistPct string                 `json:"flipDistPct,omitempty"`
+	Used        int                    `json:"used"`
+	Skipped     int                    `json:"skipped,omitempty"`
+	Profile     []optionsGammaLevelDTO `json:"profile,omitempty"`
 }
 
 type optionsVsFindingDTO struct {
@@ -246,14 +277,31 @@ func optionsToDTO(a *domain.OptionsSnapshot) optionsResponse {
 			row.MaxPain = formatHistQty(e.MaxPain)
 			row.MaxPainPayout = formatHistQty(e.MaxPainPayout)
 		}
+		if e.HasGamma {
+			row.GammaNetUsd = domain.FormatSignedQty(e.GammaNetUSD)
+			row.GammaCallUsd = domain.FormatSignedQty(e.GammaCallUSD)
+			row.GammaPutUsd = domain.FormatSignedQty(e.GammaPutUSD)
+			row.GammaRegime = e.GammaRegime
+		}
+		if e.HasGammaFlip {
+			row.GammaFlip = formatHistQty(e.GammaFlip)
+			row.GammaFlipSide = e.GammaFlipSide
+			row.GammaFlipDistPct = domain.FormatSignedQty(e.GammaFlipDistPct)
+		}
 		if len(e.Strikes) > 0 {
 			row.Strikes = make([]optionsExpiryStrikeDTO, 0, len(e.Strikes))
 			for _, s := range e.Strikes {
-				row.Strikes = append(row.Strikes, optionsExpiryStrikeDTO{
+				st := optionsExpiryStrikeDTO{
 					Strike: formatHistQty(s.Strike), CallOi: formatHistQty(s.CallOI),
 					PutOi: formatHistQty(s.PutOI), Payout: formatHistQty(s.Payout),
 					IsMaxPain: s.IsMaxPain, BelowSpot: s.BelowSpot,
-				})
+				}
+				if s.HasGamma {
+					st.GammaNetUsd = domain.FormatSignedQty(s.GammaNetUSD)
+					st.GammaCallUsd = domain.FormatSignedQty(s.GammaCallUSD)
+					st.GammaPutUsd = domain.FormatSignedQty(s.GammaPutUSD)
+				}
+				row.Strikes = append(row.Strikes, st)
 			}
 		}
 		expiries = append(expiries, row)
@@ -331,6 +379,9 @@ func optionsToDTO(a *domain.OptionsSnapshot) optionsResponse {
 		}
 		out.Atm = atm
 	}
+	if g := optionsGammaToDTO(a.Gamma); g != nil {
+		out.Gamma = g
+	}
 	if a.Skew != nil {
 		sk := &optionsSkewDTO{Lean: a.Skew.Lean, FrontDte: a.Skew.FrontDTE, BackDte: a.Skew.BackDTE}
 		if a.Skew.HasAtmSkew {
@@ -349,6 +400,37 @@ func optionsToDTO(a *domain.OptionsSnapshot) optionsResponse {
 			sk.WingCallIv = formatHistQty(a.Skew.WingCallIV)
 		}
 		out.Skew = sk
+	}
+	return out
+}
+
+func optionsGammaToDTO(g *domain.OptionsGamma) *optionsGammaDTO {
+	if g == nil {
+		return nil
+	}
+	out := &optionsGammaDTO{
+		NetUsd:  domain.FormatSignedQty(g.NetUSD),
+		CallUsd: domain.FormatSignedQty(g.CallUSD),
+		PutUsd:  domain.FormatSignedQty(g.PutUSD),
+		Regime:  g.Regime,
+		Used:    g.Used,
+		Skipped: g.Skipped,
+	}
+	if g.HasFlip {
+		out.Flip = formatHistQty(g.Flip)
+		out.FlipSide = g.FlipSide
+		out.FlipDistPct = domain.FormatSignedQty(g.FlipDistPct)
+	}
+	if len(g.Profile) > 0 {
+		out.Profile = make([]optionsGammaLevelDTO, 0, len(g.Profile))
+		for _, p := range g.Profile {
+			out.Profile = append(out.Profile, optionsGammaLevelDTO{
+				Spot:    formatHistQty(p.Spot),
+				NetUsd:  domain.FormatSignedQty(p.NetUSD),
+				CallUsd: domain.FormatSignedQty(p.CallUSD),
+				PutUsd:  domain.FormatSignedQty(p.PutUSD),
+			})
+		}
 	}
 	return out
 }

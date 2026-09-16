@@ -1,6 +1,6 @@
 {
   "title": "Options",
-  "subtitle": "BTC and ETH listed options from Deribit — open interest, volume, put/call, implied vol, and where that disagrees with spot or futures.",
+  "subtitle": "BTC and ETH listed options from Deribit — open interest, volume, put/call, implied vol, dealer gamma, and where that disagrees with spot or futures.",
   "assetAria": "Options underlying",
   "stats": {
     "oi": "Open interest",
@@ -35,9 +35,44 @@
     "maxPain": "Lowest payout",
     "maxPainHint": "Spot {{spot}}",
     "maxPainEmpty": "Needs listed strikes",
+    "gex": "Dealer GEX",
+    "gexHint": "{{regime}} · USD per 1% move",
+    "gexEmpty": "Needs mark IV",
+    "flip": "Gamma flip",
+    "flipHint": "Spot {{spot}}",
+    "flipEmpty": "No nearby zero",
     "payoutLegend": "Total call + put intrinsic if price expires at that strike. Highlight is the lowest.",
     "painMark": "lowest",
     "empty": "Select an expiry."
+  },
+  "gamma": {
+    "title": "Dealer gamma",
+    "subtitle": "Where market makers are long or short gamma — stabler below a long book, faster when they are short",
+    "net": "Net dealer GEX",
+    "netHint": "Calls {{call}} · puts {{put}} · USD delta per 1% move",
+    "regime": "At this price",
+    "regimeLabel": {
+      "long": "Stabler",
+      "short": "Faster",
+      "flat": "Balanced"
+    },
+    "regimeHint": {
+      "long": "Dealers long gamma — they fade moves",
+      "short": "Dealers short gamma — moves can run faster",
+      "flat": "Call and put gamma nearly cancel"
+    },
+    "flip": "Gamma flip",
+    "flipHint": {
+      "above": "Spot {{spot}} is above the flip {{dist}}",
+      "below": "Spot {{spot}} is below the flip {{dist}}",
+      "at": "Spot is at the flip"
+    },
+    "flipEmpty": "No zero crossing in the nearby strikes",
+    "needIv": "Needs listed mark IV",
+    "profileTitle": "GEX if spot were here",
+    "profileLegend": "Green = long gamma (stabler) · red = short (faster). Solid outline is the flip; dashed is spot.",
+    "profileAria": "Dealer gamma versus spot",
+    "empty": "No dealer gamma yet. Needs listed strikes with mark IV."
   },
   "vol": {
     "title": "Volatility structure",

@@ -1,6 +1,6 @@
 {
   "title": "Opsiyonlar",
-  "subtitle": "Deribit BTC ve ETH opsiyonları — açık pozisyon, hacim, put/call, ima vol, ve spot veya vadeliyle ayrıştığı yerler.",
+  "subtitle": "Deribit BTC ve ETH opsiyonları — açık pozisyon, hacim, put/call, ima vol, bayi gamma, ve spot veya vadeliyle ayrıştığı yerler.",
   "assetAria": "Opsiyon dayanak varlığı",
   "stats": {
     "oi": "Açık pozisyon",
@@ -35,9 +35,44 @@
     "maxPain": "En düşük ödeme",
     "maxPainHint": "Spot {{spot}}",
     "maxPainEmpty": "Strike gerekir",
+    "gex": "Bayi GEX",
+    "gexHint": "{{regime}} · %1 harekette USD",
+    "gexEmpty": "Mark IV gerekir",
+    "flip": "Gamma dönüş",
+    "flipHint": "Spot {{spot}}",
+    "flipEmpty": "Yakında sıfır yok",
     "payoutLegend": "Fiyat o strikeda kapanırsa toplam call + put içsel değer. Vurgu en düşük ödeme.",
     "painMark": "en düşük",
     "empty": "Bir vade seçin."
+  },
+  "gamma": {
+    "title": "Bayi gamma",
+    "subtitle": "Piyasa yapıcıların gamma’da uzun veya kısa olduğu yer — uzun kitapta daha sakin, kısa gamma’da hareket hızlanabilir",
+    "net": "Net bayi GEX",
+    "netHint": "Call {{call}} · put {{put}} · %1 harekette USD delta",
+    "regime": "Bu fiyatta",
+    "regimeLabel": {
+      "long": "Daha sakin",
+      "short": "Daha hızlı",
+      "flat": "Dengeli"
+    },
+    "regimeHint": {
+      "long": "Bayiler uzun gamma — hareketi söndürürler",
+      "short": "Bayiler kısa gamma — hareket hızlanabilir",
+      "flat": "Call ve put gamma neredeyse denge"
+    },
+    "flip": "Gamma dönüş",
+    "flipHint": {
+      "above": "Spot {{spot}} dönüşün üstünde {{dist}}",
+      "below": "Spot {{spot}} dönüşün altında {{dist}}",
+      "at": "Spot dönüş seviyesinde"
+    },
+    "flipEmpty": "Yakın strikelerde sıfır geçişi yok",
+    "needIv": "Mark IV gerekir",
+    "profileTitle": "Spot burada olsaydı GEX",
+    "profileLegend": "Yeşil = uzun gamma (sakin) · kırmızı = kısa (hızlı). Düz çerçeve dönüş; kesik çizgi spot.",
+    "profileAria": "Spot’a göre bayi gamma",
+    "empty": "Henüz bayi gamma yok. Mark IV’li strike gerekir."
   },
   "vol": {
     "title": "Volatilite yapısı",

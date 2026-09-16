@@ -82,6 +82,8 @@ export type {
   MarketOptionsATM,
   MarketOptionsVolPoint,
   MarketOptionsSkew,
+  MarketOptionsGamma,
+  MarketOptionsGammaLevel,
   MarketOptionsFinding,
   MarketOptionsVsMarket,
   MarketOptionsHistory,

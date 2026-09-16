@@ -229,13 +229,30 @@ func (b *Backend) GetOptions(ctx context.Context, exchange, asset string) (json.
 			row["maxPain"] = e.MaxPain
 			row["maxPainPayout"] = e.MaxPainPayout
 		}
+		if e.HasGamma {
+			row["gammaNetUsd"] = e.GammaNetUSD
+			row["gammaCallUsd"] = e.GammaCallUSD
+			row["gammaPutUsd"] = e.GammaPutUSD
+			row["gammaRegime"] = e.GammaRegime
+		}
+		if e.HasGammaFlip {
+			row["gammaFlip"] = e.GammaFlip
+			row["gammaFlipSide"] = e.GammaFlipSide
+			row["gammaFlipDistPct"] = e.GammaFlipDistPct
+		}
 		if len(e.Strikes) > 0 {
 			strikes := make([]map[string]any, 0, len(e.Strikes))
 			for _, s := range e.Strikes {
-				strikes = append(strikes, map[string]any{
+				st := map[string]any{
 					"strike": s.Strike, "callOi": s.CallOI, "putOi": s.PutOI,
 					"payout": s.Payout, "isMaxPain": s.IsMaxPain, "belowSpot": s.BelowSpot,
-				})
+				}
+				if s.HasGamma {
+					st["gammaNetUsd"] = s.GammaNetUSD
+					st["gammaCallUsd"] = s.GammaCallUSD
+					st["gammaPutUsd"] = s.GammaPutUSD
+				}
+				strikes = append(strikes, st)
 			}
 			row["strikes"] = strikes
 		}
@@ -307,6 +324,9 @@ func (b *Backend) GetOptions(ctx context.Context, exchange, asset string) (json.
 		}
 		out["atm"] = atm
 	}
+	if gm := optionsGammaMap(got.Gamma); gm != nil {
+		out["gamma"] = gm
+	}
 	if got.Skew != nil {
 		sk := map[string]any{"lean": got.Skew.Lean}
 		if got.Skew.HasAtmSkew {
@@ -329,6 +349,34 @@ func (b *Backend) GetOptions(ctx context.Context, exchange, asset string) (json.
 		out["skew"] = sk
 	}
 	return mustJSON(out)
+}
+
+func optionsGammaMap(g *domain.OptionsGamma) map[string]any {
+	if g == nil {
+		return nil
+	}
+	out := map[string]any{
+		"netUsd": g.NetUSD, "callUsd": g.CallUSD, "putUsd": g.PutUSD,
+		"regime": g.Regime, "used": g.Used,
+	}
+	if g.Skipped > 0 {
+		out["skipped"] = g.Skipped
+	}
+	if g.HasFlip {
+		out["flip"] = g.Flip
+		out["flipSide"] = g.FlipSide
+		out["flipDistPct"] = g.FlipDistPct
+	}
+	if len(g.Profile) > 0 {
+		profile := make([]map[string]any, 0, len(g.Profile))
+		for _, p := range g.Profile {
+			profile = append(profile, map[string]any{
+				"spot": p.Spot, "netUsd": p.NetUSD, "callUsd": p.CallUSD, "putUsd": p.PutUSD,
+			})
+		}
+		out["profile"] = profile
+	}
+	return out
 }
 
 func optionsVsMarketMap(v *domain.OptionsVsMarket) map[string]any {

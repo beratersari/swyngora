@@ -22,6 +22,14 @@ vi.mock('@/libs/api', async (importOriginal) => {
           { label: '27 Mar 2026', atmIv: '51', callIv: '50', putIv: '52', skew: '2' },
         ],
         skew: { atmSkew: '2', lean: 'puts', termSlope: '-1' },
+        gamma: {
+          netUsd: '-840000000',
+          callUsd: '-1200000000',
+          putUsd: '360000000',
+          regime: 'short',
+          flip: '97200',
+          flipSide: 'above',
+        },
         expiries: [{
           expiry: '2026-03-27T08:00:00Z',
           label: '27 Mar 2026',
@@ -68,6 +76,14 @@ vi.mock('@/libs/api', async (importOriginal) => {
           { label: '27 Mar 2026', atmIv: '51', callIv: '50', putIv: '52', skew: '2' },
         ],
         skew: { atmSkew: '2', lean: 'puts', termSlope: '-1' },
+        gamma: {
+          netUsd: '-840000000',
+          callUsd: '-1200000000',
+          putUsd: '360000000',
+          regime: 'short',
+          flip: '97200',
+          flipSide: 'above',
+        },
         expiries: [{
           expiry: '2026-03-27T08:00:00Z',
           label: '27 Mar 2026',
@@ -114,6 +130,8 @@ describe('OptionsPage', () => {
     expect(screen.getByRole('heading', { name: /options/i })).toBeInTheDocument();
     expect(screen.getAllByText('27 Mar 2026').length).toBeGreaterThan(0);
     expect(screen.getByText(/volatility structure/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/dealer gamma/i).length).toBeGreaterThan(0);
+    expect(screen.getByText('−840.00M')).toBeInTheDocument();
     expect(screen.getByText('±13.6%')).toBeInTheDocument();
     expect(screen.getByText(/important options moves/i)).toBeInTheDocument();
     expect(screen.getByText(/open interest jumped 14%/i)).toBeInTheDocument();

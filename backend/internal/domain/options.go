@@ -106,7 +106,17 @@ type OptionsExpiryBucket struct {
 	MaxPain       float64
 	MaxPainPayout float64
 	HasMaxPain    bool
-	Strikes       []OptionsExpiryStrike
+	// Dealer gamma on this expiry only (USD delta per 1% spot move).
+	GammaNetUSD      float64
+	GammaCallUSD     float64
+	GammaPutUSD      float64
+	GammaRegime      string
+	HasGamma         bool
+	GammaFlip        float64
+	HasGammaFlip     bool
+	GammaFlipSide    string
+	GammaFlipDistPct float64
+	Strikes          []OptionsExpiryStrike
 }
 
 // OptionsExpiryStrike is call/put OI and total intrinsic if spot expires there.
@@ -117,6 +127,11 @@ type OptionsExpiryStrike struct {
 	Payout    float64 // USD intrinsic if spot = strike (coin OI × USD payoff)
 	IsMaxPain bool
 	BelowSpot bool
+	// Dealer GEX at the current index for this strike (USD per 1% move).
+	GammaNetUSD  float64
+	GammaCallUSD float64
+	GammaPutUSD  float64
+	HasGamma     bool
 }
 
 // OptionsVolPoint is ATM implied vol on one expiry (term structure / skew).
@@ -184,6 +199,7 @@ type OptionsSnapshot struct {
 	Listed          int
 	WithOI          int
 	WithIV          int
+	Gamma           *OptionsGamma
 	VsMarket        *OptionsVsMarket
 	History         *OptionsHistory
 	Moves           *OptionsMoves
@@ -303,7 +319,7 @@ func BuildOptionsSnapshot(asset string, quotes []OptionQuote, index float64, dvo
 		Asset:    asset,
 		Exchange: string(ExchangeDeribit),
 		AsOf:     asOf.UTC(),
-		Note:     "Deribit inverse options. Open interest and volume are in the base coin. Implied vol is percent. Informational only — not financial advice.",
+		Note:     "Deribit inverse options. Open interest and volume are in the base coin. Implied vol is percent. Dealer gamma assumes short calls / long puts (USD delta per 1% spot move). Informational only — not financial advice.",
 	}
 	if index > 0 {
 		out.IndexPrice = index
@@ -461,6 +477,7 @@ func BuildOptionsSnapshot(asset string, quotes []OptionQuote, index float64, dvo
 		out.ATM = atm
 	}
 	out.Skew = buildOptionsSkew(out.ATM, term, groups, out.IndexPrice)
+	attachOptionsGamma(out, quotes, asOf)
 	return out
 }
 

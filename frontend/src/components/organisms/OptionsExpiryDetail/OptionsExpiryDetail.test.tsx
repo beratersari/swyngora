@@ -16,6 +16,9 @@ describe('OptionsExpiryDetail', () => {
           expectedLow: '86400',
           expectedHigh: '113600',
           maxPain: '100000',
+          gammaNetUsd: '-1250000',
+          gammaRegime: 'short',
+          gammaFlip: '98000',
           strikes: [
             { strike: '90000', payout: '200000', callOi: '0', putOi: '10' },
             { strike: '100000', payout: '0', callOi: '10', putOi: '10', isMaxPain: true },
@@ -25,6 +28,8 @@ describe('OptionsExpiryDetail', () => {
     );
     expect(screen.getByText('±13.6%')).toBeInTheDocument();
     expect(screen.getByText(/lowest payout/i)).toBeInTheDocument();
+    expect(screen.getByText(/dealer gex/i)).toBeInTheDocument();
+    expect(screen.getByText(/gamma flip/i)).toBeInTheDocument();
     expect(screen.getAllByText(/100[.,]000/).length).toBeGreaterThan(0);
   });
 });
