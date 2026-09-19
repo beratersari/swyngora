@@ -91,6 +91,7 @@
   "path": "Path",
   "similarTitle": "Similar past moves",
   "similarEmpty": "No similar past setups with enough coverage.",
+  "similarOpenHint": "Click a row to open that past move's timeline and before / during / after tape.",
   "similarError": "Similar past moves could not be loaded.",
   "similarity": "Similarity",
   "coverage": "Coverage",

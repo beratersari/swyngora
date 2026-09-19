@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI HTTP client:** `ai/` tools use `httpx2` (Pydantic-maintained fork) instead of `httpx`; LangChain may still pull `httpx` transitively
 
 ### Added
+- **Forensics similar-move inspect:** click a similar past row on `/forensics` to open that event's timeline and before / during / after tape (`docs/features/forensics.md`)
 - **Forensics similar-move fields:** each past twin shows which tape pieces matched (price, volume, takers, OI, book, options) with a closeness score, plus a short why. Web `/forensics` (`docs/features/forensics.md`)
 - **Forensics futures curve:** BTC/ETH (and any coin with dated futures) forensics shows whether the listed curve was in contango or backwardation before the move, and the near-vs-far gap, as a timeline beat plus the why story. (`docs/features/forensics.md`)
 - **Futures curve over time:** the basis desk shows when near vs far flipped (contango ↔ backwardation) or got steeper/flatter. `curve.history` / `windows` / `moves` on `GET /api/v1/market/basis`, web `/basis` (`docs/features/basis.md`)

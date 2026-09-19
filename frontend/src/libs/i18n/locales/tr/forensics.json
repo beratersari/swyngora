@@ -91,6 +91,7 @@
   "path": "Yol",
   "similarTitle": "Benzer geçmiş hareketler",
   "similarEmpty": "Yeterli kapsama sahip benzer geçmiş kurulum yok.",
+  "similarOpenHint": "Bir satıra tıklayınca o geçmiş hareketin zaman çizelgesini ve önce / sırada / sonra bandını açar.",
   "similarError": "Benzer geçmiş hareketler yüklenemedi.",
   "similarity": "Benzerlik",
   "coverage": "Kapsama",

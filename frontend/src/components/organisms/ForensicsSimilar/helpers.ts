@@ -1,4 +1,4 @@
-import type { ForensicsSimilarField } from '@/libs/types/forensics.types';
+import type { ForensicsSimilarField, ForensicsSimilarHit } from '@/libs/types/forensics.types';
 import { SIMILAR_FIELD_ORDER } from './constants';
 
 export function orderedSimilarFields(fields?: ForensicsSimilarField[]): ForensicsSimilarField[] {
@@ -23,4 +23,12 @@ export function orderedSimilarFields(fields?: ForensicsSimilarField[]): Forensic
 export function similarFieldScore(field: ForensicsSimilarField): string {
   if (!field.used) return 'n/a';
   return field.score && field.score !== '' ? field.score : '—';
+}
+
+export function similarMoveAt(hit: ForensicsSimilarHit | undefined): string | null {
+  const raw = hit?.at?.trim();
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
 }

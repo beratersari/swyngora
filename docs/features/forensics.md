@@ -185,4 +185,6 @@ curl "http://localhost:8080/api/v1/market/forensics/radar?since=7d"
 
 Open `/forensics`, pick a symbol and time, confirm the why-story, the
 time-ordered timeline, three phase cards, and the similar-move table
-(or a soft similar error).
+(or a soft similar error). Click a similar row to load that past
+event's timeline and before / during / after tape (same symbol,
+window, and during).

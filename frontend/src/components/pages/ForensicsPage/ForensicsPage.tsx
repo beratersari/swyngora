@@ -298,6 +298,19 @@ export function ForensicsPage() {
             similar={report?.similar}
             similarError={report?.similarError}
             isLoading={loading}
+            onOpenMove={(nextAt) => {
+              if (nextAt === at) return;
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+              setSearchParams(
+                (prev) => {
+                  const p = new URLSearchParams(prev);
+                  p.set('view', 'event');
+                  p.set('at', nextAt);
+                  return p;
+                },
+                { replace: false },
+              );
+            }}
           />
         </>
       )}

@@ -3,11 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import type { ForensicsSimilarHit } from '@/libs/types/forensics.types';
 import { formatForensicsTime } from '@/libs/utils/forensics';
-import { orderedSimilarFields, similarFieldScore } from './helpers';
+import { orderedSimilarFields, similarFieldScore, similarMoveAt } from './helpers';
 import { FieldScores, Stack, TableWrap, WhyCell } from './ForensicsSimilar.styles';
 import type { ForensicsSimilarProps } from './ForensicsSimilar.types';
 
-export function ForensicsSimilar({ similar, similarError, isLoading }: ForensicsSimilarProps) {
+export function ForensicsSimilar({ similar, similarError, isLoading, onOpenMove }: ForensicsSimilarProps) {
   const { t } = useTranslation('forensics');
   if (isLoading) {
     return <Skeleton active paragraph={{ rows: 4 }} />;
@@ -52,11 +52,23 @@ export function ForensicsSimilar({ similar, similarError, isLoading }: Forensics
       ) : null}
       {similar?.matches && similar.matches.length > 0 ? (
         <TableWrap>
+          {onOpenMove ? (
+            <Text variant="caption" color="secondary">
+              {t('similarOpenHint')}
+            </Text>
+          ) : null}
           <Table<ForensicsSimilarHit>
             size="small"
             pagination={false}
             rowKey={(row) => `${row.at}-${row.until}`}
             dataSource={similar.matches}
+            onRow={(row) => ({
+              onClick: () => {
+                const at = similarMoveAt(row);
+                if (at) onOpenMove?.(at);
+              },
+              style: onOpenMove ? { cursor: 'pointer' } : undefined,
+            })}
             columns={[
               {
                 title: t('at'),

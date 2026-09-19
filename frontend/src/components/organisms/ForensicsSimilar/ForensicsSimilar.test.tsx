@@ -1,12 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '@/test/render';
 import { ForensicsSimilar } from './ForensicsSimilar';
 
 describe('ForensicsSimilar', () => {
-  it('renders matches and after horizons', () => {
+  it('renders matches and after horizons', async () => {
+    const onOpen = vi.fn();
     renderWithProviders(
       <ForensicsSimilar
+        onOpenMove={onOpen}
         similar={{
           summary: '2 similar past setups',
           matches: [
@@ -35,5 +38,8 @@ describe('ForensicsSimilar', () => {
     expect(screen.getByText(/matched most on open interest/i)).toBeInTheDocument();
     expect(screen.getByText(/open interest 88/i)).toBeInTheDocument();
     expect(screen.getByText(/book n\/a/i)).toBeInTheDocument();
+    expect(screen.getByText(/click a row to open|satıra tıklayınca/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByText('+3.5'));
+    expect(onOpen).toHaveBeenCalledWith('2026-08-18T12:00:00.000Z');
   });
 });

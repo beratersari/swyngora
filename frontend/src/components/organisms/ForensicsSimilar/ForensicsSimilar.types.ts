@@ -4,4 +4,5 @@ export type ForensicsSimilarProps = {
   similar?: ForensicsSimilar | null;
   similarError?: string;
   isLoading?: boolean;
+  onOpenMove?: (at: string) => void;
 };
