@@ -440,6 +440,7 @@ type aroundPhaseDTO struct {
 	Book     *aroundBookDTO    `json:"book,omitempty"`
 	Futures  *aroundFuturesDTO `json:"futures,omitempty"`
 	Options  *aroundOptionsDTO `json:"options,omitempty"`
+	Curve    *aroundCurveDTO   `json:"curve,omitempty"`
 	Events   []aroundEventDTO  `json:"events,omitempty"`
 	Summary  string            `json:"summary"`
 	Complete bool              `json:"complete"`
@@ -665,6 +666,44 @@ func aroundPhaseToDTO(p domain.AroundPhase) aroundPhaseDTO {
 	}
 	if p.Options != nil {
 		out.Options = aroundOptionsToDTO(p.Options)
+	}
+	if p.Curve != nil {
+		out.Curve = aroundCurveToDTO(p.Curve)
+	}
+	return out
+}
+
+type aroundCurveDTO struct {
+	Exchange  string `json:"exchange,omitempty"`
+	Shape     string `json:"shape"`
+	Slope     string `json:"slope,omitempty"`
+	Spread    string `json:"spread,omitempty"`
+	SpreadPct string `json:"spreadPct,omitempty"`
+	NearLabel string `json:"nearLabel,omitempty"`
+	FarLabel  string `json:"farLabel,omitempty"`
+	NearMark  string `json:"nearMark,omitempty"`
+	FarMark   string `json:"farMark,omitempty"`
+	At        string `json:"at,omitempty"`
+	Complete  bool   `json:"complete"`
+	Summary   string `json:"summary,omitempty"`
+}
+
+func aroundCurveToDTO(c *domain.AroundCurve) *aroundCurveDTO {
+	if c == nil {
+		return nil
+	}
+	out := &aroundCurveDTO{
+		Exchange: string(c.Exchange), Shape: c.Shape, Slope: c.Slope,
+		NearLabel: c.NearLabel, FarLabel: c.FarLabel, Complete: c.Complete, Summary: c.Summary,
+	}
+	if c.Complete {
+		out.Spread = domain.FormatSignedQty(c.Spread)
+		out.SpreadPct = domain.FormatSignedPct(c.SpreadPct)
+		out.NearMark = formatHistQty(c.NearMark)
+		out.FarMark = formatHistQty(c.FarMark)
+	}
+	if !c.At.IsZero() {
+		out.At = c.At.UTC().Format(time.RFC3339Nano)
 	}
 	return out
 }

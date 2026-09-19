@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-const ForensicsDisclaimer = "One tape of what happened before, during, and after a chosen time — price, volume, takers, VWAP, vs typical, POC, sweeps, stored book/futures (open interest, funding, liquidations), and listed BTC/ETH options when those samples exist (including dealer gamma and flip vs spot) — plus past important-move setups that looked like the before-window, and how price moved after those. Informational only — not financial advice."
+const ForensicsDisclaimer = "One tape of what happened before, during, and after a chosen time — price, volume, takers, VWAP, vs typical, POC, sweeps, stored book/futures (open interest, funding, liquidations), the listed futures curve (contango / backwardation and near-vs-far spread), and listed BTC/ETH options when those samples exist (including dealer gamma and flip vs spot) — plus past important-move setups that looked like the before-window, and how price moved after those. Informational only — not financial advice."
 
 // ForensicsReport is the around-the-move tape plus similar past setups for one event.
 type ForensicsReport struct {

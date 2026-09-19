@@ -10,7 +10,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const aroundDisclaimer = "Before / during / after are adjacent windows around the time you pick: before is the lookback ending at that time, during is the move starting there, after is the same lookback after the move. Price, volume, buy/sell, VWAP, volume vs typical, and the volume-profile POC come from spot candles. Liquidity sweeps use 15-minute bars. Stored order-book and futures history are attached when those archives have a sample near the window. Listed BTC/ETH options (open interest, put/call, implied vol, dealer gamma / flip, unusual prints) attach when the options archive has samples. Informational only — not financial advice."
+const aroundDisclaimer = "Before / during / after are adjacent windows around the time you pick: before is the lookback ending at that time, during is the move starting there, after is the same lookback after the move. Price, volume, buy/sell, VWAP, volume vs typical, and the volume-profile POC come from spot candles. Liquidity sweeps use 15-minute bars. Stored order-book and futures history are attached when those archives have a sample near the window. Listed BTC/ETH options (open interest, put/call, implied vol, dealer gamma / flip, unusual prints) attach when the options archive has samples. The listed futures curve (contango / backwardation and near-vs-far spread) attaches from mark klines when those contracts exist. Informational only — not financial advice."
 
 const aroundSweepLookback = 48 * time.Hour
 
@@ -87,6 +87,7 @@ func (s *Service) getAround(ctx context.Context, exchange, symbol, window, durin
 		out.VenueTiming = domain.CompareAroundVenueTiming(out.Venues)
 	}
 	s.attachAroundOptions(ctx, symbol, plan, out)
+	s.attachAroundCurve(ctx, symbol, out)
 	out.Summary = domain.ExplainAroundReport(*out)
 	return out, nil
 }
@@ -400,6 +401,72 @@ func (s *Service) attachAroundOptions(ctx context.Context, symbol string, plan d
 		}
 		ven.Changes = domain.CompareAroundPhases(ven.Phases)
 		ven.Summary = domain.ExplainAroundVenue(*ven)
+	}
+	for i := range out.Venues {
+		apply(&out.Venues[i])
+	}
+	apply(out.Combined)
+}
+
+func (s *Service) attachAroundCurve(ctx context.Context, symbol string, out *domain.AroundReport) {
+	if s == nil || out == nil {
+		return
+	}
+	type packed struct {
+		ex    domain.Exchange
+		hist  []domain.BasisCurvePoint
+		curve domain.BasisCurve
+	}
+	cache := map[domain.Exchange]packed{}
+	load := func(ex domain.Exchange) (packed, bool) {
+		if got, ok := cache[ex]; ok {
+			return got, got.curve.Complete && len(got.hist) > 0
+		}
+		p := s.basisPort(ex)
+		if p == nil {
+			return packed{}, false
+		}
+		q, err := p.GetBasisQuote(ctx, symbol)
+		if err != nil || q == nil {
+			return packed{}, false
+		}
+		c := domain.AttachBasisCurveHistory(domain.BuildBasisCurve(*q), *q)
+		pk := packed{ex: ex, hist: c.History, curve: c}
+		cache[ex] = pk
+		return pk, c.Complete && len(c.History) > 0
+	}
+	apply := func(ven *domain.AroundVenue) {
+		if ven == nil || ven.Error != "" {
+			return
+		}
+		ex := ven.Exchange
+		if ex == "" || ex == "all" {
+			ex = domain.ExchangeBinance
+		}
+		pk, ok := load(ex)
+		if !ok && (ven.Exchange == "" || ven.Exchange == "all") {
+			pk, ok = load(domain.ExchangeBybit)
+		}
+		if !ok {
+			return
+		}
+		for i := range ven.Phases {
+			ph := &ven.Phases[i]
+			at := ph.To
+			if at.IsZero() {
+				at = ph.From
+			}
+			if at.IsZero() {
+				continue
+			}
+			if ph.Phase == domain.AroundPhaseBefore {
+				at = at.Add(-time.Second)
+			}
+			if got := domain.AroundCurveAt(pk.hist, pk.curve, pk.ex, at); got != nil {
+				ph.Curve = got
+				ph.Summary = domain.ExplainAroundPhase(*ph)
+			}
+		}
 	}
 	for i := range out.Venues {
 		apply(&out.Venues[i])

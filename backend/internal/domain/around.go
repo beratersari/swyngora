@@ -200,6 +200,7 @@ type AroundPhase struct {
 	Book     *AroundBook
 	Futures  *AroundFutures
 	Options  *AroundOptions
+	Curve    *AroundCurve
 	Events   []AroundEvent
 	Summary  string
 	Complete bool
@@ -681,6 +682,9 @@ func ExplainAroundPhase(p AroundPhase) string {
 				head += ", spot " + o.GammaFlipSide + " flip"
 			}
 		}
+	}
+	if c := p.Curve; c != nil && c.Complete && (c.Shape == BasisCurveContango || c.Shape == BasisCurveBackwardation) {
+		head += "; curve in " + c.Shape + " (" + FormatSignedPct(c.SpreadPct) + ")"
 	}
 	for _, ev := range p.Events {
 		if ev.Kind == AroundEventSweep {

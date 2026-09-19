@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI HTTP client:** `ai/` tools use `httpx2` (Pydantic-maintained fork) instead of `httpx`; LangChain may still pull `httpx` transitively
 
 ### Added
+- **Forensics futures curve:** BTC/ETH (and any coin with dated futures) forensics shows whether the listed curve was in contango or backwardation before the move, and the near-vs-far gap, as a timeline beat plus the why story. (`docs/features/forensics.md`)
 - **Futures curve over time:** the basis desk shows when near vs far flipped (contango ↔ backwardation) or got steeper/flatter. `curve.history` / `windows` / `moves` on `GET /api/v1/market/basis`, web `/basis` (`docs/features/basis.md`)
 - **Mobile leaderboards** (`mobile/`): full Gainers / Losers / Volume boards via spot sorts; Home See all + Markets Boards entry (`docs/features/mobile-leaderboards.md`)
 - **Mobile cross-exchange compare** (`mobile/`): coin detail “Across exchanges” section compares 24h tickers on Binance / Coinbase / Bybit with symbol mapping and partial failure (`docs/features/mobile-cross-exchange-compare.md`)

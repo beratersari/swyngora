@@ -99,6 +99,9 @@ func explainForensicsBefore(name string, before, during AroundPhase) string {
 	if o := forensicsOptionsStory(before, true); o != "" {
 		s = append(s, o)
 	}
+	if c := forensicsCurveStory(before, nil); c != "" {
+		s = append(s, c)
+	}
 	if e := forensicsEventStory(before, true); e != "" {
 		s = append(s, e)
 	}
@@ -124,6 +127,9 @@ func explainForensicsDuring(name string, before, during AroundPhase, tape *Aroun
 	}
 	if o := forensicsOptionsStory(during, false); o != "" {
 		s = append(s, o)
+	}
+	if c := forensicsCurveStory(during, &before); c != "" {
+		s = append(s, c)
 	}
 	if e := forensicsEventStory(during, false); e != "" {
 		s = append(s, e)
@@ -431,6 +437,35 @@ func forensicsPositionStory(before, during AroundPhase) string {
 		s = append(s, "Funding moved more negative, so the short side was paying to stay in — a crowded short can squeeze once selling dries up.")
 	}
 	return strings.Join(s, " ")
+}
+
+func forensicsCurveStory(p AroundPhase, prior *AroundPhase) string {
+	c := p.Curve
+	if c == nil || !c.Complete {
+		return ""
+	}
+	if prior != nil && prior.Curve != nil && prior.Curve.Complete && prior.Curve.Shape != "" && prior.Curve.Shape != c.Shape {
+		return ensureSentence(fmt.Sprintf("During the move the listed futures curve flipped from %s to %s", prior.Curve.Shape, c.Shape))
+	}
+	if p.Phase != AroundPhaseBefore {
+		return ""
+	}
+	near, far := c.NearLabel, c.FarLabel
+	if near == "" {
+		near = "near"
+	}
+	if far == "" {
+		far = "far"
+	}
+	gap := FormatSignedPct(absFloat(c.SpreadPct))
+	switch c.Shape {
+	case BasisCurveContango:
+		return ensureSentence(fmt.Sprintf("The listed futures curve was in contango going into the move — far (%s) was %s%% richer than near (%s)", far, gap, near))
+	case BasisCurveBackwardation:
+		return ensureSentence(fmt.Sprintf("The listed futures curve was in backwardation going into the move — near (%s) was %s%% richer than far (%s)", near, gap, far))
+	default:
+		return ""
+	}
 }
 
 func forensicsOptionsStory(p AroundPhase, before bool) string {

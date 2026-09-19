@@ -20,6 +20,14 @@ describe('ForensicsTimeline', () => {
               detail: 'Spot was above the flip (97200).',
             },
             {
+              at: '2026-08-20T13:00:00Z',
+              offsetLabel: 'about an hour before',
+              kind: 'curve',
+              venue: 'binance',
+              title: 'The futures curve was in contango',
+              detail: 'Far (25 Dec 2026) was +1.24% richer than near (25 Sep 2026).',
+            },
+            {
               at: '2026-08-20T13:52:00Z',
               offsetLabel: 'about 8 minutes before',
               kind: 'oi',
@@ -57,6 +65,8 @@ describe('ForensicsTimeline', () => {
     expect(screen.getByText(/known as of|itibarıyla bilinen/i)).toBeInTheDocument();
     expect(screen.getByText(/dealers were short gamma/i)).toBeInTheDocument();
     expect(screen.getByText(/above the flip/i)).toBeInTheDocument();
+    expect(screen.getByText(/futures curve was in contango/i)).toBeInTheDocument();
+    expect(screen.getByText(/1\.24%/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Binance open interest started rising/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Bybit price started moving up/i)).toBeInTheDocument();
     expect(screen.getByText(/order not certain|sıra kesin değil/i)).toBeInTheDocument();

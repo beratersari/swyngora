@@ -128,6 +128,44 @@ func TestBuildForensicsTimeline_GammaBeforeMove(t *testing.T) {
 	}
 }
 
+func TestBuildForensicsTimeline_CurveBeforeMove(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	r := ForensicsReport{
+		Symbol: "BTCUSDT", At: at, Window: AroundWindow1h, During: AroundDuring15m, AsOf: at.Add(time.Hour),
+		Tape: &AroundReport{
+			Symbol: "BTCUSDT", At: at, Window: AroundWindow1h, During: AroundDuring15m,
+			Combined: &AroundVenue{
+				Exchange: "all",
+				Phases: []AroundPhase{{
+					Phase: AroundPhaseBefore,
+					Curve: &AroundCurve{
+						Exchange: ExchangeBinance, Complete: true, Shape: BasisCurveContango,
+						SpreadPct: 1.24, NearLabel: "25 Sep 2026", FarLabel: "25 Dec 2026",
+						At: at.Add(-time.Hour),
+					},
+				}},
+			},
+			Venues: []AroundVenue{{
+				Exchange: ExchangeBinance, Symbol: "BTCUSDT", MoveStart: at,
+				Phases: []AroundPhase{{Phase: AroundPhaseDuring, Complete: true, Price: AroundPrice{Direction: CVDDirUp}}},
+			}},
+		},
+	}
+	got := BuildForensicsTimeline(r)
+	var curve ForensicsTimelineEvent
+	for _, ev := range got.Events {
+		if ev.Kind == ForensicsTimelineCurve {
+			curve = ev
+		}
+	}
+	if curve.Title != "The futures curve was in contango" {
+		t.Fatalf("curve %+v events=%+v", curve, got.Events)
+	}
+	if !strings.Contains(curve.Detail, "1.24") || !strings.Contains(curve.Detail, "25 Dec 2026") || curve.Phase != AroundPhaseBefore {
+		t.Fatalf("detail %+v", curve)
+	}
+}
+
 func TestBuildForensicsTimeline_EmptyTape(t *testing.T) {
 	if got := BuildForensicsTimeline(ForensicsReport{}); len(got.Events) != 0 || got.Summary != "" {
 		t.Fatalf("%+v", got)

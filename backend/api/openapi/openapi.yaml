@@ -11500,7 +11500,7 @@ components:
         caution: { type: string }
     MarketForensicsTimeline:
       type: object
-      description: One clock of what printed around the event (OI, takers, price, follow-through, liquidations, options, sweeps). Only prints at or before knownUntil.
+      description: One clock of what printed around the event (OI, takers, price, follow-through, liquidations, options, dealer gamma, futures curve, sweeps). Only prints at or before knownUntil.
       properties:
         summary: { type: string }
         knownUntil:
@@ -11521,7 +11521,7 @@ components:
         offset: { type: string, description: Signed short offset from the event time (-8m, 0, +3m) }
         offsetLabel: { type: string, description: Plain-language offset (about 8 minutes before) }
         phase: { type: string, description: before | during | after }
-        kind: { type: string, description: oi | takers | price | liquidations | options | gamma | sweep | absorption }
+        kind: { type: string, description: oi | takers | price | liquidations | options | gamma | curve | sweep | absorption }
         venue: { type: string, description: binance | bybit | deribit | all }
         direction: { type: string }
         title: { type: string }

@@ -29,6 +29,7 @@ Each phase includes:
 - stored spot-book compare (when order-book history has samples)
 - stored futures: open interest, funding, long %, liquidations (when the archive has samples)
 - listed BTC/ETH options: open interest, put/call, implied vol, and unusual prints (two samples required; `started` is before vs during; `lead` is the real start inside the 1h/4h/24h unusual lookback, not the window open; `after` is kept going / turned / went quiet)
+- listed futures curve: contango / backwardation and the near-vs-far mark gap at the close of the phase (`curve`, from 1h mark klines of the current dated contracts)
 
 Liquidity sweeps whose poke sits in the span are attached as events.
 `changes` compares the three windows (continued / reversed / faded).

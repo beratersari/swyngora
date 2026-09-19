@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ const (
 	ForensicsTimelineLiq     = "liquidations"
 	ForensicsTimelineOptions = "options"
 	ForensicsTimelineGamma   = "gamma"
+	ForensicsTimelineCurve   = "curve"
 	ForensicsTimelineSweep   = "sweep"
 	ForensicsTimelineAbsorb  = "absorption"
 )
@@ -63,7 +65,7 @@ func timelineEventKnown(at, cutoff time.Time) bool {
 }
 
 // BuildForensicsTimeline orders OI, takers, price, follow-through, liquidations,
-// options, dealer gamma, and sweeps on one clock. Missing series are omitted. Prints after
+// options, dealer gamma, the futures curve, and sweeps on one clock. Missing series are omitted. Prints after
 // KnownUntil are omitted — they were not visible yet at that observer clock.
 func BuildForensicsTimeline(r ForensicsReport) ForensicsTimeline {
 	if r.Tape == nil {
@@ -87,6 +89,9 @@ func BuildForensicsTimeline(r ForensicsReport) ForensicsTimeline {
 	if ev := timelineGammaBeat(r.Tape, plan, cutoff); ev.Kind != "" {
 		evs = append(evs, ev)
 	}
+	if ev := timelineCurveBeat(r.Tape, plan, cutoff); ev.Kind != "" {
+		evs = append(evs, ev)
+	}
 	if ev := timelineOptionsBeat(r.Tape, plan, cutoff); ev.Kind != "" {
 		evs = append(evs, ev)
 	}
@@ -108,6 +113,8 @@ func timelineKindResolution(kind, interval string) time.Duration {
 		return 0
 	case ForensicsTimelineOI, ForensicsTimelineOptions, ForensicsTimelineGamma:
 		return aroundVenueOIStep
+	case ForensicsTimelineCurve:
+		return time.Hour
 	case ForensicsTimelineSweep:
 		return 15 * time.Minute
 	default:
@@ -261,6 +268,86 @@ func timelineGammaCopy(o AroundOptions) (title, detail string) {
 	return title, detail
 }
 
+func timelineCurveBeat(tape *AroundReport, plan AroundPlan, cutoff time.Time) ForensicsTimelineEvent {
+	if tape == nil {
+		return ForensicsTimelineEvent{}
+	}
+	c := beforePhaseCurve(tape)
+	if c == nil || !c.Complete {
+		return ForensicsTimelineEvent{}
+	}
+	at := c.At
+	if at.IsZero() {
+		at = plan.At
+	}
+	if !timelineEventKnown(at, cutoff) {
+		return ForensicsTimelineEvent{}
+	}
+	title, detail := timelineCurveCopy(*c)
+	if title == "" {
+		return ForensicsTimelineEvent{}
+	}
+	venue := string(c.Exchange)
+	if venue == "" {
+		venue = string(ExchangeBinance)
+	}
+	return newForensicsTimelineEvent(at, plan, ForensicsTimelineCurve, venue, c.Shape, title, detail, timelineKindResolution(ForensicsTimelineCurve, ""))
+}
+
+func beforePhaseCurve(tape *AroundReport) *AroundCurve {
+	look := func(v *AroundVenue) *AroundCurve {
+		if v == nil {
+			return nil
+		}
+		for i := range v.Phases {
+			if v.Phases[i].Phase != AroundPhaseBefore {
+				continue
+			}
+			c := v.Phases[i].Curve
+			if c != nil && c.Complete {
+				cp := *c
+				return &cp
+			}
+		}
+		return nil
+	}
+	if c := look(tape.Combined); c != nil {
+		return c
+	}
+	for i := range tape.Venues {
+		if c := look(&tape.Venues[i]); c != nil {
+			return c
+		}
+	}
+	return nil
+}
+
+func timelineCurveCopy(c AroundCurve) (title, detail string) {
+	near, far := c.NearLabel, c.FarLabel
+	if near == "" {
+		near = "near"
+	}
+	if far == "" {
+		far = "far"
+	}
+	gap := FormatSignedPct(math.Abs(c.SpreadPct))
+	switch c.Shape {
+	case BasisCurveContango:
+		title = "The futures curve was in contango"
+		detail = fmt.Sprintf("Far (%s) was %s%% richer than near (%s).", far, gap, near)
+	case BasisCurveBackwardation:
+		title = "The futures curve was in backwardation"
+		detail = fmt.Sprintf("Near (%s) was %s%% richer than far (%s).", near, gap, far)
+	case BasisKindFlat:
+		title = "The futures curve was flat"
+		detail = fmt.Sprintf("Near (%s) and far (%s) were about in line.", near, far)
+	}
+	if detail != "" && !strings.HasSuffix(detail, ".") {
+		detail += "."
+	}
+	return title, detail
+}
+
 func timelineOptionsBeat(tape *AroundReport, plan AroundPlan, cutoff time.Time) ForensicsTimelineEvent {
 	if tape == nil {
 		return ForensicsTimelineEvent{}
@@ -354,7 +441,7 @@ func newForensicsTimelineEvent(at time.Time, plan AroundPlan, kind, venue, dir, 
 }
 
 func timelineKindBackward(kind string) bool {
-	return kind == ForensicsTimelineOI || kind == ForensicsTimelineOptions || kind == ForensicsTimelineGamma
+	return kind == ForensicsTimelineOI || kind == ForensicsTimelineOptions || kind == ForensicsTimelineGamma || kind == ForensicsTimelineCurve
 }
 
 func timelineOffsetLabelAt(at, event time.Time, stamp AroundStamp) string {

@@ -126,6 +126,24 @@ func TestExplainForensicsWhy_GammaBefore(t *testing.T) {
 	}
 }
 
+func TestExplainForensicsWhy_CurveBefore(t *testing.T) {
+	r := forensicsWhyFixture()
+	before, _ := AroundPhaseByID(*r.Tape.Combined, AroundPhaseBefore)
+	before.Curve = &AroundCurve{
+		Complete: true, Shape: BasisCurveBackwardation, SpreadPct: -0.40,
+		NearLabel: "25 Sep 2026", FarLabel: "25 Dec 2026",
+	}
+	for i := range r.Tape.Combined.Phases {
+		if r.Tape.Combined.Phases[i].Phase == AroundPhaseBefore {
+			r.Tape.Combined.Phases[i] = before
+		}
+	}
+	why := ExplainForensicsWhy(r)
+	if !strings.Contains(why.Before, "backwardation") || !strings.Contains(why.Before, "25 Sep 2026") {
+		t.Fatalf("before %q", why.Before)
+	}
+}
+
 func TestExplainForensicsWhy_OptionsStartedDuring(t *testing.T) {
 	r := forensicsWhyFixture()
 	during, _ := AroundPhaseByID(*r.Tape.Combined, AroundPhaseDuring)

@@ -163,6 +163,50 @@ func TestGetAround_AttachesOptions(t *testing.T) {
 	}
 }
 
+func TestGetAround_AttachesCurve(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Hour)
+	at := now.Add(-2 * time.Hour)
+	tape := aroundTape(at)
+	bn := &fakeMarket{candles: tape, ticker: &domain.Ticker24h{LastPrice: "105"}}
+	nearExp := at.Add(40 * 24 * time.Hour)
+	farExp := at.Add(130 * 24 * time.Hour)
+	histNear := []domain.PriceSample{{Time: at.Add(-time.Hour), Price: 64000}, {Time: at, Price: 64000}}
+	histFar := []domain.PriceSample{{Time: at.Add(-time.Hour), Price: 64600}, {Time: at, Price: 64700}}
+	bin := &fakeBasis{q: &domain.BasisQuote{
+		Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Time: now,
+		FuturesMark: 64000, SpotIndex: 64000,
+		Contracts: []domain.BasisContractQuote{
+			{Symbol: "BTCUSDT", Kind: domain.BasisContractPerp, Mark: 64000, Index: 64000},
+			{Symbol: "BTCUSDT_260925", Kind: domain.BasisContractCurrentQuarter, Expiry: nearExp, Mark: 64000, Index: 64000, History: histNear},
+			{Symbol: "BTCUSDT_261225", Kind: domain.BasisContractNextQuarter, Expiry: farExp, Mark: 64700, Index: 64000, History: histFar},
+		},
+	}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: bn,
+	}, &fakeSupply{}).WithBasis(map[domain.Exchange]domain.BasisPort{
+		domain.ExchangeBinance: bin,
+	})
+	got, err := svc.GetAround(context.Background(), "binance", "BTCUSDT", "1h", "15m", at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Venues) == 0 {
+		t.Fatal("no venues")
+	}
+	var before *domain.AroundPhase
+	for i := range got.Venues[0].Phases {
+		if got.Venues[0].Phases[i].Phase == domain.AroundPhaseBefore {
+			before = &got.Venues[0].Phases[i]
+		}
+	}
+	if before == nil || before.Curve == nil || !before.Curve.Complete {
+		t.Fatalf("curve %+v", before)
+	}
+	if before.Curve.Shape != domain.BasisCurveContango {
+		t.Fatalf("shape %s", before.Curve.Shape)
+	}
+}
+
 func TestGetAround_OneSidedOptionsNotAChange(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Minute)
 	at := now.Add(-2 * time.Hour)

@@ -86,6 +86,21 @@ export type ForensicsOptions = {
   complete?: boolean;
 };
 
+export type ForensicsCurve = {
+  exchange?: string;
+  shape?: string;
+  slope?: string;
+  spread?: string;
+  spreadPct?: string;
+  nearLabel?: string;
+  farLabel?: string;
+  nearMark?: string;
+  farMark?: string;
+  at?: string;
+  complete?: boolean;
+  summary?: string;
+};
+
 export type ForensicsEvent = {
   kind?: string;
   phase?: string;
@@ -107,6 +122,7 @@ export type ForensicsPhase = {
   book?: ForensicsBook | null;
   futures?: ForensicsFutures | null;
   options?: ForensicsOptions | null;
+  curve?: ForensicsCurve | null;
   events?: ForensicsEvent[];
   summary?: string;
   complete?: boolean;
