@@ -381,36 +381,41 @@ type aroundFuturesDTO struct {
 }
 
 type aroundOptionsDTO struct {
-	Asset        string           `json:"asset"`
-	OiFrom       string           `json:"oiFrom,omitempty"`
-	OiTo         string           `json:"oiTo,omitempty"`
-	OiChange     string           `json:"oiChange,omitempty"`
-	OiChangePct  string           `json:"oiChangePct,omitempty"`
-	OiDirection  string           `json:"oiDirection,omitempty"`
-	PutCallFrom  string           `json:"putCallFrom,omitempty"`
-	PutCallTo    string           `json:"putCallTo,omitempty"`
-	PutCallDelta string           `json:"putCallDelta,omitempty"`
-	LeanFrom     string           `json:"leanFrom,omitempty"`
-	LeanTo       string           `json:"leanTo,omitempty"`
-	DvolFrom     string           `json:"dvolFrom,omitempty"`
-	DvolTo       string           `json:"dvolTo,omitempty"`
-	DvolDelta    string           `json:"dvolDelta,omitempty"`
-	AtmIvFrom    string           `json:"atmIvFrom,omitempty"`
-	AtmIvTo      string           `json:"atmIvTo,omitempty"`
-	AtmIvDelta   string           `json:"atmIvDelta,omitempty"`
-	Moves        []optionsMoveDTO `json:"moves,omitempty"`
-	Unusual      bool             `json:"unusual,omitempty"`
-	Started      string           `json:"started,omitempty"`
-	StartedAt    *time.Time       `json:"startedAt,omitempty"`
-	Lead         string           `json:"lead,omitempty"`
-	LeadLabel    string           `json:"leadLabel,omitempty"`
-	LeadWindow   string           `json:"leadWindow,omitempty"`
-	Together     int              `json:"together,omitempty"`
-	Weight       string           `json:"weight,omitempty"`
-	After        string           `json:"after,omitempty"`
-	AfterSummary string           `json:"afterSummary,omitempty"`
-	Summary      string           `json:"summary,omitempty"`
-	Complete     bool             `json:"complete"`
+	Asset         string           `json:"asset"`
+	OiFrom        string           `json:"oiFrom,omitempty"`
+	OiTo          string           `json:"oiTo,omitempty"`
+	OiChange      string           `json:"oiChange,omitempty"`
+	OiChangePct   string           `json:"oiChangePct,omitempty"`
+	OiDirection   string           `json:"oiDirection,omitempty"`
+	PutCallFrom   string           `json:"putCallFrom,omitempty"`
+	PutCallTo     string           `json:"putCallTo,omitempty"`
+	PutCallDelta  string           `json:"putCallDelta,omitempty"`
+	LeanFrom      string           `json:"leanFrom,omitempty"`
+	LeanTo        string           `json:"leanTo,omitempty"`
+	DvolFrom      string           `json:"dvolFrom,omitempty"`
+	DvolTo        string           `json:"dvolTo,omitempty"`
+	DvolDelta     string           `json:"dvolDelta,omitempty"`
+	AtmIvFrom     string           `json:"atmIvFrom,omitempty"`
+	AtmIvTo       string           `json:"atmIvTo,omitempty"`
+	AtmIvDelta    string           `json:"atmIvDelta,omitempty"`
+	Moves         []optionsMoveDTO `json:"moves,omitempty"`
+	Unusual       bool             `json:"unusual,omitempty"`
+	Started       string           `json:"started,omitempty"`
+	StartedAt     *time.Time       `json:"startedAt,omitempty"`
+	Lead          string           `json:"lead,omitempty"`
+	LeadLabel     string           `json:"leadLabel,omitempty"`
+	LeadWindow    string           `json:"leadWindow,omitempty"`
+	Together      int              `json:"together,omitempty"`
+	Weight        string           `json:"weight,omitempty"`
+	After         string           `json:"after,omitempty"`
+	AfterSummary  string           `json:"afterSummary,omitempty"`
+	GammaNetUsd   string           `json:"gammaNetUsd,omitempty"`
+	GammaRegime   string           `json:"gammaRegime,omitempty"`
+	GammaFlip     string           `json:"gammaFlip,omitempty"`
+	GammaFlipSide string           `json:"gammaFlipSide,omitempty"`
+	IndexPrice    string           `json:"indexPrice,omitempty"`
+	Summary       string           `json:"summary,omitempty"`
+	Complete      bool             `json:"complete"`
 }
 
 type aroundEventDTO struct {
@@ -701,6 +706,17 @@ func aroundOptionsToDTO(o *domain.AroundOptions) *aroundOptionsDTO {
 		out.AtmIvFrom = formatHistQty(o.AtmIVFrom)
 		out.AtmIvTo = formatHistQty(o.AtmIVTo)
 		out.AtmIvDelta = domain.FormatSignedQty(o.AtmIVDelta)
+	}
+	if o.HasGamma {
+		out.GammaNetUsd = domain.FormatSignedQty(o.GammaNetUSD)
+		out.GammaRegime = o.GammaRegime
+	}
+	if o.HasGammaFlip {
+		out.GammaFlip = formatHistQty(o.GammaFlip)
+		out.GammaFlipSide = o.GammaFlipSide
+	}
+	if o.HasIndex {
+		out.IndexPrice = formatHistQty(o.IndexPrice)
 	}
 	if len(o.Moves) > 0 {
 		out.Moves = optionsMovesToDTO(&domain.OptionsMoves{Findings: o.Moves}).Findings

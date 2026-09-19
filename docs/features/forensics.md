@@ -33,13 +33,13 @@ If similar-move search fails, `tape` is still returned and
 `why` is a plain-language story of **why the move may have happened**
 (before / during / after, plus similar past cases). It interprets the
 tape — volume vs typical, who was aggressive, book thinning, open
-interest vs price, funding, liquidations, sweeps, and unusual listed
-options (OI / put-call / implied vol) on BTC and ETH — instead of
-listing raw metrics.
+interest vs price, funding, liquidations, sweeps, unusual listed
+options (OI / put-call / implied vol), and dealer gamma / flip vs
+spot on BTC and ETH — instead of listing raw metrics.
 
 `timeline` is the same tape on **one clock**. Each beat is a start
 print (open interest, takers, price on Binance or Bybit, liquidations,
-listed options, a sweep or absorption) with the time, how far it sits
+listed options, dealer gamma / flip vs spot, a sweep or absorption) with the time, how far it sits
 from `at` (`offset` / `offsetLabel`), and which venue printed it.
 Missing series are omitted. The clock only includes prints that were
 **already known** at the observer time (`timeline.knownUntil`).
@@ -77,8 +77,12 @@ sequence we cannot know. Liquidation prints stay exact.
 Informational only.
 
 On BTC and ETH, each phase can include stored Deribit desk samples
-(`options`): listed open interest, put/call lean, DVOL/ATM IV, and
-`unusual` when that series jumped in **this** window. `started` is
+(`options`): listed open interest, put/call lean, DVOL/ATM IV, dealer
+gamma (long / short / flip vs spot) when those samples exist, and
+`unusual` when that series jumped in **this** window. The timeline
+adds a **gamma** beat for the before-window state — whether dealers
+were long or short gamma going into the move, and whether spot sat
+above or below the flip. `started` is
 `before` when the print was already underway at the price event, or
 `during` when it only appeared once price was moving. If it started
 before, `lead` / `leadLabel` say how much earlier. A 4h or 24h unusual

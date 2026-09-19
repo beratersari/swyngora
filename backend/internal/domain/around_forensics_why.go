@@ -478,6 +478,11 @@ func forensicsOptionsStory(p AroundPhase, before bool) string {
 	} else if o.HasDVOL && o.DVOLDelta <= -aroundOptionsDVOLFloor {
 		bits = append(bits, fmt.Sprintf("implied vol cooled %.1f points", -o.DVOLDelta))
 	}
+	if before {
+		if g := explainAroundGamma(*o); g != "" {
+			bits = append(bits, g)
+		}
+	}
 	if o.AfterSummary != "" {
 		bits = append(bits, strings.TrimSuffix(o.AfterSummary, "."))
 	}

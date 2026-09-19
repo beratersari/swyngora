@@ -675,6 +675,12 @@ func ExplainAroundPhase(p AroundPhase) string {
 		} else if o.HasOI {
 			head += fmt.Sprintf(", listed OI %s%%", FormatSignedPct(o.OIChangePct))
 		}
+		if o.HasGamma && (o.GammaRegime == GammaRegimeShort || o.GammaRegime == GammaRegimeLong) {
+			head += "; dealers " + o.GammaRegime + " gamma"
+			if o.HasGammaFlip && o.GammaFlipSide != "" && o.GammaFlipSide != GammaFlipAt {
+				head += ", spot " + o.GammaFlipSide + " flip"
+			}
+		}
 	}
 	for _, ev := range p.Events {
 		if ev.Kind == AroundEventSweep {

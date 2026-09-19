@@ -104,7 +104,7 @@ each move and lists conditions that show up often:
 - open interest rising or falling
 - bid or ask liquidity pulled
 - a sweep or absorption in the before-window
-- listed options already unusual, OI/IV rising or falling, put/call lean (BTC/ETH)
+- listed options already unusual, OI/IV rising or falling, put/call lean, dealer gamma / flip vs spot (BTC/ETH)
 
 `common` on a **combo** is the **overall** hit rate across every
 sampled before-window (not “often on one side only”) — **60%+** with

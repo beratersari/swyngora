@@ -90,6 +90,44 @@ func TestBuildForensicsTimeline_Order(t *testing.T) {
 	}
 }
 
+func TestBuildForensicsTimeline_GammaBeforeMove(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	r := ForensicsReport{
+		Symbol: "BTCUSDT", At: at, Window: AroundWindow1h, During: AroundDuring15m, AsOf: at.Add(time.Hour),
+		Tape: &AroundReport{
+			Symbol: "BTCUSDT", At: at, Window: AroundWindow1h, During: AroundDuring15m,
+			Combined: &AroundVenue{
+				Exchange: "all",
+				Phases: []AroundPhase{{
+					Phase: AroundPhaseBefore,
+					Options: &AroundOptions{
+						HasGamma: true, GammaRegime: GammaRegimeShort, GammaNetUSD: -2e8,
+						HasGammaFlip: true, GammaFlip: 97200, GammaFlipSide: GammaFlipAbove,
+						GammaAt: at.Add(-10 * time.Minute),
+					},
+				}},
+			},
+			Venues: []AroundVenue{{
+				Exchange: ExchangeBinance, Symbol: "BTCUSDT", MoveStart: at,
+				Phases: []AroundPhase{{Phase: AroundPhaseDuring, Complete: true, Price: AroundPrice{Direction: CVDDirUp}}},
+			}},
+		},
+	}
+	got := BuildForensicsTimeline(r)
+	var gamma ForensicsTimelineEvent
+	for _, ev := range got.Events {
+		if ev.Kind == ForensicsTimelineGamma {
+			gamma = ev
+		}
+	}
+	if gamma.Title != "Dealers were short gamma" {
+		t.Fatalf("gamma %+v events=%+v", gamma, got.Events)
+	}
+	if !strings.Contains(gamma.Detail, "above the flip") || gamma.Phase != AroundPhaseBefore {
+		t.Fatalf("detail %+v", gamma)
+	}
+}
+
 func TestBuildForensicsTimeline_EmptyTape(t *testing.T) {
 	if got := BuildForensicsTimeline(ForensicsReport{}); len(got.Events) != 0 || got.Summary != "" {
 		t.Fatalf("%+v", got)

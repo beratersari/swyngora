@@ -13,6 +13,7 @@ const (
 	ForensicsTimelinePrice   = "price"
 	ForensicsTimelineLiq     = "liquidations"
 	ForensicsTimelineOptions = "options"
+	ForensicsTimelineGamma   = "gamma"
 	ForensicsTimelineSweep   = "sweep"
 	ForensicsTimelineAbsorb  = "absorption"
 )
@@ -62,7 +63,7 @@ func timelineEventKnown(at, cutoff time.Time) bool {
 }
 
 // BuildForensicsTimeline orders OI, takers, price, follow-through, liquidations,
-// options, and sweeps on one clock. Missing series are omitted. Prints after
+// options, dealer gamma, and sweeps on one clock. Missing series are omitted. Prints after
 // KnownUntil are omitted — they were not visible yet at that observer clock.
 func BuildForensicsTimeline(r ForensicsReport) ForensicsTimeline {
 	if r.Tape == nil {
@@ -83,6 +84,9 @@ func BuildForensicsTimeline(r ForensicsReport) ForensicsTimeline {
 	if len(evs) == 0 && r.Tape.Combined != nil && r.Tape.Combined.Error == "" {
 		evs = append(evs, timelineVenueBeats(*r.Tape.Combined, plan, cutoff)...)
 	}
+	if ev := timelineGammaBeat(r.Tape, plan, cutoff); ev.Kind != "" {
+		evs = append(evs, ev)
+	}
 	if ev := timelineOptionsBeat(r.Tape, plan, cutoff); ev.Kind != "" {
 		evs = append(evs, ev)
 	}
@@ -102,7 +106,7 @@ func timelineKindResolution(kind, interval string) time.Duration {
 	switch kind {
 	case ForensicsTimelineLiq:
 		return 0
-	case ForensicsTimelineOI, ForensicsTimelineOptions:
+	case ForensicsTimelineOI, ForensicsTimelineOptions, ForensicsTimelineGamma:
 		return aroundVenueOIStep
 	case ForensicsTimelineSweep:
 		return 15 * time.Minute
@@ -171,6 +175,90 @@ func timelineUntilDetail(until string) string {
 	default:
 		return ""
 	}
+}
+
+func timelineGammaBeat(tape *AroundReport, plan AroundPlan, cutoff time.Time) ForensicsTimelineEvent {
+	if tape == nil {
+		return ForensicsTimelineEvent{}
+	}
+	o := beforePhaseGamma(tape)
+	if o == nil || (!o.HasGamma && !o.HasGammaFlip) {
+		return ForensicsTimelineEvent{}
+	}
+	at := o.GammaAt
+	if at.IsZero() {
+		at = plan.At
+	}
+	if !timelineEventKnown(at, cutoff) {
+		return ForensicsTimelineEvent{}
+	}
+	title, detail := timelineGammaCopy(*o)
+	if title == "" {
+		return ForensicsTimelineEvent{}
+	}
+	return newForensicsTimelineEvent(at, plan, ForensicsTimelineGamma, string(ExchangeDeribit), o.GammaRegime, title, detail, timelineKindResolution(ForensicsTimelineGamma, ""))
+}
+
+func beforePhaseGamma(tape *AroundReport) *AroundOptions {
+	look := func(v *AroundVenue) *AroundOptions {
+		if v == nil {
+			return nil
+		}
+		for i := range v.Phases {
+			if v.Phases[i].Phase != AroundPhaseBefore {
+				continue
+			}
+			o := v.Phases[i].Options
+			if o != nil && (o.HasGamma || o.HasGammaFlip) {
+				cp := *o
+				return &cp
+			}
+		}
+		return nil
+	}
+	if o := look(tape.Combined); o != nil {
+		return o
+	}
+	for i := range tape.Venues {
+		if o := look(&tape.Venues[i]); o != nil {
+			return o
+		}
+	}
+	return nil
+}
+
+func timelineGammaCopy(o AroundOptions) (title, detail string) {
+	switch o.GammaRegime {
+	case GammaRegimeShort:
+		title = "Dealers were short gamma"
+	case GammaRegimeLong:
+		title = "Dealers were long gamma"
+	case GammaRegimeFlat:
+		title = "Dealer gamma was balanced"
+	}
+	var bits []string
+	if o.HasGammaFlip && o.GammaFlip > 0 {
+		switch o.GammaFlipSide {
+		case GammaFlipAbove:
+			bits = append(bits, fmt.Sprintf("Spot was above the flip (%.0f)", o.GammaFlip))
+		case GammaFlipBelow:
+			bits = append(bits, fmt.Sprintf("Spot was below the flip (%.0f)", o.GammaFlip))
+		case GammaFlipAt:
+			bits = append(bits, fmt.Sprintf("Spot was at the flip (%.0f)", o.GammaFlip))
+		}
+	}
+	if o.HasGammaRegimeChange && o.GammaRegimeFrom != "" {
+		bits = append(bits, fmt.Sprintf("Gamma flipped from %s to %s before the move", o.GammaRegimeFrom, o.GammaRegime))
+	}
+	if title == "" && len(bits) > 0 {
+		title = bits[0]
+		bits = bits[1:]
+	}
+	detail = strings.Join(bits, ". ")
+	if detail != "" && !strings.HasSuffix(detail, ".") {
+		detail += "."
+	}
+	return title, detail
 }
 
 func timelineOptionsBeat(tape *AroundReport, plan AroundPlan, cutoff time.Time) ForensicsTimelineEvent {
@@ -266,7 +354,7 @@ func newForensicsTimelineEvent(at time.Time, plan AroundPlan, kind, venue, dir, 
 }
 
 func timelineKindBackward(kind string) bool {
-	return kind == ForensicsTimelineOI || kind == ForensicsTimelineOptions
+	return kind == ForensicsTimelineOI || kind == ForensicsTimelineOptions || kind == ForensicsTimelineGamma
 }
 
 func timelineOffsetLabelAt(at, event time.Time, stamp AroundStamp) string {
@@ -373,16 +461,18 @@ func sortForensicsTimeline(evs []ForensicsTimelineEvent) {
 			return 1
 		case ForensicsTimelineTakers:
 			return 2
-		case ForensicsTimelineOptions:
+		case ForensicsTimelineGamma:
 			return 3
-		case ForensicsTimelinePrice:
+		case ForensicsTimelineOptions:
 			return 4
-		case ForensicsTimelineLiq:
+		case ForensicsTimelinePrice:
 			return 5
-		case ForensicsTimelineSweep:
+		case ForensicsTimelineLiq:
 			return 6
-		case ForensicsTimelineAbsorb:
+		case ForensicsTimelineSweep:
 			return 7
+		case ForensicsTimelineAbsorb:
+			return 8
 		default:
 			return 8
 		}

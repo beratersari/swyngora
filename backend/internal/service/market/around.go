@@ -10,7 +10,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const aroundDisclaimer = "Before / during / after are adjacent windows around the time you pick: before is the lookback ending at that time, during is the move starting there, after is the same lookback after the move. Price, volume, buy/sell, VWAP, volume vs typical, and the volume-profile POC come from spot candles. Liquidity sweeps use 15-minute bars. Stored order-book and futures history are attached when those archives have a sample near the window. Listed BTC/ETH options (open interest, put/call, implied vol, unusual prints) attach when the options archive has samples. Informational only — not financial advice."
+const aroundDisclaimer = "Before / during / after are adjacent windows around the time you pick: before is the lookback ending at that time, during is the move starting there, after is the same lookback after the move. Price, volume, buy/sell, VWAP, volume vs typical, and the volume-profile POC come from spot candles. Liquidity sweeps use 15-minute bars. Stored order-book and futures history are attached when those archives have a sample near the window. Listed BTC/ETH options (open interest, put/call, implied vol, dealer gamma / flip, unusual prints) attach when the options archive has samples. Informational only — not financial advice."
 
 const aroundSweepLookback = 48 * time.Hour
 

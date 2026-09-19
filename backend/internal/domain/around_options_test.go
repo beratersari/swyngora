@@ -31,6 +31,41 @@ func TestOptionsAcrossWindow_DeltasAndUnusual(t *testing.T) {
 	}
 }
 
+func TestOptionsAcrossWindow_AttachesGammaState(t *testing.T) {
+	base := time.Date(2026, 8, 20, 12, 0, 0, 0, time.UTC)
+	points := []OptionsHistoryPoint{
+		{Time: base, OpenInterest: 100, HasOI: true, HasGamma: true, GammaRegime: GammaRegimeLong, GammaNetUSD: 400},
+		{
+			Time: base.Add(time.Hour), OpenInterest: 102, HasOI: true,
+			HasGamma: true, GammaRegime: GammaRegimeShort, GammaNetUSD: -200,
+			HasGammaFlip: true, GammaFlip: 97200, GammaFlipSide: GammaFlipAbove,
+			HasIndex: true, IndexPrice: 100000,
+		},
+	}
+	got := OptionsAcrossWindow(OptionsAssetBTC, points, base, base.Add(time.Hour))
+	if got == nil || !got.HasGamma || got.GammaRegime != GammaRegimeShort {
+		t.Fatalf("gamma %+v", got)
+	}
+	if !got.HasGammaFlip || got.GammaFlipSide != GammaFlipAbove || !got.HasGammaRegimeChange {
+		t.Fatalf("flip %+v", got)
+	}
+	if !strings.Contains(got.Summary, "short gamma") || !strings.Contains(got.Summary, "above the flip") {
+		t.Fatalf("summary %q", got.Summary)
+	}
+}
+
+func TestOptionsGammaAt_OneSample(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	points := []OptionsHistoryPoint{{
+		Time: at.Add(-3 * time.Minute), HasGamma: true, GammaRegime: GammaRegimeLong,
+		HasGammaFlip: true, GammaFlip: 101000, GammaFlipSide: GammaFlipBelow,
+	}}
+	got := OptionsGammaAt(OptionsAssetBTC, points, at)
+	if got == nil || got.GammaRegime != GammaRegimeLong || got.GammaFlipSide != GammaFlipBelow {
+		t.Fatalf("%+v", got)
+	}
+}
+
 func TestOptionsAcrossWindow_Missing(t *testing.T) {
 	if got := OptionsAcrossWindow(OptionsAssetBTC, nil, time.Now().Add(-time.Hour), time.Now()); got != nil {
 		t.Fatalf("expected nil, got %+v", got)

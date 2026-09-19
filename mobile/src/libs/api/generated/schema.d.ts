@@ -7511,7 +7511,7 @@ export interface components {
             offsetLabel?: string;
             /** @description before | during | after */
             phase?: string;
-            /** @description oi | takers | price | liquidations | options | sweep | absorption */
+            /** @description oi | takers | price | liquidations | options | gamma | sweep | absorption */
             kind?: string;
             /** @description binance | bybit | deribit | all */
             venue?: string;

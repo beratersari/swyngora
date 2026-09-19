@@ -12,6 +12,14 @@ describe('ForensicsTimeline', () => {
           summary: 'Binance open interest started rising (about 8 minutes before).',
           events: [
             {
+              at: '2026-08-20T13:50:00Z',
+              offsetLabel: 'about 10 minutes before',
+              kind: 'gamma',
+              venue: 'deribit',
+              title: 'Dealers were short gamma',
+              detail: 'Spot was above the flip (97200).',
+            },
+            {
               at: '2026-08-20T13:52:00Z',
               offsetLabel: 'about 8 minutes before',
               kind: 'oi',
@@ -47,6 +55,8 @@ describe('ForensicsTimeline', () => {
     );
     expect(screen.getByText(/what happened, in order|zaman sırasıyla/i)).toBeInTheDocument();
     expect(screen.getByText(/known as of|itibarıyla bilinen/i)).toBeInTheDocument();
+    expect(screen.getByText(/dealers were short gamma/i)).toBeInTheDocument();
+    expect(screen.getByText(/above the flip/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Binance open interest started rising/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Bybit price started moving up/i)).toBeInTheDocument();
     expect(screen.getByText(/order not certain|sıra kesin değil/i)).toBeInTheDocument();

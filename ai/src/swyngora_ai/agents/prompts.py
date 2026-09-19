@@ -196,7 +196,7 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
   `find_around_moves` → strongest recent up/down legs plus the around tape for each;
   `find_around_precursors` → what often changed before those moves, including combos that fire together and lean up or down;
   `find_around_similar` → past important-move setups like now (unique events; pick horizons for after up/down/avg/median), and what price did after;
-  `get_market_forensics` → one report: before / during / after a chosen time plus similar past moves, after-horizons, why the move may have happened, and a timeline of what printed first (OI, venues, liquidations; only prints known by asOf / knownUntil; unusual BTC/ETH options prints in the before-window are called out);
+  `get_market_forensics` → one report: before / during / after a chosen time plus similar past moves, after-horizons, why the move may have happened, and a timeline of what printed first (OI, venues, liquidations; only prints known by asOf / knownUntil; unusual BTC/ETH options prints in the before-window are called out; dealer gamma / flip vs spot when those samples exist);
   `scan_market_forensics` → which coins currently look like past pre-move setups, which tape pieces matched, and what usually happened after;
   `review_setup_radar` → saved radar hits and whether price later matched the lean;
   `create_setup_radar_alert` → notify when a coin starts looking similar enough to those past setups (min_similarity, lean any/up/down, symbol or all);

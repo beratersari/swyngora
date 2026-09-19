@@ -66,9 +66,21 @@ type AroundOptions struct {
 	Weight       string        // single | pair | cluster
 	After        string        // continued | reversed | faded | mixed — vs the price event
 	AfterSummary string
-	Summary      string
-	Complete     bool
-	SampledTo    time.Time `json:"sampledTo,omitempty"` // last options sample used for this phase
+	// Dealer gamma at the close of this window (state, not a change).
+	HasGamma             bool
+	GammaNetUSD          float64
+	GammaRegime          string
+	GammaRegimeFrom      string
+	HasGammaRegimeChange bool
+	HasGammaFlip         bool
+	GammaFlip            float64
+	GammaFlipSide        string
+	HasIndex             bool
+	IndexPrice           float64
+	GammaAt              time.Time
+	Summary              string
+	Complete             bool
+	SampledTo            time.Time `json:"sampledTo,omitempty"` // last options sample used for this phase
 }
 
 // OptionsHistoryUntil keeps samples at or before at (inclusive).
@@ -101,7 +113,7 @@ func OptionsAcrossWindow(asset string, points []OptionsHistoryPoint, from, to ti
 	}
 	start, end, ok := optionsHistoryPair(points, from, to)
 	if !ok {
-		return nil
+		return OptionsGammaAt(asset, points, to)
 	}
 	out := AroundOptions{Asset: asset}
 	if start.HasOI && end.HasOI {
@@ -138,6 +150,7 @@ func OptionsAcrossWindow(asset string, points []OptionsHistoryPoint, from, to ti
 		out.AtmIVDelta = out.AtmIVTo - out.AtmIVFrom
 		out.Complete = true
 	}
+	attachAroundGamma(&out, start, end)
 	if !out.Complete {
 		return nil
 	}
@@ -160,6 +173,60 @@ func optionsHistoryPair(points []OptionsHistoryPoint, from, to time.Time) (start
 		return OptionsHistoryPoint{}, OptionsHistoryPoint{}, false
 	}
 	return start, end, true
+}
+
+// OptionsAcrossWindow also returns a gamma-only snapshot when the window
+// has a dealer-gamma print at the close but no paired OI / put-call / IV change.
+func OptionsGammaAt(asset string, points []OptionsHistoryPoint, at time.Time) *AroundOptions {
+	if len(points) == 0 || at.IsZero() {
+		return nil
+	}
+	end := optionsHistoryAtOrBefore(points, at, aroundOptionsSlack)
+	if !end.HasGamma && !end.HasGammaFlip {
+		return nil
+	}
+	out := AroundOptions{Asset: asset}
+	attachAroundGamma(&out, OptionsHistoryPoint{}, end)
+	if !out.HasGamma && !out.HasGammaFlip {
+		return nil
+	}
+	out.Summary = explainAroundOptions(out)
+	return &out
+}
+
+func attachAroundGamma(out *AroundOptions, start, end OptionsHistoryPoint) {
+	if out == nil {
+		return
+	}
+	src := end
+	if !src.HasGamma && !src.HasGammaFlip && (start.HasGamma || start.HasGammaFlip) {
+		src = start
+	}
+	if src.HasGamma {
+		out.HasGamma = true
+		out.GammaNetUSD = src.GammaNetUSD
+		out.GammaRegime = src.GammaRegime
+		out.GammaAt = src.Time.UTC()
+		out.Complete = true
+	}
+	if src.HasGammaFlip && src.GammaFlip > 0 {
+		out.HasGammaFlip = true
+		out.GammaFlip = src.GammaFlip
+		out.GammaFlipSide = src.GammaFlipSide
+		if out.GammaAt.IsZero() {
+			out.GammaAt = src.Time.UTC()
+		}
+		out.Complete = true
+	}
+	if src.HasIndex && src.IndexPrice > 0 {
+		out.HasIndex = true
+		out.IndexPrice = src.IndexPrice
+	}
+	if start.HasGamma && end.HasGamma && start.GammaRegime != "" && end.GammaRegime != "" &&
+		start.GammaRegime != end.GammaRegime {
+		out.GammaRegimeFrom = start.GammaRegime
+		out.HasGammaRegimeChange = true
+	}
 }
 
 func firstOptionsPointIn(points []OptionsHistoryPoint, from, to time.Time) OptionsHistoryPoint {
@@ -230,6 +297,15 @@ func attachBeforeOptionsLookback(before *AroundPhase, points []OptionsHistoryPoi
 	}
 	if before.Options == nil {
 		before.Options = &AroundOptions{Unusual: true, Started: AroundOptionsStartedBefore}
+	}
+	if !before.Options.HasGamma && !before.Options.HasGammaFlip {
+		if g := OptionsGammaAt(before.Options.Asset, points, before.To); g != nil {
+			attachAroundGamma(before.Options, OptionsHistoryPoint{}, OptionsHistoryPoint{
+				HasGamma: g.HasGamma, GammaNetUSD: g.GammaNetUSD, GammaRegime: g.GammaRegime,
+				HasGammaFlip: g.HasGammaFlip, GammaFlip: g.GammaFlip, GammaFlipSide: g.GammaFlipSide,
+				HasIndex: g.HasIndex, IndexPrice: g.IndexPrice, Time: g.GammaAt,
+			})
+		}
 	}
 	before.Options.Moves = append([]OptionsMove(nil), moves.Findings...)
 	before.Options.Unusual = true
@@ -837,6 +913,9 @@ func explainAroundOptions(o AroundOptions) string {
 	} else if o.HasAtmIV && absFloat(o.AtmIVDelta) >= aroundOptionsDVOLFloor {
 		bits = append(bits, fmt.Sprintf("ATM IV %s %.1f pts", changeDir(o.AtmIVDelta), o.AtmIVDelta))
 	}
+	if g := explainAroundGamma(o); g != "" {
+		bits = append(bits, g)
+	}
 	if len(bits) == 0 {
 		if o.Unusual {
 			return unusualOptionsLeadSentence(o) + "."
@@ -852,6 +931,32 @@ func explainAroundOptions(o AroundOptions) string {
 		return s
 	}
 	return head
+}
+
+func explainAroundGamma(o AroundOptions) string {
+	var bits []string
+	switch o.GammaRegime {
+	case GammaRegimeShort:
+		bits = append(bits, "dealers were short gamma (moves can run faster)")
+	case GammaRegimeLong:
+		bits = append(bits, "dealers were long gamma (price can stay calmer)")
+	case GammaRegimeFlat:
+		bits = append(bits, "dealer gamma was balanced")
+	}
+	if o.HasGammaFlip && o.GammaFlip > 0 {
+		switch o.GammaFlipSide {
+		case GammaFlipAbove:
+			bits = append(bits, fmt.Sprintf("spot was above the flip (%.0f)", o.GammaFlip))
+		case GammaFlipBelow:
+			bits = append(bits, fmt.Sprintf("spot was below the flip (%.0f)", o.GammaFlip))
+		case GammaFlipAt:
+			bits = append(bits, fmt.Sprintf("spot was at the flip (%.0f)", o.GammaFlip))
+		}
+	}
+	if o.HasGammaRegimeChange && o.GammaRegimeFrom != "" && o.GammaRegime != "" {
+		bits = append(bits, fmt.Sprintf("gamma flipped from %s to %s in this window", o.GammaRegimeFrom, o.GammaRegime))
+	}
+	return strings.Join(bits, "; ")
 }
 
 func unusualOptionsLeadSentence(o AroundOptions) string {

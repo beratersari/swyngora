@@ -108,6 +108,24 @@ func TestExplainForensicsWhy_UnusualOptionsBefore(t *testing.T) {
 	}
 }
 
+func TestExplainForensicsWhy_GammaBefore(t *testing.T) {
+	r := forensicsWhyFixture()
+	before, _ := AroundPhaseByID(*r.Tape.Combined, AroundPhaseBefore)
+	before.Options = &AroundOptions{
+		Complete: true, HasGamma: true, GammaRegime: GammaRegimeShort,
+		HasGammaFlip: true, GammaFlip: 97200, GammaFlipSide: GammaFlipAbove,
+	}
+	for i := range r.Tape.Combined.Phases {
+		if r.Tape.Combined.Phases[i].Phase == AroundPhaseBefore {
+			r.Tape.Combined.Phases[i] = before
+		}
+	}
+	why := ExplainForensicsWhy(r)
+	if !strings.Contains(why.Before, "short gamma") || !strings.Contains(why.Before, "above the flip") {
+		t.Fatalf("before %q", why.Before)
+	}
+}
+
 func TestExplainForensicsWhy_OptionsStartedDuring(t *testing.T) {
 	r := forensicsWhyFixture()
 	during, _ := AroundPhaseByID(*r.Tape.Combined, AroundPhaseDuring)
