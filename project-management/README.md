@@ -15,8 +15,8 @@ Local task tracking for Swyngora until GitLab MCP/issues are fully wired.
 ```text
 tasks/
 ├── frontend/init|markets|detail   # INIT-*, MKT-*, DET-*
-└── mobile/init|markets|detail|watchlist|pumps|batch-indicators
-    # MINIT-*, MMKT-*, MDET-*, MWL-*, MPUMP-*, MBIND-*
+└── mobile/…|category-discovery|cross-exchange|leaderboards
+    # … MCAT-*, MCROSS-*, MLEAD-*
 ```
 
 **Do not add new task files to `tasks/` root.** Use the matching subfolder.
@@ -58,6 +58,9 @@ See `decisions/002-react-native-cli-modules-viewmodel.md`.
 9. Epic H — Mobile batch indicators — **done** (`tasks/mobile/batch-indicators/`, `epics/mobile-batch-indicators.md`)
 10. Epic I — Mobile AI assistant chat — **done** (`tasks/mobile/ai-chat/`, `epics/mobile-ai-chat.md`)
 11. Epic J — Mobile home dashboard — **done** (`tasks/mobile/home/`, `epics/mobile-home-dashboard.md`)
+12. Epic K — Mobile category discovery — **done** (`tasks/mobile/category-discovery/`, `epics/mobile-category-discovery.md`)
+13. Epic L — Mobile cross-exchange coin comparison — **done** (`tasks/mobile/cross-exchange/`, `epics/mobile-cross-exchange-compare.md`)
+14. Epic M — Mobile gainers/losers/volume leaderboards — **done** (`tasks/mobile/leaderboards/`, `epics/mobile-leaderboards.md`)
 
 ### Mobile designs
 
@@ -72,7 +75,10 @@ See `decisions/002-react-native-cli-modules-viewmodel.md`.
 | `docs/design/mobile-batch-indicators.md` | Batch RSI/EMA list enrichment |
 | `docs/design/mobile-ai-chat.md` | AI assistant Ask tab / chat |
 | `docs/design/mobile-home-dashboard.md` | Home live widgets dashboard |
+| `docs/design/mobile-category-discovery.md` | Product tag / category browse |
+| `docs/design/mobile-cross-exchange-compare.md` | Cross-venue ticker compare on detail |
+| `docs/design/mobile-leaderboards.md` | Gainers / losers / volume leaderboards |
 
 GitLab: when MCP auth works, mirror these epics/issues (see `docs/pm/`).
 
-**Last updated:** 2026-07-28 (Epic J home dashboard implemented)
+**Last updated:** 2026-07-29 (Epic M leaderboards implemented)

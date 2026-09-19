@@ -1,0 +1,11 @@
+{
+  "title": "Sıralamalar",
+  "quote": "Kotasyon",
+  "summary": "{{total}} içinden {{count}} gösteriliyor",
+  "empty": "Şu an {{board}} yok",
+  "boards": {
+    "gainers": "Yükselenler",
+    "losers": "Düşenler",
+    "volume": "Hacim"
+  }
+}

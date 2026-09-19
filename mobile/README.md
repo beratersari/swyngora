@@ -45,7 +45,7 @@ src/
   components/          # Atomic ONLY (no pages); kebab-case folders
   modules/
     app/pages/         # home-page (View + ViewModel)
-    markets/pages/     # markets-page, coin-detail-page, …
+    markets/pages/     # markets-page, categories-page, coin-detail-page, …
     watchlist/pages/   # watchlist-page (Favorites tab)
     ai/pages/          # ai-chat-page (Ask tab)
   libs/api/            # RTK Query + OpenAPI

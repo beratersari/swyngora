@@ -57,6 +57,25 @@ export function MarketsProvider({ children }: { children: ReactNode }) {
     [notifyFiltersChanged],
   );
 
+  const selectCategoryTag = useCallback(
+    (tag: string) => {
+      const trimmed = tag.trim();
+      if (!trimmed) return;
+      setSelectedTagsState([trimmed]);
+      setQuoteState(DEFAULT_QUOTE);
+      setSortState(DEFAULT_SORT);
+      setOrderState(DEFAULT_ORDER);
+      setSearchState('');
+      notifyFiltersChanged();
+    },
+    [notifyFiltersChanged],
+  );
+
+  const clearSelectedTags = useCallback(() => {
+    setSelectedTagsState([]);
+    notifyFiltersChanged();
+  }, [notifyFiltersChanged]);
+
   const activeFilterCount = useMemo(() => {
     let n = 0;
     if (quote !== DEFAULT_QUOTE) n += 1;
@@ -78,6 +97,8 @@ export function MarketsProvider({ children }: { children: ReactNode }) {
       setExchange,
       setSearch,
       applyListFilters,
+      selectCategoryTag,
+      clearSelectedTags,
       notifyFiltersChanged,
       activeFilterCount,
     }),
@@ -92,6 +113,8 @@ export function MarketsProvider({ children }: { children: ReactNode }) {
       setExchange,
       setSearch,
       applyListFilters,
+      selectCategoryTag,
+      clearSelectedTags,
       notifyFiltersChanged,
       activeFilterCount,
     ],

@@ -37,6 +37,10 @@ export const styles = StyleSheet.create({
     borderColor: '#F5C542',
     backgroundColor: 'rgba(245, 197, 66, 0.15)',
   },
+  categoryChip: {
+    borderColor: semanticColors.border.focus,
+    backgroundColor: semanticColors.action.primary,
+  },
   btnInner: {
     flexDirection: 'row',
     alignItems: 'center',

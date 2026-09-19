@@ -5,6 +5,7 @@ import type {
   ChartLinePoint,
   ChartMarker,
   ChartPriceLine,
+  CrossExchangeRowModel,
 } from '@/libs/utils';
 import type { ChartVertLine } from '@/components/organisms/candle-chart/CandleChart.vertLines';
 
@@ -25,6 +26,15 @@ export type CoinDetailPageViewModel = {
   tickerError: string | null;
   supplyError: string | null;
   holdersError: string | null;
+
+  crossExchangeTitle: string;
+  crossExchangeRows: CrossExchangeRowModel[];
+  crossExchangeDisclaimer: string | null;
+  crossExchangeUnavailableLabel: string;
+  crossExchangeSourceLabel: string;
+  crossExchangeCheapestLabel: string;
+  crossExchangeCheapestId: string | null;
+  onPressCrossExchangeRow: (exchange: string, symbol: string) => void;
 
   intervals: string[];
   intervalsLoading: boolean;

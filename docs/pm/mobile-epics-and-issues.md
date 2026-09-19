@@ -405,3 +405,175 @@ MHOME-1 … MHOME-7
 | MHOME-7 | Docs + board + changelog closeout |
 
 Full task text: `project-management/tasks/mobile/home/MHOME-*.md`.
+
+
+---
+
+## Epic K — Mobile category discovery
+
+| Field | Value |
+|---|---|
+| **Title** | `[mobile] Category discovery` |
+| **Type** | Epic |
+| **Labels** | `mobile`, `priority::p1` |
+| **Design** | `docs/design/mobile-category-discovery.md` |
+| **Feature** | `docs/features/mobile-category-discovery.md` |
+| **Analysis** | `project-management/tasks/mobile/category-discovery/MCAT-A.md` |
+| **Epic file** | `project-management/epics/mobile-category-discovery.md` |
+| **Tasks** | `project-management/tasks/mobile/category-discovery/MCAT-*.md` |
+| **Branch** | `feature/mobile-category-discovery` |
+
+### Epic description (paste into GitLab)
+
+```markdown
+## Summary
+
+Mobile category discovery: browse Binance product-catalog tags (Meme, AI, defi, …)
+via GET /api/v1/market/tags, open tag-filtered markets via GET /spot?tag=.
+Home featured chips + Categories browse page; reuse Markets list/context.
+No new backend work.
+
+## Goals
+
+- Featured categories on Home
+- Categories browse (search + grid) on Markets stack
+- Single-tag apply → filtered Markets list
+- Empty / error / i18n (en/tr)
+
+## Out of scope
+
+New endpoints, multi-tag discovery UX, alerts, web frontend category UI.
+
+## Child issues
+
+MCAT-A · MCAT-1 … MCAT-7
+```
+
+### Child issues
+
+| ID | Title |
+|---|---|
+| MCAT-A | Tags + spot tag-filter field matrix |
+| MCAT-1 | Constants + category query helpers |
+| MCAT-2 | Atomic category UI |
+| MCAT-3 | Categories browse page + route |
+| MCAT-4 | Apply tag to Markets list |
+| MCAT-5 | Home featured strip + Markets entry |
+| MCAT-6 | Loading / empty / error / i18n |
+| MCAT-7 | Docs + board + changelog closeout |
+
+Full task text: `project-management/tasks/mobile/category-discovery/MCAT-*.md`.
+
+
+---
+
+## Epic L — Mobile cross-exchange coin comparison
+
+| Field | Value |
+|---|---|
+| **Title** | `[mobile] Cross-exchange coin comparison` |
+| **Type** | Epic |
+| **Labels** | `mobile`, `priority::p1` |
+| **Design** | `docs/design/mobile-cross-exchange-compare.md` |
+| **Feature** | `docs/features/mobile-cross-exchange-compare.md` |
+| **Analysis** | `project-management/tasks/mobile/cross-exchange/MCROSS-A.md` |
+| **Epic file** | `project-management/epics/mobile-cross-exchange-compare.md` |
+| **Tasks** | `project-management/tasks/mobile/cross-exchange/MCROSS-*.md` |
+| **Branch** | `feature/mobile-cross-exchange-compare` |
+
+### Epic description (paste into GitLab)
+
+```markdown
+## Summary
+
+Coin detail “Across exchanges” section: parallel GET /ticker/24h for
+binance / coinbase / bybit with client symbol mapping (BTCUSDT ↔ BTC-USD).
+No new backend endpoint in v1. Partial failure per venue; tap opens that venue detail.
+
+## Goals
+
+- Symbol mapping helpers + tests
+- Atomic compare UI
+- Wire into coin detail ViewModel + page
+- Poll pause / i18n / disclaimer
+
+## Out of scope
+
+New compare API, FX conversion, alerts, web UI.
+
+## Child issues
+
+MCROSS-A · MCROSS-1 … MCROSS-7
+```
+
+### Child issues
+
+| ID | Title |
+|---|---|
+| MCROSS-A | Field matrix + symbol mapping analysis |
+| MCROSS-1 | Constants + cross-exchange helpers |
+| MCROSS-2 | Atomic compare UI |
+| MCROSS-3 | Coin detail ViewModel parallel tickers |
+| MCROSS-4 | Wire section + navigate to venue |
+| MCROSS-5 | Loading / partial failure / i18n |
+| MCROSS-6 | Tests polish |
+| MCROSS-7 | Docs + board + changelog closeout |
+
+Full task text: `project-management/tasks/mobile/cross-exchange/MCROSS-*.md`.
+
+
+---
+
+## Epic M — Mobile gainers / losers / high-volume leaderboards
+
+| Field | Value |
+|---|---|
+| **Title** | `[mobile] Gainers/losers/volume leaderboards` |
+| **Type** | Epic |
+| **Labels** | `mobile`, `priority::p1` |
+| **Design** | `docs/design/mobile-leaderboards.md` |
+| **Feature** | `docs/features/mobile-leaderboards.md` |
+| **Analysis** | `project-management/tasks/mobile/leaderboards/MLEAD-A.md` |
+| **Epic file** | `project-management/epics/mobile-leaderboards.md` |
+| **Tasks** | `project-management/tasks/mobile/leaderboards/MLEAD-*.md` |
+| **Branch** | `feature/mobile-leaderboards` |
+
+### Epic description (paste into GitLab)
+
+```markdown
+## Summary
+
+Full leaderboards for 24h gainers, losers, and high quote volume via
+GET /api/v1/market/spot sorts. Beyond Home teasers (limit 5): pagination,
+exchange/quote chips, Home “See all” deep links. No new backend.
+
+## Goals
+
+- LeaderboardsPage with Gainers | Losers | Volume
+- Shared query helpers with Home
+- Infinite scroll + poll pause
+- en/tr i18n
+
+## Out of scope
+
+New endpoints, multi-timeframe boards, alerts, web redesign.
+
+## Child issues
+
+MLEAD-A · MLEAD-1 … MLEAD-7
+```
+
+### Child issues
+
+| ID | Title |
+|---|---|
+| MLEAD-A | Spot sort field matrix + UX decisions |
+| MLEAD-1 | Constants + leaderboard query helpers |
+| MLEAD-2 | Atomic segment / list chrome |
+| MLEAD-3 | LeaderboardsPage ViewModel |
+| MLEAD-4 | LeaderboardsPage View + routes |
+| MLEAD-5 | Home See all + Markets entry |
+| MLEAD-6 | Loading / empty / error / i18n |
+| MLEAD-7 | Docs + board + changelog closeout |
+
+Full task text: `project-management/tasks/mobile/leaderboards/MLEAD-*.md`.

@@ -13,6 +13,7 @@ import {
 } from './formatMarket';
 import { formatPrice } from './formatPrice';
 import { formatPumpReturnPct, pumpReturnTone } from './formatPump';
+import { buildLeaderboardSpotQuery } from './leaderboardQuery';
 import { buildScanQuery, defaultPumpScanFilters } from './pumpQuery';
 import { watchKey, type WatchlistPair } from './watchlistKey';
 
@@ -40,15 +41,13 @@ export function buildMoversSpotQuery(
   quote: string = HOME_DEFAULT_QUOTE,
   limit: number = HOME_MOVERS_LIMIT,
 ): SpotListQuery {
-  return {
+  return buildLeaderboardSpotQuery({
+    board: 'gainers',
     exchange,
     quote,
-    sort: 'priceChangePercent',
-    order: 'desc',
     limit,
     offset: 0,
-    status: 'TRADING',
-  };
+  });
 }
 
 export function buildVolumeSpotQuery(
@@ -56,15 +55,13 @@ export function buildVolumeSpotQuery(
   quote: string = HOME_DEFAULT_QUOTE,
   limit: number = HOME_VOLUME_LIMIT,
 ): SpotListQuery {
-  return {
+  return buildLeaderboardSpotQuery({
+    board: 'volume',
     exchange,
     quote,
-    sort: 'quoteVolume',
-    order: 'desc',
     limit,
     offset: 0,
-    status: 'TRADING',
-  };
+  });
 }
 
 export function buildHomePumpScanQuery(

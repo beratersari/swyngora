@@ -8,6 +8,7 @@ import watchlistEn from './locales/en/watchlist.json';
 import pumpsEn from './locales/en/pumps.json';
 import detailEn from './locales/en/detail.json';
 import aiEn from './locales/en/ai.json';
+import leaderboardsEn from './locales/en/leaderboards.json';
 
 import commonTr from './locales/tr/common.json';
 import homeTr from './locales/tr/home.json';
@@ -16,12 +17,13 @@ import watchlistTr from './locales/tr/watchlist.json';
 import pumpsTr from './locales/tr/pumps.json';
 import detailTr from './locales/tr/detail.json';
 import aiTr from './locales/tr/ai.json';
+import leaderboardsTr from './locales/tr/leaderboards.json';
 
 /**
  * Bundled translation catalogs.
  *
  * To add a language:
- * 1. Create `locales/<code>/{common,home,markets,watchlist,pumps,detail,ai}.json`
+ * 1. Create `locales/<code>/{common,home,markets,watchlist,pumps,detail,ai,leaderboards}.json`
  * 2. Import and register in `localeBundles` below
  * 3. Add `<code>` to `SUPPORTED_LOCALES` in `config.ts`
  * 4. Add display labels under `common.language.<code>` and `LOCALE_META`
@@ -37,6 +39,7 @@ const localeBundles = {
     pumps: pumpsEn,
     detail: detailEn,
     ai: aiEn,
+    leaderboards: leaderboardsEn,
   },
   tr: {
     common: commonTr,
@@ -46,6 +49,7 @@ const localeBundles = {
     pumps: pumpsTr,
     detail: detailTr,
     ai: aiTr,
+    leaderboards: leaderboardsTr,
   },
 } as const satisfies Record<AppLocale, Record<I18nNamespace, object>>;
 

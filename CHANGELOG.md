@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI HTTP client:** `ai/` tools use `httpx2` (Pydantic-maintained fork) instead of `httpx`; LangChain may still pull `httpx` transitively
 
 ### Added
+- **Mobile leaderboards** (`mobile/`): full Gainers / Losers / Volume boards via spot sorts; Home See all + Markets Boards entry (`docs/features/mobile-leaderboards.md`)
+- **Mobile cross-exchange compare** (`mobile/`): coin detail “Across exchanges” section compares 24h tickers on Binance / Coinbase / Bybit with symbol mapping and partial failure (`docs/features/mobile-cross-exchange-compare.md`)
+- **Mobile category discovery** (`mobile/`): browse Binance product-catalog tags (Home featured chips + Markets Categories page); single-tag filter reuses Markets list via `GET /tags` + `GET /spot?tag=` (`docs/features/mobile-category-discovery.md`)
 - **Futures curve on basis:** listed dated futures vs each other — near vs far expiry, contango (far richer / up) or backwardation (near richer / down). `curve` on `GET /api/v1/market/basis`, web `/basis` (`docs/features/basis.md`)
 - **Cascade episode share:** combined waves also show how much liquidation each venue produced and its percent of the total (`venueStarts[].totalNotional` / `sharePct`, `largestBy`). Web `/liquidations?view=cascade` (`docs/features/liquidations.md`)
 - **Cascade episode lead:** combined waves name which venue printed first and how many seconds later the others followed (`startedBy`, `venueStarts[].lagSec`; `orderUnknown` when first prints share a second). Web `/liquidations?view=cascade` (`docs/features/liquidations.md`)

@@ -37,6 +37,7 @@ import {
   emaLineFromCloses,
   indicatorPointsToRsi,
   parseEmaPeriods,
+  cheapestExchangeId,
   isMarketExchange,
   mergeChartCandles,
   toSupplyAsset,
@@ -56,7 +57,7 @@ import {
   DEFAULT_PUMP_DETAIL_MIN_RETURN_PCT,
   PUMP_DISCLAIMER,
 } from '@/config/pumpConstants';
-import type { MarketsStackParamList } from '../../navigation';
+import { MarketsScreens, type MarketsStackParamList } from '../../navigation';
 import { useOptionalWatchlist } from '@/modules/watchlist';
 import {
   DEFAULT_DETAIL_CANDLE_LIMIT,
@@ -70,6 +71,7 @@ import {
   DETAIL_TICKER_POLL_MS,
 } from './CoinDetailPage.constants';
 import type { CoinDetailPageViewModel } from './CoinDetailPage.types';
+import { useCrossExchangeRows } from './useCrossExchangeRows';
 
 function mapApiCandlesToChart(
   raw: {
@@ -165,6 +167,17 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
 
   const isEquity = exchange === 'nasdaq' || exchange === 'bist';
   const supplyAsset = toSupplyAsset(symbol);
+
+  const crossExchange = useCrossExchangeRows({
+    sourceExchange: exchange,
+    sourceSymbol: symbol,
+    sourceTicker: tickerQuery.data,
+    sourceLoading: tickerQuery.isLoading || tickerQuery.isFetching,
+    sourceError: tickerQuery.error,
+    sourceIsError: tickerQuery.isError,
+    polling,
+    skip,
+  });
 
   const supplyQuery = useGetSupplyQuery(
     { asset: supplyAsset },
@@ -537,6 +550,7 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
     void indicatorsQuery.refetch();
     void intervalsQuery.refetch();
     void pumpQuery.refetch();
+    crossExchange.refetchAll();
   }, [
     tickerQuery,
     supplyQuery,
@@ -545,16 +559,38 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
     indicatorsQuery,
     intervalsQuery,
     pumpQuery,
+    crossExchange,
   ]);
 
   const onSelectInterval = useCallback((next: string) => {
     setInterval(next);
   }, []);
 
+  const onPressCrossExchangeRow = useCallback(
+    (nextExchange: string, nextSymbol: string) => {
+      if (
+        nextExchange === exchange &&
+        nextSymbol.toUpperCase() === symbol.toUpperCase()
+      ) {
+        return;
+      }
+      navigation.navigate(MarketsScreens.Detail, {
+        exchange: nextExchange,
+        symbol: nextSymbol,
+      });
+    },
+    [navigation, exchange, symbol],
+  );
+
   const watched = watchlist?.isWatched(exchange, symbol) ?? false;
   const onStarPress = useCallback(() => {
     void watchlist?.toggle(exchange, symbol);
   }, [watchlist, exchange, symbol]);
+
+  const crossExchangeCheapestId = useMemo(
+    () => cheapestExchangeId(crossExchange.rows),
+    [crossExchange.rows],
+  );
 
   return {
     symbol,
@@ -574,6 +610,15 @@ export function useCoinDetailPageViewModel(): CoinDetailPageViewModel {
       : null,
     supplyError,
     holdersError,
+
+    crossExchangeTitle: t('detail:crossExchangeTitle'),
+    crossExchangeRows: crossExchange.rows,
+    crossExchangeDisclaimer: t('detail:crossExchangeDisclaimer'),
+    crossExchangeUnavailableLabel: t('detail:crossExchangeUnavailable'),
+    crossExchangeSourceLabel: t('detail:crossExchangeSource'),
+    crossExchangeCheapestLabel: t('detail:crossExchangeCheapest'),
+    crossExchangeCheapestId,
+    onPressCrossExchangeRow,
 
     intervals: supported ?? [],
     intervalsLoading: intervalsQuery.isLoading,

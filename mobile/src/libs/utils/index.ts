@@ -119,3 +119,33 @@ export type {
   DashboardMarketRow,
   DashboardPumpTeaser,
 } from './homeDashboardQuery';
+
+export {
+  intersectFeaturedTags,
+  filterTagsBySearch,
+  formatCategoryLabel,
+  buildCategorySpotParams,
+} from './categoryQuery';
+export type { CategorySpotParamsInput } from './categoryQuery';
+
+export {
+  parseMarketSymbol,
+  symbolCandidatesForExchange,
+  buildCrossExchangePlan,
+  mapTickerToCrossExchangeRow,
+  cheapestExchangeId,
+} from './crossExchange';
+export type {
+  ParsedMarketSymbol,
+  CrossExchangePlanRow,
+  CrossExchangeRowModel,
+  CrossExchangeRowStatus,
+} from './crossExchange';
+
+export {
+  buildLeaderboardSpotQuery,
+  rankLabel,
+  mapSpotToLeaderboardRow,
+  mapSpotListToLeaderboardRows,
+} from './leaderboardQuery';
+export type { BuildLeaderboardSpotQueryInput } from './leaderboardQuery';

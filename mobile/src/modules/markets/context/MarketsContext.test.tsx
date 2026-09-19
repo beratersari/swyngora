@@ -31,6 +31,12 @@ function Probe() {
       >
         apply
       </button>
+      <button type="button" onClick={() => m.selectCategoryTag('AI')}>
+        category
+      </button>
+      <button type="button" onClick={() => m.clearSelectedTags()}>
+        clearTags
+      </button>
     </div>
   );
 }
@@ -63,5 +69,17 @@ describe('MarketsProvider', () => {
     expect(screen.getByTestId('tags').textContent).toBe('Meme');
     expect(Number(screen.getByTestId('filters').textContent)).toBeGreaterThan(0);
     expect(Number(screen.getByTestId('rev').textContent)).toBeGreaterThan(0);
+
+    act(() => {
+      fireEvent.click(screen.getByText('category'));
+    });
+    expect(screen.getByTestId('tags').textContent).toBe('AI');
+    expect(screen.getByTestId('quote').textContent).toBe('USDT');
+    expect(screen.getByTestId('search').textContent).toBe('');
+
+    act(() => {
+      fireEvent.click(screen.getByText('clearTags'));
+    });
+    expect(screen.getByTestId('tags').textContent).toBe('');
   });
 });

@@ -16,6 +16,10 @@ function makeVm(overrides: Partial<MarketsPageViewModel> = {}): MarketsPageViewM
     activeFilterCount: 0,
     filterSummary: null,
     onOpenFilters: vi.fn(),
+    onOpenCategories: vi.fn(),
+    onOpenLeaderboards: vi.fn(),
+    activeCategoryLabel: null,
+    onClearCategory: vi.fn(),
     rows: [
       {
         id: 'BTCUSDT',

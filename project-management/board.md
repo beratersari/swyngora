@@ -229,6 +229,72 @@ Local status for web (`frontend/`) and mobile (`mobile/`) until GitLab issues ar
 
 **MR grouping:** (1–2) · (3–4) · (5–6) · (7)
 
+## Epic K — Mobile category discovery (**done**)
+
+**Tasks:** `tasks/mobile/category-discovery/`  
+**Epic:** `epics/mobile-category-discovery.md`  
+**Plan:** `docs/design/mobile-category-discovery.md`  
+**Feature:** `docs/features/mobile-category-discovery.md`  
+**Analysis:** `tasks/mobile/category-discovery/MCAT-A.md`  
+**Branch:** `feature/mobile-category-discovery`
+
+| ID | Task | Status |
+|---|---|---|
+| MCAT-A | Tags + spot tag-filter field matrix | done |
+| MCAT-1 | Constants + category query helpers + tests | done |
+| MCAT-2 | Atomic category UI (grid / strip) | done |
+| MCAT-3 | Categories browse page + route | done |
+| MCAT-4 | Apply tag to Markets list (context + nav) | done |
+| MCAT-5 | Home featured strip + Markets entry | done |
+| MCAT-6 | Loading / empty / error / i18n | done |
+| MCAT-7 | Tests polish + docs/board/changelog closeout | done |
+
+**MR grouping:** (A+1) · (2–3) · (4–5) · (6–7)
+
+## Epic L — Mobile cross-exchange coin comparison (**done**)
+
+**Tasks:** `tasks/mobile/cross-exchange/`  
+**Epic:** `epics/mobile-cross-exchange-compare.md`  
+**Plan:** `docs/design/mobile-cross-exchange-compare.md`  
+**Feature:** `docs/features/mobile-cross-exchange-compare.md`  
+**Analysis:** `tasks/mobile/cross-exchange/MCROSS-A.md`  
+**Branch:** `feature/mobile-cross-exchange-compare`
+
+| ID | Task | Status |
+|---|---|---|
+| MCROSS-A | Field matrix + symbol mapping analysis | done |
+| MCROSS-1 | Constants + cross-exchange helpers + tests | done |
+| MCROSS-2 | Atomic compare UI (row + list) | done |
+| MCROSS-3 | Coin detail ViewModel parallel tickers | done |
+| MCROSS-4 | Wire section + navigate to venue detail | done |
+| MCROSS-5 | Loading / partial failure / i18n | done |
+| MCROSS-6 | Tests polish | done |
+| MCROSS-7 | Docs / board / changelog closeout | done |
+
+**MR grouping:** (A+1) · (2–3) · (4–5) · (6–7)
+
+## Epic M — Mobile gainers / losers / high-volume leaderboards (**done**)
+
+**Tasks:** `tasks/mobile/leaderboards/`  
+**Epic:** `epics/mobile-leaderboards.md`  
+**Plan:** `docs/design/mobile-leaderboards.md`  
+**Feature:** `docs/features/mobile-leaderboards.md`  
+**Analysis:** `tasks/mobile/leaderboards/MLEAD-A.md`  
+**Branch:** `feature/mobile-leaderboards`
+
+| ID | Task | Status |
+|---|---|---|
+| MLEAD-A | Spot sort field matrix + UX decisions | done |
+| MLEAD-1 | Constants + leaderboard query helpers + tests | done |
+| MLEAD-2 | Atomic segment / list chrome | done |
+| MLEAD-3 | LeaderboardsPage ViewModel | done |
+| MLEAD-4 | LeaderboardsPage View + navigation routes | done |
+| MLEAD-5 | Home See all deep links + Markets entry | done |
+| MLEAD-6 | Loading / empty / error / poll / i18n | done |
+| MLEAD-7 | Tests polish + docs/board/changelog closeout | done |
+
+**MR grouping:** (A+1) · (2–3) · (4–5) · (6–7)
+
 ## Later (not started)
 
 | ID | Task | Status |

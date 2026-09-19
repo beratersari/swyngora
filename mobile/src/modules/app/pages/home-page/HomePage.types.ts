@@ -19,6 +19,7 @@ export type HomePageViewModel = {
   moversError: string | null;
   moversEmpty: string | null;
   moversTitle: string;
+  onOpenMoversSeeAll: () => void;
   onRetryMovers: () => void;
 
   volume: DashboardMarketRow[];
@@ -26,6 +27,7 @@ export type HomePageViewModel = {
   volumeError: string | null;
   volumeEmpty: string | null;
   volumeTitle: string;
+  onOpenVolumeSeeAll: () => void;
   onRetryVolume: () => void;
 
   pumps: DashboardPumpTeaser[];
@@ -35,6 +37,16 @@ export type HomePageViewModel = {
   pumpsTitle: string;
   pumpsDisclaimer: string | null;
   onRetryPumps: () => void;
+
+  categoriesTitle: string;
+  categoryTags: string[];
+  categoriesLoading: boolean;
+  categoriesError: string | null;
+  categoriesEmpty: string | null;
+  onSelectCategory: (tag: string) => void;
+  onOpenCategories: () => void;
+  onRetryCategories: () => void;
+  formatCategoryLabel: (tag: string) => string;
 
   seeAllLabel: string;
   retryLabel: string;

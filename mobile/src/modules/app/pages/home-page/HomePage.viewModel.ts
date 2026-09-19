@@ -6,10 +6,12 @@ import {
   HOME_FAVORITES_LIMIT,
   HOME_WIDGET_POLL_MS,
 } from '@/config/homeDashboardConstants';
+import { CATEGORY_TAGS_EXCHANGE } from '@/config/categoryConstants';
 import { env } from '@/config/env';
 import {
   rtkErrorMessage,
   useGetHealthQuery,
+  useListProductTagsQuery,
   useListSpotMarketsQuery,
   useScanPumpEventsQuery,
 } from '@/libs/api';
@@ -18,22 +20,25 @@ import {
   buildHomePumpScanQuery,
   buildMoversSpotQuery,
   buildVolumeSpotQuery,
+  formatCategoryLabel,
   indexDashboardRows,
+  intersectFeaturedTags,
   mapFavoritesToDashboardRows,
   mapPumpHitsToTeasers,
   mapSpotListToDashboardRows,
 } from '@/libs/utils';
-import { MarketsScreens } from '@/modules/markets';
+import { MarketsScreens, useOptionalMarketsContext } from '@/modules/markets';
 import { PumpsScreens } from '@/modules/pumps';
 import { useOptionalWatchlist } from '@/modules/watchlist';
 import type { HomePageViewModel } from './HomePage.types';
 
 export function useHomePageViewModel(): HomePageViewModel {
-  const { t } = useTranslation(['home', 'common']);
+  const { t } = useTranslation(['home', 'common', 'markets']);
   const navigation = useNavigation();
   const active = useAppStateActive();
   const focused = useIsFocused();
   const watchlist = useOptionalWatchlist();
+  const markets = useOptionalMarketsContext();
 
   const poll = active && focused ? HOME_WIDGET_POLL_MS : 0;
   const skipWidgets = !active || !focused;
@@ -57,6 +62,14 @@ export function useHomePageViewModel(): HomePageViewModel {
     pollingInterval: 0,
     refetchOnFocus: false,
   });
+  const tagsQuery = useListProductTagsQuery(
+    { exchange: CATEGORY_TAGS_EXCHANGE },
+    {
+      skip: skipWidgets,
+      pollingInterval: 0,
+      refetchOnFocus: false,
+    },
+  );
   const healthQuery = useGetHealthQuery(undefined, {
     pollingInterval: poll || 0,
     refetchOnFocus: false,
@@ -101,6 +114,27 @@ export function useHomePageViewModel(): HomePageViewModel {
     navigateTab('MarketsTab');
   }, [navigateTab]);
 
+  const onOpenGainers = useCallback(() => {
+    navigateTab('MarketsTab', {
+      screen: MarketsScreens.Leaderboards,
+      params: { board: 'gainers' },
+    });
+  }, [navigateTab]);
+
+  const onOpenVolumeBoard = useCallback(() => {
+    navigateTab('MarketsTab', {
+      screen: MarketsScreens.Leaderboards,
+      params: { board: 'volume' },
+    });
+  }, [navigateTab]);
+
+  const onOpenLeaderboards = useCallback(() => {
+    navigateTab('MarketsTab', {
+      screen: MarketsScreens.Leaderboards,
+      params: { board: 'gainers' },
+    });
+  }, [navigateTab]);
+
   const onOpenPumps = useCallback(() => {
     navigateTab('PumpsTab');
   }, [navigateTab]);
@@ -112,6 +146,22 @@ export function useHomePageViewModel(): HomePageViewModel {
   const onOpenFavorites = useCallback(() => {
     navigateTab('WatchlistTab');
   }, [navigateTab]);
+
+  const onOpenCategories = useCallback(() => {
+    navigateTab('MarketsTab', {
+      screen: MarketsScreens.Categories,
+    });
+  }, [navigateTab]);
+
+  const onSelectCategory = useCallback(
+    (tag: string) => {
+      markets?.selectCategoryTag(tag);
+      navigateTab('MarketsTab', {
+        screen: MarketsScreens.List,
+      });
+    },
+    [markets, navigateTab],
+  );
 
   const onPressMarket = useCallback(
     (ex: string, symbol: string) => {
@@ -137,8 +187,9 @@ export function useHomePageViewModel(): HomePageViewModel {
     void moversQuery.refetch();
     void volumeQuery.refetch();
     void pumpsQuery.refetch();
+    void tagsQuery.refetch();
     void healthQuery.refetch();
-  }, [moversQuery, volumeQuery, pumpsQuery, healthQuery]);
+  }, [moversQuery, volumeQuery, pumpsQuery, tagsQuery, healthQuery]);
 
   let healthStatus: HomePageViewModel['healthStatus'] = 'unknown';
   if (healthQuery.isSuccess) healthStatus = 'ok';
@@ -148,11 +199,24 @@ export function useHomePageViewModel(): HomePageViewModel {
     (moversQuery.isFetching || volumeQuery.isFetching || pumpsQuery.isFetching) &&
     (movers.length > 0 || volume.length > 0 || pumps.length > 0);
 
+  const liveTags = tagsQuery.data?.tags ?? [];
+  const categoryTags = useMemo(() => intersectFeaturedTags(liveTags), [liveTags]);
+  const categoriesLoading =
+    tagsQuery.isLoading || (tagsQuery.isFetching && liveTags.length === 0);
+  const categoriesError = tagsQuery.isError
+    ? rtkErrorMessage(tagsQuery.error, { resource: 'tags' })
+    : null;
+  const categoriesEmpty =
+    !categoriesError && !categoriesLoading && categoryTags.length === 0
+      ? t('home:categoriesEmpty')
+      : null;
+
   return {
     title: t('home:title'),
     intro: t('home:intro'),
     quickActions: [
       { id: 'markets', label: t('home:openMarkets'), onPress: onOpenMarkets },
+      { id: 'leaderboards', label: t('home:openLeaderboards'), onPress: onOpenLeaderboards },
       { id: 'pumps', label: t('home:openPumps'), onPress: onOpenPumps },
       { id: 'ask', label: t('home:openAsk'), onPress: onOpenAsk },
     ],
@@ -175,6 +239,7 @@ export function useHomePageViewModel(): HomePageViewModel {
         ? t('home:moversEmpty')
         : null,
     moversTitle: t('home:sectionMovers'),
+    onOpenMoversSeeAll: onOpenGainers,
     onRetryMovers: () => {
       void moversQuery.refetch();
     },
@@ -189,6 +254,7 @@ export function useHomePageViewModel(): HomePageViewModel {
         ? t('home:volumeEmpty')
         : null,
     volumeTitle: t('home:sectionVolume'),
+    onOpenVolumeSeeAll: onOpenVolumeBoard,
     onRetryVolume: () => {
       void volumeQuery.refetch();
     },
@@ -207,6 +273,18 @@ export function useHomePageViewModel(): HomePageViewModel {
     onRetryPumps: () => {
       void pumpsQuery.refetch();
     },
+
+    categoriesTitle: t('home:sectionCategories'),
+    categoryTags,
+    categoriesLoading,
+    categoriesError,
+    categoriesEmpty,
+    onSelectCategory,
+    onOpenCategories,
+    onRetryCategories: () => {
+      void tagsQuery.refetch();
+    },
+    formatCategoryLabel,
 
     seeAllLabel: t('home:seeAll'),
     retryLabel: t('common:actions.retry'),

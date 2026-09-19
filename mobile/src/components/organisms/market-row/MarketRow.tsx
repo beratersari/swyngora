@@ -28,7 +28,14 @@ export function MarketRow({ row, onPress, watched, onStarPress }: MarketRowProps
         style={styles.main}
       >
         <View style={styles.top}>
-          <Text variant="h4">{row.symbol}</Text>
+          <View style={styles.symbolRow}>
+            {row.rankLabel ? (
+              <Text variant="caption" color="steel" style={styles.rank}>
+                {row.rankLabel}
+              </Text>
+            ) : null}
+            <Text variant="h4">{row.symbol}</Text>
+          </View>
           <View style={styles.topRight}>
             {row.rsiLabel != null ? (
               <RsiBadge

@@ -20,7 +20,9 @@ import {
 import { Icon, ICON_FAVORITE_GOLD } from '@/components/atoms/icon';
 import { HomePage } from '@/modules/app';
 import {
+  CategoriesPage,
   CoinDetailPage,
+  LeaderboardsPage,
   MarketsFilterPage,
   MarketsPage,
   MarketsProvider,
@@ -97,13 +99,13 @@ function HomeStackNavigator() {
 
 function MarketsStackNavigator() {
   return (
-    <MarketsProvider>
-      <MarketsStack.Navigator screenOptions={stackScreenOptions}>
-        <MarketsStack.Screen name={MarketsScreens.List} component={MarketsPage} />
-        <MarketsStack.Screen name={MarketsScreens.Filters} component={MarketsFilterPage} />
-        <MarketsStack.Screen name={MarketsScreens.Detail} component={CoinDetailPage} />
-      </MarketsStack.Navigator>
-    </MarketsProvider>
+    <MarketsStack.Navigator screenOptions={stackScreenOptions}>
+      <MarketsStack.Screen name={MarketsScreens.List} component={MarketsPage} />
+      <MarketsStack.Screen name={MarketsScreens.Filters} component={MarketsFilterPage} />
+      <MarketsStack.Screen name={MarketsScreens.Categories} component={CategoriesPage} />
+      <MarketsStack.Screen name={MarketsScreens.Leaderboards} component={LeaderboardsPage} />
+      <MarketsStack.Screen name={MarketsScreens.Detail} component={CoinDetailPage} />
+    </MarketsStack.Navigator>
   );
 }
 
@@ -246,7 +248,9 @@ function MainTabsInner() {
 function MainTabs() {
   return (
     <WatchlistProvider>
-      <MainTabsInner />
+      <MarketsProvider>
+        <MainTabsInner />
+      </MarketsProvider>
     </WatchlistProvider>
   );
 }

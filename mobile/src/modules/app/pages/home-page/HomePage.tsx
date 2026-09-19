@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/text';
 import { LanguageSwitcher } from '@/components/molecules/language-switcher';
 import { QuickActionChips } from '@/components/molecules/quick-action-chips';
+import { CategorySection } from '@/components/organisms/category-section';
 import { DashboardSectionList } from '@/components/organisms/dashboard-section-list';
 import { PumpTeaserCard } from '@/components/organisms/pump-teaser-card';
 import { ScreenTemplate } from '@/components/templates/screen-template';
@@ -43,6 +44,20 @@ function HomePageView({ vm }: { vm: HomePageViewModel }) {
           <QuickActionChips actions={vm.quickActions} />
         </View>
 
+        <CategorySection
+          title={vm.categoriesTitle}
+          actionLabel={vm.seeAllLabel}
+          onAction={vm.onOpenCategories}
+          tags={vm.categoryTags}
+          onSelectTag={vm.onSelectCategory}
+          isLoading={vm.categoriesLoading}
+          errorMessage={vm.categoriesError}
+          emptyMessage={vm.categoriesEmpty}
+          onRetry={vm.onRetryCategories}
+          retryLabel={vm.retryLabel}
+          formatLabel={vm.formatCategoryLabel}
+        />
+
         <DashboardSectionList
           title={vm.favoritesTitle}
           actionLabel={vm.favorites.length > 0 ? vm.seeAllLabel : undefined}
@@ -57,7 +72,7 @@ function HomePageView({ vm }: { vm: HomePageViewModel }) {
         <DashboardSectionList
           title={vm.moversTitle}
           actionLabel={vm.seeAllLabel}
-          onAction={vm.onOpenMarkets}
+          onAction={vm.onOpenMoversSeeAll}
           rows={vm.movers}
           isLoading={vm.moversLoading}
           errorMessage={vm.moversError}
@@ -70,7 +85,7 @@ function HomePageView({ vm }: { vm: HomePageViewModel }) {
         <DashboardSectionList
           title={vm.volumeTitle}
           actionLabel={vm.seeAllLabel}
-          onAction={vm.onOpenMarkets}
+          onAction={vm.onOpenVolumeSeeAll}
           rows={vm.volume}
           isLoading={vm.volumeLoading}
           errorMessage={vm.volumeError}
