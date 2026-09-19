@@ -91,6 +91,7 @@ func (c *Client) fetchBasis(ctx context.Context, symbol string) (*domain.BasisQu
 		SpotLast:    spot,
 		Time:        at,
 		History:     domain.BuildBasisHistory(marks, indexes),
+		Contracts:   c.fetchBasisContracts(ctx, symbol, last, mark, index),
 	}
 	if out.Time.IsZero() {
 		out.Time = time.Now().UTC()
@@ -193,6 +194,182 @@ func (c *Client) fetchPriceKlines(ctx context.Context, path, symbol string) ([]d
 			continue
 		}
 		out = append(out, domain.PriceSample{Time: time.UnixMilli(ms).UTC(), Price: px})
+	}
+	return out, nil
+}
+
+type linContractMeta struct {
+	Symbol   string
+	Type     string
+	Base     string
+	Quote    string
+	Status   string
+	Delivery time.Time
+}
+
+type linPx struct {
+	last, mark, index float64
+}
+
+func (c *Client) fetchBasisContracts(ctx context.Context, perp string, perpLast, perpMark, perpIndex float64) []domain.BasisContractQuote {
+	if c == nil {
+		return nil
+	}
+	base, quote := splitUSDTPair(perp)
+	if base == "" {
+		return []domain.BasisContractQuote{{
+			Symbol: perp, Kind: domain.BasisContractPerp, Last: perpLast, Mark: perpMark, Index: perpIndex,
+		}}
+	}
+	meta, err := c.listLinearContracts(ctx)
+	if err != nil || len(meta) == 0 {
+		return []domain.BasisContractQuote{{
+			Symbol: perp, Kind: domain.BasisContractPerp, Last: perpLast, Mark: perpMark, Index: perpIndex,
+		}}
+	}
+	px, _ := c.fetchAllLinearPrices(ctx)
+	out := make([]domain.BasisContractQuote, 0, 6)
+	for _, m := range meta {
+		if !strings.EqualFold(m.Base, base) || !strings.EqualFold(m.Quote, quote) {
+			continue
+		}
+		if m.Status != "" && !strings.EqualFold(m.Status, "Trading") {
+			continue
+		}
+		kind := domain.BasisContractDated
+		if strings.EqualFold(m.Type, "LinearPerpetual") || m.Delivery.IsZero() {
+			kind = domain.BasisContractPerp
+		}
+		p := px[m.Symbol]
+		if kind == domain.BasisContractPerp {
+			if p.last <= 0 {
+				p.last = perpLast
+			}
+			if p.mark <= 0 {
+				p.mark = perpMark
+			}
+			if p.index <= 0 {
+				p.index = perpIndex
+			}
+		}
+		if p.last <= 0 && p.mark <= 0 {
+			continue
+		}
+		out = append(out, domain.BasisContractQuote{
+			Symbol: m.Symbol, Kind: kind, Expiry: m.Delivery,
+			Last: p.last, Mark: p.mark, Index: p.index,
+		})
+	}
+	if len(out) == 0 {
+		out = append(out, domain.BasisContractQuote{
+			Symbol: perp, Kind: domain.BasisContractPerp, Last: perpLast, Mark: perpMark, Index: perpIndex,
+		})
+	}
+	return out
+}
+
+func splitUSDTPair(symbol string) (base, quote string) {
+	s := strings.ToUpper(strings.TrimSpace(symbol))
+	for _, q := range []string{"USDT", "USDC"} {
+		if strings.HasSuffix(s, q) && len(s) > len(q) {
+			return s[:len(s)-len(q)], q
+		}
+	}
+	return "", ""
+}
+
+func (c *Client) listLinearContracts(ctx context.Context) ([]linContractMeta, error) {
+	if c.linMeta != nil {
+		if cached, ok := c.linMeta.Get("all"); ok {
+			return cached, nil
+		}
+	}
+	v, err, _ := c.linMetaSF.Do("all", func() (any, error) {
+		if c.linMeta != nil {
+			if cached, ok := c.linMeta.Get("all"); ok {
+				return cached, nil
+			}
+		}
+		q := url.Values{}
+		q.Set("category", "linear")
+		q.Set("limit", "1000")
+		body, err := c.get(ctx, "/v5/market/instruments-info", q)
+		if err != nil {
+			return nil, err
+		}
+		var raw struct {
+			RetCode int    `json:"retCode"`
+			RetMsg  string `json:"retMsg"`
+			Result  struct {
+				List []struct {
+					Symbol       string `json:"symbol"`
+					ContractType string `json:"contractType"`
+					BaseCoin     string `json:"baseCoin"`
+					QuoteCoin    string `json:"quoteCoin"`
+					Status       string `json:"status"`
+					DeliveryTime string `json:"deliveryTime"`
+				} `json:"list"`
+			} `json:"result"`
+		}
+		if err := json.Unmarshal(body, &raw); err != nil {
+			return nil, fmt.Errorf("%w: instruments decode: %v", domain.ErrUpstream, err)
+		}
+		if raw.RetCode != 0 {
+			return nil, mapBybitError(raw.RetCode, raw.RetMsg)
+		}
+		out := make([]linContractMeta, 0, len(raw.Result.List))
+		for _, s := range raw.Result.List {
+			row := linContractMeta{
+				Symbol: s.Symbol, Type: s.ContractType, Base: s.BaseCoin,
+				Quote: s.QuoteCoin, Status: s.Status,
+			}
+			if ms, err := strconv.ParseInt(strings.TrimSpace(s.DeliveryTime), 10, 64); err == nil && ms > 0 && ms < 4_000_000_000_000 {
+				row.Delivery = time.UnixMilli(ms).UTC()
+			}
+			out = append(out, row)
+		}
+		if c.linMeta != nil {
+			c.linMeta.Set("all", out)
+		}
+		return out, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	got, _ := v.([]linContractMeta)
+	return got, nil
+}
+
+func (c *Client) fetchAllLinearPrices(ctx context.Context) (map[string]linPx, error) {
+	q := url.Values{}
+	q.Set("category", "linear")
+	body, err := c.get(ctx, "/v5/market/tickers", q)
+	if err != nil {
+		return nil, err
+	}
+	var raw struct {
+		RetCode int `json:"retCode"`
+		Result  struct {
+			List []struct {
+				Symbol     string `json:"symbol"`
+				LastPrice  string `json:"lastPrice"`
+				MarkPrice  string `json:"markPrice"`
+				IndexPrice string `json:"indexPrice"`
+			} `json:"list"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(body, &raw); err != nil || raw.RetCode != 0 {
+		return nil, fmt.Errorf("%w: linear tickers", domain.ErrUpstream)
+	}
+	out := make(map[string]linPx, len(raw.Result.List))
+	for _, r := range raw.Result.List {
+		if r.Symbol == "" {
+			continue
+		}
+		last, _ := strconv.ParseFloat(strings.TrimSpace(r.LastPrice), 64)
+		mark, _ := strconv.ParseFloat(strings.TrimSpace(r.MarkPrice), 64)
+		idx, _ := strconv.ParseFloat(strings.TrimSpace(r.IndexPrice), 64)
+		out[r.Symbol] = linPx{last: last, mark: mark, index: idx}
 	}
 	return out, nil
 }

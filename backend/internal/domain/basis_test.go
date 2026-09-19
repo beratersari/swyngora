@@ -114,6 +114,61 @@ func TestCompareBasisVenues_VeryDifferent(t *testing.T) {
 	}
 }
 
+func TestBuildBasisCurve_ContangoFarRicher(t *testing.T) {
+	now := time.Date(2026, 8, 14, 16, 0, 0, 0, time.UTC)
+	got := BuildBasisCurve(BasisQuote{
+		Symbol: "BTCUSDT", FuturesLast: 64000, FuturesMark: 64000, SpotIndex: 64000, Time: now,
+		Contracts: []BasisContractQuote{
+			{Symbol: "BTCUSDT", Kind: BasisContractPerp, Last: 64000, Mark: 64000, Index: 64000},
+			{Symbol: "BTCUSDT_260925", Kind: BasisContractCurrentQuarter, Expiry: now.Add(42 * 24 * time.Hour), Last: 64200, Mark: 64200, Index: 64000},
+			{Symbol: "BTCUSDT_261225", Kind: BasisContractNextQuarter, Expiry: now.Add(133 * 24 * time.Hour), Last: 64600, Mark: 64600, Index: 64000},
+		},
+	})
+	if !got.Complete || got.Shape != BasisCurveContango || got.Slope != BasisSlopeUp || got.Richer != BasisRicherFar {
+		t.Fatalf("%+v", got)
+	}
+	if got.Near == nil || got.Far == nil || got.Near.Symbol != "BTCUSDT_260925" || got.Far.Symbol != "BTCUSDT_261225" {
+		t.Fatalf("ends %+v %+v", got.Near, got.Far)
+	}
+	if got.SpreadPct <= 0 || !strings.Contains(got.Summary, "contango") {
+		t.Fatalf("summary %s spread %v", got.Summary, got.SpreadPct)
+	}
+}
+
+func TestBuildBasisCurve_BackwardationNearRicher(t *testing.T) {
+	now := time.Date(2026, 8, 14, 16, 0, 0, 0, time.UTC)
+	got := BuildBasisCurve(BasisQuote{
+		Symbol: "ETHUSDT", FuturesLast: 4000, FuturesMark: 4000, SpotIndex: 4000, Time: now,
+		Contracts: []BasisContractQuote{
+			{Symbol: "ETHUSDT", Kind: BasisContractPerp, Mark: 4000, Index: 4000},
+			{Symbol: "ETHUSDT_260925", Kind: BasisContractCurrentQuarter, Expiry: now.Add(40 * 24 * time.Hour), Mark: 4050, Index: 4000},
+			{Symbol: "ETHUSDT_261225", Kind: BasisContractNextQuarter, Expiry: now.Add(130 * 24 * time.Hour), Mark: 3980, Index: 4000},
+		},
+	})
+	if !got.Complete || got.Slope != BasisSlopeDown || got.Richer != BasisRicherNear {
+		t.Fatalf("%+v", got)
+	}
+	if got.Shape != BasisCurveBackwardation && got.Shape != BasisCurveHumped {
+		t.Fatalf("shape %s", got.Shape)
+	}
+	if !strings.Contains(got.Summary, "backwardation") {
+		t.Fatalf("summary %s", got.Summary)
+	}
+}
+
+func TestBuildBasisCurve_PerpVsOneDated(t *testing.T) {
+	now := time.Date(2026, 8, 14, 16, 0, 0, 0, time.UTC)
+	got := BuildBasisCurve(BasisQuote{
+		Symbol: "SOLUSDT", FuturesLast: 140, FuturesMark: 140, SpotIndex: 140, Time: now,
+		Contracts: []BasisContractQuote{
+			{Symbol: "SOL-26DEC26", Kind: BasisContractDated, Expiry: now.Add(120 * 24 * time.Hour), Mark: 144, Index: 140},
+		},
+	})
+	if !got.Complete || got.Richer != BasisRicherFar || got.Near == nil || got.Near.Kind != BasisContractPerp {
+		t.Fatalf("%+v", got)
+	}
+}
+
 func TestBuildBasisHistory(t *testing.T) {
 	t0 := time.UnixMilli(1_700_000_000_000).UTC()
 	marks := []PriceSample{{Time: t0, Price: 101}, {Time: t0.Add(time.Minute), Price: 102}}

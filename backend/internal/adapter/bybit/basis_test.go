@@ -42,8 +42,10 @@ func TestGetBasisQuote_OK(t *testing.T) {
 					strconv.FormatInt(now.Add(-time.Hour).UnixMilli(), 10), "0", "0", "0", px,
 				}}},
 			})
+		case "/v5/market/instruments-info":
+			_ = json.NewEncoder(w).Encode(map[string]any{"retCode": 0, "result": map[string]any{"list": []any{}}})
 		default:
-			t.Fatalf("path %s", r.URL.Path)
+			http.NotFound(w, r)
 		}
 	}))
 	defer srv.Close()

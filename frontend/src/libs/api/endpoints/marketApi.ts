@@ -41,6 +41,8 @@ import type {
   AssetProfile,
   AssetProfileQuery,
   HoldersQuery,
+  MarketBasis,
+  BasisQuery,
   MarketOpenInterest,
   MarketOptions,
   MarketOptionsExpiry,
@@ -289,6 +291,13 @@ export const marketApi = baseApi.injectEndpoints({
       providesTags: (_r, _e, arg) => [{ type: 'Holders' as const, id: holdersTagId(arg) }],
     }),
 
+    getMarketBasis: build.query<MarketBasis, BasisQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/basis',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
     getOpenInterest: build.query<MarketOpenInterest, OpenInterestQuery>({
       query: (arg) => ({
         url: '/api/v1/market/open-interest',
@@ -518,6 +527,7 @@ export const {
   useGetSupplyQuery,
   useGetHoldersQuery,
   useGetAssetProfileQuery,
+  useGetMarketBasisQuery,
   useGetOpenInterestQuery,
   useGetMarketOptionsQuery,
   useGetMarketLiquidationsQuery,

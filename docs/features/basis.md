@@ -5,7 +5,9 @@
 Show how far the **perpetual futures price** is from **spot/index** on Binance
 USD-M and Bybit linear: dollar gap, percent gap, premium or discount, whether
 that gap is getting bigger or smaller, and a short read with funding and open
-interest. Also say if both venues agree.
+interest. Also say if both venues agree. Compare **listed dated futures** so
+you can see whether the near expiry is richer than the far expiry (backwardation)
+or the far expiry is richer (contango), and whether that curve is up or down.
 
 ## Behavior
 
@@ -18,6 +20,12 @@ interest. Also say if both venues agree.
   `shrinking` / `stable` / `flipped`
 - `agreement` (when `exchange=all`): `same` | `opposite` | `mixed`
   (`mixed` also when both sides match but the percent gaps differ by ≥ 0.05 pp)
+- `curve` (per venue): listed contracts sorted by days to expiry (perp first).
+  `near` / `far` are the shortest and longest dated when two dated contracts
+  exist; otherwise perp vs the one dated book. `shape` is `contango` (far
+  richer), `backwardation` (near richer), `flat`, or `humped`. `slope` is
+  `up` / `down` / `flat`. `richer` is `near` | `far` | `none`.
+- Web: `/basis?symbol=BTCUSDT`
 
 Sources: Binance `premiumIndex` + mark/index 5m klines (`indexPriceKlines` uses
 `pair`); Bybit linear ticker + mark/index 5m klines. Venue spot last is attached

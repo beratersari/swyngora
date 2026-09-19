@@ -1,0 +1,44 @@
+{
+  "title": "Baz",
+  "subtitle": "Perpetual ile spot farkı ve vadeli kontratların birbirine göre fiyatı. Yalnızca bilgi amaçlı.",
+  "symbol": "Coin",
+  "empty": "Bu coin için baz yok.",
+  "perpVsSpot": "Perpetual / spot",
+  "curveTitle": "Vadeli eğri",
+  "curveHint": "Yakın vade ile uzak vade. Contango, uzak vadenin daha pahalı (eğri yukarı) olduğu anlamına gelir. Backwardation, yakın vadenin daha pahalı (eğri aşağı) olduğu anlamına gelir.",
+  "near": "Yakın",
+  "far": "Uzak",
+  "spread": "Uzak − yakın",
+  "contract": "Kontrat",
+  "expiry": "Vade",
+  "dte": "Gün",
+  "mark": "Mark",
+  "vsIndex": "Endekse göre",
+  "richerFar": "Uzak vade daha pahalı",
+  "richerNear": "Yakın vade daha pahalı",
+  "richerFlat": "Yakın ve uzak neredeyse aynı",
+  "shapes": {
+    "contango": "Contango",
+    "backwardation": "Backwardation",
+    "flat": "Düz",
+    "humped": "Kambur",
+    "unknown": "Bilinmiyor"
+  },
+  "slopes": {
+    "up": "Eğri yukarı",
+    "down": "Eğri aşağı",
+    "flat": "Eğri düz"
+  },
+  "kinds": {
+    "premium": "Prim",
+    "discount": "İskonto",
+    "flat": "Düz"
+  },
+  "trends": {
+    "expanding": "Genişliyor",
+    "shrinking": "Daralıyor",
+    "stable": "Stabil",
+    "flipped": "Ters döndü"
+  },
+  "agreement": "Borsalar"
+}

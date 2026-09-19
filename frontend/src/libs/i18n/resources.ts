@@ -12,6 +12,7 @@ import heatmapEn from './locales/en/heatmap.json';
 import liquidationsEn from './locales/en/liquidations.json';
 import forensicsEn from './locales/en/forensics.json';
 import optionsEn from './locales/en/options.json';
+import basisEn from './locales/en/basis.json';
 import settingsEn from './locales/en/settings.json';
 import arbEn from './locales/en/arb.json';
 import commonTr from './locales/tr/common.json';
@@ -28,6 +29,7 @@ import heatmapTr from './locales/tr/heatmap.json';
 import liquidationsTr from './locales/tr/liquidations.json';
 import forensicsTr from './locales/tr/forensics.json';
 import optionsTr from './locales/tr/options.json';
+import basisTr from './locales/tr/basis.json';
 import settingsTr from './locales/tr/settings.json';
 import arbTr from './locales/tr/arb.json';
 
@@ -51,6 +53,7 @@ export const resources = {
     liquidations: liquidationsEn,
     forensics: forensicsEn,
     options: optionsEn,
+    basis: basisEn,
     settings: settingsEn,
     arb: arbEn,
   },
@@ -69,6 +72,7 @@ export const resources = {
     liquidations: liquidationsTr,
     forensics: forensicsTr,
     options: optionsTr,
+    basis: basisTr,
     settings: settingsTr,
     arb: arbTr,
   },

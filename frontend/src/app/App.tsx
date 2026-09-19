@@ -26,6 +26,7 @@ const NAV_ITEMS = [
   { to: '/watchlist', key: 'nav.watchlist' as const },
   { to: '/liquidations', key: 'nav.liquidations' as const },
   { to: '/options', key: 'nav.options' as const },
+  { to: '/basis', key: 'nav.basis' as const },
   { to: '/portfolio', key: 'nav.portfolio' as const },
   { to: '/signals', key: 'nav.signals' as const },
   { to: '/pumps', key: 'nav.pumps' as const },
