@@ -10,7 +10,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const basisDisclaimer = "Basis is perpetual futures minus spot/index on that venue. last is the tape price vs the spot index; mark vs index is what funding is built from. Expanding means the absolute gap is getting larger. The curve compares listed dated futures: contango means far expiry is richer (up), backwardation means near expiry is richer (down). Informational only — not financial advice."
+const basisDisclaimer = "Basis is perpetual futures minus spot/index on that venue. last is the tape price vs the spot index; mark vs index is what funding is built from. Expanding means the absolute gap is getting larger. The curve compares listed dated futures: contango means far expiry is richer (up), backwardation means near expiry is richer (down). Curve history is that same near/far spread from mark klines (1h/4h/24h/7d) and calls out flips and steepening. Informational only — not financial advice."
 
 // GetBasis returns futures-vs-spot premium/discount per venue and agreement.
 func (s *Service) GetBasis(ctx context.Context, exchange, symbol string) (*domain.BasisReport, error) {

@@ -4828,8 +4828,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "How far the perpetual is from spot/index: premium or discount, "
                 "dollar and percent, expanding or shrinking, with funding and "
                 "OI context. curve compares listed dated futures (near vs far, "
-                "contango / backwardation). Binance and Bybit separately plus "
-                "whether they agree."
+                "contango / backwardation). curve.history / windows / moves "
+                "show when that spread flipped or got steeper (1h/4h/24h/7d). "
+                "Binance and Bybit separately plus whether they agree."
             ),
             args_schema=BasisInput,
         ),

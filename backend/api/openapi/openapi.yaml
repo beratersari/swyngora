@@ -1604,7 +1604,10 @@ paths:
         the gap is expanding or shrinking (5m/1h/4h), a short read with funding
         and open interest, and whether both venues agree. `curve` compares
         listed dated futures: near vs far expiry, contango (far richer / up)
-        or backwardation (near richer / down).
+        or backwardation (near richer / down). `curve.history` is that same
+        near/far spread over the last hours and days from mark klines;
+        `curve.windows` (1h/4h/24h/7d) say if it flipped, got steeper, or
+        flattened; `curve.moves` lists those events.
       operationId: getMarketBasis
       tags: [Market]
       parameters:
@@ -8528,6 +8531,49 @@ components:
         richer: { type: string, enum: [near, far, none] }
         summary: { type: string }
         complete: { type: boolean }
+        history:
+          type: array
+          items: { $ref: '#/components/schemas/MarketBasisCurvePoint' }
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/MarketBasisCurveWindow' }
+        moves:
+          type: array
+          items: { $ref: '#/components/schemas/MarketBasisCurveMove' }
+    MarketBasisCurvePoint:
+      type: object
+      description: Near vs far mark at one time
+      properties:
+        time: { type: string, format: date-time }
+        nearMark: { type: string }
+        farMark: { type: string }
+        spread: { type: string }
+        spreadPct: { type: string }
+        shape: { type: string, enum: [contango, backwardation, flat] }
+        slope: { type: string, enum: [up, down, flat] }
+    MarketBasisCurveWindow:
+      type: object
+      description: Live curve vs a lookback
+      properties:
+        window: { type: string }
+        pastSpreadPct: { type: string }
+        changePct: { type: string }
+        pastShape: { type: string }
+        shape: { type: string }
+        change: { type: string, enum: [flipped, steeper, flatter, stable] }
+        complete: { type: boolean }
+        sampleTime: { type: string, format: date-time }
+    MarketBasisCurveMove:
+      type: object
+      description: When the curve flipped or got much steeper/flatter
+      properties:
+        time: { type: string, format: date-time }
+        kind: { type: string, enum: [flipped, steepened, flattened] }
+        fromShape: { type: string }
+        toShape: { type: string }
+        spreadPct: { type: string }
+        changePct: { type: string }
+        summary: { type: string }
     MarketBasisVenue:
       type: object
       properties:

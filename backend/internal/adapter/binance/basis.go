@@ -66,11 +66,11 @@ func (c *Client) fetchBasis(ctx context.Context, symbol string) (*domain.BasisQu
 	}()
 	go func() {
 		defer wg.Done()
-		marks, errM = c.fetchFuturesKlineCloses(ctx, "/fapi/v1/markPriceKlines", symbol)
+		marks, errM = c.fetchFuturesKlineCloses(ctx, "/fapi/v1/markPriceKlines", symbol, "5m", 60)
 	}()
 	go func() {
 		defer wg.Done()
-		indexes, errI = c.fetchFuturesKlineCloses(ctx, "/fapi/v1/indexPriceKlines", symbol)
+		indexes, errI = c.fetchFuturesKlineCloses(ctx, "/fapi/v1/indexPriceKlines", symbol, "5m", 60)
 	}()
 	wg.Wait()
 	if errP != nil {
@@ -164,7 +164,7 @@ func (c *Client) fetchSpotLast(ctx context.Context, symbol string) (float64, err
 	return strconv.ParseFloat(raw.Price, 64)
 }
 
-func (c *Client) fetchFuturesKlineCloses(ctx context.Context, path, symbol string) ([]domain.PriceSample, error) {
+func (c *Client) fetchFuturesKlineCloses(ctx context.Context, path, symbol, interval string, limit int) ([]domain.PriceSample, error) {
 	q := url.Values{}
 	// indexPriceKlines is keyed by pair; markPriceKlines uses symbol.
 	if path == "/fapi/v1/indexPriceKlines" {
@@ -172,8 +172,14 @@ func (c *Client) fetchFuturesKlineCloses(ctx context.Context, path, symbol strin
 	} else {
 		q.Set("symbol", symbol)
 	}
-	q.Set("interval", "5m")
-	q.Set("limit", "60")
+	if interval == "" {
+		interval = "5m"
+	}
+	if limit <= 0 {
+		limit = 60
+	}
+	q.Set("interval", interval)
+	q.Set("limit", strconv.Itoa(limit))
 	body, err := c.getFutures(ctx, path, q)
 	if err != nil {
 		return nil, err
@@ -256,7 +262,31 @@ func (c *Client) fetchBasisContracts(ctx context.Context, pair string, perpLast,
 			Symbol: pair, Kind: domain.BasisContractPerp, Last: perpLast, Mark: perpMark, Index: perpIndex,
 		})
 	}
+	c.fillContractMarkHistory(ctx, out)
 	return out
+}
+
+func (c *Client) fillContractMarkHistory(ctx context.Context, contracts []domain.BasisContractQuote) {
+	if len(contracts) == 0 {
+		return
+	}
+	var wg sync.WaitGroup
+	for i := range contracts {
+		sym := strings.TrimSpace(contracts[i].Symbol)
+		if sym == "" {
+			continue
+		}
+		wg.Add(1)
+		go func(i int, sym string) {
+			defer wg.Done()
+			hist, err := c.fetchFuturesKlineCloses(ctx, "/fapi/v1/markPriceKlines", sym, "1h", 168)
+			if err != nil || len(hist) == 0 {
+				return
+			}
+			contracts[i].History = hist
+		}(i, sym)
+	}
+	wg.Wait()
 }
 
 func sameFuturesPair(metaPair, metaSymbol, want string) bool {

@@ -4757,6 +4757,47 @@ export interface components {
             richer?: "near" | "far" | "none";
             summary?: string;
             complete?: boolean;
+            history?: components["schemas"]["MarketBasisCurvePoint"][];
+            windows?: components["schemas"]["MarketBasisCurveWindow"][];
+            moves?: components["schemas"]["MarketBasisCurveMove"][];
+        };
+        /** @description Near vs far mark at one time */
+        MarketBasisCurvePoint: {
+            /** Format: date-time */
+            time?: string;
+            nearMark?: string;
+            farMark?: string;
+            spread?: string;
+            spreadPct?: string;
+            /** @enum {string} */
+            shape?: "contango" | "backwardation" | "flat";
+            /** @enum {string} */
+            slope?: "up" | "down" | "flat";
+        };
+        /** @description Live curve vs a lookback */
+        MarketBasisCurveWindow: {
+            window?: string;
+            pastSpreadPct?: string;
+            changePct?: string;
+            pastShape?: string;
+            shape?: string;
+            /** @enum {string} */
+            change?: "flipped" | "steeper" | "flatter" | "stable";
+            complete?: boolean;
+            /** Format: date-time */
+            sampleTime?: string;
+        };
+        /** @description When the curve flipped or got much steeper/flatter */
+        MarketBasisCurveMove: {
+            /** Format: date-time */
+            time?: string;
+            /** @enum {string} */
+            kind?: "flipped" | "steepened" | "flattened";
+            fromShape?: string;
+            toShape?: string;
+            spreadPct?: string;
+            changePct?: string;
+            summary?: string;
         };
         MarketBasisVenue: {
             exchange?: string;

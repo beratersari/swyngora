@@ -50,16 +50,50 @@ type basisContractDTO struct {
 }
 
 type basisCurveDTO struct {
-	Points    []basisContractDTO `json:"points"`
-	Near      *basisContractDTO  `json:"near,omitempty"`
-	Far       *basisContractDTO  `json:"far,omitempty"`
-	Spread    string             `json:"spread,omitempty"`
-	SpreadPct string             `json:"spreadPct,omitempty"`
-	Shape     string             `json:"shape"`
-	Slope     string             `json:"slope"`
-	Richer    string             `json:"richer"`
-	Summary   string             `json:"summary"`
-	Complete  bool               `json:"complete"`
+	Points    []basisContractDTO    `json:"points"`
+	Near      *basisContractDTO     `json:"near,omitempty"`
+	Far       *basisContractDTO     `json:"far,omitempty"`
+	Spread    string                `json:"spread,omitempty"`
+	SpreadPct string                `json:"spreadPct,omitempty"`
+	Shape     string                `json:"shape"`
+	Slope     string                `json:"slope"`
+	Richer    string                `json:"richer"`
+	Summary   string                `json:"summary"`
+	Complete  bool                  `json:"complete"`
+	History   []basisCurvePointDTO  `json:"history,omitempty"`
+	Windows   []basisCurveWindowDTO `json:"windows,omitempty"`
+	Moves     []basisCurveMoveDTO   `json:"moves,omitempty"`
+}
+
+type basisCurvePointDTO struct {
+	Time      string `json:"time"`
+	NearMark  string `json:"nearMark,omitempty"`
+	FarMark   string `json:"farMark,omitempty"`
+	Spread    string `json:"spread"`
+	SpreadPct string `json:"spreadPct"`
+	Shape     string `json:"shape"`
+	Slope     string `json:"slope"`
+}
+
+type basisCurveWindowDTO struct {
+	Window        string `json:"window"`
+	PastSpreadPct string `json:"pastSpreadPct,omitempty"`
+	ChangePct     string `json:"changePct,omitempty"`
+	PastShape     string `json:"pastShape,omitempty"`
+	Shape         string `json:"shape"`
+	Change        string `json:"change"`
+	Complete      bool   `json:"complete"`
+	SampleTime    string `json:"sampleTime,omitempty"`
+}
+
+type basisCurveMoveDTO struct {
+	Time      string `json:"time"`
+	Kind      string `json:"kind"`
+	FromShape string `json:"fromShape,omitempty"`
+	ToShape   string `json:"toShape,omitempty"`
+	SpreadPct string `json:"spreadPct,omitempty"`
+	ChangePct string `json:"changePct,omitempty"`
+	Summary   string `json:"summary"`
 }
 
 type basisVenueDTO struct {
@@ -151,7 +185,58 @@ func basisCurveToDTO(c domain.BasisCurve) basisCurveDTO {
 		f := basisContractToDTO(*c.Far)
 		out.Far = &f
 	}
+	if len(c.History) > 0 {
+		out.History = make([]basisCurvePointDTO, 0, len(c.History))
+		for _, p := range c.History {
+			out.History = append(out.History, basisCurvePointToDTO(p))
+		}
+	}
+	if len(c.Windows) > 0 {
+		out.Windows = make([]basisCurveWindowDTO, 0, len(c.Windows))
+		for _, w := range c.Windows {
+			row := basisCurveWindowDTO{Window: w.Window, Shape: w.Shape, Change: w.Change, Complete: w.Complete}
+			if w.Complete {
+				row.PastSpreadPct = domain.FormatSignedPct(w.PastSpreadPct)
+				row.ChangePct = domain.FormatSignedPct(w.ChangePct)
+				row.PastShape = w.PastShape
+				if !w.SampleTime.IsZero() {
+					row.SampleTime = w.SampleTime.UTC().Format(time.RFC3339Nano)
+				}
+			}
+			out.Windows = append(out.Windows, row)
+		}
+	}
+	if len(c.Moves) > 0 {
+		out.Moves = make([]basisCurveMoveDTO, 0, len(c.Moves))
+		for _, m := range c.Moves {
+			row := basisCurveMoveDTO{
+				Kind: m.Kind, FromShape: m.FromShape, ToShape: m.ToShape, Summary: m.Summary,
+			}
+			if !m.Time.IsZero() {
+				row.Time = m.Time.UTC().Format(time.RFC3339Nano)
+			}
+			if m.SpreadPct != 0 {
+				row.SpreadPct = domain.FormatSignedPct(m.SpreadPct)
+			}
+			if m.ChangePct != 0 {
+				row.ChangePct = domain.FormatSignedPct(m.ChangePct)
+			}
+			out.Moves = append(out.Moves, row)
+		}
+	}
 	return out
+}
+
+func basisCurvePointToDTO(p domain.BasisCurvePoint) basisCurvePointDTO {
+	t := ""
+	if !p.Time.IsZero() {
+		t = p.Time.UTC().Format(time.RFC3339Nano)
+	}
+	return basisCurvePointDTO{
+		Time: t, NearMark: formatHistQty(p.NearMark), FarMark: formatHistQty(p.FarMark),
+		Spread: domain.FormatSignedQty(p.Spread), SpreadPct: domain.FormatSignedPct(p.SpreadPct),
+		Shape: p.Shape, Slope: p.Slope,
+	}
 }
 
 func basisContractToDTO(p domain.BasisContractPoint) basisContractDTO {

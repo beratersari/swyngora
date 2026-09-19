@@ -62,11 +62,11 @@ func (c *Client) fetchBasis(ctx context.Context, symbol string) (*domain.BasisQu
 	}()
 	go func() {
 		defer wg.Done()
-		marks, errM = c.fetchPriceKlines(ctx, "/v5/market/mark-price-kline", symbol)
+		marks, errM = c.fetchPriceKlines(ctx, "/v5/market/mark-price-kline", symbol, "5", 60)
 	}()
 	go func() {
 		defer wg.Done()
-		indexes, errI = c.fetchPriceKlines(ctx, "/v5/market/index-price-kline", symbol)
+		indexes, errI = c.fetchPriceKlines(ctx, "/v5/market/index-price-kline", symbol, "5", 60)
 	}()
 	wg.Wait()
 	if errT != nil {
@@ -160,12 +160,18 @@ func (c *Client) fetchSpotLast(ctx context.Context, symbol string) (float64, err
 	return strconv.ParseFloat(strings.TrimSpace(raw.Result.List[0].LastPrice), 64)
 }
 
-func (c *Client) fetchPriceKlines(ctx context.Context, path, symbol string) ([]domain.PriceSample, error) {
+func (c *Client) fetchPriceKlines(ctx context.Context, path, symbol, interval string, limit int) ([]domain.PriceSample, error) {
 	q := url.Values{}
 	q.Set("category", "linear")
 	q.Set("symbol", symbol)
-	q.Set("interval", "5")
-	q.Set("limit", "60")
+	if interval == "" {
+		interval = "5"
+	}
+	if limit <= 0 {
+		limit = 60
+	}
+	q.Set("interval", interval)
+	q.Set("limit", strconv.Itoa(limit))
 	body, err := c.get(ctx, path, q)
 	if err != nil {
 		return nil, err
@@ -265,7 +271,31 @@ func (c *Client) fetchBasisContracts(ctx context.Context, perp string, perpLast,
 			Symbol: perp, Kind: domain.BasisContractPerp, Last: perpLast, Mark: perpMark, Index: perpIndex,
 		})
 	}
+	c.fillContractMarkHistory(ctx, out)
 	return out
+}
+
+func (c *Client) fillContractMarkHistory(ctx context.Context, contracts []domain.BasisContractQuote) {
+	if len(contracts) == 0 {
+		return
+	}
+	var wg sync.WaitGroup
+	for i := range contracts {
+		sym := strings.TrimSpace(contracts[i].Symbol)
+		if sym == "" {
+			continue
+		}
+		wg.Add(1)
+		go func(i int, sym string) {
+			defer wg.Done()
+			hist, err := c.fetchPriceKlines(ctx, "/v5/market/mark-price-kline", sym, "60", 168)
+			if err != nil || len(hist) == 0 {
+				return
+			}
+			contracts[i].History = hist
+		}(i, sym)
+	}
+	wg.Wait()
 }
 
 func splitUSDTPair(symbol string) (base, quote string) {

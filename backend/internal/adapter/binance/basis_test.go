@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -108,6 +109,85 @@ func TestGetBasisQuote_Curve(t *testing.T) {
 	}
 	if len(got.Contracts) < 3 {
 		t.Fatalf("contracts %+v", got.Contracts)
+	}
+}
+
+func TestGetBasisQuote_CurveHistory(t *testing.T) {
+	now := time.Date(2026, 8, 14, 16, 0, 0, 0, time.UTC)
+	near := now.Add(40 * 24 * time.Hour)
+	far := now.Add(130 * 24 * time.Hour)
+	klines := func(close string) [][]any {
+		return [][]any{{float64(now.Add(-time.Hour).UnixMilli()), "0", "0", "0", close}}
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/fapi/v1/premiumIndex":
+			if r.URL.Query().Get("symbol") != "" {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"markPrice": "64000", "indexPrice": "64000", "time": now.UnixMilli(),
+				})
+				return
+			}
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"symbol": "BTCUSDT", "markPrice": "64000", "indexPrice": "64000"},
+				{"symbol": "BTCUSDT_260925", "markPrice": "64200", "indexPrice": "64000"},
+				{"symbol": "BTCUSDT_261225", "markPrice": "64600", "indexPrice": "64000"},
+			})
+		case "/fapi/v1/ticker/price":
+			if r.URL.Query().Get("symbol") != "" {
+				_ = json.NewEncoder(w).Encode(map[string]any{"price": "64000"})
+				return
+			}
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"symbol": "BTCUSDT", "price": "64000"},
+				{"symbol": "BTCUSDT_260925", "price": "64200"},
+				{"symbol": "BTCUSDT_261225", "price": "64600"},
+			})
+		case "/api/v3/ticker/price":
+			_ = json.NewEncoder(w).Encode(map[string]any{"price": "64000"})
+		case "/fapi/v1/indexPriceKlines":
+			_ = json.NewEncoder(w).Encode([][]any{})
+		case "/fapi/v1/markPriceKlines":
+			sym := r.URL.Query().Get("symbol")
+			iv := r.URL.Query().Get("interval")
+			if iv == "1h" && strings.Contains(sym, "_") {
+				close := "64200"
+				if strings.HasSuffix(sym, "261225") {
+					close = "64600"
+				}
+				_ = json.NewEncoder(w).Encode(klines(close))
+				return
+			}
+			_ = json.NewEncoder(w).Encode([][]any{})
+		case "/fapi/v1/exchangeInfo":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"symbols": []map[string]any{
+					{"symbol": "BTCUSDT", "pair": "BTCUSDT", "contractType": "PERPETUAL", "status": "TRADING", "deliveryDate": 4133404800000},
+					{"symbol": "BTCUSDT_260925", "pair": "BTCUSDT", "contractType": "CURRENT_QUARTER", "status": "TRADING", "deliveryDate": near.UnixMilli()},
+					{"symbol": "BTCUSDT_261225", "pair": "BTCUSDT", "contractType": "NEXT_QUARTER", "status": "TRADING", "deliveryDate": far.UnixMilli()},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	c := NewClient(Options{BaseURL: srv.URL, FuturesBaseURL: srv.URL, HTTPClient: srv.Client()})
+	got, err := c.GetBasisQuote(context.Background(), "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var nearH, farH int
+	for _, row := range got.Contracts {
+		if row.Symbol == "BTCUSDT_260925" {
+			nearH = len(row.History)
+		}
+		if row.Symbol == "BTCUSDT_261225" {
+			farH = len(row.History)
+		}
+	}
+	if nearH != 1 || farH != 1 {
+		t.Fatalf("history near=%d far=%d contracts=%+v", nearH, farH, got.Contracts)
 	}
 }
 

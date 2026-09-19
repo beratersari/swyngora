@@ -82,7 +82,7 @@ Coin detail also has an **order heatmap** (resting bid/ask size over time) from 
 - `GET /api/v1/market/liquidity-sweeps` poke through a prior high/low that comes back; level, excursion, reclaim time, volume. See [`liquidity-sweeps.md`](liquidity-sweeps.md).
 - `GET /api/v1/market/volume-surge` current 5m/15m/1h volume vs that coin's typical; buy/sell split. See [`volume-surge.md`](volume-surge.md).
 - `GET /api/v1/market/volume-surge/scan` rank coins whose volume is much higher than typical. See [`volume-surge.md`](volume-surge.md).
-- `GET /api/v1/market/basis` perp vs spot/index premium or discount, plus the listed futures curve (near vs far). See [`basis.md`](basis.md).
+- `GET /api/v1/market/basis` perp vs spot/index premium or discount, plus the listed futures curve (near vs far) and how that curve changed (flips / steeper). See [`basis.md`](basis.md).
 - `GET /api/v1/market/correlation` how similarly a coin moves with BTC and ETH (1h / 4h / 24h). See [`correlation.md`](correlation.md).
 - `GET /api/v1/market/breadth` how many followed coins are up vs down (1h / 4h / 24h). See [`breadth.md`](breadth.md).
 - `GET /api/v1/market/volatility` how much a coin moved (range, vs normal, vs BTC/ETH). See [`volatility.md`](volatility.md).

@@ -1412,7 +1412,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_basis",
-		mcp.WithDescription("How far the perpetual futures price is from spot/index on Binance and Bybit: premium or discount, dollar and percent gap, whether the gap is expanding or shrinking, plus a short read with funding and open interest. curve compares listed dated futures: near vs far expiry, contango (far richer / up) or backwardation (near richer / down). Says if both venues agree. Not financial advice."),
+		mcp.WithDescription("How far the perpetual futures price is from spot/index on Binance and Bybit: premium or discount, dollar and percent gap, whether the gap is expanding or shrinking, plus a short read with funding and open interest. curve compares listed dated futures: near vs far expiry, contango (far richer / up) or backwardation (near richer / down). curve.history / windows / moves show when that near-far spread flipped or got steeper over 1h/4h/24h/7d. Says if both venues agree. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + agreement)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

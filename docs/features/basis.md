@@ -25,7 +25,14 @@ or the far expiry is richer (contango), and whether that curve is up or down.
   exist; otherwise perp vs the one dated book. `shape` is `contango` (far
   richer), `backwardation` (near richer), `flat`, or `humped`. `slope` is
   `up` / `down` / `flat`. `richer` is `near` | `far` | `none`.
-- Web: `/basis?symbol=BTCUSDT`
+- `curve.history`: hourly near/far mark spread over up to 7 days (same listed
+  contracts as now). Each point has `spreadPct` and `shape`.
+- `curve.windows` 1h / 4h / 24h / 7d: past spread %, `change` `flipped` /
+  `steeper` / `flatter` / `stable`.
+- `curve.moves`: when the book flipped contango ↔ backwardation, or the
+  steepest ~4h steepen/flatten that clears 8 bp. Empty when nothing stands out.
+- Web: `/basis?symbol=BTCUSDT` — live curve table plus Over time chart and
+  those windows/moves.
 
 Sources: Binance `premiumIndex` + mark/index 5m klines (`indexPriceKlines` uses
 `pair`); Bybit linear ticker + mark/index 5m klines. Venue spot last is attached
@@ -38,7 +45,7 @@ read, see [`funding-arb.md`](funding-arb.md).
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/basis.go` |
+| Domain | `backend/internal/domain/basis.go`, `basis_curve_history.go` |
 | Adapters | `adapter/binance/basis.go`, `adapter/bybit/basis.go` |
 | Service | `backend/internal/service/market/basis.go` |
 | HTTP | `GET /api/v1/market/basis` |

@@ -83,7 +83,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/liquidity-sweeps` | Poke through a prior high/low that comes back; level, excursion, time, volume |
 | `GET` | `/api/v1/market/volume-surge` | Current 5m/15m/1h volume vs that coin's typical; buy/sell split |
 | `GET` | `/api/v1/market/volume-surge/scan` | Rank coins whose volume is much higher than their own typical |
-| `GET` | `/api/v1/market/basis` | Perp vs spot/index premium or discount, trend, funding/OI read; `curve` is near vs far dated futures |
+| `GET` | `/api/v1/market/basis` | Perp vs spot/index premium or discount, trend, funding/OI read; `curve` is near vs far dated futures plus history / windows / moves when that spread flipped or got steeper |
 | `GET` | `/api/v1/market/correlation` | How similarly a coin moves with BTC and ETH (1h / 4h / 24h) |
 | `GET` | `/api/v1/market/breadth` | How many followed coins are up vs down (1h / 4h / 24h) |
 | `GET` | `/api/v1/market/volatility` | How much a coin moved (range + vs normal / BTC / ETH) |

@@ -2,6 +2,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { PageHeader } from '@/components/molecules/PageHeader';
 import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
+import { BasisCurveHistory } from '@/components/organisms/BasisCurveHistory';
 import { BasisPanel, BASIS_POLL_MS, DEFAULT_BASIS_SYMBOL } from '@/components/organisms/BasisPanel';
 import { rtkErrorMessage, useGetMarketBasisQuery } from '@/libs/api';
 import { useDocumentVisible } from '@/libs/hooks';
@@ -19,6 +20,7 @@ export function BasisPage() {
     { symbol, exchange: 'all' },
     { pollingInterval: visible ? BASIS_POLL_MS : 0, refetchOnFocus: true },
   );
+  const report = rtkCurrent(query);
 
   return (
     <PageStack>
@@ -45,10 +47,17 @@ export function BasisPage() {
         </Field>
       </Toolbar>
       <BasisPanel
-        report={rtkCurrent(query)}
+        report={report}
         isLoading={query.isLoading}
         errorMessage={query.isError ? rtkErrorMessage(query.error) : null}
       />
+      {(report?.venues ?? []).map((v) => (
+        <BasisCurveHistory
+          key={`curve-hist-${v.exchange ?? v.symbol}`}
+          curve={v.curve}
+          venueLabel={v.exchange ? v.exchange.charAt(0).toUpperCase() + v.exchange.slice(1) : undefined}
+        />
+      ))}
     </PageStack>
   );
 }

@@ -60,12 +60,13 @@ type BasisQuote struct {
 
 // BasisContractQuote is one listed futures contract on a venue.
 type BasisContractQuote struct {
-	Symbol string
-	Kind   string // perp | current_quarter | next_quarter | dated
-	Expiry time.Time
-	Last   float64
-	Mark   float64
-	Index  float64
+	Symbol  string
+	Kind    string // perp | current_quarter | next_quarter | dated
+	Expiry  time.Time
+	Last    float64
+	Mark    float64
+	Index   float64
+	History []PriceSample // mark closes, oldest first (optional)
 }
 
 // BasisHistPoint is mark vs index at one sample time.
@@ -136,6 +137,9 @@ type BasisCurve struct {
 	Richer    string  // near | far | none
 	Summary   string
 	Complete  bool
+	History   []BasisCurvePoint
+	Windows   []BasisCurveWindow
+	Moves     []BasisCurveMove
 }
 
 // BasisAgreement is whether Binance and Bybit tell the same story.
@@ -317,7 +321,7 @@ func BuildBasisVenue(q BasisQuote) BasisVenueReport {
 		out.Windows = append(out.Windows, ch)
 	}
 	out.Trend = pickBasisTrend(out.Windows)
-	out.Curve = BuildBasisCurve(q)
+	out.Curve = AttachBasisCurveHistory(BuildBasisCurve(q), q)
 	out.Summary = ExplainBasis(out, q)
 	return out
 }
@@ -537,15 +541,7 @@ func BuildBasisCurve(q BasisQuote) BasisCurve {
 	out.Near, out.Far = &n, &f
 	out.Spread = f.Mark - n.Mark
 	out.SpreadPct = out.Spread / n.Mark * 100
-	_, _, kind := ComputeBasis(f.Mark, n.Mark)
-	switch kind {
-	case BasisKindPremium:
-		out.Shape, out.Slope, out.Richer = BasisCurveContango, BasisSlopeUp, BasisRicherFar
-	case BasisKindDiscount:
-		out.Shape, out.Slope, out.Richer = BasisCurveBackwardation, BasisSlopeDown, BasisRicherNear
-	default:
-		out.Shape, out.Slope, out.Richer = BasisKindFlat, BasisSlopeFlat, BasisRicherNone
-	}
+	out.Shape, out.Slope, out.Richer = basisCurveShape(out.SpreadPct)
 	out.Complete = true
 	out.Summary = explainBasisCurve(out)
 	if curveIsHumped(pts) && out.Shape != BasisKindFlat {

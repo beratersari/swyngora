@@ -34,6 +34,40 @@ export type BasisContract = {
   vsIndexPct?: string;
 };
 
+export type BasisCurveChange = 'flipped' | 'steeper' | 'flatter' | 'stable' | string;
+export type BasisCurveMoveKind = 'flipped' | 'steepened' | 'flattened' | string;
+
+export type BasisCurvePoint = {
+  time?: string;
+  nearMark?: string;
+  farMark?: string;
+  spread?: string;
+  spreadPct?: string;
+  shape?: BasisShape;
+  slope?: BasisSlope;
+};
+
+export type BasisCurveWindow = {
+  window?: string;
+  pastSpreadPct?: string;
+  changePct?: string;
+  pastShape?: string;
+  shape?: string;
+  change?: BasisCurveChange;
+  complete?: boolean;
+  sampleTime?: string;
+};
+
+export type BasisCurveMove = {
+  time?: string;
+  kind?: BasisCurveMoveKind;
+  fromShape?: string;
+  toShape?: string;
+  spreadPct?: string;
+  changePct?: string;
+  summary?: string;
+};
+
 export type BasisCurve = {
   points?: BasisContract[];
   near?: BasisContract;
@@ -45,6 +79,9 @@ export type BasisCurve = {
   richer?: BasisRicher;
   summary?: string;
   complete?: boolean;
+  history?: BasisCurvePoint[];
+  windows?: BasisCurveWindow[];
+  moves?: BasisCurveMove[];
 };
 
 export type BasisVenue = {

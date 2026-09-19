@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI HTTP client:** `ai/` tools use `httpx2` (Pydantic-maintained fork) instead of `httpx`; LangChain may still pull `httpx` transitively
 
 ### Added
+- **Futures curve over time:** the basis desk shows when near vs far flipped (contango ↔ backwardation) or got steeper/flatter. `curve.history` / `windows` / `moves` on `GET /api/v1/market/basis`, web `/basis` (`docs/features/basis.md`)
 - **Mobile leaderboards** (`mobile/`): full Gainers / Losers / Volume boards via spot sorts; Home See all + Markets Boards entry (`docs/features/mobile-leaderboards.md`)
 - **Mobile cross-exchange compare** (`mobile/`): coin detail “Across exchanges” section compares 24h tickers on Binance / Coinbase / Bybit with symbol mapping and partial failure (`docs/features/mobile-cross-exchange-compare.md`)
 - **Mobile category discovery** (`mobile/`): browse Binance product-catalog tags (Home featured chips + Markets Categories page); single-tag filter reuses Markets list via `GET /tags` + `GET /spot?tag=` (`docs/features/mobile-category-discovery.md`)
