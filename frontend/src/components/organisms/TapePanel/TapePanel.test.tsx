@@ -31,6 +31,30 @@ describe('TapePanel', () => {
     expect(screen.getByText('Volume building ahead of price')).toBeInTheDocument();
   });
 
+  it('shows OI-weighted funding pressure and window change', () => {
+    renderWithTheme(
+      <TapePanel
+        openInterest={{
+          funding: {
+            pressure: {
+              ratePct: '0.007778',
+              payer: 'long',
+              summary: 'Binance 88.9% of OI at 0.01%. Combined pressure 0.007778% (longs pay).',
+            },
+            pressureWindows: [
+              { window: '1h', changePct: '+0.001', complete: true },
+              { window: '24h', changePct: '-0.002', complete: true },
+            ],
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText('0.0078%')).toBeInTheDocument();
+    expect(screen.getByText('+0.0010%')).toBeInTheDocument();
+    expect(screen.getByText('-0.0020%')).toBeInTheDocument();
+    expect(screen.getByText(/88.9%/)).toBeInTheDocument();
+  });
+
   it('shows top-trader size and a crowd-vs-size split', () => {
     renderWithTheme(
       <TapePanel

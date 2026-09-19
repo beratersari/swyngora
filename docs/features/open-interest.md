@@ -19,7 +19,7 @@ can ask “is BTC open interest rising?”
   `complete` (false when the historical sample is missing or older than the
   window slack)
 - Combined `all` sums venues that have a past sample for that window
-- `funding` is attached (predicted next rate + recent settlements). See [`funding-rate.md`](funding-rate.md)
+- `funding` is attached (predicted next rate + recent settlements, plus OI-weighted `pressure`). See [`funding-rate.md`](funding-rate.md)
 - `longShort` is attached (account long/short ratio). See [`long-short-ratio.md`](long-short-ratio.md)
 - Cached ~30s (`OPEN_INTEREST_CACHE_TTL`)
 

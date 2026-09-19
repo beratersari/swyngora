@@ -23,7 +23,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `scan_liquidation_cascades` | Market cascade plus coins currently bursting; `both` when the same side fires on both venues |
 | `get_open_interest` | Current futures OI plus 5m/1h/4h/24h change (Binance USD-M + Bybit linear + OKX USDT-swap); includes `funding` |
 | `get_options_overview` | BTC/ETH Deribit options: OI, 24h volume, put/call, DVOL + ATM IV, term structure, call/put skew, expiry mix, expected move, max pain, dealer gamma (`netUsd` / flip / regime); `history` over hours/days including net GEX and flip vs spot; `moves` when OI/PCR/IV jumps vs typical or gamma / flip-side changes; `vsMarket` when IV or put/call disagrees with spot/futures |
-| `get_funding_rate` | Predicted next perpetual funding plus recent settlements (Binance USD-M + Bybit linear + OKX USDT-swap) |
+| `get_funding_rate` | Predicted next perpetual funding plus recent settlements (Binance USD-M + Bybit linear + OKX USDT-swap); `pressure` is OI-weighted combined predicted funding plus 1h/4h/24h change |
 | `get_funding_arb` | Long cheaper-funding venue / short richer venue; sized after-fee payout + spot-perp gap |
 | `scan_funding_arb` | Rank liquid USDT coins that beat fees on published settlements |
 | `get_funding_arb_history` | Past after-fee winning stretches from settled Binance/Bybit prints (first clock is entry only; flip clock still pays the old sides) |

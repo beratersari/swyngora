@@ -1061,11 +1061,14 @@ paths:
       summary: Perpetual funding rate and recent history
       description: |
         Predicted **next** funding rate plus recent **settled** payments for
-        **Binance USD-M** and **Bybit linear perpetual**. `rate` is decimal
+        **Binance USD-M**, **Bybit linear**, and **OKX USDT-swap**. `rate` is decimal
         (`0.0001` = 0.01%); `ratePct` is percent. `payer` is who pays at
-        settlement (`long` = longs pay shorts). Combined `exchange=all` returns
-        each venue separately — rates are not averaged. `limit` is settled
-        history size (default 12, max 30). Cached ~30s. Informational only.
+        settlement (`long` = longs pay shorts). Combined `exchange=all` keeps
+        each venue as its own row. `pressure` is **OI-weighted** combined
+        predicted funding (USDT open-interest share), so an 8B book at +0.01%
+        outweighs a 1B book at −0.01%. `pressureHistory` / `pressureWindows`
+        (1h/4h/24h) / `pressureMoves` show how that blend changed. `limit` is
+        settled history size (default 12, max 30). Cached ~30s. Informational only.
       operationId: getMarketFundingRate
       tags: [Market]
       parameters:
@@ -9474,6 +9477,65 @@ components:
         history:
           type: array
           items: { $ref: '#/components/schemas/FundingPrint' }
+    FundingPressureVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        rate: { type: string }
+        ratePct: { type: string }
+        payer: { type: string, enum: [long, short, none] }
+        openInterestValue: { type: string }
+        weightPct: { type: string, description: Share of combined USDT open interest }
+    FundingPressure:
+      type: object
+      description: Predicted funding weighted by USDT open interest across venues
+      properties:
+        rate: { type: string }
+        ratePct: { type: string }
+        payer: { type: string, enum: [long, short, none] }
+        openInterestValue: { type: string }
+        venueCount: { type: integer }
+        dominantVenue: { type: string }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/FundingPressureVenue' }
+        nextFundingTime: { type: string, format: date-time }
+        intervalHours: { type: integer }
+        summary: { type: string }
+        time: { type: string, format: date-time }
+    FundingPressurePoint:
+      type: object
+      properties:
+        time: { type: string, format: date-time }
+        rate: { type: string }
+        ratePct: { type: string }
+        payer: { type: string, enum: [long, short, none] }
+        openInterestValue: { type: string }
+        venueCount: { type: integer }
+        dominantVenue: { type: string }
+    FundingPressureWindow:
+      type: object
+      properties:
+        window: { type: string, enum: [1h, 4h, 24h] }
+        pastRate: { type: string }
+        pastRatePct: { type: string }
+        pastPayer: { type: string, enum: [long, short, none] }
+        change: { type: string }
+        changePct: { type: string }
+        payer: { type: string, enum: [long, short, none] }
+        kind: { type: string, enum: [flipped, steeper, flatter, stable] }
+        complete: { type: boolean }
+        sampleTime: { type: string, format: date-time }
+    FundingPressureMove:
+      type: object
+      properties:
+        time: { type: string, format: date-time }
+        kind: { type: string, enum: [flipped, steeper, flatter] }
+        fromPayer: { type: string, enum: [long, short, none] }
+        toPayer: { type: string, enum: [long, short, none] }
+        ratePct: { type: string }
+        changePct: { type: string }
+        summary: { type: string }
     MarketFundingRate:
       type: object
       description: Predicted next funding plus recent settlements
@@ -9487,6 +9549,16 @@ components:
         history:
           type: array
           items: { $ref: '#/components/schemas/FundingPrint' }
+        pressure: { $ref: '#/components/schemas/FundingPressure' }
+        pressureHistory:
+          type: array
+          items: { $ref: '#/components/schemas/FundingPressurePoint' }
+        pressureWindows:
+          type: array
+          items: { $ref: '#/components/schemas/FundingPressureWindow' }
+        pressureMoves:
+          type: array
+          items: { $ref: '#/components/schemas/FundingPressureMove' }
         asOf: { type: string, format: date-time }
         venueCount: { type: integer }
         note: { type: string }

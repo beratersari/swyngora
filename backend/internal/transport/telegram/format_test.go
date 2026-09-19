@@ -93,6 +93,27 @@ func TestFormatFunding(t *testing.T) {
 	}
 }
 
+func TestFormatFunding_Pressure(t *testing.T) {
+	s := &domain.FundingSnapshot{
+		Symbol: "BTCUSDT", Exchange: "all", VenueCount: 2,
+		Pressure: &domain.FundingPressure{
+			RatePct: "0.007778", Payer: "long",
+			Summary: "Binance 88.9% of OI at 0.01%; Bybit 11.1% of OI at -0.01%. Combined pressure 0.007778% (longs pay).",
+		},
+		PressureWindows: []domain.FundingPressureWindow{
+			{Window: "1h", ChangePct: "+0.001", Kind: "steeper"},
+		},
+		Venues: []domain.FundingVenueSnap{{
+			Exchange: "binance",
+			Current:  domain.FundingCurrent{RatePct: "0.01", Payer: "long"},
+		}},
+	}
+	got := FormatFunding(s)
+	if !strings.Contains(got, "OI-weighted") || !strings.Contains(got, "0.007778") || !strings.Contains(got, "88.9%") {
+		t.Fatalf("%s", got)
+	}
+}
+
 func TestFormatOpenInterest(t *testing.T) {
 	s := &domain.OpenInterestSnapshot{
 		Symbol: "BTCUSDT", Exchange: "all", Unit: "BTC", VenueCount: 2,

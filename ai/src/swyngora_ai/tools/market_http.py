@@ -989,7 +989,7 @@ class FundingRateInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
         default="all",
-        description="binance|bybit|all (default all = both venues, not averaged)",
+        description="binance|bybit|okx|all (default all = per-venue rows plus OI-weighted pressure)",
     )
     limit: int = Field(default=12, ge=1, le=30, description="Settled history size")
 
@@ -4432,8 +4432,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "Perpetual futures funding rate: predicted next payment plus recent "
                 "settled history. rate is decimal (0.0001 = 0.01%); ratePct is percent. "
-                "payer=long means longs pay shorts. Binance USD-M + Bybit linear. "
-                "exchange=all returns each venue separately (not averaged)."
+                "payer=long means longs pay shorts. Binance USD-M + Bybit linear + OKX. "
+                "Per-venue rows stay separate. pressure is OI-weighted combined predicted "
+                "funding (USDT open-interest share) so a large book outweighs a small one; "
+                "pressureWindows (1h/4h/24h) and pressureMoves show how that blend changed."
             ),
             args_schema=FundingRateInput,
         ),

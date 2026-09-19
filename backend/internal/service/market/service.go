@@ -1045,7 +1045,76 @@ func (s *Service) GetFundingRate(ctx context.Context, exchange, symbol string, l
 	if len(series) == 0 && lastErr != nil {
 		return nil, lastErr
 	}
-	return domain.BuildFundingSnapshot(ex, symbol, series, time.Now().UTC()), nil
+	now := time.Now().UTC()
+	snap := domain.BuildFundingSnapshot(ex, symbol, series, now)
+	s.attachFundingPressure(ctx, snap, series, ex, symbol, now)
+	return snap, nil
+}
+
+func (s *Service) attachFundingPressure(ctx context.Context, snap *domain.FundingSnapshot, series []*domain.FundingSeries, exchange, symbol string, now time.Time) {
+	if s == nil || snap == nil {
+		return
+	}
+	oi := s.collectOpenInterestSeries(ctx, exchange, symbol)
+	domain.AttachFundingPressure(snap, series, oi, now)
+	if s.futHist == nil {
+		return
+	}
+	from := now.Add(-domain.FundingPressureLookback)
+	q := domain.FuturesHistoryQuery{
+		Exchange: exchange, Symbol: symbol, From: from, To: now,
+		Limit: domain.MaxFuturesHistoryLimit,
+	}
+	q.Metric = domain.FuturesMetricFunding
+	fundRaw, _ := s.futHist.History(ctx, q)
+	q.Metric = domain.FuturesMetricOpenInterest
+	oiRaw, _ := s.futHist.History(ctx, q)
+	domain.AttachFundingPressureHistory(snap, futuresSnapshots(fundRaw), futuresSnapshots(oiRaw), now)
+}
+
+func futuresSnapshots(v any) []domain.FuturesSnapshot {
+	s, _ := v.([]domain.FuturesSnapshot)
+	return s
+}
+
+func (s *Service) collectOpenInterestSeries(ctx context.Context, exchange, symbol string) []*domain.OpenInterestSeries {
+	want := s.futuresWant(exchange)
+	type job struct {
+		ex domain.Exchange
+		p  domain.OpenInterestPort
+	}
+	var jobs []job
+	for _, v := range want {
+		if p := s.oiPort(v); p != nil {
+			jobs = append(jobs, job{ex: v, p: p})
+		}
+	}
+	if len(jobs) == 0 {
+		return nil
+	}
+	type result struct {
+		ser *domain.OpenInterestSeries
+	}
+	ch := make(chan result, len(jobs))
+	for _, j := range jobs {
+		go func(j job) {
+			ser, err := j.p.GetOpenInterestSeries(ctx, symbol)
+			if err != nil || ser == nil {
+				ch <- result{}
+				return
+			}
+			ser.Exchange = j.ex
+			ser.Symbol = symbol
+			ch <- result{ser: ser}
+		}(j)
+	}
+	var out []*domain.OpenInterestSeries
+	for range jobs {
+		if r := <-ch; r.ser != nil {
+			out = append(out, r.ser)
+		}
+	}
+	return out
 }
 
 func (s *Service) fundingPort(ex domain.Exchange) domain.FundingRatePort {

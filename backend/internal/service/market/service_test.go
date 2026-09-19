@@ -985,6 +985,47 @@ func TestGetFundingRate_Combined(t *testing.T) {
 	}
 }
 
+func TestGetFundingRate_OIWeightedPressure(t *testing.T) {
+	now := time.Now().UTC()
+	binF := &fakeFunding{ser: &domain.FundingSeries{
+		Exchange:        domain.ExchangeBinance,
+		Current:         domain.FundingPoint{Time: now, Rate: 0.0001, Predicted: true},
+		NextFundingTime: now.Add(time.Hour),
+		IntervalHours:   8,
+	}}
+	bybF := &fakeFunding{ser: &domain.FundingSeries{
+		Exchange:        domain.ExchangeBybit,
+		Current:         domain.FundingPoint{Time: now, Rate: -0.0001, Predicted: true},
+		NextFundingTime: now.Add(2 * time.Hour),
+		IntervalHours:   8,
+	}}
+	binOI := &fakeOI{ser: &domain.OpenInterestSeries{
+		Exchange: domain.ExchangeBinance,
+		Current:  domain.OpenInterestPoint{Time: now, Value: 8e9},
+	}}
+	bybOI := &fakeOI{ser: &domain.OpenInterestSeries{
+		Exchange: domain.ExchangeBybit,
+		Current:  domain.OpenInterestPoint{Time: now, Value: 1e9},
+	}}
+	svc := New(&fakeMarket{}, &fakeSupply{}).
+		WithFundingRate(map[domain.Exchange]domain.FundingRatePort{
+			domain.ExchangeBinance: binF, domain.ExchangeBybit: bybF,
+		}).
+		WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+			domain.ExchangeBinance: binOI, domain.ExchangeBybit: bybOI,
+		})
+	got, err := svc.GetFundingRate(context.Background(), "all", "BTCUSDT", 12)
+	if err != nil || got.Pressure == nil {
+		t.Fatalf("%+v %v", got, err)
+	}
+	if got.Pressure.Payer != "long" || got.Pressure.DominantVenue != "binance" {
+		t.Fatalf("pressure %+v", got.Pressure)
+	}
+	if got.Pressure.Venues[0].WeightPct != "88.9" {
+		t.Fatalf("weight %+v", got.Pressure.Venues)
+	}
+}
+
 type fakeLS struct {
 	ser *domain.LongShortSeries
 	err error

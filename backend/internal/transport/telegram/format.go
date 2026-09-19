@@ -615,6 +615,24 @@ func FormatFunding(s *domain.FundingSnapshot) string {
 	}
 	fmt.Fprintf(&b, "%s\n", code(ex))
 	b.WriteString(divider())
+	if s.Pressure != nil {
+		pay := s.Pressure.Payer
+		if pay == "long" {
+			pay = "longs pay"
+		} else if pay == "short" {
+			pay = "shorts pay"
+		}
+		fmt.Fprintf(&b, "pressure  %s%%  %s  (OI-weighted)\n", code(s.Pressure.RatePct), italic(pay))
+		if s.Pressure.Summary != "" {
+			b.WriteString(italic(s.Pressure.Summary) + "\n")
+		}
+		for _, w := range s.PressureWindows {
+			if w.Window == "" || w.Kind == "" {
+				continue
+			}
+			b.WriteString(row(w.Window, code(w.ChangePct+"%")+"  "+w.Kind))
+		}
+	}
 	b.WriteString(formatFundingVenues(s))
 	b.WriteString(footer())
 	return b.String()

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **OI-weighted funding pressure:** combined predicted funding is weighted by USDT open interest, so an 8B book at +0.01% outweighs a 1B book at −0.01%. `pressure` / `pressureHistory` / `pressureWindows` / `pressureMoves` on `GET /api/v1/market/funding-rate` (also on open-interest `funding`); coin-detail tape; MCP `get_funding_rate` (`docs/features/funding-rate.md`)
+
 ### Changed
 - **AI HTTP client:** `ai/` tools use `httpx2` (Pydantic-maintained fork) instead of `httpx`; LangChain may still pull `httpx` transitively
 

@@ -18,6 +18,16 @@ export function formatFundingPct(raw: string | number | null | undefined): strin
   return `${n.toFixed(4)}%`;
 }
 
+export function formatSignedFundingPct(raw: string | number | null | undefined): string {
+  if (raw === null || raw === undefined || raw === '') return '—';
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(n)) return String(raw);
+  const body = `${Math.abs(n).toFixed(4)}%`;
+  if (n > 0) return `+${body}`;
+  if (n < 0) return `-${body}`;
+  return '0.0000%';
+}
+
 export function windowByName<T extends { window?: string }>(
   windows: T[] | undefined,
   name: string,

@@ -1415,10 +1415,84 @@ func fundingSnapshotMap(got *domain.FundingSnapshot) map[string]any {
 	out := map[string]any{
 		"symbol": got.Symbol, "exchange": got.Exchange, "venues": venues,
 		"history": fundingPrintsMap(got.History), "asOf": asOf, "venueCount": got.VenueCount,
-		"note": "Predicted next funding plus recent settlements. rate is decimal; ratePct is percent. payer=long means longs pay shorts. Combined all does not average venues.",
+		"note": "Predicted next funding plus recent settlements. rate is decimal; ratePct is percent. payer=long means longs pay shorts. Per-venue rows stay separate. pressure is OI-weighted combined predicted funding (USDT open interest share) plus pressureHistory / pressureWindows / pressureMoves.",
 	}
 	if got.Current != nil {
 		out["current"] = fundingCurrentMap(*got.Current)
+	}
+	if got.Pressure != nil {
+		out["pressure"] = fundingPressureMap(*got.Pressure)
+	}
+	if len(got.PressureHistory) > 0 {
+		hist := make([]map[string]any, 0, len(got.PressureHistory))
+		for _, p := range got.PressureHistory {
+			hist = append(hist, fundingPressurePointMap(p))
+		}
+		out["pressureHistory"] = hist
+	}
+	if len(got.PressureWindows) > 0 {
+		wins := make([]map[string]any, 0, len(got.PressureWindows))
+		for _, w := range got.PressureWindows {
+			row := map[string]any{
+				"window": w.Window, "pastRate": w.PastRate, "pastRatePct": w.PastRatePct,
+				"pastPayer": w.PastPayer, "change": w.Change, "changePct": w.ChangePct,
+				"payer": w.Payer, "kind": w.Kind, "complete": w.Complete,
+			}
+			if !w.SampleTime.IsZero() {
+				row["sampleTime"] = w.SampleTime.UTC().Format(time.RFC3339Nano)
+			}
+			wins = append(wins, row)
+		}
+		out["pressureWindows"] = wins
+	}
+	if len(got.PressureMoves) > 0 {
+		moves := make([]map[string]any, 0, len(got.PressureMoves))
+		for _, m := range got.PressureMoves {
+			row := map[string]any{
+				"kind": m.Kind, "fromPayer": m.FromPayer, "toPayer": m.ToPayer,
+				"ratePct": m.RatePct, "changePct": m.ChangePct, "summary": m.Summary,
+			}
+			if !m.Time.IsZero() {
+				row["time"] = m.Time.UTC().Format(time.RFC3339Nano)
+			}
+			moves = append(moves, row)
+		}
+		out["pressureMoves"] = moves
+	}
+	return out
+}
+
+func fundingPressureMap(p domain.FundingPressure) map[string]any {
+	venues := make([]map[string]any, 0, len(p.Venues))
+	for _, v := range p.Venues {
+		venues = append(venues, map[string]any{
+			"exchange": v.Exchange, "rate": v.Rate, "ratePct": v.RatePct, "payer": v.Payer,
+			"openInterestValue": v.OpenInterestValue, "weightPct": v.WeightPct,
+		})
+	}
+	out := map[string]any{
+		"rate": p.Rate, "ratePct": p.RatePct, "payer": p.Payer,
+		"openInterestValue": p.OpenInterestValue, "venueCount": p.VenueCount,
+		"dominantVenue": p.DominantVenue, "venues": venues, "summary": p.Summary,
+		"intervalHours": p.IntervalHours,
+	}
+	if !p.NextFundingTime.IsZero() {
+		out["nextFundingTime"] = p.NextFundingTime.UTC().Format(time.RFC3339Nano)
+	}
+	if !p.Time.IsZero() {
+		out["time"] = p.Time.UTC().Format(time.RFC3339Nano)
+	}
+	return out
+}
+
+func fundingPressurePointMap(p domain.FundingPressurePoint) map[string]any {
+	out := map[string]any{
+		"rate": p.Rate, "ratePct": p.RatePct, "payer": p.Payer,
+		"openInterestValue": p.OpenInterestValue, "venueCount": p.VenueCount,
+		"dominantVenue": p.DominantVenue,
+	}
+	if !p.Time.IsZero() {
+		out["time"] = p.Time.UTC().Format(time.RFC3339Nano)
 	}
 	return out
 }

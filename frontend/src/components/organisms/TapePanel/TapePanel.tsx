@@ -1,7 +1,7 @@
 import { Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
-import { formatFundingPct, formatTapeNum, windowByName } from './TapePanel.helpers';
+import { formatFundingPct, formatSignedFundingPct, formatTapeNum, windowByName } from './TapePanel.helpers';
 import { Block, Panel, StatCard, StatsGrid, TitleRow } from './TapePanel.styles';
 import type { TapePanelProps } from './TapePanel.types';
 
@@ -42,7 +42,15 @@ export function TapePanel({
   const oi24h = windowByName(openInterest?.windows, '24h');
   const liq1h = windowByName(liquidations?.windows, '1h');
   const liq24h = windowByName(liquidations?.windows, '24h');
-  const funding = openInterest?.funding?.current;
+  const pressure = openInterest?.funding?.pressure;
+  const funding = pressure ?? openInterest?.funding?.current;
+  const pressure1h = windowByName(openInterest?.funding?.pressureWindows, '1h');
+  const pressure24h = windowByName(openInterest?.funding?.pressureWindows, '24h');
+  const nextSettle =
+    pressure?.nextFundingTime ??
+    openInterest?.funding?.current?.nextFundingTime ??
+    openInterest?.funding?.venues?.find((v) => v.current?.nextFundingTime)?.current
+      ?.nextFundingTime;
   const cvdRow = cvd?.combined ?? cvd?.venues?.[0];
   const snap = snapshot?.combined ?? snapshot?.venues?.[0];
   const snap1h = snap?.windows?.find((w) => w.window === '1h');
@@ -106,27 +114,40 @@ export function TapePanel({
         {openInterestError && !funding ? (
           <Alert type="info" showIcon message={t('tape.funding')} description={openInterestError} />
         ) : (
-          <StatsGrid>
-            <Stat
-              label={t('tape.nextRate')}
-              value={formatFundingPct(funding?.ratePct)}
-              isLoading={isLoading}
-            />
-            <Stat
-              label={t('tape.payer')}
-              value={funding?.payer ? t(`tape.payer_${funding.payer}`) : '—'}
-              isLoading={isLoading}
-            />
-            <Stat
-              label={t('tape.nextTime')}
-              value={
-                funding?.nextFundingTime
-                  ? new Date(funding.nextFundingTime).toLocaleString()
-                  : '—'
-              }
-              isLoading={isLoading}
-            />
-          </StatsGrid>
+          <>
+            <StatsGrid>
+              <Stat
+                label={pressure ? t('tape.pressure') : t('tape.nextRate')}
+                value={formatFundingPct(funding?.ratePct)}
+                isLoading={isLoading}
+              />
+              <Stat
+                label={t('tape.payer')}
+                value={funding?.payer ? t(`tape.payer_${funding.payer}`) : '—'}
+                isLoading={isLoading}
+              />
+              <Stat
+                label={t('tape.pressure1h')}
+                value={formatSignedFundingPct(pressure1h?.changePct)}
+                isLoading={isLoading}
+              />
+              <Stat
+                label={t('tape.pressure24h')}
+                value={formatSignedFundingPct(pressure24h?.changePct)}
+                isLoading={isLoading}
+              />
+              <Stat
+                label={t('tape.nextTime')}
+                value={nextSettle ? new Date(nextSettle).toLocaleString() : '—'}
+                isLoading={isLoading}
+              />
+            </StatsGrid>
+            {pressure?.summary ? (
+              <Text variant="caption" color="secondary">
+                {pressure.summary}
+              </Text>
+            ) : null}
+          </>
         )}
       </Block>
 

@@ -319,6 +319,31 @@ func TestGetFundingRate_OK(t *testing.T) {
 	}
 }
 
+func TestFundingToDTO_Pressure(t *testing.T) {
+	now := time.Date(2026, 8, 11, 15, 0, 0, 0, time.UTC)
+	dto := fundingToDTO(&domain.FundingSnapshot{
+		Symbol: "BTCUSDT", Exchange: "all", VenueCount: 2, AsOf: now,
+		Pressure: &domain.FundingPressure{
+			Rate: "0.00007778", RatePct: "0.007778", Payer: "long",
+			OpenInterestValue: "9000000000", VenueCount: 2, DominantVenue: "binance",
+			Summary: "Binance 88.9% of OI at 0.01%. Combined pressure 0.007778% (longs pay).",
+			Venues: []domain.FundingPressureVenue{{
+				Exchange: "binance", Rate: "0.0001", RatePct: "0.01", Payer: "long",
+				OpenInterestValue: "8000000000", WeightPct: "88.9",
+			}},
+		},
+		PressureWindows: []domain.FundingPressureWindow{{
+			Window: "1h", Kind: "stable", Complete: true, Payer: "long",
+		}},
+	})
+	if dto.Pressure == nil || dto.Pressure.Payer != "long" || dto.Pressure.DominantVenue != "binance" {
+		t.Fatalf("%+v", dto.Pressure)
+	}
+	if len(dto.PressureWindows) != 1 || dto.PressureWindows[0].Kind != "stable" {
+		t.Fatalf("%+v", dto.PressureWindows)
+	}
+}
+
 func TestGetFundingArb_OKWithoutPorts(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/funding-arb?symbol=BTCUSDT&notional=10000", nil)

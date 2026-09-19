@@ -983,15 +983,75 @@ type fundingVenueDTO struct {
 	History     []fundingPrintDTO `json:"history"`
 }
 
+type fundingPressureVenueDTO struct {
+	Exchange          string `json:"exchange"`
+	Rate              string `json:"rate"`
+	RatePct           string `json:"ratePct"`
+	Payer             string `json:"payer"`
+	OpenInterestValue string `json:"openInterestValue"`
+	WeightPct         string `json:"weightPct"`
+}
+
+type fundingPressureDTO struct {
+	Rate              string                    `json:"rate"`
+	RatePct           string                    `json:"ratePct"`
+	Payer             string                    `json:"payer"`
+	OpenInterestValue string                    `json:"openInterestValue"`
+	VenueCount        int                       `json:"venueCount"`
+	DominantVenue     string                    `json:"dominantVenue,omitempty"`
+	Venues            []fundingPressureVenueDTO `json:"venues"`
+	NextFundingTime   string                    `json:"nextFundingTime,omitempty"`
+	IntervalHours     int                       `json:"intervalHours,omitempty"`
+	Summary           string                    `json:"summary,omitempty"`
+	Time              string                    `json:"time,omitempty"`
+}
+
+type fundingPressurePointDTO struct {
+	Time              string `json:"time,omitempty"`
+	Rate              string `json:"rate"`
+	RatePct           string `json:"ratePct"`
+	Payer             string `json:"payer"`
+	OpenInterestValue string `json:"openInterestValue"`
+	VenueCount        int    `json:"venueCount"`
+	DominantVenue     string `json:"dominantVenue,omitempty"`
+}
+
+type fundingPressureWindowDTO struct {
+	Window      string `json:"window"`
+	PastRate    string `json:"pastRate,omitempty"`
+	PastRatePct string `json:"pastRatePct,omitempty"`
+	PastPayer   string `json:"pastPayer,omitempty"`
+	Change      string `json:"change,omitempty"`
+	ChangePct   string `json:"changePct,omitempty"`
+	Payer       string `json:"payer,omitempty"`
+	Kind        string `json:"kind,omitempty"`
+	Complete    bool   `json:"complete"`
+	SampleTime  string `json:"sampleTime,omitempty"`
+}
+
+type fundingPressureMoveDTO struct {
+	Time      string `json:"time,omitempty"`
+	Kind      string `json:"kind"`
+	FromPayer string `json:"fromPayer,omitempty"`
+	ToPayer   string `json:"toPayer,omitempty"`
+	RatePct   string `json:"ratePct,omitempty"`
+	ChangePct string `json:"changePct,omitempty"`
+	Summary   string `json:"summary,omitempty"`
+}
+
 type fundingRateResponse struct {
-	Symbol     string             `json:"symbol"`
-	Exchange   string             `json:"exchange"`
-	Current    *fundingCurrentDTO `json:"current,omitempty"`
-	Venues     []fundingVenueDTO  `json:"venues"`
-	History    []fundingPrintDTO  `json:"history,omitempty"`
-	AsOf       string             `json:"asOf,omitempty"`
-	VenueCount int                `json:"venueCount"`
-	Note       string             `json:"note"`
+	Symbol          string                     `json:"symbol"`
+	Exchange        string                     `json:"exchange"`
+	Current         *fundingCurrentDTO         `json:"current,omitempty"`
+	Venues          []fundingVenueDTO          `json:"venues"`
+	History         []fundingPrintDTO          `json:"history,omitempty"`
+	Pressure        *fundingPressureDTO        `json:"pressure,omitempty"`
+	PressureHistory []fundingPressurePointDTO  `json:"pressureHistory,omitempty"`
+	PressureWindows []fundingPressureWindowDTO `json:"pressureWindows,omitempty"`
+	PressureMoves   []fundingPressureMoveDTO   `json:"pressureMoves,omitempty"`
+	AsOf            string                     `json:"asOf,omitempty"`
+	VenueCount      int                        `json:"venueCount"`
+	Note            string                     `json:"note"`
 }
 
 type longShortLevelDTO struct {
@@ -1081,7 +1141,7 @@ func openInterestToDTO(a *domain.OpenInterestSnapshot) openInterestResponse {
 		Symbol: a.Symbol, Exchange: a.Exchange, Unit: a.Unit,
 		Current: oiLevelDTO(a.Current), Windows: oiWindowsDTO(a.Windows),
 		Venues: venues, AsOf: asOf, VenueCount: a.VenueCount,
-		Note: "Binance USD-M and Bybit linear perpetual open interest. contracts is outstanding size in the base asset (Bybit uses singleOpenInterest — one side — not the 2× both-sides openInterest). value is USDT notional. Change is current minus the reading ~window ago. funding is the predicted next rate plus recent settlements. longShort is the share of accounts that are long vs short. Combined all sums OI across venues; funding and long/short stay per venue. Informational only.",
+		Note: "Binance USD-M and Bybit linear perpetual open interest. contracts is outstanding size in the base asset (Bybit uses singleOpenInterest — one side — not the 2× both-sides openInterest). value is USDT notional. Change is current minus the reading ~window ago. funding is the predicted next rate plus recent settlements; funding.pressure is OI-weighted combined predicted funding. longShort is the share of accounts that are long vs short. Combined all sums OI across venues. Informational only.",
 	}
 	if a.Funding != nil {
 		f := fundingToDTO(a.Funding)
@@ -1149,11 +1209,90 @@ func fundingToDTO(a *domain.FundingSnapshot) fundingRateResponse {
 	out := fundingRateResponse{
 		Symbol: a.Symbol, Exchange: a.Exchange, Venues: venues, History: hist,
 		AsOf: asOf, VenueCount: a.VenueCount,
-		Note: "Binance USD-M and Bybit linear perpetual funding. rate is decimal (0.0001 = 0.01%). ratePct is percent. payer is who pays at settlement (positive rate → longs pay shorts). current is the predicted next payment, not yet settled. history is recent settlements, newest first. Combined all does not average venues. Informational only.",
+		Note: "Binance USD-M, Bybit linear, and OKX USDT-swap funding. rate is decimal (0.0001 = 0.01%). ratePct is percent. payer is who pays at settlement (positive rate → longs pay shorts). current is the predicted next payment, not yet settled (hoisted only for a single venue). history is recent settlements, newest first. pressure is OI-weighted combined predicted funding (USDT open interest share); pressureHistory / pressureWindows / pressureMoves show how that blend changed. Informational only.",
 	}
 	if a.Current != nil {
 		cur := fundingCurrentDTOFrom(*a.Current)
 		out.Current = &cur
+	}
+	if a.Pressure != nil {
+		p := fundingPressureDTOFrom(*a.Pressure)
+		out.Pressure = &p
+	}
+	if len(a.PressureHistory) > 0 {
+		out.PressureHistory = make([]fundingPressurePointDTO, 0, len(a.PressureHistory))
+		for _, h := range a.PressureHistory {
+			out.PressureHistory = append(out.PressureHistory, fundingPressurePointDTOFrom(h))
+		}
+	}
+	if len(a.PressureWindows) > 0 {
+		out.PressureWindows = make([]fundingPressureWindowDTO, 0, len(a.PressureWindows))
+		for _, w := range a.PressureWindows {
+			out.PressureWindows = append(out.PressureWindows, fundingPressureWindowDTOFrom(w))
+		}
+	}
+	if len(a.PressureMoves) > 0 {
+		out.PressureMoves = make([]fundingPressureMoveDTO, 0, len(a.PressureMoves))
+		for _, m := range a.PressureMoves {
+			out.PressureMoves = append(out.PressureMoves, fundingPressureMoveDTOFrom(m))
+		}
+	}
+	return out
+}
+
+func fundingPressureDTOFrom(p domain.FundingPressure) fundingPressureDTO {
+	out := fundingPressureDTO{
+		Rate: p.Rate, RatePct: p.RatePct, Payer: p.Payer,
+		OpenInterestValue: p.OpenInterestValue, VenueCount: p.VenueCount,
+		DominantVenue: p.DominantVenue, IntervalHours: p.IntervalHours, Summary: p.Summary,
+		Venues: make([]fundingPressureVenueDTO, 0, len(p.Venues)),
+	}
+	if !p.NextFundingTime.IsZero() {
+		out.NextFundingTime = p.NextFundingTime.UTC().Format(time.RFC3339Nano)
+	}
+	if !p.Time.IsZero() {
+		out.Time = p.Time.UTC().Format(time.RFC3339Nano)
+	}
+	for _, v := range p.Venues {
+		out.Venues = append(out.Venues, fundingPressureVenueDTO{
+			Exchange: v.Exchange, Rate: v.Rate, RatePct: v.RatePct, Payer: v.Payer,
+			OpenInterestValue: v.OpenInterestValue, WeightPct: v.WeightPct,
+		})
+	}
+	return out
+}
+
+func fundingPressurePointDTOFrom(p domain.FundingPressurePoint) fundingPressurePointDTO {
+	out := fundingPressurePointDTO{
+		Rate: p.Rate, RatePct: p.RatePct, Payer: p.Payer,
+		OpenInterestValue: p.OpenInterestValue, VenueCount: p.VenueCount,
+		DominantVenue: p.DominantVenue,
+	}
+	if !p.Time.IsZero() {
+		out.Time = p.Time.UTC().Format(time.RFC3339Nano)
+	}
+	return out
+}
+
+func fundingPressureWindowDTOFrom(w domain.FundingPressureWindow) fundingPressureWindowDTO {
+	out := fundingPressureWindowDTO{
+		Window: w.Window, PastRate: w.PastRate, PastRatePct: w.PastRatePct,
+		PastPayer: w.PastPayer, Change: w.Change, ChangePct: w.ChangePct,
+		Payer: w.Payer, Kind: w.Kind, Complete: w.Complete,
+	}
+	if !w.SampleTime.IsZero() {
+		out.SampleTime = w.SampleTime.UTC().Format(time.RFC3339Nano)
+	}
+	return out
+}
+
+func fundingPressureMoveDTOFrom(m domain.FundingPressureMove) fundingPressureMoveDTO {
+	out := fundingPressureMoveDTO{
+		Kind: m.Kind, FromPayer: m.FromPayer, ToPayer: m.ToPayer,
+		RatePct: m.RatePct, ChangePct: m.ChangePct, Summary: m.Summary,
+	}
+	if !m.Time.IsZero() {
+		out.Time = m.Time.UTC().Format(time.RFC3339Nano)
 	}
 	return out
 }

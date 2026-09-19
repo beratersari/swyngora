@@ -615,7 +615,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_funding_rate",
-		mcp.WithDescription("Perpetual futures funding rate: predicted next payment plus recent settled history. rate is decimal (0.0001 = 0.01%); ratePct is percent. payer=long means longs pay shorts at settlement. Binance USD-M + Bybit linear + OKX USDT-swap. exchange=all (default) returns each venue separately (rates are not averaged). Prefer this for 'what is the funding rate' or carry analysis."),
+		mcp.WithDescription("Perpetual futures funding rate: predicted next payment plus recent settled history. rate is decimal (0.0001 = 0.01%); ratePct is percent. payer=long means longs pay shorts at settlement. Binance USD-M + Bybit linear + OKX USDT-swap. Per-venue rows stay separate. pressure is OI-weighted combined predicted funding (USDT open interest share) so an 8B book outweighs a 1B book; pressureWindows (1h/4h/24h) and pressureMoves show how that blend changed. Prefer this for 'what is the funding rate' or carry analysis."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 		mcp.WithNumber("limit", mcp.Description("Settled history size 1–30 (default 12)")),

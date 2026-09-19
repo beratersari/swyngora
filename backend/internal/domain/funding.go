@@ -63,13 +63,17 @@ type FundingVenueSnap struct {
 
 // FundingSnapshot is current funding plus recent settlements.
 type FundingSnapshot struct {
-	Symbol     string
-	Exchange   string // binance | bybit | all
-	Current    *FundingCurrent
-	Venues     []FundingVenueSnap
-	History    []FundingPrint // hoisted when a single venue is requested
-	AsOf       time.Time
-	VenueCount int
+	Symbol          string
+	Exchange        string // binance | bybit | all
+	Current         *FundingCurrent
+	Venues          []FundingVenueSnap
+	History         []FundingPrint // hoisted when a single venue is requested
+	Pressure        *FundingPressure
+	PressureHistory []FundingPressurePoint
+	PressureWindows []FundingPressureWindow
+	PressureMoves   []FundingPressureMove
+	AsOf            time.Time
+	VenueCount      int
 }
 
 // ClampFundingHistoryLimit bounds history size.

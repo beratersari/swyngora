@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatFundingPct, formatTapeNum, windowByName } from './TapePanel.helpers';
+import { formatFundingPct, formatSignedFundingPct, formatTapeNum, windowByName } from './TapePanel.helpers';
 
 describe('TapePanel helpers', () => {
   it('compacts large notionals', () => {
@@ -10,6 +10,12 @@ describe('TapePanel helpers', () => {
   it('formats funding percents', () => {
     expect(formatFundingPct(0.0123)).toBe('0.0123%');
     expect(formatFundingPct(null)).toBe('—');
+  });
+
+  it('keeps the sign on funding pressure change', () => {
+    expect(formatSignedFundingPct('+0.001')).toBe('+0.0010%');
+    expect(formatSignedFundingPct('-0.002')).toBe('-0.0020%');
+    expect(formatSignedFundingPct(null)).toBe('—');
   });
 
   it('picks a named window', () => {

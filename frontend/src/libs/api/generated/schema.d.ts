@@ -621,11 +621,14 @@ export interface paths {
         /**
          * Perpetual funding rate and recent history
          * @description Predicted **next** funding rate plus recent **settled** payments for
-         *     **Binance USD-M** and **Bybit linear perpetual**. `rate` is decimal
+         *     **Binance USD-M**, **Bybit linear**, and **OKX USDT-swap**. `rate` is decimal
          *     (`0.0001` = 0.01%); `ratePct` is percent. `payer` is who pays at
-         *     settlement (`long` = longs pay shorts). Combined `exchange=all` returns
-         *     each venue separately — rates are not averaged. `limit` is settled
-         *     history size (default 12, max 30). Cached ~30s. Informational only.
+         *     settlement (`long` = longs pay shorts). Combined `exchange=all` keeps
+         *     each venue as its own row. `pressure` is **OI-weighted** combined
+         *     predicted funding (USDT open-interest share), so an 8B book at +0.01%
+         *     outweighs a 1B book at −0.01%. `pressureHistory` / `pressureWindows`
+         *     (1h/4h/24h) / `pressureMoves` show how that blend changed. `limit` is
+         *     settled history size (default 12, max 30). Cached ~30s. Informational only.
          */
         get: operations["getMarketFundingRate"];
         put?: never;
@@ -908,7 +911,10 @@ export interface paths {
          *     the gap is expanding or shrinking (5m/1h/4h), a short read with funding
          *     and open interest, and whether both venues agree. `curve` compares
          *     listed dated futures: near vs far expiry, contango (far richer / up)
-         *     or backwardation (near richer / down).
+         *     or backwardation (near richer / down). `curve.history` is that same
+         *     near/far spread over the last hours and days from mark klines;
+         *     `curve.windows` (1h/4h/24h/7d) say if it flipped, got steeper, or
+         *     flattened; `curve.moves` lists those events.
          */
         get: operations["getMarketBasis"];
         put?: never;
@@ -1378,7 +1384,8 @@ export interface paths {
          *     ranges overlap**. Shared setup windows do not merge different
          *     moves.
          *     Each past match uses only tape available before that move
-         *     (`dataFrom` / `dataTo`). `horizons` picks the after-windows
+         *     (`dataFrom` / `dataTo`) and includes `whySimilar` plus per-field
+         *     `compared` scores. `horizons` picks the after-windows
          *     (default `15m,1h,4h`; e.g. `5m,30m,2h`). Each horizon is
          *     measured on matching candle size (5m uses 5m bars) and reports
          *     up/down, average, median, `sample`, plus the same stats in
@@ -5712,6 +5719,74 @@ export interface components {
             avgLast3Pct?: string;
             history?: components["schemas"]["FundingPrint"][];
         };
+        FundingPressureVenue: {
+            exchange?: string;
+            rate?: string;
+            ratePct?: string;
+            /** @enum {string} */
+            payer?: "long" | "short" | "none";
+            openInterestValue?: string;
+            /** @description Share of combined USDT open interest */
+            weightPct?: string;
+        };
+        /** @description Predicted funding weighted by USDT open interest across venues */
+        FundingPressure: {
+            rate?: string;
+            ratePct?: string;
+            /** @enum {string} */
+            payer?: "long" | "short" | "none";
+            openInterestValue?: string;
+            venueCount?: number;
+            dominantVenue?: string;
+            venues?: components["schemas"]["FundingPressureVenue"][];
+            /** Format: date-time */
+            nextFundingTime?: string;
+            intervalHours?: number;
+            summary?: string;
+            /** Format: date-time */
+            time?: string;
+        };
+        FundingPressurePoint: {
+            /** Format: date-time */
+            time?: string;
+            rate?: string;
+            ratePct?: string;
+            /** @enum {string} */
+            payer?: "long" | "short" | "none";
+            openInterestValue?: string;
+            venueCount?: number;
+            dominantVenue?: string;
+        };
+        FundingPressureWindow: {
+            /** @enum {string} */
+            window?: "1h" | "4h" | "24h";
+            pastRate?: string;
+            pastRatePct?: string;
+            /** @enum {string} */
+            pastPayer?: "long" | "short" | "none";
+            change?: string;
+            changePct?: string;
+            /** @enum {string} */
+            payer?: "long" | "short" | "none";
+            /** @enum {string} */
+            kind?: "flipped" | "steeper" | "flatter" | "stable";
+            complete?: boolean;
+            /** Format: date-time */
+            sampleTime?: string;
+        };
+        FundingPressureMove: {
+            /** Format: date-time */
+            time?: string;
+            /** @enum {string} */
+            kind?: "flipped" | "steeper" | "flatter";
+            /** @enum {string} */
+            fromPayer?: "long" | "short" | "none";
+            /** @enum {string} */
+            toPayer?: "long" | "short" | "none";
+            ratePct?: string;
+            changePct?: string;
+            summary?: string;
+        };
         /** @description Predicted next funding plus recent settlements */
         MarketFundingRate: {
             symbol?: string;
@@ -5719,6 +5794,10 @@ export interface components {
             current?: components["schemas"]["FundingCurrent"];
             venues?: components["schemas"]["FundingVenue"][];
             history?: components["schemas"]["FundingPrint"][];
+            pressure?: components["schemas"]["FundingPressure"];
+            pressureHistory?: components["schemas"]["FundingPressurePoint"][];
+            pressureWindows?: components["schemas"]["FundingPressureWindow"][];
+            pressureMoves?: components["schemas"]["FundingPressureMove"][];
             /** Format: date-time */
             asOf?: string;
             venueCount?: number;
@@ -7640,7 +7719,7 @@ export interface components {
             similar?: string;
             caution?: string;
         };
-        /** @description One clock of what printed around the event (OI, takers, price, follow-through, liquidations, options, sweeps). Only prints at or before knownUntil. */
+        /** @description One clock of what printed around the event (OI, takers, price, follow-through, liquidations, options, dealer gamma, futures curve, sweeps). Only prints at or before knownUntil. */
         MarketForensicsTimeline: {
             summary?: string;
             /**
