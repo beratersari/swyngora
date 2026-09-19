@@ -30,6 +30,13 @@ tape:
 If similar-move search fails, `tape` is still returned and
 `similarError` explains why.
 
+Each similar match lists **which tape pieces matched** (`whySimilar`
+plus per-field `compared` scores for price, volume, taker flow, open
+interest, the order book, and listed options when both sides have
+samples). `used` / `missing` / `matches` name those fields. Coverage
+is how much of the selected weight actually had data; similarity is
+scored only on fields that were present.
+
 `why` is a plain-language story of **why the move may have happened**
 (before / during / after, plus similar past cases). It interprets the
 tape — volume vs typical, who was aggressive, book thinning, open

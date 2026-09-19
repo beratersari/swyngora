@@ -17,6 +17,12 @@ describe('ForensicsSimilar', () => {
               similarity: '82',
               coverage: '90',
               afterReturnPct: '+3.5',
+              whySimilar: 'Matched most on open interest and volume.',
+              compared: [
+                { name: 'oi', used: true, matched: true, score: '88' },
+                { name: 'volume', used: true, score: '80' },
+                { name: 'book', used: false },
+              ],
             },
           ],
           afterHorizons: [{ horizon: '1h', up: 2, down: 0, medianPct: '+2.1', sample: 2 }],
@@ -26,5 +32,8 @@ describe('ForensicsSimilar', () => {
     expect(screen.getByText(/similar past moves|benzer geçmiş hareketler/i)).toBeInTheDocument();
     expect(screen.getByText('+3.5')).toBeInTheDocument();
     expect(screen.getByText('+2.1')).toBeInTheDocument();
+    expect(screen.getByText(/matched most on open interest/i)).toBeInTheDocument();
+    expect(screen.getByText(/open interest 88/i)).toBeInTheDocument();
+    expect(screen.getByText(/book n\/a/i)).toBeInTheDocument();
   });
 });

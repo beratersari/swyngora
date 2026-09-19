@@ -66,10 +66,11 @@ type AroundSimilarWeights struct {
 
 // AroundSimilarFieldScore is one requested field on one match.
 type AroundSimilarFieldScore struct {
-	Name   string
-	Used   bool
-	Score  float64 // 0–100 closeness when used
-	Weight float64
+	Name    string
+	Used    bool
+	Matched bool    // close enough to count as the same kind of tape
+	Score   float64 // 0–100 closeness when used
+	Weight  float64
 }
 
 // AroundSimilarScoreBand is one similarity range, e.g. 40–60.
@@ -123,6 +124,7 @@ type AroundSimilarHit struct {
 	Used           []string
 	Missing        []string
 	Matches        []string
+	WhySimilar     string
 	Before         AroundPhase
 	After          AroundPhase // the move itself (during)
 	DataFrom       time.Time   // start of tape used for the comparison (pre-move)
@@ -554,6 +556,7 @@ func MatchAroundSimilar(current AroundPhase, past []AroundMoveHit, limit int, fi
 			row.AfterReturnPct = hit.ReturnPct
 			row.AfterDirection = hit.Direction
 		}
+		row.WhySimilar = ExplainAroundSimilarWhy(row.Compared)
 		row.Summary = explainAroundSimilarHit(row)
 		if minCoverage > 0 && sc.Coverage < minCoverage {
 			drop = append(drop, row)
@@ -844,7 +847,7 @@ func aroundPhaseSimilarity(a, b AroundPhase, want AroundSimilarFields, w AroundS
 	out := aroundSimilarScore{}
 	for _, c := range cands {
 		selected += c.weight
-		row := AroundSimilarFieldScore{Name: c.name, Used: c.have, Weight: c.weight}
+		row := AroundSimilarFieldScore{Name: c.name, Used: c.have, Matched: c.have && c.match, Weight: c.weight}
 		if c.have {
 			usedW += c.weight
 			ssum += c.weight * c.score
@@ -874,6 +877,54 @@ func aroundPhaseSimilarity(a, b AroundPhase, want AroundSimilarFields, w AroundS
 		out.Similarity = 0
 	}
 	return out
+}
+
+// ExplainAroundSimilarWhy says which tape pieces made this past setup look similar.
+func ExplainAroundSimilarWhy(compared []AroundSimilarFieldScore) string {
+	var close, some, far, missing []string
+	for _, c := range compared {
+		label := prettyScanField(c.Name)
+		if label == "" {
+			continue
+		}
+		if !c.Used {
+			missing = append(missing, label)
+			continue
+		}
+		switch {
+		case c.Score+1e-9 >= forensicsScanFieldClose:
+			close = append(close, label)
+		case c.Score+1e-9 >= forensicsScanFieldSome:
+			some = append(some, label)
+		default:
+			far = append(far, label)
+		}
+	}
+	if len(close)+len(some)+len(far)+len(missing) == 0 {
+		return ""
+	}
+	var parts []string
+	switch {
+	case len(close) > 0:
+		parts = append(parts, "Matched most on "+joinList(close)+".")
+		if len(some) > 0 {
+			parts = append(parts, scanFieldWere(some, "was only somewhat similar.", "were only somewhat similar."))
+		}
+		if len(far) > 0 {
+			parts = append(parts, scanFieldWere(far, "looked different.", "looked different."))
+		}
+	case len(some) > 0:
+		parts = append(parts, "Only somewhat similar on "+joinList(some)+".")
+		if len(far) > 0 {
+			parts = append(parts, scanFieldWere(far, "looked different.", "looked different."))
+		}
+	case len(far) > 0:
+		parts = append(parts, "None of the compared tape pieces were close — "+scanFieldWere(far, "looked different.", "looked different."))
+	}
+	if len(missing) > 0 {
+		parts = append(parts, scanFieldWere(missing, "could not be compared.", "could not be compared."))
+	}
+	return strings.TrimSpace(strings.Join(parts, " "))
 }
 
 func explainAroundSimilarHit(h AroundSimilarHit) string {

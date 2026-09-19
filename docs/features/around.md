@@ -161,8 +161,9 @@ and `sample`. The same stats are also split by similarity band
 (`40-60`, `60-80`, `80-100`) so you can see how the after-move
 changes as matches get closer. A match is left out of a horizon
 when that tape is not long enough. Each case still lists `used`,
-`missing`, `coverage`, per-field `compared` scores, and the move
-itself (`afterReturnPct`). MCP: `find_around_similar`.
+`missing`, `coverage`, per-field `compared` scores, `whySimilar`
+(which pieces were close), and the move itself (`afterReturnPct`).
+MCP: `find_around_similar`.
 
 ## Where the code lives
 

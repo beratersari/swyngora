@@ -1249,7 +1249,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("find_around_similar",
-		mcp.WithDescription("Compare the current market tape to the setup before past important moves. Each past match uses only tape available before that move (dataFrom–dataTo). fields selects price,volume,takers,oi,book,options. Only overlapping price-move ranges count as one event. horizons is a CSV of after-windows (default 15m,1h,4h; e.g. 5m,30m,2h) measured on matching candle size. Each horizon reports avg, median, up, down, sample, and the same stats for similarity 40-60, 60-80, 80-100. Default lookback 7d. Not financial advice."),
+		mcp.WithDescription("Compare the current market tape to the setup before past important moves. Each past match uses only tape available before that move (dataFrom–dataTo) and lists whySimilar plus per-field compared scores (price, volume, takers, oi, book, options). fields selects price,volume,takers,oi,book,options. Only overlapping price-move ranges count as one event. horizons is a CSV of after-windows (default 15m,1h,4h; e.g. 5m,30m,2h) measured on matching candle size. Each horizon reports avg, median, up, down, sample, and the same stats for similarity 40-60, 60-80, 80-100. Default lookback 7d. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 		mcp.WithString("lookback", mcp.Description("4h | 12h | 24h | 3d | 7d (default 7d)")),

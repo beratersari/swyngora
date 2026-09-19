@@ -2290,7 +2290,8 @@ paths:
         ranges overlap**. Shared setup windows do not merge different
         moves.
         Each past match uses only tape available before that move
-        (`dataFrom` / `dataTo`). `horizons` picks the after-windows
+        (`dataFrom` / `dataTo`) and includes `whySimilar` plus per-field
+        `compared` scores. `horizons` picks the after-windows
         (default `15m,1h,4h`; e.g. `5m,30m,2h`). Each horizon is
         measured on matching candle size (5m uses 5m bars) and reports
         up/down, average, median, `sample`, plus the same stats in

@@ -56,6 +56,12 @@ func TestMatchAroundSimilar_RanksClosestAndReportsAfter(t *testing.T) {
 	if got[0].Similarity < got[len(got)-1].Similarity && len(got) > 1 {
 		t.Fatalf("not ranked %+v", got)
 	}
+	if len(got[0].Compared) == 0 || got[0].WhySimilar == "" {
+		t.Fatalf("need field breakdown %+v %q", got[0].Compared, got[0].WhySimilar)
+	}
+	if !strings.Contains(got[0].WhySimilar, "open interest") && !strings.Contains(got[0].WhySimilar, "volume") {
+		t.Fatalf("why %q", got[0].WhySimilar)
+	}
 }
 
 func TestMatchAroundSimilar_SkipsCurrentWindow(t *testing.T) {
@@ -65,6 +71,17 @@ func TestMatchAroundSimilar_SkipsCurrentWindow(t *testing.T) {
 	got, _ := MatchAroundSimilar(cur, []AroundMoveHit{inside}, 5, DefaultAroundSimilarFields(), DefaultAroundSimilarWeights(), 0)
 	if len(got) != 0 {
 		t.Fatalf("should skip current window %+v", got)
+	}
+}
+
+func TestExplainAroundSimilarWhy_CloseAndMissing(t *testing.T) {
+	got := ExplainAroundSimilarWhy([]AroundSimilarFieldScore{
+		{Name: AroundSimilarFieldOI, Used: true, Matched: true, Score: 88},
+		{Name: AroundSimilarFieldVolume, Used: true, Score: 55},
+		{Name: AroundSimilarFieldBook, Used: false},
+	})
+	if !strings.Contains(got, "open interest") || !strings.Contains(got, "volume") || !strings.Contains(got, "order book") {
+		t.Fatalf("%q", got)
 	}
 }
 

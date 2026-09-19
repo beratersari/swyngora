@@ -188,6 +188,14 @@ export type ForensicsTape = {
   summary?: string;
 };
 
+export type ForensicsSimilarField = {
+  name?: string;
+  used?: boolean;
+  matched?: boolean;
+  score?: string;
+  weight?: string;
+};
+
 export type ForensicsSimilarHit = {
   at?: string;
   until?: string;
@@ -196,6 +204,11 @@ export type ForensicsSimilarHit = {
   grade?: string;
   similarity?: string;
   coverage?: string;
+  compared?: ForensicsSimilarField[];
+  used?: string[];
+  missing?: string[];
+  matches?: string[];
+  whySimilar?: string;
   afterReturnPct?: string;
   afterDirection?: string;
   summary?: string;
@@ -268,6 +281,7 @@ export type ForensicsReport = {
 export type ForensicsScanField = {
   name?: string;
   used?: boolean;
+  matched?: boolean;
   score?: string;
   weight?: string;
 };

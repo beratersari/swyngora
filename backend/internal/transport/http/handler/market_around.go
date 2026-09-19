@@ -989,7 +989,7 @@ func aroundSimilarHitsToDTO(in []domain.AroundSimilarHit) []aroundSimilarHitDTO 
 	for _, m := range in {
 		cmp := make([]aroundSimilarFieldDTO, 0, len(m.Compared))
 		for _, c := range m.Compared {
-			row := aroundSimilarFieldDTO{Name: c.Name, Used: c.Used, Weight: formatHistQty(c.Weight)}
+			row := aroundSimilarFieldDTO{Name: c.Name, Used: c.Used, Matched: c.Matched, Weight: formatHistQty(c.Weight)}
 			if c.Used {
 				row.Score = formatHistQty(c.Score)
 			}
@@ -1000,8 +1000,8 @@ func aroundSimilarHitsToDTO(in []domain.AroundSimilarHit) []aroundSimilarHitDTO 
 			ReturnPct: domain.FormatSignedPct(m.Move.ReturnPct), Grade: m.Move.Grade,
 			Similarity: formatHistQty(m.Similarity), Coverage: formatHistQty(m.Coverage),
 			Compared: cmp, Used: append([]string(nil), m.Used...), Missing: append([]string(nil), m.Missing...),
-			Matches: append([]string(nil), m.Matches...),
-			Before:  aroundPhaseToDTO(m.Before), After: aroundPhaseToDTO(m.After),
+			Matches: append([]string(nil), m.Matches...), WhySimilar: m.WhySimilar,
+			Before: aroundPhaseToDTO(m.Before), After: aroundPhaseToDTO(m.After),
 			DataFrom: m.DataFrom.UTC(), DataTo: m.DataTo.UTC(),
 			AfterReturnPct: domain.FormatSignedPct(m.AfterReturnPct), AfterDirection: m.AfterDirection,
 			Summary: m.Summary,
@@ -1049,7 +1049,7 @@ func aroundSimilarFieldsToDTO(in []domain.AroundSimilarFieldScore) []aroundSimil
 	}
 	out := make([]aroundSimilarFieldDTO, 0, len(in))
 	for _, c := range in {
-		row := aroundSimilarFieldDTO{Name: c.Name, Used: c.Used, Weight: formatHistQty(c.Weight)}
+		row := aroundSimilarFieldDTO{Name: c.Name, Used: c.Used, Matched: c.Matched, Weight: formatHistQty(c.Weight)}
 		if c.Used {
 			row.Score = formatHistQty(c.Score)
 		}
@@ -1072,10 +1072,11 @@ func aroundSimilarWeightsToDTO(in []domain.AroundSimilarFieldScore) []aroundSimi
 }
 
 type aroundSimilarFieldDTO struct {
-	Name   string `json:"name"`
-	Used   bool   `json:"used"`
-	Score  string `json:"score,omitempty"`
-	Weight string `json:"weight"`
+	Name    string `json:"name"`
+	Used    bool   `json:"used"`
+	Matched bool   `json:"matched,omitempty"`
+	Score   string `json:"score,omitempty"`
+	Weight  string `json:"weight"`
 }
 
 type aroundSimilarHitDTO struct {
@@ -1090,6 +1091,7 @@ type aroundSimilarHitDTO struct {
 	Used           []string                `json:"used,omitempty"`
 	Missing        []string                `json:"missing,omitempty"`
 	Matches        []string                `json:"matches,omitempty"`
+	WhySimilar     string                  `json:"whySimilar,omitempty"`
 	Before         aroundPhaseDTO          `json:"before"`
 	After          aroundPhaseDTO          `json:"after"`
 	DataFrom       time.Time               `json:"dataFrom"`

@@ -1,8 +1,10 @@
 import { Skeleton, Table } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
+import type { ForensicsSimilarHit } from '@/libs/types/forensics.types';
 import { formatForensicsTime } from '@/libs/utils/forensics';
-import { Stack, TableWrap } from './ForensicsSimilar.styles';
+import { orderedSimilarFields, similarFieldScore } from './helpers';
+import { FieldScores, Stack, TableWrap, WhyCell } from './ForensicsSimilar.styles';
 import type { ForensicsSimilarProps } from './ForensicsSimilar.types';
 
 export function ForensicsSimilar({ similar, similarError, isLoading }: ForensicsSimilarProps) {
@@ -50,7 +52,7 @@ export function ForensicsSimilar({ similar, similarError, isLoading }: Forensics
       ) : null}
       {similar?.matches && similar.matches.length > 0 ? (
         <TableWrap>
-          <Table
+          <Table<ForensicsSimilarHit>
             size="small"
             pagination={false}
             rowKey={(row) => `${row.at}-${row.until}`}
@@ -65,6 +67,27 @@ export function ForensicsSimilar({ similar, similarError, isLoading }: Forensics
               { title: t('path'), dataIndex: 'direction', key: 'direction' },
               { title: t('similarity'), dataIndex: 'similarity', key: 'similarity' },
               { title: t('coverage'), dataIndex: 'coverage', key: 'coverage' },
+              {
+                title: t('scan.whySimilar'),
+                key: 'whySimilar',
+                render: (_: unknown, row: ForensicsSimilarHit) => {
+                  const fields = orderedSimilarFields(row.compared);
+                  return (
+                    <WhyCell>
+                      {row.whySimilar ? <Text variant="bodySm">{row.whySimilar}</Text> : null}
+                      {fields.length > 0 ? (
+                        <FieldScores>
+                          {fields.map((f) => (
+                            <Text key={f.name ?? 'field'} variant="caption" color="secondary">
+                              {t(`scan.fields.${f.name}`, { defaultValue: f.name })} {similarFieldScore(f)}
+                            </Text>
+                          ))}
+                        </FieldScores>
+                      ) : null}
+                    </WhyCell>
+                  );
+                },
+              },
               { title: t('afterReturn'), dataIndex: 'afterReturnPct', key: 'afterReturnPct' },
             ]}
           />
