@@ -70,12 +70,12 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/taker-flow` | Aggressive futures buy vs sell volume (5m/1h/4h) per venue + combined |
 | `GET` | `/api/v1/market/cvd` | Spot and futures CVD versus price; 15m/1h/4h/24h change; venue split and spot-vs-futures split |
 | `GET` | `/api/v1/market/volume-profile` | Volume by price (POC + 70% value area, buy/sell); Binance and Bybit separately plus combined |
-| `GET` | `/api/v1/market/around` | What happened around a time (before / during / after): price, volume, VWAP, vs typical, POC, sweeps, stored book/futures, BTC/ETH options when sampled |
+| `GET` | `/api/v1/market/around` | What happened around a time (before / during / after): price, volume, VWAP, vs typical, POC, sweeps, stored book/futures, BTC/ETH options when sampled; `tapeRead` is flow at prices |
 | `GET` | `/api/v1/market/around/compare` | How two times / moves of the same coin differed (price, volume, book, OI, sweeps) |
 | `GET` | `/api/v1/market/around/moves` | Strongest recent up/down legs plus what happened during each |
 | `GET` | `/api/v1/market/around/precursors` | What often changed before those moves, including conditions that fire together |
 | `GET` | `/api/v1/market/around/similar` | Past important-move setups like the current tape (optional `at`); unique events; caller-picked after horizons |
-| `GET` | `/api/v1/market/forensics` | Around-the-move tape plus similar past setups for a chosen time; `timeline` is one clock of OI / venues / liquidations / dealer gamma / futures curve (only prints known by `asOf` / `knownUntil`) |
+| `GET` | `/api/v1/market/forensics` | Around-the-move tape plus similar past setups for a chosen time; `timeline` is one clock of OI / venues / liquidations / dealer gamma / futures curve / tapeRead (only prints known by `asOf` / `knownUntil`) |
 | `GET` | `/api/v1/market/forensics/scan` | Coins whose current tape looks like past pre-move setups, plus what usually happened after |
 | `GET` | `/api/v1/market/forensics/radar` | Saved Setup Radar hits and what price did after, plus lean usefulness |
 | `GET` | `/api/v1/market/vwap` | Volume-weighted average price from a start time; last vs VWAP; Binance, Bybit, combined |

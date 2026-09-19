@@ -16,6 +16,7 @@ const (
 	ForensicsTimelineOptions = "options"
 	ForensicsTimelineGamma   = "gamma"
 	ForensicsTimelineCurve   = "curve"
+	ForensicsTimelineTape    = "tape"
 	ForensicsTimelineSweep   = "sweep"
 	ForensicsTimelineAbsorb  = "absorption"
 )
@@ -92,6 +93,9 @@ func BuildForensicsTimeline(r ForensicsReport) ForensicsTimeline {
 	if ev := timelineCurveBeat(r.Tape, plan, cutoff); ev.Kind != "" {
 		evs = append(evs, ev)
 	}
+	if ev := timelineTapeReadBeat(r.Tape, plan, cutoff); ev.Kind != "" {
+		evs = append(evs, ev)
+	}
 	if ev := timelineOptionsBeat(r.Tape, plan, cutoff); ev.Kind != "" {
 		evs = append(evs, ev)
 	}
@@ -115,6 +119,8 @@ func timelineKindResolution(kind, interval string) time.Duration {
 		return aroundVenueOIStep
 	case ForensicsTimelineCurve:
 		return time.Hour
+	case ForensicsTimelineTape:
+		return time.Minute
 	case ForensicsTimelineSweep:
 		return 15 * time.Minute
 	default:
@@ -346,6 +352,47 @@ func timelineCurveCopy(c AroundCurve) (title, detail string) {
 		detail += "."
 	}
 	return title, detail
+}
+
+func timelineTapeReadBeat(tape *AroundReport, plan AroundPlan, cutoff time.Time) ForensicsTimelineEvent {
+	if tape == nil {
+		return ForensicsTimelineEvent{}
+	}
+	tr := forensicsTapeRead(tape)
+	if tr == nil || !tr.Complete || tr.Summary == "" {
+		return ForensicsTimelineEvent{}
+	}
+	at := tr.DeltaFlipAt
+	if at.IsZero() {
+		at = tr.DominantAt
+	}
+	if at.IsZero() {
+		at = plan.At
+	}
+	if !timelineEventKnown(at, cutoff) {
+		return ForensicsTimelineEvent{}
+	}
+	title := "Aggressive flow vs price"
+	switch {
+	case tr.Divergence == AroundTapeDivPriceUpDeltaDown:
+		title = "Delta turned negative while price was still going up"
+	case tr.Divergence == AroundTapeDivPriceDownDeltaUp:
+		title = "Delta turned positive while price was still going down"
+	case tr.DominantSide == TakerSideSell && tr.DominantFrom > 0:
+		title = "Seller dominance started around " + formatQty(tr.DominantFrom)
+	case tr.DominantSide == TakerSideBuy && tr.DominantFrom > 0:
+		title = "Buyer dominance started around " + formatQty(tr.DominantFrom)
+	case tr.POC > 0:
+		title = "Most volume printed around " + formatQty(tr.POC)
+	}
+	venue := "all"
+	if tape.Combined != nil && tape.Combined.TapeRead != nil {
+		venue = string(tape.Combined.Exchange)
+		if venue == "" {
+			venue = "all"
+		}
+	}
+	return newForensicsTimelineEvent(at, plan, ForensicsTimelineTape, venue, tr.DominantSide, title, tr.Summary, time.Minute)
 }
 
 func timelineOptionsBeat(tape *AroundReport, plan AroundPlan, cutoff time.Time) ForensicsTimelineEvent {

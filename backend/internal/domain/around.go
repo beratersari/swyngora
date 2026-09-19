@@ -237,6 +237,7 @@ type AroundVenue struct {
 	TakerUntil string
 	LiqStart   time.Time
 	LiqSide    string
+	TapeRead   *AroundTapeRead
 	Summary    string
 	Error      string
 }
@@ -473,6 +474,7 @@ func BuildAroundVenue(ex Exchange, symbol string, bars []AroundBar, plan AroundP
 	out.MoveStart = FindAroundPriceRunStart(bars, plan)
 	out.TakerStart, out.TakerDir = FindAroundTakerRunStart(bars, plan)
 	out.TakerUntil = MarkAroundTakerUntil(bars, out.TakerStart, out.TakerDir, AroundVenueUntilPrice(out.MoveStart, plan), interval)
+	out.TapeRead = BuildAroundTapeRead(bars, plan.From, plan.DuringTo)
 	out.Summary = ExplainAroundVenue(out)
 	return out
 }
@@ -600,6 +602,7 @@ func CombineAroundVenues(symbol string, venues []AroundVenue, plan AroundPlan, i
 		}
 	}
 	out.Changes = CompareAroundPhases(out.Phases)
+	out.TapeRead = pickAroundTapeRead(venues)
 	out.Summary = ExplainAroundVenue(*out)
 	return out
 }
@@ -742,6 +745,9 @@ func ExplainAroundVenue(v AroundVenue) string {
 	}
 	if n := countAroundKind(v.Events, AroundEventSweep); n > 0 {
 		head += fmt.Sprintf(" %d liquidity sweep(s) in the span.", n)
+	}
+	if v.TapeRead != nil && v.TapeRead.Summary != "" {
+		head += " " + v.TapeRead.Summary
 	}
 	return strings.TrimSpace(head)
 }

@@ -1,5 +1,15 @@
 import styled from 'styled-components';
 
+export const TapeRead = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid ${({ theme }) => theme.semantic.border.accent};
+  background: ${({ theme }) => theme.semantic.bg.accentSoft};
+`;
+
 export const Stack = styled.div`
   display: flex;
   flex-direction: column;

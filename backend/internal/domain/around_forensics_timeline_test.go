@@ -166,6 +166,39 @@ func TestBuildForensicsTimeline_CurveBeforeMove(t *testing.T) {
 	}
 }
 
+func TestBuildForensicsTimeline_TapeRead(t *testing.T) {
+	at := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	r := ForensicsReport{
+		Symbol: "BTCUSDT", At: at, Window: AroundWindow1h, During: AroundDuring15m, AsOf: at.Add(time.Hour),
+		Tape: &AroundReport{
+			Symbol: "BTCUSDT", At: at, Window: AroundWindow1h, During: AroundDuring15m,
+			Combined: &AroundVenue{
+				Exchange: "all",
+				TapeRead: &AroundTapeRead{
+					Complete: true, POC: 65520, POCBuy: 8e6, POCSell: 2e6,
+					DominantSide: TakerSideSell, DominantFrom: 65700, DominantAt: at.Add(-5 * time.Minute),
+					DeltaFlip: 65800, DeltaFlipKind: "negative", DeltaFlipAt: at.Add(2 * time.Minute),
+					Divergence: AroundTapeDivPriceUpDeltaDown,
+					Summary:    "Around 65520 most volume printed: 8.0M market buys vs 2.0M market sells, seller dominance started around 65700, and delta turned negative after 65800 while price was still going up.",
+				},
+			},
+		},
+	}
+	got := BuildForensicsTimeline(r)
+	var tape ForensicsTimelineEvent
+	for _, ev := range got.Events {
+		if ev.Kind == ForensicsTimelineTape {
+			tape = ev
+		}
+	}
+	if !strings.Contains(tape.Title, "Delta turned negative") {
+		t.Fatalf("tape %+v events=%+v", tape, got.Events)
+	}
+	if !strings.Contains(tape.Detail, "8.0M") {
+		t.Fatalf("detail %+v", tape)
+	}
+}
+
 func TestBuildForensicsTimeline_EmptyTape(t *testing.T) {
 	if got := BuildForensicsTimeline(ForensicsReport{}); len(got.Events) != 0 || got.Summary != "" {
 		t.Fatalf("%+v", got)

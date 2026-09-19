@@ -102,5 +102,6 @@
   "down": "Down",
   "median": "Median",
   "sample": "Sample",
-  "incomplete": "Incomplete window"
+  "incomplete": "Incomplete window",
+  "tapeReadTitle": "Flow at prices"
 }

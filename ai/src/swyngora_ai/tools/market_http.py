@@ -4770,7 +4770,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "those. why is a plain-language read of why the move "
                 "may have happened (not a metric dump). timeline is one "
                 "clock of OI, takers, venue price, follow-through, "
-                "liquidations, options, dealer gamma / flip vs spot, the futures curve (contango / backwardation and near-vs-far gap), and sweeps. at is required. "
+                "liquidations, options, dealer gamma / flip vs spot, the futures curve (contango / backwardation and near-vs-far gap), tapeRead (POC buy vs sell, dominance start, delta vs price), and sweeps. at is required. "
                 "Prefer this when the user asks what happened around a "
                 "move and what similar past cases did next. If "
                 "similar-move search fails, tape is still returned."

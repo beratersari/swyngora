@@ -11522,7 +11522,7 @@ components:
         offset: { type: string, description: Signed short offset from the event time (-8m, 0, +3m) }
         offsetLabel: { type: string, description: Plain-language offset (about 8 minutes before) }
         phase: { type: string, description: before | during | after }
-        kind: { type: string, description: oi | takers | price | liquidations | options | gamma | curve | sweep | absorption }
+        kind: { type: string, description: oi | takers | price | liquidations | options | gamma | curve | tape | sweep | absorption }
         venue: { type: string, description: binance | bybit | deribit | all }
         direction: { type: string }
         title: { type: string }

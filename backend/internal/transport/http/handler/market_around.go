@@ -457,14 +457,15 @@ type aroundChangeDTO struct {
 }
 
 type aroundVenueDTO struct {
-	Exchange string            `json:"exchange"`
-	Symbol   string            `json:"symbol"`
-	Interval string            `json:"interval"`
-	Phases   []aroundPhaseDTO  `json:"phases"`
-	Changes  []aroundChangeDTO `json:"changes"`
-	Events   []aroundEventDTO  `json:"events,omitempty"`
-	Summary  string            `json:"summary"`
-	Error    string            `json:"error,omitempty"`
+	Exchange string             `json:"exchange"`
+	Symbol   string             `json:"symbol"`
+	Interval string             `json:"interval"`
+	Phases   []aroundPhaseDTO   `json:"phases"`
+	Changes  []aroundChangeDTO  `json:"changes"`
+	Events   []aroundEventDTO   `json:"events,omitempty"`
+	Summary  string             `json:"summary"`
+	Error    string             `json:"error,omitempty"`
+	TapeRead *aroundTapeReadDTO `json:"tapeRead,omitempty"`
 }
 
 type aroundResponse struct {
@@ -601,10 +602,58 @@ func aroundVenueToDTO(v domain.AroundVenue) aroundVenueDTO {
 		})
 	}
 	evs := aroundEventsToDTO(v.Events)
-	return aroundVenueDTO{
+	out := aroundVenueDTO{
 		Exchange: string(v.Exchange), Symbol: v.Symbol, Interval: v.Interval,
 		Phases: phases, Changes: changes, Events: evs, Summary: v.Summary, Error: v.Error,
 	}
+	if v.TapeRead != nil {
+		out.TapeRead = aroundTapeReadToDTO(v.TapeRead)
+	}
+	return out
+}
+
+type aroundTapeReadDTO struct {
+	Poc            string `json:"poc,omitempty"`
+	PocVolume      string `json:"pocVolume,omitempty"`
+	PocBuy         string `json:"pocBuy,omitempty"`
+	PocSell        string `json:"pocSell,omitempty"`
+	Volume         string `json:"volume,omitempty"`
+	BuyNotional    string `json:"buyNotional,omitempty"`
+	SellNotional   string `json:"sellNotional,omitempty"`
+	Delta          string `json:"delta,omitempty"`
+	Dominant       string `json:"dominant,omitempty"`
+	DominantFrom   string `json:"dominantFrom,omitempty"`
+	DominantSide   string `json:"dominantSide,omitempty"`
+	DominantAt     string `json:"dominantAt,omitempty"`
+	DeltaFlip      string `json:"deltaFlip,omitempty"`
+	DeltaFlipKind  string `json:"deltaFlipKind,omitempty"`
+	DeltaFlipAt    string `json:"deltaFlipAt,omitempty"`
+	PriceAfterFlip string `json:"priceAfterFlip,omitempty"`
+	Divergence     string `json:"divergence,omitempty"`
+	Summary        string `json:"summary"`
+	Complete       bool   `json:"complete"`
+}
+
+func aroundTapeReadToDTO(r *domain.AroundTapeRead) *aroundTapeReadDTO {
+	if r == nil || !r.Complete {
+		return nil
+	}
+	out := &aroundTapeReadDTO{
+		Poc: formatHistQty(r.POC), PocVolume: formatHistQty(r.POCVolume),
+		PocBuy: formatHistQty(r.POCBuy), PocSell: formatHistQty(r.POCSell),
+		Volume: formatHistQty(r.Volume), BuyNotional: formatHistQty(r.BuyNotional),
+		SellNotional: formatHistQty(r.SellNotional), Delta: domain.FormatSignedQty(r.Delta),
+		Dominant: r.Dominant, DominantFrom: formatHistQty(r.DominantFrom), DominantSide: r.DominantSide,
+		DeltaFlip: formatHistQty(r.DeltaFlip), DeltaFlipKind: r.DeltaFlipKind,
+		PriceAfterFlip: r.PriceAfterFlip, Divergence: r.Divergence, Summary: r.Summary, Complete: true,
+	}
+	if !r.DominantAt.IsZero() {
+		out.DominantAt = r.DominantAt.UTC().Format(time.RFC3339Nano)
+	}
+	if !r.DeltaFlipAt.IsZero() {
+		out.DeltaFlipAt = r.DeltaFlipAt.UTC().Format(time.RFC3339Nano)
+	}
+	return out
 }
 
 func aroundPhaseToDTO(p domain.AroundPhase) aroundPhaseDTO {

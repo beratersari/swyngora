@@ -138,6 +138,28 @@ export type ForensicsChange = {
   summary?: string;
 };
 
+export type ForensicsTapeRead = {
+  poc?: string;
+  pocVolume?: string;
+  pocBuy?: string;
+  pocSell?: string;
+  volume?: string;
+  buyNotional?: string;
+  sellNotional?: string;
+  delta?: string;
+  dominant?: string;
+  dominantFrom?: string;
+  dominantSide?: string;
+  dominantAt?: string;
+  deltaFlip?: string;
+  deltaFlipKind?: string;
+  deltaFlipAt?: string;
+  priceAfterFlip?: string;
+  divergence?: string;
+  summary?: string;
+  complete?: boolean;
+};
+
 export type ForensicsVenue = {
   exchange?: string;
   symbol?: string;
@@ -145,6 +167,7 @@ export type ForensicsVenue = {
   phases?: ForensicsPhase[];
   changes?: ForensicsChange[];
   events?: ForensicsEvent[];
+  tapeRead?: ForensicsTapeRead | null;
   summary?: string;
   error?: string;
 };

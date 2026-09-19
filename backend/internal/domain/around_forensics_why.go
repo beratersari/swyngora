@@ -134,6 +134,11 @@ func explainForensicsDuring(name string, before, during AroundPhase, tape *Aroun
 	if e := forensicsEventStory(during, false); e != "" {
 		s = append(s, e)
 	}
+	if tape != nil {
+		if tr := forensicsTapeRead(tape); tr != nil && tr.Summary != "" {
+			s = append(s, tr.Summary)
+		}
+	}
 	if tape != nil && tape.VenueTiming != nil && tape.VenueTiming.Summary != "" {
 		s = append(s, tape.VenueTiming.Summary)
 	}
@@ -437,6 +442,21 @@ func forensicsPositionStory(before, during AroundPhase) string {
 		s = append(s, "Funding moved more negative, so the short side was paying to stay in — a crowded short can squeeze once selling dries up.")
 	}
 	return strings.Join(s, " ")
+}
+
+func forensicsTapeRead(tape *AroundReport) *AroundTapeRead {
+	if tape == nil {
+		return nil
+	}
+	if tape.Combined != nil && tape.Combined.TapeRead != nil && tape.Combined.TapeRead.Complete {
+		return tape.Combined.TapeRead
+	}
+	for i := range tape.Venues {
+		if tape.Venues[i].TapeRead != nil && tape.Venues[i].TapeRead.Complete {
+			return tape.Venues[i].TapeRead
+		}
+	}
+	return nil
 }
 
 func forensicsCurveStory(p AroundPhase, prior *AroundPhase) string {

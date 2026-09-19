@@ -45,6 +45,14 @@ options (OI / put-call / implied vol), dealer gamma / flip vs
 spot on BTC and ETH, and the listed futures curve (contango /
 backwardation and the near-vs-far gap) — instead of listing raw metrics.
 
+`tapeRead` on each venue (and combined) is a flow-at-prices read of
+the before + during window: where **most volume** printed (POC) with
+market buy vs sell there, where **buyer/seller dominance** started,
+and if **delta flipped** while price was still going the other way
+(for example delta turned negative after 65800 while price was still
+rising). The why-story and a timeline `tape` beat use that same read
+so the AI tools see the numbers too.
+
 `timeline` is the same tape on **one clock**. Each beat is a start
 print (open interest, takers, price on Binance or Bybit, liquidations,
 listed options, dealer gamma / flip vs spot, the futures curve, a sweep or absorption) with the time, how far it sits

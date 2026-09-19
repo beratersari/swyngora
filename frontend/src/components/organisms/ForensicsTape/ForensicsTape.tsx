@@ -12,6 +12,7 @@ import {
   PhaseGrid,
   PhaseHead,
   Stack,
+  TapeRead,
 } from './ForensicsTape.styles';
 import type { ForensicsTapeProps } from './ForensicsTape.types';
 
@@ -138,6 +139,14 @@ export function ForensicsTape({ venue, venueTiming, isLoading }: ForensicsTapePr
         <Text variant="bodySm" color="secondary">
           {venue.error}
         </Text>
+      ) : null}
+      {venue.tapeRead?.summary ? (
+        <TapeRead data-testid="forensics-tape-read">
+          <Text variant="bodySm" weight={700}>
+            {t('tapeReadTitle')}
+          </Text>
+          <Text variant="caption">{venue.tapeRead.summary}</Text>
+        </TapeRead>
       ) : null}
       <PhaseGrid>
         {PHASES.map((id) => {

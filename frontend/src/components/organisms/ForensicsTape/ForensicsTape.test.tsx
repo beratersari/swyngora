@@ -24,6 +24,25 @@ describe('ForensicsTape', () => {
     expect(screen.getByText('faded')).toBeInTheDocument();
   });
 
+  it('shows a flow-at-prices read', () => {
+    renderWithProviders(
+      <ForensicsTape
+        venue={{
+          exchange: 'binance',
+          tapeRead: {
+            complete: true,
+            summary:
+              'Around 65520 most volume printed: 8.0M market buys vs 2.0M market sells, seller dominance started around 65700, and delta turned negative after 65800 while price was still going up.',
+          },
+          phases: [{ phase: 'during', complete: true, price: { close: '65900' } }],
+        }}
+      />,
+    );
+    expect(screen.getByTestId('forensics-tape-read')).toBeInTheDocument();
+    expect(screen.getByText(/8\.0M market buys/i)).toBeInTheDocument();
+    expect(screen.getByText(/seller dominance started around 65700/i)).toBeInTheDocument();
+  });
+
   it('shows unusual options on a phase', () => {
     renderWithProviders(
       <ForensicsTape
