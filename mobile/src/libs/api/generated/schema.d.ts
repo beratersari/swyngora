@@ -4650,12 +4650,31 @@ export interface components {
             summary?: string;
             note?: string;
         };
+        /** @description When one venue's prints joined a combined cascade wave */
+        MarketLiquidationCascadeVenueStart: {
+            /** @description binance | bybit | okx */
+            exchange?: string;
+            /**
+             * Format: date-time
+             * @description First print of that venue in the wave
+             */
+            startedAt?: string;
+            /** @description Seconds after the first venue print; 0 if first or tied */
+            lagSec?: number;
+            longNotional?: string;
+            shortNotional?: string;
+            /** @description That venue's liquidation notional in the wave */
+            totalNotional?: string;
+            /** @description Percent of the combined wave's total notional */
+            sharePct?: number;
+            count?: number;
+        };
         /** @description One liquidation wave (open or finished) in the last 24h */
         MarketLiquidationCascadeEpisode: {
             symbol?: string;
-            /** @description binance | bybit | both */
+            /** @description binance | bybit | okx | both */
             exchange?: string;
-            /** @description Same-side wave on Binance and Bybit at once */
+            /** @description Same-side wave on two or more venues at once */
             combined?: boolean;
             /** @enum {string} */
             side?: "long" | "short" | "both" | "none";
@@ -4680,6 +4699,13 @@ export interface components {
             /** @description Signed percent */
             priceChangePct?: string;
             summary?: string;
+            /** @description Venue whose first print started a combined wave */
+            startedBy?: string;
+            /** @description True when two or more venues share the same first-print second */
+            orderUnknown?: boolean;
+            /** @description Venue that produced the most notional in a combined wave */
+            largestBy?: string;
+            venueStarts?: components["schemas"]["MarketLiquidationCascadeVenueStart"][];
         };
         MarketLiquidationCascadeHit: {
             symbol?: string;

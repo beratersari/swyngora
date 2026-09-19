@@ -153,12 +153,26 @@ export const EpisodeWrap = styled.div`
 
 export const EpisodeTable = styled.div`
   display: grid;
-  grid-template-columns: 72px 56px 88px 64px 80px minmax(72px, 1fr) minmax(72px, 1fr) 88px 56px;
+  grid-template-columns: 84px 56px minmax(140px, 1.2fr) 64px 80px minmax(72px, 1fr) minmax(72px, 1fr) 88px 56px;
   gap: 8px 10px;
-  align-items: center;
+  align-items: start;
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   overflow-x: auto;
+`;
+
+export const EpisodeVenue = styled.span`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+`;
+
+export const EpisodeLead = styled.span<{ $hot?: boolean }>`
+  font-size: 11px;
+  font-weight: ${({ $hot }) => ($hot ? 700 : 600)};
+  color: ${({ theme, $hot }) =>
+    $hot ? theme.semantic.text.primary : theme.semantic.text.secondary};
 `;
 
 export const HitButton = styled.button`

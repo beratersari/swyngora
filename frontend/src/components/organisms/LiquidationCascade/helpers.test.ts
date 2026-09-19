@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { formatClock, formatDurationSec, formatRatio, gradeTone, orderedWindows, sideTone } from './helpers';
+import {
+  episodeLeadBeats,
+  formatClock,
+  formatDurationSec,
+  formatRatio,
+  formatSharePct,
+  gradeTone,
+  orderedWindows,
+  sideTone,
+} from './helpers';
 
 describe('LiquidationCascade helpers', () => {
   it('formats ratios and grades', () => {
@@ -23,6 +32,37 @@ describe('LiquidationCascade helpers', () => {
     expect(formatDurationSec(600)).toBe('10m');
     expect(formatDurationSec(3600)).toBe('1h');
     expect(formatDurationSec(5400)).toBe('1h 30m');
-    expect(formatClock('2026-08-30T15:21:00.000Z')).toBe('15:21');
+    expect(formatClock('2026-08-30T15:21:00.000Z')).toBe('15:21:00');
+    expect(formatClock('2026-08-30T15:21:17.000Z')).toBe('15:21:17');
+  });
+
+  it('orders combined venue lead and follow seconds', () => {
+    expect(
+      episodeLeadBeats({
+        combined: true,
+        largestBy: 'bybit',
+        venueStarts: [
+          { exchange: 'binance', lagSec: 0, totalNotional: '20000', sharePct: 20 },
+          { exchange: 'bybit', lagSec: 12, totalNotional: '80000', sharePct: 80 },
+          { exchange: 'okx', lagSec: 40, totalNotional: '0', sharePct: 0 },
+        ],
+      }),
+    ).toEqual([
+      { exchange: 'binance', lagSec: 0, role: 'first', totalNotional: '20000', sharePct: 20, largest: false },
+      { exchange: 'bybit', lagSec: 12, role: 'follow', totalNotional: '80000', sharePct: 80, largest: true },
+      { exchange: 'okx', lagSec: 40, role: 'follow', totalNotional: '0', sharePct: 0, largest: false },
+    ]);
+    expect(
+      episodeLeadBeats({
+        combined: true,
+        orderUnknown: true,
+        venueStarts: [
+          { exchange: 'binance', lagSec: 0 },
+          { exchange: 'bybit', lagSec: 0 },
+        ],
+      }).map((b) => b.role),
+    ).toEqual(['tied', 'tied']);
+    expect(formatSharePct(80)).toBe('80%');
+    expect(formatSharePct(12.4)).toBe('12.4%');
   });
 });

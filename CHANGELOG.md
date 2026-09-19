@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **AI HTTP client:** `ai/` tools use `httpx2` (Pydantic-maintained fork) instead of `httpx`; LangChain may still pull `httpx` transitively
 
 ### Added
+- **Cascade episode share:** combined waves also show how much liquidation each venue produced and its percent of the total (`venueStarts[].totalNotional` / `sharePct`, `largestBy`). Web `/liquidations?view=cascade` (`docs/features/liquidations.md`)
+- **Cascade episode lead:** combined waves name which venue printed first and how many seconds later the others followed (`startedBy`, `venueStarts[].lagSec`; `orderUnknown` when first prints share a second). Web `/liquidations?view=cascade` (`docs/features/liquidations.md`)
 - **Forensics gamma on the clock:** BTC/ETH forensics shows whether dealers were long or short gamma before the move, and whether spot sat above or below the flip, as a timeline beat plus the why story. (`docs/features/forensics.md`)
 - **Options gamma history:** net GEX, regime, and flip vs index are sampled with the options desk and shown on the Over time chart (Dealer GEX / Gamma flip). Windows say when the book flipped to short/long gamma or spot crossed the flip. `history` on `GET /api/v1/market/options` (`docs/features/options.md`)
 - **Options dealer gamma:** net GEX (USD delta per 1% spot move), call vs put split, regime (long = stabler, short = faster), and the gamma flip level from a re-gammad strike profile. `gamma` on `GET /api/v1/market/options`, web `/options` (`docs/features/options.md`)

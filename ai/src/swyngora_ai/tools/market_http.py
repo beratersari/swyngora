@@ -4363,9 +4363,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "liquidations far above that stream's own typical rate "
                 "(1m / 5m / 15m vs the prior 6 hours). episodes lists each "
                 "wave in the last 24h (start, duration, long/short notional, "
-                "price move). Binance and Bybit are scored separately; a "
-                "combined episode is the same-side wave on both venues at "
-                "once. symbol=all is market-wide."
+                "price move). Combined waves include startedBy, "
+                "venueStarts.lagSec, and venueStarts.sharePct / totalNotional "
+                "(how much of the wave each venue produced). Binance, "
+                "Bybit, and OKX are scored separately; a combined episode is "
+                "the same-side wave on more than one venue at once. "
+                "symbol=all is market-wide."
             ),
             args_schema=LiquidationCascadeInput,
         ),

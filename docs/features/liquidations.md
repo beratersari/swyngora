@@ -84,7 +84,7 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
   - `grade` is `quiet` / `elevated` (≥2×) / `cascade` (≥4× + enough hits) / `extreme` (≥8×).
   - Binance and Bybit are scored **separately**. `both.agree` is true only when the **same side** is `cascade` or hotter on both venues.
   - `symbol=all` pools every tracked coin (market-wide risk). `GET /liquidation-cascade/scan` adds ranked bursting coins.
-  - `episodes` lists each wave in the last 24h: when it started, how long it lasted, long vs short notional, and the price move. A still-running wave has `open=true`. Overlapping same-side waves on Binance and Bybit become one `combined` episode.
+  - `episodes` lists each wave in the last 24h: when it started, how long it lasted, long vs short notional, and the price move. A still-running wave has `open=true`. Overlapping same-side waves on two or more venues become one `combined` episode. Combined rows name `startedBy` (first print), `venueStarts[].lagSec` (how many seconds later the others followed), and `venueStarts[].totalNotional` / `sharePct` (how much of the wave that venue produced). `largestBy` is the venue with the most notional. If two venues share the same first-print second, `orderUnknown` is true and the summary says they started together.
 
 ## Cascade grades
 

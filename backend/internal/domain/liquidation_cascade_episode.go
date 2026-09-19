@@ -5,6 +5,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -45,39 +46,68 @@ func DetectCascadeEpisodes(ex Exchange, symbol string, events []LiquidationEvent
 	return raw
 }
 
-// MergeCascadeEpisodes turns overlapping same-side Binance+Bybit waves into one event.
-func MergeCascadeEpisodes(binance, bybit []CascadeEpisode, now time.Time) []CascadeEpisode {
+// MergeCascadeEpisodes turns overlapping same-side waves on two or more venues into one event.
+func MergeCascadeEpisodes(groups [][]CascadeEpisode, now time.Time) []CascadeEpisode {
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	used := make([]bool, len(bybit))
-	out := make([]CascadeEpisode, 0, len(binance)+len(bybit))
-	for _, a := range binance {
-		merged := false
-		for j, b := range bybit {
-			if used[j] {
-				continue
-			}
-			if !cascadeIntervalsOverlap(a, b, now) {
-				continue
-			}
-			side, ok := cascadeSharedSide(a.Side, b.Side)
-			if !ok {
-				continue
-			}
-			out = append(out, combineCascadeEpisodes(a, b, side, now))
-			used[j] = true
-			merged = true
-			break
+	var all []CascadeEpisode
+	for _, g := range groups {
+		all = append(all, g...)
+	}
+	n := len(all)
+	if n == 0 {
+		return nil
+	}
+	parent := make([]int, n)
+	for i := range parent {
+		parent[i] = i
+	}
+	var find func(int) int
+	find = func(i int) int {
+		if parent[i] != i {
+			parent[i] = find(parent[i])
 		}
-		if !merged {
-			out = append(out, a)
+		return parent[i]
+	}
+	union := func(a, b int) {
+		pa, pb := find(a), find(b)
+		if pa != pb {
+			parent[pa] = pb
 		}
 	}
-	for j, b := range bybit {
-		if !used[j] {
-			out = append(out, b)
+	for i := 0; i < n; i++ {
+		for j := i + 1; j < n; j++ {
+			if all[i].Exchange == all[j].Exchange {
+				continue
+			}
+			if !cascadeIntervalsOverlap(all[i], all[j], now) {
+				continue
+			}
+			if _, ok := cascadeSharedSide(all[i].Side, all[j].Side); !ok {
+				continue
+			}
+			union(i, j)
 		}
+	}
+	clusters := map[int][]CascadeEpisode{}
+	for i := range all {
+		root := find(i)
+		clusters[root] = append(clusters[root], all[i])
+	}
+	out := make([]CascadeEpisode, 0, n)
+	for _, cl := range clusters {
+		if len(cl) == 1 {
+			out = append(out, cl[0])
+			continue
+		}
+		side := cl[0].Side
+		for _, ep := range cl[1:] {
+			if s, ok := cascadeSharedSide(side, ep.Side); ok {
+				side = s
+			}
+		}
+		out = append(out, combineCascadeEpisodeGroup(cl, side, now))
 	}
 	sortCascadeEpisodes(out)
 	if len(out) > CascadeEpisodeMax {
@@ -319,41 +349,90 @@ func fillCascadePrintPrices(ep *CascadeEpisode, events []LiquidationEvent, now t
 			low = e.Price
 		}
 	}
-	if !have {
-		return
+	if have {
+		ep.PriceOpen = formatQty(first)
+		ep.PriceClose = formatQty(last)
+		ep.PriceHigh = formatQty(high)
+		ep.PriceLow = formatQty(low)
+		if first > 0 {
+			ep.PriceChangePct = formatSignedPct((last - first) / first * 100)
+		}
 	}
-	ep.PriceOpen = formatQty(first)
-	ep.PriceClose = formatQty(last)
-	ep.PriceHigh = formatQty(high)
-	ep.PriceLow = formatQty(low)
-	if first > 0 {
-		ep.PriceChangePct = formatSignedPct((last - first) / first * 100)
+	var firstPrint time.Time
+	for _, e := range events {
+		t := e.Time.UTC()
+		if t.Before(ep.StartedAt) || !t.Before(end) {
+			continue
+		}
+		if firstPrint.IsZero() || t.Before(firstPrint) {
+			firstPrint = t
+		}
 	}
+	ep.FirstPrintAt = firstPrint
 }
 
-func combineCascadeEpisodes(a, b CascadeEpisode, side string, now time.Time) CascadeEpisode {
-	start := a.StartedAt
-	if b.StartedAt.Before(start) {
-		start = b.StartedAt
+func combineCascadeEpisodeGroup(parts []CascadeEpisode, side string, now time.Time) CascadeEpisode {
+	parts = collapseCascadePartsByVenue(parts)
+	if len(parts) == 1 {
+		return parts[0]
 	}
-	open := a.Open || b.Open
-	end := cascadeEpisodeEnd(a, now)
-	if be := cascadeEpisodeEnd(b, now); be.After(end) {
-		end = be
+	start := parts[0].StartedAt
+	open := parts[0].Open
+	end := cascadeEpisodeEnd(parts[0], now)
+	grade := parts[0].Grade
+	peak := parts[0].PeakRatio
+	score := parts[0].Score
+	var longN, shortN, totalN float64
+	count := 0
+	pick := parts[0]
+	var hi, lo float64
+	haveHi, haveLo := false, false
+	for _, p := range parts {
+		if p.StartedAt.Before(start) {
+			start = p.StartedAt
+		}
+		if p.Open {
+			open = true
+		}
+		if be := cascadeEpisodeEnd(p, now); be.After(end) {
+			end = be
+		}
+		if cascadeGradeRank(p.Grade) > cascadeGradeRank(grade) {
+			grade = p.Grade
+		}
+		if p.PeakRatio > peak {
+			peak = p.PeakRatio
+		}
+		if p.Score > score {
+			score = p.Score
+		}
+		longN += parseQty(p.LongNotional)
+		shortN += parseQty(p.ShortNotional)
+		totalN += parseQty(p.TotalNotional)
+		count += p.Count
+		if parseQty(p.PriceOpen) > 0 && (parseQty(pick.PriceOpen) <= 0 || p.DurationSec >= pick.DurationSec) {
+			pick = p
+		}
+		if h := parseQty(p.PriceHigh); h > 0 && (!haveHi || h > hi) {
+			hi, haveHi = h, true
+		}
+		if l := parseQty(p.PriceLow); l > 0 && (!haveLo || l < lo) {
+			lo, haveLo = l, true
+		}
 	}
-	grade := a.Grade
-	if cascadeGradeRank(b.Grade) > cascadeGradeRank(grade) {
-		grade = b.Grade
-	}
-	peak := math.Max(a.PeakRatio, b.PeakRatio)
 	out := CascadeEpisode{
-		Symbol: a.Symbol, Exchange: CascadeExchangeBoth, Combined: true,
-		Side: side, Grade: grade, Score: math.Max(a.Score, b.Score),
+		Symbol: parts[0].Symbol, Exchange: CascadeExchangeBoth, Combined: true,
+		Side: side, Grade: grade, Score: score,
 		StartedAt: start, Open: open, PeakRatio: peak,
-		LongNotional:  formatQty(parseQty(a.LongNotional) + parseQty(b.LongNotional)),
-		ShortNotional: formatQty(parseQty(a.ShortNotional) + parseQty(b.ShortNotional)),
-		TotalNotional: formatQty(parseQty(a.TotalNotional) + parseQty(b.TotalNotional)),
-		Count:         a.Count + b.Count,
+		LongNotional:   formatQty(longN),
+		ShortNotional:  formatQty(shortN),
+		TotalNotional:  formatQty(totalN),
+		Count:          count,
+		PriceOpen:      pick.PriceOpen,
+		PriceClose:     pick.PriceClose,
+		PriceHigh:      pick.PriceHigh,
+		PriceLow:       pick.PriceLow,
+		PriceChangePct: pick.PriceChangePct,
 	}
 	if !open {
 		out.EndedAt = end
@@ -361,28 +440,171 @@ func combineCascadeEpisodes(a, b CascadeEpisode, side string, now time.Time) Cas
 	if end.After(start) {
 		out.DurationSec = int64(end.Sub(start).Seconds())
 	}
-	// Prefer the longer venue path for print prices until candles overwrite.
-	pick := a
-	if parseQty(b.PriceOpen) > 0 && (parseQty(a.PriceOpen) <= 0 || b.DurationSec >= a.DurationSec) {
-		pick = b
+	if haveHi {
+		out.PriceHigh = formatQty(hi)
 	}
-	out.PriceOpen, out.PriceClose = pick.PriceOpen, pick.PriceClose
-	out.PriceHigh, out.PriceLow = pick.PriceHigh, pick.PriceLow
-	out.PriceChangePct = pick.PriceChangePct
-	if ao, bo := parseQty(a.PriceOpen), parseQty(b.PriceOpen); ao > 0 && bo > 0 {
-		hi := math.Max(parseQty(a.PriceHigh), parseQty(b.PriceHigh))
-		lo := parseQty(a.PriceLow)
-		if bl := parseQty(b.PriceLow); bl > 0 && (lo <= 0 || bl < lo) {
-			lo = bl
-		}
-		if hi > 0 {
-			out.PriceHigh = formatQty(hi)
-		}
-		if lo > 0 {
-			out.PriceLow = formatQty(lo)
-		}
+	if haveLo {
+		out.PriceLow = formatQty(lo)
 	}
+	fillCascadeVenueStarts(&out, parts)
 	out.Summary = explainCascadeEpisode(out)
+	return out
+}
+
+func collapseCascadePartsByVenue(parts []CascadeEpisode) []CascadeEpisode {
+	if len(parts) < 2 {
+		return parts
+	}
+	order := make([]string, 0, len(parts))
+	byEx := map[string]CascadeEpisode{}
+	for _, p := range parts {
+		cur, ok := byEx[p.Exchange]
+		if !ok {
+			byEx[p.Exchange] = p
+			order = append(order, p.Exchange)
+			continue
+		}
+		if p.StartedAt.Before(cur.StartedAt) {
+			cur.StartedAt = p.StartedAt
+		}
+		if !p.FirstPrintAt.IsZero() && (cur.FirstPrintAt.IsZero() || p.FirstPrintAt.Before(cur.FirstPrintAt)) {
+			cur.FirstPrintAt = p.FirstPrintAt
+		}
+		if p.Open {
+			cur.Open = true
+		}
+		if p.EndedAt.After(cur.EndedAt) {
+			cur.EndedAt = p.EndedAt
+		}
+		if cascadeGradeRank(p.Grade) > cascadeGradeRank(cur.Grade) {
+			cur.Grade = p.Grade
+		}
+		if p.PeakRatio > cur.PeakRatio {
+			cur.PeakRatio = p.PeakRatio
+		}
+		if p.Score > cur.Score {
+			cur.Score = p.Score
+		}
+		cur.LongNotional = formatQty(parseQty(cur.LongNotional) + parseQty(p.LongNotional))
+		cur.ShortNotional = formatQty(parseQty(cur.ShortNotional) + parseQty(p.ShortNotional))
+		cur.TotalNotional = formatQty(parseQty(cur.TotalNotional) + parseQty(p.TotalNotional))
+		cur.Count += p.Count
+		if p.DurationSec > cur.DurationSec {
+			cur.DurationSec = p.DurationSec
+		}
+		byEx[p.Exchange] = cur
+	}
+	out := make([]CascadeEpisode, 0, len(order))
+	for _, ex := range order {
+		out = append(out, byEx[ex])
+	}
+	return out
+}
+
+func fillCascadeVenueStarts(out *CascadeEpisode, parts []CascadeEpisode) {
+	if out == nil || len(parts) == 0 {
+		return
+	}
+	type rec struct {
+		ex                 string
+		t                  time.Time
+		long, short, total float64
+		count              int
+	}
+	recs := make([]rec, 0, len(parts))
+	for _, p := range parts {
+		t := p.FirstPrintAt
+		if t.IsZero() {
+			t = p.StartedAt
+		}
+		if t.IsZero() {
+			continue
+		}
+		recs = append(recs, rec{
+			ex:    p.Exchange,
+			t:     t.UTC(),
+			long:  parseQty(p.LongNotional),
+			short: parseQty(p.ShortNotional),
+			total: parseQty(p.TotalNotional),
+			count: p.Count,
+		})
+	}
+	if len(recs) == 0 {
+		return
+	}
+	sort.Slice(recs, func(i, j int) bool {
+		if !recs[i].t.Equal(recs[j].t) {
+			return recs[i].t.Before(recs[j].t)
+		}
+		return recs[i].ex < recs[j].ex
+	})
+	first := recs[0].t
+	tied := 0
+	firstSec := first.Truncate(time.Second)
+	for _, r := range recs {
+		if r.t.Truncate(time.Second).Equal(firstSec) {
+			tied++
+		}
+	}
+	out.OrderUnknown = tied > 1
+	if !out.OrderUnknown {
+		out.StartedBy = recs[0].ex
+	}
+	totals := make([]float64, len(recs))
+	for i, r := range recs {
+		totals[i] = r.total
+	}
+	shares := cascadeSharePcts(totals)
+	out.VenueStarts = make([]CascadeVenueStart, 0, len(recs))
+	bestI, bestShare, tie := -1, -1.0, false
+	for i, r := range recs {
+		lag := int64(r.t.Sub(first) / time.Second)
+		if lag < 0 {
+			lag = 0
+		}
+		out.VenueStarts = append(out.VenueStarts, CascadeVenueStart{
+			Exchange: r.ex, StartedAt: r.t, LagSec: lag,
+			LongNotional: formatQty(r.long), ShortNotional: formatQty(r.short),
+			TotalNotional: formatQty(r.total), SharePct: shares[i], Count: r.count,
+		})
+		if shares[i] > bestShare {
+			bestShare, bestI, tie = shares[i], i, false
+		} else if shares[i] == bestShare {
+			tie = true
+		}
+	}
+	if !tie && bestI >= 0 && bestShare > 0 {
+		out.LargestBy = recs[bestI].ex
+	}
+}
+
+func cascadeSharePcts(totals []float64) []float64 {
+	out := make([]float64, len(totals))
+	var sum float64
+	for _, n := range totals {
+		if n > 0 {
+			sum += n
+		}
+	}
+	if sum <= 0 || len(totals) == 0 {
+		return out
+	}
+	var used float64
+	for i, n := range totals {
+		if i == len(totals)-1 {
+			out[i] = math.Round((100-used)*10) / 10
+			if out[i] < 0 {
+				out[i] = 0
+			}
+			break
+		}
+		p := 0.0
+		if n > 0 {
+			p = math.Round(n/sum*1000) / 10
+		}
+		out[i] = p
+		used += p
+	}
 	return out
 }
 
@@ -433,10 +655,7 @@ func formatSignedPct(v float64) string {
 }
 
 func explainCascadeEpisode(ep CascadeEpisode) string {
-	who := ep.Exchange
-	if ep.Combined {
-		who = "Binance+Bybit"
-	}
+	who := cascadeEpisodeWho(ep)
 	dur := formatCascadeDuration(ep.DurationSec)
 	state := "lasted"
 	if ep.Open {
@@ -446,8 +665,107 @@ func explainCascadeEpisode(ep CascadeEpisode) string {
 	if ep.PriceChangePct != "" {
 		move = fmt.Sprintf(" Price %s%%.", ep.PriceChangePct)
 	}
-	return fmt.Sprintf("%s %s %s %s wave %s %s (long %s / short %s).%s",
+	body := fmt.Sprintf("%s %s %s %s wave %s %s (long %s / short %s).%s",
 		who, ep.Symbol, ep.Grade, ep.Side, state, dur, ep.LongNotional, ep.ShortNotional, move)
+	head := explainCascadeLead(ep)
+	if share := explainCascadeShare(ep); share != "" {
+		if head != "" {
+			head += ". " + share
+		} else {
+			head = share
+		}
+	}
+	if head != "" {
+		return head + ". " + body
+	}
+	return body
+}
+
+func cascadeEpisodeWho(ep CascadeEpisode) string {
+	if !ep.Combined {
+		return ep.Exchange
+	}
+	if len(ep.VenueStarts) == 0 {
+		return "combined"
+	}
+	names := make([]string, 0, len(ep.VenueStarts))
+	for _, v := range ep.VenueStarts {
+		names = append(names, cascadeVenueTitle(v.Exchange))
+	}
+	return strings.Join(names, "+")
+}
+
+func explainCascadeLead(ep CascadeEpisode) string {
+	if !ep.Combined || len(ep.VenueStarts) < 2 {
+		return ""
+	}
+	if ep.OrderUnknown {
+		var first, later []string
+		for _, v := range ep.VenueStarts {
+			name := cascadeVenueTitle(v.Exchange)
+			if v.LagSec == 0 {
+				first = append(first, name)
+			} else {
+				later = append(later, fmt.Sprintf("%s +%ds", name, v.LagSec))
+			}
+		}
+		head := strings.Join(first, " and ") + " started together"
+		if len(later) > 0 {
+			return head + ", " + strings.Join(later, ", ")
+		}
+		return head
+	}
+	parts := make([]string, 0, len(ep.VenueStarts))
+	for i, v := range ep.VenueStarts {
+		name := cascadeVenueTitle(v.Exchange)
+		if i == 0 || v.LagSec == 0 {
+			parts = append(parts, name+" first")
+		} else {
+			parts = append(parts, fmt.Sprintf("%s +%ds", name, v.LagSec))
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+func explainCascadeShare(ep CascadeEpisode) string {
+	if !ep.Combined || len(ep.VenueStarts) < 2 {
+		return ""
+	}
+	parts := make([]string, 0, len(ep.VenueStarts))
+	for _, v := range ep.VenueStarts {
+		parts = append(parts, fmt.Sprintf("%s %s (%s)", cascadeVenueTitle(v.Exchange), formatSharePct(v.SharePct), v.TotalNotional))
+	}
+	out := strings.Join(parts, ", ")
+	if ep.LargestBy != "" && ep.LargestBy != ep.StartedBy {
+		out += fmt.Sprintf(". Most of the wave was %s", cascadeVenueTitle(ep.LargestBy))
+	}
+	return out
+}
+
+func formatSharePct(p float64) string {
+	if math.IsNaN(p) || math.IsInf(p, 0) || p <= 0 {
+		return "0%"
+	}
+	if math.Abs(p-math.Round(p)) < 0.05 {
+		return fmt.Sprintf("%.0f%%", math.Round(p))
+	}
+	return fmt.Sprintf("%.1f%%", p)
+}
+
+func cascadeVenueTitle(ex string) string {
+	switch Exchange(ex) {
+	case ExchangeBinance:
+		return "Binance"
+	case ExchangeBybit:
+		return "Bybit"
+	case ExchangeOKX:
+		return "OKX"
+	default:
+		if ex == "" {
+			return ""
+		}
+		return strings.ToUpper(ex[:1]) + ex[1:]
+	}
 }
 
 func formatCascadeDuration(sec int64) string {

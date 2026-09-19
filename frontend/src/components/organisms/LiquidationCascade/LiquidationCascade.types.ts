@@ -39,6 +39,17 @@ export type CascadeBoth = {
   summary?: string;
 };
 
+export type CascadeVenueStart = {
+  exchange?: string;
+  startedAt?: string;
+  lagSec?: number;
+  longNotional?: string;
+  shortNotional?: string;
+  totalNotional?: string;
+  sharePct?: number;
+  count?: number;
+};
+
 export type CascadeEpisode = {
   symbol?: string;
   exchange?: string;
@@ -61,6 +72,10 @@ export type CascadeEpisode = {
   priceLow?: string;
   priceChangePct?: string;
   summary?: string;
+  startedBy?: string;
+  orderUnknown?: boolean;
+  largestBy?: string;
+  venueStarts?: CascadeVenueStart[];
 };
 
 export type CascadeReport = {

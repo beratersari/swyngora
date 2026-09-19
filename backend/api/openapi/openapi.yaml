@@ -2953,9 +2953,14 @@ paths:
         / cascade / extreme. Binance and Bybit are scored **separately**.
         `both.agree` is true only when the **same side** is cascading on both
         venues. `episodes` lists each wave in the last 24h (start, duration,
-        long/short notional, price move). Overlapping same-side waves on both
-        venues are one `combined` episode. `symbol=all` pools every tracked
-        coin (market-wide risk; no price). Informational only.
+        long/short notional, price move). Overlapping same-side waves on two
+        or more venues are one `combined` episode with `startedBy`,
+        `venueStarts[].lagSec` (seconds after the first print),
+        `venueStarts[].totalNotional` / `sharePct` (how much of the wave
+        that venue produced), `largestBy`, and `orderUnknown` when two
+        venues share the same first-print second.
+        `symbol=all` pools every tracked coin (market-wide risk; no price).
+        Informational only.
       operationId: getMarketLiquidationCascade
       tags: [Market]
       parameters:
@@ -8430,13 +8435,25 @@ components:
           items: { $ref: '#/components/schemas/MarketLiquidationCascadeEpisode' }
         summary: { type: string }
         note: { type: string }
+    MarketLiquidationCascadeVenueStart:
+      type: object
+      description: When one venue's prints joined a combined cascade wave
+      properties:
+        exchange: { type: string, description: binance | bybit | okx }
+        startedAt: { type: string, format: date-time, description: First print of that venue in the wave }
+        lagSec: { type: integer, description: Seconds after the first venue print; 0 if first or tied }
+        longNotional: { type: string }
+        shortNotional: { type: string }
+        totalNotional: { type: string, description: That venue's liquidation notional in the wave }
+        sharePct: { type: number, description: Percent of the combined wave's total notional }
+        count: { type: integer }
     MarketLiquidationCascadeEpisode:
       type: object
       description: One liquidation wave (open or finished) in the last 24h
       properties:
         symbol: { type: string }
-        exchange: { type: string, description: binance | bybit | both }
-        combined: { type: boolean, description: Same-side wave on Binance and Bybit at once }
+        exchange: { type: string, description: binance | bybit | okx | both }
+        combined: { type: boolean, description: Same-side wave on two or more venues at once }
         side: { type: string, enum: [long, short, both, none] }
         grade: { type: string, enum: [quiet, elevated, cascade, extreme] }
         score: { type: number }
@@ -8455,6 +8472,12 @@ components:
         priceLow: { type: string }
         priceChangePct: { type: string, description: Signed percent, e.g. -1.24 }
         summary: { type: string }
+        startedBy: { type: string, description: Venue whose first print started a combined wave }
+        orderUnknown: { type: boolean, description: True when two or more venues share the same first-print second }
+        largestBy: { type: string, description: Venue that produced the most notional in a combined wave }
+        venueStarts:
+          type: array
+          items: { $ref: '#/components/schemas/MarketLiquidationCascadeVenueStart' }
     MarketLiquidationCascadeHit:
       type: object
       properties:
