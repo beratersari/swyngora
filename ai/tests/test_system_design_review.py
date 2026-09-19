@@ -6,7 +6,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-import httpx
+import httpx2
 
 from swyngora_ai.config import Settings
 from swyngora_ai.tools.market_http import (
@@ -19,24 +19,24 @@ from swyngora_ai.tools.market_http import (
 )
 
 
-class _RecordingTransport(httpx.BaseTransport):
+class _RecordingTransport(httpx2.BaseTransport):
     def __init__(self) -> None:
-        self.requests: list[httpx.Request] = []
+        self.requests: list[httpx2.Request] = []
 
-    def handle_request(self, request: httpx.Request) -> httpx.Response:
+    def handle_request(self, request: httpx2.Request) -> httpx2.Response:
         self.requests.append(request)
-        return httpx.Response(200, json={"ok": True, "clientId": "should-not-matter"})
+        return httpx2.Response(200, json={"ok": True, "clientId": "should-not-matter"})
 
 
 def _install_transport(monkeypatch, transport: _RecordingTransport) -> None:
-    real = httpx.Client
+    real = httpx2.Client
 
     def fake_client(*args, **kwargs):
         kwargs["transport"] = transport
         kwargs.pop("timeout", None)
         return real(*args, timeout=5.0, transport=transport)
 
-    monkeypatch.setattr(httpx, "Client", fake_client)
+    monkeypatch.setattr(httpx2, "Client", fake_client)
 
 
 def test_worker_thread_keeps_read_only_scope(monkeypatch):

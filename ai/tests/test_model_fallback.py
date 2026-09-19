@@ -188,6 +188,50 @@ def test_note_llm_error_emits_llm_on_chat_model_start(monkeypatch) -> None:
     ]
 
 
+def test_note_llm_error_emits_usage_on_llm_end(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    from swyngora_ai.llm.errors import usage_from_llm_result
+
+    seen: list[tuple[str, str]] = []
+    monkeypatch.setattr("swyngora_ai.llm.errors.emit", lambda t, text="": seen.append((t, text)))
+    msg = SimpleNamespace(usage_metadata={"input_tokens": 900, "output_tokens": 200})
+    response = SimpleNamespace(generations=[[SimpleNamespace(message=msg)]], llm_output=None)
+    grok = NoteLLMError("grok-4.3", "low")
+    grok.on_llm_end(response)
+    assert seen == [("usage", "grok-4.3 (low)|in=900|out=200")]
+    empty = SimpleNamespace(
+        generations=[[SimpleNamespace(message=SimpleNamespace(usage_metadata=None))]]
+    )
+    assert usage_from_llm_result(empty) is None
+    grok.on_llm_end(empty)
+    assert seen == [("usage", "grok-4.3 (low)|in=900|out=200")]
+
+
+def test_usage_from_metadata_includes_cache_and_reasoning() -> None:
+    from types import SimpleNamespace
+
+    from swyngora_ai.llm.errors import format_usage_emit, usage_from_llm_result
+
+    msg = SimpleNamespace(
+        usage_metadata={
+            "input_tokens": 900,
+            "output_tokens": 200,
+            "input_token_details": {"cache_read": 50, "audio": 4},
+            "output_token_details": {"reasoning": 20},
+        }
+    )
+    response = SimpleNamespace(generations=[[SimpleNamespace(message=msg)]], llm_output=None)
+    usage = usage_from_llm_result(response)
+    assert usage is not None
+    assert usage.cache_read == 50
+    assert usage.reasoning == 20
+    assert usage.audio_in == 4
+    assert format_usage_emit("grok-4.3 (low)", usage) == (
+        "grok-4.3 (low)|in=900|out=200|cache_read=50|reasoning=20|audio_in=4"
+    )
+
+
 def test_note_llm_error_emits_retry_then_exhausted(monkeypatch) -> None:
     seen: list[str] = []
     monkeypatch.setattr("swyngora_ai.llm.errors.emit", lambda _t, text="": seen.append(text))

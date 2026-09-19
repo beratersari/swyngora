@@ -1,6 +1,6 @@
 import json
 
-import httpx
+import httpx2
 from langchain_core.messages import AIMessage, HumanMessage
 
 from swyngora_ai.config import Settings
@@ -12,17 +12,17 @@ from swyngora_ai.tools.market_http import (
 )
 
 
-class _Transport(httpx.BaseTransport):
-    def handle_request(self, request: httpx.Request) -> httpx.Response:
+class _Transport(httpx2.BaseTransport):
+    def handle_request(self, request: httpx2.Request) -> httpx2.Response:
         if request.url.path == "/health":
-            return httpx.Response(200, json={"status": "ok"})
+            return httpx2.Response(200, json={"status": "ok"})
         if request.url.path.endswith("/ticker/24h"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={"symbol": request.url.params.get("symbol"), "lastPrice": "100"},
             )
         if request.url.path.endswith("/long-short-ratio"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -35,25 +35,25 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/funding-arb/history"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={"symbol": request.url.params.get("symbol"), "runs": []},
             )
         if request.url.path.endswith("/funding-arb/scan"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={"hits": [], "skipped": 0, "note": "informational only"},
             )
         if "/funding-arb/watches" in request.url.path:
             if request.method == "POST":
-                return httpx.Response(201, json={"id": "w1", "symbol": "BTCUSDT", "minProfit": 10})
+                return httpx2.Response(201, json={"id": "w1", "symbol": "BTCUSDT", "minProfit": 10})
             if request.method == "DELETE":
-                return httpx.Response(200, json={"deleted": True})
-            return httpx.Response(200, json={"id": "w1", "watches": []})
+                return httpx2.Response(200, json={"deleted": True})
+            return httpx2.Response(200, json={"id": "w1", "watches": []})
         if request.url.path.endswith("/funding-arb/signals"):
-            return httpx.Response(200, json={"signals": []})
+            return httpx2.Response(200, json={"signals": []})
         if request.url.path.endswith("/funding-arb"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -65,7 +65,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/funding-rate"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -78,7 +78,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/options"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "asset": "BTC",
@@ -89,7 +89,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/open-interest"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -99,7 +99,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/liquidation-cascade/scan"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "market": {"symbol": "all", "summary": "quiet"},
@@ -107,7 +107,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/liquidation-cascade"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol") or "all",
@@ -116,7 +116,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/liquidation-levels"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "kind": "totals",
@@ -127,7 +127,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/liquidations/overview"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "exchange": request.url.params.get("exchange") or "all",
@@ -139,7 +139,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/liquidations"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -149,7 +149,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/orderbook/heatmap"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -158,7 +158,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/orderbook/liquidity"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -167,7 +167,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/orderbook/impact"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -179,7 +179,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/orderbook"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -189,9 +189,9 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/exchanges"):
-            return httpx.Response(200, json={"exchanges": ["binance"], "default": "binance"})
+            return httpx2.Response(200, json={"exchanges": ["binance"], "default": "binance"})
         if request.url.path.endswith("/rsi-heatmap"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "exchange": "binance",
@@ -207,12 +207,12 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/volume-surge/scan"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={"hits": [{"symbol": "HOTUSDT", "maxRatio": "5", "hottest": "5m"}]},
             )
         if request.url.path.endswith("/volume-surge"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -226,7 +226,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/liquidity-sweeps"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -237,7 +237,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/absorption"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -247,7 +247,7 @@ class _Transport(httpx.BaseTransport):
             )
         if request.url.path == "/api/v1/alerts" and request.method == "POST":
             body = json.loads(request.content.decode()) if request.content else {}
-            return httpx.Response(
+            return httpx2.Response(
                 201,
                 json={
                     "id": "a1",
@@ -261,7 +261,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/forensics/radar"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "summary": "Saved 1 setup(s) over 7d.",
@@ -269,7 +269,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/forensics/scan"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "summary": "1 of 4 scanned coin(s) currently look like a past pre-move setup.",
@@ -284,7 +284,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/forensics"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -302,7 +302,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/around/similar"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -311,7 +311,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/around/precursors"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -320,7 +320,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/around/moves"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -331,7 +331,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/around/compare"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -342,7 +342,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/around"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -358,7 +358,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/vwap"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -366,7 +366,7 @@ class _Transport(httpx.BaseTransport):
                 },
             )
         if request.url.path.endswith("/volume-profile"):
-            return httpx.Response(
+            return httpx2.Response(
                 200,
                 json={
                     "symbol": request.url.params.get("symbol"),
@@ -376,18 +376,18 @@ class _Transport(httpx.BaseTransport):
                     "valueArea": {"low": "64800", "high": "66100"},
                 },
             )
-        return httpx.Response(404, json={"error": "not found"})
+        return httpx2.Response(404, json={"error": "not found"})
 
 
 def test_market_tools_hit_api(monkeypatch):
-    real_client = httpx.Client
+    real_client = httpx2.Client
 
     def fake_client(*args, **kwargs):
         kwargs["transport"] = _Transport()
         kwargs.pop("timeout", None)
         return real_client(*args, timeout=5.0, transport=_Transport())
 
-    monkeypatch.setattr(httpx, "Client", fake_client)
+    monkeypatch.setattr(httpx2, "Client", fake_client)
     tools = build_market_tools(Settings(api_base_url="http://test"))
     by_name = {t.name: t for t in tools}
     assert "get_ticker" in by_name
@@ -592,8 +592,8 @@ def test_market_tools_hit_api(monkeypatch):
 
 
 def test_market_http_reuses_one_client(monkeypatch):
-    created: list[httpx.Client] = []
-    real_client = httpx.Client
+    created: list[httpx2.Client] = []
+    real_client = httpx2.Client
 
     def fake_client(*args, **kwargs):
         kwargs["transport"] = _Transport()
@@ -602,7 +602,7 @@ def test_market_http_reuses_one_client(monkeypatch):
         created.append(client)
         return client
 
-    monkeypatch.setattr(httpx, "Client", fake_client)
+    monkeypatch.setattr(httpx2, "Client", fake_client)
     tools = build_market_tools(Settings(api_base_url="http://test"))
     by_name = {t.name: t for t in tools}
     by_name["get_ticker"].invoke({"symbol": "BTCUSDT", "exchange": "binance"})
@@ -613,19 +613,19 @@ def test_market_http_reuses_one_client(monkeypatch):
 def test_read_only_scope_blocks_mutations(monkeypatch):
     posted: list[str] = []
 
-    class _MutTransport(httpx.BaseTransport):
-        def handle_request(self, request: httpx.Request) -> httpx.Response:
+    class _MutTransport(httpx2.BaseTransport):
+        def handle_request(self, request: httpx2.Request) -> httpx2.Response:
             posted.append(f"{request.method} {request.url.path}")
-            return httpx.Response(200, json={"ok": True})
+            return httpx2.Response(200, json={"ok": True})
 
-    real_client = httpx.Client
+    real_client = httpx2.Client
 
     def fake_client(*args, **kwargs):
         kwargs["transport"] = _MutTransport()
         kwargs.pop("timeout", None)
         return real_client(*args, timeout=5.0, transport=_MutTransport())
 
-    monkeypatch.setattr(httpx, "Client", fake_client)
+    monkeypatch.setattr(httpx2, "Client", fake_client)
     tools = build_market_tools(Settings(api_base_url="http://test"))
     by_name = {t.name: t for t in tools}
 

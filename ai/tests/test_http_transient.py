@@ -2,36 +2,36 @@
 
 from __future__ import annotations
 
-import httpx
+import httpx2
 import pytest
 
 from swyngora_ai.tools.errors import ToolTransientError
 from swyngora_ai.tools.market_http import _HTTP, bind_tool_scope, reset_tool_scope
 
 
-def _client(transport: httpx.BaseTransport) -> _HTTP:
+def _client(transport: httpx2.BaseTransport) -> _HTTP:
     http = _HTTP("http://test")
     http._client.close()
-    http._client = httpx.Client(transport=transport, timeout=5.0)
+    http._client = httpx2.Client(transport=transport, timeout=5.0)
     return http
 
 
-class _TimeoutTransport(httpx.BaseTransport):
-    def handle_request(self, request: httpx.Request) -> httpx.Response:
-        raise httpx.TimeoutException("slow")
+class _TimeoutTransport(httpx2.BaseTransport):
+    def handle_request(self, request: httpx2.Request) -> httpx2.Response:
+        raise httpx2.TimeoutException("slow")
 
 
-class _ConnectTransport(httpx.BaseTransport):
-    def handle_request(self, request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("refused")
+class _ConnectTransport(httpx2.BaseTransport):
+    def handle_request(self, request: httpx2.Request) -> httpx2.Response:
+        raise httpx2.ConnectError("refused")
 
 
-class _StatusTransport(httpx.BaseTransport):
+class _StatusTransport(httpx2.BaseTransport):
     def __init__(self, status: int) -> None:
         self.status = status
 
-    def handle_request(self, request: httpx.Request) -> httpx.Response:
-        return httpx.Response(self.status, text=f"body-{self.status}")
+    def handle_request(self, request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(self.status, text=f"body-{self.status}")
 
 
 def test_get_timeout_raises_transient() -> None:

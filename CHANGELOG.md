@@ -7,10 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **AI HTTP client:** `ai/` tools use `httpx2` (Pydantic-maintained fork) instead of `httpx`; LangChain may still pull `httpx` transitively
+
 ### Added
 - **Forensics gamma on the clock:** BTC/ETH forensics shows whether dealers were long or short gamma before the move, and whether spot sat above or below the flip, as a timeline beat plus the why story. (`docs/features/forensics.md`)
 - **Options gamma history:** net GEX, regime, and flip vs index are sampled with the options desk and shown on the Over time chart (Dealer GEX / Gamma flip). Windows say when the book flipped to short/long gamma or spot crossed the flip. `history` on `GET /api/v1/market/options` (`docs/features/options.md`)
 - **Options dealer gamma:** net GEX (USD delta per 1% spot move), call vs put split, regime (long = stabler, short = faster), and the gamma flip level from a re-gammad strike profile. `gamma` on `GET /api/v1/market/options`, web `/options` (`docs/features/options.md`)
+- **AI CLI Activity token details:** when the provider reports them, Activity also shows cache read/write, reasoning, and audio (LangChain UsageMetadata / InputTokenDetails / OutputTokenDetails only)
+- **AI CLI Activity tokens:** details Activity shows provider `in` / `out` / total tokens and `temperature` from `AI_TEMPERATURE` (no dollar cost)
 - **Liquidation level alerts:** `kind=liquidation_level` fires when last price or later prints hit a predicted 10x/25x/50x/100x band that clears later-print confidence (`any` / `fair` / `high`). Low-confidence bands do not fire the same alert as bands that keep working. Notional alerts now include `importance` and the matching level when prints land in a predicted pocket (`docs/features/price-alerts.md`)
 
 ### Changed

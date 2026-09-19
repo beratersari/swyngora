@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-import httpx
+import httpx2
 
 from swyngora_ai.config import Settings
 from swyngora_ai.graph.facts import extract_market_facts
@@ -23,26 +23,26 @@ from swyngora_ai.tools.market_http import (
 )
 
 
-class _RecordingTransport(httpx.BaseTransport):
+class _RecordingTransport(httpx2.BaseTransport):
     def __init__(self) -> None:
-        self.requests: list[httpx.Request] = []
+        self.requests: list[httpx2.Request] = []
 
-    def handle_request(self, request: httpx.Request) -> httpx.Response:
+    def handle_request(self, request: httpx2.Request) -> httpx2.Response:
         self.requests.append(request)
         if request.url.path == "/api/v1/account/close":
-            return httpx.Response(200, json={"status": "closed", "clientId": "victim"})
-        return httpx.Response(200, json={"ok": True, "path": request.url.path})
+            return httpx2.Response(200, json={"status": "closed", "clientId": "victim"})
+        return httpx2.Response(200, json={"ok": True, "path": request.url.path})
 
 
 def _install_tools(monkeypatch, transport: _RecordingTransport):
-    real_client = httpx.Client
+    real_client = httpx2.Client
 
     def fake_client(*args, **kwargs):
         kwargs["transport"] = transport
         kwargs.pop("timeout", None)
         return real_client(*args, timeout=5.0, transport=transport)
 
-    monkeypatch.setattr(httpx, "Client", fake_client)
+    monkeypatch.setattr(httpx2, "Client", fake_client)
     return build_market_tools(Settings(api_base_url="http://backend.test", api_auth_token="master"))
 
 

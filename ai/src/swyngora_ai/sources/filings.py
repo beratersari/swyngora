@@ -6,20 +6,20 @@ import urllib.parse
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import httpx
+import httpx2
 
 _UA = "SwyngoraAI/0.1 (research; +https://github.com/beratersari/swyngora)"
 
 
 def _http_json(url: str, timeout: float = 12.0) -> Any:
-    with httpx.Client(timeout=timeout, headers={"User-Agent": _UA}) as client:
+    with httpx2.Client(timeout=timeout, headers={"User-Agent": _UA}) as client:
         r = client.get(url, headers={"Accept": "application/json"})
         r.raise_for_status()
         return r.json()
 
 
 def _http_bytes(url: str, timeout: float = 12.0) -> bytes:
-    with httpx.Client(timeout=timeout, headers={"User-Agent": _UA}) as client:
+    with httpx2.Client(timeout=timeout, headers={"User-Agent": _UA}) as client:
         r = client.get(url, headers={"Accept": "*/*"})
         r.raise_for_status()
         return r.content
@@ -85,7 +85,7 @@ def kap_recent(query: str, limit: int = 5) -> str:
     url = f"https://www.kap.org.tr/en/api/disclosureList?fromDate={since}&search={encoded}"
     try:
         data = _http_json(url, timeout=12)
-    except httpx.HTTPStatusError as e:
+    except httpx2.HTTPStatusError as e:
         return f"(KAP: HTTP {e.response.status_code})"
     except Exception as e:  # noqa: BLE001
         # Fallback: KAP search landing (still a primary host for the desk to open).

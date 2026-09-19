@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import httpx
+import httpx2
 
 from swyngora_ai.config import Settings
 from swyngora_ai.tools.market_http import (
@@ -13,14 +13,14 @@ from swyngora_ai.tools.market_http import (
 )
 
 
-class _RecordingTransport(httpx.BaseTransport):
+class _RecordingTransport(httpx2.BaseTransport):
     def __init__(self) -> None:
-        self.requests: list[httpx.Request] = []
+        self.requests: list[httpx2.Request] = []
 
-    def handle_request(self, request: httpx.Request) -> httpx.Response:
+    def handle_request(self, request: httpx2.Request) -> httpx2.Response:
         self.requests.append(request)
         if request.url.path == "/api/v1/account/api-keys" and request.method == "POST":
-            return httpx.Response(
+            return httpx2.Response(
                 201,
                 json={
                     "id": "k1",
@@ -30,7 +30,7 @@ class _RecordingTransport(httpx.BaseTransport):
                     "prefix": "swy_leaked",
                 },
             )
-        return httpx.Response(404, json={"error": "not found"})
+        return httpx2.Response(404, json={"error": "not found"})
 
 
 def test_redact_secrets_strips_secret_fields():
@@ -48,14 +48,14 @@ def test_redact_secrets_strips_secret_fields():
 
 def test_create_api_key_tool_redacts_secret(monkeypatch):
     transport = _RecordingTransport()
-    real_client = httpx.Client
+    real_client = httpx2.Client
 
     def fake_client(*args, **kwargs):
         kwargs["transport"] = transport
         kwargs.pop("timeout", None)
         return real_client(*args, timeout=5.0, transport=transport)
 
-    monkeypatch.setattr(httpx, "Client", fake_client)
+    monkeypatch.setattr(httpx2, "Client", fake_client)
     monkeypatch.setenv("SWYNGORA_API_URL", "http://backend.test")
     monkeypatch.setenv("SWYNGORA_API_TOKEN", "master-token")
     tools = build_market_tools(Settings())

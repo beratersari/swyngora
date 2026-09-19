@@ -19,6 +19,8 @@ from rich.markup import escape
 from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 
+from swyngora_ai.llm.errors import TokenUsage, parse_usage_emit
+
 if TYPE_CHECKING:
     from swyngora_ai.graph.orchestrator import ChatResult, Orchestrator
 
@@ -605,6 +607,7 @@ _STATUS_TYPES = frozenset({"status", "tool", "thinking", "tool_error"})
 # orchestrator also emits tool_result later — do not count both.
 _TOOL_TICK_TYPES = frozenset({"tool", "tool_retry"})
 _LLM_TICK_TYPES = frozenset({"llm"})
+_USAGE_TICK_TYPES = frozenset({"usage"})
 _STATUS_MAX = 88
 
 
@@ -643,6 +646,23 @@ def _activity_model_id(settings: Any) -> str:
     return str(getattr(settings, "ollama_model", "") or "")
 
 
+def _activity_temperature(settings: Any) -> float | None:
+    if settings is None:
+        return None
+    raw = getattr(settings, "temperature", None)
+    if raw is None:
+        return None
+    return float(raw)
+
+
+def _format_temp(value: float) -> str:
+    return f"{value:g}"
+
+
+def _format_tokens(n: int) -> str:
+    return f"{n:,}"
+
+
 def _format_elapsed(seconds: float) -> str:
     total = max(0, int(seconds))
     return f"{total // 60}:{total % 60:02d}"
@@ -671,6 +691,8 @@ def activity_headline(state: ActivityBarState, elapsed: float) -> str:
         parts.append(f"{_llm_label(0)} {state.fallback_model}")
     else:
         parts.append(_llm_label(0))
+    if state.temperature is not None:
+        parts.append(f"temperature {_format_temp(state.temperature)}")
     parts.append(f"{_format_elapsed(elapsed)} elapsed")
     return " · ".join(parts)
 
@@ -682,21 +704,61 @@ def _tool_row(state: ActivityBarState, name: str, count: int) -> str:
     return line
 
 
+def _usage_detail_bits(usage: TokenUsage) -> list[str]:
+    bits: list[str] = []
+    if usage.cache_read:
+        bits.append(f"{_format_tokens(usage.cache_read)} cache read")
+    if usage.cache_creation:
+        bits.append(f"{_format_tokens(usage.cache_creation)} cache write")
+    if usage.reasoning:
+        bits.append(f"{_format_tokens(usage.reasoning)} reasoning")
+    if usage.audio_in:
+        bits.append(f"{_format_tokens(usage.audio_in)} audio in")
+    if usage.audio_out:
+        bits.append(f"{_format_tokens(usage.audio_out)} audio out")
+    return bits
+
+
+def _format_usage_line(usage: TokenUsage, *, prefix: str = "") -> str:
+    core = f"{_format_tokens(usage.input_tokens)} input · {_format_tokens(usage.output_tokens)} output"
+    extra = _usage_detail_bits(usage)
+    if extra:
+        core = f"{core} · {' · '.join(extra)}"
+    if prefix:
+        return f"{prefix}  {core}"
+    return core
+
+
+def activity_token_rows(state: ActivityBarState) -> list[str]:
+    items = list(state.tokens_by_model.items())
+    if not items:
+        return ["0 input · 0 output", "total 0 tokens"]
+    rows = [_format_usage_line(usage, prefix=name if len(items) > 1 else "") for name, usage in items]
+    total = TokenUsage()
+    for usage in state.tokens_by_model.values():
+        total.add(usage)
+    rows.append(f"total {_format_tokens(total.total)} tokens")
+    return rows
+
+
 def activity_rows(state: ActivityBarState, elapsed: float) -> list[str]:
     rows = [activity_headline(state, elapsed)]
+    rows.extend(activity_token_rows(state))
     rows.extend(_tool_row(state, name, n) for name, n in state.tools_by_name.items())
     return rows
 
 
 @dataclass
 class ActivityBarState:
-    """Live CLI activity line: status text plus per-name tool and llm counts."""
+    """Live CLI activity line: status text plus per-name tool, llm, and token counts."""
 
     description: str = "Planning…"
     tools_by_name: dict[str, int] = field(default_factory=dict)
     tool_retries_by_name: dict[str, int] = field(default_factory=dict)
     llm_by_model: dict[str, int] = field(default_factory=dict)
+    tokens_by_model: dict[str, TokenUsage] = field(default_factory=dict)
     fallback_model: str = ""
+    temperature: float | None = None
 
 
 def apply_activity_event(state: ActivityBarState, ev: dict[str, Any]) -> bool:
@@ -713,6 +775,16 @@ def apply_activity_event(state: ActivityBarState, ev: dict[str, Any]) -> bool:
         label = (ev.get("text") or "").strip() or state.fallback_model or "unknown"
         state.llm_by_model[label] = state.llm_by_model.get(label, 0) + 1
         changed = True
+    if kind in _USAGE_TICK_TYPES:
+        parsed = parse_usage_emit(str(ev.get("text") or ""))
+        if parsed is not None:
+            label, piece = parsed
+            cur = state.tokens_by_model.get(label)
+            if cur is None:
+                state.tokens_by_model[label] = piece
+            else:
+                cur.add(piece)
+            changed = True
     text = _status_text(ev)
     if text is not None:
         state.description = text
@@ -729,7 +801,11 @@ def _chat(orch: Any, message: str, session_id: str) -> tuple[ChatResult, list[st
         return orch.chat(message, session_id=session_id), []
 
     started = time.monotonic()
-    state = ActivityBarState(fallback_model=_activity_model_id(getattr(orch, "settings", None)))
+    settings = getattr(orch, "settings", None)
+    state = ActivityBarState(
+        fallback_model=_activity_model_id(settings),
+        temperature=_activity_temperature(settings),
+    )
     try:
         with Progress(
             SpinnerColumn(),

@@ -11,7 +11,7 @@ from contextvars import ContextVar, copy_context
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
-import httpx
+import httpx2
 from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel, Field
 
@@ -241,7 +241,7 @@ class _HTTP:
         self.base = base_url.rstrip("/")
         self.timeout = timeout
         self.auth_token = (auth_token or "").strip()
-        self._client = httpx.Client(timeout=timeout)
+        self._client = httpx2.Client(timeout=timeout)
 
     def _headers(self) -> dict[str, str]:
         headers: dict[str, str] = {}
@@ -278,14 +278,14 @@ class _HTTP:
         if ".." in head or "\\" in head:
             return "ERROR 400: invalid path id"
         try:
-            norm = httpx.URL(raw if "://" in raw else f"http://local{raw}").path
-        except (httpx.InvalidURL, ValueError, TypeError):
+            norm = httpx2.URL(raw if "://" in raw else f"http://local{raw}").path
+        except (httpx2.InvalidURL, ValueError, TypeError):
             return "ERROR 400: invalid path"
         if err := self._scope_error(raw, mutating=mutating):
             return err
         return self._scope_error(norm, mutating=mutating)
 
-    def _body_text(self, r: httpx.Response, *, retryable: bool = False) -> str:
+    def _body_text(self, r: httpx2.Response, *, retryable: bool = False) -> str:
         if r.status_code >= 400:
             if retryable and (r.status_code == 429 or r.status_code >= 500):
                 raise ToolTransientError(f"{r.status_code}: {r.text[:500]}")
@@ -300,17 +300,17 @@ class _HTTP:
     def _request(self, method: str, url: str, *, retryable: bool = False, **kwargs: Any) -> str:
         try:
             r = self._client.request(method, url, **kwargs)
-        except httpx.TimeoutException as e:
+        except httpx2.TimeoutException as e:
             msg = f"timeout: {e}"
             if retryable:
                 raise ToolTransientError(msg[:500]) from e
             return f"ERROR {msg}"[:500]
-        except httpx.ConnectError as e:
+        except httpx2.ConnectError as e:
             msg = f"connect: {e}"
             if retryable:
                 raise ToolTransientError(msg[:500]) from e
             return f"ERROR {msg}"[:500]
-        except httpx.HTTPError as e:
+        except httpx2.HTTPError as e:
             msg = f"{type(e).__name__}: {e}"
             if retryable:
                 raise ToolTransientError(msg[:500]) from e

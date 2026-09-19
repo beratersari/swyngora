@@ -114,6 +114,8 @@ def test_apply_activity_event_updates_description_and_tool_count() -> None:
     assert activity_line(again, 75) == "1 llm call qwen2.5 · 1:15 elapsed"
     assert activity_rows(again, 75) == [
         "1 llm call qwen2.5 · 1:15 elapsed",
+        "0 input · 0 output",
+        "total 0 tokens",
         "1 tool call get_ticker",
     ]
 
@@ -139,6 +141,8 @@ def test_activity_counts_tools_per_name() -> None:
     apply_activity_event(state, {"type": "llm", "text": "grok-4.4 (low)"})
     assert activity_rows(state, 14) == [
         "1 llm call grok-4.4 (low) · 0:14 elapsed",
+        "0 input · 0 output",
+        "total 0 tokens",
         "2 tool calls get_ticker",
         "1 tool call get_indicators",
         "1 tool call market_tape_agent",
@@ -147,8 +151,11 @@ def test_activity_counts_tools_per_name() -> None:
     apply_activity_event(state, {"type": "tool_retry", "text": "get_ticker"})
     apply_activity_event(state, {"type": "tool_retry", "text": "get_ticker"})
     assert state.tools_by_name["get_ticker"] == 4
-    assert activity_rows(state, 14)[1] == "4 tool calls get_ticker (includes retries)"
-    assert activity_rows(state, 14)[2] == "1 tool call get_indicators"
+    rows = activity_rows(state, 14)
+    assert rows[1] == "0 input · 0 output"
+    assert rows[2] == "total 0 tokens"
+    assert rows[3] == "4 tool calls get_ticker (includes retries)"
+    assert rows[4] == "1 tool call get_indicators"
 
 
 def test_activity_counts_llm_calls_per_model() -> None:
@@ -170,6 +177,40 @@ def test_activity_includes_reasoning_effort_in_model_label() -> None:
     assert activity_summary(state) == (
         "0 tool calls · 2 llm calls grok-4.4 (low) · 1 llm call qwen2.5"
     )
+
+
+def test_activity_sums_usage_and_shows_temperature() -> None:
+    state = ActivityBarState(temperature=0.2)
+    apply_activity_event(state, {"type": "llm", "text": "grok-4.3 (low)"})
+    apply_activity_event(state, {"type": "usage", "text": "grok-4.3 (low)|in=900|out=200"})
+    apply_activity_event(state, {"type": "tool", "text": "prefetch → get_ticker"})
+    assert activity_rows(state, 6) == [
+        "1 llm call grok-4.3 (low) · temperature 0.2 · 0:06 elapsed",
+        "900 input · 200 output",
+        "total 1,100 tokens",
+        "1 tool call get_ticker",
+    ]
+    apply_activity_event(state, {"type": "llm", "text": "qwen2.5"})
+    apply_activity_event(state, {"type": "usage", "text": "qwen2.5|in=800|out=120"})
+    rows = activity_rows(state, 14)
+    assert rows[0] == (
+        "1 llm call grok-4.3 (low) · 1 llm call qwen2.5 · temperature 0.2 · 0:14 elapsed"
+    )
+    assert rows[1] == "grok-4.3 (low)  900 input · 200 output"
+    assert rows[2] == "qwen2.5  800 input · 120 output"
+    assert rows[3] == "total 2,020 tokens"
+    assert not apply_activity_event(state, {"type": "usage", "text": "broken"})
+    apply_activity_event(
+        state,
+        {
+            "type": "usage",
+            "text": "grok-4.3 (low)|in=100|out=40|cache_read=50|reasoning=20|audio_in=4",
+        },
+    )
+    assert activity_rows(state, 14)[1] == (
+        "grok-4.3 (low)  1,000 input · 240 output · 50 cache read · 20 reasoning · 4 audio in"
+    )
+    assert activity_rows(state, 14)[3] == "total 2,160 tokens"
 
 
 def test_chat_prints_details_activity_when_orchestrator_raises(monkeypatch) -> None:
