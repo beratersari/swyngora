@@ -1249,6 +1249,23 @@ func TestGetTakerFlow_OK(t *testing.T) {
 	}
 }
 
+func TestGetPrintSize_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/print-size?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetPrintSize(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body printSizeResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+}
+
 func TestGetTakerFlow_BadSymbol(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/taker-flow", nil)

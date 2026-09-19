@@ -682,6 +682,74 @@ func (b *Backend) GetTakerFlow(ctx context.Context, exchange, symbol string) (js
 	return mustJSON(got)
 }
 
+func (b *Backend) GetPrintSize(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetPrintSize(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(printSizeMap(got))
+}
+
+func printSizeMap(got *domain.PrintSizeReport) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	venues := make([]map[string]any, 0, len(got.Venues))
+	for _, v := range got.Venues {
+		venues = append(venues, printSizeVenueMap(v))
+	}
+	out := map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange, "asOf": got.AsOf.UTC().Format(time.RFC3339Nano),
+		"venues": venues, "note": got.Note,
+	}
+	if got.Combined != nil {
+		out["combined"] = printSizeVenueMap(*got.Combined)
+	}
+	return out
+}
+
+func printSizeVenueMap(v domain.PrintSizeVenue) map[string]any {
+	wins := make([]map[string]any, 0, len(v.Windows))
+	for _, w := range v.Windows {
+		row := map[string]any{
+			"window": w.Window, "buy": printSizeSideMap(w.Buy), "sell": printSizeSideMap(w.Sell),
+			"complete": w.Complete, "read": w.Read, "summary": w.Summary,
+		}
+		if !w.From.IsZero() {
+			row["from"] = w.From.UTC().Format(time.RFC3339Nano)
+		}
+		if !w.To.IsZero() {
+			row["to"] = w.To.UTC().Format(time.RFC3339Nano)
+		}
+		wins = append(wins, row)
+	}
+	out := map[string]any{
+		"exchange": string(v.Exchange), "symbol": v.Symbol, "windows": wins, "summary": v.Summary,
+	}
+	if v.Error != "" {
+		out["error"] = v.Error
+	}
+	return out
+}
+
+func printSizeSideMap(s domain.PrintSizeSide) map[string]any {
+	return map[string]any{
+		"avg": formatQtyMCP(s.Avg), "priorAvg": formatQtyMCP(s.PriorAvg),
+		"notional": formatQtyMCP(s.Notional), "priorNotional": formatQtyMCP(s.PriorNotional),
+		"count": s.Count, "priorCount": s.PriorCount, "ratio": formatQtyMCP(s.Ratio), "kind": s.Kind,
+	}
+}
+
+func formatQtyMCP(v float64) string {
+	if v == 0 {
+		return "0"
+	}
+	return strconv.FormatFloat(v, 'f', -1, 64)
+}
+
 func (b *Backend) GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

@@ -2085,6 +2085,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"symbol": symbol, "exchange": exchange},
         )
 
+    def get_print_size(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/print-size",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
     def get_cvd(symbol: str, exchange: str = "all") -> str:
         return http.get(
             "/api/v1/market/cvd",
@@ -4611,6 +4617,18 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "positioning differ and why that split can matter."
             ),
             args_schema=VenueDivergenceInput,
+        ),
+        StructuredTool.from_function(
+            get_print_size,
+            name="get_print_size",
+            description=(
+                "Average USDT size per aggressive futures fill, buy vs sell, "
+                "for 5m and 15m versus the window before. Use when volume is "
+                "high and you need to know if it was a few large market orders "
+                "(avg jumped, e.g. 20K to 180K) or many small prints. "
+                "read=few_large or many_small. Binance + Bybit."
+            ),
+            args_schema=TakerFlowInput,
         ),
         StructuredTool.from_function(
             get_taker_flow,

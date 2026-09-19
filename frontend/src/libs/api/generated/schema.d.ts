@@ -1070,6 +1070,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/print-size": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Average aggressive print size
+         * @description Average **USDT notional per taker fill** on Binance USD-M and Bybit
+         *     linear, split buy vs sell. Windows are **5 minutes** and **15 minutes**,
+         *     each compared to the same length just before. A jump from 20K to 180K
+         *     means a few large market orders, not many small ones (`read=few_large`).
+         *     `kind` is jumped / faded / stable. Bybit is the newest ~1000 public
+         *     trades (minutes when busy). Informational only.
+         */
+        get: operations["getMarketPrintSize"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/taker-flow": {
         parameters: {
             query?: never;
@@ -5787,6 +5812,48 @@ export interface components {
             changePct?: string;
             summary?: string;
         };
+        PrintSizeSide: {
+            avg?: string;
+            priorAvg?: string;
+            notional?: string;
+            priorNotional?: string;
+            count?: number;
+            priorCount?: number;
+            ratio?: string;
+            /** @enum {string} */
+            kind?: "jumped" | "faded" | "stable";
+        };
+        PrintSizeWindow: {
+            /** @enum {string} */
+            window?: "5m" | "15m";
+            buy?: components["schemas"]["PrintSizeSide"];
+            sell?: components["schemas"]["PrintSizeSide"];
+            complete?: boolean;
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            /** @enum {string} */
+            read?: "few_large" | "many_small" | "larger" | "smaller" | "stable";
+            summary?: string;
+        };
+        PrintSizeVenue: {
+            exchange?: string;
+            symbol?: string;
+            windows?: components["schemas"]["PrintSizeWindow"][];
+            summary?: string;
+            error?: string;
+        };
+        /** @description Average aggressive print size vs the prior window */
+        MarketPrintSize: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            venues?: components["schemas"]["PrintSizeVenue"][];
+            combined?: components["schemas"]["PrintSizeVenue"];
+            note?: string;
+        };
         /** @description Predicted next funding plus recent settlements */
         MarketFundingRate: {
             symbol?: string;
@@ -9332,6 +9399,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketPrintSize: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all = both + combined) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue and optional combined print size */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketPrintSize"];
                 };
             };
             400: components["responses"]["Error"];

@@ -73,6 +73,8 @@ import type {
   LiquidationsQuery,
   LiquidationOverviewQuery,
   CvdQuery,
+  MarketPrintSize,
+  PrintSizeQuery,
   Ticker24h,
   Ticker24hQuery,
   SpotOrderBook,
@@ -131,6 +133,7 @@ export type {
   MarketLiquidationCascade,
   MarketLiquidationCascadeScan,
   MarketCvd,
+  MarketPrintSize,
   MarketForensics,
   MarketForensicsQuery,
   MarketForensicsScan,
@@ -394,6 +397,13 @@ export const marketApi = baseApi.injectEndpoints({
       }),
     }),
 
+    getMarketPrintSize: build.query<MarketPrintSize, PrintSizeQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/print-size',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
     getMarketForensics: build.query<MarketForensics, MarketForensicsQuery>({
       query: (arg) => ({
         url: '/api/v1/market/forensics',
@@ -539,6 +549,7 @@ export const {
   useGetMarketLiquidationMaxPainQuery,
   useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketCvdQuery,
+  useGetMarketPrintSizeQuery,
   useGetMarketForensicsQuery,
   useScanMarketForensicsQuery,
   useReviewSetupRadarQuery,

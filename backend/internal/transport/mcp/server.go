@@ -66,6 +66,7 @@ type DataPort interface {
 	GetPositioning(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVenueDivergence(ctx context.Context, symbol string) (json.RawMessage, error)
 	GetTakerFlow(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetPrintSize(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeProfile(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize float64) (json.RawMessage, error)
 	GetVWAP(ctx context.Context, exchange, symbol, window, startTime, endTime string) (json.RawMessage, error)
@@ -1048,6 +1049,22 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetVenueDivergence(ctx, symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_print_size",
+		mcp.WithDescription("Average aggressive futures print size (USDT notional per taker fill) on Binance USD-M and Bybit linear. Windows are 5m and 15m vs the same length just before. Use this when volume is high and you need to know whether it was a few large market buys/sells or many small ones (e.g. buy avg jumped from 20K to 180K). kind=jumped/faded/stable; read=few_large/many_small. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetPrintSize(ctx, req.GetString("exchange", "all"), symbol)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -116,7 +116,7 @@ You ONLY use book/flow tools.
   `scan_funding_arb`, `get_funding_arb_history`, `create_funding_arb_watch`
   (omit symbol to follow the scan), `list_funding_arb_watches`,
   `list_funding_arb_signals`, `get_funding_arb_signal`, `get_long_short_ratio`,
-  `get_cvd`, `get_taker_flow`, `get_basis`, `get_squeeze_risk`, `get_positioning`,
+  `get_cvd`, `get_taker_flow`, `get_print_size`, `get_basis`, `get_squeeze_risk`, `get_positioning`,
   `get_venue_divergence`, `estimate_liquidation_hunt`, `get_liquidation_heatmap`, `get_futures_history`,
   `get_market_snapshot`, `get_support_resistance`, `get_whale_trades`,
   `get_orderbook_history`, `compare_orderbook_history`, `get_orderbook_icebergs`,

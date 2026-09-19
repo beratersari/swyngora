@@ -35,6 +35,8 @@ export function TapePanel({
   cvdError,
   snapshot,
   snapshotError,
+  printSize,
+  printSizeError,
   isLoading = false,
 }: TapePanelProps) {
   const { t } = useTranslation('detail');
@@ -51,6 +53,8 @@ export function TapePanel({
     openInterest?.funding?.current?.nextFundingTime ??
     openInterest?.funding?.venues?.find((v) => v.current?.nextFundingTime)?.current
       ?.nextFundingTime;
+  const printVenue = printSize?.combined ?? printSize?.venues?.[0];
+  const print15 = windowByName(printVenue?.windows, '15m') ?? windowByName(printVenue?.windows, '5m');
   const cvdRow = cvd?.combined ?? cvd?.venues?.[0];
   const snap = snapshot?.combined ?? snapshot?.venues?.[0];
   const snap1h = snap?.windows?.find((w) => w.window === '1h');
@@ -189,6 +193,43 @@ export function TapePanel({
         {liq1h && liq1h.complete === false ? (
           <Text variant="caption" color="secondary">
             {t('tape.liqIncomplete')}
+          </Text>
+        ) : null}
+      </Block>
+
+      <Block>
+        <Text variant="label" color="primary">
+          {t('tape.printSize')}
+        </Text>
+        {printSizeError ? (
+          <Alert type="info" showIcon message={t('tape.printSize')} description={printSizeError} />
+        ) : (
+          <StatsGrid>
+            <Stat
+              label={t('tape.avgBuy')}
+              value={formatTapeNum(print15?.buy?.avg)}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.avgSell')}
+              value={formatTapeNum(print15?.sell?.avg)}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.priorBuy')}
+              value={formatTapeNum(print15?.buy?.priorAvg)}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.priorSell')}
+              value={formatTapeNum(print15?.sell?.priorAvg)}
+              isLoading={isLoading}
+            />
+          </StatsGrid>
+        )}
+        {printVenue?.summary || print15?.summary ? (
+          <Text variant="caption" color="secondary">
+            {printVenue?.summary || print15?.summary}
           </Text>
         ) : null}
       </Block>

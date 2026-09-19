@@ -618,6 +618,16 @@ func (c *APIClient) GetTakerFlow(ctx context.Context, exchange, symbol string) (
 	return c.get(ctx, "/api/v1/market/taker-flow", q)
 }
 
+// GetPrintSize returns average aggressive print size vs the prior window.
+func (c *APIClient) GetPrintSize(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/print-size", q)
+}
+
 // GetCVD returns cumulative taker buy−sell versus price.
 func (c *APIClient) GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

@@ -1829,6 +1829,38 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/print-size:
+    get:
+      summary: Average aggressive print size
+      description: |
+        Average **USDT notional per taker fill** on Binance USD-M and Bybit
+        linear, split buy vs sell. Windows are **5 minutes** and **15 minutes**,
+        each compared to the same length just before. A jump from 20K to 180K
+        means a few large market orders, not many small ones (`read=few_large`).
+        `kind` is jumped / faded / stable. Bybit is the newest ~1000 public
+        trades (minutes when busy). Informational only.
+      operationId: getMarketPrintSize
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + combined)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Per-venue and optional combined print size
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketPrintSize'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/taker-flow:
     get:
       summary: Futures taker buy vs sell volume
@@ -9536,6 +9568,50 @@ components:
         ratePct: { type: string }
         changePct: { type: string }
         summary: { type: string }
+    PrintSizeSide:
+      type: object
+      properties:
+        avg: { type: string }
+        priorAvg: { type: string }
+        notional: { type: string }
+        priorNotional: { type: string }
+        count: { type: integer }
+        priorCount: { type: integer }
+        ratio: { type: string }
+        kind: { type: string, enum: [jumped, faded, stable] }
+    PrintSizeWindow:
+      type: object
+      properties:
+        window: { type: string, enum: [5m, 15m] }
+        buy: { $ref: '#/components/schemas/PrintSizeSide' }
+        sell: { $ref: '#/components/schemas/PrintSizeSide' }
+        complete: { type: boolean }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        read: { type: string, enum: [few_large, many_small, larger, smaller, stable] }
+        summary: { type: string }
+    PrintSizeVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/PrintSizeWindow' }
+        summary: { type: string }
+        error: { type: string }
+    MarketPrintSize:
+      type: object
+      description: Average aggressive print size vs the prior window
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        asOf: { type: string, format: date-time }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/PrintSizeVenue' }
+        combined: { $ref: '#/components/schemas/PrintSizeVenue' }
+        note: { type: string }
     MarketFundingRate:
       type: object
       description: Predicted next funding plus recent settlements

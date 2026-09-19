@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
@@ -43,6 +44,18 @@ func (c *Client) GetRecentPrints(ctx context.Context, symbol string) ([]domain.T
 	}
 	got, _ := v.([]domain.TakerPrint)
 	return append([]domain.TakerPrint(nil), got...), nil
+}
+
+// ListPrints returns recent linear trades filtered to [from, to] (Bybit has no historical page).
+func (c *Client) ListPrints(ctx context.Context, symbol string, from, to time.Time) ([]domain.TakerPrint, error) {
+	got, err := c.GetRecentPrints(ctx, symbol)
+	if err != nil {
+		return nil, err
+	}
+	if from.IsZero() || to.IsZero() {
+		return got, nil
+	}
+	return domain.FilterPrintsInRange(got, from, to), nil
 }
 
 func (c *Client) fetchRecentPrints(ctx context.Context, symbol string) ([]domain.TakerPrint, error) {

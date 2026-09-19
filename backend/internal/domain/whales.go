@@ -61,6 +61,11 @@ type RecentPrintPort interface {
 	GetRecentPrints(ctx context.Context, symbol string) ([]TakerPrint, error)
 }
 
+// PrintRangePort loads aggressive fills in [from, to] (inclusive), paging if needed.
+type PrintRangePort interface {
+	ListPrints(ctx context.Context, symbol string, from, to time.Time) ([]TakerPrint, error)
+}
+
 // ParseWhaleMinNotional clamps the size floor.
 func ParseWhaleMinNotional(v float64) float64 {
 	if v <= 0 {

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Average print size:** 5m/15m average USDT per aggressive buy vs sell fill, compared to the window before, so a 20K→180K jump reads as a few large market orders rather than many small ones. `GET /api/v1/market/print-size`, MCP `get_print_size`, coin-detail tape (`docs/features/print-size.md`)
 - **OI-weighted funding pressure:** combined predicted funding is weighted by USDT open interest, so an 8B book at +0.01% outweighs a 1B book at −0.01%. `pressure` / `pressureHistory` / `pressureWindows` / `pressureMoves` on `GET /api/v1/market/funding-rate` (also on open-interest `funding`); coin-detail tape; MCP `get_funding_rate` (`docs/features/funding-rate.md`)
 
 ### Changed

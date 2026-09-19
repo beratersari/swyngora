@@ -51,6 +51,81 @@ func (c *Client) fetchAggTrades(ctx context.Context, symbol string) ([]domain.Ta
 	q := url.Values{}
 	q.Set("symbol", symbol)
 	q.Set("limit", "1000")
+	return c.decodeAggTrades(ctx, symbol, q)
+}
+
+// ListPrints pages USD-M aggTrades in [from, to] (inclusive).
+func (c *Client) ListPrints(ctx context.Context, symbol string, from, to time.Time) ([]domain.TakerPrint, error) {
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return nil, err
+	}
+	if from.IsZero() || to.IsZero() || !to.After(from) {
+		return c.GetRecentPrints(ctx, symbol)
+	}
+	from, to = from.UTC(), to.UTC()
+	key := "range:" + symbol
+	if c.printCache != nil {
+		if hit, ok := c.printCache.Get(key); ok {
+			return domain.FilterPrintsInRange(append([]domain.TakerPrint(nil), hit...), from, to), nil
+		}
+	}
+	v, err, _ := c.printSF.Do(key, func() (any, error) {
+		if c.printCache != nil {
+			if hit, ok := c.printCache.Get(key); ok {
+				return hit, nil
+			}
+		}
+		got, err := c.fetchAggTradesRange(ctx, symbol, from, to)
+		if err != nil {
+			return nil, err
+		}
+		if c.printCache != nil {
+			c.printCache.Set(key, got)
+		}
+		return got, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	got, _ := v.([]domain.TakerPrint)
+	return domain.FilterPrintsInRange(append([]domain.TakerPrint(nil), got...), from, to), nil
+}
+
+func (c *Client) fetchAggTradesRange(ctx context.Context, symbol string, from, to time.Time) ([]domain.TakerPrint, error) {
+	start := from.UnixMilli()
+	end := to.UnixMilli()
+	var out []domain.TakerPrint
+	for page := 0; page < domain.PrintSizeMaxPages(); page++ {
+		if start > end {
+			break
+		}
+		q := url.Values{}
+		q.Set("symbol", symbol)
+		q.Set("limit", "1000")
+		q.Set("startTime", strconv.FormatInt(start, 10))
+		q.Set("endTime", strconv.FormatInt(end, 10))
+		chunk, err := c.decodeAggTrades(ctx, symbol, q)
+		if err != nil {
+			return nil, err
+		}
+		if len(chunk) == 0 {
+			break
+		}
+		out = append(out, chunk...)
+		last := chunk[len(chunk)-1].Time.UnixMilli()
+		if last < start {
+			break
+		}
+		start = last + 1
+		if len(chunk) < 1000 {
+			break
+		}
+	}
+	return out, nil
+}
+
+func (c *Client) decodeAggTrades(ctx context.Context, symbol string, q url.Values) ([]domain.TakerPrint, error) {
 	body, err := c.getFutures(ctx, "/fapi/v1/aggTrades", q)
 	if err != nil {
 		return nil, err

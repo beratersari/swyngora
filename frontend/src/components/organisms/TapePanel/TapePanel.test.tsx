@@ -55,6 +55,28 @@ describe('TapePanel', () => {
     expect(screen.getByText(/88.9%/)).toBeInTheDocument();
   });
 
+  it('shows average buy vs sell print size', () => {
+    renderWithTheme(
+      <TapePanel
+        printSize={{
+          combined: {
+            summary: 'Buy prints averaged 180000 USDT vs 20000 before.',
+            windows: [
+              {
+                window: '15m',
+                buy: { avg: '180000', priorAvg: '20000', kind: 'jumped' },
+                sell: { avg: '25000', priorAvg: '25000', kind: 'stable' },
+              },
+            ],
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText('180.00K')).toBeInTheDocument();
+    expect(screen.getByText('20.00K')).toBeInTheDocument();
+    expect(screen.getByText(/few large|180000/i)).toBeInTheDocument();
+  });
+
   it('shows top-trader size and a crowd-vs-size split', () => {
     renderWithTheme(
       <TapePanel

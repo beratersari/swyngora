@@ -24,7 +24,8 @@ ratio (who already holds positions).
 | Binance USD-M | Public `takerlongshortRatio` 5m bars (4h available immediately) |
 | Bybit linear | Recent REST trades + `publicTrade` websocket (4h `complete` after this process has been collecting) |
 
-Volumes are **USDT notional**.
+Volumes are **USDT notional**. Average size per fill (few large vs many small)
+is `GET /api/v1/market/print-size` — see [`print-size.md`](print-size.md).
 
 ## Where the code lives
 

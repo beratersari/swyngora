@@ -79,6 +79,7 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetMarketLiquidationsQuery: () => empty,
     useGetMarketLiquidationHuntHeatmapQuery: () => empty,
     useGetMarketCvdQuery: () => empty,
+    useGetMarketPrintSizeQuery: () => empty,
     useGetMarketSnapshotQuery: () => empty,
     useGetPumpEventsQuery: () => empty,
     useGetWatchlistQuery: () => ({ data: { items: [] }, isLoading: false }),

@@ -86,6 +86,7 @@ BOOK_TOOLS: frozenset[str] = frozenset(
         "get_squeeze_risk",
         "get_positioning",
         "get_venue_divergence",
+        "get_print_size",
         "get_taker_flow",
         "get_cvd",
         "get_basis",
