@@ -615,6 +615,12 @@ func formatLongShortVenues(s *domain.LongShortSnapshot) string {
 				b.WriteString(row(label, code(val)))
 			}
 		}
+		if v.Divergence != nil && v.Divergence.Headline != "" {
+			b.WriteString(row("vs price", italic(v.Divergence.Headline)))
+			if v.Divergence.Duration != "" && !v.Divergence.Since.IsZero() {
+				b.WriteString(row("started", code(v.Divergence.Duration)+" · "+v.Divergence.Since.UTC().Format("15:04 UTC")))
+			}
+		}
 		if v.Split.Alignment == domain.AlignOpposite && v.Split.Headline != "" {
 			b.WriteString(row("split", italic(v.Split.Headline)))
 		}

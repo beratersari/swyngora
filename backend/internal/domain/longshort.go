@@ -41,6 +41,7 @@ type LongShortSeries struct {
 	GapHistory   []LongShortGapPoint
 	GapWindows   []LongShortGapWindow
 	GapMoves     []LongShortGapMove
+	Divergence   *LongShortPriceDivergence
 }
 
 // LongShortLevel is a formatted ratio print.
@@ -70,6 +71,7 @@ type LongShortVenueSnap struct {
 	GapHistory   []LongShortGapPoint
 	GapWindows   []LongShortGapWindow
 	GapMoves     []LongShortGapMove
+	Divergence   *LongShortPriceDivergence
 }
 
 // LongShortSplit is how the crowd (all accounts) lines up with top traders.
@@ -99,6 +101,7 @@ type LongShortSnapshot struct {
 	GapHistory []LongShortGapPoint
 	GapWindows []LongShortGapWindow
 	GapMoves   []LongShortGapMove
+	Divergence *LongShortPriceDivergence
 }
 
 // ClampLongShortHistoryLimit bounds history size.
@@ -199,6 +202,7 @@ func venueLongShortSnap(s *LongShortSeries) LongShortVenueSnap {
 	out.GapHistory = s.GapHistory
 	out.GapWindows = s.GapWindows
 	out.GapMoves = s.GapMoves
+	out.Divergence = s.Divergence
 	return out
 }
 
@@ -393,6 +397,10 @@ func BuildLongShortSnapshot(exchange, symbol string, series []*LongShortSeries, 
 			out.GapHistory = s.GapHistory
 			out.GapWindows = s.GapWindows
 			out.GapMoves = s.GapMoves
+		}
+		if out.Divergence == nil && s.Divergence != nil {
+			d := *s.Divergence
+			out.Divergence = &d
 		}
 	}
 	if len(clean) == 1 {

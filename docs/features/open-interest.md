@@ -20,7 +20,7 @@ can ask “is BTC open interest rising?”
   window slack)
 - Combined `all` sums venues that have a past sample for that window
 - `funding` is attached (predicted next rate + recent settlements, plus OI-weighted `pressure`). See [`funding-rate.md`](funding-rate.md)
-- `longShort` is attached (account long/short ratio, plus Binance crowd-vs-top `gap`). See [`long-short-ratio.md`](long-short-ratio.md)
+- `longShort` is attached (account long/short ratio, plus Binance crowd-vs-top `gap` and top-vs-price `divergence`). See [`long-short-ratio.md`](long-short-ratio.md)
 - Cached ~30s (`OPEN_INTEREST_CACHE_TTL`)
 
 Sources (public REST, no API key):

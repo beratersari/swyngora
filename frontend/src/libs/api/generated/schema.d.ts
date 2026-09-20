@@ -862,6 +862,8 @@ export interface paths {
          *     value: top long% minus crowd long% in percentage points
          *     (e.g. top 65% long vs crowd 55% → `+10`). `gapWindows` (1h/4h/24h)
          *     and `gapMoves` say if that spread widened, narrowed, or flipped.
+         *     `divergence` is when top traders get more long while price falls
+         *     (or more short while price rises), with `since` / `duration`.
          *     `split.opposite` means the crowd and bigger books lean different
          *     ways — hunt / squeeze / positioning then treat size as the
          *     positioned side. 5-minute samples. `ratio` is long/short (1 = even).
@@ -6157,6 +6159,42 @@ export interface components {
             gapPct?: string;
             /** @enum {string} */
             lean?: "top_more_long" | "top_more_short" | "even";
+            price?: string;
+            /** @description Signed % vs previous 5m close */
+            priceChangePct?: string;
+            /** @description Signed pp of top long share vs previous 5m */
+            topChangePct?: string;
+            /**
+             * @description Same direction as price or opposite
+             * @enum {string}
+             */
+            vsPrice?: "confirms" | "opposite";
+        };
+        /** @description Top-trader long share vs price moving opposite ways */
+        LongShortPriceDivergence: {
+            /** @enum {string} */
+            kind?: "top_long_price_down" | "top_short_price_up";
+            /** @enum {string} */
+            versus?: "top_positions" | "top_accounts";
+            /**
+             * Format: date-time
+             * @description When the current opposite run started
+             */
+            since?: string;
+            /** Format: date-time */
+            lastAt?: string;
+            /** @example 30m */
+            duration?: string;
+            durationSeconds?: number;
+            /** @description Signed % over the run */
+            priceChangePct?: string;
+            /** @description Signed pp of top long share over the run */
+            topChangePct?: string;
+            /** @description Signed pp of crowd-vs-top gap over the run */
+            gapChangePct?: string;
+            headline?: string;
+            detail?: string;
+            bars?: number;
         };
         LongShortGapWindow: {
             /** @enum {string} */
@@ -6204,6 +6242,7 @@ export interface components {
             gapHistory?: components["schemas"]["LongShortGapPoint"][];
             gapWindows?: components["schemas"]["LongShortGapWindow"][];
             gapMoves?: components["schemas"]["LongShortGapMove"][];
+            divergence?: components["schemas"]["LongShortPriceDivergence"];
         };
         /** @description Account long/short ratio plus Binance top-trader layers, crowd-vs-top gap, and recent 5m history */
         MarketLongShortRatio: {
@@ -6218,6 +6257,7 @@ export interface components {
             gapHistory?: components["schemas"]["LongShortGapPoint"][];
             gapWindows?: components["schemas"]["LongShortGapWindow"][];
             gapMoves?: components["schemas"]["LongShortGapMove"][];
+            divergence?: components["schemas"]["LongShortPriceDivergence"];
             /** Format: date-time */
             asOf?: string;
             venueCount?: number;

@@ -65,6 +65,7 @@ export function TapePanel({
   const lsGap = lsVenue?.gap ?? openInterest?.longShort?.gap;
   const lsGap1h = windowByName(lsVenue?.gapWindows ?? openInterest?.longShort?.gapWindows, '1h');
   const lsGap24h = windowByName(lsVenue?.gapWindows ?? openInterest?.longShort?.gapWindows, '24h');
+  const lsDiv = lsVenue?.divergence ?? openInterest?.longShort?.divergence;
 
   return (
     <Panel>
@@ -301,6 +302,20 @@ export function TapePanel({
                 isLoading={isLoading}
               />
             ) : null}
+            {lsDiv ? (
+              <Stat
+                label={t('tape.lsDiv')}
+                value={lsDiv.duration ? `${lsDiv.duration}` : '—'}
+                isLoading={isLoading}
+              />
+            ) : null}
+            {lsDiv?.since ? (
+              <Stat
+                label={t('tape.lsDivSince')}
+                value={new Date(lsDiv.since).toLocaleTimeString()}
+                isLoading={isLoading}
+              />
+            ) : null}
             <Stat
               label={t('tape.taker1h')}
               value={snap1h?.taker?.dominant ?? '—'}
@@ -319,6 +334,12 @@ export function TapePanel({
             {lsGap1h?.kind && lsGap1h.kind !== 'stable'
               ? ` ${t(`tape.gap_${lsGap1h.kind}`, { defaultValue: lsGap1h.kind })} 1h.`
               : ''}
+          </Text>
+        ) : null}
+        {lsDiv?.headline ? (
+          <Text variant="caption" color="secondary">
+            {lsDiv.headline}
+            {lsDiv.detail ? ` ${lsDiv.detail}` : ''}
           </Text>
         ) : null}
         {lsSplit?.alignment === 'opposite' && lsSplit.headline ? (

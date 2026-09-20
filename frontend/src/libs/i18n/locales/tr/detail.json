@@ -166,6 +166,8 @@
     "gap_narrowed": "Kapanıyor",
     "gap_flipped": "Ters döndü",
     "gap_stable": "Sabit",
+    "lsDiv": "Fiyata karşı",
+    "lsDivSince": "Başlangıç",
     "taker1h": "1s taker",
     "takerShare": "1s alış payı"
   },

@@ -37,6 +37,25 @@ func TestFormatLongShort_Gap(t *testing.T) {
 	}
 }
 
+func TestFormatLongShort_PriceDivergence(t *testing.T) {
+	out := FormatLongShort(&domain.LongShortSnapshot{
+		Symbol: "BTCUSDT", Exchange: "binance", Period: "5m",
+		Venues: []domain.LongShortVenueSnap{{
+			Exchange: "binance",
+			Current:  domain.LongShortLevel{LongPct: "55", ShortPct: "45", Ratio: "1.22", Bias: "long"},
+			Divergence: &domain.LongShortPriceDivergence{
+				Kind:     domain.LongShortPriceDivTopLongPriceDown,
+				Duration: "30m",
+				Since:    time.Date(2026, 9, 20, 15, 30, 0, 0, time.UTC),
+				Headline: "Top traders got more long while price dropped 1.5% over 30m.",
+			},
+		}},
+	})
+	if !strings.Contains(out, "dropped 1.5%") || !strings.Contains(out, "30m") || !strings.Contains(out, "15:30 UTC") {
+		t.Fatalf("%s", out)
+	}
+}
+
 func TestCompactMcap(t *testing.T) {
 	v := 1.5e9
 	if CompactMcap(&v) != "$1.50B" {

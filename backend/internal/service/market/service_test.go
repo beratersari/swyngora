@@ -1098,6 +1098,54 @@ func TestGetLongShortRatio_CrowdVsTopGap(t *testing.T) {
 	}
 }
 
+func TestGetLongShortRatio_PriceDivergence(t *testing.T) {
+	now := time.Date(2026, 9, 20, 16, 0, 0, 0, time.UTC)
+	topHist := make([]domain.LongShortPoint, 0, 6)
+	crowdHist := make([]domain.LongShortPoint, 0, 6)
+	candles := make([]domain.Candle, 0, 7)
+	px := 100.0
+	top := 0.62
+	for i := 0; i < 7; i++ {
+		at := now.Add(-time.Duration(6-i) * 5 * time.Minute)
+		if i > 0 {
+			px *= 0.9975
+			top += 0.005
+		}
+		c := domain.Candle{OpenTime: at, CloseTime: at.Add(5*time.Minute - time.Millisecond), Close: strconv.FormatFloat(px, 'f', 4, 64)}
+		candles = append(candles, c)
+		pt := domain.LongShortPoint{Time: at, LongShare: 0.55, ShortShare: 0.45}
+		tp := domain.LongShortPoint{Time: at, LongShare: top, ShortShare: 1 - top}
+		if i == 6 {
+			continue
+		}
+		crowdHist = append(crowdHist, pt)
+		topHist = append(topHist, tp)
+	}
+	bin := &fakeLS{ser: &domain.LongShortSeries{
+		Exchange: domain.ExchangeBinance,
+		Current:  domain.LongShortPoint{Time: now, LongShare: 0.55, ShortShare: 0.45},
+		History:  domain.SortLongShortNewestFirst(crowdHist),
+		TopPositions: &domain.LongShortSeries{
+			Kind:    domain.LongShortKindTopPositions,
+			Current: domain.LongShortPoint{Time: now, LongShare: top, ShortShare: 1 - top},
+			History: domain.SortLongShortNewestFirst(topHist),
+		},
+	}}
+	svc := New(&fakeMarket{candles: candles}, &fakeSupply{}).WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{
+		domain.ExchangeBinance: bin,
+	})
+	got, err := svc.GetLongShortRatio(context.Background(), "binance", "BTCUSDT", 24)
+	if err != nil || got.Divergence == nil {
+		t.Fatalf("div %+v %v", got.Divergence, err)
+	}
+	if got.Divergence.Kind != domain.LongShortPriceDivTopLongPriceDown {
+		t.Fatalf("kind %s", got.Divergence.Kind)
+	}
+	if got.Divergence.Duration != "30m" && got.Divergence.Duration != "25m" {
+		t.Fatalf("duration %s", got.Divergence.Duration)
+	}
+}
+
 func TestGetOpenInterest_AttachesFunding(t *testing.T) {
 	now := time.Now().UTC()
 	oi := &fakeOI{ser: &domain.OpenInterestSeries{

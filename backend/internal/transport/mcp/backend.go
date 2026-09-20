@@ -1201,6 +1201,9 @@ func longShortSnapshotMap(got *domain.LongShortSnapshot) map[string]any {
 		if moves := longShortGapMovesMap(v.GapMoves); len(moves) > 0 {
 			row["gapMoves"] = moves
 		}
+		if v.Divergence != nil {
+			row["divergence"] = longShortDivergenceMap(*v.Divergence)
+		}
 		venues = append(venues, row)
 	}
 	asOf := ""
@@ -1211,7 +1214,7 @@ func longShortSnapshotMap(got *domain.LongShortSnapshot) map[string]any {
 		"symbol": got.Symbol, "exchange": got.Exchange, "kind": got.Kind, "period": got.Period,
 		"venues": venues, "history": longShortLevelsMap(got.History),
 		"asOf": asOf, "venueCount": got.VenueCount,
-		"note": "Share of accounts that are long vs short (not position size). On Binance, gap is top long% minus crowd long% in percentage points; gapWindows (1h/4h/24h) say if that spread widened, narrowed, or flipped. Combined all does not average venues.",
+		"note": "Share of accounts that are long vs short (not position size). On Binance, gap is top long% minus crowd long% in percentage points; gapWindows (1h/4h/24h) say if that spread widened, narrowed, or flipped. divergence is when top traders get more long while price falls (or more short while price rises), with since/duration. Combined all does not average venues.",
 	}
 	if got.Current != nil {
 		out["current"] = longShortLevelMap(*got.Current)
@@ -1227,6 +1230,9 @@ func longShortSnapshotMap(got *domain.LongShortSnapshot) map[string]any {
 	}
 	if moves := longShortGapMovesMap(got.GapMoves); len(moves) > 0 {
 		out["gapMoves"] = moves
+	}
+	if got.Divergence != nil {
+		out["divergence"] = longShortDivergenceMap(*got.Divergence)
 	}
 	return out
 }
@@ -1263,7 +1269,35 @@ func longShortGapHistoryMap(in []domain.LongShortGapPoint) []map[string]any {
 		if !p.Time.IsZero() {
 			row["time"] = p.Time.UTC().Format(time.RFC3339Nano)
 		}
+		if p.Price != "" {
+			row["price"] = p.Price
+		}
+		if p.PriceChangePct != "" {
+			row["priceChangePct"] = p.PriceChangePct
+		}
+		if p.TopChangePct != "" {
+			row["topChangePct"] = p.TopChangePct
+		}
+		if p.VsPrice != "" {
+			row["vsPrice"] = p.VsPrice
+		}
 		out = append(out, row)
+	}
+	return out
+}
+
+func longShortDivergenceMap(d domain.LongShortPriceDivergence) map[string]any {
+	out := map[string]any{
+		"kind": d.Kind, "versus": d.Versus, "duration": d.Duration,
+		"durationSeconds": d.DurationSeconds, "priceChangePct": d.PriceChangePct,
+		"topChangePct": d.TopChangePct, "gapChangePct": d.GapChangePct,
+		"headline": d.Headline, "detail": d.Detail, "bars": d.Bars,
+	}
+	if !d.Since.IsZero() {
+		out["since"] = d.Since.UTC().Format(time.RFC3339Nano)
+	}
+	if !d.LastAt.IsZero() {
+		out["lastAt"] = d.LastAt.UTC().Format(time.RFC3339Nano)
 	}
 	return out
 }

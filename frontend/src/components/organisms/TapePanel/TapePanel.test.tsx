@@ -138,6 +138,37 @@ describe('TapePanel', () => {
     expect(screen.getAllByText(/Widening/i).length).toBeGreaterThan(0);
   });
 
+  it('shows top vs price divergence and when it started', () => {
+    renderWithTheme(
+      <TapePanel
+        openInterest={{
+          longShort: {
+            venues: [
+              {
+                exchange: 'binance',
+                current: { longPct: '55', shortPct: '45', bias: 'long' },
+                topPositions: { longPct: '65', shortPct: '35', bias: 'long' },
+                divergence: {
+                  kind: 'top_long_price_down',
+                  duration: '30m',
+                  since: '2026-09-20T15:30:00Z',
+                  priceChangePct: '-1.5',
+                  topChangePct: '+3',
+                  headline: 'Top traders got more long while price dropped 1.5% over 30m.',
+                  detail: 'Started 15:30 UTC.',
+                },
+              },
+            ],
+          },
+        }}
+        snapshot={{ combined: { longPct: '55', windows: [] } }}
+      />,
+    );
+    expect(screen.getByText('30m')).toBeInTheDocument();
+    expect(screen.getByText(/dropped 1\.5%/i)).toBeInTheDocument();
+    expect(screen.getByText(/15:30 UTC/i)).toBeInTheDocument();
+  });
+
   it('explains a missing perp book', () => {
     renderWithTheme(<TapePanel openInterestError="no perpetual on this venue" />);
     expect(screen.getAllByText('no perpetual on this venue').length).toBeGreaterThan(0);

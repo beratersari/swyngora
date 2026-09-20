@@ -981,7 +981,34 @@ func (s *Service) GetLongShortRatio(ctx context.Context, exchange, symbol string
 	}
 	now := time.Now().UTC()
 	domain.EnrichLongShortFromStore(series, s.longShortStored(ctx, ex, symbol, now))
-	return domain.BuildLongShortSnapshot(ex, symbol, series, now), nil
+	snap := domain.BuildLongShortSnapshot(ex, symbol, series, now)
+	domain.AttachLongShortPrices(series, s.longShortCandles(ctx, series, symbol))
+	domain.ApplyLongShortPrices(snap, series)
+	return snap, nil
+}
+
+func (s *Service) longShortCandles(ctx context.Context, series []*domain.LongShortSeries, symbol string) map[domain.Exchange][]domain.Candle {
+	out := map[domain.Exchange][]domain.Candle{}
+	if s == nil {
+		return out
+	}
+	for _, ser := range series {
+		if ser == nil {
+			continue
+		}
+		if ser.TopPositions == nil && ser.TopAccounts == nil {
+			continue
+		}
+		if _, ok := out[ser.Exchange]; ok {
+			continue
+		}
+		bars, err := s.GetCandles(ctx, string(ser.Exchange), symbol, string(domain.Interval5m), 300, nil, nil)
+		if err != nil || len(bars) == 0 {
+			continue
+		}
+		out[ser.Exchange] = domain.ClosedCandles(bars, time.Now().UTC())
+	}
+	return out
 }
 
 func (s *Service) longShortStored(ctx context.Context, exchange, symbol string, now time.Time) []domain.FuturesSnapshot {

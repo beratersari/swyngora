@@ -1086,12 +1086,31 @@ type longShortGapDTO struct {
 }
 
 type longShortGapPointDTO struct {
-	Time         string `json:"time,omitempty"`
-	Versus       string `json:"versus"`
-	CrowdLongPct string `json:"crowdLongPct"`
-	TopLongPct   string `json:"topLongPct"`
-	GapPct       string `json:"gapPct"`
-	Lean         string `json:"lean"`
+	Time           string `json:"time,omitempty"`
+	Versus         string `json:"versus"`
+	CrowdLongPct   string `json:"crowdLongPct"`
+	TopLongPct     string `json:"topLongPct"`
+	GapPct         string `json:"gapPct"`
+	Lean           string `json:"lean"`
+	Price          string `json:"price,omitempty"`
+	PriceChangePct string `json:"priceChangePct,omitempty"`
+	TopChangePct   string `json:"topChangePct,omitempty"`
+	VsPrice        string `json:"vsPrice,omitempty"`
+}
+
+type longShortDivergenceDTO struct {
+	Kind            string `json:"kind"`
+	Versus          string `json:"versus,omitempty"`
+	Since           string `json:"since,omitempty"`
+	LastAt          string `json:"lastAt,omitempty"`
+	Duration        string `json:"duration,omitempty"`
+	DurationSeconds int    `json:"durationSeconds,omitempty"`
+	PriceChangePct  string `json:"priceChangePct,omitempty"`
+	TopChangePct    string `json:"topChangePct,omitempty"`
+	GapChangePct    string `json:"gapChangePct,omitempty"`
+	Headline        string `json:"headline,omitempty"`
+	Detail          string `json:"detail,omitempty"`
+	Bars            int    `json:"bars,omitempty"`
 }
 
 type longShortGapWindowDTO struct {
@@ -1129,6 +1148,7 @@ type longShortVenueDTO struct {
 	GapHistory   []longShortGapPointDTO  `json:"gapHistory,omitempty"`
 	GapWindows   []longShortGapWindowDTO `json:"gapWindows,omitempty"`
 	GapMoves     []longShortGapMoveDTO   `json:"gapMoves,omitempty"`
+	Divergence   *longShortDivergenceDTO `json:"divergence,omitempty"`
 }
 
 type longShortResponse struct {
@@ -1143,6 +1163,7 @@ type longShortResponse struct {
 	GapHistory []longShortGapPointDTO  `json:"gapHistory,omitempty"`
 	GapWindows []longShortGapWindowDTO `json:"gapWindows,omitempty"`
 	GapMoves   []longShortGapMoveDTO   `json:"gapMoves,omitempty"`
+	Divergence *longShortDivergenceDTO `json:"divergence,omitempty"`
 	AsOf       string                  `json:"asOf,omitempty"`
 	VenueCount int                     `json:"venueCount"`
 	Note       string                  `json:"note"`
@@ -1190,7 +1211,7 @@ func openInterestToDTO(a *domain.OpenInterestSnapshot) openInterestResponse {
 		Symbol: a.Symbol, Exchange: a.Exchange, Unit: a.Unit,
 		Current: oiLevelDTO(a.Current), Windows: oiWindowsDTO(a.Windows),
 		Venues: venues, AsOf: asOf, VenueCount: a.VenueCount,
-		Note: "Binance USD-M and Bybit linear perpetual open interest. contracts is outstanding size in the base asset (Bybit uses singleOpenInterest — one side — not the 2× both-sides openInterest). value is USDT notional. Change is current minus the reading ~window ago. funding is the predicted next rate plus recent settlements; funding.pressure is OI-weighted combined predicted funding. longShort is the share of accounts that are long vs short; longShort.gap is top-trader long% minus crowd long% plus whether that spread is widening. Combined all sums OI across venues. Informational only.",
+		Note: "Binance USD-M and Bybit linear perpetual open interest. contracts is outstanding size in the base asset (Bybit uses singleOpenInterest — one side — not the 2× both-sides openInterest). value is USDT notional. Change is current minus the reading ~window ago. funding is the predicted next rate plus recent settlements; funding.pressure is OI-weighted combined predicted funding. longShort is the share of accounts that are long vs short; longShort.gap is top-trader long% minus crowd long%; longShort.divergence is top vs price (more long while price falls). Combined all sums OI across venues. Informational only.",
 	}
 	if a.Funding != nil {
 		f := fundingToDTO(a.Funding)
@@ -1387,10 +1408,27 @@ func longShortGapDTOFrom(g domain.LongShortGap) longShortGapDTO {
 func longShortGapPointDTOFrom(p domain.LongShortGapPoint) longShortGapPointDTO {
 	out := longShortGapPointDTO{
 		Versus: p.Versus, CrowdLongPct: p.CrowdLongPct, TopLongPct: p.TopLongPct,
-		GapPct: p.GapPct, Lean: p.Lean,
+		GapPct: p.GapPct, Lean: p.Lean, Price: p.Price, PriceChangePct: p.PriceChangePct,
+		TopChangePct: p.TopChangePct, VsPrice: p.VsPrice,
 	}
 	if !p.Time.IsZero() {
 		out.Time = p.Time.UTC().Format(time.RFC3339Nano)
+	}
+	return out
+}
+
+func longShortDivergenceDTOFrom(d domain.LongShortPriceDivergence) longShortDivergenceDTO {
+	out := longShortDivergenceDTO{
+		Kind: d.Kind, Versus: d.Versus, Duration: d.Duration,
+		DurationSeconds: d.DurationSeconds, PriceChangePct: d.PriceChangePct,
+		TopChangePct: d.TopChangePct, GapChangePct: d.GapChangePct,
+		Headline: d.Headline, Detail: d.Detail, Bars: d.Bars,
+	}
+	if !d.Since.IsZero() {
+		out.Since = d.Since.UTC().Format(time.RFC3339Nano)
+	}
+	if !d.LastAt.IsZero() {
+		out.LastAt = d.LastAt.UTC().Format(time.RFC3339Nano)
 	}
 	return out
 }
@@ -1483,6 +1521,10 @@ func longShortToDTO(a *domain.LongShortSnapshot) longShortResponse {
 			g := longShortGapDTOFrom(*v.Gap)
 			row.Gap = &g
 		}
+		if v.Divergence != nil {
+			d := longShortDivergenceDTOFrom(*v.Divergence)
+			row.Divergence = &d
+		}
 		venues = append(venues, row)
 	}
 	hist := make([]longShortLevelDTO, 0, len(a.History))
@@ -1499,7 +1541,7 @@ func longShortToDTO(a *domain.LongShortSnapshot) longShortResponse {
 		GapHistory: longShortGapHistoryDTO(a.GapHistory),
 		GapWindows: longShortGapWindowsDTO(a.GapWindows),
 		GapMoves:   longShortGapMovesDTO(a.GapMoves),
-		Note:       "current is all-account long/short (count, not size). On Binance, topAccounts is the top 20% of traders by margin (account count) and topPositions is their position size. gap is top long% minus crowd long% in percentage points (+10 = top 65% long vs crowd 55%). gapWindows (1h/4h/24h) and gapMoves say if that spread widened, narrowed, or flipped. split.opposite means the crowd and bigger books lean different ways — analysis then treats size as the positioned side. ratio is long/short. bias is long if ratio≥1.05, short if ≤0.95. 5m samples. Combined all does not average venues. Informational only.",
+		Note:       "current is all-account long/short (count, not size). On Binance, topAccounts is the top 20% of traders by margin (account count) and topPositions is their position size. gap is top long% minus crowd long% in percentage points (+10 = top 65% long vs crowd 55%). gapWindows (1h/4h/24h) and gapMoves say if that spread widened, narrowed, or flipped. divergence is when top traders get more long while price falls (or more short while price rises), with since/duration. split.opposite means the crowd and bigger books lean different ways — analysis then treats size as the positioned side. ratio is long/short. bias is long if ratio≥1.05, short if ≤0.95. 5m samples. Combined all does not average venues. Informational only.",
 	}
 	if a.Current != nil {
 		cur := longShortLevelDTOFrom(*a.Current)
@@ -1508,6 +1550,10 @@ func longShortToDTO(a *domain.LongShortSnapshot) longShortResponse {
 	if a.Gap != nil {
 		g := longShortGapDTOFrom(*a.Gap)
 		out.Gap = &g
+	}
+	if a.Divergence != nil {
+		d := longShortDivergenceDTOFrom(*a.Divergence)
+		out.Divergence = &d
 	}
 	return out
 }

@@ -4555,7 +4555,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "vs short (not position size). On Binance, gap is top-trader long% "
                 "minus crowd long% in percentage points (65% vs 55% → +10); "
                 "gapWindows (1h/4h/24h) say if that spread widened, narrowed, or "
-                "flipped. ratio is long/short (1 = even). bias is long if ratio≥1.05, "
+                "flipped. divergence is when top traders get more long while price "
+                "falls (or more short while price rises), with since/duration. "
+                "ratio is long/short (1 = even). bias is long if ratio≥1.05, "
                 "short if ≤0.95. 5-minute samples. Binance USD-M + Bybit linear. "
                 "exchange=all is per venue, not averaged."
             ),

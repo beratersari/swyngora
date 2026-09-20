@@ -166,6 +166,8 @@
     "gap_narrowed": "Narrowing",
     "gap_flipped": "Flipped",
     "gap_stable": "Stable",
+    "lsDiv": "Vs price",
+    "lsDivSince": "Since",
     "taker1h": "1h takers",
     "takerShare": "1h buy share"
   },

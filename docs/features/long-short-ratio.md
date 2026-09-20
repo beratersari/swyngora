@@ -7,8 +7,10 @@ for a coin on Binance USD-M and Bybit linear perpetual, so a user or the AI
 can ask “are more traders long or short BTC?” On Binance, also show
 **top-trader account** and **top-trader position** ratios, a **single gap**
 between big traders and the crowd (top long% minus crowd long%), and whether
-that gap is **widening or shrinking**. Say when the crowd and bigger books
-lean opposite.
+that gap is **widening or shrinking**. Show when **top traders and price
+diverge** (top getting more long while price drops, or more short while
+price rises), and **when that run started**. Say when the crowd and bigger
+books lean opposite.
 
 ## Behavior
 
@@ -28,6 +30,12 @@ lean opposite.
   `widened` / `narrowed` / `flipped` / `stable`. `gapHistory` is 5m samples
   (newest first). `gapMoves` calls out larger jumps. 24h uses stored futures
   history when the live REST window is shorter
+- `divergence` is when top-trader long share and 5m price move opposite ways
+  for at least 15 minutes (max 4h). `kind` is `top_long_price_down` (top
+  getting more long, price down) or `top_short_price_up`. `since` is when
+  the current run started; `duration` / `priceChangePct` / `topChangePct`
+  cover that run (e.g. +3pp long vs −1.5% over 30m). Price is the venue's
+  5m close. `gapHistory[].vsPrice` is `opposite` or `confirms` per bar
 - `split.opposite` means all-account crowding and top-trader size lean different
   ways. Hunt, squeeze, and positioning then treat **size** as who is positioned
   and keep the crowd print visible
@@ -46,7 +54,7 @@ Sources (public REST, no API key):
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/longshort.go`, `longshort_gap.go` |
+| Domain | `backend/internal/domain/longshort.go`, `longshort_gap.go`, `longshort_price.go` |
 | Adapters | `adapter/binance/longshort.go`, `adapter/bybit/longshort.go` |
 | Service | `GetLongShortRatio` (also attached by `GetOpenInterest`) |
 | HTTP | `GET /api/v1/market/long-short-ratio` |

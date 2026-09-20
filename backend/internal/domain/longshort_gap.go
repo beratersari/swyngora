@@ -56,12 +56,16 @@ type LongShortGap struct {
 
 // LongShortGapPoint is the crowd-vs-top gap at one 5m sample.
 type LongShortGapPoint struct {
-	Time         time.Time
-	Versus       string
-	CrowdLongPct string
-	TopLongPct   string
-	GapPct       string
-	Lean         string
+	Time           time.Time
+	Versus         string
+	CrowdLongPct   string
+	TopLongPct     string
+	GapPct         string
+	Lean           string
+	Price          string
+	PriceChangePct string
+	TopChangePct   string
+	VsPrice        string // confirms | opposite
 }
 
 // LongShortGapWindow is live gap vs a lookback.

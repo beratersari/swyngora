@@ -1524,6 +1524,8 @@ paths:
         value: top long% minus crowd long% in percentage points
         (e.g. top 65% long vs crowd 55% → `+10`). `gapWindows` (1h/4h/24h)
         and `gapMoves` say if that spread widened, narrowed, or flipped.
+        `divergence` is when top traders get more long while price falls
+        (or more short while price rises), with `since` / `duration`.
         `split.opposite` means the crowd and bigger books lean different
         ways — hunt / squeeze / positioning then treat size as the
         positioned side. 5-minute samples. `ratio` is long/short (1 = even).
@@ -9916,6 +9918,26 @@ components:
         topLongPct: { type: string }
         gapPct: { type: string }
         lean: { type: string, enum: [top_more_long, top_more_short, even] }
+        price: { type: string }
+        priceChangePct: { type: string, description: Signed % vs previous 5m close }
+        topChangePct: { type: string, description: Signed pp of top long share vs previous 5m }
+        vsPrice: { type: string, enum: [confirms, opposite], description: Same direction as price or opposite }
+    LongShortPriceDivergence:
+      type: object
+      description: Top-trader long share vs price moving opposite ways
+      properties:
+        kind: { type: string, enum: [top_long_price_down, top_short_price_up] }
+        versus: { type: string, enum: [top_positions, top_accounts] }
+        since: { type: string, format: date-time, description: When the current opposite run started }
+        lastAt: { type: string, format: date-time }
+        duration: { type: string, example: 30m }
+        durationSeconds: { type: integer }
+        priceChangePct: { type: string, description: Signed % over the run }
+        topChangePct: { type: string, description: Signed pp of top long share over the run }
+        gapChangePct: { type: string, description: Signed pp of crowd-vs-top gap over the run }
+        headline: { type: string }
+        detail: { type: string }
+        bars: { type: integer }
     LongShortGapWindow:
       type: object
       properties:
@@ -9961,6 +9983,7 @@ components:
         gapMoves:
           type: array
           items: { $ref: '#/components/schemas/LongShortGapMove' }
+        divergence: { $ref: '#/components/schemas/LongShortPriceDivergence' }
     MarketLongShortRatio:
       type: object
       description: Account long/short ratio plus Binance top-trader layers, crowd-vs-top gap, and recent 5m history
@@ -9986,6 +10009,7 @@ components:
         gapMoves:
           type: array
           items: { $ref: '#/components/schemas/LongShortGapMove' }
+        divergence: { $ref: '#/components/schemas/LongShortPriceDivergence' }
         asOf: { type: string, format: date-time }
         venueCount: { type: integer }
         note: { type: string }
