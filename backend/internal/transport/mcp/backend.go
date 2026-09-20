@@ -750,6 +750,53 @@ func formatQtyMCP(v float64) string {
 	return strconv.FormatFloat(v, 'f', -1, 64)
 }
 
+func (b *Backend) GetMarketPressure(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetMarketPressure(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(marketPressureMap(got))
+}
+
+func marketPressureMap(got *domain.MarketPressureReport) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	comps := make([]map[string]any, 0, len(got.Current.Components))
+	for _, c := range got.Current.Components {
+		comps = append(comps, map[string]any{
+			"id": c.ID, "label": c.Label, "value": domain.FormatMarketPressureValue(c.Value),
+			"weight": c.Weight, "used": c.Used, "lean": c.Lean, "detail": c.Detail,
+		})
+	}
+	wins := make([]map[string]any, 0, len(got.Windows))
+	for _, w := range got.Windows {
+		row := map[string]any{
+			"window": w.Window, "value": w.ValueText, "pastValue": w.PastText,
+			"change": w.ChangeText, "lean": w.Lean, "kind": w.Kind, "complete": w.Complete,
+		}
+		if !w.SampleTime.IsZero() {
+			row["sampleTime"] = w.SampleTime.UTC().Format(time.RFC3339Nano)
+		}
+		wins = append(wins, row)
+	}
+	asOf := ""
+	if !got.AsOf.IsZero() {
+		asOf = got.AsOf.UTC().Format(time.RFC3339Nano)
+	}
+	return map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange, "asOf": asOf,
+		"current": map[string]any{
+			"value": got.Current.ValueText, "lean": got.Current.Lean, "agreement": got.Current.Agreement,
+			"components": comps, "headline": got.Current.Headline, "detail": got.Current.Detail,
+		},
+		"change1h": got.Change1h, "windows": wins, "note": got.Note,
+	}
+}
+
 func (b *Backend) GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

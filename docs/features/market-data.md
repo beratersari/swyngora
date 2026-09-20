@@ -68,6 +68,7 @@ Coin detail also has an **order heatmap** (resting bid/ask size over time) from 
 - `GET /api/v1/market/positioning` price + open-interest regime (buildup / unwinding / covering) per venue + combined. See [`positioning.md`](positioning.md).
 - `GET /api/v1/market/venue-divergence` Binance vs Bybit same/opposite split. See [`venue-divergence.md`](venue-divergence.md).
 - `GET /api/v1/market/taker-flow` aggressive futures buy vs sell volume (5m/1h/4h). See [`taker-flow.md`](taker-flow.md).
+- `GET /api/v1/market/pressure` one −1…+1 score from resting book, CVD, and absorption, plus 1h change. See [`market-pressure.md`](market-pressure.md).
 - `GET /api/v1/market/cvd` spot and futures CVD versus price (15m / 1h / 4h / 24h); venue split and spot-vs-futures split. See [`cvd.md`](cvd.md).
 - `GET /api/v1/market/volume-profile` volume by price (POC + 70% value area, buy/sell); Binance and Bybit separately plus combined. See [`volume-profile.md`](volume-profile.md).
 - `GET /api/v1/market/around` what happened around a time (before / during / after). See [`around.md`](around.md).

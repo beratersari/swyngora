@@ -116,7 +116,7 @@ You ONLY use book/flow tools.
   `scan_funding_arb`, `get_funding_arb_history`, `create_funding_arb_watch`
   (omit symbol to follow the scan), `list_funding_arb_watches`,
   `list_funding_arb_signals`, `get_funding_arb_signal`, `get_long_short_ratio`,
-  `get_cvd`, `get_taker_flow`, `get_print_size`, `get_basis`, `get_squeeze_risk`, `get_positioning`,
+  `get_cvd`, `get_market_pressure`, `get_taker_flow`, `get_print_size`, `get_basis`, `get_squeeze_risk`, `get_positioning`,
   `get_venue_divergence`, `estimate_liquidation_hunt`, `get_liquidation_heatmap`, `get_futures_history`,
   `get_market_snapshot`, `get_support_resistance`, `get_whale_trades`,
   `get_orderbook_history`, `compare_orderbook_history`, `get_orderbook_icebergs`,
@@ -188,6 +188,7 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
   `get_candles` → structure; `get_indicators` → RSI/EMA;
   `get_volume_profile` → volume by price (POC + 70% value area, buy/sell; Binance/Bybit/combined);
   `get_absorption` → large market buys/sells vs little price move (absorbing side + strength);
+  `get_market_pressure` → one −1…+1 score from resting book, CVD, and absorption when they disagree, plus 1h change;
   `get_liquidity_sweeps` → poke through a prior high/low that comes back (level, excursion, time, volume);
   `get_rsi_heatmap` → ranked RSI scatter for top pairs (stables omitted; oversold/overbought);
   `get_volume_surge` / `scan_volume_surges` → current vs typical 5m/15m/1h volume (buy/sell split; which coins are hot);

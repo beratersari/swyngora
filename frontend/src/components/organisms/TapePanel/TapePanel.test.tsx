@@ -169,6 +169,27 @@ describe('TapePanel', () => {
     expect(screen.getByText(/15:30 UTC/i)).toBeInTheDocument();
   });
 
+  it('shows combined net pressure and 1h change', () => {
+    renderWithTheme(
+      <TapePanel
+        pressure={{
+          current: {
+            value: '+0.40',
+            lean: 'buy',
+            agreement: 'opposite',
+            headline:
+              'The order book looks bid-heavy while CVD is selling, but bids are absorbing that flow. Net pressure +0.40.',
+          },
+          change1h: '+0.22',
+          windows: [{ window: '1h', change: '+0.22', kind: 'more_buy', complete: true }],
+        }}
+      />,
+    );
+    expect(screen.getByText('+0.40')).toBeInTheDocument();
+    expect(screen.getByText('+0.22')).toBeInTheDocument();
+    expect(screen.getByText(/bids are absorbing/i)).toBeInTheDocument();
+  });
+
   it('explains a missing perp book', () => {
     renderWithTheme(<TapePanel openInterestError="no perpetual on this venue" />);
     expect(screen.getAllByText('no perpetual on this venue').length).toBeGreaterThan(0);

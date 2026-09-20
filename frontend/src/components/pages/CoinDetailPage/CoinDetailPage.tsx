@@ -42,6 +42,7 @@ import {
   useGetMarketLiquidationsQuery,
   useGetMarketCvdQuery,
   useGetMarketPrintSizeQuery,
+  useGetMarketPressureQuery,
   useGetMarketSnapshotQuery,
   useGetTicker24hQuery,
   useGetSpotOrderBookQuery,
@@ -392,6 +393,11 @@ export function CoinDetailPage() {
     refetchOnFocus: true,
   });
   const printSizeQuery = useGetMarketPrintSizeQuery(tapeQueryArg, {
+    skip: skipTape,
+    pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
+    refetchOnFocus: true,
+  });
+  const pressureQuery = useGetMarketPressureQuery(tapeQueryArg, {
     skip: skipTape,
     pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
     refetchOnFocus: true,
@@ -1115,12 +1121,24 @@ export function CoinDetailPage() {
                               })
                             : null
                         }
+                        pressure={rtkCurrent(pressureQuery)}
+                        pressureError={
+                          pressureQuery.isError
+                            ? rtkErrorMessage(pressureQuery.error, {
+                                resource: t('detail:resource.tape'),
+                                statusMessages: {
+                                  400: t('detail:tape.unsupported'),
+                                },
+                              })
+                            : null
+                        }
                         isLoading={
                           rtkCurrentPending(openInterestQuery) ||
                           rtkCurrentPending(liquidationsQuery) ||
                           rtkCurrentPending(cvdQuery) ||
                           rtkCurrentPending(snapshotQuery) ||
-                          rtkCurrentPending(printSizeQuery)
+                          rtkCurrentPending(printSizeQuery) ||
+                          rtkCurrentPending(pressureQuery)
                         }
                       />
                     </TabStack>

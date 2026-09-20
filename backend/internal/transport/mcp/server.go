@@ -68,6 +68,7 @@ type DataPort interface {
 	GetTakerFlow(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetPrintSize(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetMarketPressure(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeProfile(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize float64) (json.RawMessage, error)
 	GetVWAP(ctx context.Context, exchange, symbol, window, startTime, endTime string) (json.RawMessage, error)
 	GetAround(ctx context.Context, exchange, symbol, at, window, during string) (json.RawMessage, error)
@@ -1065,6 +1066,22 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetPrintSize(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_market_pressure",
+		mcp.WithDescription("One −1…+1 score for which side has more pressure when the resting order book, CVD, and absorption disagree. +1 is buy, −1 is sell. When the book looks bid-heavy but CVD is selling, absorption is weighted more so the net is not a wash. change1h is this score minus ~1h ago. Prefer this for 'who has the pressure' or 'book is bullish but CVD is negative'. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetMarketPressure(ctx, req.GetString("exchange", "all"), symbol)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

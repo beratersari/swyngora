@@ -628,6 +628,16 @@ func (c *APIClient) GetPrintSize(ctx context.Context, exchange, symbol string) (
 	return c.get(ctx, "/api/v1/market/print-size", q)
 }
 
+// GetMarketPressure returns the blended −1…+1 book/CVD/absorption score.
+func (c *APIClient) GetMarketPressure(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/pressure", q)
+}
+
 // GetCVD returns cumulative taker buy−sell versus price.
 func (c *APIClient) GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

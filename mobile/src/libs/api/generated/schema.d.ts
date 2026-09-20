@@ -1101,6 +1101,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/pressure": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Combined market pressure from book, CVD, and absorption
+         * @description One **−1…+1** score for which side has more pressure when the
+         *     resting order book, CVD, and absorption disagree. +1 is buy,
+         *     −1 is sell. When the book looks bid-heavy but CVD is selling,
+         *     absorption (bids taking that flow) is weighted more so the net
+         *     is not a wash. `change1h` is this score minus the score ~1h ago.
+         *     Components stay visible. Informational only.
+         */
+        get: operations["getMarketPressure"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/taker-flow": {
         parameters: {
             query?: never;
@@ -5850,6 +5875,55 @@ export interface components {
             summary?: string;
             error?: string;
         };
+        MarketPressureComponent: {
+            /** @enum {string} */
+            id?: "book" | "flow" | "absorption";
+            label?: string;
+            /** @description Signed −1…+1 */
+            value?: string;
+            weight?: string;
+            used?: boolean;
+            /** @enum {string} */
+            lean?: "buy" | "sell" | "mixed";
+            detail?: string;
+        };
+        MarketPressureReading: {
+            /** @description Signed −1 (sell) to +1 (buy) */
+            value?: string;
+            /** @enum {string} */
+            lean?: "buy" | "sell" | "mixed";
+            /** @enum {string} */
+            agreement?: "same" | "mixed" | "opposite";
+            components?: components["schemas"]["MarketPressureComponent"][];
+            headline?: string;
+            detail?: string;
+        };
+        MarketPressureWindow: {
+            /** @enum {string} */
+            window?: "1h";
+            value?: string;
+            pastValue?: string;
+            /** @description Signed now minus ~1h ago */
+            change?: string;
+            /** @enum {string} */
+            lean?: "buy" | "sell" | "mixed";
+            /** @enum {string} */
+            kind?: "more_buy" | "more_sell" | "flipped" | "stable";
+            complete?: boolean;
+            /** Format: date-time */
+            sampleTime?: string;
+        };
+        /** @description Combined −1…+1 market pressure from book, CVD, and absorption */
+        MarketPressure: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            current?: components["schemas"]["MarketPressureReading"];
+            change1h?: string;
+            windows?: components["schemas"]["MarketPressureWindow"][];
+            note?: string;
+        };
         /** @description Average aggressive print size vs the prior window */
         MarketPrintSize: {
             symbol?: string;
@@ -9511,6 +9585,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketPressure: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Combined −1…+1 pressure and 1h change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketPressure"];
                 };
             };
             400: components["responses"]["Error"];

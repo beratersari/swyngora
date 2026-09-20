@@ -523,6 +523,33 @@ func TestGetSnapshot_BadSymbol(t *testing.T) {
 	}
 }
 
+func TestGetMarketPressure_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/pressure?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetMarketPressure(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body marketPressureResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Current.Value == "" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetMarketPressure_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/pressure", nil)
+	rr := httptest.NewRecorder()
+	h.GetMarketPressure(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetCVD_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/cvd?symbol=BTCUSDT", nil)

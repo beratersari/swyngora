@@ -1098,6 +1098,17 @@ func TestGetLongShortRatio_CrowdVsTopGap(t *testing.T) {
 	}
 }
 
+func TestGetMarketPressure_BookOnly(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	got, err := svc.GetMarketPressure(context.Background(), "all", "BTCUSDT")
+	if err != nil || got == nil || got.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v %v", got, err)
+	}
+	if got.Current.ValueText == "" {
+		t.Fatalf("empty value %+v", got.Current)
+	}
+}
+
 func TestGetLongShortRatio_PriceDivergence(t *testing.T) {
 	now := time.Date(2026, 9, 20, 16, 0, 0, 0, time.UTC)
 	topHist := make([]domain.LongShortPoint, 0, 6)

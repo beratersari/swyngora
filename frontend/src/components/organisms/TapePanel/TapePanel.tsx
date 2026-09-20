@@ -37,6 +37,8 @@ export function TapePanel({
   snapshotError,
   printSize,
   printSizeError,
+  pressure,
+  pressureError,
   isLoading = false,
 }: TapePanelProps) {
   const { t } = useTranslation('detail');
@@ -44,12 +46,13 @@ export function TapePanel({
   const oi24h = windowByName(openInterest?.windows, '24h');
   const liq1h = windowByName(liquidations?.windows, '1h');
   const liq24h = windowByName(liquidations?.windows, '24h');
-  const pressure = openInterest?.funding?.pressure;
-  const funding = pressure ?? openInterest?.funding?.current;
-  const pressure1h = windowByName(openInterest?.funding?.pressureWindows, '1h');
-  const pressure24h = windowByName(openInterest?.funding?.pressureWindows, '24h');
+  const fundingPressure = openInterest?.funding?.pressure;
+  const funding = fundingPressure ?? openInterest?.funding?.current;
+  const funding1h = windowByName(openInterest?.funding?.pressureWindows, '1h');
+  const funding24h = windowByName(openInterest?.funding?.pressureWindows, '24h');
+  const tapePressure1h = windowByName(pressure?.windows, '1h');
   const nextSettle =
-    pressure?.nextFundingTime ??
+    fundingPressure?.nextFundingTime ??
     openInterest?.funding?.current?.nextFundingTime ??
     openInterest?.funding?.venues?.find((v) => v.current?.nextFundingTime)?.current
       ?.nextFundingTime;
@@ -125,7 +128,7 @@ export function TapePanel({
           <>
             <StatsGrid>
               <Stat
-                label={pressure ? t('tape.pressure') : t('tape.nextRate')}
+                label={fundingPressure ? t('tape.pressure') : t('tape.nextRate')}
                 value={formatFundingPct(funding?.ratePct)}
                 isLoading={isLoading}
               />
@@ -136,12 +139,12 @@ export function TapePanel({
               />
               <Stat
                 label={t('tape.pressure1h')}
-                value={formatSignedFundingPct(pressure1h?.changePct)}
+                value={formatSignedFundingPct(funding1h?.changePct)}
                 isLoading={isLoading}
               />
               <Stat
                 label={t('tape.pressure24h')}
-                value={formatSignedFundingPct(pressure24h?.changePct)}
+                value={formatSignedFundingPct(funding24h?.changePct)}
                 isLoading={isLoading}
               />
               <Stat
@@ -150,9 +153,9 @@ export function TapePanel({
                 isLoading={isLoading}
               />
             </StatsGrid>
-            {pressure?.summary ? (
+            {fundingPressure?.summary ? (
               <Text variant="caption" color="secondary">
-                {pressure.summary}
+                {fundingPressure.summary}
               </Text>
             ) : null}
           </>
@@ -257,6 +260,42 @@ export function TapePanel({
         {cvdRow?.error ? (
           <Text variant="caption" color="secondary">
             {cvdRow.error}
+          </Text>
+        ) : null}
+      </Block>
+
+      <Block>
+        <Text variant="label" color="primary">
+          {t('tape.netPressure')}
+        </Text>
+        {pressureError ? (
+          <Alert type="info" showIcon message={t('tape.netPressure')} description={pressureError} />
+        ) : (
+          <StatsGrid>
+            <Stat
+              label={t('tape.netNow')}
+              value={pressure?.current?.value ?? '—'}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.netLean')}
+              value={
+                pressure?.current?.lean
+                  ? t(`tape.net_${pressure.current.lean}`, { defaultValue: pressure.current.lean })
+                  : '—'
+              }
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.net1h')}
+              value={pressure?.change1h ?? tapePressure1h?.change ?? '—'}
+              isLoading={isLoading}
+            />
+          </StatsGrid>
+        )}
+        {pressure?.current?.headline ? (
+          <Text variant="caption" color="secondary">
+            {pressure.current.headline}
           </Text>
         ) : null}
       </Block>

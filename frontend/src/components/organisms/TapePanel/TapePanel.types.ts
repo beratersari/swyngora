@@ -4,6 +4,7 @@ import type {
   MarketLiquidations,
   MarketOpenInterest,
   MarketPrintSize,
+  MarketPressure,
   MarketSnapshot,
 } from '@/libs/api';
 
@@ -18,4 +19,6 @@ export type TapePanelProps = WithLoadingProps & {
   snapshotError?: string | null;
   printSize?: MarketPrintSize | null;
   printSizeError?: string | null;
+  pressure?: MarketPressure | null;
+  pressureError?: string | null;
 };

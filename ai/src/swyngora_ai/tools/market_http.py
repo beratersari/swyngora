@@ -2091,6 +2091,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"symbol": symbol, "exchange": exchange},
         )
 
+    def get_market_pressure(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/pressure",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
     def get_cvd(symbol: str, exchange: str = "all") -> str:
         return http.get(
             "/api/v1/market/cvd",
@@ -4641,6 +4647,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "Aggressive futures buy vs sell volume (who is hitting the "
                 "book) for 5m, 1h, and 4h on Binance and Bybit, plus combined."
+            ),
+            args_schema=TakerFlowInput,
+        ),
+        StructuredTool.from_function(
+            get_market_pressure,
+            name="get_market_pressure",
+            description=(
+                "One -1 to +1 score for which side has more pressure when the "
+                "resting order book, CVD, and absorption disagree. +1 is buy, "
+                "-1 is sell. When the book looks bid-heavy but CVD is selling, "
+                "absorption is weighted more. change1h is this score minus ~1h ago."
             ),
             args_schema=TakerFlowInput,
         ),

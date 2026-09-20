@@ -45,6 +45,7 @@ BOOK_FLOW_ANALYTICS = frozenset(
         "get_print_size",
         "get_taker_flow",
         "get_cvd",
+        "get_market_pressure",
         "get_basis",
         "get_price_correlation",
         "get_market_breadth",

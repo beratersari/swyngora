@@ -1898,6 +1898,37 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/pressure:
+    get:
+      summary: Combined market pressure from book, CVD, and absorption
+      description: |
+        One **−1…+1** score for which side has more pressure when the
+        resting order book, CVD, and absorption disagree. +1 is buy,
+        −1 is sell. When the book looks bid-heavy but CVD is selling,
+        absorption (bids taking that flow) is weighted more so the net
+        is not a wash. `change1h` is this score minus the score ~1h ago.
+        Components stay visible. Informational only.
+      operationId: getMarketPressure
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Combined −1…+1 pressure and 1h change
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MarketPressure' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/cvd:
     get:
       summary: Cumulative volume delta versus price
@@ -9606,6 +9637,51 @@ components:
           items: { $ref: '#/components/schemas/PrintSizeWindow' }
         summary: { type: string }
         error: { type: string }
+    MarketPressureComponent:
+      type: object
+      properties:
+        id: { type: string, enum: [book, flow, absorption] }
+        label: { type: string }
+        value: { type: string, description: Signed −1…+1 }
+        weight: { type: string }
+        used: { type: boolean }
+        lean: { type: string, enum: [buy, sell, mixed] }
+        detail: { type: string }
+    MarketPressureReading:
+      type: object
+      properties:
+        value: { type: string, description: Signed −1 (sell) to +1 (buy) }
+        lean: { type: string, enum: [buy, sell, mixed] }
+        agreement: { type: string, enum: [same, mixed, opposite] }
+        components:
+          type: array
+          items: { $ref: '#/components/schemas/MarketPressureComponent' }
+        headline: { type: string }
+        detail: { type: string }
+    MarketPressureWindow:
+      type: object
+      properties:
+        window: { type: string, enum: [1h] }
+        value: { type: string }
+        pastValue: { type: string }
+        change: { type: string, description: Signed now minus ~1h ago }
+        lean: { type: string, enum: [buy, sell, mixed] }
+        kind: { type: string, enum: [more_buy, more_sell, flipped, stable] }
+        complete: { type: boolean }
+        sampleTime: { type: string, format: date-time }
+    MarketPressure:
+      type: object
+      description: Combined −1…+1 market pressure from book, CVD, and absorption
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        asOf: { type: string, format: date-time }
+        current: { $ref: '#/components/schemas/MarketPressureReading' }
+        change1h: { type: string }
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/MarketPressureWindow' }
+        note: { type: string }
     MarketPrintSize:
       type: object
       description: Average aggressive print size vs the prior window

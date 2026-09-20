@@ -75,6 +75,8 @@ import type {
   CvdQuery,
   MarketPrintSize,
   PrintSizeQuery,
+  MarketPressure,
+  PressureQuery,
   Ticker24h,
   Ticker24hQuery,
   SpotOrderBook,
@@ -134,6 +136,7 @@ export type {
   MarketLiquidationCascadeScan,
   MarketCvd,
   MarketPrintSize,
+  MarketPressure,
   MarketForensics,
   MarketForensicsQuery,
   MarketForensicsScan,
@@ -404,6 +407,13 @@ export const marketApi = baseApi.injectEndpoints({
       }),
     }),
 
+    getMarketPressure: build.query<MarketPressure, PressureQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/pressure',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
     getMarketForensics: build.query<MarketForensics, MarketForensicsQuery>({
       query: (arg) => ({
         url: '/api/v1/market/forensics',
@@ -550,6 +560,7 @@ export const {
   useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketCvdQuery,
   useGetMarketPrintSizeQuery,
+  useGetMarketPressureQuery,
   useGetMarketForensicsQuery,
   useScanMarketForensicsQuery,
   useReviewSetupRadarQuery,
