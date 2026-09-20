@@ -46,9 +46,10 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_venue_divergence` | Binance vs Bybit: same/opposite, which metrics differ and why |
 | `get_taker_flow` | Aggressive futures buy vs sell volume (5m/1h/4h) per venue + combined |
 | `get_print_size` | Average aggressive print size (USDT per fill) 5m/15m vs the prior window; few large vs many small |
+| `get_flow_at_prices` | Buy vs sell USDT, print count, and delta at each price (Binance aggTrades / Bybit recent trades); `window` 5m/15m/1h or `startTime`/`endTime`; optional `minPrice`/`maxPrice`/`tickSize` |
 | `get_market_pressure` | One −1…+1 score from resting book, CVD, and absorption when they disagree; `change1h` is that score vs ~1h ago |
 | `get_cvd` | Spot and futures CVD versus price; 15m/1h/4h/24h change; venue split, spot-vs-futures split, divergence duration |
-| `get_volume_profile` | Volume by price (POC + 70% value area, buy/sell); Binance and Bybit separately plus combined; `window` or `startTime`/`endTime` |
+| `get_volume_profile` | Volume by price (POC + 70% value area, buy/sell); Binance and Bybit separately plus combined; `window` or `startTime`/`endTime`. Candle smear — use `get_flow_at_prices` for print-level buy/sell/count/delta |
 | `get_around` | What happened around a time: before / during / after (price, volume, VWAP, vs typical, POC, sweeps, stored book/futures, BTC/ETH options when sampled, listed futures curve, tapeRead flow-at-prices; venueTiming says who printed first, whether the other followed, and whether OI or takers had already changed before the laggard's real start; last OI/taker print much earlier than price, a price-start taker bar, or a hole longer than one missing bar at the tape interval, omits continued/faded/reversed) |
 | `compare_around` | Compare two times for the same coin: how the two moves differed (price, volume, book, OI, sweeps) |
 | `find_around_moves` | Find strong up/down legs and show what happened during each (around tape) |

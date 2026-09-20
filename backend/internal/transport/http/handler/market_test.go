@@ -1293,6 +1293,43 @@ func TestGetPrintSize_OK(t *testing.T) {
 	}
 }
 
+func TestGetFlowAtPrices_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/flow-at-prices?symbol=BTCUSDT&window=15m&tickSize=1", nil)
+	rr := httptest.NewRecorder()
+	h.GetFlowAtPrices(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body flowAtPricesResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Window != "15m" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetFlowAtPrices_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/flow-at-prices", nil)
+	rr := httptest.NewRecorder()
+	h.GetFlowAtPrices(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
+func TestGetFlowAtPrices_BadTick(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/flow-at-prices?symbol=BTCUSDT&tickSize=nope", nil)
+	rr := httptest.NewRecorder()
+	h.GetFlowAtPrices(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetTakerFlow_BadSymbol(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/taker-flow", nil)

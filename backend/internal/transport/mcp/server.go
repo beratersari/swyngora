@@ -70,6 +70,7 @@ type DataPort interface {
 	GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetMarketPressure(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeProfile(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize float64) (json.RawMessage, error)
+	GetFlowAtPrices(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize, minPrice, maxPrice float64) (json.RawMessage, error)
 	GetVWAP(ctx context.Context, exchange, symbol, window, startTime, endTime string) (json.RawMessage, error)
 	GetAround(ctx context.Context, exchange, symbol, at, window, during string) (json.RawMessage, error)
 	CompareAround(ctx context.Context, exchange, symbol, from, to, window, during string) (json.RawMessage, error)
@@ -1439,6 +1440,28 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetVolumeProfile(ctx, req.GetString("exchange", "all"), symbol, req.GetString("window", ""), req.GetString("startTime", ""), req.GetString("endTime", ""), req.GetFloat("tickSize", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_flow_at_prices",
+		mcp.WithDescription("What printed at each price: market buy vs sell USDT, print count, and delta (buy − sell) on that row. Use when the user asks how much bought/sold at a level (e.g. 65520 while BTC traded 65400–65600), not candle totals. Built from aggressive futures prints (Binance aggTrades, Bybit recent trades), not candle smear. window 5m/15m/1h (default 15m) or startTime/endTime (max 1h). Optional minPrice/maxPrice clips the ladder; tickSize sets row width. truncated when the venue tape does not cover the whole window. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
+		mcp.WithString("window", mcp.Description("5m | 15m | 1h (default 15m). Ignored when startTime/endTime are set.")),
+		mcp.WithString("startTime", mcp.Description("Range start (RFC3339 or unix ms). Use with endTime. Max 1h.")),
+		mcp.WithString("endTime", mcp.Description("Range end (RFC3339 or unix ms).")),
+		mcp.WithNumber("tickSize", mcp.Description("Price row width (e.g. 10). Omit to pick one automatically.")),
+		mcp.WithNumber("minPrice", mcp.Description("Only include prints at or above this price.")),
+		mcp.WithNumber("maxPrice", mcp.Description("Only include prints at or below this price.")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetFlowAtPrices(ctx, req.GetString("exchange", "all"), symbol, req.GetString("window", ""), req.GetString("startTime", ""), req.GetString("endTime", ""), req.GetFloat("tickSize", 0), req.GetFloat("minPrice", 0), req.GetFloat("maxPrice", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -1606,6 +1606,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/flow-at-prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Flow at prices (buy/sell/delta per price)
+         * @description **Flow at prices** shows what actually printed at each price:
+         *     market **buy** vs **sell** USDT, **print count**, and **delta**
+         *     (buy − sell). Use this when a candle's total buy/sell is not
+         *     enough — for example BTC traded 65400–65600 and you want the
+         *     row at 65520. Built from aggressive **futures prints** (Binance
+         *     USD-M aggTrades, Bybit recent trades), not candle volume smeared
+         *     across high–low (that is `/volume-profile`). `exchange=all`
+         *     (default) returns Binance and Bybit separately plus `combined`.
+         *     Use `window` (`5m` / `15m` / `1h`, default `15m`) or `startTime`
+         *     + `endTime` (max 1h). Optional `tickSize` sets the row width;
+         *     `minPrice` / `maxPrice` clip the ladder to a band. `truncated`
+         *     is true when the venue tape does not cover the whole window.
+         *     `trades` is aggregated print count, not individual orders.
+         *     Informational only.
+         */
+        get: operations["getMarketFlowAtPrices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/venue-divergence": {
         parameters: {
             query?: never;
@@ -10190,6 +10223,44 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Per-venue and optional combined volume profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketFlowAtPrices: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all = both + combined) */
+                exchange?: string;
+                /** @description 5m | 15m | 1h (default 15m). Ignored when startTime/endTime are set. */
+                window?: string;
+                /** @description Range start (RFC3339 or unix ms). Max span 1h. */
+                startTime?: string;
+                /** @description Range end (RFC3339 or unix ms) */
+                endTime?: string;
+                /** @description Price row width (e.g. 10). Omit to pick one automatically. */
+                tickSize?: number;
+                /** @description Only include prints at or above this price (e.g. 65400). */
+                minPrice?: number;
+                /** @description Only include prints at or below this price (e.g. 65600). */
+                maxPrice?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue and optional combined price ladder */
             200: {
                 headers: {
                     [name: string]: unknown;

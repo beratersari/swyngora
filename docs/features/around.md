@@ -30,7 +30,7 @@ Each phase includes:
 - stored futures: open interest, funding, long %, liquidations (when the archive has samples)
 - listed BTC/ETH options: open interest, put/call, implied vol, and unusual prints (two samples required; `started` is before vs during; `lead` is the real start inside the 1h/4h/24h unusual lookback, not the window open; `after` is kept going / turned / went quiet)
 - listed futures curve: contango / backwardation and the near-vs-far mark gap at the close of the phase (`curve`, from 1h mark klines of the current dated contracts)
-- `tapeRead`: where most volume printed (POC) with market buy vs sell, where buyer/seller dominance started, and if delta flipped against price in the before+during window
+- `tapeRead`: where most volume printed (POC) with market buy vs sell, where buyer/seller dominance started, and if delta flipped against price in the before+during window. The full per-price ladder (buy / sell / print count / delta) is `GET /api/v1/market/flow-at-prices`
 
 Liquidity sweeps whose poke sits in the span are attached as events.
 `changes` compares the three windows (continued / reversed / faded).

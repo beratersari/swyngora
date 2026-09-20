@@ -376,6 +376,25 @@ class _Transport(httpx2.BaseTransport):
                     "valueArea": {"low": "64800", "high": "66100"},
                 },
             )
+        if request.url.path.endswith("/flow-at-prices"):
+            return httpx2.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "exchange": request.url.params.get("exchange") or "all",
+                    "window": request.url.params.get("window") or "15m",
+                    "poc": {"price": "65520", "buyVolume": "8000000", "sellVolume": "2000000"},
+                    "levels": [
+                        {
+                            "price": "65520",
+                            "buyVolume": "8000000",
+                            "sellVolume": "2000000",
+                            "trades": 12,
+                            "delta": "+6000000",
+                        }
+                    ],
+                },
+            )
         return httpx2.Response(404, json={"error": "not found"})
 
 
@@ -573,6 +592,16 @@ def test_market_tools_hit_api(monkeypatch):
     )
     assert vp["symbol"] == "BTCUSDT"
     assert vp["poc"]["price"] == "65200"
+
+    assert "get_flow_at_prices" in by_name
+    flow = json.loads(
+        by_name["get_flow_at_prices"].invoke(
+            {"symbol": "BTCUSDT", "exchange": "all", "window": "15m", "min_price": 65400, "max_price": 65600}
+        )
+    )
+    assert flow["symbol"] == "BTCUSDT"
+    assert flow["poc"]["price"] == "65520"
+    assert flow["levels"][0]["delta"] == "+6000000"
 
     assert "get_market_liquidity" in by_name
     liq = json.loads(by_name["get_market_liquidity"].invoke({"symbol": "BTCUSDT"}))

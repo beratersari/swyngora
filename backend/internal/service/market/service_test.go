@@ -83,6 +83,14 @@ func (f *fakeMarket) GetRecentPrints(_ context.Context, symbol string) ([]domain
 	return nil, nil
 }
 
+func (f *fakeMarket) ListPrints(ctx context.Context, symbol string, from, to time.Time) ([]domain.TakerPrint, error) {
+	got, err := f.GetRecentPrints(ctx, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return domain.FilterPrintsInRange(got, from, to), nil
+}
+
 func (f *fakeMarket) GetOrderBook(_ context.Context, q domain.OrderBookQuery) (*domain.RawOrderBook, error) {
 	f.lastBookQ = q
 	if q.SnapshotOnly {

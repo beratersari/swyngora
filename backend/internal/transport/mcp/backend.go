@@ -1036,6 +1036,98 @@ func (b *Backend) GetVolumeProfile(ctx context.Context, exchange, symbol, window
 	return mustJSON(got)
 }
 
+func (b *Backend) GetFlowAtPrices(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize, minPrice, maxPrice float64) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	var startPtr, endPtr *time.Time
+	if startTime != "" {
+		t, err := parseMCPTime(startTime)
+		if err != nil {
+			return nil, err
+		}
+		startPtr = &t
+	}
+	if endTime != "" {
+		t, err := parseMCPTime(endTime)
+		if err != nil {
+			return nil, err
+		}
+		endPtr = &t
+	}
+	got, err := b.Market.GetFlowAtPrices(ctx, exchange, symbol, window, startPtr, endPtr, tickSize, minPrice, maxPrice)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(flowAtPricesMap(got))
+}
+
+func flowAtPricesMap(got *domain.FlowAtPricesReport) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	venues := make([]map[string]any, 0, len(got.Venues))
+	for _, v := range got.Venues {
+		venues = append(venues, flowAtPricesVenueMap(v))
+	}
+	out := map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange, "window": got.Window,
+		"from": got.From.UTC().Format(time.RFC3339Nano), "to": got.To.UTC().Format(time.RFC3339Nano),
+		"asOf": got.AsOf.UTC().Format(time.RFC3339Nano), "tickSize": formatQtyMCP(got.TickSize),
+		"venues": venues, "summary": got.Summary, "note": got.Note,
+	}
+	if got.MinPrice > 0 {
+		out["minPrice"] = formatQtyMCP(got.MinPrice)
+	}
+	if got.MaxPrice > 0 {
+		out["maxPrice"] = formatQtyMCP(got.MaxPrice)
+	}
+	if got.Combined != nil {
+		out["combined"] = flowAtPricesVenueMap(*got.Combined)
+	}
+	return out
+}
+
+func flowAtPricesVenueMap(v domain.FlowAtPricesVenue) map[string]any {
+	levels := make([]map[string]any, 0, len(v.Levels))
+	for _, lv := range v.Levels {
+		levels = append(levels, map[string]any{
+			"price": formatQtyMCP(lv.Price), "high": formatQtyMCP(lv.High),
+			"buyVolume": formatQtyMCP(lv.BuyVolume), "sellVolume": formatQtyMCP(lv.SellVolume),
+			"volume": formatQtyMCP(lv.Volume), "buyCount": lv.BuyCount, "sellCount": lv.SellCount,
+			"trades": lv.Trades, "delta": domain.FormatSignedQty(lv.Delta),
+			"buyPct": formatQtyMCP(lv.BuyPct), "sharePct": formatQtyMCP(lv.SharePct),
+			"dominant": lv.Dominant, "isPoc": lv.IsPoc,
+		})
+	}
+	out := map[string]any{
+		"exchange": string(v.Exchange), "symbol": v.Symbol,
+		"from": v.From.UTC().Format(time.RFC3339Nano), "to": v.To.UTC().Format(time.RFC3339Nano),
+		"tickSize": formatQtyMCP(v.TickSize), "lastPrice": formatQtyMCP(v.LastPrice),
+		"high": formatQtyMCP(v.High), "low": formatQtyMCP(v.Low),
+		"buyVolume": formatQtyMCP(v.BuyVolume), "sellVolume": formatQtyMCP(v.SellVolume),
+		"volume": formatQtyMCP(v.Volume), "delta": domain.FormatSignedQty(v.Delta),
+		"buyCount": v.BuyCount, "sellCount": v.SellCount, "trades": v.Trades, "dominant": v.Dominant,
+		"poc": map[string]any{
+			"price": formatQtyMCP(v.POC.Price), "high": formatQtyMCP(v.POC.High),
+			"buyVolume": formatQtyMCP(v.POC.BuyVolume), "sellVolume": formatQtyMCP(v.POC.SellVolume),
+			"volume": formatQtyMCP(v.POC.Volume), "delta": domain.FormatSignedQty(v.POC.Delta),
+			"trades": v.POC.Trades, "sharePct": formatQtyMCP(v.POC.SharePct),
+		},
+		"levels": levels, "complete": v.Complete, "truncated": v.Truncated, "summary": v.Summary,
+	}
+	if !v.KnownFrom.IsZero() {
+		out["knownFrom"] = v.KnownFrom.UTC().Format(time.RFC3339Nano)
+	}
+	if !v.KnownTo.IsZero() {
+		out["knownTo"] = v.KnownTo.UTC().Format(time.RFC3339Nano)
+	}
+	if v.Error != "" {
+		out["error"] = v.Error
+	}
+	return out
+}
+
 func (b *Backend) GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

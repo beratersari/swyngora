@@ -897,6 +897,38 @@ class VolumeProfileInput(BaseModel):
     )
 
 
+class FlowAtPricesInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both + combined)",
+    )
+    window: str = Field(
+        default="15m",
+        description="5m|15m|1h (default 15m). Ignored when start_time/end_time are set.",
+    )
+    start_time: str = Field(
+        default="",
+        description="Range start (RFC3339 or unix ms). Max span 1h.",
+    )
+    end_time: str = Field(
+        default="",
+        description="Range end (RFC3339 or unix ms)",
+    )
+    tick_size: float = Field(
+        default=0,
+        description="Price row width (e.g. 10). Omit or 0 to pick one automatically.",
+    )
+    min_price: float = Field(
+        default=0,
+        description="Only include prints at or above this price (e.g. 65400).",
+    )
+    max_price: float = Field(
+        default=0,
+        description="Only include prints at or below this price (e.g. 65600).",
+    )
+
+
 class BasisInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -2427,6 +2459,31 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if tick_size:
             params["tickSize"] = tick_size
         return http.get("/api/v1/market/volume-profile", params)
+
+    def get_flow_at_prices(
+        symbol: str,
+        exchange: str = "all",
+        window: str = "15m",
+        start_time: str = "",
+        end_time: str = "",
+        tick_size: float = 0,
+        min_price: float = 0,
+        max_price: float = 0,
+    ) -> str:
+        params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
+        if window:
+            params["window"] = window
+        if start_time:
+            params["startTime"] = start_time
+        if end_time:
+            params["endTime"] = end_time
+        if tick_size:
+            params["tickSize"] = tick_size
+        if min_price:
+            params["minPrice"] = min_price
+        if max_price:
+            params["maxPrice"] = max_price
+        return http.get("/api/v1/market/flow-at-prices", params)
 
     def get_basis(symbol: str, exchange: str = "all") -> str:
         return http.get(
@@ -4864,6 +4921,20 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Use window 1h/4h/24h/7d/30d or start_time/end_time."
             ),
             args_schema=VolumeProfileInput,
+        ),
+        StructuredTool.from_function(
+            get_flow_at_prices,
+            name="get_flow_at_prices",
+            description=(
+                "What printed at each price: market buy vs sell USDT, print "
+                "count, and delta (buy − sell). Use when a candle's total "
+                "buy/sell is not enough — e.g. how much bought and sold at "
+                "65520 while BTC traded 65400–65600. Built from aggressive "
+                "futures prints, not candle smear. window 5m/15m/1h or "
+                "start_time/end_time (max 1h). Optional min_price/max_price "
+                "and tick_size. Binance + Bybit."
+            ),
+            args_schema=FlowAtPricesInput,
         ),
         StructuredTool.from_function(
             get_basis,

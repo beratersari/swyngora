@@ -1015,6 +1015,34 @@ func (c *APIClient) GetVolumeProfile(ctx context.Context, exchange, symbol, wind
 	return c.get(ctx, "/api/v1/market/volume-profile", q)
 }
 
+// GetFlowAtPrices returns buy/sell/count/delta at each traded price.
+func (c *APIClient) GetFlowAtPrices(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize, minPrice, maxPrice float64) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if window != "" {
+		q.Set("window", window)
+	}
+	if startTime != "" {
+		q.Set("startTime", startTime)
+	}
+	if endTime != "" {
+		q.Set("endTime", endTime)
+	}
+	if tickSize > 0 {
+		q.Set("tickSize", strconv.FormatFloat(tickSize, 'f', -1, 64))
+	}
+	if minPrice > 0 {
+		q.Set("minPrice", strconv.FormatFloat(minPrice, 'f', -1, 64))
+	}
+	if maxPrice > 0 {
+		q.Set("maxPrice", strconv.FormatFloat(maxPrice, 'f', -1, 64))
+	}
+	return c.get(ctx, "/api/v1/market/flow-at-prices", q)
+}
+
 // GetBasis returns futures-vs-spot premium/discount per venue.
 func (c *APIClient) GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

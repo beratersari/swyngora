@@ -36,6 +36,9 @@ volume is spread evenly across the prices it traded (`high`–`low`). That is
 an approximation, not tick-level prints. Binance klines include taker-buy, so
 buy/sell is available there. Bybit klines do not.
 
+For **actual prints at a price** (buy vs sell, print count, delta — e.g.
+how much traded at 65520), use [`flow-at-prices.md`](flow-at-prices.md).
+
 Informational only — not financial advice.
 
 ## Where the code lives

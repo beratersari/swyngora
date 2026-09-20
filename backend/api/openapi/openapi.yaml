@@ -2752,6 +2752,69 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/flow-at-prices:
+    get:
+      summary: Flow at prices (buy/sell/delta per price)
+      description: |
+        **Flow at prices** shows what actually printed at each price:
+        market **buy** vs **sell** USDT, **print count**, and **delta**
+        (buy − sell). Use this when a candle's total buy/sell is not
+        enough — for example BTC traded 65400–65600 and you want the
+        row at 65520. Built from aggressive **futures prints** (Binance
+        USD-M aggTrades, Bybit recent trades), not candle volume smeared
+        across high–low (that is `/volume-profile`). `exchange=all`
+        (default) returns Binance and Bybit separately plus `combined`.
+        Use `window` (`5m` / `15m` / `1h`, default `15m`) or `startTime`
+        + `endTime` (max 1h). Optional `tickSize` sets the row width;
+        `minPrice` / `maxPrice` clip the ladder to a band. `truncated`
+        is true when the venue tape does not cover the whole window.
+        `trades` is aggregated print count, not individual orders.
+        Informational only.
+      operationId: getMarketFlowAtPrices
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + combined)
+          schema: { type: string, default: all }
+        - name: window
+          in: query
+          description: 5m | 15m | 1h (default 15m). Ignored when startTime/endTime are set.
+          schema: { type: string, default: "15m" }
+        - name: startTime
+          in: query
+          description: Range start (RFC3339 or unix ms). Max span 1h.
+          schema: { type: string }
+        - name: endTime
+          in: query
+          description: Range end (RFC3339 or unix ms)
+          schema: { type: string }
+        - name: tickSize
+          in: query
+          description: Price row width (e.g. 10). Omit to pick one automatically.
+          schema: { type: number, example: 10 }
+        - name: minPrice
+          in: query
+          description: Only include prints at or above this price (e.g. 65400).
+          schema: { type: number, example: 65400 }
+        - name: maxPrice
+          in: query
+          description: Only include prints at or below this price (e.g. 65600).
+          schema: { type: number, example: 65600 }
+      responses:
+        '200':
+          description: Per-venue and optional combined price ladder
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/venue-divergence:
     get:
       summary: Binance vs Bybit signal split
