@@ -58,6 +58,18 @@ func (c *Client) ListPrints(ctx context.Context, symbol string, from, to time.Ti
 	return domain.FilterPrintsInRange(got, from, to), nil
 }
 
+// ListSpotPrints returns recent spot trades filtered to [from, to].
+func (c *Client) ListSpotPrints(ctx context.Context, symbol string, from, to time.Time) ([]domain.TakerPrint, error) {
+	got, err := c.fetchRecentTrades(ctx, symbol, "spot")
+	if err != nil {
+		return nil, err
+	}
+	if from.IsZero() || to.IsZero() {
+		return got, nil
+	}
+	return domain.FilterPrintsInRange(got, from, to), nil
+}
+
 func (c *Client) fetchRecentPrints(ctx context.Context, symbol string) ([]domain.TakerPrint, error) {
 	q := url.Values{}
 	q.Set("category", "linear")

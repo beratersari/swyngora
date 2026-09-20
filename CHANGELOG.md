@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Book liquidity flow:** when a bid or ask shrinks, split how much was traded vs pulled vs added, plus a time series. `GET /api/v1/market/orderbook/liquidity-flow`, MCP `get_orderbook_liquidity_flow` (`docs/features/book-liquidity-flow.md`)
 - **Flow at prices:** buy vs sell USDT, print count, and delta at each traded price from aggressive futures prints (not candle smear). `GET /api/v1/market/flow-at-prices`, MCP `get_flow_at_prices` (`docs/features/flow-at-prices.md`)
 - **OI opened vs closed:** 1h / 4h / 24h USDT amount and percent of open interest added or closed, per venue and combined. `flow` / `openedValue` / `closedValue` on `GET /api/v1/market/open-interest`; coin-detail tape; MCP `get_open_interest` (`docs/features/open-interest.md`)
 - **Combined market pressure:** one −1…+1 score from resting book, CVD, and absorption when those disagree, plus 1h change. `GET /api/v1/market/pressure`, MCP `get_market_pressure`, coin-detail tape (`docs/features/market-pressure.md`)

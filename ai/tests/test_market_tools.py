@@ -376,6 +376,17 @@ class _Transport(httpx2.BaseTransport):
                     "valueArea": {"low": "64800", "high": "66100"},
                 },
             )
+        if request.url.path.endswith("/liquidity-flow"):
+            return httpx2.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "exchange": request.url.params.get("exchange") or "all",
+                    "window": request.url.params.get("window") or "5m",
+                    "bids": {"pulled": "3000000", "traded": "3000000", "added": "0"},
+                    "asks": {"pulled": "0", "traded": "3000000", "added": "0"},
+                },
+            )
         if request.url.path.endswith("/flow-at-prices"):
             return httpx2.Response(
                 200,
@@ -592,6 +603,15 @@ def test_market_tools_hit_api(monkeypatch):
     )
     assert vp["symbol"] == "BTCUSDT"
     assert vp["poc"]["price"] == "65200"
+
+    assert "get_orderbook_liquidity_flow" in by_name
+    liqflow = json.loads(
+        by_name["get_orderbook_liquidity_flow"].invoke(
+            {"symbol": "BTCUSDT", "exchange": "binance", "window": "5m"}
+        )
+    )
+    assert liqflow["symbol"] == "BTCUSDT"
+    assert liqflow["bids"]["pulled"] == "3000000"
 
     assert "get_flow_at_prices" in by_name
     flow = json.loads(

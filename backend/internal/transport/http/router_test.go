@@ -172,6 +172,7 @@ func TestNewRouter_RoutesAndCORS(t *testing.T) {
 		{"/api/v1/market/ticker/24h?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/orderbook?symbol=BTCUSDT&group=0.1", http.StatusOK, nil},
 		{"/api/v1/market/orderbook/icebergs?symbol=BTCUSDT", http.StatusOK, nil},
+		{"/api/v1/market/orderbook/liquidity-flow?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/orderbook/history?symbol=BTCUSDT", http.StatusBadGateway, nil},
 		{"/api/v1/market/orderbook/combined?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/orderbook/impact?symbol=BTCUSDT&quantity=0.1", http.StatusOK, nil},

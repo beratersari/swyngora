@@ -94,6 +94,7 @@ Coin detail also has an **order heatmap** (resting bid/ask size over time) from 
 - `GET /api/v1/market/orderbook/history` stored book at a time (or a list). See [`book-history.md`](book-history.md).
 - `GET /api/v1/market/orderbook/history/compare` which levels gained or lost liquidity. See [`book-history.md`](book-history.md).
 - `GET /api/v1/market/orderbook/icebergs` same-price clip eaten then refilled. See [`icebergs.md`](icebergs.md).
+- `GET /api/v1/market/orderbook/liquidity-flow` traded vs pulled vs added resting size (bid and ask). See [`book-liquidity-flow.md`](book-liquidity-flow.md).
 - See [`order-book.md`](order-book.md).
 
 ### Equities — `nasdaq` / `bist`

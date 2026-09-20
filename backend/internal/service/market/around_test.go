@@ -528,6 +528,9 @@ func (s stubAroundBook) SnapshotAt(_ context.Context, _, _ string, at time.Time)
 func (s stubAroundBook) List(context.Context, domain.BookHistoryQuery) ([]domain.BookHistorySnapshot, error) {
 	return []domain.BookHistorySnapshot{s.from, s.to}, nil
 }
+func (s stubAroundBook) ListLadders(ctx context.Context, q domain.BookHistoryQuery) ([]domain.BookHistorySnapshot, error) {
+	return s.List(ctx, q)
+}
 func (s stubAroundBook) Compare(_ context.Context, _, _ string, _, _ time.Time) (*domain.BookHistoryDiff, error) {
 	d := domain.CompareBookHistory(s.from, s.to)
 	return &d, nil

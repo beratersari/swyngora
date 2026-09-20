@@ -151,6 +151,24 @@ func (s *Service) List(ctx context.Context, q domain.BookHistoryQuery) ([]domain
 	return rows, nil
 }
 
+// ListLadders returns snapshots in the range with bid/ask levels kept.
+func (s *Service) ListLadders(ctx context.Context, q domain.BookHistoryQuery) ([]domain.BookHistorySnapshot, error) {
+	if s == nil || s.Store == nil {
+		return nil, fmt.Errorf("%w: order book history not configured", domain.ErrUpstream)
+	}
+	ex, err := parseBookExchange(q.Exchange)
+	if err != nil {
+		return nil, err
+	}
+	q.Exchange = string(ex)
+	q.Symbol = domain.NormalizeSymbol(ex, q.Symbol)
+	if q.Symbol == "" {
+		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
+	}
+	q.Limit = domain.ParseBookHistoryLimit(q.Limit)
+	return s.Store.ListSnapshots(ctx, q)
+}
+
 // Compare loads the nearest books at from and to and diffs liquidity.
 func (s *Service) Compare(ctx context.Context, exchange, symbol string, from, to time.Time) (*domain.BookHistoryDiff, error) {
 	if from.IsZero() || to.IsZero() {

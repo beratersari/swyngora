@@ -741,6 +741,61 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook/liquidity-flow:
+    get:
+      summary: Traded vs pulled vs added resting liquidity
+      description: |
+        When a bid (or ask) shrinks — for example **8M at 65500 down to 2M**
+        five minutes later — split that 6M into **traded** (aggressive prints
+        at that price) versus **pulled** (cancelled / no matching print).
+        Size that appeared is **added**. `bids` / `asks` totals plus per-price
+        `levels`, and `series` of added/pulled/traded over the stored samples.
+        Uses 1-minute stored spot books (top grouped levels) plus spot prints
+        (Binance aggTrades; Bybit/Coinbase recent public trades). Not L3
+        order-by-order. `window` `5m` / `15m` / `1h` (default `5m`) or
+        `startTime` + `endTime` (max 1h). Optional `minPrice` / `maxPrice`.
+        Informational only.
+      operationId: getOrderBookLiquidityFlow
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | coinbase | bybit | all (default all)
+          schema: { type: string, default: all }
+        - name: window
+          in: query
+          description: 5m | 15m | 1h (default 5m). Ignored when startTime/endTime are set.
+          schema: { type: string, default: "5m" }
+        - name: startTime
+          in: query
+          description: Range start (RFC3339 or unix ms). Max span 1h.
+          schema: { type: string }
+        - name: endTime
+          in: query
+          description: Range end (RFC3339 or unix ms)
+          schema: { type: string }
+        - name: minPrice
+          in: query
+          description: Only include this price and above (e.g. 65400).
+          schema: { type: number, example: 65400 }
+        - name: maxPrice
+          in: query
+          description: Only include this price and below (e.g. 65600).
+          schema: { type: number, example: 65600 }
+      responses:
+        '200':
+          description: Per-venue and optional combined traded vs pulled vs added
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/orderbook/combined:
     get:
       summary: Market-wide spot order book analysis

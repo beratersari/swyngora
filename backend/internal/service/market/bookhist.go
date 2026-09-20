@@ -14,6 +14,7 @@ const bookHistoryNote = "Stored books are 1-minute samples of the live spot ladd
 type BookHistoryReader interface {
 	SnapshotAt(ctx context.Context, exchange, symbol string, at time.Time) (*domain.BookHistorySnapshot, error)
 	List(ctx context.Context, q domain.BookHistoryQuery) ([]domain.BookHistorySnapshot, error)
+	ListLadders(ctx context.Context, q domain.BookHistoryQuery) ([]domain.BookHistorySnapshot, error)
 	Compare(ctx context.Context, exchange, symbol string, from, to time.Time) (*domain.BookHistoryDiff, error)
 	Note(exchange, symbol string)
 }

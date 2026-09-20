@@ -120,7 +120,7 @@ You ONLY use book/flow tools.
   `get_cvd`, `get_market_pressure`, `get_taker_flow`, `get_print_size`, `get_flow_at_prices`, `get_basis`, `get_squeeze_risk`, `get_positioning`,
   `get_venue_divergence`, `estimate_liquidation_hunt`, `get_liquidation_heatmap`, `get_futures_history`,
   `get_market_snapshot`, `get_support_resistance`, `get_whale_trades`,
-  `get_orderbook_history`, `compare_orderbook_history`, `get_orderbook_icebergs`,
+  `get_orderbook_history`, `compare_orderbook_history`, `get_orderbook_icebergs`, `get_orderbook_liquidity_flow`,
   `get_price_correlation`, `get_market_breadth`, `get_price_volatility`.
 - Pumps are mechanical threshold hits, not buy signals.
 - Venues: binance, coinbase, bybit (books); nasdaq/bist have thinner depth — say so if a tool fails.
@@ -178,6 +178,7 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
   `get_long_short_ratio` → share of accounts that are long vs short (ratio / bias); on Binance `gap` is top long% minus crowd long% (+10 = top 65% vs crowd 55%) and `gapWindows` say if that spread is widening; `divergence` is top vs price (more long while price falls) with `since` / duration;
   `get_market_liquidity` → how liquid the book is (0–100 + grade, weaker side, only ±0.1/0.5/1% bands the book actually covers, per venue + common-range market-wide);
   `get_orderbook_heatmap` → resting bid/ask size over the last few minutes (not executed volume);
+  `get_orderbook_liquidity_flow` → when a bid/ask shrinks, how much was traded vs pulled vs added, plus a time series;
   `analyze_market_orderbook` → overall buy/sell pressure across Binance+Coinbase+Bybit in one ±range_pct band;
   `analyze_spot_orderbook` → one-venue pressure/walls (read wall `behavior`: persistent ≈ resting support/resistance, suspicious ≈ flicker/pulled often, short ≈ just appeared);
   `get_spot_orderbook` → grouped ladder + analysis;

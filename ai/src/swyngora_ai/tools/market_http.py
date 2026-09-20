@@ -451,6 +451,34 @@ class IcebergsInput(BaseModel):
     )
 
 
+class OrderBookLiquidityFlowInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|coinbase|bybit|all (default all)",
+    )
+    window: str = Field(
+        default="5m",
+        description="5m|15m|1h (default 5m). Ignored when start_time/end_time are set.",
+    )
+    start_time: str = Field(
+        default="",
+        description="Range start (RFC3339 or unix ms). Max span 1h.",
+    )
+    end_time: str = Field(
+        default="",
+        description="Range end (RFC3339 or unix ms)",
+    )
+    min_price: float = Field(
+        default=0,
+        description="Only include this price and above (e.g. 65400).",
+    )
+    max_price: float = Field(
+        default=0,
+        description="Only include this price and below (e.g. 65600).",
+    )
+
+
 class OrderBookHistoryInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT or BTC-USD")
     exchange: str = Field(default="binance", description="binance|coinbase|bybit")
@@ -1998,6 +2026,28 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if min_notional:
             params["minNotional"] = min_notional
         return http.get("/api/v1/market/orderbook/icebergs", params)
+
+    def get_orderbook_liquidity_flow(
+        symbol: str,
+        exchange: str = "all",
+        window: str = "5m",
+        start_time: str = "",
+        end_time: str = "",
+        min_price: float = 0,
+        max_price: float = 0,
+    ) -> str:
+        params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
+        if window:
+            params["window"] = window
+        if start_time:
+            params["startTime"] = start_time
+        if end_time:
+            params["endTime"] = end_time
+        if min_price:
+            params["minPrice"] = min_price
+        if max_price:
+            params["maxPrice"] = max_price
+        return http.get("/api/v1/market/orderbook/liquidity-flow", params)
 
     def get_orderbook_history(
         symbol: str,
@@ -4343,6 +4393,18 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "notional. Book pattern only, not proof of a hidden order."
             ),
             args_schema=IcebergsInput,
+        ),
+        StructuredTool.from_function(
+            get_orderbook_liquidity_flow,
+            name="get_orderbook_liquidity_flow",
+            description=(
+                "When resting size at a price shrinks (e.g. 8M bid at 65500 "
+                "down to 2M), split how much was actually traded vs pulled "
+                "from the book. Same for asks. series is added/pulled/traded "
+                "over time. Stored spot books plus spot prints. window "
+                "5m/15m/1h or start_time/end_time. Optional min_price/max_price."
+            ),
+            args_schema=OrderBookLiquidityFlowInput,
         ),
         StructuredTool.from_function(
             get_orderbook_history,

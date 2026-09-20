@@ -191,6 +191,31 @@ func (c *APIClient) CompareBookHistory(ctx context.Context, exchange, symbol, fr
 	return c.get(ctx, "/api/v1/market/orderbook/history/compare", q)
 }
 
+// GetBookLiquidity attributes resting size changes as traded vs pulled vs added.
+func (c *APIClient) GetBookLiquidity(ctx context.Context, exchange, symbol, window, startTime, endTime string, minPrice, maxPrice float64) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if window != "" {
+		q.Set("window", window)
+	}
+	if startTime != "" {
+		q.Set("startTime", startTime)
+	}
+	if endTime != "" {
+		q.Set("endTime", endTime)
+	}
+	if minPrice > 0 {
+		q.Set("minPrice", strconv.FormatFloat(minPrice, 'f', -1, 64))
+	}
+	if maxPrice > 0 {
+		q.Set("maxPrice", strconv.FormatFloat(maxPrice, 'f', -1, 64))
+	}
+	return c.get(ctx, "/api/v1/market/orderbook/liquidity-flow", q)
+}
+
 // GetIcebergs returns prices where visible size was eaten and then refilled.
 func (c *APIClient) GetIcebergs(ctx context.Context, exchange, symbol string, minNotional float64) (json.RawMessage, error) {
 	q := url.Values{}

@@ -94,7 +94,7 @@ Futures / other markets are out of scope for now version.
 | Adapters | `adapter/{binance,coinbase,bybit}/depthhub.go` |
 | Service | `backend/internal/service/market` `GetSpotOrderBook`, `GetCombinedOrderBookAnalysis`, `EstimateOrderBookImpact`, `GetMarketLiquidity` |
 | HTTP | `GET /api/v1/market/orderbook`, `GET /api/v1/market/orderbook/combined`, `GET /api/v1/market/orderbook/impact`, `GET /api/v1/market/orderbook/liquidity`, `GET /api/v1/market/orderbook/heatmap`, `GET /api/v1/market/orderbook/history`, `GET /api/v1/market/orderbook/history/compare`, `GET /api/v1/market/orderbook/icebergs` |
-| MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook`, `analyze_market_orderbook`, `estimate_market_impact`, `get_market_liquidity`, `get_orderbook_heatmap`, `get_orderbook_history`, `compare_orderbook_history`, `get_orderbook_icebergs`, `create_orderbook_alert` |
+| MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook`, `analyze_market_orderbook`, `estimate_market_impact`, `get_market_liquidity`, `get_orderbook_heatmap`, `get_orderbook_history`, `compare_orderbook_history`, `get_orderbook_icebergs`, `get_orderbook_liquidity_flow`, `create_orderbook_alert` |
 | UI | `frontend` coin detail `OrderBookPanel` + `OrderDepthChart` + `OrderHeatmap` |
 
 ## How to verify

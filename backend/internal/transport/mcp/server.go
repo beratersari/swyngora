@@ -94,6 +94,7 @@ type DataPort interface {
 	GetWhales(ctx context.Context, exchange, symbol string, minNotional float64, limit int) (json.RawMessage, error)
 	GetBookHistory(ctx context.Context, exchange, symbol, at, from, to string, limit int) (json.RawMessage, error)
 	CompareBookHistory(ctx context.Context, exchange, symbol, from, to string) (json.RawMessage, error)
+	GetBookLiquidity(ctx context.Context, exchange, symbol, window, startTime, endTime string, minPrice, maxPrice float64) (json.RawMessage, error)
 	GetIcebergs(ctx context.Context, exchange, symbol string, minNotional float64) (json.RawMessage, error)
 	GetCandles(ctx context.Context, exchange, symbol, interval string, limit int) (json.RawMessage, error)
 	GetSupply(ctx context.Context, asset string) (json.RawMessage, error)
@@ -443,6 +444,27 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.CompareBookHistory(ctx, req.GetString("exchange", "binance"), symbol, from, to)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_orderbook_liquidity_flow",
+		mcp.WithDescription("When resting size at a price shrinks (e.g. 8M bid at 65500 down to 2M), split how much was actually traded vs pulled from the book. Same for asks. series shows liquidity added/pulled/traded over time. Uses stored spot books plus spot prints. window 5m/15m/1h (default 5m) or startTime/endTime (max 1h). Optional minPrice/maxPrice. Not L3 order-by-order. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | coinbase | bybit | all (default all)")),
+		mcp.WithString("window", mcp.Description("5m | 15m | 1h (default 5m). Ignored when startTime/endTime are set.")),
+		mcp.WithString("startTime", mcp.Description("Range start (RFC3339 or unix ms). Max 1h.")),
+		mcp.WithString("endTime", mcp.Description("Range end (RFC3339 or unix ms).")),
+		mcp.WithNumber("minPrice", mcp.Description("Only include this price and above (e.g. 65400).")),
+		mcp.WithNumber("maxPrice", mcp.Description("Only include this price and below (e.g. 65600).")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetBookLiquidity(ctx, req.GetString("exchange", "all"), symbol, req.GetString("window", ""), req.GetString("startTime", ""), req.GetString("endTime", ""), req.GetFloat("minPrice", 0), req.GetFloat("maxPrice", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

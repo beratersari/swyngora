@@ -65,3 +65,25 @@ func TestListPrints_PagesAggTrades(t *testing.T) {
 		t.Fatalf("%+v pages=%d", got, n)
 	}
 }
+
+func TestListSpotPrints_UsesSpotAggTrades(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v3/aggTrades" {
+			t.Fatalf("path %s", r.URL.Path)
+		}
+		t0 := int64(1_700_000_000_000)
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{"p": "65500", "q": "1", "T": t0 + 1000, "m": true},
+		})
+	}))
+	defer srv.Close()
+	c := NewClient(Options{BaseURL: srv.URL, HTTPClient: srv.Client()})
+	from := time.UnixMilli(1_700_000_000_000).UTC()
+	got, err := c.ListSpotPrints(context.Background(), "BTCUSDT", from, from.Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Side != domain.TakerSideSell || got[0].Price != 65500 {
+		t.Fatalf("%+v", got)
+	}
+}

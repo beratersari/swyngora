@@ -156,6 +156,107 @@ func (b *Backend) CompareBookHistory(ctx context.Context, exchange, symbol, from
 	return mustJSON(got)
 }
 
+func (b *Backend) GetBookLiquidity(ctx context.Context, exchange, symbol, window, startTime, endTime string, minPrice, maxPrice float64) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	var startPtr, endPtr *time.Time
+	if startTime != "" {
+		t, err := parseMCPTime(startTime)
+		if err != nil {
+			return nil, err
+		}
+		startPtr = &t
+	}
+	if endTime != "" {
+		t, err := parseMCPTime(endTime)
+		if err != nil {
+			return nil, err
+		}
+		endPtr = &t
+	}
+	got, err := b.Market.GetBookLiquidity(ctx, exchange, symbol, window, startPtr, endPtr, minPrice, maxPrice)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(bookLiquidityMap(got))
+}
+
+func bookLiquidityMap(got *domain.BookLiquidityReport) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	venues := make([]map[string]any, 0, len(got.Venues))
+	for _, v := range got.Venues {
+		venues = append(venues, bookLiquidityVenueMap(v))
+	}
+	out := map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange, "window": got.Window,
+		"from": got.From.UTC().Format(time.RFC3339Nano), "to": got.To.UTC().Format(time.RFC3339Nano),
+		"asOf": got.AsOf.UTC().Format(time.RFC3339Nano), "venues": venues, "summary": got.Summary, "note": got.Note,
+	}
+	if got.MinPrice > 0 {
+		out["minPrice"] = formatQtyMCP(got.MinPrice)
+	}
+	if got.MaxPrice > 0 {
+		out["maxPrice"] = formatQtyMCP(got.MaxPrice)
+	}
+	if got.Combined != nil {
+		out["combined"] = bookLiquidityVenueMap(*got.Combined)
+	}
+	return out
+}
+
+func bookLiquidityVenueMap(v domain.BookLiquidityVenue) map[string]any {
+	out := map[string]any{
+		"exchange": string(v.Exchange), "symbol": v.Symbol,
+		"from": v.From.UTC().Format(time.RFC3339Nano), "to": v.To.UTC().Format(time.RFC3339Nano),
+		"tickSize": formatQtyMCP(v.TickSize), "samples": v.Samples,
+		"bids": bookLiquiditySideMap(v.Bids), "asks": bookLiquiditySideMap(v.Asks),
+		"series": bookLiquiditySeriesMap(v.Series), "complete": v.Complete, "truncated": v.Truncated,
+		"summary": v.Summary,
+	}
+	if !v.KnownFrom.IsZero() {
+		out["knownFrom"] = v.KnownFrom.UTC().Format(time.RFC3339Nano)
+	}
+	if !v.KnownTo.IsZero() {
+		out["knownTo"] = v.KnownTo.UTC().Format(time.RFC3339Nano)
+	}
+	if v.Error != "" {
+		out["error"] = v.Error
+	}
+	return out
+}
+
+func bookLiquiditySideMap(s domain.BookLiquiditySide) map[string]any {
+	levels := make([]map[string]any, 0, len(s.Levels))
+	for _, lv := range s.Levels {
+		levels = append(levels, map[string]any{
+			"side": lv.Side, "price": formatQtyMCP(lv.Price),
+			"fromNotional": formatQtyMCP(lv.FromNotional), "toNotional": formatQtyMCP(lv.ToNotional),
+			"added": formatQtyMCP(lv.Added), "pulled": formatQtyMCP(lv.Pulled),
+			"traded": formatQtyMCP(lv.Traded), "remaining": formatQtyMCP(lv.Remaining), "read": lv.Read,
+		})
+	}
+	return map[string]any{
+		"side": s.Side, "fromNotional": formatQtyMCP(s.FromNotional), "toNotional": formatQtyMCP(s.ToNotional),
+		"added": formatQtyMCP(s.Added), "pulled": formatQtyMCP(s.Pulled), "traded": formatQtyMCP(s.Traded),
+		"read": s.Read, "levels": levels,
+	}
+}
+
+func bookLiquiditySeriesMap(in []domain.BookLiquidityPoint) []map[string]any {
+	out := make([]map[string]any, 0, len(in))
+	for _, p := range in {
+		out = append(out, map[string]any{
+			"from": p.From.UTC().Format(time.RFC3339Nano), "to": p.To.UTC().Format(time.RFC3339Nano),
+			"bidAdded": formatQtyMCP(p.BidAdded), "bidPulled": formatQtyMCP(p.BidPulled), "bidTraded": formatQtyMCP(p.BidTraded),
+			"askAdded": formatQtyMCP(p.AskAdded), "askPulled": formatQtyMCP(p.AskPulled), "askTraded": formatQtyMCP(p.AskTraded),
+		})
+	}
+	return out
+}
+
 func (b *Backend) EstimateOrderBookImpact(ctx context.Context, exchange, symbol, side string, quantity, notional float64) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

@@ -385,6 +385,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/orderbook/liquidity-flow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Traded vs pulled vs added resting liquidity
+         * @description When a bid (or ask) shrinks — for example **8M at 65500 down to 2M**
+         *     five minutes later — split that 6M into **traded** (aggressive prints
+         *     at that price) versus **pulled** (cancelled / no matching print).
+         *     Size that appeared is **added**. `bids` / `asks` totals plus per-price
+         *     `levels`, and `series` of added/pulled/traded over the stored samples.
+         *     Uses 1-minute stored spot books (top grouped levels) plus spot prints
+         *     (Binance aggTrades; Bybit/Coinbase recent public trades). Not L3
+         *     order-by-order. `window` `5m` / `15m` / `1h` (default `5m`) or
+         *     `startTime` + `endTime` (max 1h). Optional `minPrice` / `maxPrice`.
+         *     Informational only.
+         */
+        get: operations["getOrderBookLiquidityFlow"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/orderbook/combined": {
         parameters: {
             query?: never;
@@ -8741,6 +8770,42 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Bid and ask icebergs, biggest clip first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getOrderBookLiquidityFlow: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | coinbase | bybit | all (default all) */
+                exchange?: string;
+                /** @description 5m | 15m | 1h (default 5m). Ignored when startTime/endTime are set. */
+                window?: string;
+                /** @description Range start (RFC3339 or unix ms). Max span 1h. */
+                startTime?: string;
+                /** @description Range end (RFC3339 or unix ms) */
+                endTime?: string;
+                /** @description Only include this price and above (e.g. 65400). */
+                minPrice?: number;
+                /** @description Only include this price and below (e.g. 65600). */
+                maxPrice?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue and optional combined traded vs pulled vs added */
             200: {
                 headers: {
                     [name: string]: unknown;

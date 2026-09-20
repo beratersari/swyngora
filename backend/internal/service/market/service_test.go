@@ -91,6 +91,10 @@ func (f *fakeMarket) ListPrints(ctx context.Context, symbol string, from, to tim
 	return domain.FilterPrintsInRange(got, from, to), nil
 }
 
+func (f *fakeMarket) ListSpotPrints(ctx context.Context, symbol string, from, to time.Time) ([]domain.TakerPrint, error) {
+	return f.ListPrints(ctx, symbol, from, to)
+}
+
 func (f *fakeMarket) GetOrderBook(_ context.Context, q domain.OrderBookQuery) (*domain.RawOrderBook, error) {
 	f.lastBookQ = q
 	if q.SnapshotOnly {
@@ -1578,6 +1582,9 @@ func (s stubBookHist) List(_ context.Context, q domain.BookHistoryQuery) ([]doma
 	out := s.snap
 	out.Symbol = q.Symbol
 	return []domain.BookHistorySnapshot{out}, nil
+}
+func (s stubBookHist) ListLadders(ctx context.Context, q domain.BookHistoryQuery) ([]domain.BookHistorySnapshot, error) {
+	return s.List(ctx, q)
 }
 func (s stubBookHist) Compare(_ context.Context, exchange, symbol string, from, to time.Time) (*domain.BookHistoryDiff, error) {
 	a := s.snap

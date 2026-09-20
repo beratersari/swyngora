@@ -65,6 +65,14 @@ func (stubMarket) GetRecentPrints(_ context.Context, symbol string) ([]domain.Ta
 	}}, nil
 }
 
+func (s stubMarket) ListSpotPrints(ctx context.Context, symbol string, from, to time.Time) ([]domain.TakerPrint, error) {
+	got, err := s.GetRecentPrints(ctx, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return domain.FilterPrintsInRange(got, from, to), nil
+}
+
 func (stubMarket) GetOrderBook(_ context.Context, q domain.OrderBookQuery) (*domain.RawOrderBook, error) {
 	return &domain.RawOrderBook{
 		Symbol: q.Symbol,
@@ -1103,6 +1111,17 @@ func (stubBookHistHTTP) List(_ context.Context, q domain.BookHistoryQuery) ([]do
 		SampledAt: time.Unix(1_700_000_000, 0).UTC(), Mid: 100, BidNotional: 500, AskNotional: 400,
 	}}, nil
 }
+func (s stubBookHistHTTP) ListLadders(ctx context.Context, q domain.BookHistoryQuery) ([]domain.BookHistorySnapshot, error) {
+	from, err := s.SnapshotAt(ctx, q.Exchange, q.Symbol, q.From)
+	if err != nil {
+		return nil, err
+	}
+	to, err := s.SnapshotAt(ctx, q.Exchange, q.Symbol, q.To)
+	if err != nil {
+		return nil, err
+	}
+	return []domain.BookHistorySnapshot{*from, *to}, nil
+}
 func (stubBookHistHTTP) Compare(_ context.Context, _, symbol string, from, to time.Time) (*domain.BookHistoryDiff, error) {
 	fromS := domain.BookHistorySnapshot{Symbol: symbol, SampledAt: from, Mid: 100, BidNotional: 500, Bids: []domain.BookHistoryLevel{{Price: 99, Quantity: 2, Notional: 198}}}
 	toS := domain.BookHistorySnapshot{Symbol: symbol, SampledAt: to, Mid: 102, BidNotional: 200, Bids: []domain.BookHistoryLevel{{Price: 99, Quantity: 1, Notional: 99}}}
@@ -1290,6 +1309,36 @@ func TestGetPrintSize_OK(t *testing.T) {
 	}
 	if body.Symbol != "BTCUSDT" {
 		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetBookLiquidity_OK(t *testing.T) {
+	from := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
+	to := from.Add(5 * time.Minute)
+	svc := market.New(stubMarket{}, stubSupply{}).WithBookHistory(stubBookHistHTTP{})
+	h := NewMarketHandler(svc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/liquidity-flow?symbol=BTCUSDT&exchange=binance&startTime="+from.Format(time.RFC3339)+"&endTime="+to.Format(time.RFC3339), nil)
+	rr := httptest.NewRecorder()
+	h.GetBookLiquidity(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body bookLiquidityResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Window != "custom" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetBookLiquidity_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/liquidity-flow", nil)
+	rr := httptest.NewRecorder()
+	h.GetBookLiquidity(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
 	}
 }
 

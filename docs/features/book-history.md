@@ -39,6 +39,9 @@ pulled.
 Times are RFC3339 or unix milliseconds. Informational only — not financial
 advice.
 
+To split a size drop into **traded vs pulled vs added** (8M bid at 65500
+down to 2M), use [`book-liquidity-flow.md`](book-liquidity-flow.md).
+
 ## Where the code lives
 
 | Layer | Path |
