@@ -858,12 +858,16 @@ export interface paths {
          *     (`globalLongShortAccountRatio`) and **Bybit linear**
          *     (`/v5/market/account-ratio`). On Binance only, also returns
          *     `topAccounts` (top 20% of traders by margin, account count) and
-         *     `topPositions` (same traders, position size). `split.opposite` means
-         *     the crowd and bigger books lean different ways — hunt / squeeze /
-         *     positioning then treat size as the positioned side. 5-minute samples.
-         *     `ratio` is long/short (1 = even). `bias` is `long` if ratio ≥ 1.05,
-         *     `short` if ≤ 0.95. Combined `exchange=all` does not average venues.
-         *     `limit` default 24 (~2 hours). Cached ~30s. Informational only.
+         *     `topPositions` (same traders, position size). `gap` is one signed
+         *     value: top long% minus crowd long% in percentage points
+         *     (e.g. top 65% long vs crowd 55% → `+10`). `gapWindows` (1h/4h/24h)
+         *     and `gapMoves` say if that spread widened, narrowed, or flipped.
+         *     `split.opposite` means the crowd and bigger books lean different
+         *     ways — hunt / squeeze / positioning then treat size as the
+         *     positioned side. 5-minute samples. `ratio` is long/short (1 = even).
+         *     `bias` is `long` if ratio ≥ 1.05, `short` if ≤ 0.95. Combined
+         *     `exchange=all` does not average venues. `limit` default 24
+         *     (~2 hours). Cached ~30s. Informational only.
          */
         get: operations["getMarketLongShortRatio"];
         put?: never;
@@ -6123,6 +6127,66 @@ export interface components {
             headline?: string;
             detail?: string;
         };
+        /** @description Top-trader long share minus crowd long share (percentage points) */
+        LongShortGap: {
+            /**
+             * @description Which top-trader layer is compared (size preferred)
+             * @enum {string}
+             */
+            versus?: "top_positions" | "top_accounts";
+            /** @description All-account long percent */
+            crowdLongPct?: string;
+            /** @description Top-trader long percent */
+            topLongPct?: string;
+            /** @description Signed pp (top − crowd); +10 means top is 10pp more long */
+            gapPct?: string;
+            /** @enum {string} */
+            lean?: "top_more_long" | "top_more_short" | "even";
+            headline?: string;
+            detail?: string;
+            /** Format: date-time */
+            time?: string;
+        };
+        LongShortGapPoint: {
+            /** Format: date-time */
+            time?: string;
+            /** @enum {string} */
+            versus?: "top_positions" | "top_accounts";
+            crowdLongPct?: string;
+            topLongPct?: string;
+            gapPct?: string;
+            /** @enum {string} */
+            lean?: "top_more_long" | "top_more_short" | "even";
+        };
+        LongShortGapWindow: {
+            /** @enum {string} */
+            window?: "1h" | "4h" | "24h";
+            pastGapPct?: string;
+            /** @description Signed pp */
+            changePct?: string;
+            /** @enum {string} */
+            pastLean?: "top_more_long" | "top_more_short" | "even";
+            /** @enum {string} */
+            lean?: "top_more_long" | "top_more_short" | "even";
+            /** @enum {string} */
+            kind?: "widened" | "narrowed" | "flipped" | "stable";
+            complete?: boolean;
+            /** Format: date-time */
+            sampleTime?: string;
+        };
+        LongShortGapMove: {
+            /** Format: date-time */
+            time?: string;
+            /** @enum {string} */
+            kind?: "widened" | "narrowed" | "flipped";
+            /** @enum {string} */
+            fromLean?: "top_more_long" | "top_more_short" | "even";
+            /** @enum {string} */
+            toLean?: "top_more_long" | "top_more_short" | "even";
+            gapPct?: string;
+            changePct?: string;
+            summary?: string;
+        };
         LongShortVenue: {
             exchange?: string;
             /** @description accounts */
@@ -6136,8 +6200,12 @@ export interface components {
             topAccounts?: components["schemas"]["LongShortLevel"];
             topPositions?: components["schemas"]["LongShortLevel"];
             split?: components["schemas"]["LongShortSplit"];
+            gap?: components["schemas"]["LongShortGap"];
+            gapHistory?: components["schemas"]["LongShortGapPoint"][];
+            gapWindows?: components["schemas"]["LongShortGapWindow"][];
+            gapMoves?: components["schemas"]["LongShortGapMove"][];
         };
-        /** @description Account long/short ratio plus Binance top-trader layers and recent 5m history */
+        /** @description Account long/short ratio plus Binance top-trader layers, crowd-vs-top gap, and recent 5m history */
         MarketLongShortRatio: {
             symbol?: string;
             exchange?: string;
@@ -6146,6 +6214,10 @@ export interface components {
             current?: components["schemas"]["LongShortLevel"];
             venues?: components["schemas"]["LongShortVenue"][];
             history?: components["schemas"]["LongShortLevel"][];
+            gap?: components["schemas"]["LongShortGap"];
+            gapHistory?: components["schemas"]["LongShortGapPoint"][];
+            gapWindows?: components["schemas"]["LongShortGapWindow"][];
+            gapMoves?: components["schemas"]["LongShortGapMove"][];
             /** Format: date-time */
             asOf?: string;
             venueCount?: number;

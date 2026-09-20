@@ -4552,9 +4552,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="get_long_short_ratio",
             description=(
                 "Futures long/short account ratio: share of accounts that are long "
-                "vs short (not position size). ratio is long/short (1 = even). "
-                "bias is long if ratio≥1.05, short if ≤0.95. 5-minute samples. "
-                "Binance USD-M + Bybit linear. exchange=all is per venue, not averaged."
+                "vs short (not position size). On Binance, gap is top-trader long% "
+                "minus crowd long% in percentage points (65% vs 55% → +10); "
+                "gapWindows (1h/4h/24h) say if that spread widened, narrowed, or "
+                "flipped. ratio is long/short (1 = even). bias is long if ratio≥1.05, "
+                "short if ≤0.95. 5-minute samples. Binance USD-M + Bybit linear. "
+                "exchange=all is per venue, not averaged."
             ),
             args_schema=LongShortInput,
         ),

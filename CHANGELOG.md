@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Crowd vs top-trader gap:** one signed value (top long% minus crowd long%; 65% vs 55% → `+10`) plus 1h/4h/24h windows that say if that spread is widening, shrinking, or flipping. `gap` / `gapWindows` / `gapMoves` on `GET /api/v1/market/long-short-ratio` (also on open-interest `longShort`); coin-detail tape; MCP `get_long_short_ratio` (`docs/features/long-short-ratio.md`)
 - **Average print size:** 5m/15m average USDT per aggressive buy vs sell fill, compared to the window before, so a 20K→180K jump reads as a few large market orders rather than many small ones. `GET /api/v1/market/print-size`, MCP `get_print_size`, coin-detail tape (`docs/features/print-size.md`)
 - **OI-weighted funding pressure:** combined predicted funding is weighted by USDT open interest, so an 8B book at +0.01% outweighs a 1B book at −0.01%. `pressure` / `pressureHistory` / `pressureWindows` / `pressureMoves` on `GET /api/v1/market/funding-rate` (also on open-interest `funding`); coin-detail tape; MCP `get_funding_rate` (`docs/features/funding-rate.md`)
 

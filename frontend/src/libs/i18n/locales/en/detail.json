@@ -159,6 +159,13 @@
     "positioning": "Positioning",
     "longPct": "Account long %",
     "topPosLongPct": "Top size long %",
+    "crowdGap": "Crowd vs top",
+    "gap1h": "Gap 1h",
+    "gap24h": "Gap 24h",
+    "gap_widened": "Widening",
+    "gap_narrowed": "Narrowing",
+    "gap_flipped": "Flipped",
+    "gap_stable": "Stable",
     "taker1h": "1h takers",
     "takerShare": "1h buy share"
   },

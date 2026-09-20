@@ -3,6 +3,7 @@ package telegram
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
@@ -10,6 +11,29 @@ import (
 func TestPct(t *testing.T) {
 	if Pct("1.5") != "+1.50%" {
 		t.Fatalf("%s", Pct("1.5"))
+	}
+}
+
+func TestFormatLongShort_Gap(t *testing.T) {
+	now := time.Date(2026, 9, 20, 16, 0, 0, 0, time.UTC)
+	out := FormatLongShort(&domain.LongShortSnapshot{
+		Symbol: "BTCUSDT", Exchange: "binance", Period: "5m",
+		Venues: []domain.LongShortVenueSnap{{
+			Exchange:     "binance",
+			Current:      domain.LongShortLevel{LongPct: "55.00", ShortPct: "45.00", Ratio: "1.2222", Bias: "long"},
+			TopPositions: &domain.LongShortLevel{LongPct: "65.00", ShortPct: "35.00", Bias: "long"},
+			Gap: &domain.LongShortGap{
+				GapPct: "+10", Lean: domain.LongShortGapLeanTopLong,
+				Headline: "Top traders are 10pp more long than other accounts.",
+			},
+			GapWindows: []domain.LongShortGapWindow{
+				{Window: domain.SnapshotWindow1h, Kind: domain.LongShortGapWidened, ChangePct: "+6"},
+			},
+		}},
+		AsOf: now,
+	})
+	if !strings.Contains(out, "+10") || !strings.Contains(out, "more long") || !strings.Contains(out, "widened") {
+		t.Fatalf("%s", out)
 	}
 }
 

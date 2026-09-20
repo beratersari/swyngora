@@ -595,6 +595,26 @@ func formatLongShortVenues(s *domain.LongShortSnapshot) string {
 			fmt.Fprintf(&b, "    top size  long %s%% / short %s%%  %s\n",
 				code(v.TopPositions.LongPct), code(v.TopPositions.ShortPct), italic(v.TopPositions.Bias))
 		}
+		if v.Gap != nil {
+			fmt.Fprintf(&b, "    gap  %s pp  %s\n", code(v.Gap.GapPct), italic(v.Gap.Lean))
+			if v.Gap.Headline != "" {
+				b.WriteString(row("gap", italic(v.Gap.Headline)))
+			}
+			for _, w := range v.GapWindows {
+				if w.Window != domain.SnapshotWindow1h && w.Window != domain.SnapshotWindow24h {
+					continue
+				}
+				if w.Kind == "" {
+					continue
+				}
+				label := "gap " + w.Window
+				val := w.Kind
+				if w.ChangePct != "" {
+					val = w.Kind + " " + w.ChangePct + " pp"
+				}
+				b.WriteString(row(label, code(val)))
+			}
+		}
 		if v.Split.Alignment == domain.AlignOpposite && v.Split.Headline != "" {
 			b.WriteString(row("split", italic(v.Split.Headline)))
 		}

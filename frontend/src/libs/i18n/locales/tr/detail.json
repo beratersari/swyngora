@@ -159,6 +159,13 @@
     "positioning": "Konumlanma",
     "longPct": "Hesap long %",
     "topPosLongPct": "Büyük boy long %",
+    "crowdGap": "Kalabalık vs büyük",
+    "gap1h": "Fark 1s",
+    "gap24h": "Fark 24s",
+    "gap_widened": "Açılıyor",
+    "gap_narrowed": "Kapanıyor",
+    "gap_flipped": "Ters döndü",
+    "gap_stable": "Sabit",
     "taker1h": "1s taker",
     "takerShare": "1s alış payı"
   },

@@ -1520,12 +1520,16 @@ paths:
         (`globalLongShortAccountRatio`) and **Bybit linear**
         (`/v5/market/account-ratio`). On Binance only, also returns
         `topAccounts` (top 20% of traders by margin, account count) and
-        `topPositions` (same traders, position size). `split.opposite` means
-        the crowd and bigger books lean different ways — hunt / squeeze /
-        positioning then treat size as the positioned side. 5-minute samples.
-        `ratio` is long/short (1 = even). `bias` is `long` if ratio ≥ 1.05,
-        `short` if ≤ 0.95. Combined `exchange=all` does not average venues.
-        `limit` default 24 (~2 hours). Cached ~30s. Informational only.
+        `topPositions` (same traders, position size). `gap` is one signed
+        value: top long% minus crowd long% in percentage points
+        (e.g. top 65% long vs crowd 55% → `+10`). `gapWindows` (1h/4h/24h)
+        and `gapMoves` say if that spread widened, narrowed, or flipped.
+        `split.opposite` means the crowd and bigger books lean different
+        ways — hunt / squeeze / positioning then treat size as the
+        positioned side. 5-minute samples. `ratio` is long/short (1 = even).
+        `bias` is `long` if ratio ≥ 1.05, `short` if ≤ 0.95. Combined
+        `exchange=all` does not average venues. `limit` default 24
+        (~2 hours). Cached ~30s. Informational only.
       operationId: getMarketLongShortRatio
       tags: [Market]
       parameters:
@@ -9891,6 +9895,48 @@ components:
         sizeBias: { type: string, enum: [long, short, balanced] }
         headline: { type: string }
         detail: { type: string }
+    LongShortGap:
+      type: object
+      description: Top-trader long share minus crowd long share (percentage points)
+      properties:
+        versus: { type: string, enum: [top_positions, top_accounts], description: Which top-trader layer is compared (size preferred) }
+        crowdLongPct: { type: string, description: All-account long percent }
+        topLongPct: { type: string, description: Top-trader long percent }
+        gapPct: { type: string, description: Signed pp (top − crowd); +10 means top is 10pp more long }
+        lean: { type: string, enum: [top_more_long, top_more_short, even] }
+        headline: { type: string }
+        detail: { type: string }
+        time: { type: string, format: date-time }
+    LongShortGapPoint:
+      type: object
+      properties:
+        time: { type: string, format: date-time }
+        versus: { type: string, enum: [top_positions, top_accounts] }
+        crowdLongPct: { type: string }
+        topLongPct: { type: string }
+        gapPct: { type: string }
+        lean: { type: string, enum: [top_more_long, top_more_short, even] }
+    LongShortGapWindow:
+      type: object
+      properties:
+        window: { type: string, enum: [1h, 4h, 24h] }
+        pastGapPct: { type: string }
+        changePct: { type: string, description: Signed pp, live gap minus past gap }
+        pastLean: { type: string, enum: [top_more_long, top_more_short, even] }
+        lean: { type: string, enum: [top_more_long, top_more_short, even] }
+        kind: { type: string, enum: [widened, narrowed, flipped, stable] }
+        complete: { type: boolean }
+        sampleTime: { type: string, format: date-time }
+    LongShortGapMove:
+      type: object
+      properties:
+        time: { type: string, format: date-time }
+        kind: { type: string, enum: [widened, narrowed, flipped] }
+        fromLean: { type: string, enum: [top_more_long, top_more_short, even] }
+        toLean: { type: string, enum: [top_more_long, top_more_short, even] }
+        gapPct: { type: string }
+        changePct: { type: string }
+        summary: { type: string }
     LongShortVenue:
       type: object
       properties:
@@ -9905,9 +9951,19 @@ components:
         topAccounts: { $ref: '#/components/schemas/LongShortLevel' }
         topPositions: { $ref: '#/components/schemas/LongShortLevel' }
         split: { $ref: '#/components/schemas/LongShortSplit' }
+        gap: { $ref: '#/components/schemas/LongShortGap' }
+        gapHistory:
+          type: array
+          items: { $ref: '#/components/schemas/LongShortGapPoint' }
+        gapWindows:
+          type: array
+          items: { $ref: '#/components/schemas/LongShortGapWindow' }
+        gapMoves:
+          type: array
+          items: { $ref: '#/components/schemas/LongShortGapMove' }
     MarketLongShortRatio:
       type: object
-      description: Account long/short ratio plus Binance top-trader layers and recent 5m history
+      description: Account long/short ratio plus Binance top-trader layers, crowd-vs-top gap, and recent 5m history
       properties:
         symbol: { type: string }
         exchange: { type: string }
@@ -9920,6 +9976,16 @@ components:
         history:
           type: array
           items: { $ref: '#/components/schemas/LongShortLevel' }
+        gap: { $ref: '#/components/schemas/LongShortGap' }
+        gapHistory:
+          type: array
+          items: { $ref: '#/components/schemas/LongShortGapPoint' }
+        gapWindows:
+          type: array
+          items: { $ref: '#/components/schemas/LongShortGapWindow' }
+        gapMoves:
+          type: array
+          items: { $ref: '#/components/schemas/LongShortGapMove' }
         asOf: { type: string, format: date-time }
         venueCount: { type: integer }
         note: { type: string }

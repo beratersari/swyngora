@@ -36,7 +36,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `delete_funding_arb_watch` | Delete watch and its signals |
 | `list_funding_arb_signals` | List min-profit crossings (open/closed/all) with predicted-vs-settled review when clocks have passed |
 | `get_funding_arb_signal` | One crossing plus predicted-vs-settled review |
-| `get_long_short_ratio` | Account long/short plus Binance top-trader account and position layers; `split` when crowd and size disagree |
+| `get_long_short_ratio` | Account long/short plus Binance top-trader layers; `gap` is top long% minus crowd long%; `gapWindows` say if that spread is widening; `split` when crowd and size disagree |
 | `get_futures_history` | Durable stored OI / funding / long-short / liquidation history |
 | `get_liquidation_max_pain` | Largest estimated liquidation pockets above (shorts) and below (longs) last price — not the hunt target |
 | `estimate_liquidation_hunt` | Hypothetical per-venue hunt: spot size to reach liq zones + desk result + up/down ease scores (optional custom weight* mix summing to 100; percents stay as given — missing factors add 0 and are not redistributed; scoreCompare has separate upFactors/downFactors, usedVenues/missingVenues on combined rows, and upLargestChange/downLargestChange) and cascade paths (running fuel pool, hop strength, stall) |

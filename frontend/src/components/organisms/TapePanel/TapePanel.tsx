@@ -62,6 +62,9 @@ export function TapePanel({
     openInterest?.longShort?.venues?.find((v) => v.exchange === 'binance') ??
     openInterest?.longShort?.venues?.[0];
   const lsSplit = lsVenue?.split;
+  const lsGap = lsVenue?.gap ?? openInterest?.longShort?.gap;
+  const lsGap1h = windowByName(lsVenue?.gapWindows ?? openInterest?.longShort?.gapWindows, '1h');
+  const lsGap24h = windowByName(lsVenue?.gapWindows ?? openInterest?.longShort?.gapWindows, '24h');
 
   return (
     <Panel>
@@ -277,6 +280,27 @@ export function TapePanel({
                 isLoading={isLoading}
               />
             ) : null}
+            {lsGap ? (
+              <Stat
+                label={t('tape.crowdGap')}
+                value={`${lsGap.gapPct} pp`}
+                isLoading={isLoading}
+              />
+            ) : null}
+            {lsGap1h?.kind ? (
+              <Stat
+                label={t('tape.gap1h')}
+                value={t(`tape.gap_${lsGap1h.kind}`, { defaultValue: lsGap1h.kind })}
+                isLoading={isLoading}
+              />
+            ) : null}
+            {lsGap24h?.kind ? (
+              <Stat
+                label={t('tape.gap24h')}
+                value={t(`tape.gap_${lsGap24h.kind}`, { defaultValue: lsGap24h.kind })}
+                isLoading={isLoading}
+              />
+            ) : null}
             <Stat
               label={t('tape.taker1h')}
               value={snap1h?.taker?.dominant ?? '—'}
@@ -289,6 +313,14 @@ export function TapePanel({
             />
           </StatsGrid>
         )}
+        {lsGap?.headline ? (
+          <Text variant="caption" color="secondary">
+            {lsGap.headline}
+            {lsGap1h?.kind && lsGap1h.kind !== 'stable'
+              ? ` ${t(`tape.gap_${lsGap1h.kind}`, { defaultValue: lsGap1h.kind })} 1h.`
+              : ''}
+          </Text>
+        ) : null}
         {lsSplit?.alignment === 'opposite' && lsSplit.headline ? (
           <Text variant="caption" color="secondary">
             {lsSplit.headline}

@@ -1064,6 +1064,40 @@ func TestGetLongShortRatio_Combined(t *testing.T) {
 	}
 }
 
+func TestGetLongShortRatio_CrowdVsTopGap(t *testing.T) {
+	now := time.Now().UTC()
+	bin := &fakeLS{ser: &domain.LongShortSeries{
+		Exchange: domain.ExchangeBinance,
+		Current:  domain.LongShortPoint{Time: now, LongShare: 0.55, ShortShare: 0.45, Ratio: 1.222},
+		History: []domain.LongShortPoint{
+			{Time: now.Add(-time.Hour), LongShare: 0.54, ShortShare: 0.46, Ratio: 1.174},
+		},
+		TopPositions: &domain.LongShortSeries{
+			Kind:    domain.LongShortKindTopPositions,
+			Current: domain.LongShortPoint{Time: now, LongShare: 0.65, ShortShare: 0.35, Ratio: 1.857},
+			History: []domain.LongShortPoint{
+				{Time: now.Add(-time.Hour), LongShare: 0.58, ShortShare: 0.42, Ratio: 1.381},
+			},
+		},
+	}}
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{
+		domain.ExchangeBinance: bin,
+	})
+	got, err := svc.GetLongShortRatio(context.Background(), "binance", "BTCUSDT", 24)
+	if err != nil || got.Gap == nil || got.Gap.GapPct != "+10" {
+		t.Fatalf("gap %+v %v", got.Gap, err)
+	}
+	var h1 domain.LongShortGapWindow
+	for _, w := range got.GapWindows {
+		if w.Window == domain.SnapshotWindow1h {
+			h1 = w
+		}
+	}
+	if h1.Kind != domain.LongShortGapWidened {
+		t.Fatalf("1h %+v", h1)
+	}
+}
+
 func TestGetOpenInterest_AttachesFunding(t *testing.T) {
 	now := time.Now().UTC()
 	oi := &fakeOI{ser: &domain.OpenInterestSeries{

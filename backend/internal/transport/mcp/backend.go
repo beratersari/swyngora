@@ -1175,11 +1175,33 @@ func longShortSnapshotMap(got *domain.LongShortSnapshot) map[string]any {
 	}
 	venues := make([]map[string]any, 0, len(got.Venues))
 	for _, v := range got.Venues {
-		venues = append(venues, map[string]any{
+		row := map[string]any{
 			"exchange": v.Exchange, "kind": v.Kind, "period": v.Period,
 			"current": longShortLevelMap(v.Current), "change": v.Change,
 			"history": longShortLevelsMap(v.History),
-		})
+		}
+		if v.TopAccounts != nil {
+			row["topAccounts"] = longShortLevelMap(*v.TopAccounts)
+		}
+		if v.TopPositions != nil {
+			row["topPositions"] = longShortLevelMap(*v.TopPositions)
+		}
+		if v.Split.Alignment != "" && v.Split.Alignment != domain.AlignUnknown {
+			row["split"] = longShortSplitMap(v.Split)
+		}
+		if v.Gap != nil {
+			row["gap"] = longShortGapMap(*v.Gap)
+		}
+		if hist := longShortGapHistoryMap(v.GapHistory); len(hist) > 0 {
+			row["gapHistory"] = hist
+		}
+		if wins := longShortGapWindowsMap(v.GapWindows); len(wins) > 0 {
+			row["gapWindows"] = wins
+		}
+		if moves := longShortGapMovesMap(v.GapMoves); len(moves) > 0 {
+			row["gapMoves"] = moves
+		}
+		venues = append(venues, row)
 	}
 	asOf := ""
 	if !got.AsOf.IsZero() {
@@ -1189,10 +1211,95 @@ func longShortSnapshotMap(got *domain.LongShortSnapshot) map[string]any {
 		"symbol": got.Symbol, "exchange": got.Exchange, "kind": got.Kind, "period": got.Period,
 		"venues": venues, "history": longShortLevelsMap(got.History),
 		"asOf": asOf, "venueCount": got.VenueCount,
-		"note": "Share of accounts that are long vs short (not position size). ratio is long/short. Combined all does not average venues.",
+		"note": "Share of accounts that are long vs short (not position size). On Binance, gap is top long% minus crowd long% in percentage points; gapWindows (1h/4h/24h) say if that spread widened, narrowed, or flipped. Combined all does not average venues.",
 	}
 	if got.Current != nil {
 		out["current"] = longShortLevelMap(*got.Current)
+	}
+	if got.Gap != nil {
+		out["gap"] = longShortGapMap(*got.Gap)
+	}
+	if hist := longShortGapHistoryMap(got.GapHistory); len(hist) > 0 {
+		out["gapHistory"] = hist
+	}
+	if wins := longShortGapWindowsMap(got.GapWindows); len(wins) > 0 {
+		out["gapWindows"] = wins
+	}
+	if moves := longShortGapMovesMap(got.GapMoves); len(moves) > 0 {
+		out["gapMoves"] = moves
+	}
+	return out
+}
+
+func longShortSplitMap(s domain.LongShortSplit) map[string]any {
+	return map[string]any{
+		"alignment": s.Alignment, "important": s.Important,
+		"general": s.General, "topAccounts": s.TopAccounts, "topPositions": s.TopPositions,
+		"sizeBias": s.SizeBias, "headline": s.Headline, "detail": s.Detail,
+	}
+}
+
+func longShortGapMap(g domain.LongShortGap) map[string]any {
+	out := map[string]any{
+		"versus": g.Versus, "crowdLongPct": g.CrowdLongPct, "topLongPct": g.TopLongPct,
+		"gapPct": g.GapPct, "lean": g.Lean, "headline": g.Headline, "detail": g.Detail,
+	}
+	if !g.Time.IsZero() {
+		out["time"] = g.Time.UTC().Format(time.RFC3339Nano)
+	}
+	return out
+}
+
+func longShortGapHistoryMap(in []domain.LongShortGapPoint) []map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(in))
+	for _, p := range in {
+		row := map[string]any{
+			"versus": p.Versus, "crowdLongPct": p.CrowdLongPct, "topLongPct": p.TopLongPct,
+			"gapPct": p.GapPct, "lean": p.Lean,
+		}
+		if !p.Time.IsZero() {
+			row["time"] = p.Time.UTC().Format(time.RFC3339Nano)
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+func longShortGapWindowsMap(in []domain.LongShortGapWindow) []map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(in))
+	for _, w := range in {
+		row := map[string]any{
+			"window": w.Window, "pastGapPct": w.PastGapPct, "changePct": w.ChangePct,
+			"pastLean": w.PastLean, "lean": w.Lean, "kind": w.Kind, "complete": w.Complete,
+		}
+		if !w.SampleTime.IsZero() {
+			row["sampleTime"] = w.SampleTime.UTC().Format(time.RFC3339Nano)
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+func longShortGapMovesMap(in []domain.LongShortGapMove) []map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(in))
+	for _, m := range in {
+		row := map[string]any{
+			"kind": m.Kind, "fromLean": m.FromLean, "toLean": m.ToLean,
+			"gapPct": m.GapPct, "changePct": m.ChangePct, "summary": m.Summary,
+		}
+		if !m.Time.IsZero() {
+			row["time"] = m.Time.UTC().Format(time.RFC3339Nano)
+		}
+		out = append(out, row)
 	}
 	return out
 }

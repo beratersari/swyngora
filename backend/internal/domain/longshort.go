@@ -37,6 +37,10 @@ type LongShortSeries struct {
 	TopAccounts  *LongShortSeries
 	TopPositions *LongShortSeries
 	Split        LongShortSplit
+	Gap          *LongShortGap
+	GapHistory   []LongShortGapPoint
+	GapWindows   []LongShortGapWindow
+	GapMoves     []LongShortGapMove
 }
 
 // LongShortLevel is a formatted ratio print.
@@ -62,6 +66,10 @@ type LongShortVenueSnap struct {
 	// TopPositions is Binance top-trader position-size ratio (nil elsewhere).
 	TopPositions *LongShortLevel
 	Split        LongShortSplit
+	Gap          *LongShortGap
+	GapHistory   []LongShortGapPoint
+	GapWindows   []LongShortGapWindow
+	GapMoves     []LongShortGapMove
 }
 
 // LongShortSplit is how the crowd (all accounts) lines up with top traders.
@@ -87,6 +95,10 @@ type LongShortSnapshot struct {
 	History    []LongShortLevel
 	AsOf       time.Time
 	VenueCount int
+	Gap        *LongShortGap
+	GapHistory []LongShortGapPoint
+	GapWindows []LongShortGapWindow
+	GapMoves   []LongShortGapMove
 }
 
 // ClampLongShortHistoryLimit bounds history size.
@@ -183,6 +195,10 @@ func venueLongShortSnap(s *LongShortSeries) LongShortVenueSnap {
 		lvl := FormatLongShortLevel(s.TopPositions.Current)
 		out.TopPositions = &lvl
 	}
+	out.Gap = s.Gap
+	out.GapHistory = s.GapHistory
+	out.GapWindows = s.GapWindows
+	out.GapMoves = s.GapMoves
 	return out
 }
 
@@ -362,6 +378,7 @@ func BuildLongShortSnapshot(exchange, symbol string, series []*LongShortSeries, 
 			s.History = s.History[1:]
 		}
 		AttachLongShortSplit(s)
+		AttachLongShortGap(s)
 		clean = append(clean, s)
 	}
 	sort.Slice(clean, func(i, j int) bool {
@@ -370,6 +387,13 @@ func BuildLongShortSnapshot(exchange, symbol string, series []*LongShortSeries, 
 	out.VenueCount = len(clean)
 	for _, s := range clean {
 		out.Venues = append(out.Venues, venueLongShortSnap(s))
+		if out.Gap == nil && s.Gap != nil {
+			g := *s.Gap
+			out.Gap = &g
+			out.GapHistory = s.GapHistory
+			out.GapWindows = s.GapWindows
+			out.GapMoves = s.GapMoves
+		}
 	}
 	if len(clean) == 1 {
 		cur := FormatLongShortLevel(clean[0].Current)

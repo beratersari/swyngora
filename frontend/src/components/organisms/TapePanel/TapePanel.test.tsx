@@ -104,6 +104,40 @@ describe('TapePanel', () => {
     expect(screen.getByText(/lean opposite/i)).toBeInTheDocument();
   });
 
+  it('shows crowd vs top gap and whether it is widening', () => {
+    renderWithTheme(
+      <TapePanel
+        openInterest={{
+          longShort: {
+            venues: [
+              {
+                exchange: 'binance',
+                current: { longPct: '55.00', shortPct: '45.00', bias: 'long' },
+                topPositions: { longPct: '65.00', shortPct: '35.00', bias: 'long' },
+                gap: {
+                  versus: 'top_positions',
+                  crowdLongPct: '55',
+                  topLongPct: '65',
+                  gapPct: '+10',
+                  lean: 'top_more_long',
+                  headline: 'Top traders are 10pp more long than other accounts.',
+                },
+                gapWindows: [
+                  { window: '1h', kind: 'widened', changePct: '+6', complete: true },
+                  { window: '24h', kind: 'stable', complete: false },
+                ],
+              },
+            ],
+          },
+        }}
+        snapshot={{ combined: { longPct: '55.00', windows: [] } }}
+      />,
+    );
+    expect(screen.getByText('+10 pp')).toBeInTheDocument();
+    expect(screen.getByText(/10pp more long/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Widening/i).length).toBeGreaterThan(0);
+  });
+
   it('explains a missing perp book', () => {
     renderWithTheme(<TapePanel openInterestError="no perpetual on this venue" />);
     expect(screen.getAllByText('no perpetual on this venue').length).toBeGreaterThan(0);

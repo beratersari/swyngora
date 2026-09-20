@@ -1074,29 +1074,78 @@ type longShortSplitDTO struct {
 	Detail       string `json:"detail,omitempty"`
 }
 
+type longShortGapDTO struct {
+	Versus       string `json:"versus"`
+	CrowdLongPct string `json:"crowdLongPct"`
+	TopLongPct   string `json:"topLongPct"`
+	GapPct       string `json:"gapPct"`
+	Lean         string `json:"lean"`
+	Headline     string `json:"headline,omitempty"`
+	Detail       string `json:"detail,omitempty"`
+	Time         string `json:"time,omitempty"`
+}
+
+type longShortGapPointDTO struct {
+	Time         string `json:"time,omitempty"`
+	Versus       string `json:"versus"`
+	CrowdLongPct string `json:"crowdLongPct"`
+	TopLongPct   string `json:"topLongPct"`
+	GapPct       string `json:"gapPct"`
+	Lean         string `json:"lean"`
+}
+
+type longShortGapWindowDTO struct {
+	Window     string `json:"window"`
+	PastGapPct string `json:"pastGapPct,omitempty"`
+	ChangePct  string `json:"changePct,omitempty"`
+	PastLean   string `json:"pastLean,omitempty"`
+	Lean       string `json:"lean,omitempty"`
+	Kind       string `json:"kind,omitempty"`
+	Complete   bool   `json:"complete"`
+	SampleTime string `json:"sampleTime,omitempty"`
+}
+
+type longShortGapMoveDTO struct {
+	Time      string `json:"time,omitempty"`
+	Kind      string `json:"kind"`
+	FromLean  string `json:"fromLean,omitempty"`
+	ToLean    string `json:"toLean,omitempty"`
+	GapPct    string `json:"gapPct,omitempty"`
+	ChangePct string `json:"changePct,omitempty"`
+	Summary   string `json:"summary,omitempty"`
+}
+
 type longShortVenueDTO struct {
-	Exchange     string              `json:"exchange"`
-	Kind         string              `json:"kind"`
-	Period       string              `json:"period"`
-	Current      longShortLevelDTO   `json:"current"`
-	Change       string              `json:"change,omitempty"`
-	History      []longShortLevelDTO `json:"history"`
-	TopAccounts  *longShortLevelDTO  `json:"topAccounts,omitempty"`
-	TopPositions *longShortLevelDTO  `json:"topPositions,omitempty"`
-	Split        *longShortSplitDTO  `json:"split,omitempty"`
+	Exchange     string                  `json:"exchange"`
+	Kind         string                  `json:"kind"`
+	Period       string                  `json:"period"`
+	Current      longShortLevelDTO       `json:"current"`
+	Change       string                  `json:"change,omitempty"`
+	History      []longShortLevelDTO     `json:"history"`
+	TopAccounts  *longShortLevelDTO      `json:"topAccounts,omitempty"`
+	TopPositions *longShortLevelDTO      `json:"topPositions,omitempty"`
+	Split        *longShortSplitDTO      `json:"split,omitempty"`
+	Gap          *longShortGapDTO        `json:"gap,omitempty"`
+	GapHistory   []longShortGapPointDTO  `json:"gapHistory,omitempty"`
+	GapWindows   []longShortGapWindowDTO `json:"gapWindows,omitempty"`
+	GapMoves     []longShortGapMoveDTO   `json:"gapMoves,omitempty"`
 }
 
 type longShortResponse struct {
-	Symbol     string              `json:"symbol"`
-	Exchange   string              `json:"exchange"`
-	Kind       string              `json:"kind"`
-	Period     string              `json:"period"`
-	Current    *longShortLevelDTO  `json:"current,omitempty"`
-	Venues     []longShortVenueDTO `json:"venues"`
-	History    []longShortLevelDTO `json:"history,omitempty"`
-	AsOf       string              `json:"asOf,omitempty"`
-	VenueCount int                 `json:"venueCount"`
-	Note       string              `json:"note"`
+	Symbol     string                  `json:"symbol"`
+	Exchange   string                  `json:"exchange"`
+	Kind       string                  `json:"kind"`
+	Period     string                  `json:"period"`
+	Current    *longShortLevelDTO      `json:"current,omitempty"`
+	Venues     []longShortVenueDTO     `json:"venues"`
+	History    []longShortLevelDTO     `json:"history,omitempty"`
+	Gap        *longShortGapDTO        `json:"gap,omitempty"`
+	GapHistory []longShortGapPointDTO  `json:"gapHistory,omitempty"`
+	GapWindows []longShortGapWindowDTO `json:"gapWindows,omitempty"`
+	GapMoves   []longShortGapMoveDTO   `json:"gapMoves,omitempty"`
+	AsOf       string                  `json:"asOf,omitempty"`
+	VenueCount int                     `json:"venueCount"`
+	Note       string                  `json:"note"`
 }
 
 func oiLevelDTO(l domain.OpenInterestLevel) openInterestLevelDTO {
@@ -1141,7 +1190,7 @@ func openInterestToDTO(a *domain.OpenInterestSnapshot) openInterestResponse {
 		Symbol: a.Symbol, Exchange: a.Exchange, Unit: a.Unit,
 		Current: oiLevelDTO(a.Current), Windows: oiWindowsDTO(a.Windows),
 		Venues: venues, AsOf: asOf, VenueCount: a.VenueCount,
-		Note: "Binance USD-M and Bybit linear perpetual open interest. contracts is outstanding size in the base asset (Bybit uses singleOpenInterest — one side — not the 2× both-sides openInterest). value is USDT notional. Change is current minus the reading ~window ago. funding is the predicted next rate plus recent settlements; funding.pressure is OI-weighted combined predicted funding. longShort is the share of accounts that are long vs short. Combined all sums OI across venues. Informational only.",
+		Note: "Binance USD-M and Bybit linear perpetual open interest. contracts is outstanding size in the base asset (Bybit uses singleOpenInterest — one side — not the 2× both-sides openInterest). value is USDT notional. Change is current minus the reading ~window ago. funding is the predicted next rate plus recent settlements; funding.pressure is OI-weighted combined predicted funding. longShort is the share of accounts that are long vs short; longShort.gap is top-trader long% minus crowd long% plus whether that spread is widening. Combined all sums OI across venues. Informational only.",
 	}
 	if a.Funding != nil {
 		f := fundingToDTO(a.Funding)
@@ -1324,6 +1373,83 @@ func longShortSplitDTOFrom(s domain.LongShortSplit) longShortSplitDTO {
 	}
 }
 
+func longShortGapDTOFrom(g domain.LongShortGap) longShortGapDTO {
+	out := longShortGapDTO{
+		Versus: g.Versus, CrowdLongPct: g.CrowdLongPct, TopLongPct: g.TopLongPct,
+		GapPct: g.GapPct, Lean: g.Lean, Headline: g.Headline, Detail: g.Detail,
+	}
+	if !g.Time.IsZero() {
+		out.Time = g.Time.UTC().Format(time.RFC3339Nano)
+	}
+	return out
+}
+
+func longShortGapPointDTOFrom(p domain.LongShortGapPoint) longShortGapPointDTO {
+	out := longShortGapPointDTO{
+		Versus: p.Versus, CrowdLongPct: p.CrowdLongPct, TopLongPct: p.TopLongPct,
+		GapPct: p.GapPct, Lean: p.Lean,
+	}
+	if !p.Time.IsZero() {
+		out.Time = p.Time.UTC().Format(time.RFC3339Nano)
+	}
+	return out
+}
+
+func longShortGapWindowDTOFrom(w domain.LongShortGapWindow) longShortGapWindowDTO {
+	out := longShortGapWindowDTO{
+		Window: w.Window, PastGapPct: w.PastGapPct, ChangePct: w.ChangePct,
+		PastLean: w.PastLean, Lean: w.Lean, Kind: w.Kind, Complete: w.Complete,
+	}
+	if !w.SampleTime.IsZero() {
+		out.SampleTime = w.SampleTime.UTC().Format(time.RFC3339Nano)
+	}
+	return out
+}
+
+func longShortGapMoveDTOFrom(m domain.LongShortGapMove) longShortGapMoveDTO {
+	out := longShortGapMoveDTO{
+		Kind: m.Kind, FromLean: m.FromLean, ToLean: m.ToLean,
+		GapPct: m.GapPct, ChangePct: m.ChangePct, Summary: m.Summary,
+	}
+	if !m.Time.IsZero() {
+		out.Time = m.Time.UTC().Format(time.RFC3339Nano)
+	}
+	return out
+}
+
+func longShortGapHistoryDTO(in []domain.LongShortGapPoint) []longShortGapPointDTO {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]longShortGapPointDTO, 0, len(in))
+	for _, p := range in {
+		out = append(out, longShortGapPointDTOFrom(p))
+	}
+	return out
+}
+
+func longShortGapWindowsDTO(in []domain.LongShortGapWindow) []longShortGapWindowDTO {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]longShortGapWindowDTO, 0, len(in))
+	for _, w := range in {
+		out = append(out, longShortGapWindowDTOFrom(w))
+	}
+	return out
+}
+
+func longShortGapMovesDTO(in []domain.LongShortGapMove) []longShortGapMoveDTO {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]longShortGapMoveDTO, 0, len(in))
+	for _, m := range in {
+		out = append(out, longShortGapMoveDTOFrom(m))
+	}
+	return out
+}
+
 func longShortToDTO(a *domain.LongShortSnapshot) longShortResponse {
 	if a == nil {
 		return longShortResponse{}
@@ -1337,6 +1463,9 @@ func longShortToDTO(a *domain.LongShortSnapshot) longShortResponse {
 		row := longShortVenueDTO{
 			Exchange: v.Exchange, Kind: v.Kind, Period: v.Period,
 			Current: longShortLevelDTOFrom(v.Current), Change: v.Change, History: hist,
+			GapHistory: longShortGapHistoryDTO(v.GapHistory),
+			GapWindows: longShortGapWindowsDTO(v.GapWindows),
+			GapMoves:   longShortGapMovesDTO(v.GapMoves),
 		}
 		if v.TopAccounts != nil {
 			lvl := longShortLevelDTOFrom(*v.TopAccounts)
@@ -1349,6 +1478,10 @@ func longShortToDTO(a *domain.LongShortSnapshot) longShortResponse {
 		if v.Split.Alignment != "" && v.Split.Alignment != domain.AlignUnknown {
 			sp := longShortSplitDTOFrom(v.Split)
 			row.Split = &sp
+		}
+		if v.Gap != nil {
+			g := longShortGapDTOFrom(*v.Gap)
+			row.Gap = &g
 		}
 		venues = append(venues, row)
 	}
@@ -1363,11 +1496,18 @@ func longShortToDTO(a *domain.LongShortSnapshot) longShortResponse {
 	out := longShortResponse{
 		Symbol: a.Symbol, Exchange: a.Exchange, Kind: a.Kind, Period: a.Period,
 		Venues: venues, History: hist, AsOf: asOf, VenueCount: a.VenueCount,
-		Note: "current is all-account long/short (count, not size). On Binance, topAccounts is the top 20% of traders by margin (account count) and topPositions is their position size. split.opposite means the crowd and bigger books lean different ways — analysis then treats size as the positioned side. ratio is long/short. bias is long if ratio≥1.05, short if ≤0.95. 5m samples. Combined all does not average venues. Informational only.",
+		GapHistory: longShortGapHistoryDTO(a.GapHistory),
+		GapWindows: longShortGapWindowsDTO(a.GapWindows),
+		GapMoves:   longShortGapMovesDTO(a.GapMoves),
+		Note:       "current is all-account long/short (count, not size). On Binance, topAccounts is the top 20% of traders by margin (account count) and topPositions is their position size. gap is top long% minus crowd long% in percentage points (+10 = top 65% long vs crowd 55%). gapWindows (1h/4h/24h) and gapMoves say if that spread widened, narrowed, or flipped. split.opposite means the crowd and bigger books lean different ways — analysis then treats size as the positioned side. ratio is long/short. bias is long if ratio≥1.05, short if ≤0.95. 5m samples. Combined all does not average venues. Informational only.",
 	}
 	if a.Current != nil {
 		cur := longShortLevelDTOFrom(*a.Current)
 		out.Current = &cur
+	}
+	if a.Gap != nil {
+		g := longShortGapDTOFrom(*a.Gap)
+		out.Gap = &g
 	}
 	return out
 }

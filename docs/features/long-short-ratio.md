@@ -5,8 +5,10 @@
 Show the **current long/short account ratio** and **recent 5-minute history**
 for a coin on Binance USD-M and Bybit linear perpetual, so a user or the AI
 can ask “are more traders long or short BTC?” On Binance, also show
-**top-trader account** and **top-trader position** ratios, and say when the
-crowd and bigger books lean opposite.
+**top-trader account** and **top-trader position** ratios, a **single gap**
+between big traders and the crowd (top long% minus crowd long%), and whether
+that gap is **widening or shrinking**. Say when the crowd and bigger books
+lean opposite.
 
 ## Behavior
 
@@ -18,6 +20,14 @@ crowd and bigger books lean opposite.
 - `current` is the **share of accounts** that are long vs short, **not** position size
 - On Binance, `topAccounts` is the top 20% of traders by margin (account count)
   and `topPositions` is the same traders by **position size**
+- `gap` is one signed number: **top long% − crowd long%** in percentage points.
+  Top 65% long vs crowd 55% long is `+10` (`lean=top_more_long`). Size
+  (`top_positions`) is preferred over account count when both exist. Bybit has
+  no public top-trader feed, so no gap there
+- `gapWindows` (1h / 4h / 24h) compare that gap to ~window ago:
+  `widened` / `narrowed` / `flipped` / `stable`. `gapHistory` is 5m samples
+  (newest first). `gapMoves` calls out larger jumps. 24h uses stored futures
+  history when the live REST window is shorter
 - `split.opposite` means all-account crowding and top-trader size lean different
   ways. Hunt, squeeze, and positioning then treat **size** as who is positioned
   and keep the crowd print visible
@@ -36,7 +46,7 @@ Sources (public REST, no API key):
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/longshort.go` |
+| Domain | `backend/internal/domain/longshort.go`, `longshort_gap.go` |
 | Adapters | `adapter/binance/longshort.go`, `adapter/bybit/longshort.go` |
 | Service | `GetLongShortRatio` (also attached by `GetOpenInterest`) |
 | HTTP | `GET /api/v1/market/long-short-ratio` |
@@ -54,6 +64,6 @@ curl "http://localhost:8080/api/v1/market/open-interest?symbol=BTCUSDT"
 ## Limits
 
 - Not Coinbase. Not COIN-M / inverse.
-- Top-trader layers are Binance-only (Bybit has no public equivalent).
-- Combined `all` does not invent a blended ratio.
+- Top-trader layers and the crowd-vs-top gap are Binance-only (Bybit has no public equivalent).
+- Combined `all` does not invent a blended ratio or a blended gap (Binance gap is hoisted when present).
 - Informational only — not financial advice.

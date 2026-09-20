@@ -979,7 +979,27 @@ func (s *Service) GetLongShortRatio(ctx context.Context, exchange, symbol string
 	if len(series) == 0 && lastErr != nil {
 		return nil, lastErr
 	}
-	return domain.BuildLongShortSnapshot(ex, symbol, series, time.Now().UTC()), nil
+	now := time.Now().UTC()
+	domain.EnrichLongShortFromStore(series, s.longShortStored(ctx, ex, symbol, now))
+	return domain.BuildLongShortSnapshot(ex, symbol, series, now), nil
+}
+
+func (s *Service) longShortStored(ctx context.Context, exchange, symbol string, now time.Time) []domain.FuturesSnapshot {
+	if s == nil || s.futHist == nil {
+		return nil
+	}
+	raw, err := s.futHist.History(ctx, domain.FuturesHistoryQuery{
+		Metric:   domain.FuturesMetricLongShort,
+		Exchange: exchange,
+		Symbol:   symbol,
+		From:     now.Add(-domain.LongShortGapLookback),
+		To:       now,
+		Limit:    domain.MaxFuturesHistoryLimit,
+	})
+	if err != nil {
+		return nil
+	}
+	return futuresSnapshots(raw)
 }
 
 func (s *Service) longShortPort(ex domain.Exchange) domain.LongShortRatioPort {
