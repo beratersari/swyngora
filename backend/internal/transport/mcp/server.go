@@ -601,7 +601,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_open_interest",
-		mcp.WithDescription("Futures open interest for a coin: current outstanding size plus how much it increased or decreased in the last 5 minutes, 1 hour, 4 hours, and 24 hours. Also includes funding (predicted next rate + recent settlements) on the funding field. contracts is base-asset size (e.g. BTC); value is USDT notional. Binance USD-M + Bybit linear + OKX USDT-swap. exchange=all (default) sums OI. Prefer this for 'is OI rising or falling'."),
+		mcp.WithDescription("Futures open interest for a coin: current outstanding size plus how much OI opened or closed in the last 5 minutes, 1 hour, 4 hours, and 24 hours — USDT amount and percent, per venue and combined. flow=opened|closed|flat; openedValue/closedValue is the USDT notional added or closed. Also includes funding on the funding field. contracts is base-asset size (e.g. BTC); value is USDT notional. Binance USD-M + Bybit linear + OKX USDT-swap. exchange=all (default) sums OI and keeps per-venue rows. Prefer this for 'how much OI was added or closed'."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

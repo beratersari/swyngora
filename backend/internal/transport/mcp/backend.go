@@ -545,7 +545,8 @@ func (b *Backend) GetOpenInterest(ctx context.Context, exchange, symbol string) 
 		row := map[string]any{
 			"window": w.Window, "openInterest": w.OpenInterest, "openInterestValue": w.OpenInterestValue,
 			"change": w.Change, "changePct": w.ChangePct, "changeValue": w.ChangeValue, "changeValuePct": w.ChangeValuePct,
-			"direction": w.Direction, "complete": w.Complete,
+			"direction": w.Direction, "flow": w.Flow, "openedValue": w.OpenedValue, "closedValue": w.ClosedValue,
+			"complete": w.Complete,
 		}
 		if !w.SampleTime.IsZero() {
 			row["sampleTime"] = w.SampleTime.UTC().Format(time.RFC3339Nano)
@@ -559,7 +560,8 @@ func (b *Backend) GetOpenInterest(ctx context.Context, exchange, symbol string) 
 			row := map[string]any{
 				"window": w.Window, "openInterest": w.OpenInterest, "openInterestValue": w.OpenInterestValue,
 				"change": w.Change, "changePct": w.ChangePct, "changeValue": w.ChangeValue, "changeValuePct": w.ChangeValuePct,
-				"direction": w.Direction, "complete": w.Complete,
+				"direction": w.Direction, "flow": w.Flow, "openedValue": w.OpenedValue, "closedValue": w.ClosedValue,
+				"complete": w.Complete,
 			}
 			if !w.SampleTime.IsZero() {
 				row["sampleTime"] = w.SampleTime.UTC().Format(time.RFC3339Nano)

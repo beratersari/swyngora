@@ -162,12 +162,22 @@ func TestFormatOpenInterest(t *testing.T) {
 		Symbol: "BTCUSDT", Exchange: "all", Unit: "BTC", VenueCount: 2,
 		Current: domain.OpenInterestLevel{Contracts: "150", Value: "15000000000"},
 		Windows: []domain.OpenInterestWindow{
-			{Window: "5m", Change: "+20", ChangePct: "+0.15", ChangeValue: "+2000000", Direction: "up", Complete: true},
+			{Window: "1h", Change: "+20", ChangePct: "+0.15", ChangeValue: "+2000000", ChangeValuePct: "+14.3", Direction: "up", Flow: "opened", OpenedValue: "2000000", Complete: true},
 		},
+		Venues: []domain.OpenInterestVenueSnap{{
+			Exchange: "binance",
+			Current:  domain.OpenInterestLevel{Value: "8000000000"},
+			Windows: []domain.OpenInterestWindow{
+				{Window: "1h", ChangeValue: "+1500000", ChangeValuePct: "+10", Flow: "opened"},
+			},
+		}},
 	}
 	got := FormatOpenInterest(s)
-	if !strings.Contains(got, "BTCUSDT") || !strings.Contains(got, "+20") || !strings.Contains(got, "$15.00B") {
+	if !strings.Contains(got, "BTCUSDT") || !strings.Contains(got, "opened") || !strings.Contains(got, "$15.00B") {
 		t.Fatalf("%s", got)
+	}
+	if !strings.Contains(got, "binance") {
+		t.Fatalf("venues %s", got)
 	}
 }
 

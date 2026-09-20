@@ -541,8 +541,29 @@ func FormatOpenInterest(s *domain.OpenInterestSnapshot) string {
 			if !w.Complete {
 				flag = "  " + italic("partial")
 			}
-			fmt.Fprintf(&b, "  %s %s  %s (%s)  %s%s\n",
-				arrow, code(w.Window), code(w.Change), code(w.ChangePct+"%"), italic(compactUSDT(w.ChangeValue)), flag)
+			flow := w.Flow
+			if flow == "" {
+				flow = w.Direction
+			}
+			fmt.Fprintf(&b, "  %s %s  %s %s (%s)%s\n",
+				arrow, code(w.Window), italic(flow), italic(compactUSDT(w.ChangeValue)), code(w.ChangeValuePct+"%"), flag)
+		}
+	}
+	if len(s.Venues) > 0 {
+		b.WriteString("\n" + bold("Venues") + "\n")
+		for _, v := range s.Venues {
+			fmt.Fprintf(&b, "  %s  %s\n", code(v.Exchange), italic(compactUSDT(v.Current.Value)))
+			for _, w := range v.Windows {
+				if w.Window != domain.OpenInterestWindow1h && w.Window != domain.OpenInterestWindow4h && w.Window != domain.OpenInterestWindow24h {
+					continue
+				}
+				flow := w.Flow
+				if flow == "" {
+					continue
+				}
+				fmt.Fprintf(&b, "    %s  %s %s (%s)\n",
+					code(w.Window), italic(flow), code(compactUSDT(w.ChangeValue)), code(w.ChangeValuePct+"%"))
+			}
 		}
 	}
 	if s.Funding != nil && len(s.Funding.Venues) > 0 {

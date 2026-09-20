@@ -57,6 +57,26 @@ func TestSummarizeOpenInterestWindow_Up(t *testing.T) {
 	if w.ChangeValue != "+1000" {
 		t.Fatalf("value change %s", w.ChangeValue)
 	}
+	if w.Flow != OpenInterestFlowOpened || w.OpenedValue != "1000" || w.ClosedValue != "" {
+		t.Fatalf("flow %+v", w)
+	}
+}
+
+func TestSummarizeOpenInterestWindow_Closed(t *testing.T) {
+	now := time.Date(2026, 8, 11, 16, 0, 0, 0, time.UTC)
+	s := &OpenInterestSeries{
+		Current: OpenInterestPoint{Time: now, Contracts: 90, Value: 9000},
+		History: []OpenInterestPoint{
+			{Time: now.Add(-time.Hour), Contracts: 100, Value: 10000},
+		},
+	}
+	w := SummarizeOpenInterestWindow(s, OpenInterestWindow1h, time.Hour, now)
+	if w.Flow != OpenInterestFlowClosed || w.ClosedValue != "1000" || w.OpenedValue != "" {
+		t.Fatalf("%+v", w)
+	}
+	if w.ChangeValuePct != "-10" {
+		t.Fatalf("pct %s", w.ChangeValuePct)
+	}
 }
 
 func TestBuildOpenInterestSnapshot_Combined(t *testing.T) {

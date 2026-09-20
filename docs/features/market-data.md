@@ -56,7 +56,7 @@ Coin detail also has an **order heatmap** (resting bid/ask size over time) from 
 - `GET /api/v1/market/liquidations` rolling 5m/1h/4h/24h long vs short futures liquidations (Binance USD-M + Bybit linear). See [`liquidations.md`](liquidations.md).
 - `GET /api/v1/market/liquidation-cascade` short-burst long/short cascade vs typical (1m/5m/15m); one coin or `symbol=all`. See [`liquidations.md`](liquidations.md).
 - `GET /api/v1/market/liquidation-cascade/scan` market cascade plus coins currently bursting. See [`liquidations.md`](liquidations.md).
-- `GET /api/v1/market/open-interest` current futures open interest plus 5m/1h/4h/24h change (Binance USD-M + Bybit linear). Includes `funding`. See [`open-interest.md`](open-interest.md).
+- `GET /api/v1/market/open-interest` current futures open interest plus 1h/4h/24h opened or closed USDT amount and percent, per venue and combined. Includes `funding`. See [`open-interest.md`](open-interest.md).
 - `GET /api/v1/market/options` BTC/ETH Deribit options: listed OI, 24h volume, put/call, DVOL + ATM IV, expiry mix, `history` over hours/days, `moves` when OI/PCR/IV jumps vs typical, plus `vsMarket` when IV or put/call disagrees with spot/futures. See [`options.md`](options.md).
 - `GET /api/v1/market/funding-rate` predicted next perpetual funding rate plus recent settlements. See [`funding-rate.md`](funding-rate.md).
 - `GET /api/v1/market/funding-arb` long the cheaper-funding venue / short the richer one; sized after-fee payout + spot-perp. See [`funding-arb.md`](funding-arb.md).

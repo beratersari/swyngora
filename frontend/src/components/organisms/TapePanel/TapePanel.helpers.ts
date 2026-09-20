@@ -1,3 +1,13 @@
+export function formatSignedTapeNum(raw: string | number | null | undefined): string {
+  if (raw === null || raw === undefined || raw === '') return '—';
+  const n = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(n)) return String(raw);
+  const body = formatTapeNum(Math.abs(n));
+  if (n > 0) return `+${body}`;
+  if (n < 0) return `-${body}`;
+  return body;
+}
+
 export function formatTapeNum(raw: string | number | null | undefined): string {
   if (raw === null || raw === undefined || raw === '') return '—';
   const n = typeof raw === 'number' ? raw : Number(raw);

@@ -4431,10 +4431,11 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="get_open_interest",
             description=(
                 "Futures open interest for a coin: current outstanding size plus "
-                "how much it increased or decreased in the last 5 minutes, 1 hour, "
-                "4 hours, and 24 hours. contracts is base-asset size; value is USDT "
-                "notional. Binance USD-M + Bybit linear. exchange=all sums both. "
-                "Use for 'is OI rising or falling'."
+                "how much OI opened or closed in the last 1 hour, 4 hours, and "
+                "24 hours as USDT amount and percent, per venue and combined. "
+                "flow=opened|closed; openedValue/closedValue is the USDT added "
+                "or closed. contracts is base-asset size; value is USDT notional. "
+                "Binance USD-M + Bybit linear + OKX. exchange=all sums venues."
             ),
             args_schema=OpenInterestInput,
         ),

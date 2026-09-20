@@ -10,7 +10,18 @@ describe('TapePanel', () => {
         openInterest={{
           venueCount: 2,
           current: { value: '1000000000' },
-          windows: [{ window: '1h', changeValuePct: '1.2', complete: true }],
+          windows: [
+            { window: '1h', changeValue: '+300000000', changeValuePct: '+14.3', flow: 'opened', complete: true },
+            { window: '4h', changeValue: '+500000000', changeValuePct: '+25', flow: 'opened', complete: true },
+            { window: '24h', changeValue: '-100000000', changeValuePct: '-4.2', flow: 'closed', complete: true },
+          ],
+          venues: [
+            {
+              exchange: 'binance',
+              current: { value: '800000000' },
+              windows: [{ window: '1h', changeValue: '+200000000', changeValuePct: '+12', flow: 'opened' }],
+            },
+          ],
           funding: { current: { ratePct: '0.01', payer: 'long' } },
         }}
         liquidations={{
@@ -25,6 +36,8 @@ describe('TapePanel', () => {
     );
     expect(screen.getByText('Futures tape')).toBeInTheDocument();
     expect(screen.getByText('1.00B')).toBeInTheDocument();
+    expect(screen.getByText(/\+300\.00M \(\+14\.3%\) opened/i)).toBeInTheDocument();
+    expect(screen.getByText(/binance/i)).toBeInTheDocument();
     expect(screen.getByText('0.0100%')).toBeInTheDocument();
     expect(screen.getByText('25.00M')).toBeInTheDocument();
     expect(screen.getByText('buy flow')).toBeInTheDocument();

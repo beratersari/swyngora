@@ -2,9 +2,10 @@
 
 ## Goal
 
-Show **current open interest** for a coin and how much it **increased or decreased**
-over the last **5 minutes, 1 hour, 4 hours, and 24 hours**, so a user or the AI
-can ask “is BTC open interest rising?”
+Show **current open interest** for a coin and how much OI **opened or closed**
+over the last **5 minutes, 1 hour, 4 hours, and 24 hours** — as a USDT
+**amount and a percent**, **per exchange** and combined — so a user or the AI
+can ask “how much BTC OI was added in the last hour?”
 
 ## Behavior
 
@@ -15,10 +16,12 @@ can ask “is BTC open interest rising?”
   - `contracts` — venue-published outstanding size in the **base asset** (e.g. BTC)
   - `value` — USDT notional
 - Each window includes past contracts/value, signed `change` / `changePct` /
-  `changeValue` / `changeValuePct`, `direction` (`up` / `down` / `flat`), and
-  `complete` (false when the historical sample is missing or older than the
-  window slack)
-- Combined `all` sums venues that have a past sample for that window
+  `changeValue` / `changeValuePct`, `direction` (`up` / `down` / `flat`),
+  `flow` (`opened` / `closed` / `flat`), `openedValue` or `closedValue`
+  (USDT notional added or closed), and `complete` (false when the historical
+  sample is missing or older than the window slack)
+- Combined `all` sums venues that have a past sample for that window and
+  still returns each venue's current OI plus the same 1h / 4h / 24h windows
 - `funding` is attached (predicted next rate + recent settlements, plus OI-weighted `pressure`). See [`funding-rate.md`](funding-rate.md)
 - `longShort` is attached (account long/short ratio, plus Binance crowd-vs-top `gap` and top-vs-price `divergence`). See [`long-short-ratio.md`](long-short-ratio.md)
 - Cached ~30s (`OPEN_INTEREST_CACHE_TTL`)

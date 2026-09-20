@@ -13,6 +13,10 @@ const (
 	OpenInterestWindow1h  = LiquidationWindow1h
 	OpenInterestWindow4h  = LiquidationWindow4h
 	OpenInterestWindow24h = LiquidationWindow24h
+
+	OpenInterestFlowOpened = "opened"
+	OpenInterestFlowClosed = "closed"
+	OpenInterestFlowFlat   = "flat"
 )
 
 // OpenInterestWindows is the same 5m / 1h / 4h / 24h set as liquidations.
@@ -50,6 +54,9 @@ type OpenInterestWindow struct {
 	ChangeValue       string
 	ChangeValuePct    string
 	Direction         string // up | down | flat
+	Flow              string // opened | closed | flat
+	OpenedValue       string // USDT notional added when OI rose
+	ClosedValue       string // USDT notional closed when OI fell
 	Complete          bool
 	SampleTime        time.Time
 }
@@ -202,6 +209,7 @@ func SummarizeOpenInterestWindow(s *OpenInterestSeries, windowID string, dur tim
 	out.ChangeValue = FormatSignedQty(dV)
 	out.ChangeValuePct = FormatSignedPct(pV)
 	out.Direction = OpenInterestDirection(pC)
+	attachOpenInterestFlow(&out, dV)
 	out.Complete = complete
 	out.SampleTime = past.Time.UTC()
 	return out
@@ -263,8 +271,29 @@ func combineOpenInterestWindow(series []*OpenInterestSeries, windowID string, du
 	out.ChangeValue = FormatSignedQty(dV)
 	out.ChangeValuePct = FormatSignedPct(pV)
 	out.Direction = OpenInterestDirection(pC)
+	attachOpenInterestFlow(&out, dV)
 	out.SampleTime = oldest.UTC()
 	return out
+}
+
+func attachOpenInterestFlow(w *OpenInterestWindow, deltaValue float64) {
+	if w == nil {
+		return
+	}
+	switch w.Direction {
+	case "up":
+		w.Flow = OpenInterestFlowOpened
+		if deltaValue > 0 {
+			w.OpenedValue = formatQty(deltaValue)
+		}
+	case "down":
+		w.Flow = OpenInterestFlowClosed
+		if deltaValue < 0 {
+			w.ClosedValue = formatQty(-deltaValue)
+		}
+	default:
+		w.Flow = OpenInterestFlowFlat
+	}
 }
 
 func sumCurrent(series []*OpenInterestSeries) OpenInterestPoint {

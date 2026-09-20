@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **OI opened vs closed:** 1h / 4h / 24h USDT amount and percent of open interest added or closed, per venue and combined. `flow` / `openedValue` / `closedValue` on `GET /api/v1/market/open-interest`; coin-detail tape; MCP `get_open_interest` (`docs/features/open-interest.md`)
 - **Combined market pressure:** one −1…+1 score from resting book, CVD, and absorption when those disagree, plus 1h change. `GET /api/v1/market/pressure`, MCP `get_market_pressure`, coin-detail tape (`docs/features/market-pressure.md`)
 - **Top vs price divergence:** when Binance top traders get more long while price falls (or more short while price rises), with when that run started and how long it has lasted. `divergence` on `GET /api/v1/market/long-short-ratio` (also on open-interest `longShort`); coin-detail tape; MCP `get_long_short_ratio` (`docs/features/long-short-ratio.md`)
 - **Crowd vs top-trader gap:** one signed value (top long% minus crowd long%; 65% vs 55% → `+10`) plus 1h/4h/24h windows that say if that spread is widening, shrinking, or flipping. `gap` / `gapWindows` / `gapMoves` on `GET /api/v1/market/long-short-ratio` (also on open-interest `longShort`); coin-detail tape; MCP `get_long_short_ratio` (`docs/features/long-short-ratio.md`)

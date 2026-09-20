@@ -5410,6 +5410,15 @@ export interface components {
             changeValuePct?: string;
             /** @enum {string} */
             direction?: "up" | "down" | "flat";
+            /**
+             * @description Whether OI was added or closed in this window
+             * @enum {string}
+             */
+            flow?: "opened" | "closed" | "flat";
+            /** @description USDT notional added when flow=opened */
+            openedValue?: string;
+            /** @description USDT notional closed when flow=closed */
+            closedValue?: string;
             /** @description False when the historical sample is missing or too old */
             complete?: boolean;
             /** Format: date-time */

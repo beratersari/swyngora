@@ -965,12 +965,15 @@ paths:
     get:
       summary: Futures open interest and windowed change
       description: |
-        Current outstanding futures size plus how much it increased or decreased
-        over the last **5 minutes, 1 hour, 4 hours, and 24 hours**.
-        Sources: **Binance USD-M** (`/fapi/v1/openInterest` + 5m hist) and
-        **Bybit linear perpetual** (`/v5/market/tickers` + `/v5/market/open-interest`).
+        Current outstanding futures size plus how much OI **opened or closed**
+        over the last **5 minutes, 1 hour, 4 hours, and 24 hours** — USDT
+        amount (`openedValue` / `closedValue` / signed `changeValue`) and
+        percent (`changeValuePct`), per venue and combined.
+        Sources: **Binance USD-M** (`/fapi/v1/openInterest` + 5m hist),
+        **Bybit linear perpetual**, and **OKX USDT-swap**.
         `contracts` is venue-published size in the base asset; `value` is USDT
-        notional. `exchange=all` (default) sums both venues. `complete` is false
+        notional. `exchange=all` (default) sums venues and keeps per-venue
+        rows. `complete` is false
         when the historical sample is missing or older than the window slack.
         The `funding` object is the predicted next funding rate plus recent
         settlements (same payload as `/funding-rate`). `longShort` is the
@@ -9224,6 +9227,9 @@ components:
         changeValue: { type: string, description: Signed USDT notional change }
         changeValuePct: { type: string, description: Signed percent change in USDT notional }
         direction: { type: string, enum: [up, down, flat] }
+        flow: { type: string, enum: [opened, closed, flat], description: Whether OI was added or closed in this window }
+        openedValue: { type: string, description: USDT notional added when flow=opened }
+        closedValue: { type: string, description: USDT notional closed when flow=closed }
         complete: { type: boolean, description: False when the historical sample is missing or too old }
         sampleTime: { type: string, format: date-time }
     OpenInterestVenue:

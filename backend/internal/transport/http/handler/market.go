@@ -932,6 +932,9 @@ type openInterestWindowDTO struct {
 	ChangeValue       string `json:"changeValue"`
 	ChangeValuePct    string `json:"changeValuePct"`
 	Direction         string `json:"direction"`
+	Flow              string `json:"flow,omitempty"`
+	OpenedValue       string `json:"openedValue,omitempty"`
+	ClosedValue       string `json:"closedValue,omitempty"`
 	Complete          bool   `json:"complete"`
 	SampleTime        string `json:"sampleTime,omitempty"`
 }
@@ -1183,7 +1186,8 @@ func oiWindowsDTO(in []domain.OpenInterestWindow) []openInterestWindowDTO {
 		row := openInterestWindowDTO{
 			Window: w.Window, OpenInterest: w.OpenInterest, OpenInterestValue: w.OpenInterestValue,
 			Change: w.Change, ChangePct: w.ChangePct, ChangeValue: w.ChangeValue, ChangeValuePct: w.ChangeValuePct,
-			Direction: w.Direction, Complete: w.Complete,
+			Direction: w.Direction, Flow: w.Flow, OpenedValue: w.OpenedValue, ClosedValue: w.ClosedValue,
+			Complete: w.Complete,
 		}
 		if !w.SampleTime.IsZero() {
 			row.SampleTime = w.SampleTime.UTC().Format(time.RFC3339Nano)
@@ -1211,7 +1215,7 @@ func openInterestToDTO(a *domain.OpenInterestSnapshot) openInterestResponse {
 		Symbol: a.Symbol, Exchange: a.Exchange, Unit: a.Unit,
 		Current: oiLevelDTO(a.Current), Windows: oiWindowsDTO(a.Windows),
 		Venues: venues, AsOf: asOf, VenueCount: a.VenueCount,
-		Note: "Binance USD-M and Bybit linear perpetual open interest. contracts is outstanding size in the base asset (Bybit uses singleOpenInterest — one side — not the 2× both-sides openInterest). value is USDT notional. Change is current minus the reading ~window ago. funding is the predicted next rate plus recent settlements; funding.pressure is OI-weighted combined predicted funding. longShort is the share of accounts that are long vs short; longShort.gap is top-trader long% minus crowd long%; longShort.divergence is top vs price (more long while price falls). Combined all sums OI across venues. Informational only.",
+		Note: "Binance USD-M and Bybit linear perpetual open interest. contracts is outstanding size in the base asset (Bybit uses singleOpenInterest — one side — not the 2× both-sides openInterest). value is USDT notional. Windows 1h/4h/24h (and 5m) show how much OI opened or closed vs ~window ago as USDT amount and percent; venues stay separate. funding is the predicted next rate plus recent settlements; funding.pressure is OI-weighted combined predicted funding. longShort is the share of accounts that are long vs short; longShort.gap is top-trader long% minus crowd long%; longShort.divergence is top vs price (more long while price falls). Combined all sums OI across venues. Informational only.",
 	}
 	if a.Funding != nil {
 		f := fundingToDTO(a.Funding)

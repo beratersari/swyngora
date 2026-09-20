@@ -1,9 +1,26 @@
 import { Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
-import { formatFundingPct, formatSignedFundingPct, formatTapeNum, windowByName } from './TapePanel.helpers';
+import {
+  formatFundingPct,
+  formatSignedFundingPct,
+  formatSignedTapeNum,
+  formatTapeNum,
+  windowByName,
+} from './TapePanel.helpers';
 import { Block, Panel, StatCard, StatsGrid, TitleRow } from './TapePanel.styles';
 import type { TapePanelProps } from './TapePanel.types';
+
+function formatOIWindow(
+  w: { changeValue?: string; changeValuePct?: string; flow?: string } | undefined,
+  t: (key: string, options?: Record<string, string>) => string,
+): string {
+  if (!w?.changeValue && !w?.changeValuePct) return '—';
+  const amt = formatSignedTapeNum(w.changeValue);
+  const pct = w.changeValuePct ? `(${w.changeValuePct}%)` : '';
+  const flow = w.flow === 'opened' ? t('tape.oiOpened') : w.flow === 'closed' ? t('tape.oiClosed') : '';
+  return [amt === '—' ? '' : amt, pct, flow].filter(Boolean).join(' ') || '—';
+}
 
 function Stat({
   label,
@@ -43,6 +60,7 @@ export function TapePanel({
 }: TapePanelProps) {
   const { t } = useTranslation('detail');
   const oi1h = windowByName(openInterest?.windows, '1h');
+  const oi4h = windowByName(openInterest?.windows, '4h');
   const oi24h = windowByName(openInterest?.windows, '24h');
   const liq1h = windowByName(liquidations?.windows, '1h');
   const liq24h = windowByName(liquidations?.windows, '24h');
@@ -96,21 +114,27 @@ export function TapePanel({
             />
             <Stat
               label={t('tape.oi1h')}
-              value={formatTapeNum(oi1h?.changeValuePct ?? oi1h?.changePct)}
+              value={formatOIWindow(oi1h, t)}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.oi4h')}
+              value={formatOIWindow(oi4h, t)}
               isLoading={isLoading}
             />
             <Stat
               label={t('tape.oi24h')}
-              value={formatTapeNum(oi24h?.changeValuePct ?? oi24h?.changePct)}
-              isLoading={isLoading}
-            />
-            <Stat
-              label={t('tape.venues')}
-              value={openInterest?.venueCount != null ? String(openInterest.venueCount) : '—'}
+              value={formatOIWindow(oi24h, t)}
               isLoading={isLoading}
             />
           </StatsGrid>
         )}
+        {openInterest?.venues?.map((v) => (
+          <Text key={v.exchange} variant="caption" color="secondary">
+            {v.exchange} {formatTapeNum(v.current?.value)} · 1h {formatOIWindow(windowByName(v.windows, '1h'), t)} · 4h{' '}
+            {formatOIWindow(windowByName(v.windows, '4h'), t)} · 24h {formatOIWindow(windowByName(v.windows, '24h'), t)}
+          </Text>
+        ))}
         {oi1h && oi1h.complete === false ? (
           <Text variant="caption" color="secondary">
             {t('tape.incomplete')}
