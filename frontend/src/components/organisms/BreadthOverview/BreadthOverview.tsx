@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Alert, Modal } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { SplitBar } from '@/components/atoms/SplitBar';
 import { Text } from '@/components/atoms/Text';
-import { DeskGaugeCard } from '@/components/molecules/DeskGaugeCard';
+import { DeskReadCard } from '@/components/molecules/DeskReadCard';
+import { financeColors } from '@/styles/tokens';
 import { upSharePct, windowMix } from './helpers';
 import { DetailList, Head } from './BreadthOverview.styles';
 import type { BreadthOverviewProps } from './BreadthOverview.types';
@@ -15,7 +17,7 @@ export function BreadthOverview({ data, error, isLoading = false }: BreadthOverv
 
   return (
     <>
-      <DeskGaugeCard
+      <DeskReadCard
         title={t('breadth.title')}
         value={up == null ? '—' : `${Math.round(up)}%`}
         caption={
@@ -23,9 +25,16 @@ export function BreadthOverview({ data, error, isLoading = false }: BreadthOverv
             ? t(`breadth.align_${hour.alignment}`, { defaultValue: hour.alignment })
             : t('breadth.hour')
         }
-        gaugeValue={up}
-        minLabel={t('breadth.gaugeDown')}
-        maxLabel={t('breadth.gaugeUp')}
+        visual={
+          <SplitBar
+            ariaLabel={up == null ? t('breadth.title') : `${t('breadth.title')} ${Math.round(up)}`}
+            parts={[
+              { key: 'up', pct: Number(hour?.counts?.upPct) || 0, color: financeColors.up },
+              { key: 'flat', pct: Number(hour?.counts?.flatPct) || 0, color: '#C7CDD8' },
+              { key: 'down', pct: Number(hour?.counts?.downPct) || 0, color: financeColors.down },
+            ]}
+          />
+        }
         isLoading={isLoading}
         onClick={() => setOpen(true)}
       />

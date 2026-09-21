@@ -5,7 +5,7 @@ import { renderWithTheme } from '@/test/render';
 import { BreadthOverview } from './BreadthOverview';
 
 describe('BreadthOverview', () => {
-  it('shows the 1h up share on the gauge and the rest in a dialog', async () => {
+  it('shows the 1h up share on a split bar and the rest in a dialog', async () => {
     const user = userEvent.setup();
     renderWithTheme(
       <BreadthOverview

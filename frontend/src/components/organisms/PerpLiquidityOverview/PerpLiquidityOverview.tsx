@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Alert, Modal } from 'antd';
 import { useTranslation } from 'react-i18next';
+import { SplitBar } from '@/components/atoms/SplitBar';
 import { Text } from '@/components/atoms/Text';
-import { DeskGaugeCard } from '@/components/molecules/DeskGaugeCard';
+import { DeskReadCard } from '@/components/molecules/DeskReadCard';
+import { financeColors } from '@/styles/tokens';
 import { formatCompactAmount } from '@/libs/utils';
 import {
   bandLeaderLabel,
@@ -29,13 +31,19 @@ export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLi
 
   return (
     <>
-      <DeskGaugeCard
+      <DeskReadCard
         title={t('perpLiq.title')}
         value={data?.lean ? t(leanKey) : '—'}
         caption={data?.bid || data?.ask ? `${bid} / ${ask}` : undefined}
-        gaugeValue={share}
-        minLabel={t('perpLiq.gaugeAsk')}
-        maxLabel={t('perpLiq.gaugeBid')}
+        visual={
+          <SplitBar
+            ariaLabel={share == null ? t('perpLiq.title') : `${t('perpLiq.title')} ${Math.round(share)}`}
+            parts={[
+              { key: 'bid', pct: Number(data?.bid) || 0, color: financeColors.up },
+              { key: 'ask', pct: Number(data?.ask) || 0, color: financeColors.down },
+            ]}
+          />
+        }
         isLoading={isLoading}
         onClick={() => setOpen(true)}
       />

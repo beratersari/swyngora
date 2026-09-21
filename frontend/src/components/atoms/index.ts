@@ -13,3 +13,6 @@ export type { BrandMarkProps } from './BrandMark';
 
 export { SpeedGauge } from './SpeedGauge';
 export type { SpeedGaugeProps } from './SpeedGauge';
+
+export { SplitBar } from './SplitBar';
+export type { SplitBarPart, SplitBarProps } from './SplitBar';

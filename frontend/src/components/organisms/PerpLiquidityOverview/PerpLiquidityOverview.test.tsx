@@ -5,7 +5,7 @@ import { renderWithTheme } from '@/test/render';
 import { PerpLiquidityOverview } from './PerpLiquidityOverview';
 
 describe('PerpLiquidityOverview', () => {
-  it('shows a bid/ask gauge and keeps bands and windows in the dialog', async () => {
+  it('shows a bid versus ask bar and keeps bands and windows in the dialog', async () => {
     const user = userEvent.setup();
     renderWithTheme(
       <PerpLiquidityOverview

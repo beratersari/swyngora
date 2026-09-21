@@ -26,7 +26,7 @@ For each window:
 1h and 4h use Binance rolling-window tickers (other venues fall back to
 candles). 24h uses the spot ticker change. Informational only.
 
-Web: a speedometer on Markets (`/markets`) next to fear and greed and perp bid/ask. The needle is the 1h up share. Clicking it opens the other windows and the summary.
+Web: a bid-style split bar on Markets (`/markets`) for the 1h up versus down share, next to the fear-and-greed dial and the perp book. Clicking it opens the other windows and the summary.
 
 The same liquid-coin idea is used for market-wide perp bid vs ask:
 `GET /api/v1/market/perp-depth/overview` (see [`perp-depth.md`](perp-depth.md)).
