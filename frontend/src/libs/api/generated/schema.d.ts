@@ -625,6 +625,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/perp-depth/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Market-wide perpetual bid vs ask liquidity
+         * @description Total perp bid/ask across liquid coins plus which coins dominate that book.
+         */
+        get: operations["getMarketPerpDepthOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/options": {
         parameters: {
             query?: never;
@@ -6109,6 +6129,47 @@ export interface components {
             complete?: boolean;
             summary?: string;
         };
+        /** @description One coin's share of market-wide perp bid/ask */
+        MarketPerpDepthCoin: {
+            symbol?: string;
+            base?: string;
+            /** @description Resting bid notional in the ±rangePct band */
+            bid?: string;
+            /** @description Resting ask notional in the ±rangePct band */
+            ask?: string;
+            /** @description bid + ask */
+            total?: string;
+            /** @description Percent of market bid+ask */
+            sharePct?: string;
+            /** @description Percent of market bid */
+            bidSharePct?: string;
+            /** @description Percent of market ask */
+            askSharePct?: string;
+            /** @enum {string} */
+            lean?: "bid" | "ask" | "balanced";
+            complete?: boolean;
+            error?: string;
+        };
+        /** @description Total perp bid/ask across liquid coins plus who dominates that book */
+        MarketPerpDepthOverview: {
+            exchange?: string;
+            rangePct?: string;
+            universe?: number;
+            known?: number;
+            /** Format: date-time */
+            asOf?: string;
+            bid?: string;
+            ask?: string;
+            total?: string;
+            imbalance?: string;
+            /** @enum {string} */
+            lean?: "bid" | "ask" | "balanced";
+            coins?: components["schemas"]["MarketPerpDepthCoin"][];
+            leaders?: string[];
+            missing?: string[];
+            summary?: string;
+            note?: string;
+        };
         /** @description How futures volume splits across Binance, Bybit, and OKX */
         MarketVolumeShare: {
             symbol?: string;
@@ -9193,6 +9254,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketPerpDepthOverview: {
+        parameters: {
+            query?: {
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+                /** @description Headline ± percent of mid (default 1, 0.05–5) */
+                rangePct?: number;
+                /** @description How many liquid perps to include (default 20, max 40) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Total bid/ask plus ranked coin shares */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketPerpDepthOverview"];
                 };
             };
             400: components["responses"]["Error"];

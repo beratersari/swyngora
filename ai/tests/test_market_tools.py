@@ -376,6 +376,23 @@ class _Transport(httpx2.BaseTransport):
                     "valueArea": {"low": "64800", "high": "66100"},
                 },
             )
+        if request.url.path.endswith("/perp-depth/overview"):
+            return httpx2.Response(
+                200,
+                json={
+                    "exchange": request.url.params.get("exchange") or "all",
+                    "rangePct": "1",
+                    "known": 2,
+                    "bid": "2400000000",
+                    "ask": "1800000000",
+                    "leaders": ["BTC", "ETH"],
+                    "summary": "2 liquid perps: 2.4B bid vs 1.8B ask within 1% of mid (bid-heavy). BTC 48% and ETH 17% of that book.",
+                    "coins": [
+                        {"symbol": "BTCUSDT", "base": "BTC", "sharePct": "48"},
+                        {"symbol": "ETHUSDT", "base": "ETH", "sharePct": "17"},
+                    ],
+                },
+            )
         if request.url.path.endswith("/perp-depth"):
             return httpx2.Response(
                 200,
@@ -626,6 +643,11 @@ def test_market_tools_hit_api(monkeypatch):
     )
     assert perp["symbol"] == "BTCUSDT"
     assert perp["combined"]["headline"]["below"]["notional"] == "40000000"
+
+    assert "get_perp_depth_overview" in by_name
+    ov = json.loads(by_name["get_perp_depth_overview"].invoke({"limit": 20}))
+    assert ov["leaders"][0] == "BTC"
+    assert ov["bid"] == "2400000000"
 
     assert "get_orderbook_liquidity_flow" in by_name
     liqflow = json.loads(

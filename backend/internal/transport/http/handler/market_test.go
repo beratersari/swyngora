@@ -1381,6 +1381,33 @@ func TestGetPerpDepth_BadSymbol(t *testing.T) {
 	}
 }
 
+func TestGetPerpDepthOverview_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/perp-depth/overview?rangePct=1&limit=10", nil)
+	rr := httptest.NewRecorder()
+	h.GetPerpDepthOverview(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body perpDepthOverviewResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.RangePct != "1" || body.Known < 1 || body.Bid == "" || len(body.Coins) == 0 {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetPerpDepthOverview_BadLimit(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/perp-depth/overview?limit=nope", nil)
+	rr := httptest.NewRecorder()
+	h.GetPerpDepthOverview(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetBookLiquidity_OK(t *testing.T) {
 	from := time.Date(2026, 8, 20, 14, 0, 0, 0, time.UTC)
 	to := from.Add(5 * time.Minute)

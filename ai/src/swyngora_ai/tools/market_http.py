@@ -597,6 +597,21 @@ class PerpDepthInput(BaseModel):
     )
 
 
+class PerpDepthOverviewInput(BaseModel):
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both + combined per coin)",
+    )
+    range_pct: float = Field(
+        default=1,
+        description="Headline ± percent of mid (default 1, max 5)",
+    )
+    limit: int = Field(
+        default=20,
+        description="How many liquid perps to include (default 20, max 40)",
+    )
+
+
 class LiquidationHuntInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -2148,6 +2163,16 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if range_pct:
             params["rangePct"] = range_pct
         return http.get("/api/v1/market/perp-depth", params)
+
+    def get_perp_depth_overview(
+        exchange: str = "all", range_pct: float = 1, limit: int = 20
+    ) -> str:
+        params: dict[str, Any] = {"exchange": exchange}
+        if range_pct:
+            params["rangePct"] = range_pct
+        if limit:
+            params["limit"] = limit
+        return http.get("/api/v1/market/perp-depth/overview", params)
 
     def estimate_liquidation_hunt(symbol: str, exchange: str = "all") -> str:
         return http.get(
@@ -4600,6 +4625,19 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "range_pct default 1. This is the futures book, not spot."
             ),
             args_schema=PerpDepthInput,
+        ),
+        StructuredTool.from_function(
+            get_perp_depth_overview,
+            name="get_perp_depth_overview",
+            description=(
+                "How much total perpetual bid vs ask liquidity is waiting "
+                "across the liquid coins we track, plus which coins make up "
+                "the biggest part of that book. Example: 2.4B bid vs 1.8B ask "
+                "within 1% of mid; BTC 48%, ETH 17%. Same universe idea as "
+                "market breadth. exchange=all adds Binance and Bybit per coin. "
+                "range_pct default 1. limit default 20."
+            ),
+            args_schema=PerpDepthOverviewInput,
         ),
         StructuredTool.from_function(
             get_funding_rate,

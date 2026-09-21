@@ -1,4 +1,14 @@
 {
+  "perpLiq": {
+    "title": "Perp alış / satış",
+    "subtitle": "Likit perp'lerde mid'in ±{{pct}}% içindeki bekleyen likidite",
+    "bid": "Toplam bid",
+    "ask": "Toplam ask",
+    "lean": "Eğilim",
+    "leanBid": "Bid ağır",
+    "leanAsk": "Ask ağır",
+    "leanEven": "Dengeli"
+  },
   "title": "Piyasalar",
   "eyebrow": "Spot · çoklu borsa",
   "watchlistResource": "izleme listesi",

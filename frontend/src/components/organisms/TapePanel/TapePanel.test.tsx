@@ -42,6 +42,13 @@ describe('TapePanel', () => {
             summary: '15m: 2B volume, OI +300M (15% of volume) is new positions.',
           },
         }}
+        symbol="BTCUSDT"
+        perpLiquidity={{
+          bid: '2400000000',
+          ask: '1800000000',
+          summary: 'BTC 48% of that book.',
+          coins: [{ symbol: 'BTCUSDT', base: 'BTC', sharePct: '48', bidSharePct: '60' }],
+        }}
         volumeShare={{
           windows: [
             {
@@ -63,13 +70,14 @@ describe('TapePanel', () => {
     expect(screen.getByText('Futures tape')).toBeInTheDocument();
     expect(screen.getByText('1.00B')).toBeInTheDocument();
     expect(screen.getByText(/\+300\.00M \(\+14\.3%\) opened/i)).toBeInTheDocument();
-    expect(screen.getByText(/binance/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/binance/i).length).toBeGreaterThan(0);
     expect(screen.getByText('0.0100%')).toBeInTheDocument();
     expect(screen.getByText('25.00M')).toBeInTheDocument();
     expect(screen.getByText('buy flow')).toBeInTheDocument();
     expect(screen.getByText('Volume building ahead of price')).toBeInTheDocument();
     expect(screen.getByText('+15%')).toBeInTheDocument();
     expect(screen.getByText('55%')).toBeInTheDocument();
+    expect(screen.getByText('48%')).toBeInTheDocument();
   });
 
   it('shows OI-weighted funding pressure and window change', () => {

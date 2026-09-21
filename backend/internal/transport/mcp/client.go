@@ -357,6 +357,21 @@ func (c *APIClient) GetPerpDepth(ctx context.Context, exchange, symbol string, r
 	return c.get(ctx, "/api/v1/market/perp-depth", q)
 }
 
+// GetPerpDepthOverview returns total perp bid/ask across liquid coins plus ranked shares.
+func (c *APIClient) GetPerpDepthOverview(ctx context.Context, exchange string, rangePct float64, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if rangePct > 0 {
+		q.Set("rangePct", strconv.FormatFloat(rangePct, 'f', -1, 64))
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/perp-depth/overview", q)
+}
+
 // GetFundingRate returns the predicted next funding rate plus recent settlements.
 func (c *APIClient) GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error) {
 	q := url.Values{}

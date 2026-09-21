@@ -75,6 +75,8 @@ import type {
   CvdQuery,
   MarketVolumeShare,
   VolumeShareQuery,
+  MarketPerpDepthOverview,
+  PerpDepthOverviewQuery,
   MarketParticipation,
   ParticipationQuery,
   MarketPrintSize,
@@ -140,6 +142,8 @@ export type {
   MarketLiquidationCascadeScan,
   MarketCvd,
   MarketVolumeShare,
+  MarketPerpDepthOverview,
+  MarketPerpDepthCoin,
   MarketParticipation,
   MarketPrintSize,
   MarketPressure,
@@ -409,6 +413,13 @@ export const marketApi = baseApi.injectEndpoints({
     getMarketVolumeShare: build.query<MarketVolumeShare, VolumeShareQuery>({
       query: (arg) => ({
         url: '/api/v1/market/volume-share',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
+    getMarketPerpDepthOverview: build.query<MarketPerpDepthOverview, PerpDepthOverviewQuery | void>({
+      query: (arg) => ({
+        url: '/api/v1/market/perp-depth/overview',
         params: compactParams({ ...(arg ?? {}) }),
       }),
     }),

@@ -8,6 +8,19 @@ export function formatSignedTapeNum(raw: string | number | null | undefined): st
   return body;
 }
 
+export function findPerpCoin<T extends { symbol?: string; base?: string }>(
+  coins: T[] | undefined,
+  symbol?: string | null,
+): T | undefined {
+  if (!coins?.length || !symbol) return undefined;
+  const want = symbol.toUpperCase();
+  const base = want.replace(/USDT$|USDC$|-USD$|-USDT$/, '');
+  return (
+    coins.find((c) => (c.symbol ?? '').toUpperCase() === want) ??
+    coins.find((c) => (c.base ?? '').toUpperCase() === base)
+  );
+}
+
 export function formatTapeNum(raw: string | number | null | undefined): string {
   if (raw === null || raw === undefined || raw === '') return '—';
   const n = typeof raw === 'number' ? raw : Number(raw);

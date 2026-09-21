@@ -2,6 +2,7 @@ import { Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import {
+  findPerpCoin,
   formatFundingPct,
   formatSignedFundingPct,
   formatSignedTapeNum,
@@ -56,6 +57,9 @@ export function TapePanel({
   participationError,
   volumeShare,
   volumeShareError,
+  perpLiquidity,
+  perpLiquidityError,
+  symbol,
   printSize,
   printSizeError,
   pressure,
@@ -84,6 +88,7 @@ export function TapePanel({
   const part4h = windowByName(partVenue?.windows, '4h');
   const share1h = windowByName(volumeShare?.windows, '1h');
   const shareOf = (ex: string) => share1h?.venues?.find((v) => v.exchange === ex);
+  const perpCoin = findPerpCoin(perpLiquidity?.coins, symbol);
   const printVenue = printSize?.combined ?? printSize?.venues?.[0];
   const print15 = windowByName(printVenue?.windows, '15m') ?? windowByName(printVenue?.windows, '5m');
   const cvdRow = cvd?.combined ?? cvd?.venues?.[0];
@@ -234,6 +239,43 @@ export function TapePanel({
         {share1h?.summary ? (
           <Text variant="caption" color="secondary">
             {share1h.summary}
+          </Text>
+        ) : null}
+      </Block>
+
+      <Block>
+        <Text variant="label" color="primary">
+          {t('tape.perpLiq')}
+        </Text>
+        {perpLiquidityError ? (
+          <Alert type="info" showIcon message={t('tape.perpLiq')} description={perpLiquidityError} />
+        ) : (
+          <StatsGrid>
+            <Stat
+              label={t('tape.perpLiqBid')}
+              value={formatTapeNum(perpLiquidity?.bid)}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.perpLiqAsk')}
+              value={formatTapeNum(perpLiquidity?.ask)}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.perpLiqShare')}
+              value={perpCoin?.sharePct ? `${perpCoin.sharePct}%` : '—'}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.perpLiqBidShare')}
+              value={perpCoin?.bidSharePct ? `${perpCoin.bidSharePct}%` : '—'}
+              isLoading={isLoading}
+            />
+          </StatsGrid>
+        )}
+        {perpLiquidity?.summary ? (
+          <Text variant="caption" color="secondary">
+            {perpLiquidity.summary}
           </Text>
         ) : null}
       </Block>

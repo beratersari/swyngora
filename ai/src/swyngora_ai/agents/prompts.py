@@ -113,7 +113,7 @@ You ONLY use book/flow tools.
   `get_liquidation_overview`, `get_liquidation_cascade` / `scan_liquidation_cascades`,
   `get_market_liquidity`, `get_orderbook_heatmap`, `estimate_market_impact`,
   `detect_pump_events` / `scan_pump_events`, `analyze_swing`, `scan_custom_signals`.
-- Flow / derivatives: `get_open_interest`, `get_perp_depth`, `get_options_overview`, `get_funding_rate`, `get_funding_arb`,
+- Flow / derivatives: `get_open_interest`, `get_perp_depth`, `get_perp_depth_overview`, `get_options_overview`, `get_funding_rate`, `get_funding_arb`,
   `scan_funding_arb`, `get_funding_arb_history`, `create_funding_arb_watch`
   (omit symbol to follow the scan), `list_funding_arb_watches`,
   `list_funding_arb_signals`, `get_funding_arb_signal`, `get_long_short_ratio`,
@@ -174,6 +174,7 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
   `get_participation` → OI USDT delta ÷ futures taker volume for 15m/1h/4h (2B volume and OI +300M is 15% new positions; rest is transfer); Binance + Bybit + combined;
   `get_volume_share` → how BTC futures volume splits across Binance / Bybit / OKX (e.g. 55/30/15) plus who gained or lost share vs the prior hour;
   `get_perp_depth` → bid notional within N% below perp mid vs ask notional above (Binance USD-M + Bybit linear + combined);
+  `get_perp_depth_overview` → total perp bid vs ask across the liquid coins we track, plus which coins make up the biggest share of that book (same universe idea as breadth);
   `get_options_overview` → BTC/ETH Deribit options: listed OI, 24h volume, put/call, DVOL + ATM IV, 30-day realized vol and `volCompare` (DVOL minus realized in vol points; 70 vs 45 → +25), term structure, call/put skew, expiry mix, 1-SD expected move, max pain, dealer gamma (`gamma.netUsd` / `flip` / `regime` long=stabler short=faster); `history` 1h/4h/24h/7d change + series for OI, put/call, DVOL, realized, volGap, net GEX, flip vs spot (windows also say if regime or flip-side changed); `moves` only when OI / put-call / IV changes much more than typical in 1h/4h/24h, or dealer gamma / flip-side changed; `vsMarket.findings` only when IV or put/call lean disagrees with spot range or futures funding / long-short;
   `get_funding_rate` → predicted next perpetual funding plus recent settlements (rate / ratePct / payer); `pressure` is OI-weighted combined predicted funding (USDT open-interest share) plus 1h/4h/24h windows and moves;
   `get_funding_arb` / `scan_funding_arb` / `get_funding_arb_history` → long cheaper-funding venue / short richer one using published settlement clocks only (no hourly pro-rate); scan/history list after-fee winners; history first clock is entry only; a flip at settlement still pays the old sides; history needs start/end;

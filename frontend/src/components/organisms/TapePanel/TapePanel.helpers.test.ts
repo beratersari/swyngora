@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatFundingPct, formatSignedFundingPct, formatTapeNum, windowByName } from './TapePanel.helpers';
+import { findPerpCoin, formatFundingPct, formatSignedFundingPct, formatTapeNum, windowByName } from './TapePanel.helpers';
 
 describe('TapePanel helpers', () => {
   it('compacts large notionals', () => {
@@ -20,5 +20,14 @@ describe('TapePanel helpers', () => {
 
   it('picks a named window', () => {
     expect(windowByName([{ window: '1h' }, { window: '24h' }], '24h')?.window).toBe('24h');
+  });
+
+  it('finds this coin in the market perp book', () => {
+    const coins = [
+      { symbol: 'ETHUSDT', base: 'ETH' },
+      { symbol: 'BTCUSDT', base: 'BTC' },
+    ];
+    expect(findPerpCoin(coins, 'BTCUSDT')?.base).toBe('BTC');
+    expect(findPerpCoin(coins, 'ETH')?.base).toBe('ETH');
   });
 });

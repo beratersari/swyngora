@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/cache"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
@@ -91,4 +93,192 @@ func (s *Service) futuresDepthPort(ex domain.Exchange) domain.FuturesDepthPort {
 		return nil
 	}
 	return fp
+}
+
+const (
+	perpOverviewCacheTTL = 8 * time.Second
+	perpOverviewWorkers  = 4
+)
+
+// GetPerpDepthOverview sums bid/ask within rangePct across the liquid perps we follow.
+func (s *Service) GetPerpDepthOverview(ctx context.Context, exchange string, rangePct float64, limit int) (*domain.PerpDepthOverview, error) {
+	ex, err := domain.ParsePerpDepthExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	rangePct, err = domain.ParsePerpDepthRangePct(rangePct)
+	if err != nil {
+		return nil, err
+	}
+	limit = domain.ParsePerpDepthOverviewLimit(limit)
+	key := ex + "|" + strconv.FormatFloat(rangePct, 'f', -1, 64) + "|" + strconv.Itoa(limit)
+	if c := s.perpOverviewCache(); c != nil {
+		if hit, ok := c.Get(key); ok && hit != nil {
+			cp := *hit
+			return &cp, nil
+		}
+	}
+
+	symbols := s.perpOverviewUniverse(ctx, limit)
+	type fetched struct {
+		in domain.PerpDepthCoinInput
+	}
+	got := make([]fetched, len(symbols))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, perpOverviewWorkers)
+	for i, sym := range symbols {
+		wg.Add(1)
+		go func(i int, sym string) {
+			defer wg.Done()
+			select {
+			case <-ctx.Done():
+				got[i] = fetched{in: domain.PerpDepthCoinInput{Symbol: sym, Error: ctx.Err().Error()}}
+				return
+			case sem <- struct{}{}:
+			}
+			defer func() { <-sem }()
+			rep, ferr := s.GetPerpDepth(ctx, ex, sym, rangePct)
+			base, _ := domain.SplitBaseQuote(domain.ExchangeBinance, sym)
+			in := domain.PerpDepthCoinInput{Symbol: sym, Base: base}
+			if ferr != nil {
+				in.Error = ferr.Error()
+				got[i] = fetched{in: in}
+				return
+			}
+			in.Bid, in.Ask, in.Lean, in.Complete, in.Error = perpDepthHeadline(rep)
+			got[i] = fetched{in: in}
+		}(i, sym)
+	}
+	wg.Wait()
+	coins := make([]domain.PerpDepthCoinInput, 0, len(got))
+	for _, f := range got {
+		if f.in.Symbol == "" {
+			continue
+		}
+		coins = append(coins, f.in)
+	}
+	out := domain.BuildPerpDepthOverview(ex, rangePct, coins, time.Now().UTC())
+	if c := s.perpOverviewCache(); c != nil && out != nil {
+		cp := *out
+		c.Set(key, &cp)
+	}
+	return out, nil
+}
+
+func (s *Service) perpOverviewCache() *cache.TTL[*domain.PerpDepthOverview] {
+	if s == nil {
+		return nil
+	}
+	s.watchMu.Lock()
+	defer s.watchMu.Unlock()
+	if s.perpOverview == nil {
+		s.perpOverview = cache.New[*domain.PerpDepthOverview](perpOverviewCacheTTL)
+	}
+	return s.perpOverview
+}
+
+func (s *Service) perpOverviewUniverse(ctx context.Context, limit int) []string {
+	listEx := domain.ExchangeBinance
+	if _, err := s.port(listEx); err != nil {
+		for _, ex := range []domain.Exchange{domain.ExchangeBybit, domain.ExchangeCoinbase} {
+			if _, perr := s.port(ex); perr == nil {
+				listEx = ex
+				break
+			}
+		}
+	}
+	spot, err := s.ListSpotMarkets(ctx, string(listEx), domain.SpotListQuery{
+		QuoteAsset: "USDT",
+		Status:     "TRADING",
+		SortBy:     domain.SpotSortQuoteVolume,
+		Order:      domain.SortDesc,
+		Limit:      limit + 20,
+	})
+	seen := map[string]struct{}{}
+	out := make([]string, 0, limit)
+	add := func(symbol string) {
+		symbol = domain.NormalizeLiquidationSymbol(symbol)
+		if symbol == "" {
+			return
+		}
+		base, _ := domain.SplitBaseQuote(listEx, symbol)
+		if !domain.IsPerpDepthEligible(base) {
+			return
+		}
+		if _, ok := seen[base]; ok {
+			return
+		}
+		if len(out) >= limit && base != "BTC" && base != "ETH" {
+			return
+		}
+		seen[base] = struct{}{}
+		out = append(out, symbol)
+	}
+	if err == nil && spot != nil {
+		for _, m := range spot.Items {
+			add(m.Symbol)
+			if len(out) >= limit {
+				break
+			}
+		}
+	}
+	for _, seed := range domain.DefaultFuturesHistorySymbols {
+		add(seed)
+		if len(out) >= limit {
+			break
+		}
+	}
+	if _, ok := seen["BTC"]; !ok {
+		add("BTCUSDT")
+	}
+	if _, ok := seen["ETH"]; !ok {
+		add("ETHUSDT")
+	}
+	if len(out) > limit {
+		// Keep BTC/ETH even if we overflowed after filling from volume.
+		kept := out[:limit]
+		haveBTC, haveETH := false, false
+		for _, sym := range kept {
+			b, _ := domain.SplitBaseQuote(domain.ExchangeBinance, sym)
+			if b == "BTC" {
+				haveBTC = true
+			}
+			if b == "ETH" {
+				haveETH = true
+			}
+		}
+		if !haveBTC {
+			kept[len(kept)-1] = "BTCUSDT"
+		}
+		if !haveETH && limit >= 2 {
+			kept[len(kept)-2] = "ETHUSDT"
+		}
+		out = kept
+	}
+	return out
+}
+
+func perpDepthHeadline(rep *domain.PerpDepthReport) (bid, ask float64, lean string, complete bool, errMsg string) {
+	if rep == nil {
+		return 0, 0, "", false, "no perpetual depth"
+	}
+	if rep.Combined != nil && rep.Combined.Error == "" && (rep.Combined.Headline.Below.Notional+rep.Combined.Headline.Above.Notional > 0 || rep.Combined.Mid > 0) {
+		h := rep.Combined.Headline
+		return h.Below.Notional, h.Above.Notional, h.Lean, h.Complete, ""
+	}
+	for _, v := range rep.Venues {
+		if v.Error == "" {
+			h := v.Headline
+			return h.Below.Notional, h.Above.Notional, h.Lean, h.Complete, ""
+		}
+	}
+	for _, v := range rep.Venues {
+		if v.Error != "" {
+			return 0, 0, "", false, v.Error
+		}
+	}
+	if rep.Summary != "" {
+		return 0, 0, "", false, rep.Summary
+	}
+	return 0, 0, "", false, "no perpetual depth"
 }

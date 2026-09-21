@@ -3,6 +3,7 @@ package market
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
@@ -45,6 +46,33 @@ func TestGetPerpDepth_Combined(t *testing.T) {
 func TestGetPerpDepth_MissingSymbol(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{})
 	if _, err := svc.GetPerpDepth(context.Background(), "all", "", 1); !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestGetPerpDepthOverview_TotalsAndLeaders(t *testing.T) {
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{},
+		domain.ExchangeBybit:   &fakeMarket{},
+	}, &fakeSupply{})
+	got, err := svc.GetPerpDepthOverview(context.Background(), "all", 1, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Known < 2 || got.Bid <= 0 || got.Ask <= 0 {
+		t.Fatalf("%+v", got)
+	}
+	if len(got.Coins) == 0 || got.Coins[0].SharePct <= 0 {
+		t.Fatalf("coins %+v", got.Coins)
+	}
+	if got.Summary == "" || !strings.Contains(strings.ToLower(got.Summary), "bid") {
+		t.Fatalf("summary %s", got.Summary)
+	}
+}
+
+func TestGetPerpDepthOverview_BadExchange(t *testing.T) {
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	if _, err := svc.GetPerpDepthOverview(context.Background(), "okx", 1, 10); !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("%v", err)
 	}
 }

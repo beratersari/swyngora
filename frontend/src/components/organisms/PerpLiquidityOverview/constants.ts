@@ -1,0 +1,3 @@
+export const PERP_LIQUIDITY_POLL_MS = 15_000;
+export const PERP_LIQUIDITY_LIMIT = 20;
+export const PERP_LIQUIDITY_LEADERS = 6;

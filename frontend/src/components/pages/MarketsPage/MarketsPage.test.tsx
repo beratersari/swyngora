@@ -15,6 +15,15 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useListExchangesQuery: () => mockExchanges(),
     useListProductTagsQuery: () => mockTags(),
     useListSpotMarketsQuery: () => mockSpot(),
+    useGetMarketPerpDepthOverviewQuery: () => ({
+      data: undefined,
+      currentData: undefined,
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    }),
     useListDelistScheduleQuery: () => ({
       data: { exchange: 'binance', enabled: true, items: [] },
       isSuccess: true,
@@ -148,10 +157,8 @@ describe('MarketsPage', () => {
 
     mockSpot.mockReturnValue(okSpot([coinbaseItem]));
     await user.click(screen.getByRole('tab', { name: /coinbase/i }));
-    // Meta line shows venue default quote after switch
-    await waitFor(() => {
-      expect(screen.getByText(/Quote USD/i)).toBeInTheDocument();
-    });
+    // Coinbase native book is USD; the row quote is the visible proof the filter reset.
+    expect(await screen.findByText('BTC/USD')).toBeInTheDocument();
   });
 
   it('does not paint previous venue rows when filter changes before new data', async () => {

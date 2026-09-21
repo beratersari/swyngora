@@ -93,6 +93,11 @@ export type LiquidationCascadeScanQuery = NonNullable<
 export type CvdQuery = NonNullable<operations['getMarketCVD']['parameters']['query']>;
 export type MarketVolumeShare = components['schemas']['MarketVolumeShare'];
 export type VolumeShareQuery = NonNullable<operations['getMarketVolumeShare']['parameters']['query']>;
+export type MarketPerpDepthOverview = components['schemas']['MarketPerpDepthOverview'];
+export type MarketPerpDepthCoin = components['schemas']['MarketPerpDepthCoin'];
+export type PerpDepthOverviewQuery = NonNullable<
+  operations['getMarketPerpDepthOverview']['parameters']['query']
+>;
 export type MarketParticipation = components['schemas']['MarketParticipation'];
 export type ParticipationQuery = NonNullable<operations['getMarketParticipation']['parameters']['query']>;
 export type MarketPrintSize = components['schemas']['MarketPrintSize'];

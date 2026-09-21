@@ -511,6 +511,34 @@ func FormatSupply(s *domain.AssetSupply) string {
 	return b.String()
 }
 
+// FormatPerpDepthOverview formats market-wide perp bid vs ask plus leading coins.
+func FormatPerpDepthOverview(o *domain.PerpDepthOverview) string {
+	if o == nil {
+		return "No perpetual depth."
+	}
+	var b strings.Builder
+	b.WriteString(header("📘", "Perp bid / ask"))
+	fmt.Fprintf(&b, "%s · ±%g%% · %d coins\n", code(o.Exchange), o.RangePct, o.Known)
+	b.WriteString(divider())
+	if o.Summary != "" {
+		b.WriteString(o.Summary + "\n")
+	}
+	n := 0
+	for _, c := range o.Coins {
+		if c.Error != "" || c.Total <= 0 {
+			continue
+		}
+		if n >= 8 {
+			break
+		}
+		fmt.Fprintf(&b, "  %s  bid %s · ask %s · %g%% of book\n",
+			code(c.Base), italic(compactUSDT(strconv.FormatFloat(c.Bid, 'f', -1, 64))), italic(compactUSDT(strconv.FormatFloat(c.Ask, 'f', -1, 64))), c.SharePct)
+		n++
+	}
+	b.WriteString(footer())
+	return b.String()
+}
+
 // FormatOpenInterest formats current OI and windowed change.
 func FormatOpenInterest(s *domain.OpenInterestSnapshot) string {
 	if s == nil {
@@ -990,6 +1018,7 @@ func HelpText() string {
 	b.WriteString(cmdLine("/rsi", "<symbol> [interval] [ex]", "RSI + EMA"))
 	b.WriteString(cmdLine("/rsiheat", "[exchange] [quote]", "RSI heatmap grid"))
 	b.WriteString(cmdLine("/oi", "<symbol> [binance|bybit|all]", "open interest + 5m/1h/4h/24h change + funding"))
+	b.WriteString(cmdLine("/perpliq", "[binance|bybit|all] [n]", "total perp bid vs ask across liquid coins"))
 	b.WriteString(cmdLine("/funding", "<symbol> [binance|bybit|all]", "current funding rate + recent history"))
 	b.WriteString(cmdLine("/fundingarb", "<symbol> [notional] [hours]", "long/short if after-fee winner"))
 	b.WriteString(cmdLine("/fundingarb hist", "<sym> <from> <to>", "past after-fee funding stretches"))
@@ -1031,6 +1060,7 @@ func HelpText() string {
 	b.WriteString("  " + code("/spot bybit SOL") + "\n")
 	b.WriteString("  " + code("/rsi ETHUSDT 1h") + "\n")
 	b.WriteString("  " + code("/oi BTCUSDT") + "\n")
+	b.WriteString("  " + code("/perpliq") + "\n")
 	b.WriteString("  " + code("/ask What is BTC RSI and recent news?") + "\n")
 	b.WriteString("  " + code("/portfolio create 10000") + "\n")
 	b.WriteString("  " + code("/portfolio create 5000 Risky") + "\n")

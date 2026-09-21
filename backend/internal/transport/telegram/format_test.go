@@ -192,6 +192,9 @@ func TestHelpHasLowmcap(t *testing.T) {
 	if !strings.Contains(help, "/oi") {
 		t.Fatal("help must document /oi open interest")
 	}
+	if !strings.Contains(help, "/perpliq") {
+		t.Fatal("help must document /perpliq")
+	}
 	if !strings.Contains(help, "/funding") {
 		t.Fatal("help must document /funding")
 	}

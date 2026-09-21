@@ -34,6 +34,13 @@ func (f *fakeMarket) GetOrderBook(_ context.Context, q domain.OrderBookQuery) (*
 		Asks:   []domain.PriceLevel{{Price: 100.1, Quantity: 1}},
 	}, nil
 }
+func (f *fakeMarket) GetFuturesDepth(_ context.Context, symbol string) (*domain.RawOrderBook, error) {
+	return &domain.RawOrderBook{
+		Symbol: symbol,
+		Bids:   []domain.PriceLevel{{Price: 100, Quantity: 10}, {Price: 99.5, Quantity: 402010}},
+		Asks:   []domain.PriceLevel{{Price: 100.1, Quantity: 5}, {Price: 100.5, Quantity: 149254}},
+	}, nil
+}
 func (f *fakeMarket) ListSpotMarkets(context.Context) ([]domain.SpotMarket, error) {
 	if f.spot != nil {
 		return append([]domain.SpotMarket(nil), f.spot...), nil
@@ -123,6 +130,17 @@ func TestFundingArbScanCommand(t *testing.T) {
 		t.Fatalf("%s", out)
 	}
 	if !strings.Contains(strings.ToLower(out), "scan") && !strings.Contains(out, "funding") {
+		t.Fatalf("%s", out)
+	}
+}
+
+func TestPerpDepthOverviewCommand(t *testing.T) {
+	r := newTestRouter(t)
+	out := r.Handle(context.Background(), 13, 13, "/perpliq")
+	if strings.Contains(strings.ToLower(out), "unknown command") {
+		t.Fatalf("%s", out)
+	}
+	if !strings.Contains(strings.ToLower(out), "bid") && !strings.Contains(strings.ToLower(out), "perp") {
 		t.Fatalf("%s", out)
 	}
 }

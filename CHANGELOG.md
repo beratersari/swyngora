@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Perp liquidity overview:** total bid vs ask waiting across the liquid perps we track (e.g. 2.4B bid / 1.8B ask within 1% of mid), plus which coins make up the biggest share of that book. `GET /api/v1/market/perp-depth/overview`, MCP `get_perp_depth_overview`, Markets page, coin-detail tape (`docs/features/perp-depth.md`)
+
+### Added
 - **Futures volume share:** how BTC volume splits across Binance / Bybit / OKX (e.g. 55/30/15) plus who gained or lost share vs the prior hour. `GET /api/v1/market/volume-share`, MCP `get_volume_share`, coin-detail tape (`docs/features/volume-share.md`)
 - **Participation ratio:** share of futures volume that stuck as new (or closed) open interest — OI USDT delta ÷ taker volume. 2B volume and OI +300M is 15%. Windows 15m / 1h / 4h. `GET /api/v1/market/participation`, MCP `get_participation`, coin-detail tape (`docs/features/participation.md`)
 - **DVOL vs 30-day realized:** options desk shows Deribit DVOL next to BTC/ETH 30-day close-to-close realized vol and the gap in vol points (70 vs 45 → +25), plus how that gap moved over 1h/4h/24h/7d. `volCompare` on `GET /api/v1/market/options`, history `realized` / `volGap`, web `/options`, MCP `get_options_overview` (`docs/features/options.md`)

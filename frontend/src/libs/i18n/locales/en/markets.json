@@ -1,4 +1,14 @@
 {
+  "perpLiq": {
+    "title": "Perp bid / ask",
+    "subtitle": "Resting liquidity within {{pct}}% of mid across liquid perps",
+    "bid": "Total bid",
+    "ask": "Total ask",
+    "lean": "Lean",
+    "leanBid": "Bid-heavy",
+    "leanAsk": "Ask-heavy",
+    "leanEven": "Balanced"
+  },
   "title": "Markets",
   "eyebrow": "Spot · multi-exchange",
   "watchlistResource": "watchlist",

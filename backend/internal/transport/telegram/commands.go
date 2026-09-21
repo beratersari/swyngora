@@ -132,6 +132,8 @@ func (r *Router) HandleMessage(ctx context.Context, chatID, userID int64, text s
 		return textReply(r.cmdRSIHeat(ctx, args))
 	case "/oi", "/openinterest", "/open-interest":
 		return textReply(r.cmdOpenInterest(ctx, args))
+	case "/perpliq", "/perpdepth", "/depthoverview":
+		return textReply(r.cmdPerpDepthOverview(ctx, args))
 	case "/funding", "/fr":
 		return textReply(r.cmdFunding(ctx, args))
 	case "/fundingarb", "/farb":
@@ -383,6 +385,28 @@ func (r *Router) cmdMcap(ctx context.Context, args []string) string {
 		return friendlyErr(err)
 	}
 	return FormatSupply(sup)
+}
+
+func (r *Router) cmdPerpDepthOverview(ctx context.Context, args []string) string {
+	exchange := "all"
+	limit := 0
+	for _, a := range args {
+		al := strings.ToLower(a)
+		if al == "binance" || al == "bybit" || al == "all" {
+			exchange = al
+			continue
+		}
+		n, err := strconv.Atoi(a)
+		if err != nil {
+			return "Usage: /perpliq [binance|bybit|all] [limit]\nExample: /perpliq\nExample: /perpliq all 20"
+		}
+		limit = n
+	}
+	got, err := r.market.GetPerpDepthOverview(ctx, exchange, 0, limit)
+	if err != nil {
+		return friendlyErr(err)
+	}
+	return FormatPerpDepthOverview(got)
 }
 
 func (r *Router) cmdOpenInterest(ctx context.Context, args []string) string {

@@ -44,6 +44,7 @@ type DataPort interface {
 	ScanLiquidationCascades(ctx context.Context, exchange string) (json.RawMessage, error)
 	GetOpenInterest(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetPerpDepth(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error)
+	GetPerpDepthOverview(ctx context.Context, exchange string, rangePct float64, limit int) (json.RawMessage, error)
 	GetOptions(ctx context.Context, exchange, asset string) (json.RawMessage, error)
 	GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFundingArb(ctx context.Context, symbol string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
@@ -653,6 +654,19 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetPerpDepth(ctx, req.GetString("exchange", "all"), symbol, req.GetFloat("rangePct", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_perp_depth_overview",
+		mcp.WithDescription("How much total perpetual bid vs ask liquidity is waiting across the liquid coins we track, plus which coins make up the biggest part of that book. Example: 2.4B bid vs 1.8B ask within 1% of mid; BTC 48%, ETH 17%. Same universe idea as market breadth. exchange=all (default) adds Binance USD-M and Bybit linear per coin. rangePct default 1. limit default 20 (max 40). coins ranked by share of bid+ask. Futures book, not spot. Not financial advice."),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithNumber("rangePct", mcp.Description("Headline ±% of mid (default 1, max 5)")),
+		mcp.WithNumber("limit", mcp.Description("How many liquid perps (default 20, max 40)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.GetPerpDepthOverview(ctx, req.GetString("exchange", "all"), req.GetFloat("rangePct", 0), req.GetInt("limit", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

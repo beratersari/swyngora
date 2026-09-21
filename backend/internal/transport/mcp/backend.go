@@ -746,6 +746,46 @@ func (b *Backend) GetPerpDepth(ctx context.Context, exchange, symbol string, ran
 	return mustJSON(perpDepthMap(got))
 }
 
+func (b *Backend) GetPerpDepthOverview(ctx context.Context, exchange string, rangePct float64, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetPerpDepthOverview(ctx, exchange, rangePct, limit)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(perpDepthOverviewMap(got))
+}
+
+func perpDepthOverviewMap(got *domain.PerpDepthOverview) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	coins := make([]map[string]any, 0, len(got.Coins))
+	for _, c := range got.Coins {
+		row := map[string]any{
+			"symbol": c.Symbol, "base": c.Base, "bid": formatQtyMCP(c.Bid), "ask": formatQtyMCP(c.Ask),
+			"total": formatQtyMCP(c.Total), "sharePct": formatQtyMCP(c.SharePct),
+			"bidSharePct": formatQtyMCP(c.BidSharePct), "askSharePct": formatQtyMCP(c.AskSharePct),
+			"lean": c.Lean, "complete": c.Complete,
+		}
+		if c.Error != "" {
+			row["error"] = c.Error
+		}
+		coins = append(coins, row)
+	}
+	out := map[string]any{
+		"exchange": got.Exchange, "rangePct": formatQtyMCP(got.RangePct), "universe": got.Universe, "known": got.Known,
+		"asOf": got.AsOf.UTC().Format(time.RFC3339Nano), "bid": formatQtyMCP(got.Bid), "ask": formatQtyMCP(got.Ask),
+		"total": formatQtyMCP(got.Total), "imbalance": domain.FormatSignedQty(got.Imbalance), "lean": got.Lean,
+		"coins": coins, "leaders": got.Leaders, "summary": got.Summary, "note": got.Note,
+	}
+	if len(got.Missing) > 0 {
+		out["missing"] = got.Missing
+	}
+	return out
+}
+
 func perpDepthMap(got *domain.PerpDepthReport) map[string]any {
 	if got == nil {
 		return map[string]any{}

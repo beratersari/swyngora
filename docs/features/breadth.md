@@ -26,6 +26,9 @@ For each window:
 1h and 4h use Binance rolling-window tickers (other venues fall back to
 candles). 24h uses the spot ticker change. Informational only.
 
+The same liquid-coin idea is used for market-wide perp bid vs ask:
+`GET /api/v1/market/perp-depth/overview` (see [`perp-depth.md`](perp-depth.md)).
+
 ## Where the code lives
 
 | Layer | Path |

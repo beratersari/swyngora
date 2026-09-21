@@ -8,6 +8,11 @@ import { PageHeader } from '@/components/molecules/PageHeader';
 import { ExchangeTabs } from '@/components/organisms/ExchangeTabs';
 import { MarketsToolbar } from '@/components/organisms/MarketsToolbar';
 import { MarketsTable } from '@/components/organisms/MarketsTable';
+import {
+  PERP_LIQUIDITY_LIMIT,
+  PERP_LIQUIDITY_POLL_MS,
+  PerpLiquidityOverview,
+} from '@/components/organisms/PerpLiquidityOverview';
 import { getResultsRange } from '@/components/organisms/MarketsTable/MarketsTable.helpers';
 import {
   rtkErrorMessage,
@@ -17,6 +22,7 @@ import {
   useListProductTagsQuery,
   useListDelistScheduleQuery,
   useListSpotMarketsQuery,
+  useGetMarketPerpDepthOverviewQuery,
   useRemoveWatchlistItemMutation,
   type MarketExchange,
   type SpotMarket,
@@ -203,6 +209,16 @@ export function MarketsPage() {
     [patchState],
   );
 
+  const showPerpLiq = state.exchange !== 'nasdaq' && state.exchange !== 'bist';
+  const perpLiqQuery = useGetMarketPerpDepthOverviewQuery(
+    { exchange: 'all', limit: PERP_LIQUIDITY_LIMIT, rangePct: 1 },
+    {
+      skip: !showPerpLiq,
+      pollingInterval: visible && showPerpLiq ? PERP_LIQUIDITY_POLL_MS : 0,
+      refetchOnFocus: true,
+    },
+  );
+
   const range = getResultsRange(state.offset, state.limit, total);
   const rangeLabel =
     range.kind === 'empty'
@@ -221,6 +237,18 @@ export function MarketsPage() {
   return (
     <PageStack>
       <PageHeader title={t('markets:title')} subtitle={t('markets:subtitle', { seconds: DEFAULT_SPOT_POLL_MS / 1000 })} />
+
+      {showPerpLiq ? (
+        <PerpLiquidityOverview
+          data={rtkCurrent(perpLiqQuery)}
+          error={
+            perpLiqQuery.isError
+              ? rtkErrorMessage(perpLiqQuery.error, { resource: t('markets:title') })
+              : null
+          }
+          isLoading={perpLiqQuery.isLoading || perpLiqQuery.isFetching}
+        />
+      ) : null}
 
       <ExchangeTabs
         exchanges={exchanges}

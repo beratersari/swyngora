@@ -9,6 +9,35 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
+// GetPerpDepthOverview handles GET /api/v1/market/perp-depth/overview.
+func (h *MarketHandler) GetPerpDepthOverview(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	var rangePct float64
+	if raw := q.Get("rangePct"); raw != "" {
+		n, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: rangePct must be a number", domain.ErrInvalidArgument))
+			return
+		}
+		rangePct = n
+	}
+	limit := 0
+	if raw := q.Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: limit must be an integer", domain.ErrInvalidArgument))
+			return
+		}
+		limit = n
+	}
+	got, err := h.svc.GetPerpDepthOverview(r.Context(), q.Get("exchange"), rangePct, limit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, perpDepthOverviewToDTO(got))
+}
+
 // GetPerpDepth handles GET /api/v1/market/perp-depth.
 func (h *MarketHandler) GetPerpDepth(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -119,4 +148,57 @@ func perpDepthSideToDTO(s domain.PerpDepthSide) perpDepthSideDTO {
 		out.EdgePrice = formatHistQty(s.EdgePrice)
 	}
 	return out
+}
+
+type perpDepthCoinShareDTO struct {
+	Symbol      string `json:"symbol"`
+	Base        string `json:"base"`
+	Bid         string `json:"bid"`
+	Ask         string `json:"ask"`
+	Total       string `json:"total"`
+	SharePct    string `json:"sharePct"`
+	BidSharePct string `json:"bidSharePct"`
+	AskSharePct string `json:"askSharePct"`
+	Lean        string `json:"lean"`
+	Complete    bool   `json:"complete"`
+	Error       string `json:"error,omitempty"`
+}
+
+type perpDepthOverviewResponse struct {
+	Exchange  string                  `json:"exchange"`
+	RangePct  string                  `json:"rangePct"`
+	Universe  int                     `json:"universe"`
+	Known     int                     `json:"known"`
+	AsOf      time.Time               `json:"asOf"`
+	Bid       string                  `json:"bid"`
+	Ask       string                  `json:"ask"`
+	Total     string                  `json:"total"`
+	Imbalance string                  `json:"imbalance"`
+	Lean      string                  `json:"lean"`
+	Coins     []perpDepthCoinShareDTO `json:"coins"`
+	Leaders   []string                `json:"leaders"`
+	Missing   []string                `json:"missing,omitempty"`
+	Summary   string                  `json:"summary"`
+	Note      string                  `json:"note"`
+}
+
+func perpDepthOverviewToDTO(a *domain.PerpDepthOverview) perpDepthOverviewResponse {
+	if a == nil {
+		return perpDepthOverviewResponse{}
+	}
+	coins := make([]perpDepthCoinShareDTO, 0, len(a.Coins))
+	for _, c := range a.Coins {
+		coins = append(coins, perpDepthCoinShareDTO{
+			Symbol: c.Symbol, Base: c.Base,
+			Bid: formatHistQty(c.Bid), Ask: formatHistQty(c.Ask), Total: formatHistQty(c.Total),
+			SharePct: formatHistQty(c.SharePct), BidSharePct: formatHistQty(c.BidSharePct),
+			AskSharePct: formatHistQty(c.AskSharePct), Lean: c.Lean, Complete: c.Complete, Error: c.Error,
+		})
+	}
+	return perpDepthOverviewResponse{
+		Exchange: a.Exchange, RangePct: formatHistQty(a.RangePct), Universe: a.Universe, Known: a.Known,
+		AsOf: a.AsOf.UTC(), Bid: formatHistQty(a.Bid), Ask: formatHistQty(a.Ask), Total: formatHistQty(a.Total),
+		Imbalance: domain.FormatSignedQty(a.Imbalance), Lean: a.Lean, Coins: coins, Leaders: a.Leaders,
+		Missing: a.Missing, Summary: a.Summary, Note: a.Note,
+	}
 }

@@ -1098,6 +1098,44 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/perp-depth/overview:
+    get:
+      summary: Market-wide perpetual bid vs ask liquidity
+      description: |
+        How much **perpetual** bid and ask liquidity is waiting across the
+        **liquid USDT coins** we follow (same universe idea as breadth), plus
+        which coins make up the biggest part of that book. Example: **2.4B bid
+        vs 1.8B ask within 1% of mid; BTC 48%, ETH 17%**. `exchange=all`
+        (default) adds Binance USD-M and Bybit linear per coin. `rangePct`
+        default **1**. `limit` default **20** (max 40). `coins` are ranked by
+        total (bid+ask) share. This is the **futures** book, not spot.
+        Informational only.
+      operationId: getMarketPerpDepthOverview
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all }
+        - name: rangePct
+          in: query
+          description: Headline ± percent of mid (default 1, 0.05–5)
+          schema: { type: number, default: 1, example: 1 }
+        - name: limit
+          in: query
+          description: How many liquid perps to include (default 20, max 40)
+          schema: { type: integer, default: 20, example: 20 }
+      responses:
+        '200':
+          description: Total bid/ask plus ranked coin shares
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketPerpDepthOverview'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/options:
     get:
       summary: BTC/ETH options overview (open interest, volume, PCR, IV, expiry)
@@ -9951,6 +9989,46 @@ components:
           items: { type: string }
         complete: { type: boolean }
         summary: { type: string }
+    MarketPerpDepthCoin:
+      type: object
+      description: One coin's share of market-wide perp bid/ask
+      properties:
+        symbol: { type: string }
+        base: { type: string }
+        bid: { type: string, description: Resting bid notional in the ±rangePct band }
+        ask: { type: string, description: Resting ask notional in the ±rangePct band }
+        total: { type: string, description: bid + ask }
+        sharePct: { type: string, description: Percent of market bid+ask }
+        bidSharePct: { type: string, description: Percent of market bid }
+        askSharePct: { type: string, description: Percent of market ask }
+        lean: { type: string, enum: [bid, ask, balanced] }
+        complete: { type: boolean }
+        error: { type: string }
+    MarketPerpDepthOverview:
+      type: object
+      description: Total perp bid/ask across liquid coins plus who dominates that book
+      properties:
+        exchange: { type: string }
+        rangePct: { type: string }
+        universe: { type: integer }
+        known: { type: integer }
+        asOf: { type: string, format: date-time }
+        bid: { type: string }
+        ask: { type: string }
+        total: { type: string }
+        imbalance: { type: string }
+        lean: { type: string, enum: [bid, ask, balanced] }
+        coins:
+          type: array
+          items: { $ref: '#/components/schemas/MarketPerpDepthCoin' }
+        leaders:
+          type: array
+          items: { type: string }
+        missing:
+          type: array
+          items: { type: string }
+        summary: { type: string }
+        note: { type: string }
     MarketVolumeShare:
       type: object
       description: How futures volume splits across Binance, Bybit, and OKX

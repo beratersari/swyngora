@@ -66,6 +66,7 @@ type Service struct {
 	offVenue       domain.OffVenuePricePort
 	rsiHeat        *cache.TTL[*domain.RSIHeatmap]
 	rsiHeatSF      singleflight.Group
+	perpOverview   *cache.TTL[*domain.PerpDepthOverview]
 	options        domain.OptionsChainPort
 	optionsHist    domain.OptionsHistoryStore
 }

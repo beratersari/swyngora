@@ -15,6 +15,7 @@ import { DetailStats } from '@/components/organisms/DetailStats';
 import { HolderPanel } from '@/components/organisms/HolderPanel';
 import { PostDelistPanel } from '@/components/organisms/PostDelistPanel';
 import { TapePanel } from '@/components/organisms/TapePanel';
+import { PERP_LIQUIDITY_LIMIT } from '@/components/organisms/PerpLiquidityOverview';
 import { IndicatorPanel, emaColor } from '@/components/organisms/IndicatorPanel';
 import {
   OrderBookPanel,
@@ -42,6 +43,7 @@ import {
   useGetMarketLiquidationsQuery,
   useGetMarketCvdQuery,
   useGetMarketVolumeShareQuery,
+  useGetMarketPerpDepthOverviewQuery,
   useGetMarketParticipationQuery,
   useGetMarketPrintSizeQuery,
   useGetMarketPressureQuery,
@@ -399,6 +401,14 @@ export function CoinDetailPage() {
     pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
     refetchOnFocus: true,
   });
+  const perpLiqQuery = useGetMarketPerpDepthOverviewQuery(
+    { exchange: 'all', limit: PERP_LIQUIDITY_LIMIT, rangePct: 1 },
+    {
+      skip: skipTape,
+      pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
+      refetchOnFocus: true,
+    },
+  );
   const participationQuery = useGetMarketParticipationQuery(tapeQueryArg, {
     skip: skipTape,
     pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
@@ -1133,6 +1143,18 @@ export function CoinDetailPage() {
                               })
                             : null
                         }
+                        symbol={perpSymbol}
+                        perpLiquidity={rtkCurrent(perpLiqQuery)}
+                        perpLiquidityError={
+                          perpLiqQuery.isError
+                            ? rtkErrorMessage(perpLiqQuery.error, {
+                                resource: t('detail:resource.tape'),
+                                statusMessages: {
+                                  400: t('detail:tape.unsupported'),
+                                },
+                              })
+                            : null
+                        }
                         participation={rtkCurrent(participationQuery)}
                         participationError={
                           participationQuery.isError
@@ -1172,6 +1194,7 @@ export function CoinDetailPage() {
                           rtkCurrentPending(cvdQuery) ||
                           rtkCurrentPending(snapshotQuery) ||
                           rtkCurrentPending(volumeShareQuery) ||
+                          rtkCurrentPending(perpLiqQuery) ||
                           rtkCurrentPending(participationQuery) ||
                           rtkCurrentPending(printSizeQuery) ||
                           rtkCurrentPending(pressureQuery)

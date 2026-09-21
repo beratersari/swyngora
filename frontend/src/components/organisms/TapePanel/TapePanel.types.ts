@@ -8,6 +8,7 @@ import type {
   MarketPrintSize,
   MarketPressure,
   MarketSnapshot,
+  MarketPerpDepthOverview,
 } from '@/libs/api';
 
 export type TapePanelProps = WithLoadingProps & {
@@ -23,6 +24,9 @@ export type TapePanelProps = WithLoadingProps & {
   participationError?: string | null;
   volumeShare?: MarketVolumeShare | null;
   volumeShareError?: string | null;
+  perpLiquidity?: MarketPerpDepthOverview | null;
+  perpLiquidityError?: string | null;
+  symbol?: string | null;
   printSize?: MarketPrintSize | null;
   printSizeError?: string | null;
   pressure?: MarketPressure | null;

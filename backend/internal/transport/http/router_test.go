@@ -182,6 +182,7 @@ func TestNewRouter_RoutesAndCORS(t *testing.T) {
 		{"/api/v1/market/liquidations/overview", http.StatusOK, nil},
 		{"/api/v1/market/open-interest?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/perp-depth?symbol=BTCUSDT", http.StatusOK, nil},
+		{"/api/v1/market/perp-depth/overview", http.StatusOK, nil},
 		{"/api/v1/market/options?asset=BTC", http.StatusOK, nil},
 		{"/api/v1/market/funding-rate?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/long-short-ratio?symbol=BTCUSDT", http.StatusOK, nil},
