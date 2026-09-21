@@ -1129,6 +1129,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/participation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * OI delta versus futures volume
+         * @description Share of futures **taker volume** that stuck as new (or closed)
+         *     open interest: **OI USDT delta ÷ volume**.
+         */
+        get: operations["getMarketParticipation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/print-size": {
         parameters: {
             query?: never;
@@ -6044,6 +6065,41 @@ export interface components {
             windows?: components["schemas"]["MarketPressureWindow"][];
             note?: string;
         };
+        MarketParticipationWindow: {
+            /** @enum {string} */
+            window?: "15m" | "1h" | "4h";
+            /** @description USDT taker volume (buy + sell) */
+            volume?: string;
+            /** @description Signed USDT open-interest change */
+            oiDelta?: string;
+            /** @description oiDelta / volume (0.15 = 15%) */
+            ratio?: string;
+            /** @description Signed percent (15 means 15%) */
+            ratioPct?: string;
+            /** @description volume minus |oiDelta|, floored at 0 */
+            transfer?: string;
+            /** @enum {string} */
+            lean?: "entering" | "exiting" | "transfer";
+            complete?: boolean;
+            summary?: string;
+        };
+        MarketParticipationVenue: {
+            exchange?: string;
+            symbol?: string;
+            windows?: components["schemas"]["MarketParticipationWindow"][];
+            summary?: string;
+            error?: string;
+        };
+        /** @description OI delta as a share of futures volume (15m / 1h / 4h) */
+        MarketParticipation: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            venues?: components["schemas"]["MarketParticipationVenue"][];
+            combined?: components["schemas"]["MarketParticipationVenue"];
+            note?: string;
+        };
         /** @description Average aggressive print size vs the prior window */
         MarketPrintSize: {
             symbol?: string;
@@ -9795,6 +9851,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketPressure"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketParticipation: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all = both + combined) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue and optional combined participation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketParticipation"];
                 };
             };
             400: components["responses"]["Error"];

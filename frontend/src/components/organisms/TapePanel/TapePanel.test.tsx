@@ -32,6 +32,16 @@ describe('TapePanel', () => {
           summary: 'Volume building ahead of price',
           combined: { longPct: '55.2', windows: [{ window: '1h', taker: { dominant: 'buy', buyShare: '0.58' } }] },
         }}
+        participation={{
+          combined: {
+            windows: [
+              { window: '15m', volume: '2000000000', oiDelta: '+300000000', ratioPct: '+15', lean: 'entering' },
+              { window: '1h', ratioPct: '8' },
+              { window: '4h', ratioPct: '12' },
+            ],
+            summary: '15m: 2B volume, OI +300M (15% of volume) is new positions.',
+          },
+        }}
       />,
     );
     expect(screen.getByText('Futures tape')).toBeInTheDocument();
@@ -42,6 +52,7 @@ describe('TapePanel', () => {
     expect(screen.getByText('25.00M')).toBeInTheDocument();
     expect(screen.getByText('buy flow')).toBeInTheDocument();
     expect(screen.getByText('Volume building ahead of price')).toBeInTheDocument();
+    expect(screen.getByText('+15%')).toBeInTheDocument();
   });
 
   it('shows OI-weighted funding pressure and window change', () => {

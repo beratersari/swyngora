@@ -41,6 +41,7 @@ import {
   useGetOpenInterestQuery,
   useGetMarketLiquidationsQuery,
   useGetMarketCvdQuery,
+  useGetMarketParticipationQuery,
   useGetMarketPrintSizeQuery,
   useGetMarketPressureQuery,
   useGetMarketSnapshotQuery,
@@ -388,6 +389,11 @@ export function CoinDetailPage() {
     refetchOnFocus: true,
   });
   const cvdQuery = useGetMarketCvdQuery(tapeQueryArg, {
+    skip: skipTape,
+    pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
+    refetchOnFocus: true,
+  });
+  const participationQuery = useGetMarketParticipationQuery(tapeQueryArg, {
     skip: skipTape,
     pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
     refetchOnFocus: true,
@@ -1110,6 +1116,17 @@ export function CoinDetailPage() {
                               })
                             : null
                         }
+                        participation={rtkCurrent(participationQuery)}
+                        participationError={
+                          participationQuery.isError
+                            ? rtkErrorMessage(participationQuery.error, {
+                                resource: t('detail:resource.tape'),
+                                statusMessages: {
+                                  400: t('detail:tape.unsupported'),
+                                },
+                              })
+                            : null
+                        }
                         printSize={rtkCurrent(printSizeQuery)}
                         printSizeError={
                           printSizeQuery.isError
@@ -1137,6 +1154,7 @@ export function CoinDetailPage() {
                           rtkCurrentPending(liquidationsQuery) ||
                           rtkCurrentPending(cvdQuery) ||
                           rtkCurrentPending(snapshotQuery) ||
+                          rtkCurrentPending(participationQuery) ||
                           rtkCurrentPending(printSizeQuery) ||
                           rtkCurrentPending(pressureQuery)
                         }

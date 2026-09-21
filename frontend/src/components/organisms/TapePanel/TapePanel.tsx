@@ -52,6 +52,8 @@ export function TapePanel({
   cvdError,
   snapshot,
   snapshotError,
+  participation,
+  participationError,
   printSize,
   printSizeError,
   pressure,
@@ -74,6 +76,10 @@ export function TapePanel({
     openInterest?.funding?.current?.nextFundingTime ??
     openInterest?.funding?.venues?.find((v) => v.current?.nextFundingTime)?.current
       ?.nextFundingTime;
+  const partVenue = participation?.combined ?? participation?.venues?.[0];
+  const part15 = windowByName(partVenue?.windows, '15m');
+  const part1h = windowByName(partVenue?.windows, '1h');
+  const part4h = windowByName(partVenue?.windows, '4h');
   const printVenue = printSize?.combined ?? printSize?.venues?.[0];
   const print15 = windowByName(printVenue?.windows, '15m') ?? windowByName(printVenue?.windows, '5m');
   const cvdRow = cvd?.combined ?? cvd?.venues?.[0];
@@ -138,6 +144,48 @@ export function TapePanel({
         {oi1h && oi1h.complete === false ? (
           <Text variant="caption" color="secondary">
             {t('tape.incomplete')}
+          </Text>
+        ) : null}
+      </Block>
+
+      <Block>
+        <Text variant="label" color="primary">
+          {t('tape.participation')}
+        </Text>
+        {participationError ? (
+          <Alert type="info" showIcon message={t('tape.participation')} description={participationError} />
+        ) : (
+          <StatsGrid>
+            <Stat
+              label={t('tape.part15m')}
+              value={part15?.ratioPct ? `${part15.ratioPct}%` : '—'}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.part1h')}
+              value={part1h?.ratioPct ? `${part1h.ratioPct}%` : '—'}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.part4h')}
+              value={part4h?.ratioPct ? `${part4h.ratioPct}%` : '—'}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.partVol15m')}
+              value={formatTapeNum(part15?.volume)}
+              isLoading={isLoading}
+            />
+          </StatsGrid>
+        )}
+        {part15?.oiDelta ? (
+          <Text variant="caption" color="secondary">
+            {t('tape.partOi15m', { value: formatSignedTapeNum(part15.oiDelta) })}
+          </Text>
+        ) : null}
+        {partVenue?.summary || part15?.summary ? (
+          <Text variant="caption" color="secondary">
+            {partVenue?.summary || part15?.summary}
           </Text>
         ) : null}
       </Block>

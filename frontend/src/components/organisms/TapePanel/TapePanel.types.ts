@@ -3,6 +3,7 @@ import type {
   MarketCvd,
   MarketLiquidations,
   MarketOpenInterest,
+  MarketParticipation,
   MarketPrintSize,
   MarketPressure,
   MarketSnapshot,
@@ -17,6 +18,8 @@ export type TapePanelProps = WithLoadingProps & {
   cvdError?: string | null;
   snapshot?: MarketSnapshot | null;
   snapshotError?: string | null;
+  participation?: MarketParticipation | null;
+  participationError?: string | null;
   printSize?: MarketPrintSize | null;
   printSizeError?: string | null;
   pressure?: MarketPressure | null;

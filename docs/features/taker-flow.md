@@ -26,6 +26,8 @@ ratio (who already holds positions).
 
 Volumes are **USDT notional**. Average size per fill (few large vs many small)
 is `GET /api/v1/market/print-size` — see [`print-size.md`](print-size.md).
+OI delta as a share of this volume is `GET /api/v1/market/participation` —
+see [`participation.md`](participation.md).
 
 ## Where the code lives
 

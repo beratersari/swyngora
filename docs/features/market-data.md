@@ -57,6 +57,7 @@ Coin detail also has an **order heatmap** (resting bid/ask size over time) from 
 - `GET /api/v1/market/liquidation-cascade` short-burst long/short cascade vs typical (1m/5m/15m); one coin or `symbol=all`. See [`liquidations.md`](liquidations.md).
 - `GET /api/v1/market/liquidation-cascade/scan` market cascade plus coins currently bursting. See [`liquidations.md`](liquidations.md).
 - `GET /api/v1/market/open-interest` current futures open interest plus 1h/4h/24h opened or closed USDT amount and percent, per venue and combined. Includes `funding`. See [`open-interest.md`](open-interest.md).
+- `GET /api/v1/market/participation` OI USDT delta ÷ futures taker volume (15m/1h/4h). See [`participation.md`](participation.md).
 - `GET /api/v1/market/perp-depth` perpetual bid notional within N% below mid vs ask notional above; Binance USD-M and Bybit linear separately plus combined. See [`perp-depth.md`](perp-depth.md).
 - `GET /api/v1/market/options` BTC/ETH Deribit options: listed OI, 24h volume, put/call, DVOL + ATM IV, 30-day realized vol and `volCompare` gap, expiry mix, `history` over hours/days (including DVOL vs realized), `moves` when OI/PCR/IV jumps vs typical, plus `vsMarket` when IV or put/call disagrees with spot/futures. See [`options.md`](options.md).
 - `GET /api/v1/market/funding-rate` predicted next perpetual funding rate plus recent settlements. See [`funding-rate.md`](funding-rate.md).

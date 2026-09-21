@@ -22,6 +22,8 @@ can ask “how much BTC OI was added in the last hour?”
   sample is missing or older than the window slack)
 - Combined `all` sums venues that have a past sample for that window and
   still returns each venue's current OI plus the same 1h / 4h / 24h windows
+- How much of futures volume that OI change represents is
+  `GET /api/v1/market/participation` (15m / 1h / 4h). See [`participation.md`](participation.md)
 - `funding` is attached (predicted next rate + recent settlements, plus OI-weighted `pressure`). See [`funding-rate.md`](funding-rate.md)
 - `longShort` is attached (account long/short ratio, plus Binance crowd-vs-top `gap` and top-vs-price `divergence`). See [`long-short-ratio.md`](long-short-ratio.md)
 - Cached ~30s (`OPEN_INTEREST_CACHE_TTL`)

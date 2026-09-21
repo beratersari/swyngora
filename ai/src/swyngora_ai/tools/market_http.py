@@ -2185,6 +2185,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"symbol": symbol, "exchange": exchange},
         )
 
+    def get_participation(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/participation",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
     def get_print_size(symbol: str, exchange: str = "all") -> str:
         return http.get(
             "/api/v1/market/print-size",
@@ -4779,6 +4785,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "positioning differ and why that split can matter."
             ),
             args_schema=VenueDivergenceInput,
+        ),
+        StructuredTool.from_function(
+            get_participation,
+            name="get_participation",
+            description=(
+                "Share of futures volume that stuck as new (or closed) open "
+                "interest: OI USDT delta divided by taker volume. 2B volume "
+                "and OI +300M is ratio 0.15 (15% new positions). Windows "
+                "15m, 1h, and 4h. Binance + Bybit + combined."
+            ),
+            args_schema=TakerFlowInput,
         ),
         StructuredTool.from_function(
             get_print_size,

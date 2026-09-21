@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Participation ratio:** share of futures volume that stuck as new (or closed) open interest — OI USDT delta ÷ taker volume. 2B volume and OI +300M is 15%. Windows 15m / 1h / 4h. `GET /api/v1/market/participation`, MCP `get_participation`, coin-detail tape (`docs/features/participation.md`)
 - **DVOL vs 30-day realized:** options desk shows Deribit DVOL next to BTC/ETH 30-day close-to-close realized vol and the gap in vol points (70 vs 45 → +25), plus how that gap moved over 1h/4h/24h/7d. `volCompare` on `GET /api/v1/market/options`, history `realized` / `volGap`, web `/options`, MCP `get_options_overview` (`docs/features/options.md`)
 - **Perp depth:** bid notional within N% below perpetual mid vs ask notional above, Binance USD-M and Bybit linear separately plus combined. `GET /api/v1/market/perp-depth`, MCP `get_perp_depth` (`docs/features/perp-depth.md`)
 - **Book liquidity flow:** when a bid or ask shrinks, split how much was traded vs pulled vs added, plus a time series. `GET /api/v1/market/orderbook/liquidity-flow`, MCP `get_orderbook_liquidity_flow` (`docs/features/book-liquidity-flow.md`)

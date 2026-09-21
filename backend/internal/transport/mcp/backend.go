@@ -884,6 +884,58 @@ func (b *Backend) GetTakerFlow(ctx context.Context, exchange, symbol string) (js
 	return mustJSON(got)
 }
 
+func (b *Backend) GetParticipation(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetParticipation(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(participationMap(got))
+}
+
+func participationMap(got *domain.ParticipationReport) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	venues := make([]map[string]any, 0, len(got.Venues))
+	for _, v := range got.Venues {
+		venues = append(venues, participationVenueMap(v))
+	}
+	out := map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange, "asOf": got.AsOf.UTC().Format(time.RFC3339Nano),
+		"venues": venues, "note": got.Note,
+	}
+	if got.Combined != nil {
+		out["combined"] = participationVenueMap(*got.Combined)
+	}
+	return out
+}
+
+func participationVenueMap(v domain.ParticipationVenue) map[string]any {
+	wins := make([]map[string]any, 0, len(v.Windows))
+	for _, w := range v.Windows {
+		row := map[string]any{
+			"window": w.Window, "volume": w.Volume, "oiDelta": w.OIDelta,
+			"lean": w.Lean, "complete": w.Complete, "summary": w.Summary,
+		}
+		if w.Volume > 0 {
+			row["ratio"] = w.Ratio
+			row["ratioPct"] = w.RatioPct
+			row["transfer"] = w.Transfer
+		}
+		wins = append(wins, row)
+	}
+	out := map[string]any{
+		"exchange": string(v.Exchange), "symbol": v.Symbol, "windows": wins, "summary": v.Summary,
+	}
+	if v.Error != "" {
+		out["error"] = v.Error
+	}
+	return out
+}
+
 func (b *Backend) GetPrintSize(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

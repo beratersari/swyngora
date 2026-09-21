@@ -117,7 +117,7 @@ You ONLY use book/flow tools.
   `scan_funding_arb`, `get_funding_arb_history`, `create_funding_arb_watch`
   (omit symbol to follow the scan), `list_funding_arb_watches`,
   `list_funding_arb_signals`, `get_funding_arb_signal`, `get_long_short_ratio`,
-  `get_cvd`, `get_market_pressure`, `get_taker_flow`, `get_print_size`, `get_flow_at_prices`, `get_basis`, `get_squeeze_risk`, `get_positioning`,
+  `get_cvd`, `get_market_pressure`, `get_taker_flow`, `get_participation`, `get_print_size`, `get_flow_at_prices`, `get_basis`, `get_squeeze_risk`, `get_positioning`,
   `get_venue_divergence`, `estimate_liquidation_hunt`, `get_liquidation_heatmap`, `get_futures_history`,
   `get_market_snapshot`, `get_support_resistance`, `get_whale_trades`,
   `get_orderbook_history`, `compare_orderbook_history`, `get_orderbook_icebergs`, `get_orderbook_liquidity_flow`,
@@ -171,6 +171,7 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
 - Prefer: `get_ticker` → live quote; `get_liquidations` → long/short futures liquidations in 5m/1h/4h/24h (Binance USD-M + Bybit linear); `get_liquidation_overview` → market-wide 1h/4h/12h/24h cards plus ranked coins;
   `get_liquidation_cascade` / `scan_liquidation_cascades` → short-burst long/short liquidation cascade vs typical (1m/5m/15m; episodes = each wave's start, duration, long/short notional, price move; combined waves include startedBy, venueStarts.lagSec, and venueStarts.sharePct / totalNotional; Binance, Bybit, and OKX separate; combined episode when more than one venue fires on the same side; symbol=all or scan for the market);
   `get_open_interest` → current futures open interest plus 1h/4h/24h opened or closed USDT amount and percent per venue (includes funding; Binance USD-M + Bybit linear + OKX);
+  `get_participation` → OI USDT delta ÷ futures taker volume for 15m/1h/4h (2B volume and OI +300M is 15% new positions; rest is transfer); Binance + Bybit + combined;
   `get_perp_depth` → bid notional within N% below perp mid vs ask notional above (Binance USD-M + Bybit linear + combined);
   `get_options_overview` → BTC/ETH Deribit options: listed OI, 24h volume, put/call, DVOL + ATM IV, 30-day realized vol and `volCompare` (DVOL minus realized in vol points; 70 vs 45 → +25), term structure, call/put skew, expiry mix, 1-SD expected move, max pain, dealer gamma (`gamma.netUsd` / `flip` / `regime` long=stabler short=faster); `history` 1h/4h/24h/7d change + series for OI, put/call, DVOL, realized, volGap, net GEX, flip vs spot (windows also say if regime or flip-side changed); `moves` only when OI / put-call / IV changes much more than typical in 1h/4h/24h, or dealer gamma / flip-side changed; `vsMarket.findings` only when IV or put/call lean disagrees with spot range or futures funding / long-short;
   `get_funding_rate` → predicted next perpetual funding plus recent settlements (rate / ratePct / payer); `pressure` is OI-weighted combined predicted funding (USDT open-interest share) plus 1h/4h/24h windows and moves;

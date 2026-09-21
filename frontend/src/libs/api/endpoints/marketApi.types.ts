@@ -91,6 +91,8 @@ export type LiquidationCascadeScanQuery = NonNullable<
   operations['scanMarketLiquidationCascades']['parameters']['query']
 >;
 export type CvdQuery = NonNullable<operations['getMarketCVD']['parameters']['query']>;
+export type MarketParticipation = components['schemas']['MarketParticipation'];
+export type ParticipationQuery = NonNullable<operations['getMarketParticipation']['parameters']['query']>;
 export type MarketPrintSize = components['schemas']['MarketPrintSize'];
 export type PrintSizeQuery = NonNullable<operations['getMarketPrintSize']['parameters']['query']>;
 export type MarketPressure = components['schemas']['MarketPressure'];

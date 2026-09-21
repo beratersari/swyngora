@@ -1931,6 +1931,38 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/participation:
+    get:
+      summary: OI delta versus futures volume
+      description: |
+        Share of futures **taker volume** that stuck as new (or closed)
+        open interest: **OI USDT delta ÷ volume**. 2B volume with OI +300M
+        is `ratio` 0.15 (`ratioPct` 15) — that share of volume is new
+        positions; `transfer` is the rest. Windows are **15 minutes**,
+        **1 hour**, and **4 hours**. Binance USD-M and Bybit linear
+        separately plus `combined`. Informational only.
+      operationId: getMarketParticipation
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all = both + combined)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Per-venue and optional combined participation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketParticipation'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/print-size:
     get:
       summary: Average aggressive print size
@@ -9859,6 +9891,40 @@ components:
         windows:
           type: array
           items: { $ref: '#/components/schemas/MarketPressureWindow' }
+        note: { type: string }
+    MarketParticipationWindow:
+      type: object
+      properties:
+        window: { type: string, enum: [15m, 1h, 4h] }
+        volume: { type: string, description: USDT taker volume (buy + sell) }
+        oiDelta: { type: string, description: Signed USDT open-interest change }
+        ratio: { type: string, description: oiDelta / volume (0.15 = 15%) }
+        ratioPct: { type: string, description: Signed percent (15 means 15%) }
+        transfer: { type: string, description: volume minus |oiDelta|, floored at 0 }
+        lean: { type: string, enum: [entering, exiting, transfer] }
+        complete: { type: boolean }
+        summary: { type: string }
+    MarketParticipationVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/MarketParticipationWindow' }
+        summary: { type: string }
+        error: { type: string }
+    MarketParticipation:
+      type: object
+      description: OI delta as a share of futures volume (15m / 1h / 4h)
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        asOf: { type: string, format: date-time }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/MarketParticipationVenue' }
+        combined: { $ref: '#/components/schemas/MarketParticipationVenue' }
         note: { type: string }
     MarketPrintSize:
       type: object
