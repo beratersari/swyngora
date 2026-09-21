@@ -189,6 +189,13 @@ type Config struct {
 	// PerpDepthHistoryRetention is how long those samples are kept.
 	PerpDepthHistoryRetention time.Duration
 
+	// FearGreedHistoryDBPath is the SQLite file for fear-and-greed score samples.
+	FearGreedHistoryDBPath string
+	// FearGreedHistoryInterval is how often the index is sampled.
+	FearGreedHistoryInterval time.Duration
+	// FearGreedHistoryRetention is how long those samples are kept.
+	FearGreedHistoryRetention time.Duration
+
 	// APIAuthToken, when non-empty, requires Authorization: Bearer or X-API-Key on
 	// tenant routes (watchlist/alerts/portfolio/scanner/AI) and /mcp. Market GETs stay public.
 	// Empty = open local-dev mode (not multi-tenant safe).
@@ -336,6 +343,9 @@ func Load() Config {
 
 		PerpDepthHistoryDBPath:    getenv("PERP_DEPTH_HISTORY_DB_PATH", "data/perpdepth.db"),
 		PerpDepthHistoryInterval:  positiveDurationEnv("PERP_DEPTH_HISTORY_INTERVAL", time.Minute),
+		FearGreedHistoryDBPath:    getenv("FEAR_GREED_HISTORY_DB_PATH", "data/feargreed.db"),
+		FearGreedHistoryInterval:  positiveDurationEnv("FEAR_GREED_HISTORY_INTERVAL", 15*time.Minute),
+		FearGreedHistoryRetention: positiveDurationEnv("FEAR_GREED_HISTORY_RETENTION", 90*24*time.Hour),
 		PerpDepthHistoryRetention: positiveDurationEnv("PERP_DEPTH_HISTORY_RETENTION", 2*24*time.Hour),
 
 		APIAuthToken: strings.TrimSpace(os.Getenv("API_AUTH_TOKEN")),

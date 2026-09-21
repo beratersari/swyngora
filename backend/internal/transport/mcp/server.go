@@ -92,6 +92,7 @@ type DataPort interface {
 	GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCorrelation(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetBreadth(ctx context.Context, exchange string, limit int) (json.RawMessage, error)
+	GetFearGreed(ctx context.Context) (json.RawMessage, error)
 	GetVolatility(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetSnapshot(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLevels(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -1594,6 +1595,16 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("limit", mcp.Description("How many liquid coins to include (default 80, max 150)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.GetBreadth(ctx, req.GetString("exchange", ""), req.GetInt("limit", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_fear_greed",
+		mcp.WithDescription("Swyngora fear and greed index, 0 to 100, calculated from our own tape (24h breadth, BTC move, volatility versus usual, OI-weighted funding, account long/short, 24h liquidations, perp bid share, taker flow). Not the Binance or CoinGlass index. factors and top say which input moved the score the most. history and windows (1h/4h/24h/7d) are past scores stored while this process runs. Levels: extreme fear, fear, neutral, greed, extreme greed. Not financial advice."),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.GetFearGreed(ctx)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

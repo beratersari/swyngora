@@ -25,6 +25,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/equities"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/ethplorer"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/exportstore"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/feargreedstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/fundingarbstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/futuresstore"
 	fxrates "gitlab.com/trace-analysis/swyngora/backend/internal/adapter/fx"
@@ -337,6 +338,18 @@ func main() {
 	}()
 	marketSvc = marketSvc.WithPerpDepthHistory(perpHistStore)
 	logger.Info("perp depth history store ready", "driver", "sqlite", "path", perpHistStore.Path())
+	fearGreedStore, err := feargreedstore.Open(cfg.FearGreedHistoryDBPath)
+	if err != nil {
+		logger.Error("fear greed history sqlite open failed", "path", cfg.FearGreedHistoryDBPath, "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := fearGreedStore.Close(); err != nil {
+			logger.Error("fear greed history sqlite close", "err", err)
+		}
+	}()
+	marketSvc = marketSvc.WithFearGreedHistory(fearGreedStore)
+	logger.Info("fear greed history store ready", "driver", "sqlite", "path", fearGreedStore.Path())
 	bybitTrades := bybit.NewTradeHub(bybit.TradeHubOptions{
 		WSURL: cfg.BybitLinearWSURL,
 		Book:  bybitClient.TakerBook(),
@@ -598,6 +611,12 @@ func main() {
 		Svc:      marketSvc,
 		Interval: cfg.PerpDepthHistoryInterval,
 		Retain:   cfg.PerpDepthHistoryRetention,
+		Logger:   logger,
+	}).Start(ctx)
+	go (&market.FearGreedHistoryWorker{
+		Svc:      marketSvc,
+		Interval: cfg.FearGreedHistoryInterval,
+		Retain:   cfg.FearGreedHistoryRetention,
 		Logger:   logger,
 	}).Start(ctx)
 

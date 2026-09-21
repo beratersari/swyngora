@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Fear and greed index:** a 0–100 score from our own tape (24h breadth, BTC move, volatility versus usual, OI-weighted funding, account long/short, 24h liquidations, perp bid share, taker flow), the input that moved it the most, and stored past scores (1h / 4h / 24h / 7d). Not the Binance or CoinGlass index. `GET /api/v1/market/fear-greed`, MCP `get_fear_greed`, Markets page, Telegram `/fear` (`docs/features/fear-greed.md`)
 - **Desk screens for leftover market reads:** Markets shows breadth (up vs down share) next to perp bid/ask. `/surges` lists coins whose 5m/15m/1h volume is a multiple of typical. Coin detail **Flow** (perp depth, surge, taker, VWAP, profile, absorption, sweeps, whales, icebergs, book flow) and **Structure** (correlation, volatility, levels, squeeze, positioning, venue divergence).
 - **Perp liquidity overview:** total bid vs ask waiting across the liquid perps we track (e.g. 2.4B bid / 1.8B ask within 1% of mid), plus which coins make up the biggest share of that book. Distance bands show how close that book is to mid (80M inside 0.1% is 8% of the 1% book, growing to 1.0B at 1%) and which coins fill each band. 15m / 1h / 4h windows compare bid vs ask share of that book (bids 55% → 65%) and name the coins that moved the mix. `GET /api/v1/market/perp-depth/overview`, MCP `get_perp_depth_overview`, Markets page, coin-detail tape (`docs/features/perp-depth.md`)
 

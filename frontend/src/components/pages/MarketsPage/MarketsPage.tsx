@@ -9,6 +9,7 @@ import { ExchangeTabs } from '@/components/organisms/ExchangeTabs';
 import { MarketsToolbar } from '@/components/organisms/MarketsToolbar';
 import { MarketsTable } from '@/components/organisms/MarketsTable';
 import { BreadthOverview } from '@/components/organisms/BreadthOverview';
+import { FEAR_GREED_POLL_MS, FearGreedPanel } from '@/components/organisms/FearGreedPanel';
 import {
   PERP_LIQUIDITY_LIMIT,
   PERP_LIQUIDITY_POLL_MS,
@@ -24,6 +25,7 @@ import {
   useListDelistScheduleQuery,
   useListSpotMarketsQuery,
   useGetMarketBreadthQuery,
+  useGetMarketFearGreedQuery,
   useGetMarketPerpDepthOverviewQuery,
   useRemoveWatchlistItemMutation,
   type MarketExchange,
@@ -221,6 +223,11 @@ export function MarketsPage() {
       refetchOnFocus: true,
     },
   );
+  const fearGreedQuery = useGetMarketFearGreedQuery(undefined, {
+    skip: !showPerpLiq,
+    pollingInterval: visible && showPerpLiq ? FEAR_GREED_POLL_MS : 0,
+    refetchOnFocus: true,
+  });
   const breadthQuery = useGetMarketBreadthQuery(
     { exchange: state.exchange, limit: 80 },
     {
@@ -250,7 +257,17 @@ export function MarketsPage() {
       <PageHeader title={t('markets:title')} subtitle={t('markets:subtitle', { seconds: DEFAULT_SPOT_POLL_MS / 1000 })} />
 
       {showPerpLiq ? (
-        <InsightRow>
+        <>
+          <FearGreedPanel
+            data={rtkCurrent(fearGreedQuery)}
+            error={
+              fearGreedQuery.isError
+                ? rtkErrorMessage(fearGreedQuery.error, { resource: t('markets:fearGreed.title') })
+                : null
+            }
+            isLoading={fearGreedQuery.isLoading || fearGreedQuery.isFetching}
+          />
+          <InsightRow>
           <PerpLiquidityOverview
             data={rtkCurrent(perpLiqQuery)}
             error={
@@ -270,6 +287,7 @@ export function MarketsPage() {
             isLoading={breadthQuery.isLoading || breadthQuery.isFetching}
           />
         </InsightRow>
+        </>
       ) : null}
 
       <ExchangeTabs

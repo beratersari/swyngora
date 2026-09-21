@@ -1148,6 +1148,11 @@ func (c *APIClient) GetBreadth(ctx context.Context, exchange string, limit int) 
 	return c.get(ctx, "/api/v1/market/breadth", q)
 }
 
+// GetFearGreed returns the 0–100 index calculated from our own tape, plus what moved it and stored past scores.
+func (c *APIClient) GetFearGreed(ctx context.Context) (json.RawMessage, error) {
+	return c.get(ctx, "/api/v1/market/fear-greed", nil)
+}
+
 // GetVolatility returns how much a coin has been moving vs its history and vs BTC/ETH.
 func (c *APIClient) GetVolatility(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

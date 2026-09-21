@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/accountstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/watchliststore"
@@ -141,6 +142,31 @@ func TestPerpDepthOverviewCommand(t *testing.T) {
 		t.Fatalf("%s", out)
 	}
 	if !strings.Contains(strings.ToLower(out), "bid") && !strings.Contains(strings.ToLower(out), "perp") {
+		t.Fatalf("%s", out)
+	}
+}
+
+func TestFearGreedCommand(t *testing.T) {
+	r := newTestRouter(t)
+	out := r.Handle(context.Background(), 13, 13, "/fear")
+	if strings.Contains(strings.ToLower(out), "unknown command") {
+		t.Fatalf("%s", out)
+	}
+}
+
+func TestFormatFearGreed(t *testing.T) {
+	now := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
+	out := FormatFearGreed(&domain.FearGreedReport{
+		Score: 62, Level: domain.FearGreedGreed, Label: "Greed", AsOf: now,
+		Summary: "Greed 62. Funding moved the score the most (+8.2 toward greed).",
+		Factors: []domain.FearGreedFactor{{
+			Name: "Funding", Detail: "OI-weighted funding +0.03% (longs pay)", Pull: 8.2,
+		}},
+		Windows: []domain.FearGreedWindow{{
+			Window: "24h", PastScore: 48, Score: 62, Change: 14, HasPast: true, Complete: true,
+		}},
+	})
+	if !strings.Contains(out, "Greed") || !strings.Contains(out, "62") || !strings.Contains(out, "48") {
 		t.Fatalf("%s", out)
 	}
 }

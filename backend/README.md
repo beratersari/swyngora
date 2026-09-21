@@ -94,6 +94,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/basis` | Perp vs spot/index premium or discount, trend, funding/OI read; `curve` is near vs far dated futures plus history / windows / moves when that spread flipped or got steeper |
 | `GET` | `/api/v1/market/correlation` | How similarly a coin moves with BTC and ETH (1h / 4h / 24h) |
 | `GET` | `/api/v1/market/breadth` | How many followed coins are up vs down (1h / 4h / 24h) |
+| `GET` | `/api/v1/market/fear-greed` | 0–100 fear and greed from our own tape (breadth, BTC move, volatility, funding, long/short, liquidations, perp book, taker flow), which input moved the score, and stored past scores |
 | `GET` | `/api/v1/market/volatility` | How much a coin moved (range + vs normal / BTC / ETH) |
 | `GET` | `/api/v1/market/snapshot` | Price, volume, mcap, OI, funding, LS, and taker flow together |
 | `GET` | `/api/v1/market/levels` | Support and resistance areas plus breakout strength |
@@ -370,6 +371,9 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `PERP_DEPTH_HISTORY_DB_PATH` | `data/perpdepth.db` | SQLite archive for market-wide perp bid/ask samples |
 | `PERP_DEPTH_HISTORY_INTERVAL` | `1m` | Liquid-perp book snapshot cadence |
 | `PERP_DEPTH_HISTORY_RETENTION` | `48h` | How long those samples are kept |
+| `FEAR_GREED_HISTORY_DB_PATH` | `data/feargreed.db` | SQLite archive for fear-and-greed score samples |
+| `FEAR_GREED_HISTORY_INTERVAL` | `15m` | How often the index is sampled |
+| `FEAR_GREED_HISTORY_RETENTION` | `2160h` | How long those samples are kept (90 days) |
 | `SCANNER_CHECK_INTERVAL` | `60s` | How often scanner rules are evaluated |
 
 No API keys are required for the public endpoints used here. Respect upstream rate limits.

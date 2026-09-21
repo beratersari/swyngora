@@ -1054,6 +1054,10 @@ class BreadthInput(BaseModel):
     )
 
 
+class FearGreedInput(BaseModel):
+    """Market-wide index. No symbol."""
+
+
 class FuturesHistoryInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     metric: str = Field(description="open_interest | funding | long_short | liquidations")
@@ -2640,6 +2644,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             "/api/v1/market/breadth",
             {"exchange": exchange, "limit": limit},
         )
+
+    def get_fear_greed() -> str:
+        return http.get("/api/v1/market/fear-greed", {})
 
     def get_futures_history(
         symbol: str,
@@ -5136,6 +5143,20 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "coins are carrying it."
             ),
             args_schema=BreadthInput,
+        ),
+        StructuredTool.from_function(
+            get_fear_greed,
+            name="get_fear_greed",
+            description=(
+                "Swyngora fear and greed index from 0 to 100, calculated from "
+                "our own tape: 24h breadth, BTC move, volatility versus usual, "
+                "OI-weighted funding, account long/short, 24h liquidations, "
+                "perp bid share, and taker flow. Not the Binance or CoinGlass "
+                "index. top and factors say which input moved the score the "
+                "most. history and windows (1h/4h/24h/7d) are past scores "
+                "stored while the backend is running."
+            ),
+            args_schema=FearGreedInput,
         ),
         StructuredTool.from_function(
             get_price_volatility,

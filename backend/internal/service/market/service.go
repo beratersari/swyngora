@@ -70,6 +70,11 @@ type Service struct {
 	perpHist       domain.PerpDepthHistoryStore
 	options        domain.OptionsChainPort
 	optionsHist    domain.OptionsHistoryStore
+	fearGreed      domain.FearGreedStore
+	fearGreedSF    singleflight.Group
+	fearGreedMu    sync.Mutex
+	fearGreedAt    time.Time
+	fearGreedHit   *domain.FearGreedReport
 }
 
 // FuturesHistoryReader is the durable futures archive (optional).
@@ -225,6 +230,14 @@ func (s *Service) WithOptionsHistory(store domain.OptionsHistoryStore) *Service 
 func (s *Service) WithPerpDepthHistory(store domain.PerpDepthHistoryStore) *Service {
 	if s != nil {
 		s.perpHist = store
+	}
+	return s
+}
+
+// WithFearGreedHistory attaches the durable fear-and-greed score store.
+func (s *Service) WithFearGreedHistory(store domain.FearGreedStore) *Service {
+	if s != nil {
+		s.fearGreed = store
 	}
 	return s
 }

@@ -132,6 +132,50 @@ export type MarketBreadth = {
 };
 export type MarketBreadthQuery = { exchange?: string; limit?: number };
 
+export type FearGreedFactor = {
+  id?: string;
+  name?: string;
+  detail?: string;
+  reading?: number;
+  weight?: number;
+  sharePct?: number;
+  pull?: string;
+  toward?: string;
+};
+export type FearGreedSample = {
+  time?: string;
+  score?: number;
+  level?: string;
+  topId?: string;
+  topPull?: string;
+};
+export type FearGreedWindow = {
+  window?: string;
+  pastScore?: number;
+  pastLevel?: string;
+  score?: number;
+  level?: string;
+  change?: number;
+  complete?: boolean;
+  sampleTime?: string;
+};
+export type FearGreedReport = {
+  score?: number;
+  level?: string;
+  label?: string;
+  asOf?: string;
+  used?: number;
+  total?: number;
+  complete?: boolean;
+  top?: FearGreedFactor | null;
+  factors?: FearGreedFactor[];
+  missing?: string[];
+  history?: FearGreedSample[];
+  windows?: FearGreedWindow[];
+  summary?: string;
+  note?: string;
+};
+
 export type MarketVolumeSurgeWindow = {
   window?: string;
   current?: string;

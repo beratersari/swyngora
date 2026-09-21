@@ -134,6 +134,8 @@ func (r *Router) HandleMessage(ctx context.Context, chatID, userID int64, text s
 		return textReply(r.cmdOpenInterest(ctx, args))
 	case "/perpliq", "/perpdepth", "/depthoverview":
 		return textReply(r.cmdPerpDepthOverview(ctx, args))
+	case "/fear", "/fng", "/feargreed":
+		return textReply(r.cmdFearGreed(ctx))
 	case "/funding", "/fr":
 		return textReply(r.cmdFunding(ctx, args))
 	case "/fundingarb", "/farb":
@@ -407,6 +409,14 @@ func (r *Router) cmdPerpDepthOverview(ctx context.Context, args []string) string
 		return friendlyErr(err)
 	}
 	return FormatPerpDepthOverview(got)
+}
+
+func (r *Router) cmdFearGreed(ctx context.Context) string {
+	got, err := r.market.GetFearGreed(ctx)
+	if err != nil {
+		return friendlyErr(err)
+	}
+	return FormatFearGreed(got)
 }
 
 func (r *Router) cmdOpenInterest(ctx context.Context, args []string) string {

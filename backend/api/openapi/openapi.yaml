@@ -1837,6 +1837,38 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/fear-greed:
+    get:
+      summary: Fear and greed index from our own tape
+      description: |
+        A **0–100** score for the crypto market, calculated here from data
+        Swyngora already collects. It is **not** the Binance or CoinGlass index.
+
+        Inputs, when present: 24h breadth (share of liquid coins that are up),
+        BTC's 24h move, BTC 24h range versus its usual range (a wider range
+        pulls toward fear), OI-weighted predicted funding, Binance account
+        long/short, 24h long versus short liquidations, perp bid share within
+        1% of mid, and aggressive taker buy share. Missing inputs are left out
+        and the rest are reweighted. At least three inputs are required.
+
+        **Levels:** 0–24 extreme fear, 25–44 fear, 45–55 neutral, 56–74 greed,
+        75–100 extreme greed.
+
+        `top` and `factors` say which input moved the score the most
+        (`pull` is points away from a neutral 50). `history` and `windows`
+        (1h / 4h / 24h / 7d) are scores stored while this process is running
+        (about every 15 minutes).
+      operationId: getFearGreed
+      tags: [Market]
+      responses:
+        '200':
+          description: Current score, the inputs that moved it, and stored past scores
+          content:
+            application/json:
+              schema:
+                type: object
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/volatility:
     get:
       summary: Price volatility vs recent history and BTC/ETH

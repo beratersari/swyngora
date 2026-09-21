@@ -104,6 +104,7 @@ import type {
   MarketForensicsRadarQuery,
   MarketBreadth,
   MarketBreadthQuery,
+  FearGreedReport,
   MarketVolumeSurgeScan,
   MarketVolumeSurgeScanQuery,
   MarketDeskReport,
@@ -158,6 +159,10 @@ export type {
   MarketPerpDepthOverviewBandCoin,
   MarketBreadth,
   MarketBreadthWindow,
+  FearGreedReport,
+  FearGreedFactor,
+  FearGreedSample,
+  FearGreedWindow,
   MarketVolumeSurgeScan,
   MarketVolumeSurgeHit,
   MarketDeskReport,
@@ -448,6 +453,10 @@ export const marketApi = baseApi.injectEndpoints({
       }),
     }),
 
+    getMarketFearGreed: build.query<FearGreedReport, void>({
+      query: () => ({ url: '/api/v1/market/fear-greed' }),
+    }),
+
     scanMarketVolumeSurges: build.query<MarketVolumeSurgeScan, MarketVolumeSurgeScanQuery | void>({
       query: (arg) => ({
         url: '/api/v1/market/volume-surge/scan',
@@ -727,6 +736,7 @@ export const {
   useGetMarketVolumeShareQuery,
   useGetMarketPerpDepthOverviewQuery,
   useGetMarketBreadthQuery,
+  useGetMarketFearGreedQuery,
   useScanMarketVolumeSurgesQuery,
   useLazyScanMarketVolumeSurgesQuery,
   useGetMarketPerpDepthQuery,

@@ -100,6 +100,7 @@ BOOK_TOOLS: frozenset[str] = frozenset(
         "get_basis",
         "get_price_correlation",
         "get_market_breadth",
+        "get_fear_greed",
         "get_price_volatility",
         "get_market_snapshot",
         "get_support_resistance",

@@ -24,6 +24,43 @@ vi.mock('@/libs/api', async (importOriginal) => {
       isSuccess: true,
       refetch: vi.fn(),
     }),
+    useGetMarketFearGreedQuery: () => ({
+      data: {
+        score: 62,
+        level: 'greed',
+        label: 'Greed',
+        used: 7,
+        total: 8,
+        top: { id: 'funding', name: 'Funding', pull: '+8.2', toward: 'greed' },
+        factors: [{ id: 'funding', name: 'Funding', pull: '+8.2', toward: 'greed', detail: 'funding +0.03%' }],
+        windows: [{ window: '24h', pastScore: 48, score: 62, change: 14, complete: true }],
+        history: [
+          { time: '2026-09-21T11:00:00Z', score: 48, level: 'fear' },
+          { time: '2026-09-21T12:00:00Z', score: 62, level: 'greed' },
+        ],
+        summary: 'Greed 62.',
+      },
+      currentData: {
+        score: 62,
+        level: 'greed',
+        label: 'Greed',
+        used: 7,
+        total: 8,
+        top: { id: 'funding', name: 'Funding', pull: '+8.2', toward: 'greed' },
+        factors: [{ id: 'funding', name: 'Funding', pull: '+8.2', toward: 'greed', detail: 'funding +0.03%' }],
+        windows: [{ window: '24h', pastScore: 48, score: 62, change: 14, complete: true }],
+        history: [
+          { time: '2026-09-21T11:00:00Z', score: 48, level: 'fear' },
+          { time: '2026-09-21T12:00:00Z', score: 62, level: 'greed' },
+        ],
+        summary: 'Greed 62.',
+      },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    }),
     useGetMarketBreadthQuery: () => ({
       data: {
         universe: 80,
@@ -106,6 +143,8 @@ describe('MarketsPage', () => {
     renderWithProviders(<MarketsPage />, { routerEntries: ['/markets'] });
     expect(await screen.findByText('Market breadth')).toBeInTheDocument();
     expect(screen.getByText('62% up · 28% down')).toBeInTheDocument();
+    expect(screen.getByText('Fear & Greed')).toBeInTheDocument();
+    expect(screen.getByText('24h 48 → 62 (+14)')).toBeInTheDocument();
   });
 
   it('shows error state when spot fails with no rows', async () => {

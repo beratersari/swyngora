@@ -551,6 +551,55 @@ func FormatPerpDepthOverview(o *domain.PerpDepthOverview) string {
 	return b.String()
 }
 
+// FormatFearGreed formats the 0–100 index, the input that moved it, and recent windows.
+func FormatFearGreed(rep *domain.FearGreedReport) string {
+	if rep == nil || rep.Label == "" {
+		return "Fear and greed needs more market data."
+	}
+	var b strings.Builder
+	b.WriteString(header("😱", "Fear & Greed"))
+	fmt.Fprintf(&b, "%s %d — %s\n", bold(rep.Label), rep.Score, italic("our tape, not Binance or CoinGlass"))
+	b.WriteString(divider())
+	if rep.Summary != "" {
+		b.WriteString(rep.Summary + "\n")
+	}
+	for _, f := range rep.Factors {
+		if f.Detail == "" {
+			continue
+		}
+		fmt.Fprintf(&b, "  %s  %s  (%s)\n", code(f.Name), f.Detail, formatFearGreedPull(f.Pull))
+		if len(b.String()) > 1400 {
+			break
+		}
+	}
+	for _, w := range rep.Windows {
+		if !w.Complete {
+			continue
+		}
+		fmt.Fprintf(&b, "  %s  %d → %d (%s)\n", code(w.Window), w.PastScore, w.Score, formatFearGreedDelta(w.Change))
+	}
+	if len(rep.History) == 0 {
+		b.WriteString(italic("Past scores appear after the desk has been running.") + "\n")
+	}
+	b.WriteString(footer())
+	return b.String()
+}
+
+func formatFearGreedPull(v float64) string {
+	s := strconv.FormatFloat(v, 'f', 1, 64)
+	if v > 0 {
+		return "+" + s
+	}
+	return s
+}
+
+func formatFearGreedDelta(v int) string {
+	if v > 0 {
+		return fmt.Sprintf("+%d", v)
+	}
+	return strconv.Itoa(v)
+}
+
 // FormatOpenInterest formats current OI and windowed change.
 func FormatOpenInterest(s *domain.OpenInterestSnapshot) string {
 	if s == nil {
@@ -1031,6 +1080,7 @@ func HelpText() string {
 	b.WriteString(cmdLine("/rsiheat", "[exchange] [quote]", "RSI heatmap grid"))
 	b.WriteString(cmdLine("/oi", "<symbol> [binance|bybit|all]", "open interest + 5m/1h/4h/24h change + funding"))
 	b.WriteString(cmdLine("/perpliq", "[binance|bybit|all] [n]", "total perp bid vs ask across liquid coins"))
+	b.WriteString(cmdLine("/fear", "", "0–100 fear and greed from our tape, plus what moved it"))
 	b.WriteString(cmdLine("/funding", "<symbol> [binance|bybit|all]", "current funding rate + recent history"))
 	b.WriteString(cmdLine("/fundingarb", "<symbol> [notional] [hours]", "long/short if after-fee winner"))
 	b.WriteString(cmdLine("/fundingarb hist", "<sym> <from> <to>", "past after-fee funding stretches"))

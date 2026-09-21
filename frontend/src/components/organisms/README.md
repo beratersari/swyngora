@@ -25,7 +25,7 @@ Do **not** reintroduce `src/features/` for product UI until multiple product are
 | `ExchangeTabs` | MarketsPage |
 | `MarketsToolbar` | MarketsPage |
 | `MarketsTable` | MarketsPage |
-| `PerpLiquidityOverview` / `BreadthOverview` | MarketsPage |
+| `PerpLiquidityOverview` / `BreadthOverview` / `FearGreedPanel` | MarketsPage |
 | `CoinInsightPanel` | CoinDetailPage Flow / Structure tabs |
 | `VolumeSurgeTable` | SurgesPage |
 | `DetailHeader` | CoinDetailPage |

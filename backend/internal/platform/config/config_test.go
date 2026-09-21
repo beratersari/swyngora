@@ -95,6 +95,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.PerpDepthHistoryDBPath != "data/perpdepth.db" || cfg.PerpDepthHistoryInterval != time.Minute {
 		t.Fatalf("perp depth hist path=%s interval=%v", cfg.PerpDepthHistoryDBPath, cfg.PerpDepthHistoryInterval)
 	}
+	if cfg.FearGreedHistoryDBPath != "data/feargreed.db" || cfg.FearGreedHistoryInterval != 15*time.Minute || cfg.FearGreedHistoryRetention != 90*24*time.Hour {
+		t.Fatalf("fear greed hist path=%s interval=%v retain=%v", cfg.FearGreedHistoryDBPath, cfg.FearGreedHistoryInterval, cfg.FearGreedHistoryRetention)
+	}
 	if cfg.SupplyRefreshHour != 3 || cfg.SupplyRefreshMinute != 0 {
 		t.Fatalf("refresh at %d:%d", cfg.SupplyRefreshHour, cfg.SupplyRefreshMinute)
 	}
