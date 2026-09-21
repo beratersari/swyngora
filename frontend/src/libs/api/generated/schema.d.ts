@@ -1129,6 +1129,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/volume-share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Futures volume share by exchange
+         * @description How perpetual quote volume splits across Binance, Bybit, and OKX.
+         */
+        get: operations["getMarketVolumeShare"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/participation": {
         parameters: {
             query?: never;
@@ -6065,6 +6085,39 @@ export interface components {
             windows?: components["schemas"]["MarketPressureWindow"][];
             note?: string;
         };
+        MarketVolumeShareVenue: {
+            exchange?: string;
+            volume?: string;
+            /** @description Percent of window volume (55 = 55%) */
+            sharePct?: string;
+            priorVolume?: string;
+            priorSharePct?: string;
+            /** @description Signed percentage-point change vs the prior window */
+            changePct?: string;
+            /** @enum {string} */
+            kind?: "gained" | "lost" | "stable";
+            complete?: boolean;
+        };
+        MarketVolumeShareWindow: {
+            /** @enum {string} */
+            window?: "15m" | "1h" | "4h";
+            total?: string;
+            prior?: string;
+            venues?: components["schemas"]["MarketVolumeShareVenue"][];
+            gained?: string[];
+            lost?: string[];
+            complete?: boolean;
+            summary?: string;
+        };
+        /** @description How futures volume splits across Binance, Bybit, and OKX */
+        MarketVolumeShare: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            windows?: components["schemas"]["MarketVolumeShareWindow"][];
+            note?: string;
+        };
         MarketParticipationWindow: {
             /** @enum {string} */
             window?: "15m" | "1h" | "4h";
@@ -9851,6 +9904,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketPressure"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketVolumeShare: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | okx | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Venue mix and share change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketVolumeShare"];
                 };
             };
             400: components["responses"]["Error"];

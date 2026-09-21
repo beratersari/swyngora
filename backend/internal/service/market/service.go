@@ -51,6 +51,7 @@ type Service struct {
 	holderFallback domain.HoldersPort
 	profile        domain.AssetProfilePort
 	oi             map[domain.Exchange]domain.OpenInterestPort
+	futVol         map[domain.Exchange]domain.FuturesVolumePort
 	funding        map[domain.Exchange]domain.FundingRatePort
 	longShort      map[domain.Exchange]domain.LongShortRatioPort
 	taker          map[domain.Exchange]domain.TakerFlowPort
@@ -154,6 +155,21 @@ func (s *Service) WithLongShortRatio(ports map[domain.Exchange]domain.LongShortR
 		}
 	}
 	s.longShort = cp
+	return s
+}
+
+// WithFuturesVolume attaches Binance / Bybit / OKX 5m perpetual quote-volume ports.
+func (s *Service) WithFuturesVolume(ports map[domain.Exchange]domain.FuturesVolumePort) *Service {
+	if s == nil {
+		return s
+	}
+	cp := make(map[domain.Exchange]domain.FuturesVolumePort, len(ports))
+	for k, v := range ports {
+		if v != nil {
+			cp[k] = v
+		}
+	}
+	s.futVol = cp
 	return s
 }
 

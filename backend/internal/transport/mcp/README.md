@@ -47,6 +47,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_venue_divergence` | Binance vs Bybit: same/opposite, which metrics differ and why |
 | `get_taker_flow` | Aggressive futures buy vs sell volume (5m/1h/4h) per venue + combined |
 | `get_participation` | OI USDT delta ÷ futures taker volume (15m/1h/4h); 2B volume and OI +300M is 15% new positions |
+| `get_volume_share` | How BTC futures volume splits across Binance / Bybit / OKX (e.g. 55/30/15) plus who gained or lost share vs the prior hour |
 | `get_print_size` | Average aggressive print size (USDT per fill) 5m/15m vs the prior window; few large vs many small |
 | `get_flow_at_prices` | Buy vs sell USDT, print count, and delta at each price (Binance aggTrades / Bybit recent trades); `window` 5m/15m/1h or `startTime`/`endTime`; optional `minPrice`/`maxPrice`/`tickSize` |
 | `get_market_pressure` | One −1…+1 score from resting book, CVD, and absorption when they disagree; `change1h` is that score vs ~1h ago |

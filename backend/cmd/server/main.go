@@ -302,6 +302,10 @@ func main() {
 	}).WithTakerFlow(map[domain.Exchange]domain.TakerFlowPort{
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,
+	}).WithFuturesVolume(map[domain.Exchange]domain.FuturesVolumePort{
+		domain.ExchangeBinance: binanceClient,
+		domain.ExchangeBybit:   bybitClient,
+		domain.ExchangeOKX:     okxClient,
 	}).WithTakerBucketStore(futuresStore).WithBasis(map[domain.Exchange]domain.BasisPort{
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,

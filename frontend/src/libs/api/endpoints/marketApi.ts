@@ -73,6 +73,8 @@ import type {
   LiquidationsQuery,
   LiquidationOverviewQuery,
   CvdQuery,
+  MarketVolumeShare,
+  VolumeShareQuery,
   MarketParticipation,
   ParticipationQuery,
   MarketPrintSize,
@@ -137,6 +139,7 @@ export type {
   MarketLiquidationCascade,
   MarketLiquidationCascadeScan,
   MarketCvd,
+  MarketVolumeShare,
   MarketParticipation,
   MarketPrintSize,
   MarketPressure,
@@ -403,6 +406,13 @@ export const marketApi = baseApi.injectEndpoints({
       }),
     }),
 
+    getMarketVolumeShare: build.query<MarketVolumeShare, VolumeShareQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/volume-share',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
     getMarketParticipation: build.query<MarketParticipation, ParticipationQuery>({
       query: (arg) => ({
         url: '/api/v1/market/participation',
@@ -569,6 +579,7 @@ export const {
   useGetMarketLiquidationMaxPainQuery,
   useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketCvdQuery,
+  useGetMarketVolumeShareQuery,
   useGetMarketParticipationQuery,
   useGetMarketPrintSizeQuery,
   useGetMarketPressureQuery,

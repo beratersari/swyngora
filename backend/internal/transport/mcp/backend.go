@@ -884,6 +884,57 @@ func (b *Backend) GetTakerFlow(ctx context.Context, exchange, symbol string) (js
 	return mustJSON(got)
 }
 
+func (b *Backend) GetVolumeShare(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetVolumeShare(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(volumeShareMap(got))
+}
+
+func volumeShareMap(got *domain.VolumeShareReport) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	windows := make([]map[string]any, 0, len(got.Windows))
+	for _, w := range got.Windows {
+		venues := make([]map[string]any, 0, len(w.Venues))
+		for _, v := range w.Venues {
+			row := map[string]any{
+				"exchange": string(v.Exchange), "volume": v.Volume, "sharePct": v.SharePct,
+				"kind": v.Kind, "complete": v.Complete,
+			}
+			if w.Prior > 0 {
+				row["priorVolume"] = v.PriorVolume
+				row["priorSharePct"] = v.PriorSharePct
+				row["changePct"] = v.ChangePct
+			}
+			venues = append(venues, row)
+		}
+		win := map[string]any{
+			"window": w.Window, "total": w.Total, "venues": venues,
+			"complete": w.Complete, "summary": w.Summary,
+		}
+		if w.Prior > 0 {
+			win["prior"] = w.Prior
+		}
+		if len(w.Gained) > 0 {
+			win["gained"] = w.Gained
+		}
+		if len(w.Lost) > 0 {
+			win["lost"] = w.Lost
+		}
+		windows = append(windows, win)
+	}
+	return map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange, "asOf": got.AsOf.UTC().Format(time.RFC3339Nano),
+		"windows": windows, "note": got.Note,
+	}
+}
+
 func (b *Backend) GetParticipation(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

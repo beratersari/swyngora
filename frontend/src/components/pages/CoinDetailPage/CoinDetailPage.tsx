@@ -41,6 +41,7 @@ import {
   useGetOpenInterestQuery,
   useGetMarketLiquidationsQuery,
   useGetMarketCvdQuery,
+  useGetMarketVolumeShareQuery,
   useGetMarketParticipationQuery,
   useGetMarketPrintSizeQuery,
   useGetMarketPressureQuery,
@@ -389,6 +390,11 @@ export function CoinDetailPage() {
     refetchOnFocus: true,
   });
   const cvdQuery = useGetMarketCvdQuery(tapeQueryArg, {
+    skip: skipTape,
+    pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
+    refetchOnFocus: true,
+  });
+  const volumeShareQuery = useGetMarketVolumeShareQuery(tapeQueryArg, {
     skip: skipTape,
     pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
     refetchOnFocus: true,
@@ -1116,6 +1122,17 @@ export function CoinDetailPage() {
                               })
                             : null
                         }
+                        volumeShare={rtkCurrent(volumeShareQuery)}
+                        volumeShareError={
+                          volumeShareQuery.isError
+                            ? rtkErrorMessage(volumeShareQuery.error, {
+                                resource: t('detail:resource.tape'),
+                                statusMessages: {
+                                  400: t('detail:tape.unsupported'),
+                                },
+                              })
+                            : null
+                        }
                         participation={rtkCurrent(participationQuery)}
                         participationError={
                           participationQuery.isError
@@ -1154,6 +1171,7 @@ export function CoinDetailPage() {
                           rtkCurrentPending(liquidationsQuery) ||
                           rtkCurrentPending(cvdQuery) ||
                           rtkCurrentPending(snapshotQuery) ||
+                          rtkCurrentPending(volumeShareQuery) ||
                           rtkCurrentPending(participationQuery) ||
                           rtkCurrentPending(printSizeQuery) ||
                           rtkCurrentPending(pressureQuery)

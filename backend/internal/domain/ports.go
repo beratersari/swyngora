@@ -74,6 +74,12 @@ type FuturesDepthPort interface {
 	GetFuturesDepth(ctx context.Context, symbol string) (*RawOrderBook, error)
 }
 
+// FuturesVolumePort loads recent USD-M / linear / USDT-swap 5m quote volume.
+// Implemented by Binance, Bybit, and OKX adapters.
+type FuturesVolumePort interface {
+	ListFuturesVolumeBars(ctx context.Context, symbol string) ([]FuturesVolumeBar, error)
+}
+
 // FundingRatePort loads the predicted next funding rate plus settled history.
 // Implemented by Binance USD-M and Bybit linear adapters.
 type FundingRatePort interface {

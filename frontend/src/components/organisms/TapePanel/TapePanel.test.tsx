@@ -42,6 +42,22 @@ describe('TapePanel', () => {
             summary: '15m: 2B volume, OI +300M (15% of volume) is new positions.',
           },
         }}
+        volumeShare={{
+          windows: [
+            {
+              window: '1h',
+              total: '100',
+              venues: [
+                { exchange: 'binance', sharePct: '55', kind: 'gained' },
+                { exchange: 'bybit', sharePct: '30', kind: 'lost' },
+                { exchange: 'okx', sharePct: '15', kind: 'stable' },
+              ],
+              gained: ['Binance'],
+              lost: ['Bybit'],
+              summary: '1h: Binance 55%, Bybit 30%, and OKX 15%. Binance gained share; Bybit lost share.',
+            },
+          ],
+        }}
       />,
     );
     expect(screen.getByText('Futures tape')).toBeInTheDocument();
@@ -53,6 +69,7 @@ describe('TapePanel', () => {
     expect(screen.getByText('buy flow')).toBeInTheDocument();
     expect(screen.getByText('Volume building ahead of price')).toBeInTheDocument();
     expect(screen.getByText('+15%')).toBeInTheDocument();
+    expect(screen.getByText('55%')).toBeInTheDocument();
   });
 
   it('shows OI-weighted funding pressure and window change', () => {

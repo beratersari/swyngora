@@ -1303,6 +1303,23 @@ func TestGetTakerFlow_OK(t *testing.T) {
 	}
 }
 
+func TestGetVolumeShare_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/volume-share?symbol=BTCUSDT", nil)
+	rr := httptest.NewRecorder()
+	h.GetVolumeShare(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body volumeShareResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" {
+		t.Fatalf("%+v", body)
+	}
+}
+
 func TestGetParticipation_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/participation?symbol=BTCUSDT", nil)

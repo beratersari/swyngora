@@ -68,6 +68,7 @@ type DataPort interface {
 	GetVenueDivergence(ctx context.Context, symbol string) (json.RawMessage, error)
 	GetTakerFlow(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetParticipation(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetVolumeShare(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetPrintSize(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetMarketPressure(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -1092,6 +1093,22 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetVenueDivergence(ctx, symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_volume_share",
+		mcp.WithDescription("How BTC (or another coin) futures volume splits across Binance USD-M, Bybit linear, and OKX USDT-swap. Example: Binance 55%, Bybit 30%, OKX 15%. Each window (15m / 1h / 4h) also compares to the same length just before so you can see who gained or lost share in the last hour. Prefer this for 'where is the volume' or 'did Binance lose share'. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetVolumeShare(ctx, req.GetString("exchange", "all"), symbol)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

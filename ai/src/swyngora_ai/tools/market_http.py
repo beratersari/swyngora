@@ -2185,6 +2185,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"symbol": symbol, "exchange": exchange},
         )
 
+    def get_volume_share(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/volume-share",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
     def get_participation(symbol: str, exchange: str = "all") -> str:
         return http.get(
             "/api/v1/market/participation",
@@ -4785,6 +4791,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "positioning differ and why that split can matter."
             ),
             args_schema=VenueDivergenceInput,
+        ),
+        StructuredTool.from_function(
+            get_volume_share,
+            name="get_volume_share",
+            description=(
+                "How BTC (or another coin) futures volume splits across "
+                "Binance, Bybit, and OKX. Example: Binance 55%, Bybit 30%, "
+                "OKX 15%. 15m/1h/4h also show who gained or lost share vs "
+                "the prior window."
+            ),
+            args_schema=TakerFlowInput,
         ),
         StructuredTool.from_function(
             get_participation,

@@ -18,6 +18,7 @@ BOOK_FLOW_ANALYTICS = frozenset(
     {
         "get_open_interest",
         "get_participation",
+        "get_volume_share",
         "get_perp_depth",
         "get_options_overview",
         "get_funding_rate",

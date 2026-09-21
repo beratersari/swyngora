@@ -72,6 +72,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/venue-divergence` | Binance vs Bybit: same or opposite, which signals differ and why |
 | `GET` | `/api/v1/market/taker-flow` | Aggressive futures buy vs sell volume (5m/1h/4h) per venue + combined |
 | `GET` | `/api/v1/market/participation` | OI USDT delta ÷ futures taker volume (15m/1h/4h); 2B volume and OI +300M is 15% new positions |
+| `GET` | `/api/v1/market/volume-share` | How BTC futures volume splits across Binance / Bybit / OKX (e.g. 55/30/15) plus who gained or lost share vs the prior window |
 | `GET` | `/api/v1/market/pressure` | Combined −1…+1 pressure from resting book, CVD, and absorption, plus 1h change |
 | `GET` | `/api/v1/market/cvd` | Spot and futures CVD versus price; 15m/1h/4h/24h change; venue split and spot-vs-futures split |
 | `GET` | `/api/v1/market/volume-profile` | Volume by price (POC + 70% value area, buy/sell); Binance and Bybit separately plus combined |

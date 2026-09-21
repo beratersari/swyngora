@@ -656,6 +656,16 @@ func (c *APIClient) GetTakerFlow(ctx context.Context, exchange, symbol string) (
 	return c.get(ctx, "/api/v1/market/taker-flow", q)
 }
 
+// GetVolumeShare returns how futures quote volume splits across Binance, Bybit, and OKX.
+func (c *APIClient) GetVolumeShare(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/volume-share", q)
+}
+
 // GetParticipation returns OI-delta / futures volume for 15m, 1h, and 4h.
 func (c *APIClient) GetParticipation(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

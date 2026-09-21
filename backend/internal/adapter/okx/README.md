@@ -1,7 +1,8 @@
 # adapter/okx
 
 Public OKX v5 adapter for **USDT-margined SWAP** futures: open interest,
-funding, live liquidations, and liquidation history backfill.
+funding, live liquidations, liquidation history backfill, and 5m quote-volume
+candles for venue mix.
 
 ## Purpose
 
@@ -23,6 +24,7 @@ No API key. Base `https://www.okx.com`, public WS
 | `funding.go` | predicted next rate + settled history |
 | `liqhub.go` | `liquidation-orders` SWAP websocket |
 | `liqhist.go` | REST `liquidation-orders?state=filled` backfill |
+| `futures_volume.go` | 5m SWAP candles (`volCcyQuote`) for volume share |
 
 ## Symbols
 

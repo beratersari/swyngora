@@ -1931,6 +1931,37 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/volume-share:
+    get:
+      summary: Futures volume share by exchange
+      description: |
+        How perpetual **quote volume** splits across Binance USD-M, Bybit
+        linear, and OKX USDT-swap. Example: Binance 55%, Bybit 30%, OKX 15%.
+        Windows **15m / 1h / 4h** also compare to the same length just
+        before (`changePct` in percentage points; `gained` / `lost`).
+        Informational only.
+      operationId: getMarketVolumeShare
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | okx | all (default all)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Venue mix and share change
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketVolumeShare'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/participation:
     get:
       summary: OI delta versus futures volume
@@ -9891,6 +9922,45 @@ components:
         windows:
           type: array
           items: { $ref: '#/components/schemas/MarketPressureWindow' }
+        note: { type: string }
+    MarketVolumeShareVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        volume: { type: string }
+        sharePct: { type: string, description: Percent of window volume (55 = 55%) }
+        priorVolume: { type: string }
+        priorSharePct: { type: string }
+        changePct: { type: string, description: Signed percentage-point change vs the prior window }
+        kind: { type: string, enum: [gained, lost, stable] }
+        complete: { type: boolean }
+    MarketVolumeShareWindow:
+      type: object
+      properties:
+        window: { type: string, enum: [15m, 1h, 4h] }
+        total: { type: string }
+        prior: { type: string }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/MarketVolumeShareVenue' }
+        gained:
+          type: array
+          items: { type: string }
+        lost:
+          type: array
+          items: { type: string }
+        complete: { type: boolean }
+        summary: { type: string }
+    MarketVolumeShare:
+      type: object
+      description: How futures volume splits across Binance, Bybit, and OKX
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        asOf: { type: string, format: date-time }
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/MarketVolumeShareWindow' }
         note: { type: string }
     MarketParticipationWindow:
       type: object

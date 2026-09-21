@@ -4,6 +4,7 @@ import type {
   MarketLiquidations,
   MarketOpenInterest,
   MarketParticipation,
+  MarketVolumeShare,
   MarketPrintSize,
   MarketPressure,
   MarketSnapshot,
@@ -20,6 +21,8 @@ export type TapePanelProps = WithLoadingProps & {
   snapshotError?: string | null;
   participation?: MarketParticipation | null;
   participationError?: string | null;
+  volumeShare?: MarketVolumeShare | null;
+  volumeShareError?: string | null;
   printSize?: MarketPrintSize | null;
   printSizeError?: string | null;
   pressure?: MarketPressure | null;

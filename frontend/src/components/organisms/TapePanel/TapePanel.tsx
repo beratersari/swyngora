@@ -54,6 +54,8 @@ export function TapePanel({
   snapshotError,
   participation,
   participationError,
+  volumeShare,
+  volumeShareError,
   printSize,
   printSizeError,
   pressure,
@@ -80,6 +82,8 @@ export function TapePanel({
   const part15 = windowByName(partVenue?.windows, '15m');
   const part1h = windowByName(partVenue?.windows, '1h');
   const part4h = windowByName(partVenue?.windows, '4h');
+  const share1h = windowByName(volumeShare?.windows, '1h');
+  const shareOf = (ex: string) => share1h?.venues?.find((v) => v.exchange === ex);
   const printVenue = printSize?.combined ?? printSize?.venues?.[0];
   const print15 = windowByName(printVenue?.windows, '15m') ?? windowByName(printVenue?.windows, '5m');
   const cvdRow = cvd?.combined ?? cvd?.venues?.[0];
@@ -186,6 +190,50 @@ export function TapePanel({
         {partVenue?.summary || part15?.summary ? (
           <Text variant="caption" color="secondary">
             {partVenue?.summary || part15?.summary}
+          </Text>
+        ) : null}
+      </Block>
+
+      <Block>
+        <Text variant="label" color="primary">
+          {t('tape.volumeShare')}
+        </Text>
+        {volumeShareError ? (
+          <Alert type="info" showIcon message={t('tape.volumeShare')} description={volumeShareError} />
+        ) : (
+          <StatsGrid>
+            <Stat
+              label={t('tape.shareBinance')}
+              value={shareOf('binance')?.sharePct ? `${shareOf('binance')?.sharePct}%` : '—'}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.shareBybit')}
+              value={shareOf('bybit')?.sharePct ? `${shareOf('bybit')?.sharePct}%` : '—'}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.shareOkx')}
+              value={shareOf('okx')?.sharePct ? `${shareOf('okx')?.sharePct}%` : '—'}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.share1h')}
+              value={
+                share1h?.gained?.length || share1h?.lost?.length
+                  ? t('tape.shareMove', {
+                      gained: (share1h?.gained ?? []).join(', ') || '—',
+                      lost: (share1h?.lost ?? []).join(', ') || '—',
+                    })
+                  : t('tape.shareStable')
+              }
+              isLoading={isLoading}
+            />
+          </StatsGrid>
+        )}
+        {share1h?.summary ? (
+          <Text variant="caption" color="secondary">
+            {share1h.summary}
           </Text>
         ) : null}
       </Block>
