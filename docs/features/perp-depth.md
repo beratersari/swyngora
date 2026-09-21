@@ -39,6 +39,10 @@ ETH 17%** of 2.4B bid + 1.8B ask).
 - `coins[].sharePct` is that coin's percent of bid+ask
 - `coins[].bidSharePct` / `askSharePct` are percent of each side
 - `leaders` are the top bases by total share
+- `bidPct` / `askPct` are that mix as a percent of the book (bids 65% / asks 35%)
+- `windows` (15m / 1h / 4h) compare that mix to a sample from then (bids
+  55% → 65%, `changePct` +10) and `drivers` rank which coins pushed the
+  change. `complete` is false until the desk has sampled that lookback.
 - `exchange=all` (default) adds Binance USD-M and Bybit linear per coin
 - MCP: `get_perp_depth_overview`
 
@@ -47,8 +51,8 @@ ETH 17%** of 2.4B bid + 1.8B ask).
 | Layer | Path |
 |---|---|
 | Domain | `backend/internal/domain/perp_depth.go`, `perp_depth_overview.go` |
-| Adapters | `adapter/binance/futures_depth.go`, `adapter/bybit/futures_depth.go` |
-| Service | `GetPerpDepth`, `GetPerpDepthOverview` |
+| Adapters | `adapter/binance/futures_depth.go`, `adapter/bybit/futures_depth.go`, `adapter/perpdepthstore` |
+| Service | `GetPerpDepth`, `GetPerpDepthOverview`, `PerpDepthHistoryWorker` |
 | HTTP | `GET /api/v1/market/perp-depth`, `GET /api/v1/market/perp-depth/overview` |
 | MCP / AI | `get_perp_depth`, `get_perp_depth_overview` |
 

@@ -158,11 +158,44 @@ func (s *Service) GetPerpDepthOverview(ctx context.Context, exchange string, ran
 		coins = append(coins, f.in)
 	}
 	out := domain.BuildPerpDepthOverview(ex, rangePct, coins, time.Now().UTC())
+	s.persistPerpDepthOverview(ctx, out)
+	s.attachPerpDepthWindows(ctx, out)
 	if c := s.perpOverviewCache(); c != nil && out != nil {
 		cp := *out
 		c.Set(key, &cp)
 	}
 	return out, nil
+}
+
+func (s *Service) persistPerpDepthOverview(ctx context.Context, out *domain.PerpDepthOverview) {
+	if s == nil || s.perpHist == nil || out == nil {
+		return
+	}
+	rows := domain.PerpDepthSamplesFromOverview(out)
+	if len(rows) == 0 {
+		return
+	}
+	_, _ = s.perpHist.InsertSamples(ctx, rows)
+}
+
+func (s *Service) attachPerpDepthWindows(ctx context.Context, out *domain.PerpDepthOverview) {
+	if s == nil || s.perpHist == nil || out == nil {
+		return
+	}
+	from := out.AsOf.Add(-4*time.Hour - 20*time.Minute)
+	rows, err := s.perpHist.ListSamples(ctx, out.Exchange, out.RangePct, from, out.AsOf.Add(time.Minute))
+	if err != nil {
+		return
+	}
+	domain.AttachPerpDepthWindows(out, rows)
+}
+
+// PurgePerpDepthHistory drops samples older than cutoff.
+func (s *Service) PurgePerpDepthHistory(ctx context.Context, cutoff time.Time) (int, error) {
+	if s == nil || s.perpHist == nil {
+		return 0, nil
+	}
+	return s.perpHist.PurgeOlderThan(ctx, cutoff)
 }
 
 func (s *Service) perpOverviewCache() *cache.TTL[*domain.PerpDepthOverview] {

@@ -4,6 +4,7 @@ import { Text } from '@/components/atoms/Text';
 import {
   findPerpCoin,
   formatFundingPct,
+  perpBidShareLine,
   formatSignedFundingPct,
   formatSignedTapeNum,
   formatTapeNum,
@@ -89,6 +90,7 @@ export function TapePanel({
   const share1h = windowByName(volumeShare?.windows, '1h');
   const shareOf = (ex: string) => share1h?.venues?.find((v) => v.exchange === ex);
   const perpCoin = findPerpCoin(perpLiquidity?.coins, symbol);
+  const perp1h = windowByName(perpLiquidity?.windows, '1h');
   const printVenue = printSize?.combined ?? printSize?.venues?.[0];
   const print15 = windowByName(printVenue?.windows, '15m') ?? windowByName(printVenue?.windows, '5m');
   const cvdRow = cvd?.combined ?? cvd?.venues?.[0];
@@ -269,6 +271,11 @@ export function TapePanel({
             <Stat
               label={t('tape.perpLiqBidShare')}
               value={perpCoin?.bidSharePct ? `${perpCoin.bidSharePct}%` : '—'}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.perpLiq1h')}
+              value={perpBidShareLine(perp1h)}
               isLoading={isLoading}
             />
           </StatsGrid>

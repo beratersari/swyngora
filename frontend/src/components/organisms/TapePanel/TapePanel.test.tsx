@@ -48,6 +48,9 @@ describe('TapePanel', () => {
           ask: '1800000000',
           summary: 'BTC 48% of that book.',
           coins: [{ symbol: 'BTCUSDT', base: 'BTC', sharePct: '48', bidSharePct: '60' }],
+          windows: [
+            { window: '1h', complete: true, pastBidPct: '55', bidPct: '65', changePct: '+10' },
+          ],
         }}
         volumeShare={{
           windows: [
@@ -78,6 +81,7 @@ describe('TapePanel', () => {
     expect(screen.getByText('+15%')).toBeInTheDocument();
     expect(screen.getByText('55%')).toBeInTheDocument();
     expect(screen.getByText('48%')).toBeInTheDocument();
+    expect(screen.getByText('55% → 65% (+10)')).toBeInTheDocument();
   });
 
   it('shows OI-weighted funding pressure and window change', () => {

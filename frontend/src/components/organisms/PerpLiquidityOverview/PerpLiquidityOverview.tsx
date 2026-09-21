@@ -2,7 +2,7 @@ import { Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { formatCompactAmount } from '@/libs/utils';
-import { leaderCoins, shareLabel } from './helpers';
+import { driverNames, leaderCoins, mixLine, shareLabel } from './helpers';
 import { CoinList, CoinRow, Panel, Stat, StatsRow } from './PerpLiquidityOverview.styles';
 import type { PerpLiquidityOverviewProps } from './PerpLiquidityOverview.types';
 
@@ -59,6 +59,25 @@ export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLi
                   <Text variant="numeric" color="primary">
                     {shareLabel(c.sharePct)}
                   </Text>
+                </CoinRow>
+              ))}
+            </CoinList>
+          ) : null}
+          {(data?.windows ?? []).length > 0 ? (
+            <CoinList>
+              {(data?.windows ?? []).map((w) => (
+                <CoinRow key={w.window}>
+                  <Text variant="caption" color="secondary">
+                    {t('perpLiq.window', { window: w.window })}
+                  </Text>
+                  <Text variant="numeric" color="primary" isLoading={isLoading} skeletonWidth="80%">
+                    {w.complete ? mixLine(w) : t('perpLiq.windowWait')}
+                  </Text>
+                  {w.complete && driverNames(w) ? (
+                    <Text variant="caption" color="secondary">
+                      {t('perpLiq.drivers', { names: driverNames(w) })}
+                    </Text>
+                  ) : null}
                 </CoinRow>
               ))}
             </CoinList>

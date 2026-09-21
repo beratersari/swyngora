@@ -367,6 +367,9 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `ORDERBOOK_HISTORY_INTERVAL` | `1m` | Book snapshot worker cadence |
 | `ORDERBOOK_HISTORY_RETENTION` | `168h` | How long stored books are kept |
 | `ORDERBOOK_HISTORY_SYMBOLS` | _(optional CSV)_ | Extra pairs always sampled (majors are built-in) |
+| `PERP_DEPTH_HISTORY_DB_PATH` | `data/perpdepth.db` | SQLite archive for market-wide perp bid/ask samples |
+| `PERP_DEPTH_HISTORY_INTERVAL` | `1m` | Liquid-perp book snapshot cadence |
+| `PERP_DEPTH_HISTORY_RETENTION` | `48h` | How long those samples are kept |
 | `SCANNER_CHECK_INTERVAL` | `60s` | How often scanner rules are evaluated |
 
 No API keys are required for the public endpoints used here. Respect upstream rate limits.
@@ -404,7 +407,7 @@ Unit tests mock upstream HTTP; they do not call live Binance. `e2e_findings_test
 
 | Layer | Package | Tests |
 |---|---|---|
-| Domain | `internal/domain` | `candle_test.go`, `errors_test.go`, `ports_test.go`, `ticker_test.go`, `supply_test.go`, `open_interest_test.go`, `volume_profile_test.go`, `flow_at_prices_test.go`, `book_liquidity_test.go`, `perp_depth_test.go`, `perp_depth_overview_test.go`, `absorption_test.go`, `liquidity_sweep_test.go`, `volume_surge_test.go`, `vwap_test.go`, `around_test.go`, `around_compare_test.go`, `around_moves_test.go`, `around_precursors_test.go`, `around_similar_test.go`, `around_options_test.go`, `around_forensics_test.go`, `around_forensics_timeline_test.go`, `around_venue_timing_test.go`, `pricediff_quote_test.go`, `funding_arb_test.go`, `funding_pressure_test.go`, `print_size_test.go`, `longshort_gap_test.go`, `longshort_price_test.go`, `market_pressure_test.go`, `liquidation_test.go`, `liquidation_history_test.go` |
+| Domain | `internal/domain` | `candle_test.go`, `errors_test.go`, `ports_test.go`, `ticker_test.go`, `supply_test.go`, `open_interest_test.go`, `volume_profile_test.go`, `flow_at_prices_test.go`, `book_liquidity_test.go`, `perp_depth_test.go`, `perp_depth_overview_test.go`, `perp_depth_history_test.go`, `absorption_test.go`, `liquidity_sweep_test.go`, `volume_surge_test.go`, `vwap_test.go`, `around_test.go`, `around_compare_test.go`, `around_moves_test.go`, `around_precursors_test.go`, `around_similar_test.go`, `around_options_test.go`, `around_forensics_test.go`, `around_forensics_timeline_test.go`, `around_venue_timing_test.go`, `pricediff_quote_test.go`, `funding_arb_test.go`, `funding_pressure_test.go`, `print_size_test.go`, `longshort_gap_test.go`, `longshort_price_test.go`, `market_pressure_test.go`, `liquidation_test.go`, `liquidation_history_test.go` |
 | Application | `internal/service/market` | `service_test.go`, `volumeprofile_test.go`, `flowatprices_test.go`, `bookliquidity_test.go`, `perpdepth_test.go`, `absorption_test.go`, `sweep_test.go`, `volumesurge_test.go`, `vwap_test.go`, `around_test.go`, `funding_arb_test.go` (fakes for ports) |
 | Application | `internal/service/futureshist` | `sink_test.go`, `backfill_test.go` (reconnect history fill, no cross-venue) |
 | Application | `internal/service/fundingarb` | `service_test.go` (create, min-profit notify, re-arm) |

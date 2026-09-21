@@ -92,6 +92,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.OptionsHistoryDBPath != "data/options.db" || cfg.OptionsHistoryInterval != 5*time.Minute {
 		t.Fatalf("options hist path=%s interval=%v", cfg.OptionsHistoryDBPath, cfg.OptionsHistoryInterval)
 	}
+	if cfg.PerpDepthHistoryDBPath != "data/perpdepth.db" || cfg.PerpDepthHistoryInterval != time.Minute {
+		t.Fatalf("perp depth hist path=%s interval=%v", cfg.PerpDepthHistoryDBPath, cfg.PerpDepthHistoryInterval)
+	}
 	if cfg.SupplyRefreshHour != 3 || cfg.SupplyRefreshMinute != 0 {
 		t.Fatalf("refresh at %d:%d", cfg.SupplyRefreshHour, cfg.SupplyRefreshMinute)
 	}

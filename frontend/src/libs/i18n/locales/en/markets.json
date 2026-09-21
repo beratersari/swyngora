@@ -7,7 +7,10 @@
     "lean": "Lean",
     "leanBid": "Bid-heavy",
     "leanAsk": "Ask-heavy",
-    "leanEven": "Balanced"
+    "leanEven": "Balanced",
+    "window": "{{window}} bid share",
+    "windowWait": "Sampling…",
+    "drivers": "{{names}}"
   },
   "title": "Markets",
   "eyebrow": "Spot · multi-exchange",

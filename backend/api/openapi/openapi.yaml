@@ -1105,11 +1105,12 @@ paths:
         How much **perpetual** bid and ask liquidity is waiting across the
         **liquid USDT coins** we follow (same universe idea as breadth), plus
         which coins make up the biggest part of that book. Example: **2.4B bid
-        vs 1.8B ask within 1% of mid; BTC 48%, ETH 17%**. `exchange=all`
-        (default) adds Binance USD-M and Bybit linear per coin. `rangePct`
-        default **1**. `limit` default **20** (max 40). `coins` are ranked by
-        total (bid+ask) share. This is the **futures** book, not spot.
-        Informational only.
+        vs 1.8B ask within 1% of mid; BTC 48%, ETH 17%**. `windows` compare
+        bid vs ask **share of that book** 15m / 1h / 4h ago (e.g. bids 55% →
+        65%) and `drivers` name the coins that moved the mix. Sampled while
+        the desk runs. `exchange=all` (default) adds Binance USD-M and Bybit
+        linear per coin. `rangePct` default **1**. `limit` default **20**
+        (max 40). This is the **futures** book, not spot. Informational only.
       operationId: getMarketPerpDepthOverview
       tags: [Market]
       parameters:
@@ -10004,6 +10005,31 @@ components:
         lean: { type: string, enum: [bid, ask, balanced] }
         complete: { type: boolean }
         error: { type: string }
+    MarketPerpDepthShareDriver:
+      type: object
+      description: One coin's contribution to the market bid-share change
+      properties:
+        symbol: { type: string }
+        base: { type: string }
+        changePct: { type: string, description: Signed percentage points of market bid share }
+        kind: { type: string, enum: [bid_gained, ask_gained, stable] }
+    MarketPerpDepthShareWindow:
+      type: object
+      description: Bid vs ask share of the liquid-perp book now vs 15m / 1h / 4h ago
+      properties:
+        window: { type: string, enum: [15m, 1h, 4h] }
+        bidPct: { type: string, description: Bid share of the book now (65 = 65%) }
+        askPct: { type: string }
+        pastBidPct: { type: string, description: Bid share of the book at the lookback }
+        pastAskPct: { type: string }
+        changePct: { type: string, description: Signed pp, now bidPct minus past }
+        kind: { type: string, enum: [bid_gained, ask_gained, stable] }
+        drivers:
+          type: array
+          items: { $ref: '#/components/schemas/MarketPerpDepthShareDriver' }
+        complete: { type: boolean }
+        sampleTime: { type: string, format: date-time }
+        summary: { type: string }
     MarketPerpDepthOverview:
       type: object
       description: Total perp bid/ask across liquid coins plus who dominates that book
@@ -10017,6 +10043,8 @@ components:
         ask: { type: string }
         total: { type: string }
         imbalance: { type: string }
+        bidPct: { type: string, description: Bid share of the book now (65 = 65%) }
+        askPct: { type: string }
         lean: { type: string, enum: [bid, ask, balanced] }
         coins:
           type: array
@@ -10027,6 +10055,9 @@ components:
         missing:
           type: array
           items: { type: string }
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/MarketPerpDepthShareWindow' }
         summary: { type: string }
         note: { type: string }
     MarketVolumeShare:

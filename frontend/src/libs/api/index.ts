@@ -109,6 +109,8 @@ export type {
   MarketVolumeShare,
   MarketPerpDepthOverview,
   MarketPerpDepthCoin,
+  MarketPerpDepthShareWindow,
+  MarketPerpDepthShareDriver,
   MarketParticipation,
   MarketPrintSize,
   MarketPressure,

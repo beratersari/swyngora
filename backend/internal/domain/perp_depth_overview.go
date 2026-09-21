@@ -51,10 +51,13 @@ type PerpDepthOverview struct {
 	Ask       float64
 	Total     float64
 	Imbalance float64
+	BidPct    float64 // 100 * bid / (bid+ask)
+	AskPct    float64
 	Lean      string
 	Coins     []PerpDepthCoinShare
 	Leaders   []string
 	Missing   []string
+	Windows   []PerpDepthShareWindow
 	Summary   string
 	Note      string
 }
@@ -90,7 +93,8 @@ func BuildPerpDepthOverview(exchange string, rangePct float64, coins []PerpDepth
 		Coins:    []PerpDepthCoinShare{},
 		Leaders:  []string{},
 		Missing:  []string{},
-		Note:     "Resting USD-M / linear perpetual depth across the most liquid USDT coins we follow. Bid is notional within N% below each coin's own mid; ask is notional within N% above. Combined exchange=all adds Binance and Bybit for each coin. Informational only — not financial advice.",
+		Windows:  []PerpDepthShareWindow{},
+		Note:     "Resting USD-M / linear perpetual depth across the most liquid USDT coins we follow. Bid is notional within N% below each coin's own mid; ask is notional within N% above. Combined exchange=all adds Binance and Bybit for each coin. windows compare bid vs ask share of that book 15m / 1h / 4h ago (sampled while the desk runs) and which coins moved the mix. Informational only — not financial advice.",
 	}
 	rows := make([]PerpDepthCoinShare, 0, len(coins))
 	var bid, ask float64
@@ -125,6 +129,11 @@ func BuildPerpDepthOverview(exchange string, rangePct float64, coins []PerpDepth
 		out.Imbalance = round4((bid - ask) / out.Total)
 	}
 	out.Lean = perpOverviewLean("", bid, ask)
+	out.BidPct = PerpBookBidPct(bid, ask)
+	out.AskPct = round4(100 - out.BidPct)
+	if out.Total <= 0 {
+		out.AskPct = 0
+	}
 	for i := range rows {
 		if rows[i].Error != "" || rows[i].Total <= 0 {
 			continue
@@ -190,6 +199,15 @@ func ExplainPerpDepthOverview(o PerpDepthOverview) string {
 	}
 	if len(parts) > 0 {
 		head += " " + joinList(parts) + " of that book."
+	}
+	if o.BidPct > 0 || o.AskPct > 0 {
+		head += fmt.Sprintf(" Bids are %s%% of the book, asks %s%%.", formatQty(o.BidPct), formatQty(o.AskPct))
+	}
+	for _, w := range o.Windows {
+		if w.Complete && w.Summary != "" {
+			head += " " + w.Summary
+			break
+		}
 	}
 	return head
 }

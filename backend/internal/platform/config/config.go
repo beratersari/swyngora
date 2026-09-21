@@ -182,6 +182,13 @@ type Config struct {
 	// OrderBookHistorySymbols extra pairs to always sample (CSV). Seeds are always included.
 	OrderBookHistorySymbols []string
 
+	// PerpDepthHistoryDBPath is the SQLite file for market-wide perp bid/ask samples.
+	PerpDepthHistoryDBPath string
+	// PerpDepthHistoryInterval is how often the liquid-perp book is sampled.
+	PerpDepthHistoryInterval time.Duration
+	// PerpDepthHistoryRetention is how long those samples are kept.
+	PerpDepthHistoryRetention time.Duration
+
 	// APIAuthToken, when non-empty, requires Authorization: Bearer or X-API-Key on
 	// tenant routes (watchlist/alerts/portfolio/scanner/AI) and /mcp. Market GETs stay public.
 	// Empty = open local-dev mode (not multi-tenant safe).
@@ -326,6 +333,10 @@ func Load() Config {
 		OrderBookHistoryInterval:  positiveDurationEnv("ORDERBOOK_HISTORY_INTERVAL", time.Minute),
 		OrderBookHistoryRetention: positiveDurationEnv("ORDERBOOK_HISTORY_RETENTION", 7*24*time.Hour),
 		OrderBookHistorySymbols:   parseCSVList(os.Getenv("ORDERBOOK_HISTORY_SYMBOLS")),
+
+		PerpDepthHistoryDBPath:    getenv("PERP_DEPTH_HISTORY_DB_PATH", "data/perpdepth.db"),
+		PerpDepthHistoryInterval:  positiveDurationEnv("PERP_DEPTH_HISTORY_INTERVAL", time.Minute),
+		PerpDepthHistoryRetention: positiveDurationEnv("PERP_DEPTH_HISTORY_RETENTION", 2*24*time.Hour),
 
 		APIAuthToken: strings.TrimSpace(os.Getenv("API_AUTH_TOKEN")),
 		// AllowOpenAuth permits empty API_AUTH_TOKEN when HTTP_ADDR is non-loopback.

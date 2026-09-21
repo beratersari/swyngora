@@ -4633,8 +4633,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "How much total perpetual bid vs ask liquidity is waiting "
                 "across the liquid coins we track, plus which coins make up "
                 "the biggest part of that book. Example: 2.4B bid vs 1.8B ask "
-                "within 1% of mid; BTC 48%, ETH 17%. Same universe idea as "
-                "market breadth. exchange=all adds Binance and Bybit per coin. "
+                "within 1% of mid; BTC 48%, ETH 17%. windows (15m/1h/4h) "
+                "compare bid vs ask share of that book (bids 55% → 65%) and "
+                "drivers name the coins that moved the mix. Sampled while "
+                "the desk runs. exchange=all adds Binance and Bybit per coin. "
                 "range_pct default 1. limit default 20."
             ),
             args_schema=PerpDepthOverviewInput,

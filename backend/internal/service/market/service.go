@@ -67,6 +67,7 @@ type Service struct {
 	rsiHeat        *cache.TTL[*domain.RSIHeatmap]
 	rsiHeatSF      singleflight.Group
 	perpOverview   *cache.TTL[*domain.PerpDepthOverview]
+	perpHist       domain.PerpDepthHistoryStore
 	options        domain.OptionsChainPort
 	optionsHist    domain.OptionsHistoryStore
 }
@@ -216,6 +217,14 @@ func (s *Service) WithOptionsChain(p domain.OptionsChainPort) *Service {
 func (s *Service) WithOptionsHistory(store domain.OptionsHistoryStore) *Service {
 	if s != nil {
 		s.optionsHist = store
+	}
+	return s
+}
+
+// WithPerpDepthHistory attaches the durable market-wide perp bid/ask sample store.
+func (s *Service) WithPerpDepthHistory(store domain.PerpDepthHistoryStore) *Service {
+	if s != nil {
+		s.perpHist = store
 	}
 	return s
 }

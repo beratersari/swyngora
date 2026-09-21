@@ -1,4 +1,4 @@
-import type { MarketPerpDepthOverview } from '@/libs/api';
+import type { MarketPerpDepthOverview, MarketPerpDepthShareWindow } from '@/libs/api';
 import { PERP_LIQUIDITY_LEADERS } from './constants';
 
 export function leaderCoins(data?: MarketPerpDepthOverview | null) {
@@ -9,4 +9,18 @@ export function leaderCoins(data?: MarketPerpDepthOverview | null) {
 export function shareLabel(pct?: string | null): string {
   if (!pct) return '—';
   return `${pct}%`;
+}
+
+export function mixLine(w?: MarketPerpDepthShareWindow | null): string {
+  if (!w?.complete || !w.pastBidPct || !w.bidPct) return '';
+  const chg = w.changePct ? ` (${w.changePct})` : '';
+  return `${w.pastBidPct}% → ${w.bidPct}%${chg}`;
+}
+
+export function driverNames(w?: MarketPerpDepthShareWindow | null): string {
+  const names = (w?.drivers ?? [])
+    .filter((d) => d.base || d.symbol)
+    .slice(0, 3)
+    .map((d) => d.base || d.symbol || '');
+  return names.filter(Boolean).join(', ');
 }

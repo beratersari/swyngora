@@ -34,6 +34,9 @@ func TestBuildPerpDepthOverview_RanksCoinShareOfTotal(t *testing.T) {
 	if got.Lean != "bid" {
 		t.Fatalf("lean %s", got.Lean)
 	}
+	if got.BidPct < 74 || got.BidPct > 76 { // 90/120 = 75
+		t.Fatalf("bid pct %v", got.BidPct)
+	}
 	if len(got.Coins) != 3 || got.Coins[0].Base != "BTC" || got.Coins[1].Base != "ETH" {
 		t.Fatalf("order %+v", got.Coins)
 	}

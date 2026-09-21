@@ -5,7 +5,9 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/perpdepthstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
@@ -67,6 +69,31 @@ func TestGetPerpDepthOverview_TotalsAndLeaders(t *testing.T) {
 	}
 	if got.Summary == "" || !strings.Contains(strings.ToLower(got.Summary), "bid") {
 		t.Fatalf("summary %s", got.Summary)
+	}
+}
+
+func TestGetPerpDepthOverview_WindowsFromHistory(t *testing.T) {
+	store := &perpdepthstore.Memory{}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{},
+	}, &fakeSupply{}).WithPerpDepthHistory(store)
+	past := time.Now().UTC().Add(-time.Hour).Truncate(time.Minute)
+	_, _ = store.InsertSamples(context.Background(), []domain.PerpDepthSample{
+		{Time: past, Exchange: "binance", RangePct: 1, Symbol: "BTCUSDT", Base: "BTC", Bid: 10, Ask: 90},
+		{Time: past, Exchange: "binance", RangePct: 1, Symbol: "ETHUSDT", Base: "ETH", Bid: 10, Ask: 90},
+	})
+	got, err := svc.GetPerpDepthOverview(context.Background(), "binance", 1, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var hour domain.PerpDepthShareWindow
+	for _, w := range got.Windows {
+		if w.Window == domain.ParticipationWindow1h {
+			hour = w
+		}
+	}
+	if !hour.Complete || hour.Kind == "" {
+		t.Fatalf("windows %+v", got.Windows)
 	}
 }
 

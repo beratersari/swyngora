@@ -523,6 +523,12 @@ func FormatPerpDepthOverview(o *domain.PerpDepthOverview) string {
 	if o.Summary != "" {
 		b.WriteString(o.Summary + "\n")
 	}
+	for _, w := range o.Windows {
+		if w.Summary == "" {
+			continue
+		}
+		b.WriteString("  " + w.Summary + "\n")
+	}
 	n := 0
 	for _, c := range o.Coins {
 		if c.Error != "" || c.Total <= 0 {

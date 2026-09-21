@@ -164,22 +164,46 @@ type perpDepthCoinShareDTO struct {
 	Error       string `json:"error,omitempty"`
 }
 
+type perpDepthShareDriverDTO struct {
+	Symbol    string `json:"symbol"`
+	Base      string `json:"base"`
+	ChangePct string `json:"changePct"`
+	Kind      string `json:"kind"`
+}
+
+type perpDepthShareWindowDTO struct {
+	Window     string                    `json:"window"`
+	BidPct     string                    `json:"bidPct"`
+	AskPct     string                    `json:"askPct"`
+	PastBidPct string                    `json:"pastBidPct,omitempty"`
+	PastAskPct string                    `json:"pastAskPct,omitempty"`
+	ChangePct  string                    `json:"changePct,omitempty"`
+	Kind       string                    `json:"kind"`
+	Drivers    []perpDepthShareDriverDTO `json:"drivers,omitempty"`
+	Complete   bool                      `json:"complete"`
+	SampleTime *time.Time                `json:"sampleTime,omitempty"`
+	Summary    string                    `json:"summary"`
+}
+
 type perpDepthOverviewResponse struct {
-	Exchange  string                  `json:"exchange"`
-	RangePct  string                  `json:"rangePct"`
-	Universe  int                     `json:"universe"`
-	Known     int                     `json:"known"`
-	AsOf      time.Time               `json:"asOf"`
-	Bid       string                  `json:"bid"`
-	Ask       string                  `json:"ask"`
-	Total     string                  `json:"total"`
-	Imbalance string                  `json:"imbalance"`
-	Lean      string                  `json:"lean"`
-	Coins     []perpDepthCoinShareDTO `json:"coins"`
-	Leaders   []string                `json:"leaders"`
-	Missing   []string                `json:"missing,omitempty"`
-	Summary   string                  `json:"summary"`
-	Note      string                  `json:"note"`
+	Exchange  string                    `json:"exchange"`
+	RangePct  string                    `json:"rangePct"`
+	Universe  int                       `json:"universe"`
+	Known     int                       `json:"known"`
+	AsOf      time.Time                 `json:"asOf"`
+	Bid       string                    `json:"bid"`
+	Ask       string                    `json:"ask"`
+	Total     string                    `json:"total"`
+	Imbalance string                    `json:"imbalance"`
+	BidPct    string                    `json:"bidPct"`
+	AskPct    string                    `json:"askPct"`
+	Lean      string                    `json:"lean"`
+	Coins     []perpDepthCoinShareDTO   `json:"coins"`
+	Leaders   []string                  `json:"leaders"`
+	Missing   []string                  `json:"missing,omitempty"`
+	Windows   []perpDepthShareWindowDTO `json:"windows"`
+	Summary   string                    `json:"summary"`
+	Note      string                    `json:"note"`
 }
 
 func perpDepthOverviewToDTO(a *domain.PerpDepthOverview) perpDepthOverviewResponse {
@@ -195,10 +219,35 @@ func perpDepthOverviewToDTO(a *domain.PerpDepthOverview) perpDepthOverviewRespon
 			AskSharePct: formatHistQty(c.AskSharePct), Lean: c.Lean, Complete: c.Complete, Error: c.Error,
 		})
 	}
+	wins := make([]perpDepthShareWindowDTO, 0, len(a.Windows))
+	for _, w := range a.Windows {
+		row := perpDepthShareWindowDTO{
+			Window: w.Window, BidPct: formatHistQty(w.BidPct), AskPct: formatHistQty(w.AskPct),
+			Kind: w.Kind, Complete: w.Complete, Summary: w.Summary,
+		}
+		if w.Complete {
+			row.PastBidPct = formatHistQty(w.PastBidPct)
+			row.PastAskPct = formatHistQty(w.PastAskPct)
+			row.ChangePct = domain.FormatSignedPct(w.ChangePct)
+			if !w.SampleTime.IsZero() {
+				t := w.SampleTime.UTC()
+				row.SampleTime = &t
+			}
+			drivers := make([]perpDepthShareDriverDTO, 0, len(w.Drivers))
+			for _, d := range w.Drivers {
+				drivers = append(drivers, perpDepthShareDriverDTO{
+					Symbol: d.Symbol, Base: d.Base, ChangePct: domain.FormatSignedPct(d.ChangePct), Kind: d.Kind,
+				})
+			}
+			row.Drivers = drivers
+		}
+		wins = append(wins, row)
+	}
 	return perpDepthOverviewResponse{
 		Exchange: a.Exchange, RangePct: formatHistQty(a.RangePct), Universe: a.Universe, Known: a.Known,
 		AsOf: a.AsOf.UTC(), Bid: formatHistQty(a.Bid), Ask: formatHistQty(a.Ask), Total: formatHistQty(a.Total),
-		Imbalance: domain.FormatSignedQty(a.Imbalance), Lean: a.Lean, Coins: coins, Leaders: a.Leaders,
-		Missing: a.Missing, Summary: a.Summary, Note: a.Note,
+		Imbalance: domain.FormatSignedQty(a.Imbalance), BidPct: formatHistQty(a.BidPct), AskPct: formatHistQty(a.AskPct),
+		Lean: a.Lean, Coins: coins, Leaders: a.Leaders, Missing: a.Missing, Windows: wins,
+		Summary: a.Summary, Note: a.Note,
 	}
 }

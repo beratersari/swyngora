@@ -7,7 +7,10 @@
     "lean": "Eğilim",
     "leanBid": "Bid ağır",
     "leanAsk": "Ask ağır",
-    "leanEven": "Dengeli"
+    "leanEven": "Dengeli",
+    "window": "{{window}} bid payı",
+    "windowWait": "Örnekleniyor…",
+    "drivers": "{{names}}"
   },
   "title": "Piyasalar",
   "eyebrow": "Spot · çoklu borsa",

@@ -6150,6 +6150,35 @@ export interface components {
             complete?: boolean;
             error?: string;
         };
+        /** @description One coin's contribution to the market bid-share change */
+        MarketPerpDepthShareDriver: {
+            symbol?: string;
+            base?: string;
+            /** @description Signed percentage points of market bid share */
+            changePct?: string;
+            /** @enum {string} */
+            kind?: "bid_gained" | "ask_gained" | "stable";
+        };
+        /** @description Bid vs ask share of the liquid-perp book now vs 15m / 1h / 4h ago */
+        MarketPerpDepthShareWindow: {
+            /** @enum {string} */
+            window?: "15m" | "1h" | "4h";
+            /** @description Bid share of the book now (65 = 65%) */
+            bidPct?: string;
+            askPct?: string;
+            /** @description Bid share of the book at the lookback */
+            pastBidPct?: string;
+            pastAskPct?: string;
+            /** @description Signed pp, now bidPct minus past */
+            changePct?: string;
+            /** @enum {string} */
+            kind?: "bid_gained" | "ask_gained" | "stable";
+            drivers?: components["schemas"]["MarketPerpDepthShareDriver"][];
+            complete?: boolean;
+            /** Format: date-time */
+            sampleTime?: string;
+            summary?: string;
+        };
         /** @description Total perp bid/ask across liquid coins plus who dominates that book */
         MarketPerpDepthOverview: {
             exchange?: string;
@@ -6162,11 +6191,15 @@ export interface components {
             ask?: string;
             total?: string;
             imbalance?: string;
+            /** @description Bid share of the book now (65 = 65%) */
+            bidPct?: string;
+            askPct?: string;
             /** @enum {string} */
             lean?: "bid" | "ask" | "balanced";
             coins?: components["schemas"]["MarketPerpDepthCoin"][];
             leaders?: string[];
             missing?: string[];
+            windows?: components["schemas"]["MarketPerpDepthShareWindow"][];
             summary?: string;
             note?: string;
         };

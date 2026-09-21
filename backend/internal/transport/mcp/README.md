@@ -23,7 +23,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `scan_liquidation_cascades` | Market cascade plus coins currently bursting; `both` when the same side fires on both venues |
 | `get_open_interest` | Current futures OI plus 5m/1h/4h/24h opened or closed USDT amount and percent, per venue and combined; includes `funding` |
 | `get_perp_depth` | Perpetual bid-below vs ask-above notional (default ±1%); Binance USD-M + Bybit linear + combined |
-| `get_perp_depth_overview` | Total perp bid vs ask across the liquid coins we track, plus which coins make up the biggest share of that book |
+| `get_perp_depth_overview` | Total perp bid vs ask across the liquid coins we track, plus which coins make up the biggest share of that book; 15m/1h/4h bid-share vs now and who moved the mix |
 | `get_options_overview` | BTC/ETH Deribit options: OI, 24h volume, put/call, DVOL + ATM IV, 30-day realized vol and `volCompare` (DVOL minus realized in vol points); term structure, call/put skew, expiry mix, expected move, max pain, dealer gamma (`netUsd` / flip / regime); `history` over hours/days including DVOL vs realized / volGap, net GEX, and flip vs spot; `moves` when OI/PCR/IV jumps vs typical or gamma / flip-side changes; `vsMarket` when IV or put/call disagrees with spot/futures |
 | `get_funding_rate` | Predicted next perpetual funding plus recent settlements (Binance USD-M + Bybit linear + OKX USDT-swap); `pressure` is OI-weighted combined predicted funding plus 1h/4h/24h change |
 | `get_funding_arb` | Long cheaper-funding venue / short richer venue; sized after-fee payout + spot-perp gap |

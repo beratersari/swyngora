@@ -95,6 +95,8 @@ export type MarketVolumeShare = components['schemas']['MarketVolumeShare'];
 export type VolumeShareQuery = NonNullable<operations['getMarketVolumeShare']['parameters']['query']>;
 export type MarketPerpDepthOverview = components['schemas']['MarketPerpDepthOverview'];
 export type MarketPerpDepthCoin = components['schemas']['MarketPerpDepthCoin'];
+export type MarketPerpDepthShareWindow = components['schemas']['MarketPerpDepthShareWindow'];
+export type MarketPerpDepthShareDriver = components['schemas']['MarketPerpDepthShareDriver'];
 export type PerpDepthOverviewQuery = NonNullable<
   operations['getMarketPerpDepthOverview']['parameters']['query']
 >;

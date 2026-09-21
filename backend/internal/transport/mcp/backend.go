@@ -774,11 +774,35 @@ func perpDepthOverviewMap(got *domain.PerpDepthOverview) map[string]any {
 		}
 		coins = append(coins, row)
 	}
+	wins := make([]map[string]any, 0, len(got.Windows))
+	for _, w := range got.Windows {
+		row := map[string]any{
+			"window": w.Window, "bidPct": formatQtyMCP(w.BidPct), "askPct": formatQtyMCP(w.AskPct),
+			"kind": w.Kind, "complete": w.Complete, "summary": w.Summary,
+		}
+		if w.Complete {
+			row["pastBidPct"] = formatQtyMCP(w.PastBidPct)
+			row["pastAskPct"] = formatQtyMCP(w.PastAskPct)
+			row["changePct"] = domain.FormatSignedPct(w.ChangePct)
+			if !w.SampleTime.IsZero() {
+				row["sampleTime"] = w.SampleTime.UTC().Format(time.RFC3339Nano)
+			}
+			drivers := make([]map[string]any, 0, len(w.Drivers))
+			for _, d := range w.Drivers {
+				drivers = append(drivers, map[string]any{
+					"symbol": d.Symbol, "base": d.Base, "changePct": domain.FormatSignedPct(d.ChangePct), "kind": d.Kind,
+				})
+			}
+			row["drivers"] = drivers
+		}
+		wins = append(wins, row)
+	}
 	out := map[string]any{
 		"exchange": got.Exchange, "rangePct": formatQtyMCP(got.RangePct), "universe": got.Universe, "known": got.Known,
 		"asOf": got.AsOf.UTC().Format(time.RFC3339Nano), "bid": formatQtyMCP(got.Bid), "ask": formatQtyMCP(got.Ask),
-		"total": formatQtyMCP(got.Total), "imbalance": domain.FormatSignedQty(got.Imbalance), "lean": got.Lean,
-		"coins": coins, "leaders": got.Leaders, "summary": got.Summary, "note": got.Note,
+		"total": formatQtyMCP(got.Total), "imbalance": domain.FormatSignedQty(got.Imbalance),
+		"bidPct": formatQtyMCP(got.BidPct), "askPct": formatQtyMCP(got.AskPct), "lean": got.Lean,
+		"coins": coins, "leaders": got.Leaders, "windows": wins, "summary": got.Summary, "note": got.Note,
 	}
 	if len(got.Missing) > 0 {
 		out["missing"] = got.Missing

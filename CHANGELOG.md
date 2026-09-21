@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Perp liquidity overview:** total bid vs ask waiting across the liquid perps we track (e.g. 2.4B bid / 1.8B ask within 1% of mid), plus which coins make up the biggest share of that book. `GET /api/v1/market/perp-depth/overview`, MCP `get_perp_depth_overview`, Markets page, coin-detail tape (`docs/features/perp-depth.md`)
+- **Perp liquidity overview:** total bid vs ask waiting across the liquid perps we track (e.g. 2.4B bid / 1.8B ask within 1% of mid), plus which coins make up the biggest share of that book. 15m / 1h / 4h windows compare bid vs ask share of that book (bids 55% → 65%) and name the coins that moved the mix. `GET /api/v1/market/perp-depth/overview`, MCP `get_perp_depth_overview`, Markets page, coin-detail tape (`docs/features/perp-depth.md`)
 
 ### Added
 - **Futures volume share:** how BTC volume splits across Binance / Bybit / OKX (e.g. 55/30/15) plus who gained or lost share vs the prior hour. `GET /api/v1/market/volume-share`, MCP `get_volume_share`, coin-detail tape (`docs/features/volume-share.md`)

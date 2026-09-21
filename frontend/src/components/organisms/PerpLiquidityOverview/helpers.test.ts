@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { leaderCoins, shareLabel } from './helpers';
+import { driverNames, leaderCoins, mixLine, shareLabel } from './helpers';
 
 describe('PerpLiquidityOverview helpers', () => {
   it('drops empty or errored coins then keeps the largest', () => {
@@ -16,5 +16,14 @@ describe('PerpLiquidityOverview helpers', () => {
   it('formats a share percent', () => {
     expect(shareLabel('48')).toBe('48%');
     expect(shareLabel(undefined)).toBe('—');
+  });
+
+  it('formats bid share then to now', () => {
+    expect(mixLine({ complete: true, pastBidPct: '55', bidPct: '65', changePct: '+10' })).toBe(
+      '55% → 65% (+10)',
+    );
+    expect(driverNames({ drivers: [{ base: 'ETH', changePct: '+10' }, { base: 'SOL' }] })).toBe(
+      'ETH, SOL',
+    );
   });
 });

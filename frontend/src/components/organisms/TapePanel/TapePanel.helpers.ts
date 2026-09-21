@@ -8,6 +8,16 @@ export function formatSignedTapeNum(raw: string | number | null | undefined): st
   return body;
 }
 
+export function perpBidShareLine(w?: {
+  complete?: boolean;
+  pastBidPct?: string;
+  bidPct?: string;
+  changePct?: string;
+} | null): string {
+  if (!w?.complete || !w.pastBidPct || !w.bidPct) return '—';
+  return `${w.pastBidPct}% → ${w.bidPct}%${w.changePct ? ` (${w.changePct})` : ''}`;
+}
+
 export function findPerpCoin<T extends { symbol?: string; base?: string }>(
   coins: T[] | undefined,
   symbol?: string | null,
