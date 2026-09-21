@@ -143,8 +143,8 @@ describe('MarketsPage', () => {
     renderWithProviders(<MarketsPage />, { routerEntries: ['/markets'] });
     expect(await screen.findByText('Market breadth')).toBeInTheDocument();
     expect(screen.getByText('62% up · 28% down')).toBeInTheDocument();
-    expect(screen.getByText('Fear & Greed')).toBeInTheDocument();
-    expect(screen.getByText('24h 48 → 62 (+14)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Fear & Greed/ })).toBeInTheDocument();
+    expect(screen.queryByText('24h 48 → 62 (+14)')).not.toBeInTheDocument();
   });
 
   it('shows error state when spot fails with no rows', async () => {

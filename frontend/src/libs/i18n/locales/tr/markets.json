@@ -16,7 +16,10 @@
   },
   "fearGreed": {
     "title": "Korku ve Açgözlülük",
-    "subtitle": "0–100, kendi verimizden. Binance veya CoinGlass endeksi değil.",
+    "info": "Bu skor nasıl hesaplanır",
+    "about": "0–100, kendi verimizden: genişlik, BTC hareketi, oynaklık, fonlama, long/short, likidasyonlar, perp defter ve taker akış. Binance veya CoinGlass endeksi değil.",
+    "tabDrivers": "Neyi kaydırdı",
+    "tabHistory": "Geçmiş skorlar",
     "score": "Skor",
     "level": "Seviye",
     "inputs": "{{used}} / {{total}} girdi",

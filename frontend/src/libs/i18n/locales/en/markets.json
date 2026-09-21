@@ -16,7 +16,10 @@
   },
   "fearGreed": {
     "title": "Fear & Greed",
-    "subtitle": "0–100 from our own tape. Not the Binance or CoinGlass index.",
+    "info": "How this score is calculated",
+    "about": "0–100 from our own tape: breadth, BTC’s move, volatility, funding, long/short, liquidations, the perp book, and taker flow. Not the Binance or CoinGlass index.",
+    "tabDrivers": "What moved it",
+    "tabHistory": "Past scores",
     "score": "Score",
     "level": "Level",
     "inputs": "{{used}} of {{total}} inputs",
