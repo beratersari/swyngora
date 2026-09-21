@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/molecules/PageHeader';
 import { ExchangeTabs } from '@/components/organisms/ExchangeTabs';
 import { MarketsToolbar } from '@/components/organisms/MarketsToolbar';
 import { MarketsTable } from '@/components/organisms/MarketsTable';
+import { BreadthOverview } from '@/components/organisms/BreadthOverview';
 import {
   PERP_LIQUIDITY_LIMIT,
   PERP_LIQUIDITY_POLL_MS,
@@ -22,6 +23,7 @@ import {
   useListProductTagsQuery,
   useListDelistScheduleQuery,
   useListSpotMarketsQuery,
+  useGetMarketBreadthQuery,
   useGetMarketPerpDepthOverviewQuery,
   useRemoveWatchlistItemMutation,
   type MarketExchange,
@@ -43,6 +45,7 @@ import {
 } from '@/libs/utils';
 import { DEFAULT_SPOT_POLL_MS, SPOT_LIST_WS_REST_POLL_MS } from '@/config/constants';
 import {
+  InsightRow,
   McapHintAlert,
   MetaLeft,
   MetaRight,
@@ -218,6 +221,14 @@ export function MarketsPage() {
       refetchOnFocus: true,
     },
   );
+  const breadthQuery = useGetMarketBreadthQuery(
+    { exchange: state.exchange, limit: 80 },
+    {
+      skip: !showPerpLiq,
+      pollingInterval: visible && showPerpLiq ? PERP_LIQUIDITY_POLL_MS : 0,
+      refetchOnFocus: true,
+    },
+  );
 
   const range = getResultsRange(state.offset, state.limit, total);
   const rangeLabel =
@@ -239,15 +250,26 @@ export function MarketsPage() {
       <PageHeader title={t('markets:title')} subtitle={t('markets:subtitle', { seconds: DEFAULT_SPOT_POLL_MS / 1000 })} />
 
       {showPerpLiq ? (
-        <PerpLiquidityOverview
-          data={rtkCurrent(perpLiqQuery)}
-          error={
-            perpLiqQuery.isError
-              ? rtkErrorMessage(perpLiqQuery.error, { resource: t('markets:title') })
-              : null
-          }
-          isLoading={perpLiqQuery.isLoading || perpLiqQuery.isFetching}
-        />
+        <InsightRow>
+          <PerpLiquidityOverview
+            data={rtkCurrent(perpLiqQuery)}
+            error={
+              perpLiqQuery.isError
+                ? rtkErrorMessage(perpLiqQuery.error, { resource: t('markets:title') })
+                : null
+            }
+            isLoading={perpLiqQuery.isLoading || perpLiqQuery.isFetching}
+          />
+          <BreadthOverview
+            data={rtkCurrent(breadthQuery)}
+            error={
+              breadthQuery.isError
+                ? rtkErrorMessage(breadthQuery.error, { resource: t('markets:breadth.title') })
+                : null
+            }
+            isLoading={breadthQuery.isLoading || breadthQuery.isFetching}
+          />
+        </InsightRow>
       ) : null}
 
       <ExchangeTabs

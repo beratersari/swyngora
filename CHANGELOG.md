@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Desk screens for leftover market reads:** Markets shows breadth (up vs down share) next to perp bid/ask. `/surges` lists coins whose 5m/15m/1h volume is a multiple of typical. Coin detail **Flow** (perp depth, surge, taker, VWAP, profile, absorption, sweeps, whales, icebergs, book flow) and **Structure** (correlation, volatility, levels, squeeze, positioning, venue divergence).
 - **Perp liquidity overview:** total bid vs ask waiting across the liquid perps we track (e.g. 2.4B bid / 1.8B ask within 1% of mid), plus which coins make up the biggest share of that book. 15m / 1h / 4h windows compare bid vs ask share of that book (bids 55% → 65%) and name the coins that moved the mix. `GET /api/v1/market/perp-depth/overview`, MCP `get_perp_depth_overview`, Markets page, coin-detail tape (`docs/features/perp-depth.md`)
 
 ### Added

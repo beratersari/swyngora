@@ -1,0 +1,18 @@
+{
+  "title": "Hacim sıçramaları",
+  "subtitle": "Son 5dk / 15dk / 1s hacmi alışılmışın katı olan coinler. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
+  "scan": "Tara",
+  "exchange": "Borsa",
+  "hits": "{{count}} sonuç",
+  "emptyTitle": "Sıçrama yok",
+  "emptyHint": "Alışılmış hacminin üzerinde basan coinleri listelemek için tarayın.",
+  "symbol": "Çift",
+  "maxRatio": "Maks. kat",
+  "hottest": "En sıcak",
+  "grade": "Not",
+  "dominant": "Taraf",
+  "read": "Okuma",
+  "note": "Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
+  "loadFailed": "Tarama başarısız",
+  "resource": "hacim sıçrama taraması"
+}

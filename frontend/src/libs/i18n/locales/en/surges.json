@@ -1,0 +1,18 @@
+{
+  "title": "Volume surges",
+  "subtitle": "Coins whose latest 5m / 15m / 1h volume is a multiple of their typical print. Informational only — not financial advice.",
+  "scan": "Scan",
+  "exchange": "Exchange",
+  "hits": "{{count}} hits",
+  "emptyTitle": "No surges",
+  "emptyHint": "Run a scan to list coins printing well above their usual volume.",
+  "symbol": "Pair",
+  "maxRatio": "Max vs typical",
+  "hottest": "Hottest",
+  "grade": "Grade",
+  "dominant": "Side",
+  "read": "Read",
+  "note": "Informational only — not financial advice.",
+  "loadFailed": "Scan failed",
+  "resource": "volume surge scan"
+}

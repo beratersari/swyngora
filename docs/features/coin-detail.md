@@ -49,7 +49,7 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 ### Page (DET-A)
 
 - Route `/markets/:exchange/:symbol`; query `interval` + `limit` (defaults `1h` / `100`)
-- Layout: Header → stats → tabs (Overview chart · Order book · Holders · Indicators · Trade)
+- Layout: Header → stats → tabs (Overview chart · Order book · Tape · Flow · Structure · Holders · Indicators · Trade)
 - Poll: ticker/supply ~15s; candles ~30s; pause when tab hidden
 - Chart starts the kline fetch immediately (does not wait for the intervals list). A 100-bar first request paints the viewport, then the 300-bar live window replaces it. EMA overlays come from loaded candles so they do not block first paint. The overview chart stays mounted when switching detail tabs.
 - Partial errors per section; supply 404 is soft

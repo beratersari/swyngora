@@ -102,6 +102,12 @@ import type {
   MarketForensicsScan,
   MarketForensicsScanQuery,
   MarketForensicsRadarQuery,
+  MarketBreadth,
+  MarketBreadthQuery,
+  MarketVolumeSurgeScan,
+  MarketVolumeSurgeScanQuery,
+  MarketDeskReport,
+  SymbolMarketQuery,
 } from './marketApi.types';
 import type { ForensicsRadarReview } from '@/libs/types/forensics.types';
 // delist types re-exported below
@@ -148,6 +154,11 @@ export type {
   MarketPerpDepthCoin,
   MarketPerpDepthShareWindow,
   MarketPerpDepthShareDriver,
+  MarketBreadth,
+  MarketBreadthWindow,
+  MarketVolumeSurgeScan,
+  MarketVolumeSurgeHit,
+  MarketDeskReport,
   MarketParticipation,
   MarketPrintSize,
   MarketPressure,
@@ -428,6 +439,123 @@ export const marketApi = baseApi.injectEndpoints({
       }),
     }),
 
+    getMarketBreadth: build.query<MarketBreadth, MarketBreadthQuery | void>({
+      query: (arg) => ({
+        url: '/api/v1/market/breadth',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
+    scanMarketVolumeSurges: build.query<MarketVolumeSurgeScan, MarketVolumeSurgeScanQuery | void>({
+      query: (arg) => ({
+        url: '/api/v1/market/volume-surge/scan',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
+    getMarketPerpDepth: build.query<MarketDeskReport, SymbolMarketQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/perp-depth',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+    getMarketVolumeSurge: build.query<MarketDeskReport, SymbolMarketQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/volume-surge',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+    getMarketTakerFlow: build.query<MarketDeskReport, SymbolMarketQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/taker-flow',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+    getMarketFlowAtPrices: build.query<MarketDeskReport, SymbolMarketQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/flow-at-prices',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+    getMarketVWAP: build.query<MarketDeskReport, SymbolMarketQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/vwap',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+    getMarketVolumeProfile: build.query<MarketDeskReport, SymbolMarketQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/volume-profile',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+    getMarketAbsorption: build.query<MarketDeskReport, SymbolMarketQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/absorption',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+    getMarketLiquiditySweeps: build.query<MarketDeskReport, SymbolMarketQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/liquidity-sweeps',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+    getMarketWhales: build.query<MarketDeskReport, SymbolMarketQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/whales',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+    getMarketIcebergs: build.query<MarketDeskReport, SymbolMarketQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/orderbook/icebergs',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+    getMarketBookLiquidityFlow: build.query<MarketDeskReport, SymbolMarketQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/orderbook/liquidity-flow',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+    getMarketCorrelation: build.query<MarketDeskReport, SymbolMarketQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/correlation',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+    getMarketVolatility: build.query<MarketDeskReport, SymbolMarketQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/volatility',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+    getMarketLevels: build.query<MarketDeskReport, SymbolMarketQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/levels',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+    getMarketSqueezeRisk: build.query<MarketDeskReport, SymbolMarketQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/squeeze-risk',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+    getMarketPositioning: build.query<MarketDeskReport, SymbolMarketQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/positioning',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+    getMarketVenueDivergence: build.query<MarketDeskReport, SymbolMarketQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/venue-divergence',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+
     getMarketParticipation: build.query<MarketParticipation, ParticipationQuery>({
       query: (arg) => ({
         url: '/api/v1/market/participation',
@@ -595,6 +723,27 @@ export const {
   useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketCvdQuery,
   useGetMarketVolumeShareQuery,
+  useGetMarketPerpDepthOverviewQuery,
+  useGetMarketBreadthQuery,
+  useScanMarketVolumeSurgesQuery,
+  useLazyScanMarketVolumeSurgesQuery,
+  useGetMarketPerpDepthQuery,
+  useGetMarketVolumeSurgeQuery,
+  useGetMarketTakerFlowQuery,
+  useGetMarketFlowAtPricesQuery,
+  useGetMarketVWAPQuery,
+  useGetMarketVolumeProfileQuery,
+  useGetMarketAbsorptionQuery,
+  useGetMarketLiquiditySweepsQuery,
+  useGetMarketWhalesQuery,
+  useGetMarketIcebergsQuery,
+  useGetMarketBookLiquidityFlowQuery,
+  useGetMarketCorrelationQuery,
+  useGetMarketVolatilityQuery,
+  useGetMarketLevelsQuery,
+  useGetMarketSqueezeRiskQuery,
+  useGetMarketPositioningQuery,
+  useGetMarketVenueDivergenceQuery,
   useGetMarketParticipationQuery,
   useGetMarketPrintSizeQuery,
   useGetMarketPressureQuery,

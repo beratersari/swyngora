@@ -15,6 +15,9 @@ vi.mock('@/components/pages/WatchlistPage', () => ({
 vi.mock('@/components/pages/PumpsPage', () => ({
   PumpsPage: () => <div data-testid="pumps-page">Pumps</div>,
 }));
+vi.mock('@/components/pages/SurgesPage', () => ({
+  SurgesPage: () => <div data-testid="surges-page">Surges</div>,
+}));
 vi.mock('@/components/pages/AiChatPage', () => ({
   AiChatPage: () => <div data-testid="ai-page">AI</div>,
 }));
@@ -60,6 +63,8 @@ describe('AppRoutes', () => {
     expect(screen.getByTestId('watchlist-page')).toBeInTheDocument();
     renderWithProviders(<AppRoutes />, { routerEntries: ['/pumps'] });
     expect(screen.getByTestId('pumps-page')).toBeInTheDocument();
+    renderWithProviders(<AppRoutes />, { routerEntries: ['/surges'] });
+    expect(screen.getByTestId('surges-page')).toBeInTheDocument();
     renderWithProviders(<AppRoutes />, { routerEntries: ['/ai'] });
     expect(screen.getByTestId('ai-page')).toBeInTheDocument();
     renderWithProviders(<AppRoutes />, { routerEntries: ['/heatmap'] });

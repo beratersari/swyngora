@@ -9,6 +9,16 @@ export const PageStack = styled.div`
   min-width: 0;
 `;
 
+export const InsightRow = styled.div`
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: ${({ theme }) => theme.spacing[3]}px;
+
+  @media (min-width: 900px) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+`;
+
 export const PageIntro = styled.div`
   display: flex;
   flex-direction: column;

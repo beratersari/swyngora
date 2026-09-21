@@ -31,6 +31,8 @@ For each window vs **BTC** and vs **ETH**:
 Default venue is **Binance** spot (same quote as the pair; USDT fallback).
 `exchange=bybit|coinbase` is allowed. Informational only — not financial advice.
 
+Web: coin detail **Structure** tab.
+
 ## Where the code lives
 
 | Layer | Path |

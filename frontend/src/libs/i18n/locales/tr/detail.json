@@ -12,6 +12,8 @@
     "orderbook": "Emir defteri",
     "holders": "Tutucular",
     "tape": "Bant",
+    "flow": "Akış",
+    "structure": "Yapı",
     "indicators": "Göstergeler",
     "trade": "İşlem"
   },
@@ -291,6 +293,27 @@
     "bidSize": "Alış büyüklüğü",
     "askSize": "Satış büyüklüğü",
     "empty": "Bu çift için canlı defter yok."
+  },
+  "flow": {
+    "perpDepth": "Perp derinlik",
+    "surge": "Hacim sıçraması",
+    "taker": "Taker akışı",
+    "prices": "Fiyatlarda akış",
+    "vwap": "VWAP",
+    "profile": "Hacim profili",
+    "absorption": "Emilim",
+    "sweeps": "Likidite süpürmeleri",
+    "whales": "Balinalar",
+    "icebergs": "Buzdağı emirler",
+    "bookFlow": "Defter likidite akışı"
+  },
+  "structure": {
+    "correlation": "Korelasyon",
+    "volatility": "Volatilite",
+    "levels": "Seviyeler",
+    "squeeze": "Sıkışma riski",
+    "positioning": "Konumlanma",
+    "divergence": "Borsa ayrışması"
   },
   "paperTrade": {
     "title": "Kağıt işlem",

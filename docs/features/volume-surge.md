@@ -28,6 +28,8 @@ separately, and **which coins** are running that hot.
 
 Informational only — not financial advice.
 
+Web: `/surges` scan table; per-coin on coin detail **Flow**.
+
 ## Where the code lives
 
 | Layer | Path |

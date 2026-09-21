@@ -12,6 +12,16 @@
     "windowWait": "Örnekleniyor…",
     "drivers": "{{names}}"
   },
+  "breadth": {
+    "title": "Piyasa genişliği",
+    "subtitle": "{{n}} likit coin — yükselen vs düşen pay",
+    "hour": "1s karışım",
+    "align": "BTC'ye göre",
+    "align_with_market": "Piyasayla",
+    "align_carrying": "BTC taşıyor",
+    "align_lagging": "BTC geride",
+    "align_mixed": "Karışık"
+  },
   "title": "Piyasalar",
   "eyebrow": "Spot · çoklu borsa",
   "watchlistResource": "izleme listesi",

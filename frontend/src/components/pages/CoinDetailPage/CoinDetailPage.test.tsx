@@ -49,6 +49,13 @@ vi.mock('@/libs/api', async (importOriginal) => {
   };
 });
 
+vi.mock('./CoinFlowTab', () => ({
+  CoinFlowTab: () => <div data-testid="coin-flow-tab" />,
+}));
+vi.mock('./CoinStructureTab', () => ({
+  CoinStructureTab: () => <div data-testid="coin-structure-tab" />,
+}));
+
 vi.mock('@/components/molecules/CandleChartHost', () => ({
   CandleChartHost: (props: { data: unknown[] }) => (
     <div data-testid="candle-chart" data-count={String((props.data ?? []).length)} />
@@ -270,6 +277,14 @@ describe('CoinDetailPage', () => {
     renderDetail('/markets/binance/BTCUSDT?tab=tape');
     expect(await screen.findAllByText(/^Liquidations$|^Likidasyonlar$/i)).not.toHaveLength(0);
     expect(screen.queryByTestId('liquidation-heatmap')).not.toBeInTheDocument();
+  });
+
+  it('opens flow and structure tabs from the URL', async () => {
+    renderDetail('/markets/binance/BTCUSDT?tab=flow');
+    expect(await screen.findByTestId('coin-flow-tab')).toBeInTheDocument();
+    expect(screen.queryByTestId('coin-structure-tab')).not.toBeInTheDocument();
+    renderDetail('/markets/binance/BTCUSDT?tab=structure');
+    expect(await screen.findByTestId('coin-structure-tab')).toBeInTheDocument();
   });
 
   it('rejects unknown exchange path segments', async () => {

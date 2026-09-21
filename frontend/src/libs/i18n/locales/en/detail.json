@@ -12,6 +12,8 @@
     "orderbook": "Order book",
     "holders": "Holders",
     "tape": "Tape",
+    "flow": "Flow",
+    "structure": "Structure",
     "indicators": "Indicators",
     "trade": "Trade"
   },
@@ -291,6 +293,27 @@
     "bidSize": "Bid size",
     "askSize": "Ask size",
     "empty": "No live book for this pair."
+  },
+  "flow": {
+    "perpDepth": "Perp depth",
+    "surge": "Volume surge",
+    "taker": "Taker flow",
+    "prices": "Flow at prices",
+    "vwap": "VWAP",
+    "profile": "Volume profile",
+    "absorption": "Absorption",
+    "sweeps": "Liquidity sweeps",
+    "whales": "Whales",
+    "icebergs": "Icebergs",
+    "bookFlow": "Book liquidity flow"
+  },
+  "structure": {
+    "correlation": "Correlation",
+    "volatility": "Volatility",
+    "levels": "Levels",
+    "squeeze": "Squeeze risk",
+    "positioning": "Positioning",
+    "divergence": "Venue divergence"
   },
   "paperTrade": {
     "title": "Paper trade",

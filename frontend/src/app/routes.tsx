@@ -12,6 +12,7 @@ import { OptionsPage } from '@/components/pages/OptionsPage';
 import { MarketsPage } from '@/components/pages/MarketsPage';
 import { PortfolioPage } from '@/components/pages/PortfolioPage';
 import { PumpsPage } from '@/components/pages/PumpsPage';
+import { SurgesPage } from '@/components/pages/SurgesPage';
 import { SignalsPage } from '@/components/pages/SignalsPage';
 import { SettingsPage } from '@/components/pages/SettingsPage';
 import { WatchlistPage } from '@/components/pages/WatchlistPage';
@@ -29,6 +30,7 @@ export function AppRoutes() {
       <Route path="/portfolio" element={<PortfolioPage />} />
       <Route path="/signals" element={<SignalsPage />} />
       <Route path="/pumps" element={<PumpsPage />} />
+      <Route path="/surges" element={<SurgesPage />} />
       <Route path="/alerts" element={<AlertsPage />} />
       <Route path="/arb" element={<ArbPage />} />
       <Route path="/compare" element={<ComparePage />} />

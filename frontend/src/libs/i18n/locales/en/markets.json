@@ -12,6 +12,16 @@
     "windowWait": "Sampling…",
     "drivers": "{{names}}"
   },
+  "breadth": {
+    "title": "Market breadth",
+    "subtitle": "{{n}} liquid coins — share that is up vs down",
+    "hour": "1h mix",
+    "align": "Vs BTC",
+    "align_with_market": "With market",
+    "align_carrying": "BTC carrying",
+    "align_lagging": "BTC lagging",
+    "align_mixed": "Mixed"
+  },
   "title": "Markets",
   "eyebrow": "Spot · multi-exchange",
   "watchlistResource": "watchlist",

@@ -9,6 +9,8 @@ export const DETAIL_TABS = [
   'overview',
   'orderbook',
   'tape',
+  'flow',
+  'structure',
   'holders',
   'indicators',
   'trade',

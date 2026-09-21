@@ -42,6 +42,8 @@ describe('detail search params', () => {
     const s = parseDetailSearchParams(new URLSearchParams('interval=4h&limit=200'));
     expect(s).toEqual({ interval: '4h', limit: 200, tab: 'overview' });
     expect(parseDetailSearchParams(new URLSearchParams('tab=holders')).tab).toBe('holders');
+    expect(parseDetailSearchParams(new URLSearchParams('tab=flow')).tab).toBe('flow');
+    expect(parseDetailSearchParams(new URLSearchParams('tab=structure')).tab).toBe('structure');
     expect(parseDetailSearchParams(new URLSearchParams('tab=nope')).tab).toBe('overview');
     expect(parseDetailSearchParams(new URLSearchParams('limit=5')).limit).toBe(
       DEFAULT_DETAIL_STATE.limit,

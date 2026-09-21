@@ -18,6 +18,7 @@ describe('App shell navigation', () => {
     expect(links.some((a) => a.getAttribute('href') === '/basis')).toBe(true);
     expect(links.some((a) => a.getAttribute('href') === '/signals')).toBe(true);
     expect(links.some((a) => a.getAttribute('href') === '/pumps')).toBe(true);
+    expect(links.some((a) => a.getAttribute('href') === '/surges')).toBe(true);
     expect(links.some((a) => a.getAttribute('href') === '/ai')).toBe(true);
     expect(links.some((a) => a.getAttribute('href') === '/alerts')).toBe(true);
     expect(links.some((a) => a.getAttribute('href') === '/arb')).toBe(true);

@@ -3,6 +3,7 @@ import marketsEn from './locales/en/markets.json';
 import detailEn from './locales/en/detail.json';
 import watchlistEn from './locales/en/watchlist.json';
 import pumpsEn from './locales/en/pumps.json';
+import surgesEn from './locales/en/surges.json';
 import aiEn from './locales/en/ai.json';
 import alertsEn from './locales/en/alerts.json';
 import compareEn from './locales/en/compare.json';
@@ -20,6 +21,7 @@ import marketsTr from './locales/tr/markets.json';
 import detailTr from './locales/tr/detail.json';
 import watchlistTr from './locales/tr/watchlist.json';
 import pumpsTr from './locales/tr/pumps.json';
+import surgesTr from './locales/tr/surges.json';
 import aiTr from './locales/tr/ai.json';
 import alertsTr from './locales/tr/alerts.json';
 import compareTr from './locales/tr/compare.json';
@@ -44,6 +46,7 @@ export const resources = {
     detail: detailEn,
     watchlist: watchlistEn,
     pumps: pumpsEn,
+    surges: surgesEn,
     ai: aiEn,
     alerts: alertsEn,
     compare: compareEn,
@@ -63,6 +66,7 @@ export const resources = {
     detail: detailTr,
     watchlist: watchlistTr,
     pumps: pumpsTr,
+    surges: surgesTr,
     ai: aiTr,
     alerts: alertsTr,
     compare: compareTr,

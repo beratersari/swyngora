@@ -100,6 +100,87 @@ export type MarketPerpDepthShareDriver = components['schemas']['MarketPerpDepthS
 export type PerpDepthOverviewQuery = NonNullable<
   operations['getMarketPerpDepthOverview']['parameters']['query']
 >;
+export type SymbolMarketQuery = { symbol: string; exchange?: string; window?: string };
+
+export type MarketBreadthWindow = {
+  window?: string;
+  alignment?: string;
+  title?: string;
+  summary?: string;
+  complete?: boolean;
+  counts?: {
+    up?: number;
+    down?: number;
+    flat?: number;
+    total?: number;
+    upPct?: string;
+    downPct?: string;
+    volumeUpPct?: string;
+  };
+  btc?: { changePct?: string };
+  eth?: { changePct?: string };
+};
+export type MarketBreadth = {
+  exchange?: string;
+  quote?: string;
+  universe?: number;
+  summary?: string;
+  note?: string;
+  windows?: MarketBreadthWindow[];
+};
+export type MarketBreadthQuery = { exchange?: string; limit?: number };
+
+export type MarketVolumeSurgeWindow = {
+  window?: string;
+  current?: string;
+  typical?: string;
+  ratio?: string;
+  grade?: string;
+  dominant?: string;
+  complete?: boolean;
+};
+export type MarketVolumeSurgeHit = {
+  symbol?: string;
+  exchange?: string;
+  maxRatio?: string;
+  hottest?: string;
+  grade?: string;
+  dominant?: string;
+  summary?: string;
+  windows?: MarketVolumeSurgeWindow[];
+};
+export type MarketVolumeSurgeScan = {
+  exchange?: string;
+  quote?: string;
+  summary?: string;
+  note?: string;
+  hits?: MarketVolumeSurgeHit[];
+};
+export type MarketVolumeSurgeScanQuery = {
+  exchange?: string;
+  quote?: string;
+  minRatio?: number;
+  limit?: number;
+};
+export type MarketDeskReport = {
+  symbol?: string;
+  exchange?: string;
+  summary?: string;
+  note?: string;
+  combined?: {
+    summary?: string;
+    lean?: string;
+    headline?: { below?: { notional?: string }; above?: { notional?: string }; lean?: string };
+    windows?: { window?: string; summary?: string; ratio?: string; grade?: string; dominant?: string }[];
+  };
+  venues?: {
+    exchange?: string;
+    summary?: string;
+    error?: string;
+    windows?: { window?: string; summary?: string; ratio?: string; grade?: string; dominant?: string }[];
+  }[];
+  windows?: { window?: string; summary?: string }[];
+};
 export type MarketParticipation = components['schemas']['MarketParticipation'];
 export type ParticipationQuery = NonNullable<operations['getMarketParticipation']['parameters']['query']>;
 export type MarketPrintSize = components['schemas']['MarketPrintSize'];

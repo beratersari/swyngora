@@ -24,6 +24,23 @@ vi.mock('@/libs/api', async (importOriginal) => {
       isSuccess: true,
       refetch: vi.fn(),
     }),
+    useGetMarketBreadthQuery: () => ({
+      data: {
+        universe: 80,
+        summary: 'Most coins are up with BTC.',
+        windows: [{ window: '1h', alignment: 'with_market', counts: { upPct: '62', downPct: '28' } }],
+      },
+      currentData: {
+        universe: 80,
+        summary: 'Most coins are up with BTC.',
+        windows: [{ window: '1h', alignment: 'with_market', counts: { upPct: '62', downPct: '28' } }],
+      },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    }),
     useListDelistScheduleQuery: () => ({
       data: { exchange: 'binance', enabled: true, items: [] },
       isSuccess: true,
@@ -83,6 +100,12 @@ describe('MarketsPage', () => {
     await waitFor(() => {
       expect(screen.getByText('BTC/USDT')).toBeInTheDocument();
     });
+  });
+
+  it('shows market breadth next to the list', async () => {
+    renderWithProviders(<MarketsPage />, { routerEntries: ['/markets'] });
+    expect(await screen.findByText('Market breadth')).toBeInTheDocument();
+    expect(screen.getByText('62% up · 28% down')).toBeInTheDocument();
   });
 
   it('shows error state when spot fails with no rows', async () => {

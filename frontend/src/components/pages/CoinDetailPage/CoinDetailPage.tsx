@@ -136,10 +136,12 @@ import {
   pumpEventsToChartMarkers,
   scannerResultsToChartMarkers,
 } from './CoinDetailPage.helpers';
+import { CoinFlowTab } from './CoinFlowTab';
+import { CoinStructureTab } from './CoinStructureTab';
 
 /**
  * Coin detail: header + 24h/supply strip, then CoinMarketCap-style tabs
- * (overview chart, order book, holders, indicators, paper trade).
+ * (overview chart, order book, tape, flow, structure, holders, indicators, paper trade).
 
  * Live candles poll a short window; pan-left pages older bars via endTime.
  * Pump/dump markers: live window is polled; each history page fetches pumps for
@@ -749,7 +751,11 @@ export function CoinDetailPage() {
   const tab: DetailTab = useMemo(() => {
     if (
       isEquity &&
-      (urlState.tab === 'orderbook' || urlState.tab === 'holders' || urlState.tab === 'tape')
+      (urlState.tab === 'orderbook' ||
+        urlState.tab === 'holders' ||
+        urlState.tab === 'tape' ||
+        urlState.tab === 'flow' ||
+        urlState.tab === 'structure')
     ) {
       return DEFAULT_DETAIL_TAB;
     }
@@ -1202,6 +1208,26 @@ export function CoinDetailPage() {
                       />
                     </TabStack>
                   ),
+                },
+                {
+                  key: 'flow',
+                  label: t('detail:tabs.flow'),
+                  children:
+                    tab === 'flow' ? (
+                      <TabStack>
+                        <CoinFlowTab symbol={symbol} exchange={exchangeArg} />
+                      </TabStack>
+                    ) : null,
+                },
+                {
+                  key: 'structure',
+                  label: t('detail:tabs.structure'),
+                  children:
+                    tab === 'structure' ? (
+                      <TabStack>
+                        <CoinStructureTab symbol={symbol} exchange={exchangeArg} />
+                      </TabStack>
+                    ) : null,
                 },
                 {
                   key: 'holders',

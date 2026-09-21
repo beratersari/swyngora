@@ -29,6 +29,8 @@ is `GET /api/v1/market/print-size` — see [`print-size.md`](print-size.md).
 OI delta as a share of this volume is `GET /api/v1/market/participation` —
 see [`participation.md`](participation.md).
 
+Web: coin detail **Flow** tab.
+
 ## Where the code lives
 
 | Layer | Path |
