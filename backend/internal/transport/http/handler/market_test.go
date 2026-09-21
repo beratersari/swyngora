@@ -1396,6 +1396,9 @@ func TestGetPerpDepthOverview_OK(t *testing.T) {
 	if body.RangePct != "1" || body.Known < 1 || body.Bid == "" || len(body.Coins) == 0 {
 		t.Fatalf("%+v", body)
 	}
+	if len(body.Bands) < 2 {
+		t.Fatalf("bands %+v", body.Bands)
+	}
 }
 
 func TestGetPerpDepthOverview_BadLimit(t *testing.T) {

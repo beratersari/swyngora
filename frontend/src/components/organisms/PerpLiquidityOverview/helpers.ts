@@ -1,4 +1,9 @@
-import type { MarketPerpDepthOverview, MarketPerpDepthShareWindow } from '@/libs/api';
+import type {
+  MarketPerpDepthOverview,
+  MarketPerpDepthOverviewBand,
+  MarketPerpDepthShareWindow,
+} from '@/libs/api';
+import { formatCompactAmount } from '@/libs/utils';
 import { PERP_LIQUIDITY_LEADERS } from './constants';
 
 export function leaderCoins(data?: MarketPerpDepthOverview | null) {
@@ -23,4 +28,19 @@ export function driverNames(w?: MarketPerpDepthShareWindow | null): string {
     .slice(0, 3)
     .map((d) => d.base || d.symbol || '');
   return names.filter(Boolean).join(', ');
+}
+
+export function distanceBands(data?: MarketPerpDepthOverview | null): MarketPerpDepthOverviewBand[] {
+  return (data?.bands ?? []).filter((b) => Number(b.total) > 0);
+}
+
+export function bandShareLabel(b?: MarketPerpDepthOverviewBand | null, headline?: string | null): string {
+  if (!b) return '—';
+  const amt = formatCompactAmount(b.total);
+  if (!b.ofHeadlinePct || b.rangePct === headline) return amt;
+  return `${amt} · ${b.ofHeadlinePct}%`;
+}
+
+export function bandLeaderLabel(b?: MarketPerpDepthOverviewBand | null): string {
+  return (b?.leaders ?? []).filter(Boolean).slice(0, 3).join(', ');
 }

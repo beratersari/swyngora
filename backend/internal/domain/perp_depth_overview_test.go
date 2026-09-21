@@ -72,6 +72,56 @@ func TestExplainPerpDepthOverview_NoBook(t *testing.T) {
 	}
 }
 
+func TestBuildPerpDepthOverview_BandsShowNearVsDeep(t *testing.T) {
+	asOf := time.Date(2026, 9, 21, 12, 0, 0, 0, time.UTC)
+	got := BuildPerpDepthOverview("all", 1, []PerpDepthCoinInput{
+		{
+			Symbol: "ETHUSDT", Base: "ETH", Bid: 100, Ask: 100, Lean: PerpDepthLeanEven, Complete: true,
+			Bands: []PerpDepthCoinBandInput{
+				{RangePct: 0.1, Bid: 80, Ask: 20, Complete: true},
+				{RangePct: 1, Bid: 100, Ask: 100, Complete: true},
+			},
+		},
+		{
+			Symbol: "BTCUSDT", Base: "BTC", Bid: 800, Ask: 200, Lean: PerpDepthLeanBid, Complete: true,
+			Bands: []PerpDepthCoinBandInput{
+				{RangePct: 0.1, Bid: 10, Ask: 10, Complete: true},
+				{RangePct: 1, Bid: 800, Ask: 200, Complete: true},
+			},
+		},
+	}, asOf)
+	if len(got.Bands) < 2 {
+		t.Fatalf("bands %+v", got.Bands)
+	}
+	var near, deep PerpDepthOverviewBand
+	for _, b := range got.Bands {
+		if b.RangePct == 0.1 {
+			near = b
+		}
+		if b.RangePct == 1 {
+			deep = b
+		}
+	}
+	if near.Total != 120 || deep.Total != 1200 {
+		t.Fatalf("totals near=%v deep=%v", near.Total, deep.Total)
+	}
+	if near.OfHeadlinePct < 9 || near.OfHeadlinePct > 11 { // 120/1200 = 10
+		t.Fatalf("of headline %v", near.OfHeadlinePct)
+	}
+	if len(near.Leaders) == 0 || near.Leaders[0] != "ETH" {
+		t.Fatalf("near leaders %v", near.Leaders)
+	}
+	if len(deep.Leaders) == 0 || deep.Leaders[0] != "BTC" {
+		t.Fatalf("deep leaders %v", deep.Leaders)
+	}
+	if len(deep.AddedLeaders) == 0 || deep.AddedLeaders[0] != "BTC" {
+		t.Fatalf("added %v", deep.AddedLeaders)
+	}
+	if !strings.Contains(got.Summary, "0.1%") || !strings.Contains(got.Summary, "only") {
+		t.Fatalf("summary %s", got.Summary)
+	}
+}
+
 func TestIsPerpDepthEligible_DropsStables(t *testing.T) {
 	if !IsPerpDepthEligible("SOL") || IsPerpDepthEligible("USDC") || IsPerpDepthEligible("BTCUP") {
 		t.Fatal("eligible")

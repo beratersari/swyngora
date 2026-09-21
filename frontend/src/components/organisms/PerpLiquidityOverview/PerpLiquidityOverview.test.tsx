@@ -20,6 +20,10 @@ describe('PerpLiquidityOverview', () => {
             { symbol: 'ETHUSDT', base: 'ETH', bid: '600000000', ask: '900000000', total: '1500000000', sharePct: '17' },
           ],
           leaders: ['BTC', 'ETH'],
+          bands: [
+            { rangePct: '0.1', total: '80000000', ofHeadlinePct: '8', leaders: ['ETH'] },
+            { rangePct: '1', total: '4200000000', ofHeadlinePct: '100', leaders: ['BTC'] },
+          ],
           windows: [
             {
               window: '1h',
@@ -36,7 +40,8 @@ describe('PerpLiquidityOverview', () => {
     expect(screen.getByText('2.40B')).toBeInTheDocument();
     expect(screen.getByText('1.80B')).toBeInTheDocument();
     expect(screen.getByText('48%')).toBeInTheDocument();
-    expect(screen.getByText('BTC')).toBeInTheDocument();
+    expect(screen.getAllByText('BTC').length).toBeGreaterThan(0);
     expect(screen.getByText('55% → 65% (+10)')).toBeInTheDocument();
+    expect(screen.getByText('80.00M · 8%')).toBeInTheDocument();
   });
 });

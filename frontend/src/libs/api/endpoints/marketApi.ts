@@ -154,6 +154,8 @@ export type {
   MarketPerpDepthCoin,
   MarketPerpDepthShareWindow,
   MarketPerpDepthShareDriver,
+  MarketPerpDepthOverviewBand,
+  MarketPerpDepthOverviewBandCoin,
   MarketBreadth,
   MarketBreadthWindow,
   MarketVolumeSurgeScan,

@@ -146,6 +146,7 @@ func (s *Service) GetPerpDepthOverview(ctx context.Context, exchange string, ran
 				return
 			}
 			in.Bid, in.Ask, in.Lean, in.Complete, in.Error = perpDepthHeadline(rep)
+			in.Bands = perpDepthCoinBands(rep)
 			got[i] = fetched{in: in}
 		}(i, sym)
 	}
@@ -289,6 +290,39 @@ func (s *Service) perpOverviewUniverse(ctx context.Context, limit int) []string 
 		out = kept
 	}
 	return out
+}
+
+func perpDepthCoinBands(rep *domain.PerpDepthReport) []domain.PerpDepthCoinBandInput {
+	v := perpDepthBestVenue(rep)
+	if v == nil {
+		return nil
+	}
+	out := make([]domain.PerpDepthCoinBandInput, 0, len(v.Bands))
+	for _, b := range v.Bands {
+		out = append(out, domain.PerpDepthCoinBandInput{
+			RangePct: b.RangePct,
+			Bid:      b.Below.Notional,
+			Ask:      b.Above.Notional,
+			Complete: b.Complete,
+		})
+	}
+	return out
+}
+
+func perpDepthBestVenue(rep *domain.PerpDepthReport) *domain.PerpDepthVenue {
+	if rep == nil {
+		return nil
+	}
+	if rep.Combined != nil && rep.Combined.Error == "" && (rep.Combined.Headline.Below.Notional+rep.Combined.Headline.Above.Notional > 0 || len(rep.Combined.Bands) > 0) {
+		return rep.Combined
+	}
+	for i := range rep.Venues {
+		v := &rep.Venues[i]
+		if v.Error == "" {
+			return v
+		}
+	}
+	return nil
 }
 
 func perpDepthHeadline(rep *domain.PerpDepthReport) (bid, ask float64, lean string, complete bool, errMsg string) {

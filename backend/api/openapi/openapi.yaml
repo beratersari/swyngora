@@ -1107,10 +1107,13 @@ paths:
         which coins make up the biggest part of that book. Example: **2.4B bid
         vs 1.8B ask within 1% of mid; BTC 48%, ETH 17%**. `windows` compare
         bid vs ask **share of that book** 15m / 1h / 4h ago (e.g. bids 55% →
-        65%) and `drivers` name the coins that moved the mix. Sampled while
-        the desk runs. `exchange=all` (default) adds Binance USD-M and Bybit
-        linear per coin. `rangePct` default **1**. `limit` default **20**
-        (max 40). This is the **futures** book, not spot. Informational only.
+        65%) and `drivers` name the coins that moved the mix. `bands` show
+        how close that book is to mid (e.g. **80M inside 0.1%** is **8% of
+        the 1% book**, growing to 1.0B at 1%) and which coins fill each
+        distance. Sampled while the desk runs. `exchange=all` (default)
+        adds Binance USD-M and Bybit linear per coin. `rangePct` default
+        **1**. `limit` default **20** (max 40). This is the **futures**
+        book, not spot. Informational only.
       operationId: getMarketPerpDepthOverview
       tags: [Market]
       parameters:
@@ -10058,8 +10061,47 @@ components:
         windows:
           type: array
           items: { $ref: '#/components/schemas/MarketPerpDepthShareWindow' }
+        bands:
+          type: array
+          items: { $ref: '#/components/schemas/MarketPerpDepthOverviewBand' }
         summary: { type: string }
         note: { type: string }
+    MarketPerpDepthOverviewBandCoin:
+      type: object
+      description: One coin's share of a ±% market-wide perp band
+      properties:
+        symbol: { type: string }
+        base: { type: string }
+        bid: { type: string }
+        ask: { type: string }
+        total: { type: string }
+        sharePct: { type: string, description: Percent of this band's bid+ask }
+    MarketPerpDepthOverviewBand:
+      type: object
+      description: Market-wide bid/ask inside ±rangePct of each coin's mid
+      properties:
+        rangePct: { type: string }
+        bid: { type: string }
+        ask: { type: string }
+        total: { type: string }
+        bidPct: { type: string }
+        askPct: { type: string }
+        lean: { type: string, enum: [bid, ask, balanced] }
+        ofHeadlinePct: { type: string, description: This band's total as percent of the headline (e.g. 1%) book }
+        addedPct: { type: string, description: Extra size vs the previous tighter band, as percent of the headline book }
+        addedBid: { type: string }
+        addedAsk: { type: string }
+        complete: { type: boolean }
+        leaders:
+          type: array
+          items: { type: string }
+        addedLeaders:
+          type: array
+          items: { type: string }
+        coins:
+          type: array
+          items: { $ref: '#/components/schemas/MarketPerpDepthOverviewBandCoin' }
+        summary: { type: string }
     MarketVolumeShare:
       type: object
       description: How futures volume splits across Binance, Bybit, and OKX

@@ -70,6 +70,18 @@ func TestGetPerpDepthOverview_TotalsAndLeaders(t *testing.T) {
 	if got.Summary == "" || !strings.Contains(strings.ToLower(got.Summary), "bid") {
 		t.Fatalf("summary %s", got.Summary)
 	}
+	if len(got.Bands) < 2 {
+		t.Fatalf("bands %+v", got.Bands)
+	}
+	var near domain.PerpDepthOverviewBand
+	for _, b := range got.Bands {
+		if b.RangePct == 0.1 {
+			near = b
+		}
+	}
+	if near.Total <= 0 || near.OfHeadlinePct <= 0 || near.OfHeadlinePct >= 100 {
+		t.Fatalf("near band %+v", near)
+	}
 }
 
 func TestGetPerpDepthOverview_WindowsFromHistory(t *testing.T) {

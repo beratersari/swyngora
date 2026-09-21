@@ -2,13 +2,14 @@ import { Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { formatCompactAmount } from '@/libs/utils';
-import { driverNames, leaderCoins, mixLine, shareLabel } from './helpers';
+import { bandLeaderLabel, bandShareLabel, distanceBands, driverNames, leaderCoins, mixLine, shareLabel } from './helpers';
 import { CoinList, CoinRow, Panel, Stat, StatsRow } from './PerpLiquidityOverview.styles';
 import type { PerpLiquidityOverviewProps } from './PerpLiquidityOverview.types';
 
 export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLiquidityOverviewProps) {
   const { t } = useTranslation('markets');
   const leaders = leaderCoins(data);
+  const bands = distanceBands(data);
   const leanKey = data?.lean === 'bid' ? 'perpLiq.leanBid' : data?.lean === 'ask' ? 'perpLiq.leanAsk' : 'perpLiq.leanEven';
 
   return (
@@ -62,6 +63,30 @@ export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLi
                 </CoinRow>
               ))}
             </CoinList>
+          ) : null}
+          {bands.length > 0 ? (
+            <>
+              <Text variant="caption" color="secondary">
+                {t('perpLiq.bands')}
+              </Text>
+              <CoinList>
+                {bands.map((b) => (
+                  <CoinRow key={b.rangePct}>
+                    <Text variant="caption" color="secondary">
+                      {t('perpLiq.band', { pct: b.rangePct })}
+                    </Text>
+                    <Text variant="numeric" color="primary" isLoading={isLoading} skeletonWidth="80%">
+                      {bandShareLabel(b, data?.rangePct)}
+                    </Text>
+                    {bandLeaderLabel(b) ? (
+                      <Text variant="caption" color="secondary">
+                        {bandLeaderLabel(b)}
+                      </Text>
+                    ) : null}
+                  </CoinRow>
+                ))}
+              </CoinList>
+            </>
           ) : null}
           {(data?.windows ?? []).length > 0 ? (
             <CoinList>

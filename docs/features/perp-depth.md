@@ -43,6 +43,10 @@ ETH 17%** of 2.4B bid + 1.8B ask).
 - `windows` (15m / 1h / 4h) compare that mix to a sample from then (bids
   55% → 65%, `changePct` +10) and `drivers` rank which coins pushed the
   change. `complete` is false until the desk has sampled that lookback.
+- `bands` (0.1 / 0.25 / 0.5 / 1, up to `rangePct`) show how close that
+  book is to mid. Example: **80M inside 0.1%** is **8% of the 1% book**;
+  by 1% it is 1.0B. `leaders` are who fills that distance; `addedLeaders`
+  are who added the extra size vs the previous tighter band.
 - `exchange=all` (default) adds Binance USD-M and Bybit linear per coin
 - MCP: `get_perp_depth_overview`
 

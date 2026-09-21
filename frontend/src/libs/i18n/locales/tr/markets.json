@@ -10,7 +10,9 @@
     "leanEven": "Dengeli",
     "window": "{{window}} bid payı",
     "windowWait": "Örnekleniyor…",
-    "drivers": "{{names}}"
+    "drivers": "{{names}}",
+    "bands": "Mid'e uzaklık",
+    "band": "±{{pct}}%"
   },
   "breadth": {
     "title": "Piyasa genişliği",

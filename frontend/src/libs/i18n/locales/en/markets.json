@@ -10,7 +10,9 @@
     "leanEven": "Balanced",
     "window": "{{window}} bid share",
     "windowWait": "Sampling…",
-    "drivers": "{{names}}"
+    "drivers": "{{names}}",
+    "bands": "Distance from mid",
+    "band": "±{{pct}}%"
   },
   "breadth": {
     "title": "Market breadth",

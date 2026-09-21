@@ -97,6 +97,8 @@ export type MarketPerpDepthOverview = components['schemas']['MarketPerpDepthOver
 export type MarketPerpDepthCoin = components['schemas']['MarketPerpDepthCoin'];
 export type MarketPerpDepthShareWindow = components['schemas']['MarketPerpDepthShareWindow'];
 export type MarketPerpDepthShareDriver = components['schemas']['MarketPerpDepthShareDriver'];
+export type MarketPerpDepthOverviewBand = components['schemas']['MarketPerpDepthOverviewBand'];
+export type MarketPerpDepthOverviewBandCoin = components['schemas']['MarketPerpDepthOverviewBandCoin'];
 export type PerpDepthOverviewQuery = NonNullable<
   operations['getMarketPerpDepthOverview']['parameters']['query']
 >;

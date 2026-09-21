@@ -523,6 +523,12 @@ func FormatPerpDepthOverview(o *domain.PerpDepthOverview) string {
 	if o.Summary != "" {
 		b.WriteString(o.Summary + "\n")
 	}
+	for _, band := range o.Bands {
+		if band.Summary == "" {
+			continue
+		}
+		b.WriteString("  " + band.Summary + "\n")
+	}
 	for _, w := range o.Windows {
 		if w.Summary == "" {
 			continue

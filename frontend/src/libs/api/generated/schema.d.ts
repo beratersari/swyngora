@@ -6200,8 +6200,41 @@ export interface components {
             leaders?: string[];
             missing?: string[];
             windows?: components["schemas"]["MarketPerpDepthShareWindow"][];
+            bands?: components["schemas"]["MarketPerpDepthOverviewBand"][];
             summary?: string;
             note?: string;
+        };
+        /** @description One coin's share of a ±% market-wide perp band */
+        MarketPerpDepthOverviewBandCoin: {
+            symbol?: string;
+            base?: string;
+            bid?: string;
+            ask?: string;
+            total?: string;
+            /** @description Percent of this band's bid+ask */
+            sharePct?: string;
+        };
+        /** @description Market-wide bid/ask inside ±rangePct of each coin's mid */
+        MarketPerpDepthOverviewBand: {
+            rangePct?: string;
+            bid?: string;
+            ask?: string;
+            total?: string;
+            bidPct?: string;
+            askPct?: string;
+            /** @enum {string} */
+            lean?: "bid" | "ask" | "balanced";
+            /** @description This band's total as percent of the headline (e.g. 1%) book */
+            ofHeadlinePct?: string;
+            /** @description Extra size vs the previous tighter band, as percent of the headline book */
+            addedPct?: string;
+            addedBid?: string;
+            addedAsk?: string;
+            complete?: boolean;
+            leaders?: string[];
+            addedLeaders?: string[];
+            coins?: components["schemas"]["MarketPerpDepthOverviewBandCoin"][];
+            summary?: string;
         };
         /** @description How futures volume splits across Binance, Bybit, and OKX */
         MarketVolumeShare: {

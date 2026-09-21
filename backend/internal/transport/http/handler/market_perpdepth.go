@@ -185,25 +185,54 @@ type perpDepthShareWindowDTO struct {
 	Summary    string                    `json:"summary"`
 }
 
+type perpDepthOverviewBandCoinDTO struct {
+	Symbol   string `json:"symbol"`
+	Base     string `json:"base"`
+	Bid      string `json:"bid"`
+	Ask      string `json:"ask"`
+	Total    string `json:"total"`
+	SharePct string `json:"sharePct"`
+}
+
+type perpDepthOverviewBandDTO struct {
+	RangePct      string                         `json:"rangePct"`
+	Bid           string                         `json:"bid"`
+	Ask           string                         `json:"ask"`
+	Total         string                         `json:"total"`
+	BidPct        string                         `json:"bidPct"`
+	AskPct        string                         `json:"askPct"`
+	Lean          string                         `json:"lean"`
+	OfHeadlinePct string                         `json:"ofHeadlinePct"`
+	AddedPct      string                         `json:"addedPct"`
+	AddedBid      string                         `json:"addedBid"`
+	AddedAsk      string                         `json:"addedAsk"`
+	Complete      bool                           `json:"complete"`
+	Leaders       []string                       `json:"leaders"`
+	AddedLeaders  []string                       `json:"addedLeaders,omitempty"`
+	Coins         []perpDepthOverviewBandCoinDTO `json:"coins"`
+	Summary       string                         `json:"summary"`
+}
+
 type perpDepthOverviewResponse struct {
-	Exchange  string                    `json:"exchange"`
-	RangePct  string                    `json:"rangePct"`
-	Universe  int                       `json:"universe"`
-	Known     int                       `json:"known"`
-	AsOf      time.Time                 `json:"asOf"`
-	Bid       string                    `json:"bid"`
-	Ask       string                    `json:"ask"`
-	Total     string                    `json:"total"`
-	Imbalance string                    `json:"imbalance"`
-	BidPct    string                    `json:"bidPct"`
-	AskPct    string                    `json:"askPct"`
-	Lean      string                    `json:"lean"`
-	Coins     []perpDepthCoinShareDTO   `json:"coins"`
-	Leaders   []string                  `json:"leaders"`
-	Missing   []string                  `json:"missing,omitempty"`
-	Windows   []perpDepthShareWindowDTO `json:"windows"`
-	Summary   string                    `json:"summary"`
-	Note      string                    `json:"note"`
+	Exchange  string                     `json:"exchange"`
+	RangePct  string                     `json:"rangePct"`
+	Universe  int                        `json:"universe"`
+	Known     int                        `json:"known"`
+	AsOf      time.Time                  `json:"asOf"`
+	Bid       string                     `json:"bid"`
+	Ask       string                     `json:"ask"`
+	Total     string                     `json:"total"`
+	Imbalance string                     `json:"imbalance"`
+	BidPct    string                     `json:"bidPct"`
+	AskPct    string                     `json:"askPct"`
+	Lean      string                     `json:"lean"`
+	Coins     []perpDepthCoinShareDTO    `json:"coins"`
+	Leaders   []string                   `json:"leaders"`
+	Missing   []string                   `json:"missing,omitempty"`
+	Windows   []perpDepthShareWindowDTO  `json:"windows"`
+	Bands     []perpDepthOverviewBandDTO `json:"bands"`
+	Summary   string                     `json:"summary"`
+	Note      string                     `json:"note"`
 }
 
 func perpDepthOverviewToDTO(a *domain.PerpDepthOverview) perpDepthOverviewResponse {
@@ -243,11 +272,29 @@ func perpDepthOverviewToDTO(a *domain.PerpDepthOverview) perpDepthOverviewRespon
 		}
 		wins = append(wins, row)
 	}
+	bands := make([]perpDepthOverviewBandDTO, 0, len(a.Bands))
+	for _, b := range a.Bands {
+		rowCoins := make([]perpDepthOverviewBandCoinDTO, 0, len(b.Coins))
+		for _, c := range b.Coins {
+			rowCoins = append(rowCoins, perpDepthOverviewBandCoinDTO{
+				Symbol: c.Symbol, Base: c.Base,
+				Bid: formatHistQty(c.Bid), Ask: formatHistQty(c.Ask), Total: formatHistQty(c.Total),
+				SharePct: formatHistQty(c.SharePct),
+			})
+		}
+		bands = append(bands, perpDepthOverviewBandDTO{
+			RangePct: formatHistQty(b.RangePct), Bid: formatHistQty(b.Bid), Ask: formatHistQty(b.Ask),
+			Total: formatHistQty(b.Total), BidPct: formatHistQty(b.BidPct), AskPct: formatHistQty(b.AskPct),
+			Lean: b.Lean, OfHeadlinePct: formatHistQty(b.OfHeadlinePct), AddedPct: formatHistQty(b.AddedPct),
+			AddedBid: formatHistQty(b.AddedBid), AddedAsk: formatHistQty(b.AddedAsk), Complete: b.Complete,
+			Leaders: b.Leaders, AddedLeaders: b.AddedLeaders, Coins: rowCoins, Summary: b.Summary,
+		})
+	}
 	return perpDepthOverviewResponse{
 		Exchange: a.Exchange, RangePct: formatHistQty(a.RangePct), Universe: a.Universe, Known: a.Known,
 		AsOf: a.AsOf.UTC(), Bid: formatHistQty(a.Bid), Ask: formatHistQty(a.Ask), Total: formatHistQty(a.Total),
 		Imbalance: domain.FormatSignedQty(a.Imbalance), BidPct: formatHistQty(a.BidPct), AskPct: formatHistQty(a.AskPct),
-		Lean: a.Lean, Coins: coins, Leaders: a.Leaders, Missing: a.Missing, Windows: wins,
+		Lean: a.Lean, Coins: coins, Leaders: a.Leaders, Missing: a.Missing, Windows: wins, Bands: bands,
 		Summary: a.Summary, Note: a.Note,
 	}
 }

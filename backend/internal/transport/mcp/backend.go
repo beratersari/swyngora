@@ -797,12 +797,33 @@ func perpDepthOverviewMap(got *domain.PerpDepthOverview) map[string]any {
 		}
 		wins = append(wins, row)
 	}
+	bands := make([]map[string]any, 0, len(got.Bands))
+	for _, b := range got.Bands {
+		rowCoins := make([]map[string]any, 0, len(b.Coins))
+		for _, c := range b.Coins {
+			rowCoins = append(rowCoins, map[string]any{
+				"symbol": c.Symbol, "base": c.Base, "bid": formatQtyMCP(c.Bid), "ask": formatQtyMCP(c.Ask),
+				"total": formatQtyMCP(c.Total), "sharePct": formatQtyMCP(c.SharePct),
+			})
+		}
+		row := map[string]any{
+			"rangePct": formatQtyMCP(b.RangePct), "bid": formatQtyMCP(b.Bid), "ask": formatQtyMCP(b.Ask),
+			"total": formatQtyMCP(b.Total), "bidPct": formatQtyMCP(b.BidPct), "askPct": formatQtyMCP(b.AskPct),
+			"lean": b.Lean, "ofHeadlinePct": formatQtyMCP(b.OfHeadlinePct), "addedPct": formatQtyMCP(b.AddedPct),
+			"addedBid": formatQtyMCP(b.AddedBid), "addedAsk": formatQtyMCP(b.AddedAsk), "complete": b.Complete,
+			"leaders": b.Leaders, "coins": rowCoins, "summary": b.Summary,
+		}
+		if len(b.AddedLeaders) > 0 {
+			row["addedLeaders"] = b.AddedLeaders
+		}
+		bands = append(bands, row)
+	}
 	out := map[string]any{
 		"exchange": got.Exchange, "rangePct": formatQtyMCP(got.RangePct), "universe": got.Universe, "known": got.Known,
 		"asOf": got.AsOf.UTC().Format(time.RFC3339Nano), "bid": formatQtyMCP(got.Bid), "ask": formatQtyMCP(got.Ask),
 		"total": formatQtyMCP(got.Total), "imbalance": domain.FormatSignedQty(got.Imbalance),
 		"bidPct": formatQtyMCP(got.BidPct), "askPct": formatQtyMCP(got.AskPct), "lean": got.Lean,
-		"coins": coins, "leaders": got.Leaders, "windows": wins, "summary": got.Summary, "note": got.Note,
+		"coins": coins, "leaders": got.Leaders, "windows": wins, "bands": bands, "summary": got.Summary, "note": got.Note,
 	}
 	if len(got.Missing) > 0 {
 		out["missing"] = got.Missing

@@ -661,7 +661,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_perp_depth_overview",
-		mcp.WithDescription("How much total perpetual bid vs ask liquidity is waiting across the liquid coins we track, plus which coins make up the biggest part of that book. Example: 2.4B bid vs 1.8B ask within 1% of mid; BTC 48%, ETH 17%. windows (15m/1h/4h) compare bid vs ask share of that book (bids 55% → 65%) and drivers name the coins that moved the mix. Sampled while the desk runs. exchange=all (default) adds Binance USD-M and Bybit linear per coin. rangePct default 1. limit default 20 (max 40). Futures book, not spot. Not financial advice."),
+		mcp.WithDescription("How much total perpetual bid vs ask liquidity is waiting across the liquid coins we track, plus which coins make up the biggest part of that book. Example: 2.4B bid vs 1.8B ask within 1% of mid; BTC 48%, ETH 17%. bands show how close that book is to mid (0.1% may be 80M / 8% of the 1% book while 1% is 1.0B) and which coins fill each distance. windows (15m/1h/4h) compare bid vs ask share of that book (bids 55% → 65%) and drivers name the coins that moved the mix. Sampled while the desk runs. exchange=all (default) adds Binance USD-M and Bybit linear per coin. rangePct default 1. limit default 20 (max 40). Futures book, not spot. Not financial advice."),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 		mcp.WithNumber("rangePct", mcp.Description("Headline ±% of mid (default 1, max 5)")),
 		mcp.WithNumber("limit", mcp.Description("How many liquid perps (default 20, max 40)")),
