@@ -43,6 +43,7 @@ type DataPort interface {
 	GetLiquidationCascade(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	ScanLiquidationCascades(ctx context.Context, exchange string) (json.RawMessage, error)
 	GetOpenInterest(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetPerpDepth(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error)
 	GetOptions(ctx context.Context, exchange, asset string) (json.RawMessage, error)
 	GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFundingArb(ctx context.Context, symbol string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
@@ -608,7 +609,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_options_overview",
-		mcp.WithDescription("BTC/ETH options desk from Deribit: listed open interest, 24h volume, put/call ratios, DVOL (30-day implied vol), ATM IV near 30 days, IV term structure, call/put skew, expiry OI, per-expiry 1-SD expected move plus max pain, dealer gamma (gamma.netUsd / callUsd / putUsd: USD delta per 1% spot move; short calls / long puts; regime long=stabler, short=faster), gamma flip (price where net GEX crosses zero; flipSide above/below), history (1h/4h/24h/7d change + series for OI, put/call, DVOL, net GEX, flip vs spot; windows also say if regime or flip-side changed), moves (unusual short-window OI / put-call / IV vs that series' typical, plus gamma_to_short / gamma_to_long / flip_crossed_up / flip_crossed_down), and vsMarket findings when implied vol or put/call lean disagrees with live spot range or futures funding / account long-short. asset is BTC or ETH (BTCUSDT is accepted). Not Binance/Bybit futures OI. Informational only."),
+		mcp.WithDescription("BTC/ETH options desk from Deribit: listed open interest, 24h volume, put/call ratios, DVOL (30-day implied vol), 30-day realized vol from Binance daily closes, volCompare (dvol / realized / gap in vol points — e.g. DVOL 70 vs realized 45 is gap +25), ATM IV near 30 days, IV term structure, call/put skew, expiry OI, per-expiry 1-SD expected move plus max pain, dealer gamma (gamma.netUsd / callUsd / putUsd: USD delta per 1% spot move; short calls / long puts; regime long=stabler, short=faster), gamma flip (price where net GEX crosses zero; flipSide above/below), history (1h/4h/24h/7d change + series for OI, put/call, DVOL, 30-day realized, volGap, net GEX, flip vs spot; windows also say if regime or flip-side changed), moves (unusual short-window OI / put-call / IV vs that series' typical, plus gamma_to_short / gamma_to_long / flip_crossed_up / flip_crossed_down), and vsMarket findings when implied vol or put/call lean disagrees with live spot range or futures funding / account long-short. asset is BTC or ETH (BTCUSDT is accepted). Not Binance/Bybit futures OI. Informational only."),
 		mcp.WithString("asset", mcp.Required(), mcp.Description("BTC or ETH (or BTCUSDT / ETHUSDT)")),
 		mcp.WithString("exchange", mcp.Description("deribit (default)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -633,6 +634,23 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetOpenInterest(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_perp_depth",
+		mcp.WithDescription("How much perpetual liquidity is waiting below vs above the price. For example 40M bid within 1% below mid vs 15M ask above. Binance USD-M and Bybit linear separately plus combined. rangePct default 1; bands also include 0.1/0.25/0.5/2. Combined adds each venue's own ±% band. This is the futures book, not spot. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithNumber("rangePct", mcp.Description("Headline ±% of mid (default 1, max 5)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetPerpDepth(ctx, req.GetString("exchange", "all"), symbol, req.GetFloat("rangePct", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

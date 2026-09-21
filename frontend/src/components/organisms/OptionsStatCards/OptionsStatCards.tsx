@@ -76,7 +76,11 @@ export function OptionsStatCards({ data, isLoading }: OptionsStatCardsProps) {
           {vals.dvol}
         </Text>
         <Text variant="caption" color="secondary">
-          {vals.dvolChange ? t('stats.dvolChange', { value: vals.dvolChange }) : t('stats.ivHint')}
+          {vals.realized !== '—' && vals.volGap
+            ? t('stats.volGap', { realized: vals.realized, gap: vals.volGap })
+            : vals.dvolChange
+              ? t('stats.dvolChange', { value: vals.dvolChange })
+              : t('stats.ivHint')}
         </Text>
       </Card>
       <Card>

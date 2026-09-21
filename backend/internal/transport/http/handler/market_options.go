@@ -105,35 +105,36 @@ type optionsSkewDTO struct {
 }
 
 type optionsResponse struct {
-	Asset           string               `json:"asset"`
-	Exchange        string               `json:"exchange"`
-	IndexPrice      string               `json:"indexPrice"`
-	AsOf            time.Time            `json:"asOf"`
-	OpenInterest    string               `json:"openInterest"`
-	OpenInterestUsd string               `json:"openInterestUsd"`
-	Volume          string               `json:"volume"`
-	VolumeUsd       string               `json:"volumeUsd"`
-	CallOi          string               `json:"callOi"`
-	PutOi           string               `json:"putOi"`
-	CallVolume      string               `json:"callVolume"`
-	PutVolume       string               `json:"putVolume"`
-	PutCallOi       string               `json:"putCallOi,omitempty"`
-	PutCallVolume   string               `json:"putCallVolume,omitempty"`
-	Lean            string               `json:"lean,omitempty"`
-	Dvol            string               `json:"dvol,omitempty"`
-	DvolChange24h   string               `json:"dvolChange24h,omitempty"`
-	Atm             *optionsATMDTO       `json:"atm,omitempty"`
-	TermStructure   []optionsVolPointDTO `json:"termStructure"`
-	Skew            *optionsSkewDTO      `json:"skew,omitempty"`
-	Expiries        []optionsExpiryDTO   `json:"expiries"`
-	Listed          int                  `json:"listed"`
-	WithOi          int                  `json:"withOi"`
-	WithIv          int                  `json:"withIv"`
-	Gamma           *optionsGammaDTO     `json:"gamma,omitempty"`
-	VsMarket        *optionsVsMarketDTO  `json:"vsMarket,omitempty"`
-	History         *optionsHistoryDTO   `json:"history,omitempty"`
-	Moves           *optionsMovesDTO     `json:"moves,omitempty"`
-	Note            string               `json:"note"`
+	Asset           string                `json:"asset"`
+	Exchange        string                `json:"exchange"`
+	IndexPrice      string                `json:"indexPrice"`
+	AsOf            time.Time             `json:"asOf"`
+	OpenInterest    string                `json:"openInterest"`
+	OpenInterestUsd string                `json:"openInterestUsd"`
+	Volume          string                `json:"volume"`
+	VolumeUsd       string                `json:"volumeUsd"`
+	CallOi          string                `json:"callOi"`
+	PutOi           string                `json:"putOi"`
+	CallVolume      string                `json:"callVolume"`
+	PutVolume       string                `json:"putVolume"`
+	PutCallOi       string                `json:"putCallOi,omitempty"`
+	PutCallVolume   string                `json:"putCallVolume,omitempty"`
+	Lean            string                `json:"lean,omitempty"`
+	Dvol            string                `json:"dvol,omitempty"`
+	DvolChange24h   string                `json:"dvolChange24h,omitempty"`
+	Atm             *optionsATMDTO        `json:"atm,omitempty"`
+	TermStructure   []optionsVolPointDTO  `json:"termStructure"`
+	Skew            *optionsSkewDTO       `json:"skew,omitempty"`
+	Expiries        []optionsExpiryDTO    `json:"expiries"`
+	Listed          int                   `json:"listed"`
+	WithOi          int                   `json:"withOi"`
+	WithIv          int                   `json:"withIv"`
+	Gamma           *optionsGammaDTO      `json:"gamma,omitempty"`
+	VolCompare      *optionsVolCompareDTO `json:"volCompare,omitempty"`
+	VsMarket        *optionsVsMarketDTO   `json:"vsMarket,omitempty"`
+	History         *optionsHistoryDTO    `json:"history,omitempty"`
+	Moves           *optionsMovesDTO      `json:"moves,omitempty"`
+	Note            string                `json:"note"`
 }
 
 type optionsMoveDTO struct {
@@ -168,6 +169,8 @@ type optionsHistoryWindowDTO struct {
 	Oi          *optionsHistoryChangeDTO `json:"oi,omitempty"`
 	PutCall     *optionsHistoryChangeDTO `json:"putCall,omitempty"`
 	Dvol        *optionsHistoryChangeDTO `json:"dvol,omitempty"`
+	Realized    *optionsHistoryChangeDTO `json:"realized,omitempty"`
+	VolGap      *optionsHistoryChangeDTO `json:"volGap,omitempty"`
 	AtmIv       *optionsHistoryChangeDTO `json:"atmIv,omitempty"`
 	Gamma       *optionsHistoryChangeDTO `json:"gamma,omitempty"`
 	Flip        *optionsHistoryChangeDTO `json:"flip,omitempty"`
@@ -184,6 +187,8 @@ type optionsHistoryPointDTO struct {
 	OpenInterestUsd string    `json:"openInterestUsd,omitempty"`
 	PutCallOi       string    `json:"putCallOi,omitempty"`
 	Dvol            string    `json:"dvol,omitempty"`
+	RealizedVol     string    `json:"realizedVol,omitempty"`
+	VolGap          string    `json:"volGap,omitempty"`
 	AtmIv           string    `json:"atmIv,omitempty"`
 	IndexPrice      string    `json:"indexPrice,omitempty"`
 	GammaNetUsd     string    `json:"gammaNetUsd,omitempty"`
@@ -198,6 +203,16 @@ type optionsHistoryDTO struct {
 	From    time.Time                 `json:"from"`
 	To      time.Time                 `json:"to"`
 	Note    string                    `json:"note,omitempty"`
+}
+
+type optionsVolCompareDTO struct {
+	Dvol     string `json:"dvol,omitempty"`
+	Realized string `json:"realized,omitempty"`
+	Gap      string `json:"gap,omitempty"`
+	Days     int    `json:"days"`
+	Bars     int    `json:"bars,omitempty"`
+	Lean     string `json:"lean,omitempty"`
+	Summary  string `json:"summary,omitempty"`
 }
 
 type optionsGammaLevelDTO struct {
@@ -358,6 +373,7 @@ func optionsToDTO(a *domain.OptionsSnapshot) optionsResponse {
 		Listed:          a.Listed,
 		WithOi:          a.WithOI,
 		WithIv:          a.WithIV,
+		VolCompare:      optionsVolCompareToDTO(a.VolCompare),
 		VsMarket:        optionsVsMarketToDTO(a.VsMarket),
 		History:         optionsHistoryToDTO(a.History),
 		Moves:           optionsMovesToDTO(a.Moves),
@@ -411,6 +427,23 @@ func optionsToDTO(a *domain.OptionsSnapshot) optionsResponse {
 			sk.WingCallIv = formatHistQty(a.Skew.WingCallIV)
 		}
 		out.Skew = sk
+	}
+	return out
+}
+
+func optionsVolCompareToDTO(v *domain.OptionsVolCompare) *optionsVolCompareDTO {
+	if v == nil || (!v.HasDVOL && !v.HasRealized) {
+		return nil
+	}
+	out := &optionsVolCompareDTO{Days: v.Days, Bars: v.Bars, Lean: v.Lean, Summary: v.Summary}
+	if v.HasDVOL {
+		out.Dvol = formatHistQty(v.DVOL)
+	}
+	if v.HasRealized {
+		out.Realized = formatHistQty(v.Realized)
+	}
+	if v.HasGap {
+		out.Gap = domain.FormatSignedQty(v.Gap)
 	}
 	return out
 }
@@ -512,6 +545,14 @@ func optionsHistoryToDTO(h *domain.OptionsHistory) *optionsHistoryDTO {
 			c := snapshotChangeToOptionsDTO(w.DVOL)
 			row.Dvol = &c
 		}
+		if w.Realized.Complete {
+			c := snapshotChangeToOptionsDTO(w.Realized)
+			row.Realized = &c
+		}
+		if w.VolGap.Complete {
+			c := snapshotChangeToOptionsDTO(w.VolGap)
+			row.VolGap = &c
+		}
 		if w.AtmIV.Complete {
 			c := snapshotChangeToOptionsDTO(w.AtmIV)
 			row.AtmIv = &c
@@ -543,6 +584,12 @@ func optionsHistoryToDTO(h *domain.OptionsHistory) *optionsHistoryDTO {
 		}
 		if p.HasDVOL {
 			row.Dvol = formatHistQty(p.DVOL)
+		}
+		if p.HasRealized {
+			row.RealizedVol = formatHistQty(p.Realized)
+		}
+		if p.HasVolGap {
+			row.VolGap = domain.FormatSignedQty(p.VolGap)
 		}
 		if p.HasAtmIV {
 			row.AtmIv = formatHistQty(p.AtmIV)

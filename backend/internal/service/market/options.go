@@ -51,7 +51,9 @@ func (s *Service) GetOptions(ctx context.Context, exchange, asset string) (*doma
 	snap := domain.BuildOptionsSnapshot(asset, quotes, index, dvol, time.Now().UTC())
 	snap.Exchange = ex
 	s.persistOptionsSample(ctx, snap)
-	s.attachOptionsHistory(ctx, snap)
+	bars := s.optionsSpotBars(ctx, asset)
+	domain.AttachOptionsVolCompare(snap, bars)
+	s.attachOptionsHistory(ctx, snap, bars)
 	if tape := s.optionsMarketTape(ctx, asset); tape.Usable() {
 		snap.VsMarket = domain.CompareOptionsToMarket(snap, tape)
 	}
@@ -69,7 +71,7 @@ func (s *Service) persistOptionsSample(ctx context.Context, snap *domain.Options
 	_, _ = s.optionsHist.InsertSample(ctx, rec)
 }
 
-func (s *Service) attachOptionsHistory(ctx context.Context, snap *domain.OptionsSnapshot) {
+func (s *Service) attachOptionsHistory(ctx context.Context, snap *domain.OptionsSnapshot, bars []domain.OHLCBar) {
 	if s == nil || snap == nil {
 		return
 	}
@@ -90,7 +92,19 @@ func (s *Service) attachOptionsHistory(ctx context.Context, snap *domain.Options
 			dvol = got
 		}
 	}
-	snap.History = domain.BuildOptionsHistory(snap, samples, dvol, now)
+	snap.History = domain.BuildOptionsHistory(snap, samples, dvol, bars, now)
+}
+
+func (s *Service) optionsSpotBars(ctx context.Context, asset string) []domain.OHLCBar {
+	if s == nil {
+		return nil
+	}
+	symbol := domain.OptionsSpotSymbol(asset)
+	c, err := s.GetCandles(ctx, string(domain.DefaultExchange), symbol, string(domain.Interval1d), domain.OptionsRealizedCandleLimit, nil, nil)
+	if err != nil {
+		return nil
+	}
+	return domain.BarsFromCandles(c)
 }
 
 // SampleOptionsHistory records BTC and ETH desk prints and purges stale rows.

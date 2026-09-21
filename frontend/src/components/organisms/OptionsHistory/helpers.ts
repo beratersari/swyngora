@@ -19,7 +19,10 @@ export function formatHistoryDelta(changePct: string | undefined): string {
   return `${sign}${n.toFixed(1)}%`;
 }
 
-function pointValue(row: MarketOptionsHistoryPoint, metric: OptionsHistoryMetric | 'index'): number | null {
+function pointValue(
+  row: MarketOptionsHistoryPoint,
+  metric: OptionsHistoryMetric | 'index' | 'realized' | 'gap',
+): number | null {
   const raw =
     metric === 'oi'
       ? (row.openInterestUsd ?? row.openInterest)
@@ -31,7 +34,11 @@ function pointValue(row: MarketOptionsHistoryPoint, metric: OptionsHistoryMetric
             ? row.gammaFlip
             : metric === 'index'
               ? row.indexPrice
-              : row.dvol;
+              : metric === 'realized'
+                ? row.realizedVol
+                : metric === 'gap'
+                  ? row.volGap
+                  : row.dvol;
   if (raw == null || raw === '') return null;
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
@@ -39,7 +46,7 @@ function pointValue(row: MarketOptionsHistoryPoint, metric: OptionsHistoryMetric
 
 export function toHistoryLine(
   points: MarketOptionsHistoryPoint[] | undefined,
-  metric: OptionsHistoryMetric | 'index',
+  metric: OptionsHistoryMetric | 'index' | 'realized' | 'gap',
   range: OptionsHistoryRange,
   nowMs = Date.now(),
 ): HistoryLinePoint[] {
@@ -85,6 +92,11 @@ export function windowChipLabel(
     }
     return { delta: formatHistoryDelta(win?.flip?.changePct) };
   }
+  if (metric === 'iv') {
+    const gap = formatVolPts(win?.volGap?.change);
+    if (gap) return { delta: gap };
+    return { delta: formatHistoryDelta(win?.dvol?.changePct) };
+  }
   const delta =
     metric === 'oi'
       ? formatHistoryDelta(win?.oi?.changePct)
@@ -92,4 +104,12 @@ export function windowChipLabel(
         ? formatHistoryDelta(win?.putCall?.changePct)
         : formatHistoryDelta(win?.dvol?.changePct);
   return { delta };
+}
+
+export function formatVolPts(change: string | undefined): string {
+  if (change == null || change === '') return '';
+  const n = Number(change);
+  if (!Number.isFinite(n)) return '';
+  const sign = n > 0 ? '+' : '';
+  return `${sign}${n.toFixed(1)}`;
 }

@@ -3,6 +3,7 @@ package market
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -77,6 +78,65 @@ func TestGetOptions(t *testing.T) {
 	if got.ATM == nil || got.ATM.IV != 51 {
 		t.Fatalf("atm=%+v", got.ATM)
 	}
+}
+
+func TestGetOptions_AttachesVolCompare(t *testing.T) {
+	exp := time.Now().UTC().Add(30 * 24 * time.Hour).Truncate(time.Hour)
+	now := time.Now().UTC()
+	mkt := &fakeMarket{candles: dailyVolCandles(now, 40)}
+	svc := New(mkt, nil).WithOptionsChain(stubOptions{
+		index: 100000,
+		dvol:  domain.OptionsDVOL{Value: 70, HasChange: true, Change24h: 1},
+		quotes: []domain.OptionQuote{{
+			Asset: "BTC", Expiry: exp, Strike: 100000, Side: domain.OptionSideCall,
+			OpenInterest: 10, Volume: 1, MarkIV: 70, Underlying: 100000,
+		}, {
+			Asset: "BTC", Expiry: exp, Strike: 100000, Side: domain.OptionSidePut,
+			OpenInterest: 20, Volume: 2, MarkIV: 72, Underlying: 100000,
+		}},
+	})
+	got, err := svc.GetOptions(context.Background(), "", "BTC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.VolCompare == nil || !got.VolCompare.HasGap || got.VolCompare.DVOL != 70 {
+		t.Fatalf("volCompare=%+v", got.VolCompare)
+	}
+	if got.VolCompare.Gap != got.VolCompare.DVOL-got.VolCompare.Realized {
+		t.Fatalf("gap=%+v", got.VolCompare)
+	}
+	if got.History == nil {
+		t.Fatal("history")
+	}
+	var saw bool
+	for _, p := range got.History.Points {
+		if p.HasVolGap {
+			saw = true
+			break
+		}
+	}
+	if !saw {
+		t.Fatalf("history points missing volGap %+v", got.History.Points)
+	}
+}
+
+func dailyVolCandles(at time.Time, n int) []domain.Candle {
+	start := at.UTC().Truncate(24*time.Hour).AddDate(0, 0, -n)
+	px := 80000.0
+	out := make([]domain.Candle, 0, n)
+	for i := 0; i < n; i++ {
+		if i%3 == 0 {
+			px *= 1.02
+		} else if i%3 == 1 {
+			px *= 0.985
+		} else {
+			px *= 1.004
+		}
+		s := fmt.Sprintf("%.4f", px)
+		t := start.AddDate(0, 0, i)
+		out = append(out, domain.Candle{OpenTime: t, Open: s, High: s, Low: s, Close: s})
+	}
+	return out
 }
 
 func TestGetOptions_BadAsset(t *testing.T) {

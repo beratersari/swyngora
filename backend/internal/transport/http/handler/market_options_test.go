@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -65,6 +66,47 @@ func TestGetOptions_OK(t *testing.T) {
 	}
 	if body.VsMarket != nil && len(body.VsMarket.Findings) > 0 {
 		t.Fatalf("stub tape should not invent vs-market findings %+v", body.VsMarket)
+	}
+}
+
+type dailyVolMarket struct{ stubMarket }
+
+func (dailyVolMarket) GetCandles(context.Context, domain.CandleQuery) ([]domain.Candle, error) {
+	now := time.Now().UTC().Truncate(24 * time.Hour)
+	px := 80000.0
+	out := make([]domain.Candle, 0, 40)
+	for i := 0; i < 40; i++ {
+		if i%3 == 0 {
+			px *= 1.02
+		} else if i%3 == 1 {
+			px *= 0.985
+		} else {
+			px *= 1.004
+		}
+		s := fmt.Sprintf("%.4f", px)
+		t := now.AddDate(0, 0, i-39)
+		out = append(out, domain.Candle{OpenTime: t, Open: s, High: s, Low: s, Close: s})
+	}
+	return out, nil
+}
+
+func TestGetOptions_VolCompare(t *testing.T) {
+	h := NewMarketHandler(market.New(dailyVolMarket{}, stubSupply{}).WithOptionsChain(stubOptionsChain{}))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/options?asset=BTC", nil)
+	rr := httptest.NewRecorder()
+	h.GetOptions(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body optionsResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.VolCompare == nil || body.VolCompare.Dvol == "" || body.VolCompare.Realized == "" || body.VolCompare.Gap == "" {
+		t.Fatalf("volCompare=%+v", body.VolCompare)
+	}
+	if body.VolCompare.Days != 30 {
+		t.Fatalf("days=%d", body.VolCompare.Days)
 	}
 }
 

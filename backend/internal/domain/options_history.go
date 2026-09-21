@@ -70,6 +70,10 @@ type OptionsHistoryPoint struct {
 	HasPutCallOI    bool
 	DVOL            float64
 	HasDVOL         bool
+	Realized        float64
+	HasRealized     bool
+	VolGap          float64
+	HasVolGap       bool
 	AtmIV           float64
 	HasAtmIV        bool
 	IndexPrice      float64
@@ -88,6 +92,8 @@ type OptionsHistoryWindow struct {
 	OI                SnapshotChange
 	PutCall           SnapshotChange
 	DVOL              SnapshotChange
+	Realized          SnapshotChange
+	VolGap            SnapshotChange
 	AtmIV             SnapshotChange
 	Gamma             SnapshotChange
 	Flip              SnapshotChange
@@ -167,7 +173,7 @@ func OptionsSampleFromSnapshot(snap *OptionsSnapshot) (OptionsSample, bool) {
 }
 
 // BuildOptionsHistory folds local samples + DVOL candles into windows and a chart series.
-func BuildOptionsHistory(snap *OptionsSnapshot, samples []OptionsSample, dvol []OptionsDVOLPoint, now time.Time) *OptionsHistory {
+func BuildOptionsHistory(snap *OptionsSnapshot, samples []OptionsSample, dvol []OptionsDVOLPoint, bars []OHLCBar, now time.Time) *OptionsHistory {
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
@@ -178,9 +184,10 @@ func BuildOptionsHistory(snap *OptionsSnapshot, samples []OptionsSample, dvol []
 		Points:  nil,
 		From:    from,
 		To:      now,
-		Note:    "Open interest, put/call, and dealer gamma are sampled while the desk runs (5-minute buckets). Implied vol also uses Deribit DVOL history. Informational only — not financial advice.",
+		Note:    "Open interest, put/call, and dealer gamma are sampled while the desk runs (5-minute buckets). Implied vol uses Deribit DVOL history. 30-day realized vol is close-to-close from Binance daily candles; volGap is DVOL minus realized. Informational only — not financial advice.",
 	}
 	merged := mergeOptionsHistory(snap, samples, dvol, from, now)
+	attachRealizedToHistory(merged, bars)
 	out.Points = downsampleOptionsHistory(merged, OptionsHistoryMaxPoints)
 	latest := optionsHistoryLatest(merged)
 	for _, spec := range OptionsHistoryWindows {
@@ -197,6 +204,12 @@ func BuildOptionsHistory(snap *OptionsSnapshot, samples []OptionsSample, dvol []
 		}
 		if latest.HasDVOL && past.HasDVOL {
 			win.DVOL = ChangeFromValues(spec.ID, latest.DVOL, past.DVOL, true)
+		}
+		if latest.HasRealized && past.HasRealized {
+			win.Realized = ChangeFromValues(spec.ID, latest.Realized, past.Realized, true)
+		}
+		if latest.HasVolGap && past.HasVolGap {
+			win.VolGap = ChangeFromValues(spec.ID, latest.VolGap, past.VolGap, true)
 		}
 		if latest.HasAtmIV && past.HasAtmIV {
 			win.AtmIV = ChangeFromValues(spec.ID, latest.AtmIV, past.AtmIV, true)
@@ -221,7 +234,8 @@ func BuildOptionsHistory(snap *OptionsSnapshot, samples []OptionsSample, dvol []
 				win.HasFlipSideChange = true
 			}
 		}
-		win.Complete = win.OI.Complete || win.PutCall.Complete || win.DVOL.Complete || win.AtmIV.Complete ||
+		win.Complete = win.OI.Complete || win.PutCall.Complete || win.DVOL.Complete || win.Realized.Complete ||
+			win.VolGap.Complete || win.AtmIV.Complete ||
 			win.Gamma.Complete || win.Flip.Complete || win.HasRegimeChange || win.HasFlipSideChange
 		out.Windows = append(out.Windows, win)
 	}
@@ -318,7 +332,7 @@ func mergeOptionsHistory(snap *OptionsSnapshot, samples []OptionsSample, dvol []
 	}
 	out := make([]OptionsHistoryPoint, 0, len(byTs))
 	for _, p := range byTs {
-		if p.HasOI || p.HasPutCallOI || p.HasDVOL || p.HasAtmIV || p.HasGamma || p.HasGammaFlip {
+		if p.HasOI || p.HasPutCallOI || p.HasDVOL || p.HasRealized || p.HasVolGap || p.HasAtmIV || p.HasGamma || p.HasGammaFlip {
 			out = append(out, *p)
 		}
 	}

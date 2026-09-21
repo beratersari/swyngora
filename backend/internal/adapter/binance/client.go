@@ -43,38 +43,40 @@ type Client struct {
 	// (those were the main reason the UI saw ~30–40s between real updates).
 	exchangeSpot *cache.TTL[[]spotSymbolMeta]
 	// productMeta holds non-crypto exclusion bases + tags-by-base from one catalog fetch.
-	productMeta  *cache.TTL[*productMetaSnapshot]
-	supply       *cache.TTL[*domain.AssetSupply]
-	catalog      *cache.TTL[*domain.AssetCatalogEntry]
-	spotSF       singleflight.Group
-	supplySF     singleflight.Group
-	metaSF       singleflight.Group
-	candleSF     singleflight.Group
-	tickerSF     singleflight.Group
-	orderBookSF  singleflight.Group
-	depth        *DepthHub
-	depthOnce    sync.Once
-	depthWait    time.Duration
-	wsURL        string
-	wsDial       wsDialer
-	depthIdle    time.Duration
-	futuresBase  string // USD-M REST (fapi.binance.com)
-	oiCache      *cache.TTL[*domain.OpenInterestSeries]
-	oiSF         singleflight.Group
-	fundingCache *cache.TTL[*domain.FundingSeries]
-	fundingSF    singleflight.Group
-	lsCache      *cache.TTL[*domain.LongShortSeries]
-	lsSF         singleflight.Group
-	takerCache   *cache.TTL[*domain.TakerVenueFlow]
-	takerSF      singleflight.Group
-	basisCache   *cache.TTL[*domain.BasisQuote]
-	basisSF      singleflight.Group
-	futMeta      *cache.TTL[[]futContractMeta]
-	futMetaSF    singleflight.Group
-	windowCache  *cache.TTL[[]domain.WindowChange]
-	windowSF     singleflight.Group
-	printCache   *cache.TTL[[]domain.TakerPrint]
-	printSF      singleflight.Group
+	productMeta   *cache.TTL[*productMetaSnapshot]
+	supply        *cache.TTL[*domain.AssetSupply]
+	catalog       *cache.TTL[*domain.AssetCatalogEntry]
+	spotSF        singleflight.Group
+	supplySF      singleflight.Group
+	metaSF        singleflight.Group
+	candleSF      singleflight.Group
+	tickerSF      singleflight.Group
+	orderBookSF   singleflight.Group
+	depth         *DepthHub
+	depthOnce     sync.Once
+	depthWait     time.Duration
+	wsURL         string
+	wsDial        wsDialer
+	depthIdle     time.Duration
+	futuresBase   string // USD-M REST (fapi.binance.com)
+	oiCache       *cache.TTL[*domain.OpenInterestSeries]
+	oiSF          singleflight.Group
+	fundingCache  *cache.TTL[*domain.FundingSeries]
+	fundingSF     singleflight.Group
+	lsCache       *cache.TTL[*domain.LongShortSeries]
+	lsSF          singleflight.Group
+	takerCache    *cache.TTL[*domain.TakerVenueFlow]
+	takerSF       singleflight.Group
+	basisCache    *cache.TTL[*domain.BasisQuote]
+	basisSF       singleflight.Group
+	futMeta       *cache.TTL[[]futContractMeta]
+	futMetaSF     singleflight.Group
+	windowCache   *cache.TTL[[]domain.WindowChange]
+	windowSF      singleflight.Group
+	printCache    *cache.TTL[[]domain.TakerPrint]
+	printSF       singleflight.Group
+	futDepthCache *cache.TTL[*domain.RawOrderBook]
+	futDepthSF    singleflight.Group
 }
 
 // Options configures the Binance client.
@@ -165,6 +167,9 @@ func NewClient(opts Options) *Client {
 	}
 	if c.printCache == nil {
 		c.printCache = cache.New[[]domain.TakerPrint](15 * time.Second)
+	}
+	if c.futDepthCache == nil {
+		c.futDepthCache = cache.New[*domain.RawOrderBook](3 * time.Second)
 	}
 	return c
 }

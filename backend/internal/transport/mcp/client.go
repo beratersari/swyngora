@@ -344,6 +344,19 @@ func (c *APIClient) GetOpenInterest(ctx context.Context, exchange, symbol string
 	return c.get(ctx, "/api/v1/market/open-interest", q)
 }
 
+// GetPerpDepth returns bid-below vs ask-above perpetual depth.
+func (c *APIClient) GetPerpDepth(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if rangePct > 0 {
+		q.Set("rangePct", strconv.FormatFloat(rangePct, 'f', -1, 64))
+	}
+	return c.get(ctx, "/api/v1/market/perp-depth", q)
+}
+
 // GetFundingRate returns the predicted next funding rate plus recent settlements.
 func (c *APIClient) GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error) {
 	q := url.Values{}

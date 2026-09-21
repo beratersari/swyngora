@@ -585,6 +585,18 @@ class OpenInterestInput(BaseModel):
     )
 
 
+class PerpDepthInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|all (default all = both + combined)",
+    )
+    range_pct: float = Field(
+        default=1,
+        description="Headline ± percent of mid (default 1, max 5)",
+    )
+
+
 class LiquidationHuntInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -2130,6 +2142,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             "/api/v1/market/open-interest",
             {"symbol": symbol, "exchange": exchange},
         )
+
+    def get_perp_depth(symbol: str, exchange: str = "all", range_pct: float = 1) -> str:
+        params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
+        if range_pct:
+            params["rangePct"] = range_pct
+        return http.get("/api/v1/market/perp-depth", params)
 
     def estimate_liquidation_hunt(symbol: str, exchange: str = "all") -> str:
         return http.get(
@@ -4529,13 +4547,15 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="get_options_overview",
             description=(
                 "BTC/ETH options desk from Deribit: listed open interest, 24h volume, "
-                "put/call ratios, DVOL (30-day implied vol), ATM IV near 30 days, "
+                "put/call ratios, DVOL (30-day implied vol), 30-day realized vol from "
+                "Binance daily closes, volCompare (dvol / realized / gap in vol points; "
+                "DVOL 70 vs realized 45 is gap +25), ATM IV near 30 days, "
                 "IV term structure, call/put skew (put minus call), expiry mix, "
                 "1-SD expected move and max pain per expiry, dealer gamma "
                 "(gamma.netUsd / callUsd / putUsd as USD delta per 1% spot move; "
                 "regime long=stabler, short=faster; flip is where net GEX crosses zero). "
                 "history is 1h/4h/24h/7d change plus a series for OI, put/call, DVOL, "
-                "net dealer GEX, and flip vs index. "
+                "30-day realized, volGap, net dealer GEX, and flip vs index. "
                 "moves lists only unusual short-window OI, put/call, or IV vs that "
                 "series' typical, plus gamma / flip-side changes. "
                 "vsMarket.findings lists only when implied vol or put/call lean "
@@ -4557,6 +4577,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Binance USD-M + Bybit linear + OKX. exchange=all sums venues."
             ),
             args_schema=OpenInterestInput,
+        ),
+        StructuredTool.from_function(
+            get_perp_depth,
+            name="get_perp_depth",
+            description=(
+                "How much perpetual liquidity is waiting below vs above the "
+                "price. Example: 40M bid within 1% below mid vs 15M ask above. "
+                "Binance USD-M and Bybit linear separately plus combined. "
+                "range_pct default 1. This is the futures book, not spot."
+            ),
+            args_schema=PerpDepthInput,
         ),
         StructuredTool.from_function(
             get_funding_rate,

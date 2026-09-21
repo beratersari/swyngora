@@ -95,6 +95,23 @@ func (f *fakeMarket) ListSpotPrints(ctx context.Context, symbol string, from, to
 	return f.ListPrints(ctx, symbol, from, to)
 }
 
+func (f *fakeMarket) GetFuturesDepth(_ context.Context, symbol string) (*domain.RawOrderBook, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &domain.RawOrderBook{
+		Symbol: symbol,
+		Bids: []domain.PriceLevel{
+			{Price: 100, Quantity: 10},
+			{Price: 99.5, Quantity: 402010},
+		},
+		Asks: []domain.PriceLevel{
+			{Price: 100.1, Quantity: 5},
+			{Price: 100.5, Quantity: 149254},
+		},
+	}, nil
+}
+
 func (f *fakeMarket) GetOrderBook(_ context.Context, q domain.OrderBookQuery) (*domain.RawOrderBook, error) {
 	f.lastBookQ = q
 	if q.SnapshotOnly {

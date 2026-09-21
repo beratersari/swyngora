@@ -1060,6 +1060,44 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/perp-depth:
+    get:
+      summary: Perpetual bid-below vs ask-above depth
+      description: |
+        How much **perpetual** liquidity is waiting **below** vs **above**
+        the price. Example: **40M bid within 1% below** mid and **15M ask
+        above**. `exchange=all` (default) returns **Binance USD-M** and
+        **Bybit linear** separately plus `combined` (sum of each venue's
+        own ±% band). `rangePct` is the headline band (default **1**,
+        max 5). `bands` also include 0.1 / 0.25 / 0.5 / 2. `below` is
+        resting bids; `above` is resting asks. `complete` is false when
+        the snapshot does not reach that %. This is the **futures** book,
+        not spot. Informational only.
+      operationId: getMarketPerpDepth
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all }
+        - name: rangePct
+          in: query
+          description: Headline ± percent of mid (default 1, 0.05–5)
+          schema: { type: number, default: 1, example: 1 }
+      responses:
+        '200':
+          description: Per-venue and optional combined perp depth
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/options:
     get:
       summary: BTC/ETH options overview (open interest, volume, PCR, IV, expiry)
@@ -9358,6 +9396,17 @@ components:
         windows:
           type: array
           items: { $ref: '#/components/schemas/OpenInterestWindow' }
+    MarketOptionsVolCompare:
+      type: object
+      description: Deribit DVOL next to 30-day realized vol. gap is DVOL minus realized (70 vs 45 → +25).
+      properties:
+        dvol: { type: string, description: Deribit 30-day implied vol index (percent) }
+        realized: { type: string, description: 30-day close-to-close realized vol, annualized percent (365) }
+        gap: { type: string, description: Signed DVOL minus realized in vol points }
+        days: { type: integer, example: 30 }
+        bars: { type: integer, description: Daily closes used for realized vol }
+        lean: { type: string, enum: [implied_richer, realized_hotter, balanced] }
+        summary: { type: string }
     MarketOptionsATM:
       type: object
       properties:
@@ -9531,6 +9580,7 @@ components:
         lean: { type: string, enum: [calls, puts, balanced], description: PCR lean (puts ≥ 1.2, calls ≤ 0.8) }
         dvol: { type: string, description: Deribit 30-day implied vol index (percent) }
         dvolChange24h: { type: string, description: Signed DVOL point change vs ~24h ago }
+        volCompare: { $ref: '#/components/schemas/MarketOptionsVolCompare' }
         atm: { $ref: '#/components/schemas/MarketOptionsATM' }
         termStructure:
           type: array
@@ -9587,6 +9637,8 @@ components:
         oi: { $ref: '#/components/schemas/MarketOptionsHistoryChange' }
         putCall: { $ref: '#/components/schemas/MarketOptionsHistoryChange' }
         dvol: { $ref: '#/components/schemas/MarketOptionsHistoryChange' }
+        realized: { $ref: '#/components/schemas/MarketOptionsHistoryChange', description: 30-day close-to-close realized vol }
+        volGap: { $ref: '#/components/schemas/MarketOptionsHistoryChange', description: DVOL minus 30-day realized (vol points) }
         atmIv: { $ref: '#/components/schemas/MarketOptionsHistoryChange' }
         gamma: { $ref: '#/components/schemas/MarketOptionsHistoryChange', description: Net dealer GEX change (USD per 1% move) }
         flip: { $ref: '#/components/schemas/MarketOptionsHistoryChange', description: Gamma flip level change }
@@ -9603,6 +9655,8 @@ components:
         openInterestUsd: { type: string }
         putCallOi: { type: string }
         dvol: { type: string }
+        realizedVol: { type: string, description: 30-day close-to-close realized vol (annualized percent) }
+        volGap: { type: string, description: Signed DVOL minus realized (vol points) }
         atmIv: { type: string }
         indexPrice: { type: string }
         gammaNetUsd: { type: string, description: Signed dealer GEX (USD delta per 1% move) }
@@ -9611,7 +9665,7 @@ components:
         gammaFlipSide: { type: string, enum: [above, below, at] }
     MarketOptionsHistory:
       type: object
-      description: How listed OI, put/call, implied vol, and dealer gamma moved over the last hours and days
+      description: How listed OI, put/call, DVOL vs 30-day realized, and dealer gamma moved over the last hours and days
       properties:
         windows:
           type: array

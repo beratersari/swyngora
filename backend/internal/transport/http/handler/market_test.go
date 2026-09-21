@@ -73,6 +73,14 @@ func (s stubMarket) ListSpotPrints(ctx context.Context, symbol string, from, to 
 	return domain.FilterPrintsInRange(got, from, to), nil
 }
 
+func (stubMarket) GetFuturesDepth(_ context.Context, symbol string) (*domain.RawOrderBook, error) {
+	return &domain.RawOrderBook{
+		Symbol: symbol,
+		Bids:   []domain.PriceLevel{{Price: 100, Quantity: 10}, {Price: 99.5, Quantity: 402010}},
+		Asks:   []domain.PriceLevel{{Price: 100.1, Quantity: 5}, {Price: 100.5, Quantity: 149254}},
+	}, nil
+}
+
 func (stubMarket) GetOrderBook(_ context.Context, q domain.OrderBookQuery) (*domain.RawOrderBook, error) {
 	return &domain.RawOrderBook{
 		Symbol: q.Symbol,
@@ -1309,6 +1317,33 @@ func TestGetPrintSize_OK(t *testing.T) {
 	}
 	if body.Symbol != "BTCUSDT" {
 		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetPerpDepth_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/perp-depth?symbol=BTCUSDT&rangePct=1", nil)
+	rr := httptest.NewRecorder()
+	h.GetPerpDepth(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body perpDepthResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.RangePct != "1" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetPerpDepth_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/perp-depth", nil)
+	rr := httptest.NewRecorder()
+	h.GetPerpDepth(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
 	}
 }
 

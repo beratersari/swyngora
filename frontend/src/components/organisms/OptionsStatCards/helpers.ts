@@ -15,6 +15,14 @@ export function formatPcr(value: string | undefined): string {
   return n.toFixed(2);
 }
 
+export function formatVolGap(value: string | undefined): string {
+  if (value == null || value === '') return '';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '';
+  const sign = n > 0 ? '+' : '';
+  return `${sign}${n.toFixed(1)}`;
+}
+
 function window24(data: MarketOptions | undefined) {
   return data?.history?.windows?.find((row) => row.window === '24h');
 }
@@ -30,8 +38,10 @@ export function optionsStatValues(data: MarketOptions | undefined, asset: string
     pcr: formatPcr(data?.putCallOi),
     pcrChange24h: w?.putCall?.changePct,
     lean: data?.lean ?? '',
-    dvol: formatIv(data?.dvol),
+    dvol: formatIv(data?.volCompare?.dvol ?? data?.dvol),
     dvolChange: data?.dvolChange24h ?? w?.dvol?.change,
+    realized: formatIv(data?.volCompare?.realized),
+    volGap: formatVolGap(data?.volCompare?.gap),
     atm: formatIv(data?.atm?.iv),
     atmDte: data?.atm?.daysToExpiry,
   };

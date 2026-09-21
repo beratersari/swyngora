@@ -601,6 +601,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/perp-depth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Perpetual bid-below vs ask-above depth
+         * @description How much **perpetual** liquidity is waiting **below** vs **above**
+         *     the price. Example: **40M bid within 1% below** mid and **15M ask
+         *     above**. `exchange=all` (default) returns **Binance USD-M** and
+         *     **Bybit linear** separately plus `combined`. `rangePct` default **1**.
+         *     This is the **futures** book, not spot. Informational only.
+         */
+        get: operations["getMarketPerpDepth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/options": {
         parameters: {
             query?: never;
@@ -5491,6 +5515,22 @@ export interface components {
             current?: components["schemas"]["OpenInterestLevel"];
             windows?: components["schemas"]["OpenInterestWindow"][];
         };
+        /** @description Deribit DVOL next to 30-day realized vol. gap is DVOL minus realized (70 vs 45 → +25). */
+        MarketOptionsVolCompare: {
+            /** @description Deribit 30-day implied vol index (percent) */
+            dvol?: string;
+            /** @description 30-day close-to-close realized vol, annualized percent (365) */
+            realized?: string;
+            /** @description Signed DVOL minus realized in vol points */
+            gap?: string;
+            /** @example 30 */
+            days?: number;
+            /** @description Daily closes used for realized vol */
+            bars?: number;
+            /** @enum {string} */
+            lean?: "implied_richer" | "realized_hotter" | "balanced";
+            summary?: string;
+        };
         MarketOptionsATM: {
             /** @description ATM implied vol percent (call/put average when both exist) */
             iv?: string;
@@ -5696,6 +5736,7 @@ export interface components {
             dvol?: string;
             /** @description Signed DVOL point change vs ~24h ago */
             dvolChange24h?: string;
+            volCompare?: components["schemas"]["MarketOptionsVolCompare"];
             atm?: components["schemas"]["MarketOptionsATM"];
             termStructure?: components["schemas"]["MarketOptionsVolPoint"][];
             skew?: components["schemas"]["MarketOptionsSkew"];
@@ -5750,6 +5791,10 @@ export interface components {
             oi?: components["schemas"]["MarketOptionsHistoryChange"];
             putCall?: components["schemas"]["MarketOptionsHistoryChange"];
             dvol?: components["schemas"]["MarketOptionsHistoryChange"];
+            /** @description 30-day close-to-close realized vol */
+            realized?: components["schemas"]["MarketOptionsHistoryChange"];
+            /** @description DVOL minus 30-day realized (vol points) */
+            volGap?: components["schemas"]["MarketOptionsHistoryChange"];
             atmIv?: components["schemas"]["MarketOptionsHistoryChange"];
             /** @description Net dealer GEX change (USD per 1% move) */
             gamma?: components["schemas"]["MarketOptionsHistoryChange"];
@@ -5775,6 +5820,10 @@ export interface components {
             openInterestUsd?: string;
             putCallOi?: string;
             dvol?: string;
+            /** @description 30-day close-to-close realized vol (annualized percent) */
+            realizedVol?: string;
+            /** @description Signed DVOL minus realized (vol points) */
+            volGap?: string;
             atmIv?: string;
             indexPrice?: string;
             /** @description Signed dealer GEX (USD delta per 1% move) */
@@ -9010,6 +9059,34 @@ export interface operations {
             400: components["responses"]["Error"];
             404: components["responses"]["Error"];
             429: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketPerpDepth: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+                /** @description Headline ± percent of mid (default 1, 0.05–5) */
+                rangePct?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue and optional combined perp depth */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
             502: components["responses"]["Error"];
         };
     };

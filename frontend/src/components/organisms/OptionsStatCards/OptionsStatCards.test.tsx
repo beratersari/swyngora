@@ -16,13 +16,15 @@ describe('OptionsStatCards', () => {
           volumeUsd: '1200000',
           putCallOi: '0.4',
           lean: 'calls',
-          dvol: '49.5',
+          dvol: '70',
+          volCompare: { dvol: '70', realized: '45', gap: '+25', days: 30, lean: 'implied_richer' },
           atm: { iv: '51', strike: '100000', daysToExpiry: 26 },
         }}
       />,
     );
     expect(screen.getByText('35.00M')).toBeInTheDocument();
-    expect(screen.getByText('49.5%')).toBeInTheDocument();
+    expect(screen.getByText('70.0%')).toBeInTheDocument();
+    expect(screen.getByText(/RV 45\.0% · gap \+25\.0/)).toBeInTheDocument();
     expect(screen.getByText('0.40')).toBeInTheDocument();
   });
 });

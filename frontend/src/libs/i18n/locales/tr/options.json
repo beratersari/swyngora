@@ -8,8 +8,10 @@
     "volume": "24s hacim",
     "pcr": "Put / call (OI)",
     "pcrHint": "Put ÷ call",
-    "dvol": "İma vol (DVOL)",
+    "dvol": "DVOL vs 30g gerçekleşen",
     "dvolChange": "24s {{value}}",
+    "volGap": "RV {{realized}} · fark {{gap}}",
+    "volGapHint": "İma eksi 30 günlük gerçekleşen",
     "atm": "ATM IV",
     "atmDte": "{{days}}g vade",
     "ivHint": "Yüzde"
@@ -115,13 +117,13 @@
   },
   "history": {
     "title": "Zaman içinde",
-    "subtitle": "Açık pozisyon, put/call, ima vol ve bayi gamma son saat ve günlerde nasıl değişti",
+    "subtitle": "Açık pozisyon, put/call, DVOL vs 30g gerçekleşen ve bayi gamma son saat ve günlerde nasıl değişti",
     "empty": "Henüz geçmiş yok. İma vol Deribit’ten gelir; açık pozisyon, put/call ve gamma masa çalıştıktan sonra birikir.",
     "collecting": "Toplanıyor",
     "collectingSeries": "Bu seri henüz toplanıyor. Masa birkaç saat çalıştıktan sonra bakın.",
     "emptyIv": "İma vol geçmişi yok.",
     "emptyGamma": "Henüz bayi gamma geçmişi yok. Masa çalıştıktan sonra bakın.",
-    "hint": "OI, put/call ve bayi gamma bu sunucu çalışırken örneklenir. İma vol ayrıca Deribit DVOL geçmişini kullanır. Dönüş grafiği spot’u üstüne koyar; fiyat dönüşü geçtiğinde görünür.",
+    "hint": "OI, put/call ve bayi gamma bu sunucu çalışırken örneklenir. İma vol Deribit DVOL geçmişini kullanır ve 30 günlük gerçekleşeni üstüne koyar. Dönüş grafiği spot’u üstüne koyar; fiyat dönüşü geçtiğinde görünür.",
     "regimeTo": {
       "long": "→ daha sakin",
       "short": "→ daha hızlı",
@@ -143,7 +145,7 @@
     "metric": {
       "oi": "Açık pozisyon",
       "pcr": "Put / call",
-      "iv": "İma vol",
+      "iv": "DVOL vs RV",
       "gex": "Bayi GEX",
       "flip": "Gamma dönüş"
     },

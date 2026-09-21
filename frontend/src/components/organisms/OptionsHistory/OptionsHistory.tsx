@@ -27,7 +27,12 @@ export function OptionsHistory({ data, isLoading }: OptionsHistoryProps) {
     [history?.points, metric, range],
   );
   const compareLine = useMemo(
-    () => (metric === 'flip' ? toHistoryLine(history?.points, 'index', range) : []),
+    () =>
+      metric === 'flip'
+        ? toHistoryLine(history?.points, 'index', range)
+        : metric === 'iv'
+          ? toHistoryLine(history?.points, 'realized', range)
+          : [],
     [history?.points, metric, range],
   );
   lineRef.current = line;

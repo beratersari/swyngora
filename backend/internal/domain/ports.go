@@ -68,6 +68,12 @@ type OpenInterestPort interface {
 	GetOpenInterestSeries(ctx context.Context, symbol string) (*OpenInterestSeries, error)
 }
 
+// FuturesDepthPort loads a perpetual futures bid/ask snapshot.
+// Implemented by Binance USD-M and Bybit linear adapters.
+type FuturesDepthPort interface {
+	GetFuturesDepth(ctx context.Context, symbol string) (*RawOrderBook, error)
+}
+
 // FundingRatePort loads the predicted next funding rate plus settled history.
 // Implemented by Binance USD-M and Bybit linear adapters.
 type FundingRatePort interface {

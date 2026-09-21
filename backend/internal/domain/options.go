@@ -200,6 +200,7 @@ type OptionsSnapshot struct {
 	WithOI          int
 	WithIV          int
 	Gamma           *OptionsGamma
+	VolCompare      *OptionsVolCompare
 	VsMarket        *OptionsVsMarket
 	History         *OptionsHistory
 	Moves           *OptionsMoves

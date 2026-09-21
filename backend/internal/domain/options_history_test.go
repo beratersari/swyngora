@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -52,7 +53,7 @@ func TestBuildOptionsHistory_WindowsAndPoints(t *testing.T) {
 		{Time: now.Add(-24 * time.Hour), Value: 46},
 		{Time: now, Value: 52},
 	}
-	got := BuildOptionsHistory(snap, samples, dvol, now)
+	got := BuildOptionsHistory(snap, samples, dvol, nil, now)
 	if got == nil || len(got.Points) < 3 {
 		t.Fatalf("points=%+v", got)
 	}
@@ -99,7 +100,7 @@ func TestBuildOptionsHistory_GammaAndFlip(t *testing.T) {
 			HasIndex: true, IndexPrice: 100000,
 		},
 	}
-	got := BuildOptionsHistory(snap, samples, nil, now)
+	got := BuildOptionsHistory(snap, samples, nil, nil, now)
 	if got == nil {
 		t.Fatal("nil history")
 	}
@@ -130,9 +131,56 @@ func TestBuildOptionsHistory_GammaAndFlip(t *testing.T) {
 	}
 }
 
+func TestBuildOptionsHistory_VolGap(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC)
+	bars := volTestBars(now, 40)
+	snap := &OptionsSnapshot{Asset: "BTC", AsOf: now, DVOL: 70, HasDVOL: true}
+	AttachOptionsVolCompare(snap, bars)
+	dvol := []OptionsDVOLPoint{
+		{Time: now.Add(-7 * 24 * time.Hour), Value: 55},
+		{Time: now.Add(-24 * time.Hour), Value: 62},
+		{Time: now, Value: 70},
+	}
+	got := BuildOptionsHistory(snap, nil, dvol, bars, now)
+	if got == nil {
+		t.Fatal("nil history")
+	}
+	var h24, d7 *OptionsHistoryWindow
+	for i := range got.Windows {
+		switch got.Windows[i].Window {
+		case OptionsHistoryWindow24h:
+			h24 = &got.Windows[i]
+		case OptionsHistoryWindow7d:
+			d7 = &got.Windows[i]
+		}
+	}
+	if h24 == nil || !h24.VolGap.Complete || !h24.Realized.Complete {
+		t.Fatalf("24h %+v", h24)
+	}
+	if d7 == nil || !d7.VolGap.Complete {
+		t.Fatalf("7d %+v", d7)
+	}
+	if h24.DVOL.Current != 70 {
+		t.Fatalf("dvol %+v", h24.DVOL)
+	}
+	var sawGap bool
+	for _, p := range got.Points {
+		if p.HasVolGap && p.HasRealized && p.HasDVOL {
+			sawGap = true
+			if math.Abs(p.VolGap-(p.DVOL-p.Realized)) > 1e-9 {
+				t.Fatalf("point gap %+v", p)
+			}
+		}
+	}
+	if !sawGap {
+		t.Fatalf("points missing vol gap %+v", got.Points)
+	}
+}
+
 func TestBuildOptionsHistory_Empty(t *testing.T) {
 	t.Parallel()
-	if got := BuildOptionsHistory(nil, nil, nil, time.Time{}); got != nil {
+	if got := BuildOptionsHistory(nil, nil, nil, nil, time.Time{}); got != nil {
 		t.Fatalf("%+v", got)
 	}
 }

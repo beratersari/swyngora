@@ -4,7 +4,9 @@
 
 Show a Binance-style **spot** order book for a pair (e.g. BTC/USDT): resting buy and sell size at each price, with **grouping** (0.01, 0.1, 1, …) and **wall** highlights. Grouping is computed on the **backend** so the frontend only renders ready rows. The same payload is available to the AI assistant.
 
-Futures / other markets are out of scope for now version.
+Futures rest is a separate endpoint: [`perp-depth.md`](perp-depth.md)
+(`GET /api/v1/market/perp-depth` — bid below vs ask above on Binance USD-M
+and Bybit linear). This file is the **spot** book.
 
 ## Behavior
 

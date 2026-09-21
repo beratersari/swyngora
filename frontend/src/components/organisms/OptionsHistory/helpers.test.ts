@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatHistoryDelta, historyWindow, toHistoryLine, windowChipLabel } from './helpers';
+import { formatHistoryDelta, formatVolPts, historyWindow, toHistoryLine, windowChipLabel } from './helpers';
 
 describe('options history helpers', () => {
   it('formats a signed percent', () => {
@@ -53,5 +53,17 @@ describe('options history helpers', () => {
     const chip = windowChipLabel({ window: '24h', regime: 'short', regimeWas: 'long' }, 'gex');
     expect(chip.note).toBe('regime');
     expect(chip.to).toBe('short');
+  });
+
+  it('maps realized vol and labels the DVOL−RV gap change', () => {
+    const now = Date.parse('2026-03-02T12:00:00Z');
+    const points = [
+      { time: '2026-03-02T06:00:00Z', dvol: '62', realizedVol: '44', volGap: '18' },
+      { time: '2026-03-02T12:00:00Z', dvol: '70', realizedVol: '45', volGap: '25' },
+    ];
+    expect(toHistoryLine(points, 'realized', '12h', now).map((p) => p.value)).toEqual([44, 45]);
+    expect(toHistoryLine(points, 'iv', '12h', now)[1]?.value).toBe(70);
+    expect(formatVolPts('25')).toBe('+25.0');
+    expect(windowChipLabel({ window: '24h', volGap: { change: '5' } }, 'iv').delta).toBe('+5.0');
   });
 });

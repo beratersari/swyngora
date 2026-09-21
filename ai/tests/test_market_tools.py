@@ -376,6 +376,22 @@ class _Transport(httpx2.BaseTransport):
                     "valueArea": {"low": "64800", "high": "66100"},
                 },
             )
+        if request.url.path.endswith("/perp-depth"):
+            return httpx2.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "exchange": request.url.params.get("exchange") or "all",
+                    "rangePct": "1",
+                    "combined": {
+                        "headline": {
+                            "below": {"notional": "40000000"},
+                            "above": {"notional": "15000000"},
+                            "lean": "bid",
+                        }
+                    },
+                },
+            )
         if request.url.path.endswith("/liquidity-flow"):
             return httpx2.Response(
                 200,
@@ -603,6 +619,13 @@ def test_market_tools_hit_api(monkeypatch):
     )
     assert vp["symbol"] == "BTCUSDT"
     assert vp["poc"]["price"] == "65200"
+
+    assert "get_perp_depth" in by_name
+    perp = json.loads(
+        by_name["get_perp_depth"].invoke({"symbol": "BTCUSDT", "range_pct": 1})
+    )
+    assert perp["symbol"] == "BTCUSDT"
+    assert perp["combined"]["headline"]["below"]["notional"] == "40000000"
 
     assert "get_orderbook_liquidity_flow" in by_name
     liqflow = json.loads(

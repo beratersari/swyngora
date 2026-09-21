@@ -428,6 +428,9 @@ func (b *Backend) GetOptions(ctx context.Context, exchange, asset string) (json.
 	if gm := optionsGammaMap(got.Gamma); gm != nil {
 		out["gamma"] = gm
 	}
+	if vc := optionsVolCompareMap(got.VolCompare); vc != nil {
+		out["volCompare"] = vc
+	}
 	if got.Skew != nil {
 		sk := map[string]any{"lean": got.Skew.Lean}
 		if got.Skew.HasAtmSkew {
@@ -450,6 +453,29 @@ func (b *Backend) GetOptions(ctx context.Context, exchange, asset string) (json.
 		out["skew"] = sk
 	}
 	return mustJSON(out)
+}
+
+func optionsVolCompareMap(v *domain.OptionsVolCompare) map[string]any {
+	if v == nil || (!v.HasDVOL && !v.HasRealized) {
+		return nil
+	}
+	out := map[string]any{"days": v.Days, "lean": v.Lean}
+	if v.Bars > 0 {
+		out["bars"] = v.Bars
+	}
+	if v.Summary != "" {
+		out["summary"] = v.Summary
+	}
+	if v.HasDVOL {
+		out["dvol"] = v.DVOL
+	}
+	if v.HasRealized {
+		out["realized"] = v.Realized
+	}
+	if v.HasGap {
+		out["gap"] = v.Gap
+	}
+	return out
 }
 
 func optionsGammaMap(g *domain.OptionsGamma) map[string]any {
@@ -537,6 +563,12 @@ func optionsHistoryMap(h *domain.OptionsHistory) map[string]any {
 		if w.DVOL.Complete {
 			row["dvol"] = optionsHistoryChangeMap(w.DVOL)
 		}
+		if w.Realized.Complete {
+			row["realized"] = optionsHistoryChangeMap(w.Realized)
+		}
+		if w.VolGap.Complete {
+			row["volGap"] = optionsHistoryChangeMap(w.VolGap)
+		}
 		if w.AtmIV.Complete {
 			row["atmIv"] = optionsHistoryChangeMap(w.AtmIV)
 		}
@@ -574,6 +606,12 @@ func optionsHistoryMap(h *domain.OptionsHistory) map[string]any {
 		}
 		if p.HasDVOL {
 			row["dvol"] = p.DVOL
+		}
+		if p.HasRealized {
+			row["realizedVol"] = p.Realized
+		}
+		if p.HasVolGap {
+			row["volGap"] = p.VolGap
 		}
 		if p.HasAtmIV {
 			row["atmIv"] = p.AtmIV
@@ -695,6 +733,67 @@ func (b *Backend) GetOpenInterest(ctx context.Context, exchange, symbol string) 
 		out["longShort"] = longShortSnapshotMap(got.LongShort)
 	}
 	return mustJSON(out)
+}
+
+func (b *Backend) GetPerpDepth(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetPerpDepth(ctx, exchange, symbol, rangePct)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(perpDepthMap(got))
+}
+
+func perpDepthMap(got *domain.PerpDepthReport) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	venues := make([]map[string]any, 0, len(got.Venues))
+	for _, v := range got.Venues {
+		venues = append(venues, perpDepthVenueMap(v))
+	}
+	out := map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange, "rangePct": formatQtyMCP(got.RangePct),
+		"asOf": got.AsOf.UTC().Format(time.RFC3339Nano), "venues": venues, "summary": got.Summary, "note": got.Note,
+	}
+	if got.Combined != nil {
+		out["combined"] = perpDepthVenueMap(*got.Combined)
+	}
+	return out
+}
+
+func perpDepthVenueMap(v domain.PerpDepthVenue) map[string]any {
+	bands := make([]map[string]any, 0, len(v.Bands))
+	for _, b := range v.Bands {
+		bands = append(bands, perpDepthBandMap(b))
+	}
+	out := map[string]any{
+		"exchange": string(v.Exchange), "symbol": v.Symbol, "mid": formatQtyMCP(v.Mid),
+		"coverBidPct": formatQtyMCP(v.CoverBidPct), "coverAskPct": formatQtyMCP(v.CoverAskPct),
+		"headline": perpDepthBandMap(v.Headline), "bands": bands, "summary": v.Summary,
+	}
+	if v.Error != "" {
+		out["error"] = v.Error
+	}
+	return out
+}
+
+func perpDepthBandMap(b domain.PerpDepthBand) map[string]any {
+	return map[string]any{
+		"rangePct": formatQtyMCP(b.RangePct),
+		"below": map[string]any{
+			"notional": formatQtyMCP(b.Below.Notional), "quantity": formatQtyMCP(b.Below.Quantity),
+			"levels": b.Below.Levels, "edgePrice": formatQtyMCP(b.Below.EdgePrice),
+		},
+		"above": map[string]any{
+			"notional": formatQtyMCP(b.Above.Notional), "quantity": formatQtyMCP(b.Above.Quantity),
+			"levels": b.Above.Levels, "edgePrice": formatQtyMCP(b.Above.EdgePrice),
+		},
+		"imbalance": domain.FormatSignedQty(b.Imbalance), "ratio": formatQtyMCP(b.Ratio),
+		"lean": b.Lean, "complete": b.Complete,
+	}
 }
 
 func (b *Backend) GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error) {

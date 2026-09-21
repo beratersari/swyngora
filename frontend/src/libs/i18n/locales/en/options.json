@@ -8,8 +8,10 @@
     "volume": "24h volume",
     "pcr": "Put / call (OI)",
     "pcrHint": "Puts ÷ calls",
-    "dvol": "Implied vol (DVOL)",
+    "dvol": "DVOL vs 30d realized",
     "dvolChange": "{{value}} vs 24h",
+    "volGap": "RV {{realized}} · gap {{gap}}",
+    "volGapHint": "Implied minus 30-day realized",
     "atm": "ATM IV",
     "atmDte": "{{days}}d tenor",
     "ivHint": "Percent"
@@ -115,13 +117,13 @@
   },
   "history": {
     "title": "Over time",
-    "subtitle": "How open interest, put/call, implied vol, and dealer gamma moved in the last hours and days",
+    "subtitle": "How open interest, put/call, DVOL vs 30-day realized, and dealer gamma moved in the last hours and days",
     "empty": "No history yet. Implied vol fills from Deribit; open interest, put/call, and gamma appear after the desk has been running.",
     "collecting": "Collecting",
     "collectingSeries": "Still collecting this series. Check back after the desk has been running for a few hours.",
     "emptyIv": "No implied-vol history yet.",
     "emptyGamma": "No dealer-gamma history yet. Check back after the desk has been running.",
-    "hint": "OI, put/call, and dealer gamma are sampled while this backend runs. Implied vol also uses Deribit DVOL history. Flip chart overlays the index so you can see when spot crossed the flip.",
+    "hint": "OI, put/call, and dealer gamma are sampled while this backend runs. Implied vol uses Deribit DVOL history and overlays 30-day realized from daily closes. Flip chart overlays the index so you can see when spot crossed the flip.",
     "regimeTo": {
       "long": "→ stabler",
       "short": "→ faster",
@@ -143,7 +145,7 @@
     "metric": {
       "oi": "Open interest",
       "pcr": "Put / call",
-      "iv": "Implied vol",
+      "iv": "DVOL vs RV",
       "gex": "Dealer GEX",
       "flip": "Gamma flip"
     },

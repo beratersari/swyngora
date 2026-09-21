@@ -25,36 +25,38 @@ const (
 
 // Client implements domain.MarketDataPort against Bybit v5 public market APIs (spot).
 type Client struct {
-	baseURL      string
-	httpClient   *http.Client
-	candles      *cache.TTL[[]domain.Candle]
-	tickers      *cache.TTL[*domain.Ticker24h]
-	orderBooks   *cache.TTL[*domain.RawOrderBook]
-	spotMarkets  *cache.TTL[[]domain.SpotMarket]
-	spotSF       singleflight.Group
-	candleSF     singleflight.Group
-	tickerSF     singleflight.Group
-	orderBookSF  singleflight.Group
-	depth        *DepthHub
-	depthOnce    sync.Once
-	depthWait    time.Duration
-	wsURL        string
-	wsDial       wsDialer
-	depthIdle    time.Duration
-	oiCache      *cache.TTL[*domain.OpenInterestSeries]
-	oiSF         singleflight.Group
-	fundingCache *cache.TTL[*domain.FundingSeries]
-	fundingSF    singleflight.Group
-	lsCache      *cache.TTL[*domain.LongShortSeries]
-	lsSF         singleflight.Group
-	taker        *domain.TakerBook
-	takerWatch   func(string)
-	basisCache   *cache.TTL[*domain.BasisQuote]
-	basisSF      singleflight.Group
-	linMeta      *cache.TTL[[]linContractMeta]
-	linMetaSF    singleflight.Group
-	printCache   *cache.TTL[[]domain.TakerPrint]
-	printSF      singleflight.Group
+	baseURL       string
+	httpClient    *http.Client
+	candles       *cache.TTL[[]domain.Candle]
+	tickers       *cache.TTL[*domain.Ticker24h]
+	orderBooks    *cache.TTL[*domain.RawOrderBook]
+	spotMarkets   *cache.TTL[[]domain.SpotMarket]
+	spotSF        singleflight.Group
+	candleSF      singleflight.Group
+	tickerSF      singleflight.Group
+	orderBookSF   singleflight.Group
+	depth         *DepthHub
+	depthOnce     sync.Once
+	depthWait     time.Duration
+	wsURL         string
+	wsDial        wsDialer
+	depthIdle     time.Duration
+	oiCache       *cache.TTL[*domain.OpenInterestSeries]
+	oiSF          singleflight.Group
+	fundingCache  *cache.TTL[*domain.FundingSeries]
+	fundingSF     singleflight.Group
+	lsCache       *cache.TTL[*domain.LongShortSeries]
+	lsSF          singleflight.Group
+	taker         *domain.TakerBook
+	takerWatch    func(string)
+	basisCache    *cache.TTL[*domain.BasisQuote]
+	basisSF       singleflight.Group
+	linMeta       *cache.TTL[[]linContractMeta]
+	linMetaSF     singleflight.Group
+	printCache    *cache.TTL[[]domain.TakerPrint]
+	printSF       singleflight.Group
+	futDepthCache *cache.TTL[*domain.RawOrderBook]
+	futDepthSF    singleflight.Group
 }
 
 // Options configures the Bybit client.
@@ -116,6 +118,9 @@ func NewClient(opts Options) *Client {
 	}
 	if c.printCache == nil {
 		c.printCache = cache.New[[]domain.TakerPrint](15 * time.Second)
+	}
+	if c.futDepthCache == nil {
+		c.futDepthCache = cache.New[*domain.RawOrderBook](3 * time.Second)
 	}
 	return c
 }
