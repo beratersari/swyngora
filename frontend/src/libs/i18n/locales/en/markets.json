@@ -12,7 +12,10 @@
     "windowWait": "Sampling…",
     "drivers": "{{names}}",
     "bands": "Distance from mid",
-    "band": "±{{pct}}%"
+    "band": "±{{pct}}%",
+    "gaugeAsk": "Ask",
+    "gaugeBid": "Bid",
+    "open": "Perp bid and ask details"
   },
   "fearGreed": {
     "title": "Fear & Greed",
@@ -36,6 +39,8 @@
     "level_neutral": "Neutral",
     "level_greed": "Greed",
     "level_extreme_greed": "Extreme greed",
+    "gaugeFear": "Fear",
+    "gaugeGreed": "Greed",
     "factor_breadth": "Breadth",
     "factor_momentum": "BTC move",
     "factor_volatility": "Volatility",
@@ -53,7 +58,10 @@
     "align_with_market": "With market",
     "align_carrying": "BTC carrying",
     "align_lagging": "BTC lagging",
-    "align_mixed": "Mixed"
+    "align_mixed": "Mixed",
+    "gaugeDown": "Down",
+    "gaugeUp": "Up",
+    "open": "Market breadth details"
   },
   "title": "Markets",
   "eyebrow": "Spot · multi-exchange",

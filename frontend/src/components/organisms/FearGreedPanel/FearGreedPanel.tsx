@@ -3,11 +3,10 @@ import { InfoCircleOutlined } from '@ant-design/icons';
 import { Alert, Modal, Tabs } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
+import { DeskGaugeCard } from '@/components/molecules/DeskGaugeCard';
 import { FEAR_GREED_TAB_DRIVERS, FEAR_GREED_TAB_HISTORY } from './constants';
 import { fearGreedTone, fearGreedWindowLine, recentFearGreed } from './helpers';
 import {
-  Chip,
-  ChipText,
   FactorHead,
   FactorList,
   FactorRow,
@@ -49,19 +48,16 @@ export function FearGreedPanel({ data, error, isLoading = false }: FearGreedPane
 
   return (
     <>
-      <Chip type="button" onClick={() => setOpen(true)} aria-haspopup="dialog">
-        <Text variant="label" color="primary">
-          {t('fearGreed.title')}
-        </Text>
-        <ChipText>
-          <Text variant="h3" color={tone} isLoading={isLoading} skeletonWidth={36}>
-            {error ? '—' : (data?.score ?? '—')}
-          </Text>
-          <Text variant="numeric" color={tone} isLoading={isLoading} skeletonWidth={72}>
-            {error ? '' : levelLabel}
-          </Text>
-        </ChipText>
-      </Chip>
+      <DeskGaugeCard
+        title={t('fearGreed.title')}
+        value={error ? '—' : (data?.score ?? '—')}
+        caption={error || isLoading ? undefined : levelLabel}
+        gaugeValue={error ? null : data?.score}
+        minLabel={t('fearGreed.gaugeFear')}
+        maxLabel={t('fearGreed.gaugeGreed')}
+        isLoading={isLoading}
+        onClick={() => setOpen(true)}
+      />
       <Modal
         open={open}
         onCancel={close}

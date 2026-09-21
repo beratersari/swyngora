@@ -45,7 +45,7 @@ Levels:
 Samples live in `data/feargreed.db` and start when the backend is running.
 A fresh process has a live score and an empty history until the first samples land.
 
-Web: a compact chip on Markets (`/markets`). Clicking it opens drivers and past scores. The note that this is our own tape, not the Binance or CoinGlass index, sits behind an info icon in that dialog.
+Web: a speedometer on Markets (`/markets`), needle from fear to greed, with the score beside it. Clicking it opens drivers and past scores. The note that this is our own tape, not the Binance or CoinGlass index, sits behind an info icon in that dialog.
 Telegram: `/fear`. MCP: `get_fear_greed`.
 
 Informational only — not financial advice, and not a copy of another vendor's index.

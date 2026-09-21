@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithTheme } from '@/test/render';
 import { BreadthOverview } from './BreadthOverview';
 
 describe('BreadthOverview', () => {
-  it('shows 1h up vs down share', () => {
+  it('shows the 1h up share on the gauge and the rest in a dialog', async () => {
+    const user = userEvent.setup();
     renderWithTheme(
       <BreadthOverview
         data={{
@@ -20,11 +22,18 @@ describe('BreadthOverview', () => {
         }}
       />,
     );
-    expect(screen.getByText('62% up · 28% down')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Market breadth/ })).toBeInTheDocument();
+    expect(screen.getByText('62%')).toBeInTheDocument();
+    expect(screen.getByText('With market')).toBeInTheDocument();
+    expect(screen.queryByText('Most coins are up with BTC.')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Market breadth/ }));
+    expect(await screen.findByText('62% up · 28% down')).toBeInTheDocument();
     expect(screen.getByText('Most coins are up with BTC.')).toBeInTheDocument();
   });
 
-  it('lists extra windows besides the 1h headline', () => {
+  it('lists extra windows besides the 1h headline inside the dialog', async () => {
+    const user = userEvent.setup();
     renderWithTheme(
       <BreadthOverview
         data={{
@@ -35,7 +44,7 @@ describe('BreadthOverview', () => {
         }}
       />,
     );
-    expect(screen.getByText('4h')).toBeInTheDocument();
-    expect(screen.getByText('55% up · 40% down')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Market breadth/ }));
+    expect(await screen.findByText('55% up · 40% down')).toBeInTheDocument();
   });
 });

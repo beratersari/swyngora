@@ -8,7 +8,7 @@ atoms → molecules → organisms → templates → pages
 
 | Level | Role |
 |---|---|
-| **atoms** | Design-system primitives (`Text`, `Button`, `Skeleton`) |
+| **atoms** | Design-system primitives (`Text`, `Button`, `Skeleton`, `SpeedGauge`) |
 | **molecules** | Small compositions / chart hosts |
 | **organisms** | Domain sections (tables, detail panels) — props only |
 | **templates** | Layout shells without data |

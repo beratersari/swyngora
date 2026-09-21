@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bandLeaderLabel, bandShareLabel, distanceBands, driverNames, leaderCoins, mixLine, shareLabel } from './helpers';
+import { bandLeaderLabel, bandShareLabel, bidSharePct, distanceBands, driverNames, leaderCoins, mixLine, shareLabel } from './helpers';
 
 describe('PerpLiquidityOverview helpers', () => {
   it('drops empty or errored coins then keeps the largest', () => {
@@ -11,6 +11,11 @@ describe('PerpLiquidityOverview helpers', () => {
       ],
     });
     expect(got.map((c) => c.base)).toEqual(['BTC', 'ETH']);
+  });
+
+  it('puts the needle on bid as a share of bid plus ask', () => {
+    expect(bidSharePct({ bid: '2400000000', ask: '1800000000' })).toBeCloseTo(57.14, 1);
+    expect(bidSharePct({ bid: '0', ask: '0' })).toBeNull();
   });
 
   it('formats a share percent', () => {

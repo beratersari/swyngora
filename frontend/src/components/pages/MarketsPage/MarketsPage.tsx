@@ -257,7 +257,7 @@ export function MarketsPage() {
       <PageHeader title={t('markets:title')} subtitle={t('markets:subtitle', { seconds: DEFAULT_SPOT_POLL_MS / 1000 })} />
 
       {showPerpLiq ? (
-        <>
+        <InsightRow>
           <FearGreedPanel
             data={rtkCurrent(fearGreedQuery)}
             error={
@@ -267,7 +267,6 @@ export function MarketsPage() {
             }
             isLoading={fearGreedQuery.isLoading || fearGreedQuery.isFetching}
           />
-          <InsightRow>
           <PerpLiquidityOverview
             data={rtkCurrent(perpLiqQuery)}
             error={
@@ -287,7 +286,6 @@ export function MarketsPage() {
             isLoading={breadthQuery.isLoading || breadthQuery.isFetching}
           />
         </InsightRow>
-        </>
       ) : null}
 
       <ExchangeTabs

@@ -30,7 +30,7 @@ describe('FearGreedPanel', () => {
     );
     expect(screen.getByRole('button', { name: /Fear & Greed/ })).toBeInTheDocument();
     expect(screen.getByText('62')).toBeInTheDocument();
-    expect(screen.getByText('Greed')).toBeInTheDocument();
+    expect(screen.getAllByText('Greed').length).toBeGreaterThan(0);
     expect(screen.queryByText('OI-weighted funding +0.03%')).not.toBeInTheDocument();
     expect(screen.queryByText(/Not the Binance or CoinGlass index/)).not.toBeInTheDocument();
 

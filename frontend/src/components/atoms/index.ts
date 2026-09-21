@@ -10,3 +10,6 @@ export type { BrandTagProps, BrandTagVariant } from './BrandTag';
 
 export { BrandMark } from './BrandMark';
 export type { BrandMarkProps } from './BrandMark';
+
+export { SpeedGauge } from './SpeedGauge';
+export type { SpeedGaugeProps } from './SpeedGauge';

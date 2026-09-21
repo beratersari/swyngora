@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithTheme } from '@/test/render';
 import { PerpLiquidityOverview } from './PerpLiquidityOverview';
 
 describe('PerpLiquidityOverview', () => {
-  it('shows total bid/ask and leading coin shares', () => {
+  it('shows a bid/ask gauge and keeps bands and windows in the dialog', async () => {
+    const user = userEvent.setup();
     renderWithTheme(
       <PerpLiquidityOverview
         data={{
@@ -37,10 +39,14 @@ describe('PerpLiquidityOverview', () => {
         }}
       />,
     );
-    expect(screen.getByText('2.40B')).toBeInTheDocument();
-    expect(screen.getByText('1.80B')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Perp bid \/ ask/ })).toBeInTheDocument();
+    expect(screen.getByText('Bid-heavy')).toBeInTheDocument();
+    expect(screen.getByText('2.40B / 1.80B')).toBeInTheDocument();
+    expect(screen.queryByText('55% → 65% (+10)')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Perp bid \/ ask/ }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('48%')).toBeInTheDocument();
-    expect(screen.getAllByText('BTC').length).toBeGreaterThan(0);
     expect(screen.getByText('55% → 65% (+10)')).toBeInTheDocument();
     expect(screen.getByText('80.00M · 8%')).toBeInTheDocument();
   });

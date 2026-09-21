@@ -1,32 +1,5 @@
 import styled from 'styled-components';
 
-export const Chip = styled.button`
-  display: inline-flex;
-  align-items: center;
-  gap: ${({ theme }) => theme.spacing[3]}px;
-  width: fit-content;
-  max-width: 100%;
-  margin: 0;
-  padding: ${({ theme }) => theme.spacing[2]}px ${({ theme }) => theme.spacing[3]}px;
-  border: 1px solid ${({ theme }) => theme.semantic.border.subtle};
-  border-radius: ${({ theme }) => theme.radii.md}px;
-  background: ${({ theme }) => theme.semantic.bg.muted};
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-
-  &:hover {
-    border-color: ${({ theme }) => theme.semantic.border.strong};
-  }
-`;
-
-export const ChipText = styled.span`
-  display: inline-flex;
-  align-items: baseline;
-  gap: ${({ theme }) => theme.spacing[2]}px;
-  min-width: 0;
-`;
-
 export const ModalTitle = styled.span`
   display: inline-flex;
   align-items: center;

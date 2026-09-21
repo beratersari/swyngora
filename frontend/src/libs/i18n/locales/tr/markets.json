@@ -12,7 +12,10 @@
     "windowWait": "Örnekleniyor…",
     "drivers": "{{names}}",
     "bands": "Mid'e uzaklık",
-    "band": "±{{pct}}%"
+    "band": "±{{pct}}%",
+    "gaugeAsk": "Ask",
+    "gaugeBid": "Bid",
+    "open": "Perp alış ve satış ayrıntısı"
   },
   "fearGreed": {
     "title": "Korku ve Açgözlülük",
@@ -36,6 +39,8 @@
     "level_neutral": "Nötr",
     "level_greed": "Açgözlülük",
     "level_extreme_greed": "Aşırı açgözlülük",
+    "gaugeFear": "Korku",
+    "gaugeGreed": "Açgöz",
     "factor_breadth": "Genişlik",
     "factor_momentum": "BTC hareketi",
     "factor_volatility": "Oynaklık",
@@ -53,7 +58,10 @@
     "align_with_market": "Piyasayla",
     "align_carrying": "BTC taşıyor",
     "align_lagging": "BTC geride",
-    "align_mixed": "Karışık"
+    "align_mixed": "Karışık",
+    "gaugeDown": "Düşen",
+    "gaugeUp": "Yükselen",
+    "open": "Piyasa genişliği ayrıntısı"
   },
   "title": "Piyasalar",
   "eyebrow": "Spot · çoklu borsa",

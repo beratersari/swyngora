@@ -6,6 +6,14 @@ import type {
 import { formatCompactAmount } from '@/libs/utils';
 import { PERP_LIQUIDITY_LEADERS } from './constants';
 
+/** Bid as a percent of bid+ask. The gauge needle uses this. */
+export function bidSharePct(data?: MarketPerpDepthOverview | null): number | null {
+  const bid = Number(data?.bid);
+  const ask = Number(data?.ask);
+  if (!Number.isFinite(bid) || !Number.isFinite(ask) || bid + ask <= 0) return null;
+  return (bid / (bid + ask)) * 100;
+}
+
 export function leaderCoins(data?: MarketPerpDepthOverview | null) {
   const coins = data?.coins ?? [];
   return coins.filter((c) => !c.error && Number(c.total) > 0).slice(0, PERP_LIQUIDITY_LEADERS);

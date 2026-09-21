@@ -1,37 +1,20 @@
 import styled from 'styled-components';
 
-export const Panel = styled.section`
+export const DetailList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: ${({ theme }) => theme.spacing[2]}px;
-  padding: ${({ theme }) => theme.spacing[3]}px;
-  background: ${({ theme }) => theme.semantic.bg.muted};
-  border: 1px solid ${({ theme }) => theme.semantic.border.subtle};
-  border-radius: ${({ theme }) => theme.radii.md}px;
+  gap: ${({ theme }) => theme.spacing[3]}px;
 `;
 
-export const StatsRow = styled.div`
-  display: flex;
-  flex-wrap: wrap;
-  gap: ${({ theme }) => theme.spacing[1]}px ${({ theme }) => theme.spacing[5]}px;
-`;
-
-export const Stat = styled.div`
+export const DetailRow = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  min-width: 88px;
+  gap: 2px;
 `;
 
-export const CoinList = styled.div`
+export const Head = styled.div`
   display: flex;
-  flex-wrap: wrap;
-  gap: ${({ theme }) => theme.spacing[2]}px ${({ theme }) => theme.spacing[4]}px;
-`;
-
-export const CoinRow = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 96px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: ${({ theme }) => theme.spacing[3]}px;
 `;

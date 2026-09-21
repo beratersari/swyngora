@@ -15,7 +15,7 @@ export const InsightRow = styled.div`
   gap: ${({ theme }) => theme.spacing[3]}px;
 
   @media (min-width: 900px) {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 `;
 
