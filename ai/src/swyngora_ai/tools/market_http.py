@@ -2214,6 +2214,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"symbol": symbol, "exchange": exchange},
         )
 
+    def get_net_position(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/net-position",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
     def get_volume_share(symbol: str, exchange: str = "all") -> str:
         return http.get(
             "/api/v1/market/volume-share",
@@ -4870,6 +4876,18 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "high and you need to know if it was a few large market orders "
                 "(avg jumped, e.g. 20K to 180K) or many small prints. "
                 "read=few_large or many_small. Binance + Bybit."
+            ),
+            args_schema=TakerFlowInput,
+        ),
+        StructuredTool.from_function(
+            get_net_position,
+            name="get_net_position",
+            description=(
+                "Estimate net long and net short USDT over 15m, 1h, and 4h "
+                "from open-interest change plus taker buy and sell. Positive "
+                "means that side grew, negative means it shrank. The two nets "
+                "add up to the open-interest change. Binance and Bybit. Not "
+                "the account long/short ratio."
             ),
             args_schema=TakerFlowInput,
         ),

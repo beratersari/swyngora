@@ -600,6 +600,29 @@ func formatFearGreedDelta(v int) string {
 	return strconv.Itoa(v)
 }
 
+// FormatNetPosition formats estimated net long and net short over 15m, 1h, and 4h.
+func FormatNetPosition(rep *domain.NetPositionReport) string {
+	if rep == nil || rep.Symbol == "" {
+		return "No net position."
+	}
+	var b strings.Builder
+	b.WriteString(header("⚖️", "Net long / short"))
+	fmt.Fprintf(&b, "%s · %s\n", code(rep.Symbol), code(rep.Exchange))
+	b.WriteString(divider())
+	if rep.Summary != "" {
+		b.WriteString(rep.Summary + "\n")
+	}
+	for _, w := range rep.Windows {
+		fmt.Fprintf(&b, "  %s  long %s · short %s\n", code(w.Window), FormatSignedQty(w.NetLong), FormatSignedQty(w.NetShort))
+	}
+	b.WriteString(footer())
+	return b.String()
+}
+
+func FormatSignedQty(v float64) string {
+	return domain.FormatSignedQty(v)
+}
+
 // FormatOpenInterest formats current OI and windowed change.
 func FormatOpenInterest(s *domain.OpenInterestSnapshot) string {
 	if s == nil {
@@ -1079,6 +1102,7 @@ func HelpText() string {
 	b.WriteString(cmdLine("/rsi", "<symbol> [interval] [ex]", "RSI + EMA"))
 	b.WriteString(cmdLine("/rsiheat", "[exchange] [quote]", "RSI heatmap grid"))
 	b.WriteString(cmdLine("/oi", "<symbol> [binance|bybit|all]", "open interest + 5m/1h/4h/24h change + funding"))
+	b.WriteString(cmdLine("/netpos", "<symbol> [binance|bybit|all]", "net long and net short from OI and taker flow"))
 	b.WriteString(cmdLine("/perpliq", "[binance|bybit|all] [n]", "total perp bid vs ask across liquid coins"))
 	b.WriteString(cmdLine("/fear", "", "0–100 fear and greed from our tape, plus what moved it"))
 	b.WriteString(cmdLine("/funding", "<symbol> [binance|bybit|all]", "current funding rate + recent history"))

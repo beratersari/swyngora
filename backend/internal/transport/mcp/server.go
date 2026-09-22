@@ -68,6 +68,7 @@ type DataPort interface {
 	GetPositioning(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVenueDivergence(ctx context.Context, symbol string) (json.RawMessage, error)
 	GetTakerFlow(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetNetPosition(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetParticipation(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeShare(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetPrintSize(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -1172,6 +1173,22 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetMarketPressure(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_net_position",
+		mcp.WithDescription("Estimate net long and net short USDT over 15m, 1h, and 4h by combining open-interest change with taker buy and sell. Positive means that side grew, negative means it shrank. The two nets add up to the open-interest change. Binance and Bybit. Not the account long/short ratio. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetNetPosition(ctx, req.GetString("exchange", "all"), symbol)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

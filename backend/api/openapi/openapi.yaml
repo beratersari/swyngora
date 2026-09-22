@@ -2131,6 +2131,46 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/net-position:
+    get:
+      summary: Net long and net short from open interest and taker flow
+      description: |
+        Estimates how much futures exposure **went long** and how much **went
+        short** over the last **15 minutes, 1 hour, and 4 hours**.
+
+        An aggressive buy is either a new long or a closed short. An aggressive
+        sell is either a new short or a closed long. The open-interest change
+        says whether positions were opened or closed. Together:
+
+        `netLong = (taker buy − taker sell + open-interest change) / 2`
+
+        `netShort = (taker sell − taker buy + open-interest change) / 2`
+
+        Positive means that side grew. Negative means it shrank. The two
+        numbers add up to the open-interest change. Binance USD-M and Bybit
+        linear. This is not the account long/short ratio.
+      operationId: getMarketNetPosition
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Net long and net short for 15m, 1h, and 4h
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/pressure:
     get:
       summary: Combined market pressure from book, CVD, and absorption

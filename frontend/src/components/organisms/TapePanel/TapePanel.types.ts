@@ -9,11 +9,14 @@ import type {
   MarketPressure,
   MarketSnapshot,
   MarketPerpDepthOverview,
+  MarketNetPosition,
 } from '@/libs/api';
 
 export type TapePanelProps = WithLoadingProps & {
   openInterest?: MarketOpenInterest | null;
   openInterestError?: string | null;
+  netPosition?: MarketNetPosition | null;
+  netPositionError?: string | null;
   liquidations?: MarketLiquidations | null;
   liquidationsError?: string | null;
   cvd?: MarketCvd | null;

@@ -10,6 +10,7 @@ import {
   formatTapeNum,
   windowByName,
 } from './TapePanel.helpers';
+import { PositionSidePanel } from '@/components/organisms/PositionSidePanel';
 import { Block, Panel, StatCard, StatsGrid, TitleRow } from './TapePanel.styles';
 import type { TapePanelProps } from './TapePanel.types';
 
@@ -48,6 +49,8 @@ function Stat({
 export function TapePanel({
   openInterest,
   openInterestError,
+  netPosition,
+  netPositionError,
   liquidations,
   liquidationsError,
   cvd,
@@ -157,6 +160,7 @@ export function TapePanel({
             {t('tape.incomplete')}
           </Text>
         ) : null}
+        <PositionSidePanel data={netPosition} error={netPositionError} isLoading={isLoading} />
       </Block>
 
       <Block>

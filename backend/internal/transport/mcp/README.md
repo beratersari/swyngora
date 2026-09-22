@@ -46,6 +46,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_squeeze_risk` | Long/short squeeze risk scores (0–100) per venue + OI-weighted combined |
 | `get_positioning` | Price+OI regime: long/short buildup, unwinding, covering + market combined |
 | `get_venue_divergence` | Binance vs Bybit: same/opposite, which metrics differ and why |
+| `get_net_position` | Net long and net short USDT over 15m / 1h / 4h from open-interest change and taker buy/sell. Positive means that side grew |
 | `get_taker_flow` | Aggressive futures buy vs sell volume (5m/1h/4h) per venue + combined |
 | `get_participation` | OI USDT delta ÷ futures taker volume (15m/1h/4h); 2B volume and OI +300M is 15% new positions |
 | `get_volume_share` | How BTC futures volume splits across Binance / Bybit / OKX (e.g. 55/30/15) plus who gained or lost share vs the prior hour |

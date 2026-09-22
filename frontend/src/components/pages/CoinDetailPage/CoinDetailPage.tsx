@@ -40,6 +40,7 @@ import {
   useGetHoldersQuery,
   useGetAssetProfileQuery,
   useGetOpenInterestQuery,
+  useGetMarketNetPositionQuery,
   useGetMarketLiquidationsQuery,
   useGetMarketCvdQuery,
   useGetMarketVolumeShareQuery,
@@ -383,6 +384,11 @@ export function CoinDetailPage() {
   const perpSymbol = symbol;
   const tapeQueryArg = { exchange: 'all' as const, symbol: perpSymbol };
   const skipTape = skip || isEquity || !perpSymbol;
+  const netPositionQuery = useGetMarketNetPositionQuery(tapeQueryArg, {
+    skip: skipTape,
+    pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
+    refetchOnFocus: true,
+  });
   const openInterestQuery = useGetOpenInterestQuery(tapeQueryArg, {
     skip: skipTape,
     pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
@@ -1093,6 +1099,18 @@ export function CoinDetailPage() {
                     <TabStack>
                       <TapePanel
                         openInterest={rtkCurrent(openInterestQuery)}
+                        netPosition={rtkCurrent(netPositionQuery)}
+                        netPositionError={
+                          netPositionQuery.isError
+                            ? rtkErrorMessage(netPositionQuery.error, {
+                                resource: t('detail:resource.tape'),
+                                statusMessages: {
+                                  404: t('detail:tape.none'),
+                                  400: t('detail:tape.unsupported'),
+                                },
+                              })
+                            : null
+                        }
                         openInterestError={
                           openInterestQuery.isError
                             ? rtkErrorMessage(openInterestQuery.error, {

@@ -104,6 +104,8 @@ import type {
   MarketForensicsRadarQuery,
   MarketBreadth,
   MarketBreadthQuery,
+  MarketNetPosition,
+  NetPositionQuery,
   FearGreedReport,
   MarketVolumeSurgeScan,
   MarketVolumeSurgeScanQuery,
@@ -159,6 +161,8 @@ export type {
   MarketPerpDepthOverviewBandCoin,
   MarketBreadth,
   MarketBreadthWindow,
+  MarketNetPosition,
+  MarketNetPositionWindow,
   FearGreedReport,
   FearGreedFactor,
   FearGreedSample,
@@ -482,6 +486,12 @@ export const marketApi = baseApi.injectEndpoints({
         params: compactParams({ ...arg }),
       }),
     }),
+    getMarketNetPosition: build.query<MarketNetPosition, NetPositionQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/net-position',
+        params: compactParams({ ...arg }),
+      }),
+    }),
     getMarketFlowAtPrices: build.query<MarketDeskReport, SymbolMarketQuery>({
       query: (arg) => ({
         url: '/api/v1/market/flow-at-prices',
@@ -742,6 +752,7 @@ export const {
   useGetMarketPerpDepthQuery,
   useGetMarketVolumeSurgeQuery,
   useGetMarketTakerFlowQuery,
+  useGetMarketNetPositionQuery,
   useGetMarketFlowAtPricesQuery,
   useGetMarketVWAPQuery,
   useGetMarketVolumeProfileQuery,

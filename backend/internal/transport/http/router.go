@@ -126,6 +126,7 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 	mux.HandleFunc("GET /api/v1/market/positioning", mh.GetPositioning)
 	mux.HandleFunc("GET /api/v1/market/venue-divergence", mh.GetVenueDivergence)
 	mux.HandleFunc("GET /api/v1/market/taker-flow", mh.GetTakerFlow)
+	mux.HandleFunc("GET /api/v1/market/net-position", mh.GetNetPosition)
 	mux.HandleFunc("GET /api/v1/market/participation", mh.GetParticipation)
 	mux.HandleFunc("GET /api/v1/market/volume-share", mh.GetVolumeShare)
 	mux.HandleFunc("GET /api/v1/market/print-size", mh.GetPrintSize)

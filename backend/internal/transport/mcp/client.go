@@ -671,6 +671,16 @@ func (c *APIClient) GetTakerFlow(ctx context.Context, exchange, symbol string) (
 	return c.get(ctx, "/api/v1/market/taker-flow", q)
 }
 
+// GetNetPosition estimates net long and net short from open interest and taker flow.
+func (c *APIClient) GetNetPosition(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/net-position", q)
+}
+
 // GetVolumeShare returns how futures quote volume splits across Binance, Bybit, and OKX.
 func (c *APIClient) GetVolumeShare(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

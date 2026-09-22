@@ -127,6 +127,8 @@
     "title": "Vadeli bant",
     "subtitle": "Açık faiz, fonlama, likidasyonlar ve CVD — Binance USD-M ve Bybit linear. Yalnızca bilgilendirme.",
     "oi": "Açık faiz",
+    "netPosition": "Net long / short",
+    "netPositionHint": "Açık faiz ve taker alış/satıştan. Artı, o tarafın büyüdüğü anlamına gelir.",
     "oiNow": "Nominal",
     "oi1h": "1s",
     "oi4h": "4s",

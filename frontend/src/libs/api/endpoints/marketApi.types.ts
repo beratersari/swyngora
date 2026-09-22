@@ -132,6 +132,26 @@ export type MarketBreadth = {
 };
 export type MarketBreadthQuery = { exchange?: string; limit?: number };
 
+export type MarketNetPositionWindow = {
+  window?: string;
+  netLong?: string;
+  netShort?: string;
+  buy?: string;
+  sell?: string;
+  oiDelta?: string;
+  unexplained?: string;
+  complete?: boolean;
+  summary?: string;
+};
+export type MarketNetPosition = {
+  symbol?: string;
+  exchange?: string;
+  summary?: string;
+  note?: string;
+  windows?: MarketNetPositionWindow[];
+};
+export type NetPositionQuery = { symbol: string; exchange?: string };
+
 export type FearGreedFactor = {
   id?: string;
   name?: string;

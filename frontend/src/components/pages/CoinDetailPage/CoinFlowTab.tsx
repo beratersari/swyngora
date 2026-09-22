@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { CoinInsightPanel, CoinInsightStack } from '@/components/organisms/CoinInsightPanel';
+import { PositionSidePanel } from '@/components/organisms/PositionSidePanel';
 import {
   rtkErrorMessage,
   useGetMarketAbsorptionQuery,
@@ -9,6 +10,7 @@ import {
   useGetMarketLiquiditySweepsQuery,
   useGetMarketPerpDepthQuery,
   useGetMarketTakerFlowQuery,
+  useGetMarketNetPositionQuery,
   useGetMarketVolumeProfileQuery,
   useGetMarketVolumeSurgeQuery,
   useGetMarketVWAPQuery,
@@ -28,6 +30,7 @@ export function CoinFlowTab({ symbol, exchange }: CoinFlowTabProps) {
   const perp = useGetMarketPerpDepthQuery(tapeArg);
   const surge = useGetMarketVolumeSurgeQuery(tapeArg);
   const taker = useGetMarketTakerFlowQuery(tapeArg);
+  const netPosition = useGetMarketNetPositionQuery(tapeArg);
   const flow = useGetMarketFlowAtPricesQuery({ ...tapeArg, window: '15m' });
   const vwap = useGetMarketVWAPQuery({ ...tapeArg, window: '24h' });
   const profile = useGetMarketVolumeProfileQuery(tapeArg);
@@ -53,6 +56,11 @@ export function CoinFlowTab({ symbol, exchange }: CoinFlowTabProps) {
 
   return (
     <CoinInsightStack>
+      <PositionSidePanel
+        data={rtkCurrent(netPosition)}
+        error={netPosition.isError ? err(netPosition.error) : null}
+        isLoading={rtkCurrentPending(netPosition)}
+      />
       {rows.map((row) => (
         <CoinInsightPanel
           key={row.key}

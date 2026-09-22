@@ -127,6 +127,8 @@
     "title": "Futures tape",
     "subtitle": "Open interest, funding, liquidations, and CVD from Binance USD-M and Bybit linear. Informational only.",
     "oi": "Open interest",
+    "netPosition": "Net long / short",
+    "netPositionHint": "From open interest and taker buy/sell. Positive means that side grew.",
     "oiNow": "Notional",
     "oi1h": "1h",
     "oi4h": "4h",

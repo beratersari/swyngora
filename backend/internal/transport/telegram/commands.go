@@ -132,6 +132,8 @@ func (r *Router) HandleMessage(ctx context.Context, chatID, userID int64, text s
 		return textReply(r.cmdRSIHeat(ctx, args))
 	case "/oi", "/openinterest", "/open-interest":
 		return textReply(r.cmdOpenInterest(ctx, args))
+	case "/netpos", "/netposition", "/sides":
+		return textReply(r.cmdNetPosition(ctx, args))
 	case "/perpliq", "/perpdepth", "/depthoverview":
 		return textReply(r.cmdPerpDepthOverview(ctx, args))
 	case "/fear", "/fng", "/feargreed":
@@ -417,6 +419,22 @@ func (r *Router) cmdFearGreed(ctx context.Context) string {
 		return friendlyErr(err)
 	}
 	return FormatFearGreed(got)
+}
+
+func (r *Router) cmdNetPosition(ctx context.Context, args []string) string {
+	if len(args) < 1 {
+		return "Usage: /netpos <symbol> [binance|bybit|all]\nExample: /netpos BTCUSDT"
+	}
+	symbol := strings.ToUpper(args[0])
+	exchange := "all"
+	if len(args) > 1 {
+		exchange = strings.ToLower(args[1])
+	}
+	got, err := r.market.GetNetPosition(ctx, exchange, symbol)
+	if err != nil {
+		return friendlyErr(err)
+	}
+	return FormatNetPosition(got)
 }
 
 func (r *Router) cmdOpenInterest(ctx context.Context, args []string) string {
