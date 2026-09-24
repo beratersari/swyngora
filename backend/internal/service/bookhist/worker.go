@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"time"
+
+	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
 // Worker periodically snapshots live spot books.
@@ -34,12 +36,40 @@ func (w *Worker) Start(ctx context.Context) {
 		w.Interval = time.Minute
 	}
 	w.RunOnce(ctx)
+	w.RunFlashes(ctx)
+	nextSnap := w.now().Add(w.Interval)
 	for {
-		if err := w.sleep(ctx, w.Interval); err != nil {
+		if err := w.sleep(ctx, domain.BookFlashSample); err != nil {
 			w.Logger.Info("order book history worker stopped", "err", err)
 			return
 		}
-		w.RunOnce(ctx)
+		w.RunFlashes(ctx)
+		if !w.now().Before(nextSnap) {
+			w.RunOnce(ctx)
+			nextSnap = w.now().Add(w.Interval)
+		}
+	}
+}
+
+// RunFlashes samples live walls so a rest that vanishes inside the minute is kept.
+func (w *Worker) RunFlashes(ctx context.Context) {
+	if w == nil || w.Hist == nil {
+		return
+	}
+	if w.Logger == nil {
+		w.Logger = slog.Default()
+	}
+	if w.now == nil {
+		w.now = time.Now
+	}
+	now := w.now().UTC()
+	for _, job := range w.Hist.Jobs() {
+		if ctx.Err() != nil {
+			return
+		}
+		if _, err := w.Hist.SaveFlashes(ctx, job.ex, job.symbol, now); err != nil {
+			w.Logger.Debug("order book flash skip", "exchange", job.ex, "symbol", job.symbol, "err", err)
+		}
 	}
 }
 

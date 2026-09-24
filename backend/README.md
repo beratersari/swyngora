@@ -34,7 +34,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/delist-schedule` | Cached spot delist schedule (`exchange=`; halt `delistTime` + `announcedAt`; last 30 days + next ~31 days; Binance needs `BINANCE_API_KEY`, Bybit is public announcements) |
 | `GET` | `/api/v1/market/post-delist` | Off-venue last + candles after this exchange halted the pair (other listed venue or CoinGecko USD; informational) |
 | `GET` | `/api/v1/market/orderbook` | Grouped live spot book + ±% pressure/wall analysis |
-| `GET` | `/api/v1/market/orderbook/history` | Stored book at a time, or a newest-first list |
+| `GET` | `/api/v1/market/orderbook/history` | Stored book at a time, or a newest-first list; `flashes` are walls that rested only a few seconds inside that minute |
 | `GET` | `/api/v1/market/orderbook/history/compare` | Which price levels gained or lost liquidity between two times |
 | `GET` | `/api/v1/market/orderbook/icebergs` | Same-price clip eaten then refilled (bid and ask) |
 | `GET` | `/api/v1/market/orderbook/liquidity-flow` | Resting size that was traded vs pulled vs added (bid and ask) over 5m/15m/1h |

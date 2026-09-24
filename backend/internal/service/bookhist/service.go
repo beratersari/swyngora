@@ -19,6 +19,8 @@ type Service struct {
 
 	mu   sync.Mutex
 	seen map[string]time.Time
+
+	watch domain.BookFlashWatch
 }
 
 // Note records a pair that users have asked about.
@@ -120,9 +122,11 @@ func (s *Service) SnapshotAt(ctx context.Context, exchange, symbol string, at ti
 	}
 	marked, ok := domain.NearestBookSnapshot([]domain.BookHistorySnapshot{*got}, at.UTC(), domain.DefaultBookHistorySlack)
 	if ok {
+		s.attachFlashes(ctx, &marked)
 		return &marked, nil
 	}
 	got.Complete = false
+	s.attachFlashes(ctx, got)
 	return got, nil
 }
 
@@ -213,7 +217,60 @@ func (s *Service) SaveSymbol(ctx context.Context, ex domain.Exchange, symbol str
 		raw.Symbol = symbol
 	}
 	snap := domain.CaptureBookHistory(ex, *raw, now)
+	s.keepFlashes(ctx, ex, symbol, now, snap.Walls, true)
 	return s.Store.InsertSnapshot(ctx, snap)
+}
+
+// SaveFlashes reads the live book and stores walls that vanish before the next minute sample.
+func (s *Service) SaveFlashes(ctx context.Context, ex domain.Exchange, symbol string, now time.Time) (int, error) {
+	if s == nil || s.Store == nil {
+		return 0, nil
+	}
+	p := s.Books[ex]
+	if p == nil {
+		return 0, nil
+	}
+	symbol = domain.NormalizeSymbol(ex, symbol)
+	if symbol == "" {
+		return 0, nil
+	}
+	raw, err := p.GetOrderBook(ctx, domain.OrderBookQuery{Symbol: symbol, Limit: domain.MaxOrderBookRawLimit})
+	if err != nil {
+		return 0, err
+	}
+	if raw == nil {
+		return 0, nil
+	}
+	return s.keepFlashes(ctx, ex, symbol, now, domain.BookWalls(*raw), false), nil
+}
+
+func (s *Service) keepFlashes(ctx context.Context, ex domain.Exchange, symbol string, now time.Time, walls []domain.BookHistoryWall, minute bool) int {
+	if s == nil || s.Store == nil {
+		return 0
+	}
+	s.mu.Lock()
+	done := s.watch.Observe(ex, symbol, now, walls, minute)
+	s.mu.Unlock()
+	n := 0
+	for _, f := range done {
+		ok, err := s.Store.InsertFlash(ctx, f)
+		if err == nil && ok {
+			n++
+		}
+	}
+	return n
+}
+
+func (s *Service) attachFlashes(ctx context.Context, snap *domain.BookHistorySnapshot) {
+	if s == nil || s.Store == nil || snap == nil || snap.SampledAt.IsZero() {
+		return
+	}
+	from := snap.SampledAt.UTC()
+	rows, err := s.Store.ListFlashes(ctx, string(snap.Exchange), snap.Symbol, from, from.Add(domain.DefaultBookHistoryBucket))
+	if err != nil || len(rows) == 0 {
+		return
+	}
+	domain.AttachBookFlashes(snap, rows)
 }
 
 func parseBookExchange(raw string) (domain.Exchange, error) {

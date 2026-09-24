@@ -91,6 +91,8 @@ import type {
   OrderBookQuery,
   OrderBookHeatmap,
   OrderBookHeatmapQuery,
+  BookHistoryReport,
+  BookHistoryQuery,
   LiquidationHuntHeatmap,
   LiquidationHuntHeatmapQuery,
   LiquidationHunt,
@@ -298,6 +300,13 @@ export const marketApi = baseApi.injectEndpoints({
         params: compactParams({ ...arg }),
       }),
       providesTags: (_r, _e, arg) => [{ type: 'OrderBook' as const, id: orderBookTagId(arg) }],
+    }),
+
+    getOrderBookHistory: build.query<BookHistoryReport, BookHistoryQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/orderbook/history',
+        params: compactParams({ ...arg }),
+      }),
     }),
 
     getSpotOrderBookHeatmap: build.query<OrderBookHeatmap, OrderBookHeatmapQuery>({
@@ -728,6 +737,7 @@ export const {
   useGetTicker24hQuery,
   useGetSpotOrderBookQuery,
   useGetSpotOrderBookHeatmapQuery,
+  useGetOrderBookHistoryQuery,
   useGetSupplyQuery,
   useGetHoldersQuery,
   useGetAssetProfileQuery,

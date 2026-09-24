@@ -8,7 +8,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const bookHistoryNote = "Stored books are 1-minute samples of the live spot ladder (top grouped levels, ±2% liquidity and walls), not a full 24h tape. Compare uses the nearest sample to each time. Informational only — not financial advice."
+const bookHistoryNote = "Stored books are 1-minute samples of the live spot ladder (top grouped levels, ±2% liquidity and walls), not a full 24h tape. Walls that rested only a few seconds between those samples are kept as brief marks on that minute. Compare uses the nearest sample to each time. Informational only — not financial advice."
 
 // BookHistoryReader is the durable order-book archive (optional).
 type BookHistoryReader interface {

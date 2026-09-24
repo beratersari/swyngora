@@ -16,6 +16,38 @@ export type HolderWallet = components['schemas']['HolderWallet'];
 export type SpotOrderBook = components['schemas']['SpotOrderBook'];
 export type OrderBookLevel = components['schemas']['OrderBookLevel'];
 export type OrderBookQuery = NonNullable<operations['getSpotOrderBook']['parameters']['query']>;
+export type BookHistoryFlash = {
+  side?: string;
+  price?: string;
+  notional?: string;
+  seenFrom?: string;
+  seenUntil?: string;
+  durationSec?: number;
+  brief?: boolean;
+};
+
+export type BookHistorySnapshot = {
+  sampledAt?: string;
+  mid?: string;
+  flashes?: BookHistoryFlash[];
+};
+
+export type BookHistoryReport = {
+  symbol?: string;
+  exchange?: string;
+  summary?: string;
+  note?: string;
+  snapshot?: BookHistorySnapshot;
+  snapshots?: BookHistorySnapshot[];
+};
+
+export type BookHistoryQuery = {
+  symbol: string;
+  exchange?: string;
+  at?: string;
+  limit?: number;
+};
+
 export type OrderBookHeatmap = components['schemas']['OrderBookHeatmap'];
 export type OrderBookHeatmapQuery = NonNullable<
   operations['getSpotOrderBookHeatmap']['parameters']['query']

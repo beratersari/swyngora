@@ -90,6 +90,8 @@ type bookHistWallDTO struct {
 	Notional    string  `json:"notional"`
 	DistancePct string  `json:"distancePct,omitempty"`
 	Share       float64 `json:"share,omitempty"`
+	Brief       bool    `json:"brief,omitempty"`
+	SeenSeconds float64 `json:"seenSeconds,omitempty"`
 }
 
 type bookHistSnapDTO struct {
@@ -114,6 +116,18 @@ type bookHistSnapDTO struct {
 	Bids         []bookHistLevelDTO `json:"bids,omitempty"`
 	Asks         []bookHistLevelDTO `json:"asks,omitempty"`
 	Walls        []bookHistWallDTO  `json:"walls,omitempty"`
+	Flashes      []bookHistFlashDTO `json:"flashes,omitempty"`
+}
+
+type bookHistFlashDTO struct {
+	Side        string  `json:"side"`
+	Price       string  `json:"price"`
+	Quantity    string  `json:"quantity"`
+	Notional    string  `json:"notional"`
+	SeenFrom    string  `json:"seenFrom"`
+	SeenUntil   string  `json:"seenUntil"`
+	DurationSec float64 `json:"durationSec"`
+	Brief       bool    `json:"brief"`
 }
 
 type bookHistoryResponse struct {
@@ -206,6 +220,7 @@ func bookSnapToDTO(s domain.BookHistorySnapshot, full bool) bookHistSnapDTO {
 		out.Bids = bookLevelsDTO(s.Bids)
 		out.Asks = bookLevelsDTO(s.Asks)
 		out.Walls = bookWallsDTO(s.Walls)
+		out.Flashes = bookFlashesDTO(s.Flashes)
 	}
 	return out
 }
@@ -227,6 +242,20 @@ func bookWallsDTO(in []domain.BookHistoryWall) []bookHistWallDTO {
 		out = append(out, bookHistWallDTO{
 			Side: w.Side, Price: formatHistQty(w.Price), Quantity: formatHistQty(w.Quantity),
 			Notional: formatHistQty(w.Notional), DistancePct: formatHistQty(w.DistancePct), Share: w.Share,
+			Brief: w.Brief, SeenSeconds: w.SeenSeconds,
+		})
+	}
+	return out
+}
+
+func bookFlashesDTO(in []domain.BookHistoryFlash) []bookHistFlashDTO {
+	out := make([]bookHistFlashDTO, 0, len(in))
+	for _, f := range in {
+		out = append(out, bookHistFlashDTO{
+			Side: f.Side, Price: formatHistQty(f.Price), Quantity: formatHistQty(f.Quantity),
+			Notional: formatHistQty(f.Notional),
+			SeenFrom: f.SeenFrom.UTC().Format(time.RFC3339), SeenUntil: f.SeenUntil.UTC().Format(time.RFC3339),
+			DurationSec: f.Duration.Seconds(), Brief: true,
 		})
 	}
 	return out

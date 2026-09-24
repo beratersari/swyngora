@@ -18,6 +18,7 @@ export {
   useGetTicker24hQuery,
   useGetSpotOrderBookQuery,
   useGetSpotOrderBookHeatmapQuery,
+  useGetOrderBookHistoryQuery,
   useGetSupplyQuery,
   useGetHoldersQuery,
   useGetAssetProfileQuery,

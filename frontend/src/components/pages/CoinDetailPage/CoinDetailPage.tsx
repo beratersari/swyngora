@@ -138,6 +138,7 @@ import {
   scannerResultsToChartMarkers,
 } from './CoinDetailPage.helpers';
 import { CoinFlowTab } from './CoinFlowTab';
+import { PastOrderBook } from './PastOrderBook';
 import { CoinStructureTab } from './CoinStructureTab';
 
 /**
@@ -1089,6 +1090,7 @@ export function CoinDetailPage() {
                             : null
                         }
                       />
+                      <PastOrderBook symbol={symbol} exchange={exchangeArg} />
                     </TabStack>
                   ),
                 },

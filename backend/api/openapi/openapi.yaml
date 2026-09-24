@@ -624,8 +624,10 @@ paths:
         Regular samples of the live spot book: grouped **bid/ask levels**,
         **spread**, **total liquidity**, **imbalance**, and **large walls**.
         Pass `at` for the snapshot nearest that time. Omit `at` to list
-        recent samples (`from` / `to` optional). 1-minute samples, not a
-        24h tape. Informational only.
+        recent samples (`from` / `to` optional). 1-minute ladder samples, not a
+        24h tape. A snapshot's `flashes` are walls that rested only a few
+        seconds inside that minute and were gone before the ladder was stored.
+        Informational only.
       operationId: getOrderBookHistory
       tags: [Market]
       parameters:

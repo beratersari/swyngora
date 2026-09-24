@@ -41,6 +41,8 @@ type BookHistoryWall struct {
 	Notional    float64
 	DistancePct float64
 	Share       float64
+	Brief       bool
+	SeenSeconds float64
 }
 
 // BookHistorySnapshot is one durable order-book sample.
@@ -64,6 +66,7 @@ type BookHistorySnapshot struct {
 	Bids         []BookHistoryLevel
 	Asks         []BookHistoryLevel
 	Walls        []BookHistoryWall
+	Flashes      []BookHistoryFlash
 	Complete     bool
 	SlackSeconds float64
 }
@@ -124,6 +127,8 @@ type BookHistoryStore interface {
 	InsertSnapshot(ctx context.Context, rec BookHistorySnapshot) (inserted bool, err error)
 	NearestAt(ctx context.Context, exchange, symbol string, at time.Time) (*BookHistorySnapshot, error)
 	ListSnapshots(ctx context.Context, q BookHistoryQuery) ([]BookHistorySnapshot, error)
+	InsertFlash(ctx context.Context, rec BookHistoryFlash) (inserted bool, err error)
+	ListFlashes(ctx context.Context, exchange, symbol string, from, to time.Time) ([]BookHistoryFlash, error)
 	PurgeOlderThan(ctx context.Context, cutoff time.Time) (int, error)
 }
 
@@ -373,10 +378,11 @@ func StripBookLevels(s BookHistorySnapshot) BookHistorySnapshot {
 	s.Bids = nil
 	s.Asks = nil
 	s.Walls = nil
+	s.Flashes = nil
 	return s
 }
 
-const bookHistoryDisclaimer = "Stored books are 1-minute samples of the live spot ladder (top grouped levels, ±2% liquidity and walls), not a full 24h tape. Compare uses the nearest sample to each time. Informational only — not financial advice."
+const bookHistoryDisclaimer = "Stored books are 1-minute samples of the live spot ladder (top grouped levels, ±2% liquidity and walls), not a full 24h tape. Walls that rested only a few seconds between those samples are kept as brief marks on that minute. Compare uses the nearest sample to each time. Informational only — not financial advice."
 
 func bookLevelsFromGrouped(in []OrderBookLevel) []BookHistoryLevel {
 	out := make([]BookHistoryLevel, 0, len(in))

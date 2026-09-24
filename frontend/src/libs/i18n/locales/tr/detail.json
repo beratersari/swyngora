@@ -219,6 +219,14 @@
     "askHeavy": "Satış ağır",
     "balanced": "Dengeli"
   },
+  "pastBook": {
+    "title": "Geçmiş emir defteri",
+    "hint": "Her dakika merdiveni saklar. Birkaç saniye durup sonra kalkan bir duvar, o dakikanın anlık görüntüsü kaçırmış olsa bile burada durur.",
+    "when": "Dakika",
+    "empty": "Kayıtlı defter yok",
+    "none": "Bu dakikada kısa duvar yok.",
+    "flash": "{{side}} {{price}} · {{notional}} · {{seconds}} sn durdu, sonra kalktı"
+  },
   "orderDepth": {
     "title": "Piyasa derinliği",
     "subtitle": "Fiyata göre birikimli bekleyen miktar. Yeşil orta fiyatın solunda alış, kırmızı sağında satış. Merdivenle aynı canlı defter.",

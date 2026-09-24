@@ -54,6 +54,14 @@ func (m *memStore) ListSnapshots(_ context.Context, q domain.BookHistoryQuery) (
 	return out, nil
 }
 
+func (m *memStore) InsertFlash(context.Context, domain.BookHistoryFlash) (bool, error) {
+	return false, nil
+}
+
+func (m *memStore) ListFlashes(context.Context, string, string, time.Time, time.Time) ([]domain.BookHistoryFlash, error) {
+	return nil, nil
+}
+
 func (m *memStore) PurgeOlderThan(_ context.Context, cutoff time.Time) (int, error) {
 	kept := m.rows[:0]
 	n := 0

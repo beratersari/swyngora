@@ -9,8 +9,11 @@ liquidity.
 
 ## Behavior
 
-A background worker (default every **1 minute**) samples majors plus recently
-viewed pairs on Binance, Coinbase, and Bybit independently. Each sample
+A background worker samples majors plus recently viewed pairs on Binance,
+Coinbase, and Bybit independently. The full ladder is stored every **1 minute**.
+Between those minutes the same books are read about every **5 seconds**. A wall
+that shows up and leaves before the next ladder (for example it rests 10 seconds)
+is stored as a **brief** mark and returned on that minute's snapshot. Each sample
 stores:
 
 - grouped **bid/ask levels** (top 25)
@@ -18,6 +21,7 @@ stores:
 - **total bid/ask liquidity** inside ±2%
 - **imbalance** / pressure
 - large **walls**
+- **brief walls** that did not survive until the minute sample (`flashes`)
 
 Duplicates for the same venue + pair + minute are ignored. Rows older than
 `ORDERBOOK_HISTORY_RETENTION` (default 7 days) are purged.

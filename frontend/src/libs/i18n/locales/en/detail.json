@@ -219,6 +219,14 @@
     "askHeavy": "More asks",
     "balanced": "Balanced"
   },
+  "pastBook": {
+    "title": "Past order book",
+    "hint": "Each minute keeps the ladder. A wall that rested only a few seconds and then left is listed on that minute, even when the snapshot itself missed it.",
+    "when": "Minute",
+    "empty": "No stored book yet",
+    "none": "No brief wall in this minute.",
+    "flash": "{{side}} {{price}} · {{notional}} · stayed {{seconds}}s, then left"
+  },
   "orderDepth": {
     "title": "Market depth",
     "subtitle": "Cumulative resting size by price. Green is bids left of mid, red is asks to the right. Same live book as the ladder.",
