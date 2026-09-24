@@ -134,6 +134,32 @@ export type CloseMarginPositionArg = {
 };
 
 type BookArg = { portfolioId?: string };
+
+export type PortfolioStressLine = {
+  kind?: string;
+  symbol?: string;
+  side?: string;
+  asset?: string;
+  movePct?: number;
+  shockedValue?: number;
+  shockedUnrealized?: number;
+  liquidated?: boolean;
+};
+
+export type PortfolioStressReport = {
+  equity?: number;
+  shockedEquity?: number;
+  equityDelta?: number;
+  totalPnl?: number;
+  shockedTotalPnl?: number;
+  unrealizedPnl?: number;
+  shockedUnrealizedPnl?: number;
+  marginEquity?: number;
+  shockedMarginEquity?: number;
+  liquidated?: number;
+  lines?: PortfolioStressLine[];
+  note?: string;
+};
 type CashMoveArg = { amount: number; note?: string; portfolioId?: string };
 type CashMovementListResponse = {
   clientId?: string;
@@ -510,6 +536,16 @@ export const portfolioApi = baseApi.injectEndpoints({
       }),
       providesTags: ['Portfolio'],
     }),
+    stressPortfolio: build.mutation<
+      PortfolioStressReport,
+      { portfolioId?: string; moves: { asset: string; movePct: number }[] }
+    >({
+      query: (body) => ({
+        url: '/api/v1/portfolio/stress',
+        method: 'POST',
+        body,
+      }),
+    }),
     continuePortfolioRebalance: build.mutation<RebalanceResult, { id: string } & BookArg>({
       query: ({ id, portfolioId }) => ({
         url: `/api/v1/portfolio/rebalances/${encodeURIComponent(id)}/continue`,
@@ -528,6 +564,7 @@ export const {
   useRenamePortfolioMutation,
   useDeletePortfolioMutation,
   useGetPortfolioPerformanceQuery,
+  useStressPortfolioMutation,
   useListPortfolioCashMovementsQuery,
   useDepositPortfolioCashMutation,
   useWithdrawPortfolioCashMutation,

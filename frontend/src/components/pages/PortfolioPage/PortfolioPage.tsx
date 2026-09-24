@@ -13,6 +13,7 @@ import { PortfolioMarginPositionsTable } from '@/components/organisms/PortfolioM
 import { PortfolioOrdersTable } from '@/components/organisms/PortfolioOrdersTable';
 import { PortfolioPositionsTable } from '@/components/organisms/PortfolioPositionsTable';
 import { PortfolioSummaryStrip } from '@/components/organisms/PortfolioSummaryStrip';
+import { PortfolioStressPanel } from '@/components/organisms/PortfolioStressPanel';
 import { PortfolioTradesTable } from '@/components/organisms/PortfolioTradesTable';
 import { RebalanceResultsTable } from '@/components/organisms/RebalanceResultsTable';
 import {
@@ -37,6 +38,7 @@ import {
   usePlaceMarginOrderMutation,
   usePlacePortfolioOrderMutation,
   useSetMarginModeMutation,
+  useStressPortfolioMutation,
   useTransferPortfolioCashMutation,
   useWithdrawPortfolioCashMutation,
   type PortfolioPerformancePeriod,
@@ -144,6 +146,7 @@ export function PortfolioPage() {
   const [transfer, transferState] = useTransferPortfolioCashMutation();
   const transferKeyRef = useRef<string | null>(null);
   const [setMarginMode, marginModeState] = useSetMarginModeMutation();
+  const [stressBook, stressState] = useStressPortfolioMutation();
   const [placeMargin, placeMarginState] = usePlaceMarginOrderMutation();
   const [closeMargin, closeMarginState] = useCloseMarginPositionMutation();
   const [continueRebalance, continueRebalanceState] = useContinuePortfolioRebalanceMutation();
@@ -421,6 +424,24 @@ export function PortfolioPage() {
                   void message.success(t('portfolio:margin.modeSuccess', { mode }));
                 }}
                 onSubmit={onMargin}
+              />
+            </PanelCard>
+          </Section>
+
+          <Section>
+            <PanelCard>
+              <PortfolioStressPanel
+                disabled={needBook}
+                isLoading={stressState.isLoading}
+                report={stressState.data}
+                errorMessage={
+                  stressState.isError
+                    ? rtkErrorMessage(stressState.error, { resource: t('portfolio:resource') })
+                    : null
+                }
+                onPreview={(moves) => {
+                  void stressBook({ portfolioId: bookId, moves });
+                }}
               />
             </PanelCard>
           </Section>

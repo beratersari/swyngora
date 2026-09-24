@@ -33,6 +33,16 @@
     "1m": "1A",
     "3m": "3A"
   },
+  "stress": {
+    "title": "Piyasa hareket ederse",
+    "hint": "Düşüş veya yükselişten önce özkaynak, toplam kâr/zarar ve marjı görün. Örnek: BTC −%10 ve ETH −%15. İşlem yapılmaz.",
+    "move": "{{asset}} hareket %",
+    "preview": "Önizle",
+    "equity": "Özkaynak {{now}} → {{next}} ({{delta}})",
+    "pnl": "Toplam kâr/zarar {{now}} → {{next}}",
+    "margin": "Marj özkaynağı {{now}} → {{next}}",
+    "liquidated": "{{n}} marj pozisyonu likide olur"
+  },
   "equityChart": {
     "title": "Özkaynak",
     "empty": "Henüz örnek yok — işlem yapın veya sonraki anlık görüntüyü bekleyin.",

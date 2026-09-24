@@ -1876,6 +1876,36 @@ func (c *APIClient) GetPaperTradingCosts(ctx context.Context, exchange string) (
 	return c.get(ctx, "/api/v1/portfolio/trading-costs", q)
 }
 
+func (c *APIClient) StressPortfolio(ctx context.Context, clientID, moves string) (json.RawMessage, error) {
+	body := map[string]any{"moves": parseStressMoveBody(moves)}
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/portfolio/stress"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodPost, path, body)
+}
+
+func parseStressMoveBody(raw string) []map[string]any {
+	var out []map[string]any
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		asset, pct, ok := strings.Cut(part, ":")
+		if !ok {
+			continue
+		}
+		f, err := strconv.ParseFloat(strings.TrimSpace(pct), 64)
+		if err != nil {
+			continue
+		}
+		out = append(out, map[string]any{"asset": strings.TrimSpace(asset), "movePct": f})
+	}
+	return out
+}
+
 func (c *APIClient) GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("clientId", clientID)

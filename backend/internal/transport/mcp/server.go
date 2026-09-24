@@ -160,6 +160,7 @@ type DataPort interface {
 	ListPortfolioCashMovements(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	TransferPortfolioCash(ctx context.Context, clientID, fromPortfolioID, toPortfolioID string, amount float64, note string) (json.RawMessage, error)
 	ListTransferAttempts(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
+	StressPortfolio(ctx context.Context, clientID, moves string) (json.RawMessage, error)
 	GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
 	PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct *float64) (json.RawMessage, error)
 	DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
@@ -2818,6 +2819,28 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		}
 		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.GetPortfolioPerformance(ctx, clientID, req.GetString("period", "1w"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("stress_portfolio",
+		mcp.WithDescription("Preview paper equity, total P&L, and margin equity if named coins move. moves is BTC:-10,ETH:-15. Nothing is traded. A margin row that crosses liquidation loses its locked margin."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
+		mcp.WithString("moves", mcp.Required(), mcp.Description("Comma list asset:percent, e.g. BTC:-10,ETH:-15")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		moves, err := req.RequireString("moves")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		raw, err := api.StressPortfolio(ctx, clientID, moves)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

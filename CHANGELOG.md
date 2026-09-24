@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Portfolio stress:** preview equity, total P&L, and margin if named coins move (BTC −10%, ETH −15%) before it happens. `POST /api/v1/portfolio/stress`, MCP `stress_portfolio`, portfolio screen (`docs/features/risk-limits.md`)
 - **Net long and net short:** how much futures exposure went to the long side and the short side over 15m, 1h, and 4h, estimated from the open-interest change and taker buy versus sell. Positive means that side grew (for example longs +45M and shorts −15M while open interest rose 30M). `GET /api/v1/market/net-position`, MCP `get_net_position`, coin tape and flow tab (`docs/features/net-position.md`)
 - **Fear and greed index:** a 0–100 score from our own tape (24h breadth, BTC move, volatility versus usual, OI-weighted funding, account long/short, 24h liquidations, perp bid share, taker flow), the input that moved it the most, and stored past scores (1h / 4h / 24h / 7d). Not the Binance or CoinGlass index. `GET /api/v1/market/fear-greed`, MCP `get_fear_greed`, Markets page, Telegram `/fear` (`docs/features/fear-greed.md`)
 - **Desk screens for leftover market reads:** Markets shows breadth (up vs down share) next to perp bid/ask. `/surges` lists coins whose 5m/15m/1h volume is a multiple of typical. Coin detail **Flow** (perp depth, surge, taker, VWAP, profile, absorption, sweeps, whales, icebergs, book flow) and **Structure** (correlation, volatility, levels, squeeze, positioning, venue divergence).

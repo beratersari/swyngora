@@ -229,6 +229,7 @@ export {
   useRenamePortfolioMutation,
   useDeletePortfolioMutation,
   useGetPortfolioPerformanceQuery,
+  useStressPortfolioMutation,
   useListPortfolioCashMovementsQuery,
   useDepositPortfolioCashMutation,
   useWithdrawPortfolioCashMutation,

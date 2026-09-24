@@ -68,6 +68,10 @@ cd backend
 go test ./internal/domain/ ./internal/service/portfolio/ ./internal/transport/http/handler/ -run 'Risk' -count=1
 ```
 
+## What-if (not a limit)
+
+`POST /api/v1/portfolio/stress` with `moves: [{asset, movePct}]` reprices the open book before anything happens. BTC −10 and ETH −15 return equity, total P&L, and margin equity before and after. A margin row that crosses its liquidation price loses the margin locked on it. The portfolio screen shows this under **If the market moves**. Nothing is saved or traded. MCP `stress_portfolio` takes `moves` as `BTC:-10,ETH:-15`.
+
 ## Limitations
 
 - Saved limits (caps + UTC day baseline) are included when a paper book is exported and restored (`docs/features/user-data-export.md`).

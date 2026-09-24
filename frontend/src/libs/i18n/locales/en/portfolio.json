@@ -33,6 +33,16 @@
     "1m": "1M",
     "3m": "3M"
   },
+  "stress": {
+    "title": "If the market moves",
+    "hint": "See equity, total P&L, and margin before a drop or rally. Example: BTC −10% and ETH −15%. Nothing is traded.",
+    "move": "{{asset}} move %",
+    "preview": "Preview",
+    "equity": "Equity {{now}} → {{next}} ({{delta}})",
+    "pnl": "Total P&L {{now}} → {{next}}",
+    "margin": "Margin equity {{now}} → {{next}}",
+    "liquidated": "{{n}} margin position would be liquidated"
+  },
   "equityChart": {
     "title": "Equity",
     "empty": "No equity samples yet — trade or wait for the next snapshot.",

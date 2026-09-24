@@ -3731,6 +3731,59 @@ func (b *Backend) GetPaperTradingCosts(_ context.Context, exchange string) (json
 	return mustJSON(map[string]any{"items": items, "note": note})
 }
 
+func (b *Backend) StressPortfolio(ctx context.Context, clientID, moves string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("portfolio service unavailable")
+	}
+	parsed := parseStressMoves(moves)
+	rep, err := b.Portfolio.Stress(ctx, clientID, PortfolioIDFrom(ctx), "", parsed)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(stressReportMap(rep))
+}
+
+func parseStressMoves(raw string) []domain.StressMove {
+	var out []domain.StressMove
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		asset, pct, ok := strings.Cut(part, ":")
+		if !ok {
+			continue
+		}
+		f, err := strconv.ParseFloat(strings.TrimSpace(pct), 64)
+		if err != nil {
+			continue
+		}
+		out = append(out, domain.StressMove{Asset: asset, MovePct: f})
+	}
+	return out
+}
+
+func stressReportMap(rep *domain.StressReport) map[string]any {
+	if rep == nil {
+		return map[string]any{}
+	}
+	lines := make([]map[string]any, 0, len(rep.Lines))
+	for _, ln := range rep.Lines {
+		lines = append(lines, map[string]any{
+			"kind": ln.Kind, "symbol": ln.Symbol, "side": ln.Side, "asset": ln.Asset,
+			"movePct": ln.MovePct, "mark": ln.Mark, "shockedMark": ln.ShockedMark,
+			"value": ln.Value, "shockedValue": ln.ShockedValue,
+			"unrealized": ln.Unrealized, "shockedUnrealized": ln.ShockedUnrealized,
+			"liquidated": ln.Liquidated,
+		})
+	}
+	return map[string]any{
+		"equity": rep.Equity, "shockedEquity": rep.ShockedEquity, "equityDelta": rep.EquityDelta,
+		"totalPnl": rep.TotalPnL, "shockedTotalPnl": rep.ShockedTotalPnL,
+		"unrealizedPnl": rep.UnrealizedPnL, "shockedUnrealizedPnl": rep.ShockedUnrealizedPnL,
+		"positionsValue": rep.PositionsValue, "shockedPositionsValue": rep.ShockedPositionsValue,
+		"marginEquity": rep.MarginEquity, "shockedMarginEquity": rep.ShockedMarginEquity,
+		"liquidated": rep.Liquidated, "lines": lines, "note": rep.Note,
+	}
+}
+
 func (b *Backend) GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)

@@ -5297,6 +5297,41 @@ paths:
           $ref: '#/components/responses/Error'
         '400':
           $ref: '#/components/responses/Error'
+  /api/v1/portfolio/stress:
+    post:
+      summary: Preview a paper book after price shocks
+      description: |
+        Reprices the open spot and margin book. Each move is a percent on a
+        base asset (BTC -10, ETH -15). Returns equity, total P&L, and margin
+        equity before and after. A margin row that crosses its liquidation
+        price loses the margin locked on it. Nothing is traded.
+      operationId: stressPortfolio
+      tags: [Portfolio]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [moves]
+              properties:
+                portfolioId: { type: string }
+                moves:
+                  type: array
+                  items:
+                    type: object
+                    required: [asset, movePct]
+                    properties:
+                      asset: { type: string, example: BTC }
+                      movePct: { type: number, example: -10 }
+      responses:
+        '200':
+          description: Before and after totals
+          content:
+            application/json:
+              schema: { type: object }
+        '400':
+          $ref: '#/components/responses/Error'
   /api/v1/portfolio/risk-limits:
     get:
       summary: Get paper risk limits and live status
