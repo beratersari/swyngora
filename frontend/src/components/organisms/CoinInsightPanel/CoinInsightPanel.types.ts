@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { WithLoadingProps } from '@/components/types';
 
 export type CoinInsightStat = { label: string; value: string };
@@ -7,4 +8,5 @@ export type CoinInsightPanelProps = WithLoadingProps & {
   summary?: string | null;
   stats?: CoinInsightStat[];
   error?: string | null;
+  extra?: ReactNode;
 };

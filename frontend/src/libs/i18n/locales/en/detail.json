@@ -314,6 +314,16 @@
     "absorption": "Absorption",
     "sweeps": "Liquidity sweeps",
     "whales": "Whales",
+    "whale": {
+      "row": "{{side}} {{notional}} · {{intent}} · OI across the print {{oi}} · {{after}}",
+      "after": "15m later price {{price}}, OI {{oi}}",
+      "afterPending": "15m later not in yet",
+      "openLong": "opened longs",
+      "closeShort": "closed shorts",
+      "openShort": "opened shorts",
+      "closeLong": "closed longs",
+      "unclear": "OI did not decide"
+    },
     "icebergs": "Icebergs",
     "bookFlow": "Book liquidity flow"
   },

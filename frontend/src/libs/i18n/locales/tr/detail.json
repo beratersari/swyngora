@@ -314,6 +314,16 @@
     "absorption": "Emilim",
     "sweeps": "Likidite süpürmeleri",
     "whales": "Balinalar",
+    "whale": {
+      "row": "{{side}} {{notional}} · {{intent}} · işlemde AP {{oi}} · {{after}}",
+      "after": "15dk sonra fiyat {{price}}, AP {{oi}}",
+      "afterPending": "15dk sonrası henüz yok",
+      "openLong": "long açtı",
+      "closeShort": "short kapattı",
+      "openShort": "short açtı",
+      "closeLong": "long kapattı",
+      "unclear": "AP karar vermedi"
+    },
     "icebergs": "Buzdağı emirler",
     "bookFlow": "Defter likidite akışı"
   },

@@ -278,6 +278,17 @@ export type MarketDeskReport = {
     windows?: { window?: string; summary?: string; ratio?: string; grade?: string; dominant?: string }[];
   }[];
   windows?: { window?: string; summary?: string }[];
+  events?: {
+    symbol?: string;
+    side?: string;
+    kind?: string;
+    notional?: string;
+    intent?: string;
+    oiChangePct?: string;
+    priceAfterPct?: string;
+    oiAfterPct?: string;
+    afterReady?: boolean;
+  }[];
 };
 export type MarketParticipation = components['schemas']['MarketParticipation'];
 export type ParticipationQuery = NonNullable<operations['getMarketParticipation']['parameters']['query']>;

@@ -8,6 +8,7 @@ export function CoinInsightPanel({
   summary,
   stats,
   error,
+  extra,
   isLoading = false,
 }: CoinInsightPanelProps) {
   return (
@@ -38,6 +39,7 @@ export function CoinInsightPanel({
               {summary}
             </Text>
           ) : null}
+          {extra}
         </>
       )}
     </Panel>

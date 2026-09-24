@@ -11,8 +11,12 @@ average price, first and last trade time, and total size.
 `GET /api/v1/market/whales?symbol=BTCUSDT`
 
 - Clusters consecutive same-side futures fills within 2 seconds (VWAP)
-- `side` `buy` / `sell` is the taker; futures buy = aggressive **long**,
-  sell = aggressive **short**
+- `side` `buy` / `sell` is the taker
+- Open interest across the print decides the meaning: buy + OI up = **opened longs**,
+  buy + OI down = **closed shorts**, sell + OI up = **opened shorts**,
+  sell + OI down = **closed longs**. A move under 0.05% stays **unclear**
+- `priceAfterPct` and `oiAfterPct` are the move in the **15 minutes after**
+  the print, once those samples exist (`afterReady`)
 - Adds large **liquidations** from the live book (last hour)
 - Sorted by notional descending
 - `unusual` is true when notional is at least **0.05% of circulating

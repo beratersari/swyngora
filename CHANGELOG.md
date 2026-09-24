@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Whale intent:** a large buy or sell is read with the open-interest change across the print (open long, close short, open short, close long). Price and open interest 15 minutes later are included when those samples exist (`GET /api/v1/market/whales`, coin Flow tab).
 - **Tape alerts:** funding (percent), open interest (USDT), 5-minute taker buy share, and the fear-and-greed score can fire when the value goes above or below a chosen level. `POST /api/v1/alerts` kinds `funding`, `open_interest`, `taker`, `fear_greed`; MCP `create_tape_alert`; Alerts page (`docs/features/price-alerts.md`)
 - **Portfolio stress:** preview equity, total P&L, and margin if named coins move (BTC −10%, ETH −15%) before it happens. `POST /api/v1/portfolio/stress`, MCP `stress_portfolio`, portfolio screen (`docs/features/risk-limits.md`)
 - **Net long and net short:** how much futures exposure went to the long side and the short side over 15m, 1h, and 4h, estimated from the open-interest change and taker buy versus sell. Positive means that side grew (for example longs +45M and shorts −15M while open interest rose 30M). `GET /api/v1/market/net-position`, MCP `get_net_position`, coin tape and flow tab (`docs/features/net-position.md`)

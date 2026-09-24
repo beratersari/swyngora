@@ -53,6 +53,11 @@ type whaleEventDTO struct {
 	MarketCap       string    `json:"marketCap,omitempty"`
 	NotionalMcapPct string    `json:"notionalMcapPct,omitempty"`
 	Unusual         bool      `json:"unusual"`
+	Intent          string    `json:"intent,omitempty"`
+	OIChangePct     string    `json:"oiChangePct,omitempty"`
+	PriceAfterPct   string    `json:"priceAfterPct,omitempty"`
+	OIAfterPct      string    `json:"oiAfterPct,omitempty"`
+	AfterReady      bool      `json:"afterReady,omitempty"`
 }
 
 type whalesResponse struct {
@@ -72,18 +77,27 @@ func whalesToDTO(a *domain.WhaleReport) whalesResponse {
 	events := make([]whaleEventDTO, 0, len(a.Events))
 	for _, e := range a.Events {
 		row := whaleEventDTO{
-			Exchange:  string(e.Exchange),
-			Symbol:    e.Symbol,
-			Kind:      e.Kind,
-			Side:      e.Side,
-			Position:  e.Position,
-			AvgPrice:  formatHistQty(e.AvgPrice),
-			Quantity:  formatHistQty(e.Quantity),
-			Notional:  formatHistQty(e.Notional),
-			FirstTime: e.FirstTime.UTC(),
-			LastTime:  e.LastTime.UTC(),
-			Prints:    e.Prints,
-			Unusual:   e.Unusual,
+			Exchange:   string(e.Exchange),
+			Symbol:     e.Symbol,
+			Kind:       e.Kind,
+			Side:       e.Side,
+			Position:   e.Position,
+			AvgPrice:   formatHistQty(e.AvgPrice),
+			Quantity:   formatHistQty(e.Quantity),
+			Notional:   formatHistQty(e.Notional),
+			FirstTime:  e.FirstTime.UTC(),
+			LastTime:   e.LastTime.UTC(),
+			Prints:     e.Prints,
+			Unusual:    e.Unusual,
+			Intent:     e.Intent,
+			AfterReady: e.AfterReady,
+		}
+		if e.OIChangePct != 0 {
+			row.OIChangePct = domain.FormatSignedPct(e.OIChangePct)
+		}
+		if e.AfterReady {
+			row.PriceAfterPct = domain.FormatSignedPct(e.PriceAfterPct)
+			row.OIAfterPct = domain.FormatSignedPct(e.OIAfterPct)
 		}
 		if e.MarketCap > 0 {
 			row.MarketCap = formatHistQty(e.MarketCap)

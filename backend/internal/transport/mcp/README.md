@@ -76,7 +76,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_price_volatility` | How much a coin moved over 1h / 4h / 24h vs its normal range and vs BTC/ETH |
 | `get_market_snapshot` | Price, volume, mcap, OI, funding, LS, and taker buy/sell together (1h / 4h / 24h) |
 | `get_support_resistance` | Support/resistance from price, volume, and the order book, plus breakout score |
-| `get_whale_trades` | Largest recent aggressive buys/sells and liquidations, biggest first |
+| `get_whale_trades` | Largest recent aggressive buys/sells and liquidations; OI says open vs close, plus price and OI 15m later |
 | `get_orderbook_history` | Stored spot book at a time (levels, spread, liquidity, walls, plus brief walls that vanished between minute samples) |
 | `compare_orderbook_history` | Which price levels gained or lost liquidity between two times |
 | `get_orderbook_icebergs` | Same-price clip eaten then refilled (bid and ask) |

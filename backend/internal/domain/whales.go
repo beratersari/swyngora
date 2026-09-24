@@ -43,6 +43,14 @@ type WhaleEvent struct {
 	MarketCap       float64
 	NotionalMcapPct float64
 	Unusual         bool // large versus this coin's market cap
+	// Intent is open_long, close_short, open_short, close_long, or unclear.
+	Intent string
+	// OIChangePct is the open-interest change across the print.
+	OIChangePct float64
+	// PriceAfterPct and OIAfterPct are the move in the 15 minutes after the print.
+	PriceAfterPct float64
+	OIAfterPct    float64
+	AfterReady    bool
 }
 
 // WhaleReport is the API result, biggest first.
@@ -226,6 +234,12 @@ func ExplainWhales(events []WhaleEvent, symbol string) string {
 	}
 	if unusual > 0 {
 		head += fmt.Sprintf(" %d print(s) are large versus that coin's market cap.", unusual)
+	}
+	if phrase := whaleIntentPhrase(top.Intent); phrase != "" {
+		head += " Read as " + phrase + " (OI " + FormatSignedPct(top.OIChangePct) + ")."
+	}
+	if top.AfterReady {
+		head += " 15m later price " + FormatSignedPct(top.PriceAfterPct) + ", OI " + FormatSignedPct(top.OIAfterPct) + "."
 	}
 	return head
 }

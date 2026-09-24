@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	whalesDisclaimer = "Whale prints are clustered aggressive futures fills from the newest ~1000 trades per coin (minutes of tape, not a 24h tape). Buy = taker long; sell = taker short. Liquidations are forced closes from the live book (last hour). Unusual means the size is large versus circulating market cap. Informational only — not financial advice."
+	whalesDisclaimer = "Whale prints are clustered aggressive futures fills from the newest ~1000 trades per coin (minutes of tape, not a 24h tape). A buy with rising open interest is read as opening longs; a buy with falling open interest is closing shorts. A sell is the mirror. Price and open interest 15 minutes later are shown when those samples exist. Liquidations are forced closes. Unusual means the size is large versus circulating market cap. Informational only — not financial advice."
 	whaleLiqLookback = time.Hour
 	whaleScanConc    = 6
 )
@@ -76,6 +76,7 @@ func (s *Service) GetWhales(ctx context.Context, exchange, symbol string, minNot
 	if len(events) > limit {
 		events = events[:limit]
 	}
+	s.annotateWhaleFollow(ctx, events)
 
 	now := time.Now().UTC()
 	out := &domain.WhaleReport{
@@ -174,6 +175,73 @@ func (s *Service) whaleScanSymbols(ctx context.Context, exchange string) ([]stri
 		}
 	}
 	return out, nil
+}
+
+func (s *Service) annotateWhaleFollow(ctx context.Context, events []domain.WhaleEvent) {
+	if s == nil || len(events) == 0 {
+		return
+	}
+	type pair struct{ ex, sym string }
+	groups := map[pair][]int{}
+	for i := range events {
+		k := pair{string(events[i].Exchange), events[i].Symbol}
+		groups[k] = append(groups[k], i)
+	}
+	now := time.Now().UTC()
+	for k, idx := range groups {
+		from := events[idx[0]].FirstTime
+		to := events[idx[0]].LastTime
+		for _, i := range idx {
+			if events[i].FirstTime.Before(from) {
+				from = events[i].FirstTime
+			}
+			if events[i].LastTime.After(to) {
+				to = events[i].LastTime
+			}
+		}
+		oi := s.whaleOI(ctx, k.ex, k.sym, from.Add(-20*time.Minute), to.Add(domain.WhaleFollowAfter+10*time.Minute))
+		marks := s.whaleMarks(ctx, k.ex, k.sym, from, to.Add(domain.WhaleFollowAfter+5*time.Minute))
+		for _, i := range idx {
+			domain.AnnotateWhaleFollow(&events[i], oi, marks, now)
+		}
+	}
+}
+
+func (s *Service) whaleOI(ctx context.Context, exchange, symbol string, from, to time.Time) []domain.FuturesSnapshot {
+	if s == nil || s.futHist == nil || exchange == "" || exchange == "all" {
+		return nil
+	}
+	raw, err := s.futHist.History(ctx, domain.FuturesHistoryQuery{
+		Metric: domain.FuturesMetricOpenInterest, Exchange: exchange, Symbol: symbol,
+		From: from, To: to, Limit: domain.MaxFuturesHistoryLimit,
+	})
+	if err != nil {
+		return nil
+	}
+	return futuresSnapshots(raw)
+}
+
+func (s *Service) whaleMarks(ctx context.Context, exchange, symbol string, from, to time.Time) []domain.WhaleMark {
+	if s == nil || exchange == "" || exchange == "all" {
+		return nil
+	}
+	bars, err := s.GetCandles(ctx, exchange, symbol, string(domain.Interval1m), 0, &from, &to)
+	if err != nil {
+		return nil
+	}
+	out := make([]domain.WhaleMark, 0, len(bars))
+	for _, b := range bars {
+		px, err := strconv.ParseFloat(b.Close, 64)
+		if err != nil || px <= 0 {
+			continue
+		}
+		at := b.CloseTime
+		if at.IsZero() {
+			at = b.OpenTime
+		}
+		out = append(out, domain.WhaleMark{Time: at.UTC(), Price: px})
+	}
+	return out
 }
 
 func (s *Service) whaleMcap(ctx context.Context, symbol string) float64 {

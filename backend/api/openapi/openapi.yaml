@@ -1969,8 +1969,11 @@ paths:
     get:
       summary: Large trades and liquidations
       description: |
-        Clusters recent aggressive futures **buys** and **sells** (taker long /
-        short) and large **liquidations**, then sorts them biggest first.
+        Clusters recent aggressive futures **buys** and **sells** and large
+        **liquidations**, then sorts them biggest first. Open interest across
+        the print marks a buy as opening longs or closing shorts (a sell is
+        the mirror). `priceAfterPct` and `oiAfterPct` are the move 15 minutes
+        later when those samples exist.
         Each event includes average price, first/last trade time, total size,
         and whether the notional is large versus circulating market cap
         (small-cap coins with huge prints are flagged). Omit `symbol` to scan

@@ -18,6 +18,7 @@ import {
 } from '@/libs/api';
 import { rtkCurrent, rtkCurrentPending } from '@/libs/utils';
 import { perpStats, reportSummary, surgeStats } from './CoinFlowTab.helpers';
+import { WhaleFollowList } from './WhaleFollowList';
 import type { CoinFlowTabProps } from './CoinFlowTab.types';
 
 /** Per-coin prints, book, and volume — RTK lives here (page layer), not in organisms. */
@@ -67,6 +68,7 @@ export function CoinFlowTab({ symbol, exchange }: CoinFlowTabProps) {
           title={row.title}
           summary={reportSummary(rtkCurrent(row.q))}
           stats={row.stats}
+          extra={row.key === 'whales' ? <WhaleFollowList events={rtkCurrent(whales)?.events} /> : null}
           error={row.q.isError ? err(row.q.error) : null}
           isLoading={rtkCurrentPending(row.q)}
         />

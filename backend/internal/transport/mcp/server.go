@@ -1679,7 +1679,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_whale_trades",
-		mcp.WithDescription("Largest recent aggressive futures buys/sells (taker long/short) and large liquidations, sorted biggest first. Each row has average price, first/last trade time, total size, and whether the print is large versus that coin's market cap (small-cap + huge trade). Omit symbol to scan the top liquid USDT coins. Tape is the newest ~1000 prints per coin, not 24h. Not financial advice."),
+		mcp.WithDescription("Largest recent aggressive futures buys/sells and large liquidations, sorted biggest first. intent uses open-interest change across the print: buy+OI up opens longs, buy+OI down closes shorts, sell is the mirror. priceAfterPct and oiAfterPct are the move 15 minutes later when samples exist. Each row also has average price, time, size, and a small-cap flag. Omit symbol to scan the top liquid USDT coins. Tape is the newest ~1000 prints per coin, not 24h. Not financial advice."),
 		mcp.WithString("symbol", mcp.Description("Pair e.g. BTCUSDT. Omit to scan top liquid USDT coins.")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 		mcp.WithNumber("minNotional", mcp.Description("Minimum USD size (default 100000)")),
