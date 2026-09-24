@@ -887,6 +887,7 @@ type liquidationLevelsReviewBucketDTO struct {
 	FillRate    float64 `json:"fillRate"`
 	Reliability string  `json:"reliability"`
 	Confidence  float64 `json:"confidence"`
+	SizeScale   float64 `json:"sizeScale"`
 }
 
 type liquidationLevelsReviewVenueDTO struct {
@@ -936,6 +937,7 @@ func levelsReviewVenueToDTO(v domain.LiquidationLevelsReviewVenue) liquidationLe
 			Signals: b.Signals, Validated: b.Validated, Hits: b.Hits, HitRate: b.HitRate,
 			Predicted: formatHistQty(b.Predicted), Realized: formatHistQty(b.Realized),
 			FillRate: b.FillRate, Reliability: b.Reliability, Confidence: b.Confidence,
+			SizeScale: b.SizeScale,
 		})
 	}
 	ss := make([]liquidationLevelsReviewSampleDTO, 0, len(v.Samples))

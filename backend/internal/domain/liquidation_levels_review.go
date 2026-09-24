@@ -22,6 +22,12 @@ const (
 	LiquidationLevelsReliabilityFair    = "fair"
 	LiquidationLevelsReliabilityLow     = "low"
 	LiquidationLevelsReliabilityUnknown = "unknown"
+
+	// liquidationLevelSizeFullHits is how many hits fully apply the
+	// realized/predicted amount. Fewer hits only move part of the way.
+	liquidationLevelSizeFullHits = 12
+	// liquidationLevelSizeFloor keeps a repeatedly over-sized band on the map.
+	liquidationLevelSizeFloor = 0.15
 )
 
 // LiquidationLevelsReviewHorizons is the look-ahead set (same clocks as the heatmap).
@@ -70,18 +76,21 @@ type LiquidationLevelsReviewHorizon struct {
 
 // LiquidationLevelsReviewBucket is reliability for one leverage × side.
 type LiquidationLevelsReviewBucket struct {
-	Leverage    int
-	Side        string
-	Horizon     string
-	Signals     int
-	Validated   int
-	Hits        int
-	HitRate     float64
-	Predicted   float64
-	Realized    float64
-	FillRate    float64
-	Reliability string
-	Confidence  float64 // 0–1 live-map weight from later hits
+	Leverage     int
+	Side         string
+	Horizon      string
+	Signals      int
+	Validated    int
+	Hits         int
+	HitRate      float64
+	Predicted    float64
+	Realized     float64
+	FillRate     float64
+	HitPredicted float64 // predicted notional on hits only; summed when venues merge
+	HitRealized  float64
+	Reliability  string
+	Confidence   float64 // 0–1 live-map weight from later hits (location)
+	SizeScale    float64 // share of model notional kept on the next map (amount)
 }
 
 // LiquidationLevelsReviewVenue is one venue's (or combined) calibration.
@@ -102,7 +111,7 @@ type LiquidationLevelsReview struct {
 	Note     string
 }
 
-const liquidationLevelsReviewNote = "Each past estimate is rebuilt from that venue's own last price, open interest, and the same 10x/25x/50x/100x mix as the live map, and kept as a frozen map (shorts above that last, longs below). Open a past estimate to see the same prediction later — today's last does not re-center it. Later liquidations count only when they print on that venue, on the same side, and inside the band around the predicted price. A quiet window is a miss only when liquidation history covers the look-ahead; pending / missing tape is not a miss. Combined sums independent venues and never copies the other book. The live map shrinks leverage bands that rarely printed later and keeps full size for bands that did. Informational only."
+const liquidationLevelsReviewNote = "Each past estimate is rebuilt from that venue's own last price, open interest, and the same 10x/25x/50x/100x mix as the live map, and kept as a frozen map (shorts above that last, longs below). Open a past estimate to see the same prediction later — today's last does not re-center it. Later liquidations count only when they print on that venue, on the same side, and inside the band around the predicted price. A quiet window is a miss only when liquidation history covers the look-ahead; pending / missing tape is not a miss. Combined sums independent venues and never copies the other book. The live map shrinks leverage bands that rarely printed later. On bands that did print, once there are enough hits, it also keeps only the share of the predicted amount that later showed up, and it does not grow a band when prints exceed the model. Informational only."
 
 // LiquidationLevelsReviewInput is history used to rebuild and score past maps.
 type LiquidationLevelsReviewInput struct {
@@ -281,8 +290,10 @@ func rebuildLevelSamples(ser HuntHeatmapVenueSeries, now time.Time, step, stale 
 				Leverage: lev, Side: side, Horizon: "1h",
 				Signals: h.Signals, Validated: h.Validated, Hits: h.Hits,
 				HitRate: h.HitRate, Predicted: h.Predicted, Realized: h.Realized,
-				FillRate: h.FillRate, Reliability: levelReliability(h.Validated, h.HitRate, h.FillRate),
-				Confidence: LevelConfidenceWeight(h.Validated, h.HitRate),
+				FillRate: h.FillRate, HitPredicted: a.hitPredicted, HitRealized: a.hitRealized,
+				Reliability: levelReliability(h.Validated, h.HitRate, h.FillRate),
+				Confidence:  LevelConfidenceWeight(h.Validated, h.HitRate),
+				SizeScale:   LevelSizeScale(a.hits, a.hitPredicted, a.hitRealized),
 			})
 		}
 	}
@@ -560,14 +571,16 @@ func realizedLiqInBand(groups [][]LiquidationEvent, from, to time.Time, lo, hi f
 }
 
 type levelReviewAcc struct {
-	horizon   string
-	signals   int
-	validated int
-	missing   int
-	pending   int
-	hits      int
-	predicted float64
-	realized  float64
+	horizon      string
+	signals      int
+	validated    int
+	missing      int
+	pending      int
+	hits         int
+	predicted    float64
+	realized     float64
+	hitPredicted float64
+	hitRealized  float64
 }
 
 func (a *levelReviewAcc) add(b LiquidationLevelsReviewBand) {
@@ -587,6 +600,8 @@ func (a *levelReviewAcc) add(b LiquidationLevelsReviewBand) {
 	a.realized += b.Realized
 	if b.Hit {
 		a.hits++
+		a.hitPredicted += b.Predicted
+		a.hitRealized += b.Realized
 	}
 }
 
@@ -615,8 +630,8 @@ func levelReliability(validated int, hitRate, fillRate float64) string {
 	if validated < LiquidationLevelsReviewMinValidated {
 		return LiquidationLevelsReliabilityUnknown
 	}
-	// Hit rate is the useful signal. Fill stays tiny because the model
-	// sizes the whole OI mix and only a slice actually prints.
+	// The grade is whether the band printed. The dollar gap is
+	// LevelSizeScale on the live map, not a second grade.
 	_ = fillRate
 	if hitRate >= 0.45 {
 		return LiquidationLevelsReliabilityHigh
@@ -644,6 +659,37 @@ func LevelConfidenceWeight(validated int, hitRate float64) float64 {
 	return w
 }
 
+// LevelSizeScale is the share of model notional the next live map keeps
+// for one leverage and side. It uses hits only: later prints inside the
+// band divided by what that band predicted. Misses stay on the hit-rate
+// weight so a quiet window is not counted twice. Fewer than three hits
+// leaves the model unchanged. The scale never exceeds 1, so a print larger
+// than the model does not grow the next map, and it never drops below the floor.
+func LevelSizeScale(hits int, hitPredicted, hitRealized float64) float64 {
+	if hits < LiquidationLevelsReviewMinValidated || hitPredicted <= 0 {
+		return 1
+	}
+	fill := hitRealized / hitPredicted
+	if fill < 0 {
+		fill = 0
+	}
+	if fill > 1 {
+		fill = 1
+	}
+	trust := float64(hits) / float64(liquidationLevelSizeFullHits)
+	if trust > 1 {
+		trust = 1
+	}
+	scale := 1 - (1-fill)*trust
+	if scale < liquidationLevelSizeFloor {
+		return liquidationLevelSizeFloor
+	}
+	if scale > 1 {
+		return 1
+	}
+	return scale
+}
+
 func reviewConfidenceTable(buckets []LiquidationLevelsReviewBucket) map[[2]int]float64 {
 	out := map[[2]int]float64{}
 	for _, b := range buckets {
@@ -667,6 +713,42 @@ func confidenceFor(table map[[2]int]float64, lev int, side string) float64 {
 	return 0.55
 }
 
+func reviewSizeTable(buckets []LiquidationLevelsReviewBucket) map[[2]int]float64 {
+	out := map[[2]int]float64{}
+	for _, b := range buckets {
+		side := 0
+		if b.Side == LiquidationSideShort {
+			side = 1
+		}
+		out[[2]int{b.Leverage, side}] = sizeScaleFor(b)
+	}
+	return out
+}
+
+func sizeScaleFor(b LiquidationLevelsReviewBucket) float64 {
+	if b.SizeScale > 0 {
+		if b.SizeScale < liquidationLevelSizeFloor {
+			return liquidationLevelSizeFloor
+		}
+		if b.SizeScale > 1 {
+			return 1
+		}
+		return b.SizeScale
+	}
+	return LevelSizeScale(b.Hits, b.HitPredicted, b.HitRealized)
+}
+
+func sizeFor(table map[[2]int]float64, lev int, side string) float64 {
+	sideN := 0
+	if side == LiquidationSideShort {
+		sideN = 1
+	}
+	if w, ok := table[[2]int{lev, sideN}]; ok && w > 0 {
+		return w
+	}
+	return 1
+}
+
 // ReviewVenueForLevels picks the review that matches the live map's exchange.
 func ReviewVenueForLevels(r LiquidationLevelsReview, exchange string) LiquidationLevelsReviewVenue {
 	switch strings.ToLower(strings.TrimSpace(exchange)) {
@@ -681,17 +763,18 @@ func ReviewVenueForLevels(r LiquidationLevelsReview, exchange string) Liquidatio
 	}
 }
 
-// ApplyLevelConfidence scales live bars by later-print hit rate so weak
-// leverage bands shrink and strong ones keep their size.
+// ApplyLevelConfidence scales live bars by later-print hit rate and, once
+// a band has enough hits, by how much of the predicted amount actually printed.
 func ApplyLevelConfidence(levels []LiquidationLevelBar, buckets []LiquidationLevelsReviewBucket) []LiquidationLevelBar {
 	if len(levels) == 0 {
 		return levels
 	}
 	table := reviewConfidenceTable(buckets)
+	sizes := reviewSizeTable(buckets)
 	out := make([]LiquidationLevelBar, len(levels))
 	for i, lv := range levels {
-		lv.ByLeverage = scaleConfidenceSlices(lv.ByLeverage, table)
-		lv.CumByLeverage = scaleConfidenceSlices(lv.CumByLeverage, table)
+		lv.ByLeverage = scaleConfidenceSlices(lv.ByLeverage, table, sizes)
+		lv.CumByLeverage = scaleConfidenceSlices(lv.CumByLeverage, table, sizes)
 		lv.LongNotional = formatQty(sumSliceSide(lv.ByLeverage, false))
 		lv.ShortNotional = formatQty(sumSliceSide(lv.ByLeverage, true))
 		lv.TotalNotional = formatQty(sumSliceSide(lv.ByLeverage, false) + sumSliceSide(lv.ByLeverage, true))
@@ -703,13 +786,15 @@ func ApplyLevelConfidence(levels []LiquidationLevelBar, buckets []LiquidationLev
 	return out
 }
 
-func scaleConfidenceSlices(in []LiquidationLeverageSlice, table map[[2]int]float64) []LiquidationLeverageSlice {
+func scaleConfidenceSlices(in []LiquidationLeverageSlice, table, sizes map[[2]int]float64) []LiquidationLeverageSlice {
 	out := make([]LiquidationLeverageSlice, 0, len(in))
 	for _, sl := range in {
 		wL := confidenceFor(table, sl.Leverage, LiquidationSideLong)
 		wS := confidenceFor(table, sl.Leverage, LiquidationSideShort)
-		longN := parseLevelNotional(sl.LongNotional) * wL
-		shortN := parseLevelNotional(sl.ShortNotional) * wS
+		sL := sizeFor(sizes, sl.Leverage, LiquidationSideLong)
+		sS := sizeFor(sizes, sl.Leverage, LiquidationSideShort)
+		longN := parseLevelNotional(sl.LongNotional) * wL * sL
+		shortN := parseLevelNotional(sl.ShortNotional) * wS * sS
 		out = append(out, LiquidationLeverageSlice{
 			Leverage: sl.Leverage, LongNotional: formatQty(longN), ShortNotional: formatQty(shortN),
 			LongConfidence: wL, ShortConfidence: wS,
@@ -775,6 +860,8 @@ func mergeLevelsReviewVenues(ex string, in []LiquidationLevelsReviewVenue) Liqui
 			a.hits += b.Hits
 			a.predicted += b.Predicted
 			a.realized += b.Realized
+			a.hitPredicted += b.HitPredicted
+			a.hitRealized += b.HitRealized
 		}
 		samples = append(samples, v.Samples...)
 	}
@@ -795,8 +882,10 @@ func mergeLevelsReviewVenues(ex string, in []LiquidationLevelsReviewVenue) Liqui
 				Leverage: lev, Side: side, Horizon: "1h",
 				Signals: h.Signals, Validated: h.Validated, Hits: h.Hits,
 				HitRate: h.HitRate, Predicted: h.Predicted, Realized: h.Realized,
-				FillRate: h.FillRate, Reliability: levelReliability(h.Validated, h.HitRate, h.FillRate),
-				Confidence: LevelConfidenceWeight(h.Validated, h.HitRate),
+				FillRate: h.FillRate, HitPredicted: a.hitPredicted, HitRealized: a.hitRealized,
+				Reliability: levelReliability(h.Validated, h.HitRate, h.FillRate),
+				Confidence:  LevelConfidenceWeight(h.Validated, h.HitRate),
+				SizeScale:   LevelSizeScale(a.hits, a.hitPredicted, a.hitRealized),
 			})
 		}
 	}
@@ -835,7 +924,7 @@ func ExplainLiquidationLevelsReview(r LiquidationLevelsReview) string {
 			best = fmt.Sprintf("%dx %s", b.Leverage, b.Side)
 		}
 	}
-	msg := fmt.Sprintf("Of %d estimated levels with later tape, %d printed nearby in 1h (%.0f%%). Realized was %.0f%% of predicted.",
+	msg := fmt.Sprintf("Of %d estimated levels with later tape, %d printed nearby in 1h (%.0f%%). Realized was %.0f%% of predicted. Bands with enough hits are shortened toward the amount that printed.",
 		h1.Validated, h1.Hits, h1.HitRate*100, h1.FillRate*100)
 	if best != "" {
 		msg += " Most reliable: " + best + "."

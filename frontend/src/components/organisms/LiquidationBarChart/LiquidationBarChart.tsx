@@ -312,6 +312,7 @@ export function LiquidationBarChart({
                     <th>{t('chart.review.fill')}</th>
                     <th>{t('chart.review.reliability')}</th>
                     <th>{t('chart.review.confidence')}</th>
+                    <th>{t('chart.review.amountKept')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -330,6 +331,7 @@ export function LiquidationBarChart({
                         </Reliability>
                       </td>
                       <td>{row.confidence ? formatHitRate(row.confidence) : '—'}</td>
+                      <td>{row.sizeScale != null && row.sizeScale > 0 ? formatHitRate(row.sizeScale) : '—'}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -4792,8 +4792,10 @@ export interface components {
             fillRate?: number;
             /** @enum {string} */
             reliability?: "high" | "fair" | "low" | "unknown";
-            /** @description 0–1 weight applied to the live map */
+            /** @description 0–1 hit-rate weight. The live bar also multiplies by sizeScale. */
             confidence?: number;
+            /** @description Share of the model notional kept on the next live map (0.15–1). Realized divided by predicted on hits only. Stays 1 until that leverage and side has enough hits. Never grows the map. */
+            sizeScale?: number;
         };
         MarketLiquidationLevelsReviewVenue: {
             exchange?: string;

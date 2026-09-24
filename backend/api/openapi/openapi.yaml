@@ -3327,6 +3327,9 @@ paths:
           reference last — it does not copy a missing venue's last.
           `review` rebuilds those past maps from stored OI + last and scores
           later same-venue liquidations in each 10x/25x/50x/100x band (1h / 4h / 12h).
+          Live bars shrink bands that rarely print. Bands that do print are
+          also shortened toward the share of the predicted amount that later
+          showed up (`sizeScale`), and are not grown when prints exceed the model.
         - `symbol=all`: **total** observed liquidations for every tracked coin
           as time bars (last 24h max). `exchange=binance|bybit|okx|all`.
 
@@ -8768,7 +8771,8 @@ components:
         realized: { type: string }
         fillRate: { type: number }
         reliability: { type: string, enum: [high, fair, low, unknown] }
-        confidence: { type: number, description: 0–1 weight applied to the live map }
+        confidence: { type: number, description: 0–1 hit-rate weight. The live bar also multiplies by sizeScale. }
+        sizeScale: { type: number, description: Share of the model notional kept on the next live map (0.15–1). Realized divided by predicted on hits only. Stays 1 until that leverage and side has enough hits. Never grows the map. }
     MarketLiquidationLevelsReviewVenue:
       type: object
       properties:

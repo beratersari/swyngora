@@ -21,7 +21,7 @@ describe('LiquidationBarChart', () => {
             combined: {
               horizons: [{ horizon: '1h', signals: 8, validated: 4, pending: 2, hits: 2, hitRate: 0.5, fillRate: 0.2 }],
               byLeverage: [
-                { leverage: 100, side: 'short', validated: 4, hitRate: 0.6, fillRate: 0.2, reliability: 'high' },
+                { leverage: 100, side: 'short', validated: 4, hitRate: 0.6, fillRate: 0.2, reliability: 'high', sizeScale: 0.4 },
               ],
               samples: [
                 {
@@ -42,6 +42,8 @@ describe('LiquidationBarChart', () => {
     expect(screen.getByText(/^From last$|^Last’ten$/)).toBeInTheDocument();
     expect(screen.getByTestId('liquidation-levels-review')).toBeInTheDocument();
     expect(screen.getByTestId('liquidation-levels-reliability')).toBeInTheDocument();
+    expect(screen.getByText(/amount kept|tutulan pay/i)).toBeInTheDocument();
+    expect(screen.getByText('40%')).toBeInTheDocument();
   });
 
   it('renders market-wide time bars', () => {

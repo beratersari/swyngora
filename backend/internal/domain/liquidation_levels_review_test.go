@@ -222,6 +222,127 @@ func TestLevelConfidenceWeight(t *testing.T) {
 	}
 }
 
+func TestLevelSizeScale(t *testing.T) {
+	if LevelSizeScale(2, 100, 10) != 1 {
+		t.Fatal("too few hits leaves the model alone")
+	}
+	if LevelSizeScale(12, 0, 10) != 1 {
+		t.Fatal("no predicted amount")
+	}
+	if LevelSizeScale(12, 100, 100) != 1 {
+		t.Fatal("a full fill keeps the model")
+	}
+	if LevelSizeScale(12, 100, 250) != 1 {
+		t.Fatal("a larger print must not grow the next map")
+	}
+	got := LevelSizeScale(3, 100, 10)
+	if got < 0.77 || got > 0.78 {
+		t.Fatalf("three hits at 10%% fill should only move part way, got %v", got)
+	}
+	full := LevelSizeScale(12, 100, 10)
+	if full < 0.15 || full > 0.16 {
+		t.Fatalf("twelve hits at 10%% fill should sit on the floor, got %v", full)
+	}
+}
+
+func TestApplyLevelConfidence_ShrinksOverPredictedAmount(t *testing.T) {
+	levels := []LiquidationLevelBar{{
+		Price: "101", ShortNotional: "100", TotalNotional: "100",
+		ByLeverage: []LiquidationLeverageSlice{
+			{Leverage: 100, ShortNotional: "100"},
+			{Leverage: 50, ShortNotional: "100"},
+		},
+		CumByLeverage: []LiquidationLeverageSlice{
+			{Leverage: 100, ShortNotional: "100"},
+			{Leverage: 50, ShortNotional: "100"},
+		},
+	}}
+	got := ApplyLevelConfidence(levels, []LiquidationLevelsReviewBucket{
+		{Leverage: 100, Side: LiquidationSideShort, Validated: 12, Hits: 12, HitRate: 1, SizeScale: 1},
+		{Leverage: 50, Side: LiquidationSideShort, Validated: 12, Hits: 12, HitRate: 1, SizeScale: 0.25},
+	})
+	var full, shrunk float64
+	for _, sl := range got[0].ByLeverage {
+		n, _ := strconv.ParseFloat(sl.ShortNotional, 64)
+		if sl.Leverage == 100 {
+			full = n
+			if sl.ShortConfidence < 0.9 {
+				t.Fatalf("hit confidence stays high when the amount is the problem, got %v", sl.ShortConfidence)
+			}
+		}
+		if sl.Leverage == 50 {
+			shrunk = n
+		}
+	}
+	if full < 90 || shrunk > 30 {
+		t.Fatalf("full=%v shrunk=%v", full, shrunk)
+	}
+}
+
+func TestReviewSizeScale_UsesRepeatedAmountGap(t *testing.T) {
+	t0 := time.Date(2026, 9, 4, 12, 0, 0, 0, time.UTC)
+	bands := PredictDisplayLevelBands(100, 2_000_000, 0.5, 0.5, 0)
+	var short100 predictedLevelBand
+	for _, b := range bands {
+		if b.Leverage == 100 && b.Side == LiquidationSideShort {
+			short100 = b
+		}
+	}
+	if short100.Predicted <= 0 {
+		t.Fatal("no 100x short")
+	}
+	var prices []HuntHeatmapPricePoint
+	var ois []FuturesSnapshot
+	liqs := []LiquidationEvent{{
+		Side: LiquidationSideShort, Price: short100.Price, Notional: 1,
+		Time: t0.Add(-40 * time.Minute),
+	}}
+	for i := 0; i < 3; i++ {
+		ts := t0.Add(time.Duration(i) * time.Hour)
+		prices = append(prices, HuntHeatmapPricePoint{Time: ts, Price: 100})
+		ois = append(ois, FuturesSnapshot{SampledAt: ts, Value: 2_000_000})
+		liqs = append(liqs, LiquidationEvent{
+			Side: LiquidationSideShort, Price: short100.Price,
+			Notional: short100.Predicted * 0.1,
+			Time:     ts.Add(10 * time.Minute),
+		})
+	}
+	liqs = append(liqs, LiquidationEvent{
+		Side: LiquidationSideShort, Price: short100.Price, Notional: 1,
+		Time: t0.Add(3*time.Hour + time.Minute),
+	})
+	got := ReviewLiquidationLevels(LiquidationLevelsReviewInput{
+		Now:  t0.Add(4 * time.Hour),
+		Step: time.Hour,
+		Venues: []HuntHeatmapVenueSeries{{
+			Exchange: ExchangeBinance, Prices: prices, OI: ois, Liquidations: liqs,
+		}},
+	})
+	var shortScale, longScale float64
+	var shortHits int
+	for _, b := range got.Binance.ByLeverage {
+		if b.Leverage != 100 {
+			continue
+		}
+		if b.Side == LiquidationSideShort {
+			shortScale = b.SizeScale
+			shortHits = b.Hits
+		}
+		if b.Side == LiquidationSideLong {
+			longScale = b.SizeScale
+		}
+	}
+	if shortHits < 3 {
+		t.Fatalf("need enough hits to calibrate, got %d", shortHits)
+	}
+	if shortScale >= 0.9 || shortScale < 0.7 {
+		t.Fatalf("100x short should shrink part way toward the 10%% fill, hits=%d scale=%v", shortHits, shortScale)
+	}
+	if longScale != 1 {
+		t.Fatalf("a side with no hits must keep the model amount, got %v", longScale)
+	}
+}
+
 func TestLevelReliability(t *testing.T) {
 	if levelReliability(2, 1, 1) != LiquidationLevelsReliabilityUnknown {
 		t.Fatal("unknown")

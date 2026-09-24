@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OI-weighted funding pressure:** combined predicted funding is weighted by USDT open interest, so an 8B book at +0.01% outweighs a 1B book at −0.01%. `pressure` / `pressureHistory` / `pressureWindows` / `pressureMoves` on `GET /api/v1/market/funding-rate` (also on open-interest `funding`); coin-detail tape; MCP `get_funding_rate` (`docs/features/funding-rate.md`)
 
 ### Changed
+- **Liquidation level amounts:** the live map shortens a 10x/25x/50x/100x band toward the share of the predicted notional that later printed in that band, once the band has enough hits. Hit rate still fades bands that miss. `sizeScale` on `GET /api/v1/market/liquidation-levels` review, shown as Amount kept on `/liquidations`.
 - **AI HTTP client:** `ai/` tools use `httpx2` (Pydantic-maintained fork) instead of `httpx`; LangChain may still pull `httpx` transitively
 
 ### Added
