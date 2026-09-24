@@ -128,6 +128,7 @@ type DataPort interface {
 	ListWatchlistAudit(ctx context.Context, ownerClientID string, limit, offset int) (json.RawMessage, error)
 	ListPriceAlerts(ctx context.Context, clientID string) (json.RawMessage, error)
 	CreatePriceAlert(ctx context.Context, clientID, exchange, symbol, condition string, targetPrice float64, mode string) (json.RawMessage, error)
+	CreateTapeAlert(ctx context.Context, clientID, exchange, symbol, kind, condition string, target float64, mode string) (json.RawMessage, error)
 	CreateOrderBookAlert(ctx context.Context, clientID, exchange, symbol, kind, condition string, threshold, rangePct float64, mode string) (json.RawMessage, error)
 	CreateLiquidationFeedAlert(ctx context.Context, clientID, exchange string, minDownSeconds float64, mode string) (json.RawMessage, error)
 	CreateLiquidationCascadeAlert(ctx context.Context, clientID, exchange, symbol, minGrade, mode string) (json.RawMessage, error)
@@ -2200,6 +2201,39 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.CreatePriceAlert(ctx, clientID, req.GetString("exchange", "binance"), symbol, condition, target, req.GetString("mode", "one_time"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("create_tape_alert",
+		mcp.WithDescription("Alert when funding, open interest, taker buy share, or fear and greed crosses a level. kind=funding (percent, e.g. 0.05 or -0.01), open_interest (USDT notional), taker (5m buy share 0-100), fear_greed (score 0-100, no symbol). condition=above|below. mode=one_time or repeating."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("kind", mcp.Required(), mcp.Description("funding | open_interest | taker | fear_greed")),
+		mcp.WithString("condition", mcp.Required(), mcp.Description("above | below")),
+		mcp.WithNumber("target", mcp.Required(), mcp.Description("Level to cross")),
+		mcp.WithString("symbol", mcp.Description("Pair e.g. BTCUSDT. Omit for fear_greed")),
+		mcp.WithString("exchange", mcp.Description("binance|bybit|okx|all (default all)")),
+		mcp.WithString("mode", mcp.Description("one_time | repeating (default repeating)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		kind, err := req.RequireString("kind")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		condition, err := req.RequireString("condition")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		target, err := req.RequireFloat("target")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CreateTapeAlert(ctx, clientID, req.GetString("exchange", "all"), req.GetString("symbol", ""), kind, condition, target, req.GetString("mode", "repeating"))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

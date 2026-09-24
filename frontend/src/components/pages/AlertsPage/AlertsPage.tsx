@@ -27,6 +27,10 @@ const RADAR_KINDS = new Set<AlertKind>([
   'liquidation_notional',
   'liquidation_level',
   'setup_radar',
+  'funding',
+  'open_interest',
+  'taker',
+  'fear_greed',
 ]);
 const RADAR_EXCHANGES = new Set(['binance', 'bybit', 'okx', 'all']);
 
@@ -37,7 +41,7 @@ function parsePrefillKind(raw: string | null): AlertKind {
 
 function parsePrefillExchange(raw: string | null, kind: AlertKind): MarketExchange | string {
   const v = (raw ?? '').trim().toLowerCase();
-  if (kind === 'setup_radar' || kind.startsWith('liquidation')) {
+  if (kind === 'setup_radar' || kind.startsWith('liquidation') || kind === 'funding' || kind === 'open_interest' || kind === 'taker' || kind === 'fear_greed') {
     return RADAR_EXCHANGES.has(v) ? v : 'all';
   }
   return EXCHANGES.has(v) ? (v as MarketExchange) : 'binance';

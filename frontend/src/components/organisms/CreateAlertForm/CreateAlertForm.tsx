@@ -58,8 +58,14 @@ export function CreateAlertForm({
   const isNotional = kind === 'liquidation_notional';
   const isLevel = kind === 'liquidation_level';
   const isRadar = kind === 'setup_radar';
+  const isFunding = kind === 'funding';
+  const isOI = kind === 'open_interest';
+  const isTaker = kind === 'taker';
+  const isFear = kind === 'fear_greed';
+  const isTape = isFunding || isOI || isTaker || isFear;
   const isLiq = isFeed || isCascade || isNotional || isLevel;
-  const venueWide = isLiq || isRadar;
+  const venueWide = isLiq || isRadar || isTape;
+  const lockRepeating = isLiq || isRadar;
   const liqExchanges = ['binance', 'bybit', 'okx', 'all'];
   const spotExchanges = ['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'];
 
@@ -86,7 +92,7 @@ export function CreateAlertForm({
       await onSubmit({
         kind,
         exchange: venueWide ? exchange || 'all' : (exchange as MarketExchange),
-        symbol: isFeed ? 'ALL' : isRadar ? symbol.trim() || 'ALL' : symbol.trim(),
+        symbol: isFeed || isFear ? 'ALL' : isRadar ? symbol.trim() || 'ALL' : symbol.trim(),
         condition: isFeed
           ? 'down'
           : isCascade
@@ -108,7 +114,7 @@ export function CreateAlertForm({
                 ? targetPrice ?? 60
                 : (targetPrice ?? 0),
         window: isNotional ? window : undefined,
-        mode: venueWide ? 'repeating' : mode,
+        mode: lockRepeating ? 'repeating' : mode,
       });
       if (kind === 'price' || isNotional) setTargetPrice(null);
     } catch {
@@ -140,10 +146,19 @@ export function CreateAlertForm({
               { value: 'liquidation_notional', label: t('alerts:kinds.liquidation_notional', { defaultValue: 'Liquidation notional' }) },
               { value: 'liquidation_level', label: t('alerts:kinds.liquidation_level', { defaultValue: 'Liquidation level' }) },
               { value: 'setup_radar', label: t('alerts:kinds.setup_radar', { defaultValue: 'Setup Radar' }) },
+              { value: 'funding', label: t('alerts:kinds.funding', { defaultValue: 'Funding' }) },
+              { value: 'open_interest', label: t('alerts:kinds.open_interest', { defaultValue: 'Open interest' }) },
+              { value: 'taker', label: t('alerts:kinds.taker', { defaultValue: 'Taker buy share' }) },
+              { value: 'fear_greed', label: t('alerts:kinds.fear_greed', { defaultValue: 'Fear and greed' }) },
             ]}
             onChange={(v) => {
               setKind(v);
-              if (v === 'liquidation_feed' || v === 'liquidation_cascade' || v === 'liquidation_notional' || v === 'liquidation_level' || v === 'setup_radar') {
+              if (v === 'funding' || v === 'open_interest' || v === 'taker' || v === 'fear_greed') {
+                setCondition('above');
+                setMode('one_time');
+                setTargetPrice(null);
+                if (!['binance', 'bybit', 'okx', 'all'].includes(exchange)) setExchange('all');
+              } else if (v === 'liquidation_feed' || v === 'liquidation_cascade' || v === 'liquidation_notional' || v === 'liquidation_level' || v === 'setup_radar') {
                 setMode('repeating');
                 if (v === 'liquidation_cascade') setCondition('cascade');
                 if (v === 'liquidation_notional') setCondition('both');
@@ -175,7 +190,7 @@ export function CreateAlertForm({
             onChange={setExchange}
           />
         </Field>
-        {isFeed ? null : (
+        {isFeed || isFear ? null : (
           <Field>
             <Text variant="caption" color="secondary">
               {t('alerts:symbol')}
@@ -223,8 +238,8 @@ export function CreateAlertForm({
                           { value: 'down', label: t('alerts:conditions.down', { defaultValue: 'Usually fell after' }) },
                         ]
                       : [
-                          { value: 'above', label: t('alerts:conditions.above', { defaultValue: 'Price above' }) },
-                          { value: 'below', label: t('alerts:conditions.below', { defaultValue: 'Price below' }) },
+                          { value: 'above', label: t(isTape ? 'alerts:conditions.levelAbove' : 'alerts:conditions.above', { defaultValue: isTape ? 'Above' : 'Price above' }) },
+                          { value: 'below', label: t(isTape ? 'alerts:conditions.levelBelow' : 'alerts:conditions.below', { defaultValue: isTape ? 'Below' : 'Price below' }) },
                         ]
               }
               onChange={(v) => setCondition(v)}
@@ -242,7 +257,15 @@ export function CreateAlertForm({
                     ? t('alerts:minConfidence', { defaultValue: 'Min confidence (0–1)' })
                   : isRadar
                     ? t('alerts:minSimilarity', { defaultValue: 'Min similarity' })
-                    : t('alerts:threshold', { defaultValue: 'Target price' })}
+                    : isFunding
+                      ? t('alerts:fundingLevel', { defaultValue: 'Funding %' })
+                      : isOI
+                        ? t('alerts:oiLevel', { defaultValue: 'Open interest USDT' })
+                        : isTaker
+                          ? t('alerts:takerLevel', { defaultValue: '5m buy share %' })
+                          : isFear
+                            ? t('alerts:fearLevel', { defaultValue: 'Score 0–100' })
+                            : t('alerts:threshold', { defaultValue: 'Target price' })}
             </Text>
             <InputNumber
               value={isFeed ? (targetPrice ?? 300) : isRadar ? (targetPrice ?? 60) : isLevel ? (targetPrice ?? 0) : (targetPrice ?? undefined)}
@@ -253,13 +276,21 @@ export function CreateAlertForm({
                     ? t('alerts:notional', { defaultValue: 'USDT notional' })
                     : isLevel
                       ? t('alerts:minConfidence', { defaultValue: 'Min confidence (0–1)' })
-                    : isRadar
-                      ? t('alerts:minSimilarity', { defaultValue: 'Min similarity' })
-                      : t('alerts:threshold', { defaultValue: 'Target price' })
+                      : isRadar
+                        ? t('alerts:minSimilarity', { defaultValue: 'Min similarity' })
+                        : isFunding
+                          ? t('alerts:fundingLevel', { defaultValue: 'Funding %' })
+                          : isOI
+                            ? t('alerts:oiLevel', { defaultValue: 'Open interest USDT' })
+                            : isTaker
+                              ? t('alerts:takerLevel', { defaultValue: '5m buy share %' })
+                              : isFear
+                                ? t('alerts:fearLevel', { defaultValue: 'Score 0–100' })
+                                : t('alerts:threshold', { defaultValue: 'Target price' })
               }
-              min={isFeed ? 30 : isRadar ? 40 : 0}
-              max={isRadar ? 100 : isLevel ? 1 : undefined}
-              step={isLevel ? 0.05 : undefined}
+              min={isFeed ? 30 : isRadar ? 40 : isFunding ? -5 : 0}
+              max={isRadar || isTaker || isFear ? 100 : isLevel ? 1 : isFunding ? 5 : undefined}
+              step={isLevel || isFunding ? 0.01 : isTaker || isFear ? 1 : undefined}
               style={{ minWidth: 160 }}
               onChange={(v) => setTargetPrice(typeof v === 'number' ? v : null)}
             />
@@ -284,7 +315,7 @@ export function CreateAlertForm({
             />
           </Field>
         ) : null}
-        {venueWide ? null : (
+        {lockRepeating ? null : (
           <Field>
             <Text variant="caption" color="secondary">
               {t('alerts:mode', { defaultValue: 'Mode' })}
@@ -320,7 +351,9 @@ export function CreateAlertForm({
             (isCascade && !symbol.trim()) ||
             (isLevel && !symbol.trim()) ||
             (isNotional && (!symbol.trim() || targetPrice == null || targetPrice <= 0)) ||
-            (isRadar && targetPrice != null && (targetPrice < 40 || targetPrice > 100))
+            (isRadar && targetPrice != null && (targetPrice < 40 || targetPrice > 100)) ||
+            (isTape && targetPrice == null) ||
+            ((isFunding || isOI || isTaker) && !symbol.trim())
           }
           onClick={() => void submit()}
         >

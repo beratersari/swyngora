@@ -62,7 +62,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 	}
 	kind, ok := domain.NormalizeAlertKind(in.Kind)
 	if !ok {
-		return nil, fmt.Errorf("%w: kind must be price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional, liquidation_level, or setup_radar", domain.ErrInvalidArgument)
+		return nil, fmt.Errorf("%w: kind must be price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional, liquidation_level, setup_radar, funding, open_interest, taker, or fear_greed", domain.ErrInvalidArgument)
 	}
 	ex, sym, err := normalizeExchangeSymbolForKind(kind, in.Exchange, in.Symbol)
 	if err != nil {
@@ -83,7 +83,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 	if !ok {
 		return nil, fmt.Errorf("%w: mode must be one_time or repeating", domain.ErrInvalidArgument)
 	}
-	if in.Mode == "" && (domain.IsBookAlert(kind) || domain.IsLiquidationAlert(kind) || domain.IsSetupRadarAlert(kind)) {
+	if in.Mode == "" && (domain.IsBookAlert(kind) || domain.IsLiquidationAlert(kind) || domain.IsSetupRadarAlert(kind) || domain.IsTapeAlert(kind)) {
 		mode = domain.AlertModeRepeating
 	}
 	rangePct := 0.0
@@ -107,7 +107,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 	// Price repeating starts disarmed (avoid firing if already on the target side).
 	// Book, liquidation, and setup-radar repeating start armed so the first appearance can fire.
 	armed := false
-	if mode == domain.AlertModeRepeating && (domain.IsBookAlert(kind) || domain.IsLiquidationAlert(kind) || domain.IsSetupRadarAlert(kind)) {
+	if mode == domain.AlertModeRepeating && (domain.IsBookAlert(kind) || domain.IsLiquidationAlert(kind) || domain.IsSetupRadarAlert(kind) || domain.IsTapeAlert(kind)) {
 		armed = true
 	}
 	alert := domain.PriceAlert{
@@ -595,6 +595,20 @@ func normalizeClientID(id string) (string, error) {
 }
 
 func normalizeExchangeSymbolForKind(kind domain.AlertKind, exchange, symbol string) (domain.Exchange, string, error) {
+	if domain.IsFearGreedAlert(kind) {
+		return domain.Exchange("all"), domain.LiqAlertSymbolAll, nil
+	}
+	if domain.IsTapeAlert(kind) {
+		ex, err := domain.ParseLiquidationExchange(exchange)
+		if err != nil {
+			return "", "", err
+		}
+		sym := domain.NormalizeLiquidationSymbol(symbol)
+		if sym == "" || strings.EqualFold(sym, "all") {
+			return "", "", fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
+		}
+		return domain.Exchange(ex), sym, nil
+	}
 	if domain.IsSetupRadarAlert(kind) {
 		ex, err := domain.ParseLiquidationExchange(exchange)
 		if err != nil {

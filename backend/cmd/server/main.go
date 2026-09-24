@@ -813,6 +813,7 @@ func main() {
 		Books:        marketSvc,
 		Liquidations: marketSvc,
 		Radar:        marketSvc,
+		Tape:         marketSvc,
 		Accounts:     accountSvc,
 		Interval:     cfg.AlertCheckInterval,
 		Logger:       logger,

@@ -4413,7 +4413,7 @@ paths:
                 clientId: { type: string }
                 exchange: { type: string, default: binance, description: Spot venues, or binance|bybit|all for liquidation kinds }
                 symbol: { type: string }
-                kind: { type: string, enum: [price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional, liquidation_level, setup_radar], default: price }
+                kind: { type: string, enum: [price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional, liquidation_level, setup_radar, funding, open_interest, taker, fear_greed], default: price }
                 condition:
                   type: string
                   description: price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both; liquidation_level any|high|fair; setup_radar any|up|down
@@ -10855,7 +10855,7 @@ components:
         clientId: { type: string }
         exchange: { type: string }
         symbol: { type: string }
-        kind: { type: string, enum: [price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional, liquidation_level, setup_radar] }
+        kind: { type: string, enum: [price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional, liquidation_level, setup_radar, funding, open_interest, taker, fear_greed] }
         condition: { type: string, description: price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both; setup_radar any|up|down }
         targetPrice: { type: number }
         rangePct: { type: number, description: Analysis band for imbalance/wall alerts }

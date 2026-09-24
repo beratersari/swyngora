@@ -6,7 +6,11 @@ export type AlertKind =
   | 'liquidation_cascade'
   | 'liquidation_notional'
   | 'liquidation_level'
-  | 'setup_radar';
+  | 'setup_radar'
+  | 'funding'
+  | 'open_interest'
+  | 'taker'
+  | 'fear_greed';
 
 export type CreateAlertFormProps = {
   defaultExchange?: MarketExchange | string;

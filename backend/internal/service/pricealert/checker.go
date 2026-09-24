@@ -30,6 +30,14 @@ type LiquidationAlertSource interface {
 	GetLiquidationLevels(ctx context.Context, exchange, symbol, rawRange string) (*domain.LiquidationLevelsReport, error)
 }
 
+// TapeAlertSource reads funding, open interest, taker flow, and fear and greed.
+type TapeAlertSource interface {
+	GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (*domain.FundingSnapshot, error)
+	GetOpenInterest(ctx context.Context, exchange, symbol string) (*domain.OpenInterestSnapshot, error)
+	GetTakerFlow(ctx context.Context, exchange, symbol string) (*domain.TakerFlowReport, error)
+	GetFearGreed(ctx context.Context) (*domain.FearGreedReport, error)
+}
+
 // SetupRadarSource compares the current tape to past pre-move setups.
 // *market.Service implements this via RadarCoin / RadarScan.
 type SetupRadarSource interface {
@@ -74,6 +82,7 @@ type Checker struct {
 	Books        BookFetcher
 	Liquidations LiquidationAlertSource
 	Radar        SetupRadarSource
+	Tape         TapeAlertSource
 	Accounts     AccountChecker
 	Interval     time.Duration
 	Logger       *slog.Logger
@@ -152,6 +161,10 @@ func (c *Checker) RunOnce(ctx context.Context) {
 	cascadeScan := map[string][]domain.PriceAlert{}
 	radarCoin := map[key][]domain.PriceAlert{}
 	radarScan := map[string][]domain.PriceAlert{}
+	fundingGroups := map[key][]domain.PriceAlert{}
+	oiGroups := map[key][]domain.PriceAlert{}
+	takerGroups := map[key][]domain.PriceAlert{}
+	var fearAlerts []domain.PriceAlert
 	for _, a := range active {
 		if tenantClosed(ctx, c.Accounts, a.ClientID) {
 			continue
@@ -187,6 +200,17 @@ func (c *Checker) RunOnce(ctx context.Context) {
 				k := key{ex: string(a.Exchange), sym: a.Symbol}
 				radarCoin[k] = append(radarCoin[k], a)
 			}
+		case domain.IsFearGreedAlert(a.Kind):
+			fearAlerts = append(fearAlerts, a)
+		case domain.IsTapeAlert(a.Kind) && domain.EffectiveAlertKind(a) == domain.AlertKindFunding:
+			k := key{ex: string(a.Exchange), sym: a.Symbol}
+			fundingGroups[k] = append(fundingGroups[k], a)
+		case domain.IsTapeAlert(a.Kind) && domain.EffectiveAlertKind(a) == domain.AlertKindOpenInterest:
+			k := key{ex: string(a.Exchange), sym: a.Symbol}
+			oiGroups[k] = append(oiGroups[k], a)
+		case domain.IsTapeAlert(a.Kind) && domain.EffectiveAlertKind(a) == domain.AlertKindTaker:
+			k := key{ex: string(a.Exchange), sym: a.Symbol}
+			takerGroups[k] = append(takerGroups[k], a)
 		case domain.IsBookAlert(a.Kind):
 			rng := a.RangePct
 			if rng <= 0 {
@@ -217,6 +241,24 @@ func (c *Checker) RunOnce(ctx context.Context) {
 		}()
 	}
 	c.evalFeedAlerts(ctx, feedAlerts)
+	c.evalFearGreed(ctx, fearAlerts)
+	for _, groups := range []map[key][]domain.PriceAlert{fundingGroups, oiGroups, takerGroups} {
+		for k, alerts := range groups {
+			k, alerts := k, alerts
+			kind := domain.EffectiveAlertKind(alerts[0])
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				select {
+				case <-ctx.Done():
+					return
+				case sem <- struct{}{}:
+				}
+				defer func() { <-sem }()
+				c.evalTapeGroup(ctx, string(kind), k.ex, k.sym, alerts)
+			}()
+		}
+	}
 	for k, alerts := range levelGroups {
 		k, alerts := k, alerts
 		wg.Add(1)
@@ -316,6 +358,58 @@ func (c *Checker) RunOnce(ctx context.Context) {
 		}()
 	}
 	wg.Wait()
+}
+
+func (c *Checker) evalTapeGroup(ctx context.Context, kind, exchange, symbol string, alerts []domain.PriceAlert) {
+	if c.Tape == nil {
+		return
+	}
+	var metric float64
+	var ok bool
+	switch kind {
+	case "funding":
+		snap, err := c.Tape.GetFundingRate(ctx, exchange, symbol, 8)
+		if err != nil {
+			return
+		}
+		metric, ok = domain.FundingAlertPercent(snap)
+	case "open_interest":
+		snap, err := c.Tape.GetOpenInterest(ctx, exchange, symbol)
+		if err != nil {
+			return
+		}
+		metric, ok = domain.OpenInterestAlertUSDT(snap)
+	default:
+		rep, err := c.Tape.GetTakerFlow(ctx, exchange, symbol)
+		if err != nil {
+			return
+		}
+		metric, ok = domain.TakerAlertBuyPercent(rep)
+	}
+	if !ok {
+		return
+	}
+	c.finishMetric(ctx, alerts, metric)
+}
+
+func (c *Checker) evalFearGreed(ctx context.Context, alerts []domain.PriceAlert) {
+	if c.Tape == nil || len(alerts) == 0 {
+		return
+	}
+	rep, err := c.Tape.GetFearGreed(ctx)
+	if err != nil || rep == nil {
+		return
+	}
+	c.finishMetric(ctx, alerts, float64(rep.Score))
+}
+
+func (c *Checker) finishMetric(ctx context.Context, alerts []domain.PriceAlert, metric float64) {
+	now := c.now().UTC()
+	for _, a := range alerts {
+		if _, _, err := c.Alerts.ProcessPrice(ctx, a, metric, now); err != nil && c.Logger != nil {
+			c.Logger.Debug("tape alert failed", "id", a.ID, "err", err)
+		}
+	}
 }
 
 func (c *Checker) evalPriceGroup(ctx context.Context, exchange, symbol string, alerts []domain.PriceAlert) {
