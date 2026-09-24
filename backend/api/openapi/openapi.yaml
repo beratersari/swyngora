@@ -2982,7 +2982,10 @@ paths:
         over a time range you choose — not just how much traded over time.
         Each row is quote (USDT) volume in a price band, with **buy** and
         **sell** when the venue publishes taker-buy (Binance klines; Bybit
-        is total-only). `poc` is the price with the most volume. `valueArea`
+        is total-only). The same row also carries **open interest opened
+        and closed** (USDT change spread across the candles trading then)
+        and **long / short liquidation** notional that printed in that band.
+        `poc` is the price with the most volume. `valueArea`
         is the contiguous block around the POC that holds about **70%** of
         volume. `exchange=all` (default) returns Binance and Bybit separately
         plus `combined`. Combined adds both venues at the same price levels.

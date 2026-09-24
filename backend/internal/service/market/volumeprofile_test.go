@@ -82,6 +82,69 @@ func TestGetVolumeProfile_PerVenueAndCombined(t *testing.T) {
 	}
 }
 
+func TestGetVolumeProfile_OiAndLiquidationsOnSameRows(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Minute)
+	candles := profileCandles(now)
+	var cluster time.Time
+	for _, c := range candles {
+		if c.Low == "65150" {
+			cluster = c.OpenTime
+		}
+	}
+	book := domain.NewLiquidationBook()
+	book.Record(domain.LiquidationEvent{
+		Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Side: domain.LiquidationSideLong,
+		Price: 65220, Quantity: 1, Notional: 80_000, Time: cluster.Add(20 * time.Second),
+	})
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{
+			candles: candles,
+			ticker:  &domain.Ticker24h{Symbol: "BTCUSDT", LastPrice: "65500"},
+		},
+		domain.ExchangeBybit: &fakeMarket{
+			candles: []domain.Candle{{
+				OpenTime: cluster, Low: "65150", High: "65250", Close: "65200", QuoteVolume: "40000",
+			}},
+			ticker: &domain.Ticker24h{Symbol: "BTCUSDT", LastPrice: "65500"},
+		},
+	}, &fakeSupply{}).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+		domain.ExchangeBinance: &fakeOI{ser: &domain.OpenInterestSeries{
+			Current: domain.OpenInterestPoint{Time: now, Value: 2_000_000, Contracts: 30},
+			History: []domain.OpenInterestPoint{
+				{Time: cluster, Value: 2_000_000, Contracts: 30},
+				{Time: cluster.Add(time.Minute), Value: 2_400_000, Contracts: 36},
+			},
+		}},
+	}).WithLiquidations(book, nil)
+
+	got, err := svc.GetVolumeProfile(context.Background(), "all", "BTCUSDT", "4h", nil, nil, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var binance *domain.VolumeProfileVenue
+	for i := range got.Venues {
+		if got.Venues[i].Exchange == domain.ExchangeBinance {
+			binance = &got.Venues[i]
+		}
+	}
+	if binance == nil || !binance.OiKnown || !binance.LiqKnown {
+		t.Fatalf("binance activity %+v", binance)
+	}
+	var row *domain.VolumeProfileBin
+	for i := range binance.Bins {
+		b := &binance.Bins[i]
+		if b.Price <= 65220 && 65220 < b.High && b.Volume > 0 {
+			row = b
+		}
+	}
+	if row == nil || row.OiOpened < 100_000 || row.LongLiq <= 0 {
+		t.Fatalf("expected OI and long liq on the 65200 row, bins=%+v", binance.Bins)
+	}
+	if got.Combined == nil || !got.Combined.OiKnown || got.Combined.LongLiq <= 0 {
+		t.Fatalf("combined %+v", got.Combined)
+	}
+}
+
 func TestGetVolumeProfile_SingleVenueAndTick(t *testing.T) {
 	now := time.Now().UTC()
 	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{

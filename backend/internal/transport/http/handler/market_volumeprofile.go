@@ -64,6 +64,10 @@ type volumeProfileBinDTO struct {
 	SellVolume  string                  `json:"sellVolume"`
 	BuyPct      string                  `json:"buyPct"`
 	SharePct    string                  `json:"sharePct"`
+	OiOpened    string                  `json:"oiOpened"`
+	OiClosed    string                  `json:"oiClosed"`
+	LongLiq     string                  `json:"longLiq"`
+	ShortLiq    string                  `json:"shortLiq"`
 	IsPoc       bool                    `json:"isPoc"`
 	InValueArea bool                    `json:"inValueArea"`
 	IsHvn       bool                    `json:"isHvn"`
@@ -102,6 +106,12 @@ type volumeProfileVenueDTO struct {
 	SellVolume     string                    `json:"sellVolume"`
 	BuySellKnown   bool                      `json:"buySellKnown"`
 	BuySellPartial bool                      `json:"buySellPartial"`
+	OiOpened       string                    `json:"oiOpened"`
+	OiClosed       string                    `json:"oiClosed"`
+	OiKnown        bool                      `json:"oiKnown"`
+	LongLiq        string                    `json:"longLiq"`
+	ShortLiq       string                    `json:"shortLiq"`
+	LiqKnown       bool                      `json:"liqKnown"`
 	LastVsArea     string                    `json:"lastVsValueArea"`
 	POC            volumeProfilePOCDTO       `json:"poc"`
 	ValueArea      volumeProfileValueAreaDTO `json:"valueArea"`
@@ -151,7 +161,10 @@ func volumeProfileVenueToDTO(v domain.VolumeProfileVenue) volumeProfileVenueDTO 
 			Price: formatHistQty(b.Price), High: formatHistQty(b.High),
 			Volume: formatHistQty(b.Volume), BuyVolume: formatHistQty(b.BuyVolume),
 			SellVolume: formatHistQty(b.SellVolume), BuyPct: formatHistQty(b.BuyPct),
-			SharePct: formatHistQty(b.SharePct), IsPoc: b.IsPoc, InValueArea: b.InValueArea,
+			SharePct: formatHistQty(b.SharePct),
+			OiOpened: formatHistQty(b.OiOpened), OiClosed: formatHistQty(b.OiClosed),
+			LongLiq: formatHistQty(b.LongLiq), ShortLiq: formatHistQty(b.ShortLiq),
+			IsPoc: b.IsPoc, InValueArea: b.InValueArea,
 			IsHvn: b.IsHvn, Shares: volumeProfileSharesToDTO(b.Shares),
 		})
 	}
@@ -162,7 +175,10 @@ func volumeProfileVenueToDTO(v domain.VolumeProfileVenue) volumeProfileVenueDTO 
 		High: formatHistQty(v.High), Low: formatHistQty(v.Low),
 		TotalVolume: formatHistQty(v.TotalVolume), BuyVolume: formatHistQty(v.BuyVolume),
 		SellVolume: formatHistQty(v.SellVolume), BuySellKnown: v.BuySellKnown,
-		BuySellPartial: v.BuySellPartial, LastVsArea: v.LastVsArea,
+		BuySellPartial: v.BuySellPartial,
+		OiOpened:       formatHistQty(v.OiOpened), OiClosed: formatHistQty(v.OiClosed), OiKnown: v.OiKnown,
+		LongLiq: formatHistQty(v.LongLiq), ShortLiq: formatHistQty(v.ShortLiq), LiqKnown: v.LiqKnown,
+		LastVsArea: v.LastVsArea,
 		POC: volumeProfilePOCDTO{
 			Price: formatHistQty(v.POC.Price), High: formatHistQty(v.POC.High),
 			Volume: formatHistQty(v.POC.Volume), BuyVolume: formatHistQty(v.POC.BuyVolume),

@@ -28,6 +28,7 @@ Do **not** reintroduce `src/features/` for product UI until multiple product are
 | `PerpLiquidityOverview` / `BreadthOverview` / `FearGreedPanel` | MarketsPage |
 | `PositionSidePanel` | Coin detail tape and Flow tab |
 | `CoinInsightPanel` | CoinDetailPage Flow / Structure tabs |
+| `VolumeProfileLadder` | Coin detail Flow tab — volume, OI change, and liquidations on the same price rows |
 | `VolumeSurgeTable` | SurgesPage |
 | `DetailHeader` | CoinDetailPage |
 | `DetailStats` | CoinDetailPage |

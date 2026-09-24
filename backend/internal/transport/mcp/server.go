@@ -1535,7 +1535,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_volume_profile",
-		mcp.WithDescription("Where trading happened by price over a time range: total, buy, and sell quote volume in each price row, the point of control (price with the most volume), and the value area (the block around it that holds about 70% of volume). Works for BTC and other pairs. Binance and Bybit separately plus combined. Buy/sell is from Binance taker-buy; Bybit rows are total-only. Not tick-accurate — volume is spread across each candle's high–low. Not financial advice."),
+		mcp.WithDescription("Where trading happened by price over a time range: total, buy, and sell quote volume in each price row, plus open interest opened/closed and long/short liquidation notional on those same rows. The point of control is the price with the most volume; the value area is the block around it that holds about 70% of volume. Works for BTC and other pairs. Binance and Bybit separately plus combined. Buy/sell is from Binance taker-buy; Bybit rows are total-only. OI change is spread across the candles that traded during each step. Liquidations use the print price. Not tick-accurate. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
 		mcp.WithString("window", mcp.Description("1h | 4h | 24h | 7d | 30d (default 24h). Ignored when startTime/endTime are set.")),

@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { CoinInsightPanel, CoinInsightStack } from '@/components/organisms/CoinInsightPanel';
+import { VolumeProfileLadder } from '@/components/organisms/VolumeProfileLadder';
 import { PositionSidePanel } from '@/components/organisms/PositionSidePanel';
 import {
   rtkErrorMessage,
@@ -68,7 +69,13 @@ export function CoinFlowTab({ symbol, exchange }: CoinFlowTabProps) {
           title={row.title}
           summary={reportSummary(rtkCurrent(row.q))}
           stats={row.stats}
-          extra={row.key === 'whales' ? <WhaleFollowList events={rtkCurrent(whales)?.events} /> : null}
+          extra={
+            row.key === 'whales' ? (
+              <WhaleFollowList events={rtkCurrent(whales)?.events} />
+            ) : row.key === 'profile' ? (
+              <VolumeProfileLadder report={rtkCurrent(profile)} />
+            ) : null
+          }
           error={row.q.isError ? err(row.q.error) : null}
           isLoading={rtkCurrentPending(row.q)}
         />

@@ -5107,10 +5107,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="get_volume_profile",
             description=(
                 "Where trading happened by price over a time range: total, "
-                "buy, and sell quote volume in each price row, the point of "
-                "control (most volume), and the 70% value area. Works for BTC "
-                "and other pairs. Binance and Bybit separately plus combined. "
-                "Use window 1h/4h/24h/7d/30d or start_time/end_time."
+                "buy, and sell quote volume in each price row, plus open "
+                "interest opened/closed and long/short liquidations on those "
+                "same rows. Point of control is the most volume; the value "
+                "area holds about 70%. Works for BTC and other pairs. "
+                "Binance and Bybit separately plus combined. Use window "
+                "1h/4h/24h/7d/30d or start_time/end_time."
             ),
             args_schema=VolumeProfileInput,
         ),

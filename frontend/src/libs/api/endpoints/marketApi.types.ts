@@ -260,6 +260,50 @@ export type MarketVolumeSurgeScanQuery = {
   minRatio?: number;
   limit?: number;
 };
+export type VolumeProfileBin = {
+  price?: string;
+  high?: string;
+  volume?: string;
+  buyVolume?: string;
+  sellVolume?: string;
+  buyPct?: string;
+  sharePct?: string;
+  oiOpened?: string;
+  oiClosed?: string;
+  longLiq?: string;
+  shortLiq?: string;
+  isPoc?: boolean;
+  inValueArea?: boolean;
+  isHvn?: boolean;
+};
+
+export type VolumeProfileVenue = {
+  exchange?: string;
+  summary?: string;
+  error?: string;
+  lastPrice?: string;
+  tickSize?: string;
+  oiOpened?: string;
+  oiClosed?: string;
+  oiKnown?: boolean;
+  longLiq?: string;
+  shortLiq?: string;
+  liqKnown?: boolean;
+  bins?: VolumeProfileBin[];
+  poc?: { price?: string; high?: string; volume?: string };
+  valueArea?: { low?: string; high?: string };
+};
+
+export type VolumeProfileReport = {
+  symbol?: string;
+  exchange?: string;
+  window?: string;
+  summary?: string;
+  note?: string;
+  venues?: VolumeProfileVenue[];
+  combined?: VolumeProfileVenue;
+};
+
 export type MarketDeskReport = {
   symbol?: string;
   exchange?: string;

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Volume profile with OI and liquidations:** each price row shows traded buy/sell size together with open interest opened or closed while price was there, and long/short liquidations that printed on that row. `GET /api/v1/market/volume-profile`, MCP `get_volume_profile`, coin Flow tab (`docs/features/volume-profile.md`)
 - **Whale intent:** a large buy or sell is read with the open-interest change across the print (open long, close short, open short, close long). Price and open interest 15 minutes later are included when those samples exist (`GET /api/v1/market/whales`, coin Flow tab).
 - **Tape alerts:** funding (percent), open interest (USDT), 5-minute taker buy share, and the fear-and-greed score can fire when the value goes above or below a chosen level. `POST /api/v1/alerts` kinds `funding`, `open_interest`, `taker`, `fear_greed`; MCP `create_tape_alert`; Alerts page (`docs/features/price-alerts.md`)
 - **Portfolio stress:** preview equity, total P&L, and margin if named coins move (BTC −10%, ETH −15%) before it happens. `POST /api/v1/portfolio/stress`, MCP `stress_portfolio`, portfolio screen (`docs/features/risk-limits.md`)

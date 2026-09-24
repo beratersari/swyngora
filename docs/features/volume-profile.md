@@ -11,6 +11,8 @@ Useful when:
 - you want the **point of control** (the price with the most volume)
 - you want the **value area** (the main band that collected most volume)
 - you want **buy vs sell** at those prices, per venue and combined
+- you want **open-interest change** and **liquidations** on those same prices,
+  so a cluster of volume, new positions, and forced closes can be seen together
 
 ## Behavior
 
@@ -23,7 +25,15 @@ Useful when:
 - Optional `tickSize` (price row width, e.g. `50`). Omit to pick a row size
   that keeps the profile readable (widened if it would exceed 200 rows)
 - Each bin: `price`–`high`, total quote volume, `buyVolume` / `sellVolume`,
-  share of total, `isPoc`, `inValueArea`, `isHvn`
+  share of total, `oiOpened` / `oiClosed` (USDT), `longLiq` / `shortLiq`
+  (USDT), `isPoc`, `inValueArea`, `isHvn`
+- **Open interest** is not published per price. Each step between two OI
+  readings is spread across the high–low of the candles that traded during
+  that step (a rise is opened, a fall is closed), on the same rows as volume.
+  Readings come from the live 5-minute series and the stored futures archive
+- **Liquidations** use the price on the print (long vs short notional).
+  A print outside the volume rows is left off the ladder
+- Coin detail **Flow** draws those three columns on one price ladder
 - **POC:** the row with the most volume (ties go to the row closer to last)
 - **Value area:** expand from the POC to neighboring rows until about **70%**
   of volume is inside. `valueArea.low` / `high` is that band

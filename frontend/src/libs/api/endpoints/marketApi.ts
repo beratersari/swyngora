@@ -113,6 +113,7 @@ import type {
   MarketVolumeSurgeScanQuery,
   MarketDeskReport,
   SymbolMarketQuery,
+  VolumeProfileReport,
 } from './marketApi.types';
 import type { ForensicsRadarReview } from '@/libs/types/forensics.types';
 // delist types re-exported below
@@ -172,6 +173,9 @@ export type {
   MarketVolumeSurgeScan,
   MarketVolumeSurgeHit,
   MarketDeskReport,
+  VolumeProfileReport,
+  VolumeProfileVenue,
+  VolumeProfileBin,
   MarketParticipation,
   MarketPrintSize,
   MarketPressure,
@@ -513,7 +517,7 @@ export const marketApi = baseApi.injectEndpoints({
         params: compactParams({ ...arg }),
       }),
     }),
-    getMarketVolumeProfile: build.query<MarketDeskReport, SymbolMarketQuery>({
+    getMarketVolumeProfile: build.query<VolumeProfileReport, SymbolMarketQuery>({
       query: (arg) => ({
         url: '/api/v1/market/volume-profile',
         params: compactParams({ ...arg }),

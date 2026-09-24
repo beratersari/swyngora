@@ -70,6 +70,10 @@ type VolumeProfileBin struct {
 	SellVolume  float64
 	BuyPct      float64
 	SharePct    float64
+	OiOpened    float64 // USDT open interest added while price traded here
+	OiClosed    float64 // USDT open interest closed while price traded here
+	LongLiq     float64 // USDT of long liquidations that printed here
+	ShortLiq    float64 // USDT of short liquidations that printed here
 	IsPoc       bool
 	InValueArea bool
 	IsHvn       bool
@@ -112,6 +116,12 @@ type VolumeProfileVenue struct {
 	SellVolume     float64
 	BuySellKnown   bool
 	BuySellPartial bool
+	OiOpened       float64
+	OiClosed       float64
+	OiKnown        bool
+	LongLiq        float64
+	ShortLiq       float64
+	LiqKnown       bool
 	LastVsArea     string
 	POC            VolumeProfilePOC
 	ValueArea      VolumeProfileValueArea
@@ -453,8 +463,10 @@ func CombineVolumeProfiles(symbol string, venues []VolumeProfileVenue, tick, las
 		}
 	}
 	type acc struct {
-		vol, buy, sell float64
-		shares         map[Exchange]float64
+		vol, buy, sell     float64
+		oiOpened, oiClosed float64
+		longLiq, shortLiq  float64
+		shares             map[Exchange]float64
 	}
 	m := map[int64]*acc{}
 	var known, unknown float64
@@ -476,6 +488,16 @@ func CombineVolumeProfiles(symbol string, venues []VolumeProfileVenue, tick, las
 		} else {
 			unknown += v.TotalVolume
 		}
+		if v.OiKnown {
+			out.OiKnown = true
+			out.OiOpened += v.OiOpened
+			out.OiClosed += v.OiClosed
+		}
+		if v.LiqKnown {
+			out.LiqKnown = true
+			out.LongLiq += v.LongLiq
+			out.ShortLiq += v.ShortLiq
+		}
 		for _, b := range v.Bins {
 			idx := priceBinIndex(b.Price, tick)
 			cur := m[idx]
@@ -486,6 +508,10 @@ func CombineVolumeProfiles(symbol string, venues []VolumeProfileVenue, tick, las
 			cur.vol += b.Volume
 			cur.buy += b.BuyVolume
 			cur.sell += b.SellVolume
+			cur.oiOpened += b.OiOpened
+			cur.oiClosed += b.OiClosed
+			cur.longLiq += b.LongLiq
+			cur.shortLiq += b.ShortLiq
 			cur.shares[v.Exchange] += b.Volume
 		}
 	}
@@ -509,6 +535,8 @@ func CombineVolumeProfiles(symbol string, venues []VolumeProfileVenue, tick, las
 		row := VolumeProfileBin{
 			Price: binLow(idx, tick), High: binLow(idx+1, tick),
 			Volume: a.vol, BuyVolume: a.buy, SellVolume: a.sell,
+			OiOpened: a.oiOpened, OiClosed: a.oiClosed,
+			LongLiq: a.longLiq, ShortLiq: a.shortLiq,
 		}
 		if side := a.buy + a.sell; side > 0 {
 			row.BuyPct = a.buy / side * 100
@@ -576,6 +604,18 @@ func ExplainVolumeProfileVenue(v VolumeProfileVenue) string {
 	}
 	if v.LastPrice > 0 && v.LastVsArea != VolumeProfileVsUnknown {
 		head += fmt.Sprintf(" Last %s is %s the value area.", formatQty(v.LastPrice), where)
+	}
+	for _, b := range v.Bins {
+		if !b.IsPoc {
+			continue
+		}
+		if v.OiKnown && b.OiOpened+b.OiClosed > 0 {
+			head += fmt.Sprintf(" At the POC, open interest opened %s and closed %s.", formatQty(b.OiOpened), formatQty(b.OiClosed))
+		}
+		if v.LiqKnown && b.LongLiq+b.ShortLiq > 0 {
+			head += fmt.Sprintf(" Liquidations at the POC were %s long and %s short.", formatQty(b.LongLiq), formatQty(b.ShortLiq))
+		}
+		break
 	}
 	if len(v.Bins) > 0 && len(v.Bins[0].Shares) > 0 {
 		parts := make([]string, 0, len(v.Bins[0].Shares))

@@ -11,7 +11,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const volumeProfileDisclaimer = "Volume profile bins quote (USDT) volume from spot candles across each bar's high–low — not individual prints. Buy/sell uses taker-buy when the venue publishes it (Binance klines). Bybit klines do not, so those rows are total-only. Combined adds Binance and Bybit at the same price levels. The point of control is the row with the most volume; the value area is the block around it that holds about 70% of volume. Informational only — not financial advice."
+const volumeProfileDisclaimer = "Volume profile bins quote (USDT) volume from spot candles across each bar's high–low — not individual prints. Buy/sell uses taker-buy when the venue publishes it (Binance klines). Bybit klines do not, so those rows are total-only. Open-interest change is the USDT added or closed between readings, spread across the candles that traded during that step, on the same price rows. Liquidations use the print price on those rows. Combined adds Binance and Bybit at the same price levels. The point of control is the row with the most volume; the value area is the block around it that holds about 70% of volume. Informational only — not financial advice."
 
 // GetVolumeProfile returns traded volume by price for Binance, Bybit, and combined.
 func (s *Service) GetVolumeProfile(ctx context.Context, exchange, symbol, window string, start, end *time.Time, tickSize float64) (*domain.VolumeProfileReport, error) {
@@ -107,11 +107,31 @@ func (s *Service) GetVolumeProfile(ctx context.Context, exchange, symbol, window
 	sort.Slice(out.Venues, func(i, j int) bool {
 		return string(out.Venues[i].Exchange) < string(out.Venues[j].Exchange)
 	})
+	barsByEx := map[domain.Exchange][]domain.VolumeProfileBar{}
+	for _, f := range got {
+		barsByEx[f.ex] = f.bars
+	}
+	s.attachProfileActivity(ctx, out, barsByEx, from, to)
 	if ex == "all" && len(out.Venues) > 0 {
 		out.Combined = domain.CombineVolumeProfiles(symbol, out.Venues, tick, last, from, to, interval)
 	}
 	out.Summary = domain.ExplainVolumeProfileReport(*out)
 	return out, nil
+}
+
+func (s *Service) attachProfileActivity(ctx context.Context, out *domain.VolumeProfileReport, barsByEx map[domain.Exchange][]domain.VolumeProfileBar, from, to time.Time) {
+	if s == nil || out == nil {
+		return
+	}
+	for i := range out.Venues {
+		v := &out.Venues[i]
+		if v.Error != "" || len(v.Bins) == 0 {
+			continue
+		}
+		oi := s.profileOiPoints(ctx, v.Exchange, out.Symbol, from, to)
+		liqs := s.profileLiquidations(ctx, v.Exchange, out.Symbol, from, to)
+		domain.AttachVolumeProfileActivity(v, barsByEx[v.Exchange], oi, liqs)
+	}
 }
 
 func (s *Service) volumeProfileVenue(ctx context.Context, ex domain.Exchange, symbol string, interval domain.CandleInterval, from, to time.Time) ([]domain.VolumeProfileBar, float64, error) {
@@ -217,6 +237,94 @@ func filterCandlesRange(in []domain.Candle, from, to time.Time, interval domain.
 			continue
 		}
 		out = append(out, c)
+	}
+	return out
+}
+
+func (s *Service) profileOiPoints(ctx context.Context, ex domain.Exchange, symbol string, from, to time.Time) []domain.VolumeProfileOiPoint {
+	var pts []domain.VolumeProfileOiPoint
+	if p := s.oiPort(ex); p != nil {
+		if ser, err := p.GetOpenInterestSeries(ctx, symbol); err == nil && ser != nil {
+			if ser.Current.Value > 0 && !ser.Current.Time.IsZero() {
+				pts = append(pts, domain.VolumeProfileOiPoint{Time: ser.Current.Time, Value: ser.Current.Value})
+			}
+			for _, h := range ser.History {
+				if h.Value > 0 && !h.Time.IsZero() {
+					pts = append(pts, domain.VolumeProfileOiPoint{Time: h.Time, Value: h.Value})
+				}
+			}
+		}
+	}
+	if s.futHist != nil {
+		raw, err := s.futHist.History(ctx, domain.FuturesHistoryQuery{
+			Metric:   domain.FuturesMetricOpenInterest,
+			Exchange: string(ex),
+			Symbol:   symbol,
+			From:     from,
+			To:       to,
+			Limit:    domain.MaxFuturesHistoryLimit,
+		})
+		if err == nil {
+			for _, rec := range futuresSnapshots(raw) {
+				if rec.Exchange != ex || rec.Value <= 0 || rec.SampledAt.IsZero() {
+					continue
+				}
+				pts = append(pts, domain.VolumeProfileOiPoint{Time: rec.SampledAt, Value: rec.Value})
+			}
+		}
+	}
+	seen := map[int64]struct{}{}
+	out := make([]domain.VolumeProfileOiPoint, 0, len(pts))
+	for _, p := range pts {
+		ms := p.Time.UTC().UnixMilli()
+		if _, ok := seen[ms]; ok {
+			continue
+		}
+		seen[ms] = struct{}{}
+		out = append(out, p)
+	}
+	return out
+}
+
+func (s *Service) profileLiquidations(ctx context.Context, ex domain.Exchange, symbol string, from, to time.Time) []domain.LiquidationEvent {
+	var ev []domain.LiquidationEvent
+	if s.liq != nil {
+		ev = append(ev, s.liq.EventsSince(string(ex), symbol, from)...)
+	}
+	if s.futHist != nil {
+		raw, err := s.futHist.History(ctx, domain.FuturesHistoryQuery{
+			Metric:   "liquidations",
+			Exchange: string(ex),
+			Symbol:   symbol,
+			From:     from,
+			To:       to,
+			Limit:    domain.MaxFuturesHistoryLimit,
+		})
+		if err == nil {
+			if rows, ok := raw.([]domain.LiquidationEvent); ok {
+				ev = append(ev, rows...)
+			}
+		}
+	}
+	if len(ev) == 0 {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	out := make([]domain.LiquidationEvent, 0, len(ev))
+	for _, e := range ev {
+		if e.Exchange != "" && e.Exchange != ex {
+			continue
+		}
+		e.Exchange = ex
+		if !to.IsZero() && e.Time.After(to) {
+			continue
+		}
+		key := domain.LiquidationEventKey(e)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, e)
 	}
 	return out
 }
