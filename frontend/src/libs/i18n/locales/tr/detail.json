@@ -221,11 +221,15 @@
   },
   "pastBook": {
     "title": "Geçmiş emir defteri",
-    "hint": "Her dakika merdiveni saklar. Birkaç saniye durup sonra kalkan bir duvar, o dakikanın anlık görüntüsü kaçırmış olsa bile burada durur.",
+    "hint": "Her dakika merdiveni saklar. Birkaç saniye durup sonra kalkan bir duvar o dakikada durur. Merdivenin kaçırdığı diğer miktar değişimleri de durur: kalkan miktar, ya da tepe noktası kaybolmuş bir salınım.",
     "when": "Dakika",
     "empty": "Kayıtlı defter yok",
-    "none": "Bu dakikada kısa duvar yok.",
-    "flash": "{{side}} {{price}} · {{notional}} · {{seconds}} sn durdu, sonra kalktı"
+    "none": "Bu dakikada kısa duvar veya miktar hareketi yok.",
+    "flash": "{{side}} {{price}} · {{notional}} · {{seconds}} sn durdu, sonra kalktı",
+    "move": "{{side}} {{price}} · {{change}} {{from}} → {{to}} · tepe {{peak}}",
+    "removed": "kalktı",
+    "gained": "büyüdü",
+    "lost": "küçüldü"
   },
   "orderDepth": {
     "title": "Piyasa derinliği",

@@ -413,7 +413,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_orderbook_history",
-		mcp.WithDescription("Stored spot order-book snapshots: bid/ask levels, spread, total liquidity, imbalance, and large walls. Pass at for the book nearest that time (RFC3339 or unix ms); flashes on that snapshot are walls that rested only a few seconds inside the minute and were gone before the ladder was stored. Omit at to list recent samples (from/to optional). 1-minute ladders, not a 24h tape. Not financial advice."),
+		mcp.WithDescription("Stored spot order-book snapshots: bid/ask levels, spread, total liquidity, imbalance, and large walls. Pass at for the book nearest that time (RFC3339 or unix ms); flashes on that snapshot are walls that rested only a few seconds inside the minute and were gone before the ladder was stored. moves are other resting-size changes in that minute that the ladder does not show. Omit at to list recent samples (from/to optional). 1-minute ladders, not a 24h tape. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
 		mcp.WithString("exchange", mcp.Description("binance (default) | coinbase | bybit")),
 		mcp.WithString("at", mcp.Description("Point in time (RFC3339 or unix ms)")),

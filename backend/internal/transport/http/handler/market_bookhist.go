@@ -117,6 +117,7 @@ type bookHistSnapDTO struct {
 	Asks         []bookHistLevelDTO `json:"asks,omitempty"`
 	Walls        []bookHistWallDTO  `json:"walls,omitempty"`
 	Flashes      []bookHistFlashDTO `json:"flashes,omitempty"`
+	Moves        []bookHistMoveDTO  `json:"moves,omitempty"`
 }
 
 type bookHistFlashDTO struct {
@@ -128,6 +129,18 @@ type bookHistFlashDTO struct {
 	SeenUntil   string  `json:"seenUntil"`
 	DurationSec float64 `json:"durationSec"`
 	Brief       bool    `json:"brief"`
+}
+
+type bookHistMoveDTO struct {
+	Side         string  `json:"side"`
+	Price        string  `json:"price"`
+	FromNotional string  `json:"fromNotional"`
+	ToNotional   string  `json:"toNotional"`
+	PeakNotional string  `json:"peakNotional"`
+	Change       string  `json:"change"`
+	SeenFrom     string  `json:"seenFrom"`
+	SeenUntil    string  `json:"seenUntil"`
+	DurationSec  float64 `json:"durationSec"`
 }
 
 type bookHistoryResponse struct {
@@ -221,6 +234,7 @@ func bookSnapToDTO(s domain.BookHistorySnapshot, full bool) bookHistSnapDTO {
 		out.Asks = bookLevelsDTO(s.Asks)
 		out.Walls = bookWallsDTO(s.Walls)
 		out.Flashes = bookFlashesDTO(s.Flashes)
+		out.Moves = bookMovesDTO(s.Moves)
 	}
 	return out
 }
@@ -256,6 +270,20 @@ func bookFlashesDTO(in []domain.BookHistoryFlash) []bookHistFlashDTO {
 			Notional: formatHistQty(f.Notional),
 			SeenFrom: f.SeenFrom.UTC().Format(time.RFC3339), SeenUntil: f.SeenUntil.UTC().Format(time.RFC3339),
 			DurationSec: f.Duration.Seconds(), Brief: true,
+		})
+	}
+	return out
+}
+
+func bookMovesDTO(in []domain.BookHistoryMove) []bookHistMoveDTO {
+	out := make([]bookHistMoveDTO, 0, len(in))
+	for _, mv := range in {
+		out = append(out, bookHistMoveDTO{
+			Side: mv.Side, Price: formatHistQty(mv.Price),
+			FromNotional: formatHistQty(mv.FromNotional), ToNotional: formatHistQty(mv.ToNotional),
+			PeakNotional: formatHistQty(mv.PeakNotional), Change: mv.Change,
+			SeenFrom: mv.SeenFrom.UTC().Format(time.RFC3339), SeenUntil: mv.SeenUntil.UTC().Format(time.RFC3339),
+			DurationSec: mv.Duration.Seconds(),
 		})
 	}
 	return out

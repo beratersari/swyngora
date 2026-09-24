@@ -51,7 +51,7 @@ func (w *Worker) Start(ctx context.Context) {
 	}
 }
 
-// RunFlashes samples live walls so a rest that vanishes inside the minute is kept.
+// RunFlashes samples live walls and other resting-size changes so a rest that vanishes inside the minute is kept.
 func (w *Worker) RunFlashes(ctx context.Context) {
 	if w == nil || w.Hist == nil {
 		return

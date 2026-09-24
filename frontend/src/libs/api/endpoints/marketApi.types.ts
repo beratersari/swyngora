@@ -26,10 +26,22 @@ export type BookHistoryFlash = {
   brief?: boolean;
 };
 
+export type BookHistoryMove = {
+  side?: string;
+  price?: string;
+  fromNotional?: string;
+  toNotional?: string;
+  peakNotional?: string;
+  change?: string;
+  seenFrom?: string;
+  durationSec?: number;
+};
+
 export type BookHistorySnapshot = {
   sampledAt?: string;
   mid?: string;
   flashes?: BookHistoryFlash[];
+  moves?: BookHistoryMove[];
 };
 
 export type BookHistoryReport = {

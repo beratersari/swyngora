@@ -112,6 +112,21 @@ CREATE TABLE IF NOT EXISTS book_flashes (
 );
 CREATE INDEX IF NOT EXISTS idx_book_flashes_lookup
 	ON book_flashes(exchange, symbol, seen_from_ms, seen_until_ms);
+CREATE TABLE IF NOT EXISTS book_moves (
+	exchange       TEXT NOT NULL,
+	symbol         TEXT NOT NULL,
+	side           TEXT NOT NULL,
+	price          REAL NOT NULL,
+	from_notional  REAL NOT NULL DEFAULT 0,
+	to_notional    REAL NOT NULL DEFAULT 0,
+	peak_notional  REAL NOT NULL DEFAULT 0,
+	change         TEXT NOT NULL DEFAULT '',
+	seen_from_ms   INTEGER NOT NULL,
+	seen_until_ms  INTEGER NOT NULL,
+	PRIMARY KEY (exchange, symbol, side, price, seen_from_ms)
+);
+CREATE INDEX IF NOT EXISTS idx_book_moves_lookup
+	ON book_moves(exchange, symbol, seen_from_ms, seen_until_ms);
 `
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("book history schema: %w", err)
@@ -247,7 +262,12 @@ func (s *SQLite) PurgeOlderThan(ctx context.Context, cutoff time.Time) (int, err
 		return int(n), err
 	}
 	n2, _ := res2.RowsAffected()
-	return int(n + n2), nil
+	res3, err := s.db.ExecContext(ctx, `DELETE FROM book_moves WHERE seen_until_ms < ?`, cutoff.UTC().UnixMilli())
+	if err != nil {
+		return int(n + n2), err
+	}
+	n3, _ := res3.RowsAffected()
+	return int(n + n2 + n3), nil
 }
 
 // InsertFlash stores one brief wall. Duplicate keys are ignored.
@@ -312,6 +332,72 @@ ORDER BY seen_from_ms ASC`, string(ex), symbol, from.UTC().UnixMilli(), to.UTC()
 			Price: price, Quantity: qty, Notional: notional,
 			SeenFrom: seenFrom, SeenUntil: seenUntil,
 			Duration: seenUntil.Sub(seenFrom), Brief: true,
+		})
+	}
+	return out, rows.Err()
+}
+
+// InsertMove stores one between-minute size change. Duplicate keys are ignored.
+func (s *SQLite) InsertMove(ctx context.Context, rec domain.BookHistoryMove) (bool, error) {
+	if s == nil || s.db == nil {
+		return false, fmt.Errorf("book history store is nil")
+	}
+	if rec.Exchange == "" || rec.Symbol == "" || rec.SeenFrom.IsZero() || rec.Price <= 0 {
+		return false, fmt.Errorf("%w: incomplete book move", domain.ErrInvalidArgument)
+	}
+	rec.Symbol = domain.NormalizeSymbol(rec.Exchange, rec.Symbol)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	res, err := s.db.ExecContext(ctx, `
+INSERT OR IGNORE INTO book_moves(
+	exchange, symbol, side, price, from_notional, to_notional, peak_notional, change, seen_from_ms, seen_until_ms
+) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		string(rec.Exchange), rec.Symbol, rec.Side, rec.Price, rec.FromNotional, rec.ToNotional, rec.PeakNotional, rec.Change,
+		rec.SeenFrom.UTC().UnixMilli(), rec.SeenUntil.UTC().UnixMilli(),
+	)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+// ListMoves returns size changes that overlap [from, to).
+func (s *SQLite) ListMoves(ctx context.Context, exchange, symbol string, from, to time.Time) ([]domain.BookHistoryMove, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("book history store is nil")
+	}
+	ex := domain.ParseExchange(exchange)
+	if ex == "" {
+		ex = domain.DefaultExchange
+	}
+	symbol = domain.NormalizeSymbol(ex, symbol)
+	if symbol == "" || from.IsZero() || to.IsZero() {
+		return nil, fmt.Errorf("%w: symbol and window are required", domain.ErrInvalidArgument)
+	}
+	rows, err := s.db.QueryContext(ctx, `
+SELECT side, price, from_notional, to_notional, peak_notional, change, seen_from_ms, seen_until_ms
+FROM book_moves
+WHERE exchange = ? AND symbol = ? AND seen_until_ms >= ? AND seen_from_ms < ?
+ORDER BY seen_from_ms ASC`, string(ex), symbol, from.UTC().UnixMilli(), to.UTC().UnixMilli())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.BookHistoryMove
+	for rows.Next() {
+		var side, change string
+		var price, fromN, toN, peak float64
+		var fromMs, untilMs int64
+		if err := rows.Scan(&side, &price, &fromN, &toN, &peak, &change, &fromMs, &untilMs); err != nil {
+			return nil, err
+		}
+		seenFrom := time.UnixMilli(fromMs).UTC()
+		seenUntil := time.UnixMilli(untilMs).UTC()
+		out = append(out, domain.BookHistoryMove{
+			Exchange: ex, Symbol: symbol, Side: side, Price: price,
+			FromNotional: fromN, ToNotional: toN, PeakNotional: peak, Change: change,
+			SeenFrom: seenFrom, SeenUntil: seenUntil, Duration: seenUntil.Sub(seenFrom),
 		})
 	}
 	return out, rows.Err()

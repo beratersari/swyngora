@@ -21,6 +21,7 @@ type Service struct {
 	seen map[string]time.Time
 
 	watch domain.BookFlashWatch
+	moves domain.BookMoveWatch
 }
 
 // Note records a pair that users have asked about.
@@ -123,10 +124,12 @@ func (s *Service) SnapshotAt(ctx context.Context, exchange, symbol string, at ti
 	marked, ok := domain.NearestBookSnapshot([]domain.BookHistorySnapshot{*got}, at.UTC(), domain.DefaultBookHistorySlack)
 	if ok {
 		s.attachFlashes(ctx, &marked)
+		s.attachMoves(ctx, &marked)
 		return &marked, nil
 	}
 	got.Complete = false
 	s.attachFlashes(ctx, got)
+	s.attachMoves(ctx, got)
 	return got, nil
 }
 
@@ -218,6 +221,7 @@ func (s *Service) SaveSymbol(ctx context.Context, ex domain.Exchange, symbol str
 	}
 	snap := domain.CaptureBookHistory(ex, *raw, now)
 	s.keepFlashes(ctx, ex, symbol, now, snap.Walls, true)
+	s.keepMoves(ctx, ex, symbol, now, domain.BookMoveSamples(*raw), true)
 	return s.Store.InsertSnapshot(ctx, snap)
 }
 
@@ -241,7 +245,9 @@ func (s *Service) SaveFlashes(ctx context.Context, ex domain.Exchange, symbol st
 	if raw == nil {
 		return 0, nil
 	}
-	return s.keepFlashes(ctx, ex, symbol, now, domain.BookWalls(*raw), false), nil
+	n := s.keepFlashes(ctx, ex, symbol, now, domain.BookWalls(*raw), false)
+	n += s.keepMoves(ctx, ex, symbol, now, domain.BookMoveSamples(*raw), false)
+	return n, nil
 }
 
 func (s *Service) keepFlashes(ctx context.Context, ex domain.Exchange, symbol string, now time.Time, walls []domain.BookHistoryWall, minute bool) int {
@@ -271,6 +277,35 @@ func (s *Service) attachFlashes(ctx context.Context, snap *domain.BookHistorySna
 		return
 	}
 	domain.AttachBookFlashes(snap, rows)
+}
+
+func (s *Service) keepMoves(ctx context.Context, ex domain.Exchange, symbol string, now time.Time, levels []domain.BookMoveSample, minute bool) int {
+	if s == nil || s.Store == nil {
+		return 0
+	}
+	s.mu.Lock()
+	done := s.moves.Observe(ex, symbol, now, levels, minute)
+	s.mu.Unlock()
+	n := 0
+	for _, mv := range done {
+		ok, err := s.Store.InsertMove(ctx, mv)
+		if err == nil && ok {
+			n++
+		}
+	}
+	return n
+}
+
+func (s *Service) attachMoves(ctx context.Context, snap *domain.BookHistorySnapshot) {
+	if s == nil || s.Store == nil || snap == nil || snap.SampledAt.IsZero() {
+		return
+	}
+	from := snap.SampledAt.UTC()
+	rows, err := s.Store.ListMoves(ctx, string(snap.Exchange), snap.Symbol, from, from.Add(domain.DefaultBookHistoryBucket))
+	if err != nil || len(rows) == 0 {
+		return
+	}
+	domain.AttachBookMoves(snap, rows)
 }
 
 func parseBookExchange(raw string) (domain.Exchange, error) {

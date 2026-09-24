@@ -62,6 +62,14 @@ func (m *memStore) ListFlashes(context.Context, string, string, time.Time, time.
 	return nil, nil
 }
 
+func (m *memStore) InsertMove(context.Context, domain.BookHistoryMove) (bool, error) {
+	return false, nil
+}
+
+func (m *memStore) ListMoves(context.Context, string, string, time.Time, time.Time) ([]domain.BookHistoryMove, error) {
+	return nil, nil
+}
+
 func (m *memStore) PurgeOlderThan(_ context.Context, cutoff time.Time) (int, error) {
 	kept := m.rows[:0]
 	n := 0

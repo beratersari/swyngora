@@ -21,6 +21,7 @@ export function PastOrderBook({ symbol, exchange }: PastOrderBookProps) {
     { skip: !chosen },
   );
   const flashes = one.data?.snapshot?.flashes ?? [];
+  const moves = one.data?.snapshot?.moves ?? [];
 
   return (
     <section data-testid="past-order-book">
@@ -42,7 +43,7 @@ export function PastOrderBook({ symbol, exchange }: PastOrderBookProps) {
         onChange={setAt}
         placeholder={t('pastBook.empty')}
       />
-      {chosen && flashes.length === 0 ? (
+      {chosen && flashes.length === 0 && moves.length === 0 ? (
         <Text variant="caption" color="secondary">
           {t('pastBook.none')}
         </Text>
@@ -54,6 +55,18 @@ export function PastOrderBook({ symbol, exchange }: PastOrderBookProps) {
             price: row.price,
             notional: formatCompactUsd(row.notional),
             seconds: Math.max(1, Math.round(row.durationSec ?? 0)),
+          })}
+        </Text>
+      ))}
+      {moves.map((row) => (
+        <Text key={`move-${row.side}-${row.price}-${row.seenFrom}`} variant="body" color="primary">
+          {t('pastBook.move', {
+            side: row.side === 'ask' ? t('orderBook.askHeavy') : t('orderBook.bidHeavy'),
+            price: row.price,
+            change: t(`pastBook.${row.change ?? 'removed'}`, { defaultValue: row.change }),
+            from: formatCompactUsd(row.fromNotional),
+            to: formatCompactUsd(row.toNotional),
+            peak: formatCompactUsd(row.peakNotional),
           })}
         </Text>
       ))}

@@ -627,7 +627,9 @@ paths:
         recent samples (`from` / `to` optional). 1-minute ladder samples, not a
         24h tape. A snapshot's `flashes` are walls that rested only a few
         seconds inside that minute and were gone before the ladder was stored.
-        Informational only.
+        `moves` are other resting-size changes in that minute (not walls) that
+        the ladder does not show: size that left, or a swing whose peak is
+        gone by the snapshot. Informational only.
       operationId: getOrderBookHistory
       tags: [Market]
       parameters:

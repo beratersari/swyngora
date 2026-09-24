@@ -72,3 +72,24 @@ func TestInsertSnapshot_VenuesIndependent(t *testing.T) {
 		t.Fatalf("bn=%+v bb=%+v", bn, bb)
 	}
 }
+
+func TestInsertMove_RoundTrip(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "books.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	at := time.Date(2026, 9, 22, 12, 0, 5, 0, time.UTC)
+	ok, err := s.InsertMove(context.Background(), domain.BookHistoryMove{
+		Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Side: "bid", Price: 100,
+		FromNotional: 500, ToNotional: 0, PeakNotional: 500, Change: domain.BookHistoryChangeRemoved,
+		SeenFrom: at, SeenUntil: at.Add(10 * time.Second),
+	})
+	if err != nil || !ok {
+		t.Fatalf("insert %v %v", ok, err)
+	}
+	rows, err := s.ListMoves(context.Background(), "binance", "BTCUSDT", at.Add(-time.Minute), at.Add(time.Minute))
+	if err != nil || len(rows) != 1 || rows[0].Change != domain.BookHistoryChangeRemoved || rows[0].PeakNotional != 500 {
+		t.Fatalf("%+v %v", rows, err)
+	}
+}

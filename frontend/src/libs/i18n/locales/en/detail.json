@@ -221,11 +221,15 @@
   },
   "pastBook": {
     "title": "Past order book",
-    "hint": "Each minute keeps the ladder. A wall that rested only a few seconds and then left is listed on that minute, even when the snapshot itself missed it.",
+    "hint": "Each minute keeps the ladder. A wall that rested only a few seconds and then left is listed on that minute. Other size changes that the ladder missed — size that left, or a swing whose peak is gone — are listed too.",
     "when": "Minute",
     "empty": "No stored book yet",
-    "none": "No brief wall in this minute.",
-    "flash": "{{side}} {{price}} · {{notional}} · stayed {{seconds}}s, then left"
+    "none": "No brief wall or size move in this minute.",
+    "flash": "{{side}} {{price}} · {{notional}} · stayed {{seconds}}s, then left",
+    "move": "{{side}} {{price}} · {{change}} {{from}} → {{to}} · peak {{peak}}",
+    "removed": "left",
+    "gained": "grew",
+    "lost": "shrank"
   },
   "orderDepth": {
     "title": "Market depth",

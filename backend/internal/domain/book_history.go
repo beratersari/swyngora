@@ -67,6 +67,7 @@ type BookHistorySnapshot struct {
 	Asks         []BookHistoryLevel
 	Walls        []BookHistoryWall
 	Flashes      []BookHistoryFlash
+	Moves        []BookHistoryMove
 	Complete     bool
 	SlackSeconds float64
 }
@@ -129,6 +130,8 @@ type BookHistoryStore interface {
 	ListSnapshots(ctx context.Context, q BookHistoryQuery) ([]BookHistorySnapshot, error)
 	InsertFlash(ctx context.Context, rec BookHistoryFlash) (inserted bool, err error)
 	ListFlashes(ctx context.Context, exchange, symbol string, from, to time.Time) ([]BookHistoryFlash, error)
+	InsertMove(ctx context.Context, rec BookHistoryMove) (inserted bool, err error)
+	ListMoves(ctx context.Context, exchange, symbol string, from, to time.Time) ([]BookHistoryMove, error)
 	PurgeOlderThan(ctx context.Context, cutoff time.Time) (int, error)
 }
 
@@ -379,10 +382,11 @@ func StripBookLevels(s BookHistorySnapshot) BookHistorySnapshot {
 	s.Asks = nil
 	s.Walls = nil
 	s.Flashes = nil
+	s.Moves = nil
 	return s
 }
 
-const bookHistoryDisclaimer = "Stored books are 1-minute samples of the live spot ladder (top grouped levels, ±2% liquidity and walls), not a full 24h tape. Walls that rested only a few seconds between those samples are kept as brief marks on that minute. Compare uses the nearest sample to each time. Informational only — not financial advice."
+const bookHistoryDisclaimer = "Stored books are 1-minute samples of the live spot ladder (top grouped levels, ±2% liquidity and walls), not a full 24h tape. Walls that rested only a few seconds between those samples are kept as brief marks on that minute. Other resting-size changes in that minute are kept as moves when they do not show on the ladder. Compare uses the nearest sample to each time. Informational only — not financial advice."
 
 func bookLevelsFromGrouped(in []OrderBookLevel) []BookHistoryLevel {
 	out := make([]BookHistoryLevel, 0, len(in))

@@ -95,7 +95,7 @@ Coin detail also has an **order heatmap** (resting bid/ask size over time) from 
 - `GET /api/v1/market/snapshot` price, volume, mcap, OI, funding, LS, and taker flow together. See [`snapshot.md`](snapshot.md).
 - `GET /api/v1/market/levels` support and resistance plus breakout strength. See [`levels.md`](levels.md).
 - `GET /api/v1/market/whales` large trades and liquidations, biggest first. See [`whales.md`](whales.md).
-- `GET /api/v1/market/orderbook/history` stored book at a time (or a list). See [`book-history.md`](book-history.md).
+- `GET /api/v1/market/orderbook/history` stored book at a time (or a list), including brief walls and other size moves the ladder missed. See [`book-history.md`](book-history.md).
 - `GET /api/v1/market/orderbook/history/compare` which levels gained or lost liquidity. See [`book-history.md`](book-history.md).
 - `GET /api/v1/market/orderbook/icebergs` same-price clip eaten then refilled. See [`icebergs.md`](icebergs.md).
 - `GET /api/v1/market/orderbook/liquidity-flow` traded vs pulled vs added resting size (bid and ask). See [`book-liquidity-flow.md`](book-liquidity-flow.md).

@@ -15,6 +15,17 @@ vi.mock('@/libs/api', async () => {
                 flashes: [
                   { side: 'bid', price: '100', notional: '8000', durationSec: 10, seenFrom: '2026-09-22T12:00:05Z' },
                 ],
+                moves: [
+                  {
+                    side: 'ask',
+                    price: '101',
+                    change: 'gained',
+                    fromNotional: '200',
+                    toNotional: '200',
+                    peakNotional: '900',
+                    seenFrom: '2026-09-22T12:00:08Z',
+                  },
+                ],
               },
             },
             isFetching: false,
@@ -31,5 +42,6 @@ describe('PastOrderBook', () => {
     renderWithProviders(<PastOrderBook symbol="BTCUSDT" exchange="binance" />);
     expect(screen.getByTestId('past-order-book')).toBeInTheDocument();
     expect(screen.getByText(/10s|10 sn/)).toBeInTheDocument();
+    expect(screen.getByText(/900/)).toBeInTheDocument();
   });
 });
