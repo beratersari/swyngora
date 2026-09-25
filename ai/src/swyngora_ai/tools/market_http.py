@@ -1201,8 +1201,8 @@ class OrderBookHeatmapInput(BaseModel):
     window: int = Field(
         default=600,
         ge=60,
-        le=1800,
-        description="Lookback seconds (60–1800, default 600)",
+        le=604800,
+        description="Lookback seconds (60–604800, default 600). Above 1800 uses stored 1-minute ladders, including brief walls and size moves.",
     )
 
 

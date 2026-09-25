@@ -15,7 +15,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `analyze_spot_orderbook` | Buy/sell pressure, imbalance, and large walls (short / persistent / suspicious) |
 | `analyze_market_orderbook` | Combined Binance+Coinbase+Bybit pressure in one shared price band |
 | `get_market_liquidity` | 0–100 liquidity score from ±0.1/0.5/1% depth; per venue + market-wide |
-| `get_orderbook_heatmap` | Resting bid/ask size over time (pre-warmed for live crypto pairs; not executed volume) |
+| `get_orderbook_heatmap` | Resting bid/ask size over time. Up to 30 minutes is the live tape; longer windows (up to 7 days) use stored ladders plus brief walls and size moves |
 | `get_liquidations` | Rolling 5m/1h/4h/24h long/short futures liquidations + `feed` last print / still-unfilled gaps / `missingSeconds` / missing venues |
 | `get_liquidation_overview` | Market-wide 1h/4h/12h/24h long/short totals + coins ranked for a treemap + `feed` |
 | `get_liquidation_levels` | CoinGlass-style 10x/25x/50x/100x price bars + walk-from-last cumulative; live bars scaled by later-print confidence and by realized/predicted amount after enough hits (`sizeScale`); `review` scores later same-venue liquidations; `symbol=all` time bars |

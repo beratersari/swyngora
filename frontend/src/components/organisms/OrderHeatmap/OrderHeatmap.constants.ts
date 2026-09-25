@@ -1,6 +1,9 @@
 export const ORDER_HEATMAP_POLL_MS = 1_000;
 
-export const ORDER_HEATMAP_WINDOWS = [300, 600, 900] as const;
+export const ORDER_HEATMAP_HISTORY_POLL_MS = 30_000;
+
+/** Live tape, then stored minute ladders (hours and days). */
+export const ORDER_HEATMAP_WINDOWS = [300, 600, 900, 3600, 14400, 86400, 259200, 604800] as const;
 
 export const DEFAULT_ORDER_HEATMAP_WINDOW = 600;
 

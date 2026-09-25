@@ -876,6 +876,7 @@ type orderBookHeatmapResponse struct {
 	To            string             `json:"to,omitempty"`
 	Columns       []heatmapColumnDTO `json:"columns"`
 	Live          bool               `json:"live"`
+	Source        string             `json:"source,omitempty"`
 	Note          string             `json:"note"`
 }
 
@@ -909,11 +910,15 @@ func heatmapToDTO(h *domain.OrderBookHeatmap) orderBookHeatmapResponse {
 	if !h.To.IsZero() {
 		to = h.To.UTC().Format(time.RFC3339Nano)
 	}
+	note := "Resting bid/ask notional over time from the live local book. Informational only — not a footprint or executed volume."
+	if h.Source == "history" {
+		note = "Resting bid/ask notional from stored 1-minute ladders. Brief walls and other size moves between those minutes are painted on the bucket they happened in. Longer windows group minutes together. Informational only — not executed volume."
+	}
 	return orderBookHeatmapResponse{
 		Exchange: string(h.Exchange), Symbol: h.Symbol, GroupSize: h.GroupSize,
 		WindowSeconds: h.WindowSeconds, SampleEveryMs: h.SampleEveryMs,
-		From: from, To: to, Columns: cols, Live: h.Live,
-		Note: "Resting bid/ask notional over time from the live local book. Informational only — not a footprint or executed volume.",
+		From: from, To: to, Columns: cols, Live: h.Live, Source: h.Source,
+		Note: note,
 	}
 }
 

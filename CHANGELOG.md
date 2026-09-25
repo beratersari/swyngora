@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Order-book heatmap history:** windows longer than 30 minutes use the stored minute ladders, including brief walls and other size moves between those minutes, so the coin heatmap can look back hours or days (up to about 7 days). `GET /api/v1/market/orderbook/heatmap` (`docs/features/order-book.md`)
 - **Options open interest by strike:** call and put open interest gained or lost at each listed strike over 1h, 4h, 24h, and 7d. A strike that appears is opened; one that leaves is closed. `strikeOi` on `GET /api/v1/market/options`, MCP `get_options_overview`, options screen (`docs/features/options.md`)
 - **Backtest fills from the stored book:** when a minute ladder exists, the shared backtest walks that size for the open and the close instead of one slippage percent. The percent remains the fallback for minutes with no book. `bookLegs` and `bookSlipPct` on the Lab book (`docs/features/indicator-scanner.md`)
 - **Order-book size moves:** between the minute ladders, resting size that is not a wall is kept when it leaves or swings and the snapshot misses that size (at least 3% of that side). `moves` on `GET /api/v1/market/orderbook/history`, coin detail past book (`docs/features/book-history.md`)

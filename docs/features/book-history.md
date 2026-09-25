@@ -47,6 +47,11 @@ pulled.
 Times are RFC3339 or unix milliseconds. Informational only — not financial
 advice.
 
+The coin order-book heatmap uses these ladders, flashes, and moves when the
+window is longer than 30 minutes (`1h`, `4h`, `24h`, `3d`, `7d`). Each column
+is a minute, or a group of minutes on a multi-day window. A flash or size
+move raises the notional at that price for the bucket it happened in.
+
 To split a size drop into **traded vs pulled vs added** (8M bid at 65500
 down to 2M), use [`book-liquidity-flow.md`](book-liquidity-flow.md).
 

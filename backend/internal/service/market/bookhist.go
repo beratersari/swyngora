@@ -19,6 +19,12 @@ type BookHistoryReader interface {
 	Note(exchange, symbol string)
 }
 
+// bookHistoryEvents is implemented by the book history service. Stubs can omit it.
+type bookHistoryEvents interface {
+	ListFlashes(ctx context.Context, exchange, symbol string, from, to time.Time) ([]domain.BookHistoryFlash, error)
+	ListMoves(ctx context.Context, exchange, symbol string, from, to time.Time) ([]domain.BookHistoryMove, error)
+}
+
 // WithBookHistory attaches the durable order-book archive.
 func (s *Service) WithBookHistory(r BookHistoryReader) *Service {
 	if s != nil {
@@ -116,4 +122,31 @@ func formatBookQty(v float64) string {
 		return s[1:]
 	}
 	return s
+}
+
+func (s *Service) orderBookHeatmapFromHistory(ctx context.Context, ex domain.Exchange, symbol string, windowSec int) domain.OrderBookHeatmap {
+	window := time.Duration(windowSec) * time.Second
+	now := time.Now().UTC()
+	out := domain.OrderBookHeatmap{
+		Exchange: ex, Symbol: symbol, WindowSeconds: windowSec, Source: "history",
+	}
+	if s == nil || s.bookHist == nil {
+		return out
+	}
+	from := now.Add(-window)
+	minutes := int(window/time.Minute) + 2
+	rows, err := s.bookHist.ListLadders(ctx, domain.BookHistoryQuery{
+		Exchange: string(ex), Symbol: symbol, From: from, To: now.Add(time.Minute),
+		Limit: minutes,
+	})
+	if err != nil {
+		return out
+	}
+	var flashes []domain.BookHistoryFlash
+	var moves []domain.BookHistoryMove
+	if ev, ok := s.bookHist.(bookHistoryEvents); ok {
+		flashes, _ = ev.ListFlashes(ctx, string(ex), symbol, from, now.Add(time.Minute))
+		moves, _ = ev.ListMoves(ctx, string(ex), symbol, from, now.Add(time.Minute))
+	}
+	return domain.BuildHeatmapFromBookHistory(ex, symbol, window, now, rows, flashes, moves)
 }

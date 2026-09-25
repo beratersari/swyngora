@@ -532,11 +532,11 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_orderbook_heatmap",
-		mcp.WithDescription("Recent resting bid/ask size over time (order heatmap / bookmap-style tape). Each column is a live book snapshot, not executed volume. Use for 'where has size been sitting' or 'did that wall persist'. window is lookback seconds (60–1800, default 600). Spot only."),
+		mcp.WithDescription("Resting bid/ask size over time (order heatmap / bookmap-style tape). Not executed volume. Windows up to 30 minutes are the live 1s tape. Longer windows (up to 7 days) use stored 1-minute ladders, including brief walls and other size moves between those minutes. window is lookback seconds (60–604800, default 600). Spot only."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
 		mcp.WithString("exchange", mcp.Description("binance (default) | coinbase | bybit")),
 		mcp.WithString("group", mcp.Description("Price bucket size e.g. 0.1; omit for a suggested default")),
-		mcp.WithNumber("window", mcp.Description("Lookback seconds 60–1800 (default 600)")),
+		mcp.WithNumber("window", mcp.Description("Lookback seconds 60–604800 (default 600). Above 1800 uses stored book history.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")
 		if err != nil {

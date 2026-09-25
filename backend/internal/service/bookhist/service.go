@@ -172,8 +172,24 @@ func (s *Service) ListLadders(ctx context.Context, q domain.BookHistoryQuery) ([
 	if q.Symbol == "" {
 		return nil, fmt.Errorf("%w: symbol is required", domain.ErrInvalidArgument)
 	}
-	q.Limit = domain.ParseBookHistoryLimit(q.Limit)
+	q.Limit = domain.ClampBookLadderLimit(q.Limit)
 	return s.Store.ListSnapshots(ctx, q)
+}
+
+// ListFlashes returns brief walls that overlap the window.
+func (s *Service) ListFlashes(ctx context.Context, exchange, symbol string, from, to time.Time) ([]domain.BookHistoryFlash, error) {
+	if s == nil || s.Store == nil {
+		return nil, fmt.Errorf("%w: order book history not configured", domain.ErrUpstream)
+	}
+	return s.Store.ListFlashes(ctx, exchange, symbol, from, to)
+}
+
+// ListMoves returns non-wall size changes that overlap the window.
+func (s *Service) ListMoves(ctx context.Context, exchange, symbol string, from, to time.Time) ([]domain.BookHistoryMove, error) {
+	if s == nil || s.Store == nil {
+		return nil, fmt.Errorf("%w: order book history not configured", domain.ErrUpstream)
+	}
+	return s.Store.ListMoves(ctx, exchange, symbol, from, to)
 }
 
 // Compare loads the nearest books at from and to and diffs liquidity.

@@ -25,6 +25,7 @@ import {
 import { OrderDepthChart } from '@/components/organisms/OrderDepthChart';
 import {
   DEFAULT_ORDER_HEATMAP_WINDOW,
+  ORDER_HEATMAP_HISTORY_POLL_MS,
   ORDER_HEATMAP_POLL_MS,
   OrderHeatmap,
 } from '@/components/organisms/OrderHeatmap';
@@ -323,7 +324,11 @@ export function CoinDetailPage() {
     },
     {
       skip: skip || isEquity,
-      pollingInterval: visible ? ORDER_HEATMAP_POLL_MS : 0,
+      pollingInterval: visible
+        ? orderHeatmapWindow > 1800
+          ? ORDER_HEATMAP_HISTORY_POLL_MS
+          : ORDER_HEATMAP_POLL_MS
+        : 0,
       refetchOnFocus: true,
     },
   );
