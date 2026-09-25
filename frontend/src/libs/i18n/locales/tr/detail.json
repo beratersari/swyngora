@@ -330,6 +330,20 @@
       "aria": "Fiyata göre hacim, açık pozisyon ve likidasyon",
       "hint": "Aynı fiyat satırları: işlem gören büyüklük, fiyat oradayken açılan veya kapanan açık pozisyon ve o fiyatta basan likidasyonlar."
     },
+    "footprint": {
+      "price": "Fiyat",
+      "buy": "Alış",
+      "sell": "Satış",
+      "delta": "Delta",
+      "poc": "POC",
+      "aria": "Fiyata göre alış ve satış baskısı",
+      "hint": "Her satır o fiyattaki agresif işlemlerdir. Yeşil alış, kırmızı satış. POC en yoğun satırdır. Bir taraf diğerinin en az 3 katıysa rozet görünür.",
+      "truncated": "Bu pencere kısmen kayıtlı, daha eski dakikalar eksik olabilir.",
+      "imbalanceCount": "{{buy}} alış dengesizliği · {{sell}} satış dengesizliği",
+      "buyImbalance": "{{ratio}} alış",
+      "sellImbalance": "{{ratio}} satış",
+      "oneSided": "tek taraf"
+    },
     "absorption": "Emilim",
     "sweeps": "Likidite süpürmeleri",
     "whales": "Balinalar",

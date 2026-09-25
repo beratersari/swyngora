@@ -319,6 +319,45 @@ export type VolumeProfileReport = {
   combined?: VolumeProfileVenue;
 };
 
+export type FlowAtPricesLevel = {
+  price?: string;
+  high?: string;
+  buyVolume?: string;
+  sellVolume?: string;
+  volume?: string;
+  buyCount?: number;
+  sellCount?: number;
+  trades?: number;
+  delta?: string;
+  buyPct?: string;
+  sharePct?: string;
+  dominant?: string;
+  isPoc?: boolean;
+};
+
+export type FlowAtPricesVenue = {
+  exchange?: string;
+  summary?: string;
+  error?: string;
+  tickSize?: string;
+  lastPrice?: string;
+  delta?: string;
+  truncated?: boolean;
+  levels?: FlowAtPricesLevel[];
+  poc?: { price?: string; volume?: string; delta?: string; sharePct?: string };
+};
+
+export type FlowAtPricesReport = {
+  symbol?: string;
+  exchange?: string;
+  window?: string;
+  summary?: string;
+  note?: string;
+  tickSize?: string;
+  venues?: FlowAtPricesVenue[];
+  combined?: FlowAtPricesVenue;
+};
+
 export type MarketDeskReport = {
   symbol?: string;
   exchange?: string;

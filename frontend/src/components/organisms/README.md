@@ -29,6 +29,7 @@ Do **not** reintroduce `src/features/` for product UI until multiple product are
 | `PositionSidePanel` | Coin detail tape and Flow tab |
 | `CoinInsightPanel` | CoinDetailPage Flow / Structure tabs |
 | `VolumeProfileLadder` | Coin detail Flow tab — volume, OI change, and liquidations on the same price rows |
+| `FlowFootprint` | Coin detail Flow tab — buy vs sell footprint, POC, and 3× imbalances |
 | `VolumeSurgeTable` | SurgesPage |
 | `DetailHeader` | CoinDetailPage |
 | `DetailStats` | CoinDetailPage |

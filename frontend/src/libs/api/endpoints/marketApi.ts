@@ -117,6 +117,7 @@ import type {
   MarketDeskReport,
   SymbolMarketQuery,
   VolumeProfileReport,
+  FlowAtPricesReport,
 } from './marketApi.types';
 import type { ForensicsRadarReview } from '@/libs/types/forensics.types';
 // delist types re-exported below
@@ -182,6 +183,9 @@ export type {
   VolumeProfileReport,
   VolumeProfileVenue,
   VolumeProfileBin,
+  FlowAtPricesReport,
+  FlowAtPricesVenue,
+  FlowAtPricesLevel,
   MarketParticipation,
   MarketPrintSize,
   MarketPressure,
@@ -511,7 +515,7 @@ export const marketApi = baseApi.injectEndpoints({
         params: compactParams({ ...arg }),
       }),
     }),
-    getMarketFlowAtPrices: build.query<MarketDeskReport, SymbolMarketQuery>({
+    getMarketFlowAtPrices: build.query<FlowAtPricesReport, SymbolMarketQuery>({
       query: (arg) => ({
         url: '/api/v1/market/flow-at-prices',
         params: compactParams({ ...arg }),

@@ -330,6 +330,20 @@
       "aria": "Volume, open interest, and liquidations by price",
       "hint": "Same price rows: traded size, open interest added or closed while price was there, and liquidations that printed there."
     },
+    "footprint": {
+      "price": "Price",
+      "buy": "Buy",
+      "sell": "Sell",
+      "delta": "Delta",
+      "poc": "POC",
+      "aria": "Buy and sell pressure by price",
+      "hint": "Each row is aggressive prints at that price. Green is buying, red is selling. POC is the busiest row. A badge marks a side at least 3× the other.",
+      "truncated": "This window is only partly stored, so earlier minutes may be missing.",
+      "imbalanceCount": "{{buy}} buy imbalances · {{sell}} sell imbalances",
+      "buyImbalance": "{{ratio}} buy",
+      "sellImbalance": "{{ratio}} sell",
+      "oneSided": "one side"
+    },
     "absorption": "Absorption",
     "sweeps": "Liquidity sweeps",
     "whales": "Whales",

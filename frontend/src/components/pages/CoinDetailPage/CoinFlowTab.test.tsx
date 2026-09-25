@@ -31,7 +31,24 @@ vi.mock('@/libs/api', async (importOriginal) => {
     }),
     useGetMarketFlowAtPricesQuery: (arg: { window?: string }) => {
       flowWindows.push(arg.window ?? '');
-      return empty;
+      const report = {
+        summary: 'Most prints at 65520.',
+        combined: {
+          levels: [
+            {
+              price: '65520',
+              buyVolume: '90000',
+              sellVolume: '10000',
+              volume: '100000',
+              delta: '80000',
+              sharePct: '50',
+              trades: 4,
+              isPoc: true,
+            },
+          ],
+        },
+      };
+      return { ...empty, data: report, currentData: report };
     },
     useGetMarketVWAPQuery: hook,
     useGetMarketVolumeProfileQuery: hook,
@@ -48,6 +65,9 @@ describe('CoinFlowTab', () => {
     renderWithProviders(<CoinFlowTab symbol="BTCUSDT" exchange="binance" />);
     expect(screen.getByText('40M bid vs 15M ask')).toBeInTheDocument();
     expect(screen.getByText('Buyers in control')).toBeInTheDocument();
+    expect(screen.getByText('Most prints at 65520.')).toBeInTheDocument();
+    expect(screen.getAllByText('POC').length).toBeGreaterThan(0);
+    expect(screen.getByText(/9\.0× buy/i)).toBeInTheDocument();
   });
 
   it('asks for a longer flow-at-prices window', async () => {

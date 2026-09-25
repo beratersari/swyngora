@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IntervalRail } from '@/components/molecules/IntervalRail';
 import { CoinInsightPanel, CoinInsightStack } from '@/components/organisms/CoinInsightPanel';
+import { FlowFootprint } from '@/components/organisms/FlowFootprint';
 import { VolumeProfileLadder } from '@/components/organisms/VolumeProfileLadder';
 import { PositionSidePanel } from '@/components/organisms/PositionSidePanel';
 import {
@@ -80,16 +81,19 @@ export function CoinFlowTab({ symbol, exchange }: CoinFlowTabProps) {
             ) : row.key === 'profile' ? (
               <VolumeProfileLadder report={rtkCurrent(profile)} />
             ) : row.key === 'prices' ? (
-              <IntervalRail
-                intervals={[...FLOW_WINDOWS]}
-                value={flowWindow}
-                onChange={(next) => {
-                  if ((FLOW_WINDOWS as readonly string[]).includes(next)) {
-                    setFlowWindow(next as (typeof FLOW_WINDOWS)[number]);
-                  }
-                }}
-                aria-label={t('flow.pricesWindow')}
-              />
+              <>
+                <IntervalRail
+                  intervals={[...FLOW_WINDOWS]}
+                  value={flowWindow}
+                  onChange={(next) => {
+                    if ((FLOW_WINDOWS as readonly string[]).includes(next)) {
+                      setFlowWindow(next as (typeof FLOW_WINDOWS)[number]);
+                    }
+                  }}
+                  aria-label={t('flow.pricesWindow')}
+                />
+                <FlowFootprint report={rtkCurrent(flow)} />
+              </>
             ) : null
           }
           error={row.q.isError ? err(row.q.error) : null}

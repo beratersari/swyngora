@@ -55,6 +55,7 @@ Informational only — not financial advice.
 | Service | `backend/internal/service/market/flowatprices.go` |
 | HTTP | `GET /api/v1/market/flow-at-prices` |
 | MCP / AI | `get_flow_at_prices` |
+| Web | Coin detail **Flow** tab (`FlowFootprint`): sell left, buy right, delta, POC highlight, and a badge when one side is at least 3× the other |
 
 ## How to verify
 

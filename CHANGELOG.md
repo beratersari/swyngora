@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Flow at prices footprint:** the coin Flow tab draws each price as sell vs buy bars, marks the busiest row (POC), and badges a level when one side is at least 3× the other (`docs/features/flow-at-prices.md`)
 - **Flow at prices history:** buy, sell, delta, and print counts at each price are kept for about 7 days while the server runs, so the ladder can look back 4h, 1d, 3d, or 7d. Bybit uses that store past the newest ~1000 trades. `GET /api/v1/market/flow-at-prices`, MCP `get_flow_at_prices`, coin Flow tab (`docs/features/flow-at-prices.md`)
 - **Options open interest by strike:** call and put open interest gained or lost at each listed strike over 1h, 4h, 24h, and 7d. A strike that appears is opened; one that leaves is closed. `strikeOi` on `GET /api/v1/market/options`, MCP `get_options_overview`, options screen (`docs/features/options.md`)
 - **Backtest fills from the stored book:** when a minute ladder exists, the shared backtest walks that size for the open and the close instead of one slippage percent. The percent remains the fallback for minutes with no book. `bookLegs` and `bookSlipPct` on the Lab book (`docs/features/indicator-scanner.md`)
