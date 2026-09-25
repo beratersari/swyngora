@@ -686,7 +686,7 @@ func (s *Service) executeCustomBacktestJob(ctx context.Context, job domain.Scann
 	if startBal := domain.CustomBacktestStartBalance(job); startBal > 0 {
 		sigs, err := s.store.ListBacktestSignals(ctx, id, 10000, 0)
 		if err == nil {
-			book := domain.SimulateSharedBacktestBook(startBal, domain.CustomBacktestRiskPct(job), domain.CustomBacktestMaxOpenRiskPct(job), domain.BookFillsFromSignals(sigs, job.RangeEnd), job.RangeEnd)
+			book := domain.SimulateSharedBacktestBookLadder(startBal, domain.CustomBacktestRiskPct(job), domain.CustomBacktestMaxOpenRiskPct(job), domain.BookFillsFromSignals(sigs, job.RangeEnd), job.RangeEnd, s.ladderAt(ctx))
 			run.Book = &book
 		}
 	}
@@ -700,6 +700,22 @@ func (s *Service) executeCustomBacktestJob(ctx context.Context, job domain.Scann
 		note = marketRunSummary(results)
 	}
 	return s.store.FinishBacktest(ctx, id, domain.BacktestCompleted, signalCount, note, time.Now().UTC())
+}
+
+func (s *Service) ladderAt(ctx context.Context) domain.StoredLadder {
+	if s == nil || s.books == nil {
+		return nil
+	}
+	return func(ex domain.Exchange, symbol string, at time.Time) ([]domain.BookHistoryLevel, []domain.BookHistoryLevel, bool) {
+		snap, err := s.books.SnapshotAt(ctx, string(ex), symbol, at)
+		if err != nil || snap == nil || !snap.Complete {
+			return nil, nil, false
+		}
+		if len(snap.Bids) == 0 && len(snap.Asks) == 0 {
+			return nil, nil, false
+		}
+		return snap.Bids, snap.Asks, true
+	}
 }
 
 var errBacktestNoCandles = fmt.Errorf("no candles")

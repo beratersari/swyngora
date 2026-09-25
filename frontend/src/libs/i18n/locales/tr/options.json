@@ -47,6 +47,17 @@
     "painMark": "en düşük",
     "empty": "Bir vade seçin."
   },
+  "strikeOi": {
+    "legend": "Her strikeda call ve put açık pozisyonunun önceki örneğe göre artışı veya azalışı. Yeşil eklenen, kırmızı kapanan.",
+    "windowAria": "Açık pozisyon değişim penceresi",
+    "aria": "Strike bazında açık pozisyon değişimi",
+    "collecting": "Strike açık pozisyonu, masa bu pencere boyunca çalıştıktan sonra dolmaya başlar.",
+    "empty": "Bu pencerede strike açık pozisyonu yok.",
+    "call": "call {{value}}",
+    "put": "put {{value}}",
+    "callTitle": "Call şimdi {{now}}, önce {{past}}",
+    "putTitle": "Put şimdi {{now}}, önce {{past}}"
+  },
   "gamma": {
     "title": "Bayi gamma",
     "subtitle": "Piyasa yapıcıların gamma’da uzun veya kısa olduğu yer — uzun kitapta daha sakin, kısa gamma’da hareket hızlanabilir",

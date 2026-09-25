@@ -119,6 +119,10 @@ type OptionsHistory struct {
 type OptionsHistoryStore interface {
 	InsertSample(ctx context.Context, rec OptionsSample) (inserted bool, err error)
 	ListSamples(ctx context.Context, asset string, from, to time.Time, limit int) ([]OptionsSample, error)
+	// ReplaceStrikeBook stores the call/put ladder for one 5-minute bucket.
+	ReplaceStrikeBook(ctx context.Context, asset string, at time.Time, points []OptionsStrikeOIPoint) error
+	// StrikeBookAt returns the latest ladder at or before at.
+	StrikeBookAt(ctx context.Context, asset string, at time.Time) (OptionsStrikeBook, bool, error)
 	PurgeOlderThan(ctx context.Context, cutoff time.Time) (int, error)
 }
 

@@ -204,6 +204,7 @@ type OptionsSnapshot struct {
 	VsMarket        *OptionsVsMarket
 	History         *OptionsHistory
 	Moves           *OptionsMoves
+	StrikeOI        *OptionsStrikeOI
 	Note            string
 }
 

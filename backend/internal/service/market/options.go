@@ -54,6 +54,7 @@ func (s *Service) GetOptions(ctx context.Context, exchange, asset string) (*doma
 	bars := s.optionsSpotBars(ctx, asset)
 	domain.AttachOptionsVolCompare(snap, bars)
 	s.attachOptionsHistory(ctx, snap, bars)
+	s.attachOptionsStrikeOI(ctx, snap)
 	if tape := s.optionsMarketTape(ctx, asset); tape.Usable() {
 		snap.VsMarket = domain.CompareOptionsToMarket(snap, tape)
 	}
@@ -69,6 +70,29 @@ func (s *Service) persistOptionsSample(ctx context.Context, snap *domain.Options
 		return
 	}
 	_, _ = s.optionsHist.InsertSample(ctx, rec)
+	_ = s.optionsHist.ReplaceStrikeBook(ctx, snap.Asset, rec.SampledAt, domain.OptionsStrikePointsFromSnapshot(snap))
+}
+
+func (s *Service) attachOptionsStrikeOI(ctx context.Context, snap *domain.OptionsSnapshot) {
+	if s == nil || snap == nil {
+		return
+	}
+	now := snap.AsOf.UTC()
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	books := map[string]domain.OptionsStrikeBook{}
+	if s.optionsHist != nil {
+		for _, spec := range domain.OptionsHistoryWindows {
+			target := now.Add(-spec.Dur)
+			book, ok, err := s.optionsHist.StrikeBookAt(ctx, snap.Asset, target)
+			if err != nil || !ok {
+				continue
+			}
+			books[spec.ID] = book
+		}
+	}
+	snap.StrikeOI = domain.BuildOptionsStrikeOI(snap, books, now)
 }
 
 func (s *Service) attachOptionsHistory(ctx context.Context, snap *domain.OptionsSnapshot, bars []domain.OHLCBar) {
@@ -147,6 +171,9 @@ func (s *Service) SampleOptionsHistory(ctx context.Context) (inserted int, err e
 				last = ierr
 			} else if ins {
 				inserted++
+			}
+			if ierr := s.optionsHist.ReplaceStrikeBook(ctx, asset, rec.SampledAt, domain.OptionsStrikePointsFromSnapshot(snap)); ierr != nil {
+				last = ierr
 			}
 		}
 	}

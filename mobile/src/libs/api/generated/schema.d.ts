@@ -323,8 +323,12 @@ export interface paths {
          * @description Regular samples of the live spot book: grouped **bid/ask levels**,
          *     **spread**, **total liquidity**, **imbalance**, and **large walls**.
          *     Pass `at` for the snapshot nearest that time. Omit `at` to list
-         *     recent samples (`from` / `to` optional). 1-minute samples, not a
-         *     24h tape. Informational only.
+         *     recent samples (`from` / `to` optional). 1-minute ladder samples, not a
+         *     24h tape. A snapshot's `flashes` are walls that rested only a few
+         *     seconds inside that minute and were gone before the ladder was stored.
+         *     `moves` are other resting-size changes in that minute (not walls) that
+         *     the ladder does not show: size that left, or a swing whose peak is
+         *     gone by the snapshot. Informational only.
          */
         get: operations["getOrderBookHistory"];
         put?: never;
@@ -580,12 +584,15 @@ export interface paths {
         };
         /**
          * Futures open interest and windowed change
-         * @description Current outstanding futures size plus how much it increased or decreased
-         *     over the last **5 minutes, 1 hour, 4 hours, and 24 hours**.
-         *     Sources: **Binance USD-M** (`/fapi/v1/openInterest` + 5m hist) and
-         *     **Bybit linear perpetual** (`/v5/market/tickers` + `/v5/market/open-interest`).
+         * @description Current outstanding futures size plus how much OI **opened or closed**
+         *     over the last **5 minutes, 1 hour, 4 hours, and 24 hours** — USDT
+         *     amount (`openedValue` / `closedValue` / signed `changeValue`) and
+         *     percent (`changeValuePct`), per venue and combined.
+         *     Sources: **Binance USD-M** (`/fapi/v1/openInterest` + 5m hist),
+         *     **Bybit linear perpetual**, and **OKX USDT-swap**.
          *     `contracts` is venue-published size in the base asset; `value` is USDT
-         *     notional. `exchange=all` (default) sums both venues. `complete` is false
+         *     notional. `exchange=all` (default) sums venues and keeps per-venue
+         *     rows. `complete` is false
          *     when the historical sample is missing or older than the window slack.
          *     The `funding` object is the predicted next funding rate plus recent
          *     settlements (same payload as `/funding-rate`). `longShort` is the
@@ -613,8 +620,12 @@ export interface paths {
          * @description How much **perpetual** liquidity is waiting **below** vs **above**
          *     the price. Example: **40M bid within 1% below** mid and **15M ask
          *     above**. `exchange=all` (default) returns **Binance USD-M** and
-         *     **Bybit linear** separately plus `combined`. `rangePct` default **1**.
-         *     This is the **futures** book, not spot. Informational only.
+         *     **Bybit linear** separately plus `combined` (sum of each venue's
+         *     own ±% band). `rangePct` is the headline band (default **1**,
+         *     max 5). `bands` also include 0.1 / 0.25 / 0.5 / 2. `below` is
+         *     resting bids; `above` is resting asks. `complete` is false when
+         *     the snapshot does not reach that %. This is the **futures** book,
+         *     not spot. Informational only.
          */
         get: operations["getMarketPerpDepth"];
         put?: never;
@@ -634,7 +645,18 @@ export interface paths {
         };
         /**
          * Market-wide perpetual bid vs ask liquidity
-         * @description Total perp bid/ask across liquid coins plus which coins dominate that book.
+         * @description How much **perpetual** bid and ask liquidity is waiting across the
+         *     **liquid USDT coins** we follow (same universe idea as breadth), plus
+         *     which coins make up the biggest part of that book. Example: **2.4B bid
+         *     vs 1.8B ask within 1% of mid; BTC 48%, ETH 17%**. `windows` compare
+         *     bid vs ask **share of that book** 15m / 1h / 4h ago (e.g. bids 55% →
+         *     65%) and `drivers` name the coins that moved the mix. `bands` show
+         *     how close that book is to mid (e.g. **80M inside 0.1%** is **8% of
+         *     the 1% book**, growing to 1.0B at 1%) and which coins fill each
+         *     distance. Sampled while the desk runs. `exchange=all` (default)
+         *     adds Binance USD-M and Bybit linear per coin. `rangePct` default
+         *     **1**. `limit` default **20** (max 40). This is the **futures**
+         *     book, not spot. Informational only.
          */
         get: operations["getMarketPerpDepthOverview"];
         put?: never;
@@ -1050,6 +1072,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/fear-greed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fear and greed index from our own tape
+         * @description A **0–100** score for the crypto market, calculated here from data
+         *     Swyngora already collects. It is **not** the Binance or CoinGlass index.
+         *
+         *     Inputs, when present: 24h breadth (share of liquid coins that are up),
+         *     BTC's 24h move, BTC 24h range versus its usual range (a wider range
+         *     pulls toward fear), OI-weighted predicted funding, Binance account
+         *     long/short, 24h long versus short liquidations, perp bid share within
+         *     1% of mid, and aggressive taker buy share. Missing inputs are left out
+         *     and the rest are reweighted. At least three inputs are required.
+         *
+         *     **Levels:** 0–24 extreme fear, 25–44 fear, 45–55 neutral, 56–74 greed,
+         *     75–100 extreme greed.
+         *
+         *     `top` and `factors` say which input moved the score the most
+         *     (`pull` is points away from a neutral 50). `history` and `windows`
+         *     (1h / 4h / 24h / 7d) are scores stored while this process is running
+         *     (about every 15 minutes).
+         */
+        get: operations["getFearGreed"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/volatility": {
         parameters: {
             query?: never;
@@ -1132,8 +1190,11 @@ export interface paths {
         };
         /**
          * Large trades and liquidations
-         * @description Clusters recent aggressive futures **buys** and **sells** (taker long /
-         *     short) and large **liquidations**, then sorts them biggest first.
+         * @description Clusters recent aggressive futures **buys** and **sells** and large
+         *     **liquidations**, then sorts them biggest first. Open interest across
+         *     the print marks a buy as opening longs or closing shorts (a sell is
+         *     the mirror). `priceAfterPct` and `oiAfterPct` are the move 15 minutes
+         *     later when those samples exist.
          *     Each event includes average price, first/last trade time, total size,
          *     and whether the notional is large versus circulating market cap
          *     (small-cap coins with huge prints are flagged). Omit `symbol` to scan
@@ -1158,7 +1219,11 @@ export interface paths {
         };
         /**
          * Futures volume share by exchange
-         * @description How perpetual quote volume splits across Binance, Bybit, and OKX.
+         * @description How perpetual **quote volume** splits across Binance USD-M, Bybit
+         *     linear, and OKX USDT-swap. Example: Binance 55%, Bybit 30%, OKX 15%.
+         *     Windows **15m / 1h / 4h** also compare to the same length just
+         *     before (`changePct` in percentage points; `gained` / `lost`).
+         *     Informational only.
          */
         get: operations["getMarketVolumeShare"];
         put?: never;
@@ -1179,7 +1244,11 @@ export interface paths {
         /**
          * OI delta versus futures volume
          * @description Share of futures **taker volume** that stuck as new (or closed)
-         *     open interest: **OI USDT delta ÷ volume**.
+         *     open interest: **OI USDT delta ÷ volume**. 2B volume with OI +300M
+         *     is `ratio` 0.15 (`ratioPct` 15) — that share of volume is new
+         *     positions; `transfer` is the rest. Windows are **15 minutes**,
+         *     **1 hour**, and **4 hours**. Binance USD-M and Bybit linear
+         *     separately plus `combined`. Informational only.
          */
         get: operations["getMarketParticipation"];
         put?: never;
@@ -1215,6 +1284,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/taker-flow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Futures taker buy vs sell volume
+         * @description Aggressive (taker) buy and sell volume on Binance USD-M and Bybit
+         *     linear for the last **5 minutes, 1 hour, and 4 hours**. Returns buy
+         *     notional, sell notional, delta, and a short read with price / OI /
+         *     funding. This is who is hitting the book now — not the account
+         *     long/short ratio. `exchange=all` adds a combined view.
+         */
+        get: operations["getMarketTakerFlow"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/net-position": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Net long and net short from open interest and taker flow
+         * @description Estimates how much futures exposure **went long** and how much **went
+         *     short** over the last **15 minutes, 1 hour, and 4 hours**.
+         *
+         *     An aggressive buy is either a new long or a closed short. An aggressive
+         *     sell is either a new short or a closed long. The open-interest change
+         *     says whether positions were opened or closed. Together:
+         *
+         *     `netLong = (taker buy − taker sell + open-interest change) / 2`
+         *
+         *     `netShort = (taker sell − taker buy + open-interest change) / 2`
+         *
+         *     Positive means that side grew. Negative means it shrank. The two
+         *     numbers add up to the open-interest change. Binance USD-M and Bybit
+         *     linear. This is not the account long/short ratio.
+         */
+        get: operations["getMarketNetPosition"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/pressure": {
         parameters: {
             query?: never;
@@ -1232,30 +1358,6 @@ export interface paths {
          *     Components stay visible. Informational only.
          */
         get: operations["getMarketPressure"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/market/taker-flow": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Futures taker buy vs sell volume
-         * @description Aggressive (taker) buy and sell volume on Binance USD-M and Bybit
-         *     linear for the last **5 minutes, 1 hour, and 4 hours**. Returns buy
-         *     notional, sell notional, delta, and a short read with price / OI /
-         *     funding. This is who is hitting the book now — not the account
-         *     long/short ratio. `exchange=all` adds a combined view.
-         */
-        get: operations["getMarketTakerFlow"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1702,7 +1804,10 @@ export interface paths {
          *     over a time range you choose — not just how much traded over time.
          *     Each row is quote (USDT) volume in a price band, with **buy** and
          *     **sell** when the venue publishes taker-buy (Binance klines; Bybit
-         *     is total-only). `poc` is the price with the most volume. `valueArea`
+         *     is total-only). The same row also carries **open interest opened
+         *     and closed** (USDT change spread across the candles trading then)
+         *     and **long / short liquidation** notional that printed in that band.
+         *     `poc` is the price with the most volume. `valueArea`
          *     is the contiguous block around the POC that holds about **70%** of
          *     volume. `exchange=all` (default) returns Binance and Bybit separately
          *     plus `combined`. Combined adds both venues at the same price levels.
@@ -1939,6 +2044,9 @@ export interface paths {
          *       reference last — it does not copy a missing venue's last.
          *       `review` rebuilds those past maps from stored OI + last and scores
          *       later same-venue liquidations in each 10x/25x/50x/100x band (1h / 4h / 12h).
+         *       Live bars shrink bands that rarely print. Bands that do print are
+         *       also shortened toward the share of the predicted amount that later
+         *       showed up (`sizeScale`), and are not grown when prints exceed the model.
          *     - `symbol=all`: **total** observed liquidations for every tracked coin
          *       as time bars (last 24h max). `exchange=binance|bybit|okx|all`.
          *
@@ -2799,6 +2907,29 @@ export interface paths {
         get: operations["getPortfolioPerformance"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/stress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview a paper book after price shocks
+         * @description Reprices the open spot and margin book. Each move is a percent on a
+         *     base asset (BTC -10, ETH -15). Returns equity, total P&L, and margin
+         *     equity before and after. A margin row that crosses its liquidation
+         *     price loses the margin locked on it. Nothing is traded.
+         */
+        post: operations["stressPortfolio"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5582,7 +5713,7 @@ export interface components {
         MarketOptionsVolCompare: {
             /** @description Deribit 30-day implied vol index (percent) */
             dvol?: string;
-            /** @description 30-day close-to-close realized vol, annualized percent (365) */
+            /** @description 30-day close-to-close realized vol */
             realized?: string;
             /** @description Signed DVOL minus realized in vol points */
             gap?: string;
@@ -5811,6 +5942,43 @@ export interface components {
             vsMarket?: components["schemas"]["MarketOptionsVsMarket"];
             history?: components["schemas"]["MarketOptionsHistory"];
             moves?: components["schemas"]["MarketOptionsMoves"];
+            strikeOi?: components["schemas"]["MarketOptionsStrikeOI"];
+            note?: string;
+        };
+        /** @description Call and put open interest at one strike versus an earlier sample */
+        MarketOptionsStrikeOIRow: {
+            /** Format: date-time */
+            expiry?: string;
+            label?: string;
+            strike?: string;
+            /** @description Current call open interest (base coin) */
+            callOi?: string;
+            /** @description Current put open interest (base coin) */
+            putOi?: string;
+            callPast?: string;
+            putPast?: string;
+            /** @description Signed call OI change (current minus past) */
+            callChange?: string;
+            /** @description Signed put OI change (current minus past) */
+            putChange?: string;
+            /** @description Signed call+put OI change */
+            netChange?: string;
+            /** @description Strike had no OI in the earlier sample */
+            opened?: boolean;
+            /** @description Strike has no OI now but did in the earlier sample */
+            closed?: boolean;
+        };
+        MarketOptionsStrikeOIWindow: {
+            /** @enum {string} */
+            window?: "1h" | "4h" | "24h" | "7d";
+            /** Format: date-time */
+            comparedAt?: string;
+            complete?: boolean;
+            strikes?: components["schemas"]["MarketOptionsStrikeOIRow"][];
+        };
+        /** @description How call and put open interest moved at each listed strike */
+        MarketOptionsStrikeOI: {
+            windows?: components["schemas"]["MarketOptionsStrikeOIWindow"][];
             note?: string;
         };
         /** @description One unusual short-window change in OI, put/call, or implied vol */
@@ -5897,7 +6065,7 @@ export interface components {
             /** @enum {string} */
             gammaFlipSide?: "above" | "below" | "at";
         };
-        /** @description How listed OI, put/call, implied vol, and dealer gamma moved over the last hours and days */
+        /** @description How listed OI, put/call, DVOL vs 30-day realized, and dealer gamma moved over the last hours and days */
         MarketOptionsHistory: {
             windows?: components["schemas"]["MarketOptionsHistoryWindow"][];
             points?: components["schemas"]["MarketOptionsHistoryPoint"][];
@@ -6171,7 +6339,7 @@ export interface components {
             /** @description Bid share of the book at the lookback */
             pastBidPct?: string;
             pastAskPct?: string;
-            /** @description Signed pp, now bidPct minus past */
+            /** @description Signed pp */
             changePct?: string;
             /** @enum {string} */
             kind?: "bid_gained" | "ask_gained" | "stable";
@@ -6202,8 +6370,41 @@ export interface components {
             leaders?: string[];
             missing?: string[];
             windows?: components["schemas"]["MarketPerpDepthShareWindow"][];
+            bands?: components["schemas"]["MarketPerpDepthOverviewBand"][];
             summary?: string;
             note?: string;
+        };
+        /** @description One coin's share of a ±% market-wide perp band */
+        MarketPerpDepthOverviewBandCoin: {
+            symbol?: string;
+            base?: string;
+            bid?: string;
+            ask?: string;
+            total?: string;
+            /** @description Percent of this band's bid+ask */
+            sharePct?: string;
+        };
+        /** @description Market-wide bid/ask inside ±rangePct of each coin's mid */
+        MarketPerpDepthOverviewBand: {
+            rangePct?: string;
+            bid?: string;
+            ask?: string;
+            total?: string;
+            bidPct?: string;
+            askPct?: string;
+            /** @enum {string} */
+            lean?: "bid" | "ask" | "balanced";
+            /** @description This band's total as percent of the headline (e.g. 1%) book */
+            ofHeadlinePct?: string;
+            /** @description Extra size vs the previous tighter band */
+            addedPct?: string;
+            addedBid?: string;
+            addedAsk?: string;
+            complete?: boolean;
+            leaders?: string[];
+            addedLeaders?: string[];
+            coins?: components["schemas"]["MarketPerpDepthOverviewBandCoin"][];
+            summary?: string;
         };
         /** @description How futures volume splits across Binance, Bybit, and OKX */
         MarketVolumeShare: {
@@ -6225,7 +6426,7 @@ export interface components {
             ratio?: string;
             /** @description Signed percent (15 means 15%) */
             ratioPct?: string;
-            /** @description volume minus |oiDelta|, floored at 0 */
+            /** @description volume minus |oiDelta| */
             transfer?: string;
             /** @enum {string} */
             lean?: "entering" | "exiting" | "transfer";
@@ -6793,7 +6994,7 @@ export interface components {
             exchange?: string;
             symbol?: string;
             /** @enum {string} */
-            kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional" | "liquidation_level" | "setup_radar";
+            kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional" | "liquidation_level" | "setup_radar" | "funding" | "open_interest" | "taker" | "fear_greed";
             /** @description price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both; setup_radar any|up|down */
             condition?: string;
             targetPrice?: number;
@@ -9900,6 +10101,27 @@ export interface operations {
             502: components["responses"]["Error"];
         };
     };
+    getFearGreed: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current score, the inputs that moved it, and stored past scores */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            502: components["responses"]["Error"];
+        };
+    };
     getMarketVolatility: {
         parameters: {
             query: {
@@ -10009,32 +10231,6 @@ export interface operations {
             502: components["responses"]["Error"];
         };
     };
-    getMarketPressure: {
-        parameters: {
-            query: {
-                symbol: string;
-                /** @description binance | bybit | all (default all) */
-                exchange?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Combined −1…+1 pressure and 1h change */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MarketPressure"];
-                };
-            };
-            400: components["responses"]["Error"];
-            502: components["responses"]["Error"];
-        };
-    };
     getMarketVolumeShare: {
         parameters: {
             query: {
@@ -10133,6 +10329,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketNetPosition: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Net long and net short for 15m, 1h, and 4h */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketPressure: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Combined −1…+1 pressure and 1h change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketPressure"];
                 };
             };
             400: components["responses"]["Error"];
@@ -11802,7 +12050,7 @@ export interface operations {
                      * @default price
                      * @enum {string}
                      */
-                    kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional" | "liquidation_level" | "setup_radar";
+                    kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional" | "liquidation_level" | "setup_radar" | "funding" | "open_interest" | "taker" | "fear_greed";
                     /** @description price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both; liquidation_level any|high|fair; setup_radar any|up|down */
                     condition: string;
                     /** @description Price target, |imbalance| threshold, wall min share, liquidation_feed min down seconds (0 = 300), liquidation_notional USDT amount, liquidation_level min confidence 0–1 (0 = default), or setup_radar min similarity 40–100 (0 = 60) */
@@ -12677,6 +12925,39 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             404: components["responses"]["Error"];
+        };
+    };
+    stressPortfolio: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    portfolioId?: string;
+                    moves: {
+                        /** @example BTC */
+                        asset: string;
+                        /** @example -10 */
+                        movePct: number;
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description Before and after totals */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
         };
     };
     getPortfolioRiskLimits: {
@@ -14800,7 +15081,7 @@ export interface operations {
                     stopAfterTp1?: "keep" | "entry" | "trail";
                     /** @description Taker fee percent on each fill including TP1 slices (0.10 = 0.10%). Default 0 */
                     feePct?: number;
-                    /** @description Adverse slippage percent on each fill (0.05 = 0.05%). Default 0 */
+                    /** @description Adverse slippage percent used only when that minute has no stored order book (0.05 = 0.05%). When a ladder exists */
                     slipPct?: number;
                     /** Format: date-time */
                     rangeStart: string;

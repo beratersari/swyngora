@@ -580,3 +580,11 @@ func (s stubAroundOptions) ListSamples(_ context.Context, asset string, from, to
 func (s stubAroundOptions) PurgeOlderThan(context.Context, time.Time) (int, error) {
 	return 0, nil
 }
+
+func (stubAroundOptions) ReplaceStrikeBook(context.Context, string, time.Time, []domain.OptionsStrikeOIPoint) error {
+	return nil
+}
+
+func (stubAroundOptions) StrikeBookAt(context.Context, string, time.Time) (domain.OptionsStrikeBook, bool, error) {
+	return domain.OptionsStrikeBook{}, false, nil
+}

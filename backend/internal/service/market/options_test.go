@@ -234,6 +234,57 @@ func TestGetOptions_AttachesHistory(t *testing.T) {
 	}
 }
 
+func TestGetOptions_AttachesStrikeOIChange(t *testing.T) {
+	exp := time.Now().UTC().Add(30 * 24 * time.Hour).Truncate(time.Hour)
+	store := &optionsstore.Memory{}
+	past := time.Now().UTC().Add(-4 * time.Hour).Truncate(5 * time.Minute)
+	if err := store.ReplaceStrikeBook(context.Background(), "BTC", past, []domain.OptionsStrikeOIPoint{
+		{Expiry: exp, Strike: 100000, CallOI: 4, PutOI: 6},
+		{Expiry: exp, Strike: 110000, CallOI: 2, PutOI: 0},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	svc := New(nil, nil).WithOptionsChain(stubOptions{
+		index: 100000,
+		dvol:  domain.OptionsDVOL{Value: 49},
+		quotes: []domain.OptionQuote{{
+			Asset: "BTC", Expiry: exp, Strike: 100000, Side: domain.OptionSideCall,
+			OpenInterest: 10, Volume: 1, MarkIV: 50, Underlying: 100000,
+		}, {
+			Asset: "BTC", Expiry: exp, Strike: 100000, Side: domain.OptionSidePut,
+			OpenInterest: 3, Volume: 1, MarkIV: 52, Underlying: 100000,
+		}},
+	}).WithOptionsHistory(store)
+	got, err := svc.GetOptions(context.Background(), "", "BTC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.StrikeOI == nil {
+		t.Fatal("missing strike OI")
+	}
+	var win *domain.OptionsStrikeOIWindow
+	for i := range got.StrikeOI.Windows {
+		if got.StrikeOI.Windows[i].Window == domain.OptionsHistoryWindow4h {
+			win = &got.StrikeOI.Windows[i]
+		}
+	}
+	if win == nil || !win.Complete {
+		t.Fatalf("4h %+v", win)
+	}
+	var call, closed bool
+	for _, row := range win.Strikes {
+		if row.Strike == 100000 && row.CallChange == 6 && row.PutChange == -3 {
+			call = true
+		}
+		if row.Strike == 110000 && row.Closed {
+			closed = true
+		}
+	}
+	if !call || !closed {
+		t.Fatalf("rows %+v", win.Strikes)
+	}
+}
+
 func TestGetOptions_AttachesUnusualMoves(t *testing.T) {
 	exp := time.Now().UTC().Add(30 * 24 * time.Hour).Truncate(time.Hour)
 	store := &optionsstore.Memory{}

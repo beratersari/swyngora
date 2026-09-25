@@ -4,8 +4,9 @@ SQLite (and in-memory) store for **BTC/ETH options desk samples**.
 
 The Deribit book summary is current-only. Open interest, put/call,
 and dealer gamma (net GEX, regime, flip, index) are sampled every
-few minutes while the backend runs. DVOL history still comes from
-Deribit public REST.
+few minutes while the backend runs. The same bucket stores call and
+put open interest at each strike that had size (`options_strike_oi`).
+DVOL history still comes from Deribit public REST.
 
 ## Layout
 

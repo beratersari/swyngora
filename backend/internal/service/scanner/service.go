@@ -35,6 +35,12 @@ type Service struct {
 	watch    WatchlistReader
 	account  AccountChecker
 	profiles domain.CustomSignalProfilePort
+	books    BookLadder
+}
+
+// BookLadder reads a stored spot book at a time.
+type BookLadder interface {
+	SnapshotAt(ctx context.Context, exchange, symbol string, at time.Time) (*domain.BookHistorySnapshot, error)
 }
 
 // New constructs a scanner service.
@@ -55,6 +61,13 @@ func (s *Service) WithProfiles(p domain.CustomSignalProfilePort) *Service {
 }
 
 // SetAccountChecker wires account-closed skips for the background runner.
+// SetBookHistory walks stored ladders when a backtest fill opens or closes.
+func (s *Service) SetBookHistory(b BookLadder) {
+	if s != nil {
+		s.books = b
+	}
+}
+
 func (s *Service) SetAccountChecker(a AccountChecker) {
 	if s != nil {
 		s.account = a

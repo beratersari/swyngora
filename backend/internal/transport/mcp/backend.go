@@ -396,6 +396,9 @@ func (b *Backend) GetOptions(ctx context.Context, exchange, asset string) (json.
 	if hist := optionsHistoryMap(got.History); hist != nil {
 		out["history"] = hist
 	}
+	if strike := optionsStrikeOIMap(got.StrikeOI); strike != nil {
+		out["strikeOi"] = strike
+	}
 	if mv := optionsMovesMap(got.Moves); mv != nil {
 		out["moves"] = mv
 	}
@@ -545,6 +548,36 @@ func optionsVsMarketMap(v *domain.OptionsVsMarket) map[string]any {
 		out["longPct"] = v.LongPct
 	}
 	return out
+}
+
+func optionsStrikeOIMap(h *domain.OptionsStrikeOI) map[string]any {
+	if h == nil {
+		return nil
+	}
+	windows := make([]map[string]any, 0, len(h.Windows))
+	for _, w := range h.Windows {
+		strikes := make([]map[string]any, 0, len(w.Strikes))
+		for _, s := range w.Strikes {
+			row := map[string]any{
+				"expiry": s.Expiry.UTC().Format(time.RFC3339), "label": s.Label, "strike": s.Strike,
+				"callOi": s.CallOI, "putOi": s.PutOI, "callPast": s.CallPast, "putPast": s.PutPast,
+				"callChange": s.CallChange, "putChange": s.PutChange, "netChange": s.NetChange,
+			}
+			if s.Opened {
+				row["opened"] = true
+			}
+			if s.Closed {
+				row["closed"] = true
+			}
+			strikes = append(strikes, row)
+		}
+		row := map[string]any{"window": w.Window, "complete": w.Complete, "strikes": strikes}
+		if !w.ComparedAt.IsZero() {
+			row["comparedAt"] = w.ComparedAt.UTC().Format(time.RFC3339)
+		}
+		windows = append(windows, row)
+	}
+	return map[string]any{"windows": windows, "note": h.Note}
 }
 
 func optionsHistoryMap(h *domain.OptionsHistory) map[string]any {

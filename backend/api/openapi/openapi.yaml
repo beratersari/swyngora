@@ -7493,7 +7493,7 @@ paths:
                 tp1ClosePct: { type: number, description: Share of the position closed at TP1 when useTp2 is true (default 50) }
                 stopAfterTp1: { type: string, enum: [keep, entry, trail], description: After TP1, keep the original stop, move it to the fill, or trail it with price (default entry) }
                 feePct: { type: number, description: Taker fee percent on each fill including TP1 slices (0.10 = 0.10%). Default 0 }
-                slipPct: { type: number, description: Adverse slippage percent on each fill (0.05 = 0.05%). Default 0 }
+                slipPct: { type: number, description: Adverse slippage percent used only when that minute has no stored order book (0.05 = 0.05%). When a ladder exists, the fill walks that size instead. Default 0 }
                 rangeStart: { type: string, format: date-time }
                 rangeEnd: { type: string, format: date-time }
       responses:
@@ -9822,6 +9822,40 @@ components:
         vsMarket: { $ref: '#/components/schemas/MarketOptionsVsMarket' }
         history: { $ref: '#/components/schemas/MarketOptionsHistory' }
         moves: { $ref: '#/components/schemas/MarketOptionsMoves' }
+        strikeOi: { $ref: '#/components/schemas/MarketOptionsStrikeOI' }
+        note: { type: string }
+    MarketOptionsStrikeOIRow:
+      type: object
+      description: Call and put open interest at one strike versus an earlier sample
+      properties:
+        expiry: { type: string, format: date-time }
+        label: { type: string }
+        strike: { type: string }
+        callOi: { type: string, description: Current call open interest (base coin) }
+        putOi: { type: string, description: Current put open interest (base coin) }
+        callPast: { type: string }
+        putPast: { type: string }
+        callChange: { type: string, description: Signed call OI change (current minus past) }
+        putChange: { type: string, description: Signed put OI change (current minus past) }
+        netChange: { type: string, description: Signed call+put OI change }
+        opened: { type: boolean, description: Strike had no OI in the earlier sample }
+        closed: { type: boolean, description: Strike has no OI now but did in the earlier sample }
+    MarketOptionsStrikeOIWindow:
+      type: object
+      properties:
+        window: { type: string, enum: [1h, 4h, 24h, 7d] }
+        comparedAt: { type: string, format: date-time }
+        complete: { type: boolean }
+        strikes:
+          type: array
+          items: { $ref: '#/components/schemas/MarketOptionsStrikeOIRow' }
+    MarketOptionsStrikeOI:
+      type: object
+      description: How call and put open interest moved at each listed strike
+      properties:
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/MarketOptionsStrikeOIWindow' }
         note: { type: string }
     MarketOptionsMove:
       type: object

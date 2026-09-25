@@ -134,7 +134,35 @@ type optionsResponse struct {
 	VsMarket        *optionsVsMarketDTO   `json:"vsMarket,omitempty"`
 	History         *optionsHistoryDTO    `json:"history,omitempty"`
 	Moves           *optionsMovesDTO      `json:"moves,omitempty"`
+	StrikeOi        *optionsStrikeOIDTO   `json:"strikeOi,omitempty"`
 	Note            string                `json:"note"`
+}
+
+type optionsStrikeOIRowDTO struct {
+	Expiry     time.Time `json:"expiry"`
+	Label      string    `json:"label,omitempty"`
+	Strike     string    `json:"strike"`
+	CallOi     string    `json:"callOi"`
+	PutOi      string    `json:"putOi"`
+	CallPast   string    `json:"callPast"`
+	PutPast    string    `json:"putPast"`
+	CallChange string    `json:"callChange"`
+	PutChange  string    `json:"putChange"`
+	NetChange  string    `json:"netChange"`
+	Opened     bool      `json:"opened,omitempty"`
+	Closed     bool      `json:"closed,omitempty"`
+}
+
+type optionsStrikeOIWindowDTO struct {
+	Window     string                  `json:"window"`
+	ComparedAt time.Time               `json:"comparedAt,omitempty"`
+	Complete   bool                    `json:"complete"`
+	Strikes    []optionsStrikeOIRowDTO `json:"strikes"`
+}
+
+type optionsStrikeOIDTO struct {
+	Windows []optionsStrikeOIWindowDTO `json:"windows"`
+	Note    string                     `json:"note,omitempty"`
 }
 
 type optionsMoveDTO struct {
@@ -257,6 +285,41 @@ type optionsVsMarketDTO struct {
 	Findings    []optionsVsFindingDTO `json:"findings"`
 }
 
+func optionsStrikeOIToDTO(a *domain.OptionsStrikeOI) *optionsStrikeOIDTO {
+	if a == nil {
+		return nil
+	}
+	windows := make([]optionsStrikeOIWindowDTO, 0, len(a.Windows))
+	for _, w := range a.Windows {
+		row := optionsStrikeOIWindowDTO{
+			Window:   w.Window,
+			Complete: w.Complete,
+			Strikes:  make([]optionsStrikeOIRowDTO, 0, len(w.Strikes)),
+		}
+		if !w.ComparedAt.IsZero() {
+			row.ComparedAt = w.ComparedAt.UTC()
+		}
+		for _, s := range w.Strikes {
+			row.Strikes = append(row.Strikes, optionsStrikeOIRowDTO{
+				Expiry:     s.Expiry.UTC(),
+				Label:      s.Label,
+				Strike:     formatHistQty(s.Strike),
+				CallOi:     formatHistQty(s.CallOI),
+				PutOi:      formatHistQty(s.PutOI),
+				CallPast:   formatHistQty(s.CallPast),
+				PutPast:    formatHistQty(s.PutPast),
+				CallChange: domain.FormatSignedQty(s.CallChange),
+				PutChange:  domain.FormatSignedQty(s.PutChange),
+				NetChange:  domain.FormatSignedQty(s.NetChange),
+				Opened:     s.Opened,
+				Closed:     s.Closed,
+			})
+		}
+		windows = append(windows, row)
+	}
+	return &optionsStrikeOIDTO{Windows: windows, Note: a.Note}
+}
+
 func optionsToDTO(a *domain.OptionsSnapshot) optionsResponse {
 	if a == nil {
 		return optionsResponse{}
@@ -377,6 +440,7 @@ func optionsToDTO(a *domain.OptionsSnapshot) optionsResponse {
 		VsMarket:        optionsVsMarketToDTO(a.VsMarket),
 		History:         optionsHistoryToDTO(a.History),
 		Moves:           optionsMovesToDTO(a.Moves),
+		StrikeOi:        optionsStrikeOIToDTO(a.StrikeOI),
 		Note:            a.Note,
 	}
 	if a.HasPutCallOI {

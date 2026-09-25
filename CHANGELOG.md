@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Options open interest by strike:** call and put open interest gained or lost at each listed strike over 1h, 4h, 24h, and 7d. A strike that appears is opened; one that leaves is closed. `strikeOi` on `GET /api/v1/market/options`, MCP `get_options_overview`, options screen (`docs/features/options.md`)
+- **Backtest fills from the stored book:** when a minute ladder exists, the shared backtest walks that size for the open and the close instead of one slippage percent. The percent remains the fallback for minutes with no book. `bookLegs` and `bookSlipPct` on the Lab book (`docs/features/indicator-scanner.md`)
 - **Order-book size moves:** between the minute ladders, resting size that is not a wall is kept when it leaves or swings and the snapshot misses that size (at least 3% of that side). `moves` on `GET /api/v1/market/orderbook/history`, coin detail past book (`docs/features/book-history.md`)
 - **Volume profile with OI and liquidations:** each price row shows traded buy/sell size together with open interest opened or closed while price was there, and long/short liquidations that printed on that row. `GET /api/v1/market/volume-profile`, MCP `get_volume_profile`, coin Flow tab (`docs/features/volume-profile.md`)
 - **Whale intent:** a large buy or sell is read with the open-interest change across the print (open long, close short, open short, close long). Price and open interest 15 minutes later are included when those samples exist (`GET /api/v1/market/whales`, coin Flow tab).

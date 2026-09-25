@@ -5,6 +5,7 @@ import { Text } from '@/components/atoms/Text';
 import { PageHeader } from '@/components/molecules/PageHeader';
 import { OptionsExpiryBars } from '@/components/organisms/OptionsExpiryBars';
 import { OptionsExpiryDetail } from '@/components/organisms/OptionsExpiryDetail';
+import { OptionsStrikeOI } from '@/components/organisms/OptionsStrikeOI';
 import { OptionsGammaPanel } from '@/components/organisms/OptionsGammaPanel';
 import { OptionsHistory } from '@/components/organisms/OptionsHistory';
 import { OptionsMoves } from '@/components/organisms/OptionsMoves';
@@ -157,6 +158,11 @@ export function OptionsPage() {
         <OptionsExpiryDetail
           expiry={selectedExpiry}
           indexPrice={data?.indexPrice}
+          isLoading={query.isLoading}
+        />
+        <OptionsStrikeOI
+          windows={data?.strikeOi?.windows}
+          expiry={selectedExpiry?.expiry}
           isLoading={query.isLoading}
         />
       </Panel>

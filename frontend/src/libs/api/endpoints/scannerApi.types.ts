@@ -270,6 +270,8 @@ export type ScannerBacktestBook = {
   closedAfterRange?: number;
   openAtRangeEnd?: number;
   openAtEnd?: number;
+  bookLegs?: number;
+  bookSlipPct?: number;
 };
 
 export type ScannerBacktestPerformance = {

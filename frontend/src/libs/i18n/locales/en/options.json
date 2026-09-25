@@ -47,6 +47,17 @@
     "painMark": "lowest",
     "empty": "Select an expiry."
   },
+  "strikeOi": {
+    "legend": "Call and put open interest gained or lost at each strike since the earlier sample. Green is added, red is closed.",
+    "windowAria": "Open interest change window",
+    "aria": "Open interest change by strike",
+    "collecting": "Strike open interest starts filling in after the desk has been running through this window.",
+    "empty": "No strike open interest in this window.",
+    "call": "calls {{value}}",
+    "put": "puts {{value}}",
+    "callTitle": "Calls now {{now}}, was {{past}}",
+    "putTitle": "Puts now {{now}}, was {{past}}"
+  },
   "gamma": {
     "title": "Dealer gamma",
     "subtitle": "Where market makers are long or short gamma — stabler below a long book, faster when they are short",

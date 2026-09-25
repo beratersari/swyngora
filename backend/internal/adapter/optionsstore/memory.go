@@ -11,8 +11,15 @@ import (
 
 // Memory is an in-process options sample ring (tests and fallback).
 type Memory struct {
-	mu   sync.Mutex
-	rows []domain.OptionsSample
+	mu      sync.Mutex
+	rows    []domain.OptionsSample
+	strikes []memStrikeBook
+}
+
+type memStrikeBook struct {
+	asset  string
+	at     time.Time
+	points []domain.OptionsStrikeOIPoint
 }
 
 // InsertSample keeps one print per asset and 5-minute bucket.
@@ -65,6 +72,60 @@ func (m *Memory) ListSamples(_ context.Context, asset string, from, to time.Time
 	return out, nil
 }
 
+// ReplaceStrikeBook stores one ladder per asset and sample time.
+func (m *Memory) ReplaceStrikeBook(_ context.Context, asset string, at time.Time, points []domain.OptionsStrikeOIPoint) error {
+	if m == nil || asset == "" || at.IsZero() {
+		return nil
+	}
+	asset, err := domain.ParseOptionsAsset(asset)
+	if err != nil {
+		return err
+	}
+	at = at.UTC()
+	cp := append([]domain.OptionsStrikeOIPoint(nil), points...)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i := range m.strikes {
+		if m.strikes[i].asset == asset && m.strikes[i].at.Equal(at) {
+			m.strikes[i].points = cp
+			return nil
+		}
+	}
+	m.strikes = append(m.strikes, memStrikeBook{asset: asset, at: at, points: cp})
+	return nil
+}
+
+// StrikeBookAt returns the latest ladder at or before at.
+func (m *Memory) StrikeBookAt(_ context.Context, asset string, at time.Time) (domain.OptionsStrikeBook, bool, error) {
+	var book domain.OptionsStrikeBook
+	if m == nil || at.IsZero() {
+		return book, false, nil
+	}
+	asset, err := domain.ParseOptionsAsset(asset)
+	if err != nil {
+		return book, false, err
+	}
+	at = at.UTC()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var hit *memStrikeBook
+	for i := range m.strikes {
+		row := &m.strikes[i]
+		if row.asset != asset || row.at.After(at) {
+			continue
+		}
+		if hit == nil || row.at.After(hit.at) {
+			hit = row
+		}
+	}
+	if hit == nil {
+		return book, false, nil
+	}
+	book.SampledAt = hit.at
+	book.Points = append([]domain.OptionsStrikeOIPoint(nil), hit.points...)
+	return book, true, nil
+}
+
 // PurgeOlderThan drops samples before cutoff.
 func (m *Memory) PurgeOlderThan(_ context.Context, cutoff time.Time) (int, error) {
 	if m == nil || cutoff.IsZero() {
@@ -82,5 +143,13 @@ func (m *Memory) PurgeOlderThan(_ context.Context, cutoff time.Time) (int, error
 		kept = append(kept, r)
 	}
 	m.rows = kept
+	keptBooks := m.strikes[:0]
+	for _, r := range m.strikes {
+		if r.at.Before(cutoff) {
+			continue
+		}
+		keptBooks = append(keptBooks, r)
+	}
+	m.strikes = keptBooks
 	return n, nil
 }

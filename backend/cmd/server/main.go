@@ -442,6 +442,7 @@ func main() {
 		}
 	}()
 	scannerSvc := scanner.New(scannerStore, marketSvc, watchSvc)
+	scannerSvc.SetBookHistory(bookHist)
 	logger.Info("indicator scanner store ready", "driver", "sqlite", "path", scannerStore.Path())
 
 	priceDiffStore, err := pricediffstore.Open(cfg.PriceDiffDBPath)

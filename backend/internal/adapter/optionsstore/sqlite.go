@@ -85,8 +85,24 @@ CREATE TABLE IF NOT EXISTS options_samples (
 CREATE INDEX IF NOT EXISTS idx_options_samples_lookup
 	ON options_samples(asset, sampled_at_ms);
 `
+	const strikes = `
+CREATE TABLE IF NOT EXISTS options_strike_oi (
+	asset          TEXT NOT NULL,
+	sampled_at_ms  INTEGER NOT NULL,
+	expiry_ms      INTEGER NOT NULL,
+	strike         REAL NOT NULL,
+	call_oi        REAL NOT NULL DEFAULT 0,
+	put_oi         REAL NOT NULL DEFAULT 0,
+	PRIMARY KEY (asset, sampled_at_ms, expiry_ms, strike)
+);
+CREATE INDEX IF NOT EXISTS idx_options_strike_oi_lookup
+	ON options_strike_oi(asset, sampled_at_ms);
+`
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("options schema: %w", err)
+	}
+	if _, err := s.db.Exec(strikes); err != nil {
+		return fmt.Errorf("options strike schema: %w", err)
 	}
 	alters := []string{
 		`ALTER TABLE options_samples ADD COLUMN index_price REAL NOT NULL DEFAULT 0`,
@@ -213,8 +229,85 @@ func (s *SQLite) PurgeOlderThan(ctx context.Context, cutoff time.Time) (int, err
 	if err != nil {
 		return 0, err
 	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM options_strike_oi WHERE sampled_at_ms < ?`, cutoff.UTC().UnixMilli()); err != nil {
+		return 0, err
+	}
 	n, _ := res.RowsAffected()
 	return int(n), nil
+}
+
+// ReplaceStrikeBook replaces the call/put ladder for one asset and bucket.
+func (s *SQLite) ReplaceStrikeBook(ctx context.Context, asset string, at time.Time, points []domain.OptionsStrikeOIPoint) error {
+	if s == nil || s.db == nil || asset == "" || at.IsZero() {
+		return nil
+	}
+	asset, err := domain.ParseOptionsAsset(asset)
+	if err != nil {
+		return err
+	}
+	ms := at.UTC().UnixMilli()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM options_strike_oi WHERE asset=? AND sampled_at_ms=?`, asset, ms); err != nil {
+		return err
+	}
+	for _, p := range points {
+		if p.Expiry.IsZero() || (p.CallOI <= 0 && p.PutOI <= 0) {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `
+INSERT INTO options_strike_oi (asset, sampled_at_ms, expiry_ms, strike, call_oi, put_oi)
+VALUES (?, ?, ?, ?, ?, ?)
+`, asset, ms, p.Expiry.UTC().UnixMilli(), p.Strike, p.CallOI, p.PutOI); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// StrikeBookAt returns the latest ladder at or before at.
+func (s *SQLite) StrikeBookAt(ctx context.Context, asset string, at time.Time) (domain.OptionsStrikeBook, bool, error) {
+	var book domain.OptionsStrikeBook
+	if s == nil || s.db == nil || at.IsZero() {
+		return book, false, nil
+	}
+	asset, err := domain.ParseOptionsAsset(asset)
+	if err != nil {
+		return book, false, err
+	}
+	var ms sql.NullInt64
+	if err := s.db.QueryRowContext(ctx, `
+SELECT MAX(sampled_at_ms) FROM options_strike_oi
+WHERE asset=? AND sampled_at_ms<=?
+`, asset, at.UTC().UnixMilli()).Scan(&ms); err != nil {
+		return book, false, err
+	}
+	if !ms.Valid {
+		return book, false, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `
+SELECT expiry_ms, strike, call_oi, put_oi
+FROM options_strike_oi
+WHERE asset=? AND sampled_at_ms=?
+`, asset, ms.Int64)
+	if err != nil {
+		return book, false, err
+	}
+	defer rows.Close()
+	book.SampledAt = time.UnixMilli(ms.Int64).UTC()
+	for rows.Next() {
+		var expiryMs int64
+		var p domain.OptionsStrikeOIPoint
+		if err := rows.Scan(&expiryMs, &p.Strike, &p.CallOI, &p.PutOI); err != nil {
+			return book, false, err
+		}
+		p.Expiry = time.UnixMilli(expiryMs).UTC()
+		book.Points = append(book.Points, p)
+	}
+	return book, true, rows.Err()
 }
 
 func boolInt(v bool) int {
