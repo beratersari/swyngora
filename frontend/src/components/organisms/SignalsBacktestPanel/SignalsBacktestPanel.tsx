@@ -195,6 +195,11 @@ function BookSummary({ book }: { book: ScannerBacktestBook }) {
             })}
           </Text>
         ) : null}
+        {(book.bookShortCloses ?? 0) > 0 ? (
+          <Text variant="caption" color="secondary">
+            {t('signals:lab.bookShortCloses', { count: book.bookShortCloses })}
+          </Text>
+        ) : null}
         <Text variant="caption" color="secondary">
           {t('signals:lab.bookSkipped')}: {book.tradesSkipped ?? 0}
           {(book.skippedNoRisk ?? 0) > 0 ? ` (${t('signals:lab.bookSkippedRisk')}: ${book.skippedNoRisk})` : ''}

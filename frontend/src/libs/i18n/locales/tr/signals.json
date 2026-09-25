@@ -178,6 +178,7 @@
     "feePct": "Komisyon %",
     "slipPct": "Defter yoksa kayma %",
     "bookLiquidity": "{{count}} dolum kayıtlı defteri yürüdü · ortalama kayma {{slip}}%",
+    "bookShortCloses": "{{count}} kapanış defterdeki boyutta kaldı",
     "stopMovedToEntry": "Kalan stop girişe çekildi",
     "outcome": "Sonuç",
     "outcomeTp": "Önce kâr al",

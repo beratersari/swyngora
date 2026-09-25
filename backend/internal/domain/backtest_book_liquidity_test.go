@@ -36,3 +36,28 @@ func TestSimulateSharedBacktestBookLadder_UsesRestingSize(t *testing.T) {
 		t.Fatalf("book=%+v fixed=%+v", got, fixed)
 	}
 }
+
+func TestSimulateSharedBacktestBookLadder_ThinBidDoesNotCloseThePosition(t *testing.T) {
+	at := time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC)
+	exitAt := at.Add(time.Hour)
+	// 1% risk, 10% stop → notional 1000 at entry 100, so the close needs 10 BTC.
+	fill := BacktestBookFill{
+		Exchange: ExchangeBinance, Symbol: "BTCUSDT", Side: BacktestTradeSideLong,
+		EntryAt: at, ExitAt: exitAt, Entry: 100, StopLoss: 90, ExitPrice: 110,
+		RangeExitPrice: 100, Leverage: 1, HasExit: true, ClosedInRange: true, FeeRate: 0,
+	}
+	ladder := func(ex Exchange, symbol string, when time.Time) ([]BookHistoryLevel, []BookHistoryLevel, bool) {
+		if when.Equal(at) {
+			return nil, []BookHistoryLevel{{Price: 100, Quantity: 10}}, true
+		}
+		return []BookHistoryLevel{{Price: 110, Quantity: 0.01}}, nil, true
+	}
+	got := SimulateSharedBacktestBookLadder(10000, 1, 3, []BacktestBookFill{fill}, exitAt, ladder)
+	if got.OpenAtEnd != 1 || got.ClosedInRange != 0 || got.BookShortCloses != 1 {
+		t.Fatalf("thin bid must leave the position open: %+v", got)
+	}
+	// 0.01 BTC sold at 110 is 1 notional, +0.10 pnl. The other 9.99 stays marked at 100.
+	if got.EndingBalance < 10000.09 || got.EndingBalance > 10000.11 {
+		t.Fatalf("ending=%v want ~10000.10", got.EndingBalance)
+	}
+}

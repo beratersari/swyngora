@@ -61,6 +61,9 @@ type BacktestBook struct {
 	BookLegs int `json:"bookLegs,omitempty"`
 	// BookSlipPct is the average adverse slippage of those legs, in percent.
 	BookSlipPct float64 `json:"bookSlipPct,omitempty"`
+	// BookShortCloses is exits or partial closes the ladder could not finish.
+	// The unfilled size stays open instead of closing at the thin print.
+	BookShortCloses int `json:"bookShortCloses,omitempty"`
 }
 
 // BacktestRunState is persisted after a custom job walks its coins.
@@ -146,7 +149,9 @@ func SimulateSharedBacktestBook(start, riskPct, maxOpenRisk float64, fills []Bac
 
 // SimulateSharedBacktestBookLadder is the shared pot. When ladder returns a
 // stored book, that leg's price and slippage come from walking it for the
-// trade size. A missing book keeps the fixed slip percent already on the fill.
+// trade size. A close or partial close only reduces the position by the size
+// the book could fill; the rest stays open. A missing book keeps the fixed
+// slip percent already on the fill.
 func SimulateSharedBacktestBookLadder(start, riskPct, maxOpenRisk float64, fills []BacktestBookFill, rangeEnd time.Time, ladder StoredLadder) BacktestBook {
 	start = NormalizeBacktestStartBalance(start)
 	riskPct = NormalizeBacktestRiskPct(riskPct)
@@ -310,7 +315,19 @@ func SimulateSharedBacktestBookLadder(start, riskPct, maxOpenRisk float64, fills
 			closedM := p.margin * pct
 			scalePx := f.ScalePrice
 			if f.Entry > 0 && scalePx > 0 {
-				if px, slip, _, ok := priceFromLadder(ladder, f, true, f.ScaleAt, scalePx, closedN/f.Entry); ok {
+				qty := closedN / f.Entry
+				if px, slip, filled, found := priceFromLadder(ladder, f, true, f.ScaleAt, scalePx, qty); found {
+					take := closeNotionalFromBook(closedN, qty, filled)
+					if take <= 0 {
+						out.BookShortCloses++
+						mark(e.at)
+						continue
+					}
+					if take < closedN {
+						out.BookShortCloses++
+						closedM = p.margin * (take / p.notional)
+						closedN = take
+					}
 					scalePx = px
 					noteLeg(slip)
 				}
@@ -331,6 +348,36 @@ func SimulateSharedBacktestBookLadder(start, riskPct, maxOpenRisk float64, fills
 			if !ok {
 				continue
 			}
+			exitPx := fills[e.i].ExitPrice
+			closeN := p.notional
+			closeM := p.margin
+			if fills[e.i].Entry > 0 && exitPx > 0 && p.notional > 0 {
+				qty := p.notional / fills[e.i].Entry
+				if px, slip, filled, found := priceFromLadder(ladder, fills[e.i], true, fills[e.i].ExitAt, exitPx, qty); found {
+					take := closeNotionalFromBook(p.notional, qty, filled)
+					if take <= 0 {
+						out.BookShortCloses++
+						mark(e.at)
+						continue
+					}
+					if take < p.notional {
+						out.BookShortCloses++
+						closeM = p.margin * (take / p.notional)
+						closeN = take
+					}
+					exitPx = px
+					noteLeg(slip)
+				}
+			}
+			if closeN < p.notional {
+				cash += closeM + notionalPnLPrice(fills[e.i], closeN, exitPx) - fillFee(closeN, fills[e.i].Entry, exitPx, fills[e.i].FeeRate)
+				p.notional -= closeN
+				p.margin -= closeM
+				p.risk = remainingStopRisk(fills[e.i].Side, fills[e.i].Entry, p.stop, p.notional, fills[e.i].FeeRate, fills[e.i].SlipRate)
+				open[e.i] = p
+				mark(e.at)
+				continue
+			}
 			delete(open, e.i)
 			if p.key != "" {
 				openCoin[p.key]--
@@ -338,15 +385,8 @@ func SimulateSharedBacktestBookLadder(start, riskPct, maxOpenRisk float64, fills
 					delete(openCoin, p.key)
 				}
 			}
-			exitPx := fills[e.i].ExitPrice
-			if fills[e.i].Entry > 0 && exitPx > 0 && p.notional > 0 {
-				if px, slip, _, ok := priceFromLadder(ladder, fills[e.i], true, fills[e.i].ExitAt, exitPx, p.notional/fills[e.i].Entry); ok {
-					exitPx = px
-					fills[e.i].ExitPrice = px
-					noteLeg(slip)
-				}
-			}
-			cash += p.margin + notionalPnL(fills[e.i], p.notional, false) - fillFee(p.notional, fills[e.i].Entry, exitPx, fills[e.i].FeeRate)
+			fills[e.i].ExitPrice = exitPx
+			cash += closeM + notionalPnL(fills[e.i], closeN, false) - fillFee(closeN, fills[e.i].Entry, exitPx, fills[e.i].FeeRate)
 			if fills[e.i].ClosedInRange {
 				out.ClosedInRange++
 			} else {
@@ -380,7 +420,7 @@ func SimulateSharedBacktestBookLadder(start, riskPct, maxOpenRisk float64, fills
 		}
 		notional := newRisk / stopF
 		if f.Entry > 0 {
-			if px, slip, filled, ok := priceFromLadder(ladder, f, false, f.EntryAt, f.Entry, notional/f.Entry); ok {
+			if px, slip, filled, found := priceFromLadder(ladder, f, false, f.EntryAt, f.Entry, notional/f.Entry); found && filled > 0 {
 				fills[e.i].Entry = px
 				fills[e.i].SlipRate = slip
 				f = fills[e.i]

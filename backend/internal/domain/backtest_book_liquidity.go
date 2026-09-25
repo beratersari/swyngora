@@ -70,12 +70,15 @@ func undoFixedSlip(buy bool, slipped, rate float64) float64 {
 
 // priceFromLadder walks the stored book for this leg. The reference is the
 // price before the fixed slip percent, so the book is not applied twice.
-func priceFromLadder(ladder StoredLadder, f BacktestBookFill, exit bool, at time.Time, slipped, qty float64) (px, slip float64, filled float64, ok bool) {
+// found is true when that minute has a ladder, even if filled is only part
+// of qty (or zero). A missing minute returns found false so the caller keeps
+// the fixed slip percent.
+func priceFromLadder(ladder StoredLadder, f BacktestBookFill, exit bool, at time.Time, slipped, qty float64) (px, slip, filled float64, found bool) {
 	if ladder == nil || at.IsZero() || qty <= 0 || slipped <= 0 {
 		return 0, 0, 0, false
 	}
-	bids, asks, found := ladder(f.Exchange, f.Symbol, at)
-	if !found {
+	bids, asks, ok := ladder(f.Exchange, f.Symbol, at)
+	if !ok {
 		return 0, 0, 0, false
 	}
 	buy := bookBuys(f.Side, exit)
@@ -84,5 +87,21 @@ func priceFromLadder(ladder StoredLadder, f BacktestBookFill, exit bool, at time
 		levels = bids
 	}
 	ref := undoFixedSlip(buy, slipped, f.SlipRate)
-	return WalkStoredLadder(levels, qty, ref, buy)
+	avg, slipFrac, got, walked := WalkStoredLadder(levels, qty, ref, buy)
+	if !walked {
+		return 0, 0, 0, true
+	}
+	return avg, slipFrac, got, true
+}
+
+// closeNotionalFromBook is the quote size the ladder actually filled.
+// A full print returns notional. A thin book returns only the filled share.
+func closeNotionalFromBook(notional, qty, filled float64) float64 {
+	if notional <= 0 || qty <= 0 || filled <= 0 {
+		return 0
+	}
+	if filled+1e-9 >= qty {
+		return notional
+	}
+	return notional * (filled / qty)
 }
