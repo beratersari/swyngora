@@ -82,13 +82,21 @@ export const HeaderNav = styled.nav`
   display: flex;
   align-items: center;
   gap: 4px;
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   overflow-x: auto;
-  scrollbar-width: none;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: ${({ theme }) => theme.semantic.border.default} transparent;
+  -webkit-overflow-scrolling: touch;
 
   &::-webkit-scrollbar {
-    display: none;
+    height: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: ${({ theme }) => theme.semantic.border.default};
+    border-radius: 999px;
   }
 `;
 
@@ -147,6 +155,7 @@ export const BrandTagline = styled.span`
 export const NavLink = styled(RouterNavLink)`
   display: inline-flex;
   align-items: center;
+  flex: 0 0 auto;
   text-decoration: none;
   color: ${({ theme }) => theme.semantic.text.primary};
   font-size: 14px;

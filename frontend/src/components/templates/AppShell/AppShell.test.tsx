@@ -22,7 +22,10 @@ describe('AppShell', () => {
       </AppShell>,
     );
 
-    expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
+    const nav = screen.getByRole('navigation', { name: 'Primary' });
+    expect(nav).toBeInTheDocument();
+    expect(getComputedStyle(nav).overflowX).toBe('auto');
+    expect(getComputedStyle(screen.getByRole('link', { name: 'Markets' })).flexShrink).toBe('0');
     expect(screen.getByText('Brand')).toBeInTheDocument();
     expect(screen.getByText('Markets')).toBeInTheDocument();
     expect(screen.getByText('Watchlist')).toBeInTheDocument();
