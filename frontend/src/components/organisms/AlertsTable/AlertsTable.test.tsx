@@ -30,4 +30,27 @@ describe('AlertsTable', () => {
     );
     expect(screen.getByText(/BTC/)).toBeInTheDocument();
   });
+
+  it('names the venue that crossed an all-exchange funding alert', () => {
+    renderWithProviders(
+      <AlertsTable
+        items={[
+          {
+            id: '2',
+            exchange: 'all',
+            symbol: 'BTCUSDT',
+            kind: 'funding',
+            condition: 'above',
+            targetPrice: 0.05,
+            mode: 'one_time',
+            status: 'triggered',
+            triggeredPrice: 0.08,
+            triggeredVenue: 'bybit',
+          },
+        ]}
+        onDelete={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/bybit/i)).toBeInTheDocument();
+  });
 });

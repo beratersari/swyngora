@@ -270,6 +270,7 @@ func (s *Service) processObservation(ctx context.Context, a domain.PriceAlert, e
 		if err != nil {
 			return nil, false, err
 		}
+		out = s.noteTriggeredVenue(ctx, out, extra)
 		if err := s.enqueueWebhookNotificationExtra(ctx, out, extra); err != nil {
 			slog.Error("enqueue webhook after alert trigger", "alertId", out.ID, "clientId", out.ClientID, "err", err)
 		}
@@ -279,6 +280,7 @@ func (s *Service) processObservation(ctx context.Context, a domain.PriceAlert, e
 		if err != nil {
 			return nil, false, err
 		}
+		out = s.noteTriggeredVenue(ctx, out, extra)
 		if err := s.enqueueWebhookNotificationExtra(ctx, out, extra); err != nil {
 			slog.Error("enqueue webhook after repeating trigger", "alertId", out.ID, "clientId", out.ClientID, "err", err)
 		}
@@ -483,6 +485,32 @@ func (s *Service) NotifyClient(ctx context.Context, clientID, sourceID, payloadJ
 		Status: domain.NotificationPending, Attempts: 0, NextAttemptAt: nextAt, CreatedAt: now,
 	})
 	return err
+}
+
+type triggeredVenueStore interface {
+	SetTriggeredVenue(ctx context.Context, id, venue string) (*domain.PriceAlert, error)
+}
+
+func (s *Service) noteTriggeredVenue(ctx context.Context, a *domain.PriceAlert, extra map[string]any) *domain.PriceAlert {
+	if s == nil || a == nil || extra == nil {
+		return a
+	}
+	venue, _ := extra["venue"].(string)
+	venue = strings.TrimSpace(venue)
+	if venue == "" {
+		return a
+	}
+	setter, ok := s.store.(triggeredVenueStore)
+	if !ok {
+		a.TriggeredVenue = venue
+		return a
+	}
+	updated, err := setter.SetTriggeredVenue(ctx, a.ID, venue)
+	if err != nil || updated == nil {
+		a.TriggeredVenue = venue
+		return a
+	}
+	return updated
 }
 
 func (s *Service) enqueueWebhookNotification(ctx context.Context, a *domain.PriceAlert) error {

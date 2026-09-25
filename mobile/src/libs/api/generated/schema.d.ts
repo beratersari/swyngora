@@ -7011,6 +7011,8 @@ export interface components {
             /** Format: date-time */
             triggeredAt?: string | null;
             triggeredPrice?: number;
+            /** @description Exchange that crossed a multi-venue funding alert (binance, bybit, or okx when exchange is all) */
+            triggeredVenue?: string;
         };
         AlertWebhook: {
             clientId?: string;

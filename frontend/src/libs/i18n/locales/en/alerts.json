@@ -69,6 +69,8 @@
   "notional": "USDT notional",
   "minConfidence": "Min confidence (0–1)",
   "fundingLevel": "Funding %",
+  "fundingAllVenues": "All exchanges fires when any of Binance, Bybit, or OKX crosses this funding level. The alert names the venue that crossed.",
+  "triggeredOn": "Crossed on {{venue}} at {{price}}%",
   "oiLevel": "Open interest USDT",
   "takerLevel": "5m buy share %",
   "fearLevel": "Score 0–100",

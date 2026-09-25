@@ -55,21 +55,63 @@ func validateTapeAlertSpec(kind AlertKind, condition string, target float64) err
 }
 
 // FundingAlertPercent is the live funding rate in percent (0.01 = 0.01%).
+// A single-venue snapshot uses that rate. A combined snapshot uses the
+// highest venue rate (above). Prefer FundingAlertReading when the condition
+// is known.
 func FundingAlertPercent(snap *FundingSnapshot) (float64, bool) {
+	pct, _, ok := FundingAlertReading(snap, AlertAbove)
+	return pct, ok
+}
+
+// FundingAlertReading is the funding percent to compare with an alert, and the
+// venue that printed it. exchange=all has no single current rate: above uses
+// the highest venue, below uses the lowest, so one venue crossing the level
+// is enough. A single-venue snapshot uses that venue only.
+func FundingAlertReading(snap *FundingSnapshot, cond AlertCondition) (pct float64, venue string, ok bool) {
 	if snap == nil {
-		return 0, false
+		return 0, "", false
 	}
 	if snap.Current != nil {
-		if v, ok := parseAlertPercent(snap.Current.RatePct); ok {
-			return v, true
+		if v, parsed := parseAlertPercent(snap.Current.RatePct); parsed {
+			return v, fundingAlertVenue(snap, ""), true
 		}
 	}
+	wantMin := cond == AlertBelow
+	found := false
+	var best float64
+	var bestVenue string
 	for _, v := range snap.Venues {
-		if p, ok := parseAlertPercent(v.Current.RatePct); ok {
-			return p, true
+		p, parsed := parseAlertPercent(v.Current.RatePct)
+		if !parsed {
+			continue
+		}
+		if !found || (wantMin && p < best) || (!wantMin && p > best) {
+			found = true
+			best = p
+			bestVenue = v.Exchange
 		}
 	}
-	return 0, false
+	if !found {
+		return 0, "", false
+	}
+	return best, fundingAlertVenue(snap, bestVenue), true
+}
+
+func fundingAlertVenue(snap *FundingSnapshot, picked string) string {
+	if picked != "" {
+		return picked
+	}
+	if snap == nil {
+		return ""
+	}
+	ex := strings.TrimSpace(string(snap.Exchange))
+	if ex != "" && !strings.EqualFold(ex, "all") {
+		return ex
+	}
+	if len(snap.Venues) == 1 {
+		return snap.Venues[0].Exchange
+	}
+	return ""
 }
 
 // OpenInterestAlertUSDT is the current open-interest notional.

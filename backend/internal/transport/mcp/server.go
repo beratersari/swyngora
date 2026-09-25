@@ -2208,7 +2208,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("create_tape_alert",
-		mcp.WithDescription("Alert when funding, open interest, taker buy share, or fear and greed crosses a level. kind=funding (percent, e.g. 0.05 or -0.01), open_interest (USDT notional), taker (5m buy share 0-100), fear_greed (score 0-100, no symbol). condition=above|below. mode=one_time or repeating."),
+		mcp.WithDescription("Alert when funding, open interest, taker buy share, or fear and greed crosses a level. kind=funding (percent, e.g. 0.05 or -0.01), open_interest (USDT notional), taker (5m buy share 0-100), fear_greed (score 0-100, no symbol). condition=above|below. mode=one_time or repeating. Funding exchange=all fires when any of Binance, Bybit, or OKX crosses the level and names that venue."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("kind", mcp.Required(), mcp.Description("funding | open_interest | taker | fear_greed")),
 		mcp.WithString("condition", mcp.Required(), mcp.Description("above | below")),

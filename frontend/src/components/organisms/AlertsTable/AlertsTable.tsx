@@ -52,12 +52,23 @@ export function AlertsTable({
       title: t('alerts:status', { defaultValue: 'Status' }),
       dataIndex: 'status',
       key: 'status',
-      render: (status: string | undefined) =>
-        status ? (
-          <BrandTag variant={status === 'triggered' ? 'live' : 'status'}>{status}</BrandTag>
-        ) : (
-          <Text variant="caption">—</Text>
-        ),
+      render: (status: string | undefined, row) => (
+        <Space direction="vertical" size={0}>
+          {status ? (
+            <BrandTag variant={status === 'triggered' ? 'live' : 'status'}>{status}</BrandTag>
+          ) : (
+            <Text variant="caption">—</Text>
+          )}
+          {row.triggeredVenue ? (
+            <Text variant="caption" color="secondary">
+              {t('alerts:triggeredOn', {
+                venue: row.triggeredVenue,
+                price: row.triggeredPrice ?? '',
+              })}
+            </Text>
+          ) : null}
+        </Space>
+      ),
     },
     {
       title: t('alerts:actions'),

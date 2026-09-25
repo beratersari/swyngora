@@ -10913,6 +10913,9 @@ components:
         createdAt: { type: string, format: date-time }
         triggeredAt: { type: string, format: date-time, nullable: true }
         triggeredPrice: { type: number }
+        triggeredVenue:
+          type: string
+          description: Exchange that crossed a multi-venue funding alert (binance, bybit, or okx when exchange is all)
     AlertWebhook:
       type: object
       properties:

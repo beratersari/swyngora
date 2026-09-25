@@ -69,6 +69,8 @@
   "notional": "USDT tutar",
   "minConfidence": "Min güven (0–1)",
   "fundingLevel": "Fonlama %",
+  "fundingAllVenues": "Tüm borsalar, Binance, Bybit veya OKX fonlaması bu seviyeyi geçince tetiklenir. Uyarı hangi borsanın geçtiğini yazar.",
+  "triggeredOn": "{{venue}} üzerinde {{price}}% ile geçti",
   "oiLevel": "Açık pozisyon USDT",
   "takerLevel": "5dk alış payı %",
   "fearLevel": "Skor 0–100",

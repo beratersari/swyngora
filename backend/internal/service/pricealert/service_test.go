@@ -880,3 +880,59 @@ func TestChecker_LiquidationNotionalNoRetriggerUntilNewWave(t *testing.T) {
 		t.Fatalf("new wave %+v", again)
 	}
 }
+
+type fakeTape struct {
+	fund *domain.FundingSnapshot
+}
+
+func (f *fakeTape) GetFundingRate(context.Context, string, string, int) (*domain.FundingSnapshot, error) {
+	return f.fund, nil
+}
+func (f *fakeTape) GetOpenInterest(context.Context, string, string) (*domain.OpenInterestSnapshot, error) {
+	return nil, nil
+}
+func (f *fakeTape) GetTakerFlow(context.Context, string, string) (*domain.TakerFlowReport, error) {
+	return nil, nil
+}
+func (f *fakeTape) GetFearGreed(context.Context) (*domain.FearGreedReport, error) {
+	return nil, nil
+}
+
+func TestChecker_FundingAllFiresOnAnyVenue(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	a, err := svc.Create(ctx, CreateInput{
+		ClientID: "fd", Kind: "funding", Exchange: "all", Symbol: "BTCUSDT",
+		Condition: "above", TargetPrice: 0.05, Mode: "one_time",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	quiet := &fakeTape{fund: &domain.FundingSnapshot{
+		Exchange: "all",
+		Venues: []domain.FundingVenueSnap{
+			{Exchange: "binance", Current: domain.FundingCurrent{RatePct: "0.0100"}},
+			{Exchange: "bybit", Current: domain.FundingCurrent{RatePct: "0.0200"}},
+		},
+	}}
+	now := time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC)
+	c := &Checker{Alerts: svc, Tape: quiet, now: func() time.Time { return now }}
+	c.RunOnce(ctx)
+	still, _ := svc.Get(ctx, "fd", a.ID)
+	if still.Status != domain.AlertStatusActive {
+		t.Fatalf("under 0.05 on every venue should stay active %+v", still)
+	}
+	c.Tape = &fakeTape{fund: &domain.FundingSnapshot{
+		Exchange: "all",
+		Venues: []domain.FundingVenueSnap{
+			{Exchange: "binance", Current: domain.FundingCurrent{RatePct: "0.0100"}},
+			{Exchange: "bybit", Current: domain.FundingCurrent{RatePct: "0.0800"}},
+			{Exchange: "okx", Current: domain.FundingCurrent{RatePct: "0.0300"}},
+		},
+	}}
+	c.RunOnce(ctx)
+	got, _ := svc.Get(ctx, "fd", a.ID)
+	if got.Status != domain.AlertStatusTriggered || got.TriggeredVenue != "bybit" || got.TriggeredPrice < 0.079 {
+		t.Fatalf("bybit 0.08 should fire the all-exchange alert %+v", got)
+	}
+}

@@ -78,7 +78,8 @@ CREATE TABLE IF NOT EXISTS price_alerts (
 	triggered_at    TEXT,
 	triggered_price REAL NOT NULL DEFAULT 0,
 	kind            TEXT NOT NULL DEFAULT 'price',
-	range_pct       REAL NOT NULL DEFAULT 0
+	range_pct       REAL NOT NULL DEFAULT 0,
+	triggered_venue TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_price_alerts_client ON price_alerts(client_id);
 CREATE INDEX IF NOT EXISTS idx_price_alerts_active ON price_alerts(status) WHERE status = 'active';
@@ -158,6 +159,7 @@ CREATE INDEX IF NOT EXISTS idx_alert_notifications_alert
 		`ALTER TABLE client_webhooks ADD COLUMN quiet_end TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE price_alerts ADD COLUMN kind TEXT NOT NULL DEFAULT 'price'`,
 		`ALTER TABLE price_alerts ADD COLUMN range_pct REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE price_alerts ADD COLUMN triggered_venue TEXT NOT NULL DEFAULT ''`,
 	} {
 		if err := sqliteutil.ExecAllowExists(s.db, stmt); err != nil {
 			return err
@@ -243,7 +245,7 @@ func (s *SQLite) Close() error {
 const alertSelectCols = `
 	id, client_id, exchange, symbol, condition, target_price,
 	mode, armed, status, created_at, triggered_at, triggered_price,
-	kind, range_pct
+	kind, range_pct, triggered_venue
 `
 
 // Create inserts a new alert. Caller supplies a unique ID and Active status.
@@ -374,6 +376,19 @@ func (s *SQLite) RecordRepeatingTrigger(ctx context.Context, id string, price fl
 	}
 	if n == 0 {
 		return nil, domain.ErrNotFound
+	}
+	return s.getByIDUnlocked(ctx, id)
+}
+
+// SetTriggeredVenue records which exchange crossed a multi-venue tape alert.
+func (s *SQLite) SetTriggeredVenue(ctx context.Context, id, venue string) (*domain.PriceAlert, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	venue = strings.TrimSpace(venue)
+	if _, err := s.db.ExecContext(ctx, `
+		UPDATE price_alerts SET triggered_venue = ? WHERE id = ?
+	`, venue, id); err != nil {
+		return nil, fmt.Errorf("alerts sqlite set triggered venue: %w", err)
 	}
 	return s.getByIDUnlocked(ctx, id)
 }
@@ -794,7 +809,7 @@ func (s *SQLite) scanOne(ctx context.Context, q rowScanner, query string, args .
 	err := q.QueryRowContext(ctx, query, args...).Scan(
 		&a.ID, &a.ClientID, &ex, &a.Symbol, &cond, &a.TargetPrice,
 		&mode, &armed, &st, &createdRaw, &trigRaw, &a.TriggeredPrice,
-		&kind, &a.RangePct,
+		&kind, &a.RangePct, &a.TriggeredVenue,
 	)
 	if err != nil {
 		return nil, err
@@ -832,7 +847,7 @@ func scanAll(rows *sql.Rows) ([]domain.PriceAlert, error) {
 		if err := rows.Scan(
 			&a.ID, &a.ClientID, &ex, &a.Symbol, &cond, &a.TargetPrice,
 			&mode, &armed, &st, &createdRaw, &trigRaw, &a.TriggeredPrice,
-			&kind, &a.RangePct,
+			&kind, &a.RangePct, &a.TriggeredVenue,
 		); err != nil {
 			return nil, fmt.Errorf("alerts sqlite scan: %w", err)
 		}

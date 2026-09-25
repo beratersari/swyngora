@@ -85,6 +85,8 @@ type PriceAlert struct {
 	CreatedAt      time.Time
 	TriggeredAt    *time.Time // last fire time (one_time or repeating)
 	TriggeredPrice float64    // last metric at most recent fire; 0 if never fired
+	// TriggeredVenue is the exchange that crossed a multi-venue tape alert (funding on exchange=all).
+	TriggeredVenue string
 }
 
 // AlertEvalResult is the outcome of evaluating a price tick against an alert.

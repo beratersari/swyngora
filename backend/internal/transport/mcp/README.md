@@ -124,7 +124,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `create_liquidation_notional_alert` | Fire when a coin's long/short/total liquidations in 1m/5m/15m/1h exceed a USDT amount; one fire per wave; payload `importance` follows nearby predicted-level confidence |
 | `create_liquidation_level_alert` | Fire when last or later prints hit a predicted 10x/25x/50x/100x band that clears min reliability/confidence; high-confidence bands are high importance |
 | `create_setup_radar_alert` | Fire when a coin (or any scanned coin) looks like a past pre-move setup; one fire until the match clears |
-| `create_tape_alert` | Funding %, open interest USDT, 5m taker buy share, or fear-and-greed score above/below a level |
+| `create_tape_alert` | Funding %, open interest USDT, 5m taker buy share, or fear-and-greed score above/below a level. Funding `exchange=all` fires when any venue crosses |
 | `delete_price_alert` | Delete a price alert by id |
 | `get_alert_webhook` | Get client webhook URL for alert notifications |
 | `set_alert_webhook` | Set http(s) webhook URL (durable outbox on trigger) |

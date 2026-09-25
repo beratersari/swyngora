@@ -18,4 +18,16 @@ describe('CreateAlertForm', () => {
     );
     expect(screen.getByRole('button', { name: /create|oluştur/i })).toBeInTheDocument();
   });
+
+  it('explains that all-exchange funding watches every venue', () => {
+    renderWithProviders(
+      <CreateAlertForm
+        defaultKind="funding"
+        defaultExchange="all"
+        defaultSymbol="BTCUSDT"
+        onSubmit={async () => undefined}
+      />,
+    );
+    expect(screen.getByText(/any of Binance, Bybit, or OKX|Binance, Bybit veya OKX/i)).toBeInTheDocument();
+  });
 });

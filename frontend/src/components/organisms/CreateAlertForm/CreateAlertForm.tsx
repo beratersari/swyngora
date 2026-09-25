@@ -333,6 +333,13 @@ export function CreateAlertForm({
           </Field>
         )}
       </FieldRow>
+      {isFunding && exchange === 'all' ? (
+        <Text variant="caption" color="secondary">
+          {t('alerts:fundingAllVenues', {
+            defaultValue: 'All exchanges fires when any of Binance, Bybit, or OKX crosses this funding level. The alert names the venue that crossed.',
+          })}
+        </Text>
+      ) : null}
       {submitError != null ? (
         <Alert
           type="error"

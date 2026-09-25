@@ -364,15 +364,17 @@ func (c *Checker) evalTapeGroup(ctx context.Context, kind, exchange, symbol stri
 	if c.Tape == nil {
 		return
 	}
+	if kind == "funding" {
+		snap, err := c.Tape.GetFundingRate(ctx, exchange, symbol, 8)
+		if err != nil || snap == nil {
+			return
+		}
+		c.finishFunding(ctx, alerts, snap)
+		return
+	}
 	var metric float64
 	var ok bool
 	switch kind {
-	case "funding":
-		snap, err := c.Tape.GetFundingRate(ctx, exchange, symbol, 8)
-		if err != nil {
-			return
-		}
-		metric, ok = domain.FundingAlertPercent(snap)
 	case "open_interest":
 		snap, err := c.Tape.GetOpenInterest(ctx, exchange, symbol)
 		if err != nil {
@@ -401,6 +403,24 @@ func (c *Checker) evalFearGreed(ctx context.Context, alerts []domain.PriceAlert)
 		return
 	}
 	c.finishMetric(ctx, alerts, float64(rep.Score))
+}
+
+func (c *Checker) finishFunding(ctx context.Context, alerts []domain.PriceAlert, snap *domain.FundingSnapshot) {
+	now := c.now().UTC()
+	for _, a := range alerts {
+		pct, venue, ok := domain.FundingAlertReading(snap, a.Condition)
+		if !ok {
+			continue
+		}
+		var extra map[string]any
+		if venue != "" {
+			extra = map[string]any{"venue": venue, "fundingPct": pct}
+		}
+		ev := domain.EvaluateAlert(a, pct)
+		if _, _, err := c.Alerts.ProcessObservationExtra(ctx, a, ev, pct, now, extra); err != nil && c.Logger != nil {
+			c.Logger.Debug("tape alert failed", "id", a.ID, "err", err)
+		}
+	}
 }
 
 func (c *Checker) finishMetric(ctx context.Context, alerts []domain.PriceAlert, metric float64) {

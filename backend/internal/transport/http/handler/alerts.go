@@ -36,6 +36,7 @@ type alertDTO struct {
 	CreatedAt      string  `json:"createdAt"`
 	TriggeredAt    *string `json:"triggeredAt,omitempty"`
 	TriggeredPrice float64 `json:"triggeredPrice,omitempty"`
+	TriggeredVenue string  `json:"triggeredVenue,omitempty"`
 }
 
 func alertToDTO(a *domain.PriceAlert) alertDTO {
@@ -66,9 +67,10 @@ func alertToDTO(a *domain.PriceAlert) alertDTO {
 		s := a.TriggeredAt.UTC().Format(time.RFC3339Nano)
 		dto.TriggeredAt = &s
 	}
-	if a.TriggeredPrice > 0 {
+	if a.TriggeredPrice != 0 {
 		dto.TriggeredPrice = a.TriggeredPrice
 	}
+	dto.TriggeredVenue = strings.TrimSpace(a.TriggeredVenue)
 	return dto
 }
 

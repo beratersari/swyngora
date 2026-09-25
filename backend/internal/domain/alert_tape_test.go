@@ -46,3 +46,30 @@ func TestTapeAlertValues(t *testing.T) {
 		t.Fatal("60 buy share should be above 60")
 	}
 }
+
+func TestFundingAlertReading_AnyVenue(t *testing.T) {
+	snap := &FundingSnapshot{
+		Exchange: "all",
+		Venues: []FundingVenueSnap{
+			{Exchange: "binance", Current: FundingCurrent{RatePct: "0.0100"}},
+			{Exchange: "bybit", Current: FundingCurrent{RatePct: "0.0800"}},
+			{Exchange: "okx", Current: FundingCurrent{RatePct: "-0.0200"}},
+		},
+	}
+	pct, venue, ok := FundingAlertReading(snap, AlertAbove)
+	if !ok || venue != "bybit" || pct < 0.079 || pct > 0.081 {
+		t.Fatalf("above should follow the highest venue, got %v %s %v", pct, venue, ok)
+	}
+	if !AlertConditionMet(AlertAbove, pct, 0.05) {
+		t.Fatal("0.08 should be above 0.05 even though binance is 0.01")
+	}
+	pct, venue, ok = FundingAlertReading(snap, AlertBelow)
+	if !ok || venue != "okx" || pct > -0.019 || pct < -0.021 {
+		t.Fatalf("below should follow the lowest venue, got %v %s %v", pct, venue, ok)
+	}
+	one := &FundingSnapshot{Exchange: "binance", Current: &FundingCurrent{RatePct: "0.0100"}}
+	pct, venue, ok = FundingAlertReading(one, AlertAbove)
+	if !ok || venue != "binance" || pct < 0.009 || pct > 0.011 {
+		t.Fatalf("single venue %v %s %v", pct, venue, ok)
+	}
+}

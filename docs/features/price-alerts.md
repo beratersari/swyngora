@@ -55,7 +55,7 @@ PUT /api/v1/alerts/webhook
 | `liquidation_notional` | Long / short / total USDT liquidated in a window | `long` / `short` / `both` | USDT amount (e.g. 20000000) | `repeating` |
 | `liquidation_level` | Last price or later prints hit a predicted 10x/25x/50x/100x band that clears later-print confidence | `any` (default) / `fair` / `high` | Min confidence 0–1 (`0` = default for that floor) | `repeating` |
 | `setup_radar` | Current tape looks like the setup before that coin's own important past moves (Setup Radar / Forensics Now) | `any` (default) / `up` / `down` | Min similarity 40–100 (`0` = 60) | `repeating` |
-| `funding` | Live funding rate in percent (0.01 means 0.01%) | `above` / `below` | −5 to 5 | `one_time` unless repeating |
+| `funding` | Live funding rate in percent (0.01 means 0.01%). `exchange=all` fires when **any** of Binance, Bybit, or OKX crosses the level (above uses the highest rate, below the lowest) and records that venue | `above` / `below` | −5 to 5 | `one_time` unless repeating |
 | `open_interest` | Current open-interest notional in USDT | `above` / `below` | Positive USDT | `one_time` unless repeating |
 | `taker` | 5-minute taker buy share, 0–100 | `above` / `below` | 0–100 | `one_time` unless repeating |
 | `fear_greed` | Market-wide fear and greed score. No symbol | `above` / `below` | 0–100 | `one_time` unless repeating |

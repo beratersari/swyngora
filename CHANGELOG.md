@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Liquidation map uses later-print confidence:** live 10x/25x/50x/100x bars shrink and fade when that leverage rarely printed later, and stay full when it did (`GET /api/v1/market/liquidation-levels`, web `/liquidations?view=chart`) (`docs/features/liquidations.md`)
 
 ### Fixed
+- **Funding alerts on all exchanges:** an alert set for every venue now fires when any of Binance, Bybit, or OKX crosses the funding level, and records which venue did. Previously only the first venue was compared, so another exchange could sit above 0.05% with no alert (`docs/features/price-alerts.md`)
 - **Frozen liquidation maps keep top-trader size:** later estimates used only all-account long/short. They now persist Binance top-trader position share and rebuild with the same opposite-crowd size blend as the live hunt (`docs/features/liquidations.md`)
 
 ### Added
