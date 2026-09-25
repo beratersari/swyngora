@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { IntervalRail } from '@/components/molecules/IntervalRail';
 import { CoinInsightPanel, CoinInsightStack } from '@/components/organisms/CoinInsightPanel';
 import { VolumeProfileLadder } from '@/components/organisms/VolumeProfileLadder';
 import { PositionSidePanel } from '@/components/organisms/PositionSidePanel';
@@ -22,9 +24,12 @@ import { perpStats, reportSummary, surgeStats } from './CoinFlowTab.helpers';
 import { WhaleFollowList } from './WhaleFollowList';
 import type { CoinFlowTabProps } from './CoinFlowTab.types';
 
+const FLOW_WINDOWS = ['5m', '15m', '1h', '4h', '1d', '3d', '7d'] as const;
+
 /** Per-coin prints, book, and volume — RTK lives here (page layer), not in organisms. */
 export function CoinFlowTab({ symbol, exchange }: CoinFlowTabProps) {
   const { t } = useTranslation('detail');
+  const [flowWindow, setFlowWindow] = useState<(typeof FLOW_WINDOWS)[number]>('15m');
   const arg = { symbol, exchange };
   const tapeArg = { symbol, exchange: 'all' as const };
   const err = (e: unknown) => rtkErrorMessage(e, { resource: t('resource.tape') });
@@ -33,7 +38,7 @@ export function CoinFlowTab({ symbol, exchange }: CoinFlowTabProps) {
   const surge = useGetMarketVolumeSurgeQuery(tapeArg);
   const taker = useGetMarketTakerFlowQuery(tapeArg);
   const netPosition = useGetMarketNetPositionQuery(tapeArg);
-  const flow = useGetMarketFlowAtPricesQuery({ ...tapeArg, window: '15m' });
+  const flow = useGetMarketFlowAtPricesQuery({ ...tapeArg, window: flowWindow });
   const vwap = useGetMarketVWAPQuery({ ...tapeArg, window: '24h' });
   const profile = useGetMarketVolumeProfileQuery(tapeArg);
   const abs = useGetMarketAbsorptionQuery(arg);
@@ -74,6 +79,17 @@ export function CoinFlowTab({ symbol, exchange }: CoinFlowTabProps) {
               <WhaleFollowList events={rtkCurrent(whales)?.events} />
             ) : row.key === 'profile' ? (
               <VolumeProfileLadder report={rtkCurrent(profile)} />
+            ) : row.key === 'prices' ? (
+              <IntervalRail
+                intervals={[...FLOW_WINDOWS]}
+                value={flowWindow}
+                onChange={(next) => {
+                  if ((FLOW_WINDOWS as readonly string[]).includes(next)) {
+                    setFlowWindow(next as (typeof FLOW_WINDOWS)[number]);
+                  }
+                }}
+                aria-label={t('flow.pricesWindow')}
+              />
             ) : null
           }
           error={row.q.isError ? err(row.q.error) : null}

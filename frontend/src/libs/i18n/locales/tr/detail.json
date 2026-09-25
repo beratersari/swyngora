@@ -313,6 +313,7 @@
     "surge": "Hacim sıçraması",
     "taker": "Taker akışı",
     "prices": "Fiyatlarda akış",
+    "pricesWindow": "Fiyatlarda akış penceresi",
     "vwap": "VWAP",
     "profile": "Hacim profili",
     "ladder": {

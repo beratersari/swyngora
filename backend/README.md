@@ -78,7 +78,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/pressure` | Combined −1…+1 pressure from resting book, CVD, and absorption, plus 1h change |
 | `GET` | `/api/v1/market/cvd` | Spot and futures CVD versus price; 15m/1h/4h/24h change; venue split and spot-vs-futures split |
 | `GET` | `/api/v1/market/volume-profile` | Volume by price (POC + 70% value area, buy/sell) plus OI opened/closed and long/short liquidations on the same rows; Binance and Bybit separately plus combined |
-| `GET` | `/api/v1/market/flow-at-prices` | Buy vs sell USDT, print count, and delta at each price from aggressive futures prints (not candle smear) |
+| `GET` | `/api/v1/market/flow-at-prices` | Buy vs sell USDT, print count, and delta at each price. Windows 5m to 7d. Live tape is about 1h (Bybit: newest ~1000 trades); stored minutes while the process runs cover the longer lookback |
 | `GET` | `/api/v1/market/around` | What happened around a time (before / during / after): price, volume, VWAP, vs typical, POC, sweeps, stored book/futures, BTC/ETH options when sampled; `tapeRead` is flow at prices |
 | `GET` | `/api/v1/market/around/compare` | How two times / moves of the same coin differed (price, volume, book, OI, sweeps) |
 | `GET` | `/api/v1/market/around/moves` | Strongest recent up/down legs plus what happened during each |
@@ -376,6 +376,9 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `FEAR_GREED_HISTORY_DB_PATH` | `data/feargreed.db` | SQLite archive for fear-and-greed score samples |
 | `FEAR_GREED_HISTORY_INTERVAL` | `15m` | How often the index is sampled |
 | `FEAR_GREED_HISTORY_RETENTION` | `2160h` | How long those samples are kept (90 days) |
+| `FLOW_AT_PRICES_DB_PATH` | `data/flowprices.db` | SQLite archive of buy/sell size at each price |
+| `FLOW_AT_PRICES_INTERVAL` | `10s` | How often closed minutes are stored |
+| `FLOW_AT_PRICES_RETENTION` | `168h` | How long those minute rows are kept (7 days) |
 | `SCANNER_CHECK_INTERVAL` | `60s` | How often scanner rules are evaluated |
 
 No API keys are required for the public endpoints used here. Respect upstream rate limits.

@@ -71,6 +71,8 @@ type Service struct {
 	options        domain.OptionsChainPort
 	optionsHist    domain.OptionsHistoryStore
 	fearGreed      domain.FearGreedStore
+	flowHist       domain.FlowAtPricesStore
+	flowSeen       map[string]struct{}
 	fearGreedSF    singleflight.Group
 	fearGreedMu    sync.Mutex
 	fearGreedAt    time.Time
@@ -238,6 +240,14 @@ func (s *Service) WithPerpDepthHistory(store domain.PerpDepthHistoryStore) *Serv
 func (s *Service) WithFearGreedHistory(store domain.FearGreedStore) *Service {
 	if s != nil {
 		s.fearGreed = store
+	}
+	return s
+}
+
+// WithFlowAtPricesHistory attaches the durable buy/sell-by-price store.
+func (s *Service) WithFlowAtPricesHistory(store domain.FlowAtPricesStore) *Service {
+	if s != nil {
+		s.flowHist = store
 	}
 	return s
 }

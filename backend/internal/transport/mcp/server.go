@@ -1555,7 +1555,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_flow_at_prices",
-		mcp.WithDescription("What printed at each price: market buy vs sell USDT, print count, and delta (buy − sell) on that row. Use when the user asks how much bought/sold at a level (e.g. 65520 while BTC traded 65400–65600), not candle totals. Built from aggressive futures prints (Binance aggTrades, Bybit recent trades), not candle smear. window 5m/15m/1h (default 15m) or startTime/endTime (max 1h). Optional minPrice/maxPrice clips the ladder; tickSize sets row width. truncated when the venue tape does not cover the whole window. Not financial advice."),
+		mcp.WithDescription("What printed at each price: market buy vs sell USDT, print count, and delta (buy − sell) on that row. Use when the user asks how much bought/sold at a level (e.g. 65520 while BTC traded 65400–65600), not candle totals. Built from aggressive futures prints, not candle smear. window 5m/15m/1h/4h/1d/3d/7d (default 15m) or startTime/endTime (max 7d). The live tape is about 1h on Binance and the newest ~1000 Bybit trades. Closed minutes stored while this process runs (about 7 days) fill longer lookbacks and Bybit further back. Optional minPrice/maxPrice clips the ladder; tickSize sets row width. truncated when stored rows do not cover the whole window. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
 		mcp.WithString("window", mcp.Description("5m | 15m | 1h (default 15m). Ignored when startTime/endTime are set.")),

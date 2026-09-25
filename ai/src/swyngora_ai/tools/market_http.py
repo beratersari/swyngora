@@ -960,11 +960,11 @@ class FlowAtPricesInput(BaseModel):
     )
     window: str = Field(
         default="15m",
-        description="5m|15m|1h (default 15m). Ignored when start_time/end_time are set.",
+        description="5m|15m|1h|4h|1d|3d|7d (default 15m). Ignored when start_time/end_time are set.",
     )
     start_time: str = Field(
         default="",
-        description="Range start (RFC3339 or unix ms). Max span 1h.",
+        description="Range start (RFC3339 or unix ms). Max span 7d. Longer than the live tape uses stored minutes.",
     )
     end_time: str = Field(
         default="",
@@ -5124,9 +5124,11 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "count, and delta (buy − sell). Use when a candle's total "
                 "buy/sell is not enough — e.g. how much bought and sold at "
                 "65520 while BTC traded 65400–65600. Built from aggressive "
-                "futures prints, not candle smear. window 5m/15m/1h or "
-                "start_time/end_time (max 1h). Optional min_price/max_price "
-                "and tick_size. Binance + Bybit."
+                "futures prints, not candle smear. window 5m/15m/1h/4h/1d/3d/7d "
+                "or start_time/end_time (max 7d). Live tape is about 1h on "
+                "Binance and the newest ~1000 Bybit trades; stored minutes "
+                "(about 7 days, while the process runs) cover longer lookbacks. "
+                "Optional min_price/max_price and tick_size. Binance + Bybit."
             ),
             args_schema=FlowAtPricesInput,
         ),

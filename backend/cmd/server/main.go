@@ -26,6 +26,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/ethplorer"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/exportstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/feargreedstore"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/flowstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/fundingarbstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/futuresstore"
 	fxrates "gitlab.com/trace-analysis/swyngora/backend/internal/adapter/fx"
@@ -350,6 +351,18 @@ func main() {
 	}()
 	marketSvc = marketSvc.WithFearGreedHistory(fearGreedStore)
 	logger.Info("fear greed history store ready", "driver", "sqlite", "path", fearGreedStore.Path())
+	flowStore, err := flowstore.Open(cfg.FlowAtPricesDBPath)
+	if err != nil {
+		logger.Error("flow at prices history sqlite open failed", "path", cfg.FlowAtPricesDBPath, "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := flowStore.Close(); err != nil {
+			logger.Error("flow at prices history sqlite close", "err", err)
+		}
+	}()
+	marketSvc = marketSvc.WithFlowAtPricesHistory(flowStore)
+	logger.Info("flow at prices history store ready", "driver", "sqlite", "path", flowStore.Path())
 	bybitTrades := bybit.NewTradeHub(bybit.TradeHubOptions{
 		WSURL: cfg.BybitLinearWSURL,
 		Book:  bybitClient.TakerBook(),
@@ -618,6 +631,12 @@ func main() {
 		Svc:      marketSvc,
 		Interval: cfg.FearGreedHistoryInterval,
 		Retain:   cfg.FearGreedHistoryRetention,
+		Logger:   logger,
+	}).Start(ctx)
+	go (&market.FlowAtPricesHistoryWorker{
+		Svc:      marketSvc,
+		Interval: cfg.FlowAtPricesInterval,
+		Retain:   cfg.FlowAtPricesRetention,
 		Logger:   logger,
 	}).Start(ctx)
 

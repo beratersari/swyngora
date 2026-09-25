@@ -15,6 +15,10 @@ func TestParseFlowAtPricesWindow(t *testing.T) {
 	if err != nil || id != FlowAtPricesWindow5m || dur != 5*time.Minute {
 		t.Fatalf("5m %s %s %v", id, dur, err)
 	}
+	id, dur, err = ParseFlowAtPricesWindow("1d")
+	if err != nil || id != FlowAtPricesWindow1d || dur != 24*time.Hour {
+		t.Fatalf("1d %s %s %v", id, dur, err)
+	}
 	if _, _, err := ParseFlowAtPricesWindow("24h"); !errors.Is(err, ErrInvalidArgument) {
 		t.Fatalf("bad window %v", err)
 	}
@@ -32,7 +36,12 @@ func TestResolveFlowAtPricesRange_CustomAndCap(t *testing.T) {
 	if err != nil || id != "custom" || !from.Equal(start) || !to.Equal(end) {
 		t.Fatalf("custom %s %s %s %v", id, from, to, err)
 	}
-	tooLong := now.Add(-2 * time.Hour)
+	hours := now.Add(-4 * time.Hour)
+	from, to, id, err = ResolveFlowAtPricesRange("", &hours, &now, now)
+	if err != nil || to.Sub(from) != 4*time.Hour {
+		t.Fatalf("4h custom %s %v", to.Sub(from), err)
+	}
+	tooLong := now.Add(-8 * 24 * time.Hour)
 	if _, _, _, err := ResolveFlowAtPricesRange("", &tooLong, &now, now); !errors.Is(err, ErrInvalidArgument) {
 		t.Fatalf("cap %v", err)
 	}

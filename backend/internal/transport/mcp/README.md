@@ -51,7 +51,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_participation` | OI USDT delta ÷ futures taker volume (15m/1h/4h); 2B volume and OI +300M is 15% new positions |
 | `get_volume_share` | How BTC futures volume splits across Binance / Bybit / OKX (e.g. 55/30/15) plus who gained or lost share vs the prior hour |
 | `get_print_size` | Average aggressive print size (USDT per fill) 5m/15m vs the prior window; few large vs many small |
-| `get_flow_at_prices` | Buy vs sell USDT, print count, and delta at each price (Binance aggTrades / Bybit recent trades); `window` 5m/15m/1h or `startTime`/`endTime`; optional `minPrice`/`maxPrice`/`tickSize` |
+| `get_flow_at_prices` | Buy vs sell USDT, print count, and delta at each price. `window` 5m/15m/1h/4h/1d/3d/7d or `startTime`/`endTime` (max 7d). Live tape is about 1h (Bybit: newest ~1000 trades); stored minutes while the process runs cover the longer lookback. Optional `minPrice`/`maxPrice`/`tickSize` |
 | `get_market_pressure` | One −1…+1 score from resting book, CVD, and absorption when they disagree; `change1h` is that score vs ~1h ago |
 | `get_cvd` | Spot and futures CVD versus price; 15m/1h/4h/24h change; venue split, spot-vs-futures split, divergence duration |
 | `get_volume_profile` | Volume by price (POC + 70% value area, buy/sell) plus OI opened/closed and long/short liquidations on the same rows; Binance and Bybit separately plus combined; `window` or `startTime`/`endTime`. Candle smear — use `get_flow_at_prices` for print-level buy/sell/count/delta |

@@ -196,6 +196,13 @@ type Config struct {
 	// FearGreedHistoryRetention is how long those samples are kept.
 	FearGreedHistoryRetention time.Duration
 
+	// FlowAtPricesDBPath is the SQLite file for buy/sell size at each price.
+	FlowAtPricesDBPath string
+	// FlowAtPricesInterval is how often closed minutes are stored.
+	FlowAtPricesInterval time.Duration
+	// FlowAtPricesRetention is how long those minute rows are kept.
+	FlowAtPricesRetention time.Duration
+
 	// APIAuthToken, when non-empty, requires Authorization: Bearer or X-API-Key on
 	// tenant routes (watchlist/alerts/portfolio/scanner/AI) and /mcp. Market GETs stay public.
 	// Empty = open local-dev mode (not multi-tenant safe).
@@ -346,6 +353,10 @@ func Load() Config {
 		FearGreedHistoryDBPath:    getenv("FEAR_GREED_HISTORY_DB_PATH", "data/feargreed.db"),
 		FearGreedHistoryInterval:  positiveDurationEnv("FEAR_GREED_HISTORY_INTERVAL", 15*time.Minute),
 		FearGreedHistoryRetention: positiveDurationEnv("FEAR_GREED_HISTORY_RETENTION", 90*24*time.Hour),
+
+		FlowAtPricesDBPath:        getenv("FLOW_AT_PRICES_DB_PATH", "data/flowprices.db"),
+		FlowAtPricesInterval:      positiveDurationEnv("FLOW_AT_PRICES_INTERVAL", 10*time.Second),
+		FlowAtPricesRetention:     positiveDurationEnv("FLOW_AT_PRICES_RETENTION", 7*24*time.Hour),
 		PerpDepthHistoryRetention: positiveDurationEnv("PERP_DEPTH_HISTORY_RETENTION", 2*24*time.Hour),
 
 		APIAuthToken: strings.TrimSpace(os.Getenv("API_AUTH_TOKEN")),

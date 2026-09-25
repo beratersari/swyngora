@@ -313,6 +313,7 @@
     "surge": "Volume surge",
     "taker": "Taker flow",
     "prices": "Flow at prices",
+    "pricesWindow": "Flow at prices lookback",
     "vwap": "VWAP",
     "profile": "Volume profile",
     "ladder": {
