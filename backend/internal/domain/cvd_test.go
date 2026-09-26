@@ -430,3 +430,58 @@ func TestResampleTakerBuckets_1mTo5m(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+func TestBuildCVDSeries_AnchorsResetAtDayAnd4hOpen(t *testing.T) {
+	// 10:30 UTC. Rolling 4h starts at 06:30. The 4h anchor starts at 08:00.
+	// Day anchor starts at 00:00, but bars only exist from 07:00, so day is partial.
+	day := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+	bars := []struct {
+		at    time.Time
+		buy   float64
+		sell  float64
+		price float64
+	}{
+		{day.Add(6*time.Hour + 35*time.Minute), 1, 0, 99},
+		{day.Add(7 * time.Hour), 100, 0, 100},
+		{day.Add(8 * time.Hour), 0, 40, 101},
+		{day.Add(10*time.Hour + 25*time.Minute), 10, 0, 102},
+	}
+	var buckets []TakerBucket
+	var prices []CVDPrice
+	for _, b := range bars {
+		buckets = append(buckets, TakerBucket{Start: b.at, BuyNotional: b.buy, SellNotional: b.sell})
+		prices = append(prices, CVDPrice{Time: b.at, Close: b.price})
+	}
+	now := day.Add(10*time.Hour + 30*time.Minute)
+	got := BuildCVDSeries(ExchangeBinance, "BTCUSDT", buckets, prices, now, bars[0].at)
+	var dayA, h4 CVDAnchor
+	for _, a := range got.Anchors {
+		switch a.Anchor {
+		case CVDAnchorDay:
+			dayA = a
+		case CVDAnchor4h:
+			h4 = a
+		}
+	}
+	if dayA.From != day || dayA.CVD != 71 || dayA.Complete {
+		t.Fatalf("day %+v", dayA)
+	}
+	if !strings.Contains(dayA.Summary, "00:00 UTC") || !strings.Contains(dayA.Summary, "bars on hand") {
+		t.Fatalf("day summary %s", dayA.Summary)
+	}
+	if h4.From != day.Add(8*time.Hour) || h4.CVD != -30 || !h4.Complete {
+		t.Fatalf("4h %+v", h4)
+	}
+	if !strings.Contains(h4.Summary, "08:00 UTC") {
+		t.Fatalf("4h summary %s", h4.Summary)
+	}
+	var roll CVDWindowStat
+	for _, w := range got.Windows {
+		if w.Window == CVDWindow4h {
+			roll = w
+		}
+	}
+	if roll.CVDChange == h4.CVD {
+		t.Fatalf("rolling 4h should include the 07:00 bar, anchored 4h should not: roll %v anchor %v", roll.CVDChange, h4.CVD)
+	}
+}

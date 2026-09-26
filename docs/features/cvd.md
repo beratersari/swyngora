@@ -25,6 +25,13 @@ Useful when:
   moved against each other
 - Windows **15m / 1h / 4h / 24h**: CVD change vs price change (not only
   the latest total), labeled `confirms` | `opposite` | `absorption` | `mixed`
+- **Anchors** reset the sum at a clock. `day` is 00:00 UTC. `4h` is the
+  current 4-hour open (00, 04, 08, 12, 16, 20 UTC). At 10:30 the rolling
+  4h window still starts at 06:30; the 4h anchor starts at 08:00. Each
+  anchor reports `cvd` (buy minus sell since that time), price change,
+  and the same confirms / opposite / absorption label. `complete` is
+  false when the stored bars start after the anchor — the number is
+  then only the bars on hand. The coin tape shows both next to last CVD.
 - Combined **adds** each venue’s delta on the overlapping **time range**
   (a quiet 5m slot on one side is treated as 0, not a hole). Combined
   `complete` follows both venues — one missing 5m bucket at the start

@@ -4923,7 +4923,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "market-sell notional over time, with price. Futures and spot "
                 "are separate; spotFutures flags when spot buying and futures "
                 "selling (or the reverse). Windows show 15m / 1h / 4h / 24h "
-                "change. Price vs CVD divergence is the current consecutive "
+                "change. Anchors reset the sum at 00:00 UTC (day) and at the "
+                "current 4-hour open. Price vs CVD divergence is the current consecutive "
                 "run only. Combined shows Binance vs Bybit when they disagree."
             ),
             args_schema=TakerFlowInput,

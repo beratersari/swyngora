@@ -9,7 +9,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const cvdDisclaimer = "CVD is the running sum of aggressive market-buy notional minus market-sell notional. Futures CVD is who hit the perpetual book; spot CVD is who hit the spot book (Binance from 5m klines, Bybit from live spot trades). It is not account long/short. Windows show 15m / 1h / 4h / 24h change. Combined futures/spot each use the overlapping time range. spotFutures flags when spot buying and futures selling (or the reverse). Divergence runs do not merge across a quiet gap. Informational only — not financial advice."
+const cvdDisclaimer = "CVD is the running sum of aggressive market-buy notional minus market-sell notional. Futures CVD is who hit the perpetual book; spot CVD is who hit the spot book (Binance from 5m klines, Bybit from live spot trades). It is not account long/short. Windows show 15m / 1h / 4h / 24h change. Anchors reset that sum at 00:00 UTC (day) and at the current 4-hour open (00/04/08/12/16/20 UTC). Combined futures/spot each use the overlapping time range. spotFutures flags when spot buying and futures selling (or the reverse). Divergence runs do not merge across a quiet gap. Informational only — not financial advice."
 
 // WithTakerBucketStore attaches durable taker bars for CVD.
 func (s *Service) WithTakerBucketStore(store domain.TakerBucketStore) *Service {

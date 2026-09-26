@@ -25,6 +25,17 @@ function formatOIWindow(
   return [amt === '—' ? '' : amt, pct, flow].filter(Boolean).join(' ') || '—';
 }
 
+function formatAnchoredCvd(
+  anchors: { anchor?: string; cvd?: string; complete?: boolean }[] | undefined,
+  id: string,
+  partial: string,
+): string {
+  const row = anchors?.find((a) => a.anchor === id);
+  if (!row?.cvd) return '—';
+  const value = formatTapeNum(row.cvd);
+  return row.complete === false ? `${value} (${partial})` : value;
+}
+
 function Stat({
   label,
   value,
@@ -424,11 +435,28 @@ export function TapePanel({
           <StatsGrid>
             <Stat label={t('tape.cvdLast')} value={formatTapeNum(cvdRow?.lastCvd)} isLoading={isLoading} />
             <Stat
+              label={t('tape.cvdDay')}
+              value={formatAnchoredCvd(cvdRow?.anchors, 'day', t('tape.cvdPartial'))}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.cvd4h')}
+              value={formatAnchoredCvd(cvdRow?.anchors, '4h', t('tape.cvdPartial'))}
+              isLoading={isLoading}
+            />
+            <Stat
               label={t('tape.cvdSummary')}
               value={cvdRow?.summary || cvd?.summary || '—'}
               isLoading={isLoading}
             />
           </StatsGrid>
+        )}
+        {cvdRow?.anchors?.map((a) =>
+          a.summary ? (
+            <Text key={a.anchor} variant="caption" color="secondary">
+              {a.summary}
+            </Text>
+          ) : null,
         )}
         {cvdRow?.error ? (
           <Text variant="caption" color="secondary">

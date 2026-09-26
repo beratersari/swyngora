@@ -2225,7 +2225,13 @@ paths:
         price and flow disagree. Divergence includes how long the split
         has been running and how far price and CVD moved. **15m / 1h /
         4h / 24h** windows show CVD change (not only the latest total)
-        and label `confirms`, `opposite`, or `absorption`. `exchange=all`
+        and label `confirms`, `opposite`, or `absorption`. **Anchors**
+        reset the sum at a clock instead of a rolling lookback: `day`
+        is 00:00 UTC, `4h` is the current 4-hour open (00/04/08/12/16/20
+        UTC). Each anchor's `cvd` is buy minus sell since that time, with
+        price change and the same confirms / opposite / absorption label.
+        `complete` is false when stored bars start after the anchor.
+        `exchange=all`
         (default) returns Binance and Bybit separately plus a combined
         series. Combined uses the overlapping **time range** (a missing
         5m slot is 0) and is `complete` when both venues are. Combined

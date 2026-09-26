@@ -27,7 +27,16 @@ describe('TapePanel', () => {
         liquidations={{
           windows: [{ window: '1h', totalNotional: '25000000', complete: true }],
         }}
-        cvd={{ combined: { lastCvd: '12.5', summary: 'buy flow' } }}
+        cvd={{
+          combined: {
+            lastCvd: '12.5',
+            summary: 'buy flow',
+            anchors: [
+              { anchor: 'day', cvd: '+1200000', complete: true, summary: 'Since the day open (00:00 UTC), CVD +1.20M.' },
+              { anchor: '4h', cvd: '-400000', complete: false, summary: 'Since the 4h open (08:00 UTC), CVD -400.00K.' },
+            ],
+          },
+        }}
         snapshot={{
           summary: 'Volume building ahead of price',
           combined: { longPct: '55.2', windows: [{ window: '1h', taker: { dominant: 'buy', buyShare: '0.58' } }] },
@@ -77,6 +86,10 @@ describe('TapePanel', () => {
     expect(screen.getByText('0.0100%')).toBeInTheDocument();
     expect(screen.getByText('25.00M')).toBeInTheDocument();
     expect(screen.getByText('buy flow')).toBeInTheDocument();
+    expect(screen.getByText('Since day open')).toBeInTheDocument();
+    expect(screen.getByText('1.20M')).toBeInTheDocument();
+    expect(screen.getByText(/-400\.00K \(Partial\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Since the day open/)).toBeInTheDocument();
     expect(screen.getByText('Volume building ahead of price')).toBeInTheDocument();
     expect(screen.getByText('+15%')).toBeInTheDocument();
     expect(screen.getByText('55%')).toBeInTheDocument();

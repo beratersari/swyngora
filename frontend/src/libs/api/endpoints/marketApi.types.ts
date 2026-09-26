@@ -442,6 +442,14 @@ export type MarketCvdVenue = {
   error?: string;
   complete?: boolean;
   windows?: { window?: string; cvdChange?: string; label?: string; complete?: boolean }[];
+  anchors?: {
+    anchor?: string;
+    from?: string;
+    cvd?: string;
+    priceChangePct?: string;
+    summary?: string;
+    complete?: boolean;
+  }[];
 };
 
 export type MarketCvd = {

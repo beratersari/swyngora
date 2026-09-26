@@ -24,6 +24,10 @@ const (
 	CVDWindow4h  = "4h"
 	CVDWindow24h = "24h"
 
+	// Anchors reset the sum at a clock, unlike the rolling windows above.
+	CVDAnchorDay = "day"
+	CVDAnchor4h  = "4h"
+
 	CVDDirUp   = "up"
 	CVDDirDown = "down"
 	CVDDirFlat = "flat"
@@ -99,6 +103,23 @@ type CVDVenueSplit struct {
 	Summary       string
 }
 
+// CVDAnchor is CVD rebased to zero at a fixed clock (day open or 4h open).
+// A rolling 4h window at 10:30 starts at 06:30; the 4h anchor starts at 08:00.
+type CVDAnchor struct {
+	Anchor         string // day | 4h
+	From           time.Time
+	CVD            float64 // sum of bar deltas with start >= From
+	CVDChangePct   float64
+	PriceChangePct float64
+	BuyNotional    float64
+	SellNotional   float64
+	VsPrice        string
+	Divergence     string
+	Title          string
+	Summary        string
+	Complete       bool
+}
+
 // CVDWindowStat is how CVD and price moved over one lookback.
 type CVDWindowStat struct {
 	Window         string
@@ -136,6 +157,7 @@ type CVDVenueSeries struct {
 	Market         string // spot | futures
 	Points         []CVDPoint
 	Windows        []CVDWindowStat
+	Anchors        []CVDAnchor
 	LastCVD        float64
 	LastPrice      float64
 	Contributions  []CVDShare
@@ -270,6 +292,7 @@ func BuildCVDSeries(ex Exchange, symbol string, buckets []TakerBucket, prices []
 	for _, w := range CVDWindows {
 		out.Windows = append(out.Windows, summarizeCVDWindow(out.Points, w.ID, now.Add(-w.Dur), now, started))
 	}
+	out.Anchors = attachCVDAnchors(out.Points, now, started)
 	out.Complete = cvdCoverageComplete(started, cut)
 	out.Divergence = summarizeCVDDivergence(out.Points, out.Windows)
 	out.Summary = ExplainCVDVenue(out)
@@ -296,6 +319,7 @@ func CombineCVDVenues(symbol string, venues []CVDVenueSeries, prices []CVDPrice,
 	}
 	if len(usable) < 2 {
 		out.Windows = emptyCVDWindows(now, time.Time{})
+		out.Anchors = attachCVDAnchors(nil, now, time.Time{})
 		out.Summary = "Combined CVD only uses the time range both Binance and Bybit have. One venue is still filling in — not shown as complete."
 		return out
 	}
@@ -309,6 +333,7 @@ func CombineCVDVenues(symbol string, venues []CVDVenueSeries, prices []CVDPrice,
 	from, to, ok := overlapCVDRange(usable)
 	if !ok {
 		out.Windows = emptyCVDWindows(now, time.Time{})
+		out.Anchors = attachCVDAnchors(nil, now, time.Time{})
 		out.Summary = "Combined CVD needs overlapping 5-minute bars on both venues. Bybit history is still filling in — not shown as complete."
 		return out
 	}
@@ -369,6 +394,7 @@ func CombineCVDVenues(symbol string, venues []CVDVenueSeries, prices []CVDPrice,
 		}
 		out.Windows = append(out.Windows, stat)
 	}
+	out.Anchors = attachCVDAnchors(out.Points, now, started)
 	allComplete := true
 	for _, v := range usable {
 		if !v.Complete {
@@ -448,6 +474,9 @@ func ExplainCVDVenue(v CVDVenueSeries) string {
 	}
 	head := fmt.Sprintf("%s %s: %s", prettyBase(v.Symbol), w4.Window, w4.Summary)
 	if bits := explainCVDChanges(v.Windows); bits != "" {
+		head += " " + bits
+	}
+	if bits := explainCVDAnchors(v.Anchors); bits != "" {
 		head += " " + bits
 	}
 	if len(v.Contributions) > 0 {
@@ -902,6 +931,124 @@ func pickCVDVenueSplit(windows []CVDWindowStat) *CVDVenueSplit {
 		}
 	}
 	return fallback
+}
+
+// cvdAnchorStarts are 00:00 UTC and the current 4-hour block (00/04/08/12/16/20).
+func cvdAnchorStarts(now time.Time) []struct {
+	ID   string
+	From time.Time
+} {
+	now = now.UTC()
+	day := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	block := now.Truncate(4 * time.Hour)
+	return []struct {
+		ID   string
+		From time.Time
+	}{
+		{CVDAnchorDay, day},
+		{CVDAnchor4h, block},
+	}
+}
+
+func attachCVDAnchors(points []CVDPoint, now, started time.Time) []CVDAnchor {
+	starts := cvdAnchorStarts(now)
+	out := make([]CVDAnchor, 0, len(starts))
+	for _, a := range starts {
+		out = append(out, summarizeCVDAnchor(points, a.ID, a.From, started))
+	}
+	return out
+}
+
+func summarizeCVDAnchor(points []CVDPoint, anchor string, from, started time.Time) CVDAnchor {
+	out := CVDAnchor{Anchor: anchor, From: from.UTC()}
+	var first, last *CVDPoint
+	for i := range points {
+		p := &points[i]
+		if p.Time.Before(from) {
+			continue
+		}
+		if first == nil {
+			first = p
+		}
+		last = p
+		out.BuyNotional += p.BuyNotional
+		out.SellNotional += p.SellNotional
+		out.CVD += p.Delta
+	}
+	out.Complete = cvdCoverageComplete(started, from) && first != nil
+	label := cvdAnchorLabel(anchor)
+	if first == nil || last == nil {
+		out.VsPrice = CVDVsMixed
+		out.Title = "no data"
+		out.Summary = "No bars since the " + label + "."
+		return out
+	}
+	if tot := out.BuyNotional + out.SellNotional; tot > 0 {
+		out.CVDChangePct = out.CVD / tot * 100
+	}
+	if first.Price > 0 && last.Price > 0 {
+		out.PriceChangePct = (last.Price - first.Price) / first.Price * 100
+	}
+	out.VsPrice = CVDVsPrice(out.PriceChangePct, out.CVD, out.BuyNotional+out.SellNotional)
+	out.Divergence = windowDivergence(out.PriceChangePct, out.CVD)
+	out.Title = cvdTitle(out.VsPrice)
+	if out.Divergence != "" {
+		out.Title = cvdDivergenceTitle(out.Divergence)
+	}
+	out.Summary = explainCVDAnchor(out)
+	if !out.Complete {
+		out.Summary += " History starts later, so this is only the bars on hand."
+	}
+	return out
+}
+
+func cvdAnchorLabel(anchor string) string {
+	if anchor == CVDAnchorDay {
+		return "day open"
+	}
+	return "4h open"
+}
+
+func explainCVDAnchor(a CVDAnchor) string {
+	cvdWord := "CVD was flat"
+	if a.CVD > 0 {
+		cvdWord = "CVD rose (more market buys)"
+	} else if a.CVD < 0 {
+		cvdWord = "CVD fell (more market sells)"
+	}
+	pxWord := "price was little changed"
+	if a.PriceChangePct >= cvdPriceFlatPct {
+		pxWord = "price rose"
+	} else if a.PriceChangePct <= -cvdPriceFlatPct {
+		pxWord = "price fell"
+	}
+	clock := a.From.UTC().Format("15:04")
+	nums := fmt.Sprintf("Since the %s (%s UTC), CVD %s, price %s%%",
+		cvdAnchorLabel(a.Anchor), clock, FormatSignedQty(a.CVD), FormatSignedPct(a.PriceChangePct))
+	switch a.VsPrice {
+	case CVDVsAbsorption:
+		return nums + " — " + cvdWord + " but " + pxWord + " (absorption)."
+	case CVDVsOpposite:
+		return nums + " — " + pxWord + " while " + cvdWord + " (price and flow disagree)."
+	case CVDVsConfirms:
+		return nums + " — " + cvdWord + " and " + pxWord + "."
+	default:
+		return nums + " — " + cvdWord + "; " + pxWord + "."
+	}
+}
+
+func explainCVDAnchors(anchors []CVDAnchor) string {
+	parts := make([]string, 0, len(anchors))
+	for _, a := range anchors {
+		if a.From.IsZero() {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("since %s UTC %s", a.From.UTC().Format("15:04"), FormatSignedQty(a.CVD)))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "Anchored CVD: " + strings.Join(parts, ", ") + "."
 }
 
 func explainCVDChanges(windows []CVDWindowStat) string {

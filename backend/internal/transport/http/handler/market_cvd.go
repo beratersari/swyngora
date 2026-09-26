@@ -63,6 +63,21 @@ type cvdPointDTO struct {
 	Shares         []cvdShareDTO `json:"shares,omitempty"`
 }
 
+type cvdAnchorDTO struct {
+	Anchor         string    `json:"anchor"`
+	From           time.Time `json:"from"`
+	CVD            string    `json:"cvd"`
+	CVDChangePct   string    `json:"cvdChangePct"`
+	PriceChangePct string    `json:"priceChangePct"`
+	BuyNotional    string    `json:"buyNotional"`
+	SellNotional   string    `json:"sellNotional"`
+	VsPrice        string    `json:"vsPrice"`
+	Divergence     string    `json:"divergence,omitempty"`
+	Title          string    `json:"title"`
+	Summary        string    `json:"summary"`
+	Complete       bool      `json:"complete"`
+}
+
 type cvdWindowDTO struct {
 	Window         string        `json:"window"`
 	CVDChange      string        `json:"cvdChange"`
@@ -97,6 +112,7 @@ type cvdVenueDTO struct {
 	Market        string             `json:"market,omitempty"`
 	Points        []cvdPointDTO      `json:"points"`
 	Windows       []cvdWindowDTO     `json:"windows"`
+	Anchors       []cvdAnchorDTO     `json:"anchors,omitempty"`
 	LastCVD       string             `json:"lastCvd"`
 	LastPrice     string             `json:"lastPrice"`
 	Contributions []cvdShareDTO      `json:"contributions,omitempty"`
@@ -164,6 +180,17 @@ func cvdVenueToDTO(v domain.CVDVenueSeries) cvdVenueDTO {
 			VsPrice: p.VsPrice, Divergence: p.Divergence, Shares: cvdSharesToDTO(p.Shares),
 		})
 	}
+	anchors := make([]cvdAnchorDTO, 0, len(v.Anchors))
+	for _, a := range v.Anchors {
+		anchors = append(anchors, cvdAnchorDTO{
+			Anchor: a.Anchor, From: a.From.UTC(),
+			CVD: domain.FormatSignedQty(a.CVD), CVDChangePct: domain.FormatSignedPct(a.CVDChangePct),
+			PriceChangePct: domain.FormatSignedPct(a.PriceChangePct),
+			BuyNotional:    formatHistQty(a.BuyNotional), SellNotional: formatHistQty(a.SellNotional),
+			VsPrice: a.VsPrice, Divergence: a.Divergence,
+			Title: a.Title, Summary: a.Summary, Complete: a.Complete,
+		})
+	}
 	wins := make([]cvdWindowDTO, 0, len(v.Windows))
 	for _, w := range v.Windows {
 		wins = append(wins, cvdWindowDTO{
@@ -193,7 +220,7 @@ func cvdVenueToDTO(v domain.CVDVenueSeries) cvdVenueDTO {
 		div.Since = v.Divergence.Since.UTC()
 	}
 	out := cvdVenueDTO{
-		Exchange: string(v.Exchange), Symbol: v.Symbol, Market: v.Market, Points: pts, Windows: wins,
+		Exchange: string(v.Exchange), Symbol: v.Symbol, Market: v.Market, Points: pts, Windows: wins, Anchors: anchors,
 		LastCVD: domain.FormatSignedQty(v.LastCVD), LastPrice: formatHistQty(v.LastPrice),
 		Contributions: cvdSharesToDTO(v.Contributions),
 		Divergence:    div,
