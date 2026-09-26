@@ -54,8 +54,20 @@ describe('TapePanel', () => {
         symbol="BTCUSDT"
         botTracker={{
           delta: 6,
+          buyCount: 6,
+          sellCount: 0,
           summary: 'Repeated size: buy 57.89K × 6 in 30s.',
           clusters: [{ side: 'buy', notional: '57889', count: 6, exchange: 'binance' }],
+        }}
+        orderCount={{
+          summary: '5m: 80 buys, 20 sells, ratio +0.60 (more market buys).',
+          combined: {
+            windows: [
+              { window: '1m', ratio: '+0.40', buyCount: 7, sellCount: 3 },
+              { window: '5m', ratio: '+0.60', buyCount: 80, sellCount: 20 },
+              { window: '15m', ratio: '-0.10', buyCount: 45, sellCount: 55 },
+            ],
+          },
         }}
         perpLiquidity={{
           bid: '2400000000',
@@ -92,7 +104,13 @@ describe('TapePanel', () => {
     expect(screen.getByText('25.00M')).toBeInTheDocument();
     expect(screen.getByText('buy flow')).toBeInTheDocument();
     expect(screen.getByText('Repeated size')).toBeInTheDocument();
+    expect(screen.getByText('Repeated buy size')).toBeInTheDocument();
     expect(screen.getByText('57.89K × 6')).toBeInTheDocument();
+    expect(screen.getByText('Repeated buy prints')).toBeInTheDocument();
+    expect(screen.getByText(/only the repeated clips/)).toBeInTheDocument();
+    expect(screen.getByText('Order count')).toBeInTheDocument();
+    expect(screen.getByText('+0.60')).toBeInTheDocument();
+    expect(screen.getByText('5m buy prints')).toBeInTheDocument();
     expect(screen.getByText(/Repeated size: buy 57.89K/)).toBeInTheDocument();
     expect(screen.getByText('Since day open')).toBeInTheDocument();
     expect(screen.getByText('1.20M')).toBeInTheDocument();

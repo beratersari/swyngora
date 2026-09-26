@@ -83,6 +83,7 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetMarketCvdQuery: () => empty,
     useGetMarketPrintSizeQuery: () => empty,
     useGetMarketBotTrackerQuery: () => empty,
+    useGetMarketOrderCountQuery: () => empty,
     useGetMarketPerpDepthOverviewQuery: () => empty,
     useGetMarketPressureQuery: () => empty,
     useGetMarketSnapshotQuery: () => empty,

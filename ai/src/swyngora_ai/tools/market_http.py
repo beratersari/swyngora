@@ -2244,6 +2244,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"symbol": symbol, "exchange": exchange},
         )
 
+    def get_order_count_ratio(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/order-count",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
     def get_market_pressure(symbol: str, exchange: str = "all") -> str:
         return http.get(
             "/api/v1/market/pressure",
@@ -4898,6 +4904,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "during the last 5 minutes. Buy and sell are separate. Use "
                 "this when the same market-order size keeps coming back, not "
                 "for the average print size. Not proof of a named bot."
+            ),
+            args_schema=TakerFlowInput,
+        ),
+        StructuredTool.from_function(
+            get_order_count_ratio,
+            name="get_order_count_ratio",
+            description=(
+                "Market order count ratio from -1 to +1: (buy print count - "
+                "sell print count) / (buy + sell) over 1m, 5m, and 15m. Counts "
+                "aggressive fills, not USDT size. Use for whether more market "
+                "orders are buying or selling. Repeated clip size is get_bot_tracker."
             ),
             args_schema=TakerFlowInput,
         ),

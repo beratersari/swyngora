@@ -12,7 +12,7 @@ flags a clip that shows up several times inside a minute.
 
 - Last **5 minutes** of aggressive futures prints
 - A size is flagged when it appears **4 or more times inside any 60 seconds**
-- Buy and sell are separate. `delta` is flagged buy prints minus flagged sell prints
+- Buy and sell are separate. `buyCount`, `sellCount`, and `delta` count **only the repeated clips**, not every market order. The tape labels them "Repeated buy prints", "Repeated sell prints", and "Repeated delta".
 - Sizes within about **0.2%** count as the same clip
 - Prints under **5,000 USDT** are ignored
 - `exchange=all` (default) returns Binance, Bybit, and OKX, plus the busiest clips across them

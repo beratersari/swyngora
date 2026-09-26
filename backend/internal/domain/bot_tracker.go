@@ -194,7 +194,7 @@ func explainBotVenue(v BotTrackerVenue) string {
 			side = "sell"
 			n = -n
 		}
-		head += fmt.Sprintf(" Net %d more bot %s prints.", n, side)
+		head += fmt.Sprintf(" Among these repeated clips only, %d more %s prints than the other side. Not every market order.", n, side)
 	}
 	return head
 }

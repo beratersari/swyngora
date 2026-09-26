@@ -2145,6 +2145,38 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/order-count:
+    get:
+      summary: Market order count ratio
+      description: |
+        Counts aggressive futures **prints**, not their USDT size, over
+        **1m / 5m / 15m**. `ratio` is (buy count − sell count) / (buy count +
+        sell count), from **−1** (all sells) to **+1** (all buys). `lean` is
+        buy, sell, or balanced (inside ±0.10). Combined sums the counts, then
+        divides. Binance pages aggTrades; Bybit and OKX use the newest public
+        trades. Informational only.
+      operationId: getMarketOrderCount
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | okx | all (default all)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Buy vs sell print counts and the −1…+1 ratio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketOrderCount'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/taker-flow:
     get:
       summary: Futures taker buy vs sell volume
@@ -10408,6 +10440,41 @@ components:
         buyCount: { type: integer }
         sellCount: { type: integer }
         delta: { type: integer }
+        summary: { type: string }
+        note: { type: string }
+    OrderCountWindow:
+      type: object
+      properties:
+        window: { type: string, enum: [1m, 5m, 15m] }
+        buyCount: { type: integer }
+        sellCount: { type: integer }
+        total: { type: integer }
+        delta: { type: integer }
+        ratio: { type: string, description: "(buy − sell) / (buy + sell), from −1 to +1" }
+        lean: { type: string, enum: [buy, sell, balanced] }
+        complete: { type: boolean }
+        summary: { type: string }
+    OrderCountVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/OrderCountWindow' }
+        summary: { type: string }
+        error: { type: string }
+    MarketOrderCount:
+      type: object
+      description: Aggressive print counts and the buy/sell count ratio
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        asOf: { type: string, format: date-time }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/OrderCountVenue' }
+        combined: { $ref: '#/components/schemas/OrderCountVenue' }
         summary: { type: string }
         note: { type: string }
     MarketFundingRate:

@@ -7,6 +7,7 @@ import type {
   MarketVolumeShare,
   MarketPrintSize,
   MarketBotTracker,
+  MarketOrderCount,
   MarketPressure,
   MarketSnapshot,
   MarketPerpDepthOverview,
@@ -35,6 +36,8 @@ export type TapePanelProps = WithLoadingProps & {
   printSizeError?: string | null;
   botTracker?: MarketBotTracker | null;
   botTrackerError?: string | null;
+  orderCount?: MarketOrderCount | null;
+  orderCountError?: string | null;
   pressure?: MarketPressure | null;
   pressureError?: string | null;
 };

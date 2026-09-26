@@ -89,6 +89,8 @@ import type {
   MarketBotTracker,
   BotCluster,
   BotTrackerQuery,
+  MarketOrderCount,
+  OrderCountQuery,
   MarketPressure,
   PressureQuery,
   Ticker24h,
@@ -195,6 +197,7 @@ export type {
   MarketPrintSize,
   MarketBotTracker,
   BotCluster,
+  MarketOrderCount,
   MarketPressure,
   MarketForensics,
   MarketForensicsQuery,
@@ -628,6 +631,13 @@ export const marketApi = baseApi.injectEndpoints({
       }),
     }),
 
+    getMarketOrderCount: build.query<MarketOrderCount, OrderCountQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/order-count',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
     getMarketPressure: build.query<MarketPressure, PressureQuery>({
       query: (arg) => ({
         url: '/api/v1/market/pressure',
@@ -808,6 +818,7 @@ export const {
   useGetMarketParticipationQuery,
   useGetMarketPrintSizeQuery,
   useGetMarketBotTrackerQuery,
+  useGetMarketOrderCountQuery,
   useGetMarketPressureQuery,
   useGetMarketForensicsQuery,
   useScanMarketForensicsQuery,

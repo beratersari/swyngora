@@ -84,7 +84,7 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 - Supply = Binance marketing-list coverage  
 - Holders = CMC, Coin Metrics, GeckoTerminal, Ethplorer, Routescan, then Tronscan; `catalog_unmapped` /
   `holders_unpublished` 404s only after every source misses; last-good marked `stale`
-- Tape tab = OI, funding, liquidations, CVD including the move since 00:00 UTC and since the current 4h open, and repeated same-size prints (`exchange=all` Binance USD-M + Bybit linear)
+- Tape tab = OI, funding, liquidations, CVD including the move since 00:00 UTC and since the current 4h open, order-count ratio, and repeated same-size prints whose buy/sell/delta count only those clips (`exchange=all` Binance USD-M + Bybit linear)
 - Asset profile = CMC public logo, listing date, and contracts when the marketing id exists  
 - Chart overlays: pump/dump arrows + swing scanner circles (from `/signals` rules). Live pump markers use the current pair only (`rtkCurrent` + exchange/symbol match) so a previous coin’s events cannot snap onto the new candles.  
 - Header links to alerts, compare, and the Signals desk; watchlist star on the pair

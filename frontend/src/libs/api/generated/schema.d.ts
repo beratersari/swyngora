@@ -1314,6 +1314,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/order-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Market order count ratio
+         * @description Counts aggressive futures **prints**, not their USDT size, over
+         *     **1m / 5m / 15m**. `ratio` is (buy count − sell count) / (buy count +
+         *     sell count), from **−1** (all sells) to **+1** (all buys). `lean` is
+         *     buy, sell, or balanced (inside ±0.10). Combined sums the counts, then
+         *     divides. Binance pages aggTrades; Bybit and OKX use the newest public
+         *     trades. Informational only.
+         */
+        get: operations["getMarketOrderCount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/taker-flow": {
         parameters: {
             query?: never;
@@ -6543,6 +6568,38 @@ export interface components {
             summary?: string;
             note?: string;
         };
+        OrderCountWindow: {
+            /** @enum {string} */
+            window?: "1m" | "5m" | "15m";
+            buyCount?: number;
+            sellCount?: number;
+            total?: number;
+            delta?: number;
+            /** @description (buy − sell) / (buy + sell), from −1 to +1 */
+            ratio?: string;
+            /** @enum {string} */
+            lean?: "buy" | "sell" | "balanced";
+            complete?: boolean;
+            summary?: string;
+        };
+        OrderCountVenue: {
+            exchange?: string;
+            symbol?: string;
+            windows?: components["schemas"]["OrderCountWindow"][];
+            summary?: string;
+            error?: string;
+        };
+        /** @description Aggressive print counts and the buy/sell count ratio */
+        MarketOrderCount: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            venues?: components["schemas"]["OrderCountVenue"][];
+            combined?: components["schemas"]["OrderCountVenue"];
+            summary?: string;
+            note?: string;
+        };
         /** @description Predicted next funding plus recent settlements */
         MarketFundingRate: {
             symbol?: string;
@@ -10415,6 +10472,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketBotTracker"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketOrderCount: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | okx | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Buy vs sell print counts and the −1…+1 ratio */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketOrderCount"];
                 };
             };
             400: components["responses"]["Error"];

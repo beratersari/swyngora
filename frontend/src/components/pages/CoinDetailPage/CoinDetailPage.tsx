@@ -48,6 +48,7 @@ import {
   useGetMarketParticipationQuery,
   useGetMarketPrintSizeQuery,
   useGetMarketBotTrackerQuery,
+  useGetMarketOrderCountQuery,
   useGetMarketPressureQuery,
   useGetMarketSnapshotQuery,
   useGetTicker24hQuery,
@@ -430,6 +431,11 @@ export function CoinDetailPage() {
     refetchOnFocus: true,
   });
   const botTrackerQuery = useGetMarketBotTrackerQuery(tapeQueryArg, {
+    skip: skipTape,
+    pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
+    refetchOnFocus: true,
+  });
+  const orderCountQuery = useGetMarketOrderCountQuery(tapeQueryArg, {
     skip: skipTape,
     pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
     refetchOnFocus: true,
@@ -1199,6 +1205,17 @@ export function CoinDetailPage() {
                             : null
                         }
                         printSize={rtkCurrent(printSizeQuery)}
+                        orderCount={rtkCurrent(orderCountQuery)}
+                        orderCountError={
+                          orderCountQuery.isError
+                            ? rtkErrorMessage(orderCountQuery.error, {
+                                resource: t('detail:resource.tape'),
+                                statusMessages: {
+                                  400: t('detail:tape.unsupported'),
+                                },
+                              })
+                            : null
+                        }
                         botTracker={rtkCurrent(botTrackerQuery)}
                         botTrackerError={
                           botTrackerQuery.isError
@@ -1240,6 +1257,7 @@ export function CoinDetailPage() {
                           rtkCurrentPending(perpLiqQuery) ||
                           rtkCurrentPending(participationQuery) ||
                           rtkCurrentPending(botTrackerQuery) ||
+                          rtkCurrentPending(orderCountQuery) ||
                           rtkCurrentPending(printSizeQuery) ||
                           rtkCurrentPending(pressureQuery)
                         }

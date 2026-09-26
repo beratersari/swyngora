@@ -79,6 +79,8 @@ export function TapePanel({
   printSizeError,
   botTracker,
   botTrackerError,
+  orderCount,
+  orderCountError,
   pressure,
   pressureError,
   isLoading = false,
@@ -108,6 +110,10 @@ export function TapePanel({
   const perpCoin = findPerpCoin(perpLiquidity?.coins, symbol);
   const perp1h = windowByName(perpLiquidity?.windows, '1h');
   const printVenue = printSize?.combined ?? printSize?.venues?.[0];
+  const countVenue = orderCount?.combined ?? orderCount?.venues?.[0];
+  const count1 = windowByName(countVenue?.windows, '1m');
+  const count5 = windowByName(countVenue?.windows, '5m');
+  const count15 = windowByName(countVenue?.windows, '15m');
   const print15 = windowByName(printVenue?.windows, '15m') ?? windowByName(printVenue?.windows, '5m');
   const cvdRow = cvd?.combined ?? cvd?.venues?.[0];
   const snap = snapshot?.combined ?? snapshot?.venues?.[0];
@@ -429,6 +435,36 @@ export function TapePanel({
 
       <Block>
         <Text variant="label" color="primary">
+          {t('tape.orderCount')}
+        </Text>
+        {orderCountError ? (
+          <Alert type="info" showIcon message={t('tape.orderCount')} description={orderCountError} />
+        ) : (
+          <StatsGrid>
+            <Stat label={t('tape.count5m')} value={count5?.ratio ?? '—'} isLoading={isLoading} />
+            <Stat
+              label={t('tape.countBuy')}
+              value={count5?.buyCount === undefined ? '—' : String(count5.buyCount)}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.countSell')}
+              value={count5?.sellCount === undefined ? '—' : String(count5.sellCount)}
+              isLoading={isLoading}
+            />
+            <Stat label={t('tape.count1m')} value={count1?.ratio ?? '—'} isLoading={isLoading} />
+            <Stat label={t('tape.count15m')} value={count15?.ratio ?? '—'} isLoading={isLoading} />
+          </StatsGrid>
+        )}
+        {countVenue?.summary || count5?.summary ? (
+          <Text variant="caption" color="secondary">
+            {countVenue?.summary || count5?.summary}
+          </Text>
+        ) : null}
+      </Block>
+
+      <Block>
+        <Text variant="label" color="primary">
           {t('tape.botTracker')}
         </Text>
         {botTrackerError ? (
@@ -438,25 +474,39 @@ export function TapePanel({
             {(botTracker?.clusters ?? []).slice(0, 4).map((c) => (
               <Stat
                 key={`${c.exchange}-${c.side}-${c.notional}`}
-                label={c.side === 'sell' ? t('tape.botSell') : t('tape.botBuy')}
+                label={c.side === 'sell' ? t('tape.botSellSize') : t('tape.botBuySize')}
                 value={`${formatTapeNum(c.notional)} × ${c.count ?? 0}`}
                 isLoading={isLoading}
               />
             ))}
             {(botTracker?.clusters ?? []).length === 0 ? (
               <Stat label={t('tape.botTracker')} value={t('tape.botNone')} isLoading={isLoading} />
-            ) : null}
-            <Stat
-              label={t('tape.botDelta')}
-              value={
-                botTracker?.delta === undefined || botTracker.delta === null
-                  ? '—'
-                  : String(botTracker.delta)
-              }
-              isLoading={isLoading}
-            />
+            ) : (
+              <>
+                <Stat
+                  label={t('tape.botBuyCount')}
+                  value={String(botTracker?.buyCount ?? 0)}
+                  isLoading={isLoading}
+                />
+                <Stat
+                  label={t('tape.botSellCount')}
+                  value={String(botTracker?.sellCount ?? 0)}
+                  isLoading={isLoading}
+                />
+                <Stat
+                  label={t('tape.botClipDelta')}
+                  value={String(botTracker?.delta ?? 0)}
+                  isLoading={isLoading}
+                />
+              </>
+            )}
           </StatsGrid>
         )}
+        {(botTracker?.clusters ?? []).length > 0 ? (
+          <Text variant="caption" color="secondary">
+            {t('tape.botCountsNote')}
+          </Text>
+        ) : null}
         {botTracker?.summary ? (
           <Text variant="caption" color="secondary">
             {botTracker.summary}

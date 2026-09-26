@@ -8,12 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Repeated-size counts:** buy, sell, and delta on the coin tape are labeled as the repeated clips only, so they are not read as every market order.
 - **OKX on the futures tape that already has a public feed:** basis (mark versus index), taker buy/sell, CVD, absorption, print size, flow at prices, whales, participation, and net position include OKX next to Binance and Bybit. OKX taker uses the newest 500 swap trades. Spot-candle desks (volume profile, VWAP, volume surge, sweeps) and account long/short stay on the venues that publish them (`docs/features/basis.md`, `docs/features/taker-flow.md`)
 - **Perp depth includes OKX:** Binance USD-M, Bybit linear, and OKX USDT-swap books are shown separately and summed. OKX contract size is converted to base before notional. The coin Flow tab lists each venue (`GET /api/v1/market/perp-depth`, MCP `get_perp_depth`) (`docs/features/perp-depth.md`)
 - **Venue divergence includes OKX:** Binance, Bybit, and OKX are compared together. Groups show which venues share a lean, and outliers name the one moving differently (`GET /api/v1/market/venue-divergence`, MCP `get_venue_divergence`, coin Structure tab) (`docs/features/venue-divergence.md`)
 - **Funding arb history includes OKX:** past stretches now pick the long and short from settled Binance, Bybit, and OKX prints, the same three venues as the live quote. Signal review matches an OKX clock to the OKX print. The Funding tab on `/arb` looks up those stretches (`GET /api/v1/market/funding-arb/history`, MCP `get_funding_arb_history`) (`docs/features/funding-arb.md`)
 
 ### Added
+- **Market order count ratio:** (buy prints − sell prints) / (buy + sell) from −1 to +1 over 1m, 5m, and 15m. The coin tape shows it above repeated size (`GET /api/v1/market/order-count`, MCP `get_order_count_ratio`) (`docs/features/order-count.md`)
 - **Repeated same-size prints:** a market-order size that hits at least 4 times inside any 60 seconds during the last 5 minutes, buy and sell apart. The coin tape lists the clips under print size (`GET /api/v1/market/bot-tracker`, MCP `get_bot_tracker`) (`docs/features/bot-tracker.md`)
 - **Anchored CVD:** CVD since 00:00 UTC and since the current 4-hour open (00/04/08/12/16/20 UTC), separate from the rolling 15m/1h/4h/24h windows. The coin tape shows both (`GET /api/v1/market/cvd`, MCP `get_cvd`) (`docs/features/cvd.md`)
 - **Flow at prices footprint:** the coin Flow tab draws each price as sell vs buy bars, marks the busiest row (POC), and badges a level when one side is at least 3× the other (`docs/features/flow-at-prices.md`)

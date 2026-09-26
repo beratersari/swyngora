@@ -1116,6 +1116,53 @@ func participationVenueMap(v domain.ParticipationVenue) map[string]any {
 	return out
 }
 
+func (b *Backend) GetOrderCount(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetOrderCount(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(orderCountMap(got))
+}
+
+func orderCountMap(got *domain.OrderCountReport) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	venues := make([]map[string]any, 0, len(got.Venues))
+	for _, v := range got.Venues {
+		venues = append(venues, orderCountVenueMap(v))
+	}
+	out := map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange, "asOf": got.AsOf.UTC().Format(time.RFC3339Nano),
+		"venues": venues, "summary": got.Summary, "note": got.Note,
+	}
+	if got.Combined != nil {
+		out["combined"] = orderCountVenueMap(*got.Combined)
+	}
+	return out
+}
+
+func orderCountVenueMap(v domain.OrderCountVenue) map[string]any {
+	wins := make([]map[string]any, 0, len(v.Windows))
+	for _, w := range v.Windows {
+		wins = append(wins, map[string]any{
+			"window": w.Window, "buyCount": w.BuyCount, "sellCount": w.SellCount,
+			"total": w.Total, "delta": w.Delta, "ratio": w.Ratio, "lean": w.Lean,
+			"complete": w.Complete, "summary": w.Summary,
+		})
+	}
+	out := map[string]any{
+		"exchange": string(v.Exchange), "symbol": v.Symbol, "windows": wins, "summary": v.Summary,
+	}
+	if v.Error != "" {
+		out["error"] = v.Error
+	}
+	return out
+}
+
 func (b *Backend) GetBotTracker(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
