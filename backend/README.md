@@ -70,7 +70,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/liquidation-cascade/scan` | Market cascade plus coins currently bursting (venues stay separate) |
 | `GET` | `/api/v1/market/squeeze-risk` | Long/short squeeze risk scores per venue + OI-weighted combined |
 | `GET` | `/api/v1/market/positioning` | Price+OI regime (buildup / unwinding / covering) per venue + combined market |
-| `GET` | `/api/v1/market/venue-divergence` | Binance vs Bybit: same or opposite, which signals differ and why |
+| `GET` | `/api/v1/market/venue-divergence` | Binance, Bybit, and OKX: who moves together and who moves differently |
 | `GET` | `/api/v1/market/taker-flow` | Aggressive futures buy vs sell volume (5m/1h/4h) per venue + combined |
 | `GET` | `/api/v1/market/net-position` | Net long and net short over 15m / 1h / 4h from open interest and taker buy/sell |
 | `GET` | `/api/v1/market/participation` | OI USDT delta ÷ futures taker volume (15m/1h/4h); 2B volume and OI +300M is 15% new positions |

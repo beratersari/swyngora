@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -17,32 +18,61 @@ const (
 	LeanMixed   = "mixed"
 )
 
-// VenueSignalDiff is one compared metric.
-type VenueSignalDiff struct {
-	Metric       string `json:"metric"` // oi_change | funding | crowding | positioning
-	Label        string `json:"label"`
-	Binance      string `json:"binance"`
-	Bybit        string `json:"bybit"`
-	Alignment    string `json:"alignment"` // same | opposite | mixed
-	Important    bool   `json:"important"`
-	WhyItMatters string `json:"whyItMatters"`
+// VenueReading is one exchange's print inside a compared metric.
+type VenueReading struct {
+	Exchange string `json:"exchange"`
+	Value    string `json:"value"`
 }
 
-// VenueDivergenceReport is Binance vs Bybit for one coin.
+// VenueSignalDiff is one compared metric across Binance, Bybit, and OKX.
+type VenueSignalDiff struct {
+	Metric       string         `json:"metric"` // oi_change | funding | crowding | positioning
+	Label        string         `json:"label"`
+	Readings     []VenueReading `json:"readings"`
+	Same         []string       `json:"same,omitempty"`
+	Different    []string       `json:"different,omitempty"`
+	Binance      string         `json:"binance,omitempty"`
+	Bybit        string         `json:"bybit,omitempty"`
+	Alignment    string         `json:"alignment"` // same | opposite | mixed | unknown
+	Important    bool           `json:"important"`
+	WhyItMatters string         `json:"whyItMatters"`
+}
+
+// VenueLeanView is one exchange's direction.
+type VenueLeanView struct {
+	Exchange string `json:"exchange"`
+	Lean     string `json:"lean"`
+	Regime   string `json:"regime"`
+	OIChange string `json:"oiChange,omitempty"`
+}
+
+// VenueLeanGroup lists exchanges that share one lean.
+type VenueLeanGroup struct {
+	Lean      string   `json:"lean"`
+	Exchanges []string `json:"exchanges"`
+}
+
+// VenueDivergenceReport compares Binance, Bybit, and OKX for one coin.
 type VenueDivergenceReport struct {
 	Symbol          string            `json:"symbol"`
 	AsOf            time.Time         `json:"asOf"`
-	Alignment       string            `json:"alignment"` // same | opposite | mixed
-	BinanceLean     string            `json:"binanceLean"`
-	BybitLean       string            `json:"bybitLean"`
+	Alignment       string            `json:"alignment"` // same | opposite | mixed | unknown
+	Venues          []VenueLeanView   `json:"venues"`
+	Groups          []VenueLeanGroup  `json:"groups"`
+	Outliers        []string          `json:"outliers,omitempty"`
+	BinanceLean     string            `json:"binanceLean,omitempty"`
+	BybitLean       string            `json:"bybitLean,omitempty"`
+	OKXLean         string            `json:"okxLean,omitempty"`
 	Important       bool              `json:"important"`
 	Title           string            `json:"title"`
 	Summary         string            `json:"summary"`
 	Diffs           []VenueSignalDiff `json:"diffs"`
-	BinanceRegime   string            `json:"binanceRegime"`
-	BybitRegime     string            `json:"bybitRegime"`
+	BinanceRegime   string            `json:"binanceRegime,omitempty"`
+	BybitRegime     string            `json:"bybitRegime,omitempty"`
+	OKXRegime       string            `json:"okxRegime,omitempty"`
 	BinanceOIChange string            `json:"binanceOiChange,omitempty"`
 	BybitOIChange   string            `json:"bybitOiChange,omitempty"`
+	OKXOIChange     string            `json:"okxOiChange,omitempty"`
 	Note            string            `json:"note,omitempty"`
 }
 
@@ -74,67 +104,111 @@ func leanFromCrowdingAndOI(crowded, oiDir string) string {
 	return LeanMixed
 }
 
-// CompareVenuePositioning contrasts Binance and Bybit positioning reports.
-func CompareVenuePositioning(symbol string, bin, byb PositioningVenueReport, now time.Time) VenueDivergenceReport {
+// CompareVenuePositioning contrasts every futures venue that printed.
+// Long is not used here: lean is bullish or bearish. Venues that share a lean
+// land in the same group. A smaller group is the outlier.
+func CompareVenuePositioning(symbol string, venues []PositioningVenueReport, now time.Time) VenueDivergenceReport {
 	symbol = NormalizeLiquidationSymbol(symbol)
+	usable := make([]PositioningVenueReport, 0, len(venues))
+	for _, v := range venues {
+		if v.Error != "" || v.Exchange == "" {
+			continue
+		}
+		usable = append(usable, v)
+	}
+	sort.SliceStable(usable, func(i, j int) bool {
+		return string(usable[i].Exchange) < string(usable[j].Exchange)
+	})
 	out := VenueDivergenceReport{
-		Symbol:        symbol,
-		AsOf:          now.UTC(),
-		BinanceRegime: bin.Regime,
-		BybitRegime:   byb.Regime,
-		Diffs:         []VenueSignalDiff{},
-		Note:          "Compares Binance USD-M vs Bybit linear using the same positioning, funding, and account long/short we already publish. Informational only — not financial advice.",
+		Symbol: symbol,
+		AsOf:   now.UTC(),
+		Venues: []VenueLeanView{},
+		Groups: []VenueLeanGroup{},
+		Diffs:  []VenueSignalDiff{},
+		Note:   "Compares Binance USD-M, Bybit linear, and OKX USDT-swap using the same positioning, funding, and account long/short we already publish. A venue with no account long/short is left out of the crowding row. Informational only — not financial advice.",
+	}
+	if len(usable) < 2 {
+		out.Alignment = AlignUnknown
+		out.Title = "Not enough venue data to compare"
+		out.Summary = "Need at least two of Binance, Bybit, and OKX for this coin."
+		return out
 	}
 
-	binWin := pickCompareWindow(bin)
-	bybWin := pickCompareWindow(byb)
-	out.BinanceOIChange = FormatSignedPct(binWin.OIChangePct)
-	out.BybitOIChange = FormatSignedPct(bybWin.OIChangePct)
-
-	out.Diffs = append(out.Diffs, compareOI(binWin, bybWin))
-	out.Diffs = append(out.Diffs, compareFunding(bin.FundingRate, byb.FundingRate))
-	out.Diffs = append(out.Diffs, compareCrowding(bin.LongShare, byb.LongShare))
-	out.Diffs = append(out.Diffs, compareRegime(bin, byb))
-
-	binLean := VenueLeanFromRegime(bin.Regime)
-	bybLean := VenueLeanFromRegime(byb.Regime)
-	if binLean == LeanMixed {
-		binLean = leanFromCrowdingAndOI(CrowdedSideFromShares(bin.LongShare), binWin.OIDir)
+	views := make([]venueSnap, 0, len(usable))
+	for _, v := range usable {
+		views = append(views, snapVenue(v))
 	}
-	if bybLean == LeanMixed {
-		bybLean = leanFromCrowdingAndOI(CrowdedSideFromShares(byb.LongShare), bybWin.OIDir)
-	}
-	out.BinanceLean = binLean
-	out.BybitLean = bybLean
-
-	opp, mix, same := 0, 0, 0
-	importantOpp := false
-	for _, d := range out.Diffs {
-		switch d.Alignment {
-		case AlignOpposite:
-			opp++
-			if d.Important {
-				importantOpp = true
-			}
-		case AlignMixed:
-			mix++
-		default:
-			same++
+	for _, s := range views {
+		out.Venues = append(out.Venues, VenueLeanView{
+			Exchange: string(s.ex), Lean: s.lean, Regime: s.regime, OIChange: s.oiChange,
+		})
+		switch s.ex {
+		case ExchangeBinance:
+			out.BinanceLean, out.BinanceRegime, out.BinanceOIChange = s.lean, s.regime, s.oiChange
+		case ExchangeBybit:
+			out.BybitLean, out.BybitRegime, out.BybitOIChange = s.lean, s.regime, s.oiChange
+		case ExchangeOKX:
+			out.OKXLean, out.OKXRegime, out.OKXOIChange = s.lean, s.regime, s.oiChange
 		}
 	}
-	switch {
-	case binLean != LeanMixed && bybLean != LeanMixed && binLean != bybLean:
-		out.Alignment = AlignOpposite
-		out.Important = true
-	case opp > 0 || mix > 0:
-		out.Alignment = AlignMixed
-		out.Important = importantOpp || opp > 0
-	default:
-		out.Alignment = AlignSame
-	}
 
-	out.Title, out.Summary = divergenceCopy(out, bin, byb)
+	out.Diffs = append(out.Diffs,
+		compareOIViews(views),
+		compareFundingViews(views),
+		compareCrowdingViews(views),
+		compareRegimeViews(views),
+	)
+	out.Groups, out.Outliers, out.Alignment, out.Important = leanGroups(views)
+	out.Title, out.Summary = divergenceCopy(out)
 	return out
+}
+
+type venueSnap struct {
+	ex        Exchange
+	lean      string
+	regime    string
+	label     string
+	oiDir     string
+	oiChange  string
+	oiWindow  string
+	funding   float64
+	payer     string
+	longShare float64
+	crowd     string
+	hasCrowd  bool
+}
+
+func snapVenue(v PositioningVenueReport) venueSnap {
+	win := pickCompareWindow(v)
+	lean := VenueLeanFromRegime(v.Regime)
+	crowd := ""
+	has := hasAccountCrowd(v)
+	if has {
+		crowd = CrowdedSideFromShares(v.LongShare)
+	}
+	if lean == LeanMixed && has {
+		lean = leanFromCrowdingAndOI(crowd, win.OIDir)
+	}
+	label := v.Label
+	if label == "" {
+		label = RegimeLabel(v.Regime)
+	}
+	return venueSnap{
+		ex: v.Exchange, lean: lean, regime: v.Regime, label: label,
+		oiDir: win.OIDir, oiChange: FormatSignedPct(win.OIChangePct), oiWindow: win.Window,
+		funding: v.FundingRate, payer: FundingPayer(v.FundingRate),
+		longShare: v.LongShare, crowd: crowd, hasCrowd: has,
+	}
+}
+
+func hasAccountCrowd(v PositioningVenueReport) bool {
+	if v.CrowdingSplit.General != "" || v.CrowdingSplit.Alignment != "" {
+		return true
+	}
+	if v.LongShare == 0.5 && v.ShortShare == 0.5 {
+		return false
+	}
+	return v.LongShare > 0 || v.ShortShare > 0
 }
 
 func pickCompareWindow(v PositioningVenueReport) PositioningWindow {
@@ -152,170 +226,362 @@ func pickCompareWindow(v PositioningVenueReport) PositioningWindow {
 	return PositioningWindow{}
 }
 
-func compareOI(bin, byb PositioningWindow) VenueSignalDiff {
-	d := VenueSignalDiff{
-		Metric:  "oi_change",
-		Label:   "Open interest (" + nzWindow(bin.Window, byb.Window) + ")",
-		Binance: fmt.Sprintf("%s (%s)", bin.OIDir, FormatSignedPct(bin.OIChangePct)),
-		Bybit:   fmt.Sprintf("%s (%s)", byb.OIDir, FormatSignedPct(byb.OIChangePct)),
-	}
-	d.Alignment = dirAlign(bin.OIDir, byb.OIDir)
-	d.Important = d.Alignment == AlignOpposite
-	d.WhyItMatters = "OI rising on one venue and falling on the other means leverage is being added in one book and taken off in the other — flow is not global."
-	if d.Alignment == AlignSame {
-		d.WhyItMatters = "Both venues are changing open interest in the same direction."
-	} else if d.Alignment == AlignMixed {
-		d.WhyItMatters = "One venue’s OI is flat, so there is no clear split yet."
-	}
-	return d
-}
-
-func compareFunding(bin, byb float64) VenueSignalDiff {
-	bDec, _ := FormatFundingRate(bin)
-	yDec, _ := FormatFundingRate(byb)
-	d := VenueSignalDiff{
-		Metric:  "funding",
-		Label:   "Funding payer",
-		Binance: fmt.Sprintf("%s (%s)", FundingPayer(bin), bDec),
-		Bybit:   fmt.Sprintf("%s (%s)", FundingPayer(byb), yDec),
-	}
-	bp, yp := FundingPayer(bin), FundingPayer(byb)
-	switch {
-	case bp == "none" || yp == "none":
-		d.Alignment = AlignMixed
-		d.WhyItMatters = "Funding is near zero on at least one venue, so payer split is weak."
-	case bp == yp:
-		d.Alignment = AlignSame
-		d.WhyItMatters = "The same side pays funding on both venues."
-	default:
-		d.Alignment = AlignOpposite
-		d.Important = true
-		d.WhyItMatters = "Opposite funding means one book is long-crowded (longs pay) while the other is short-crowded (shorts pay). That is a real positioning split, not just noise."
-	}
-	return d
-}
-
-func compareCrowding(binLong, bybLong float64) VenueSignalDiff {
-	bc := CrowdedSideFromShares(binLong)
-	yc := CrowdedSideFromShares(bybLong)
-	d := VenueSignalDiff{
-		Metric:  "crowding",
-		Label:   "Account long/short",
-		Binance: fmt.Sprintf("%s (%.1f%% long)", bc, binLong*100),
-		Bybit:   fmt.Sprintf("%s (%.1f%% long)", yc, bybLong*100),
-	}
-	switch {
-	case bc == SqueezeSideNone || yc == SqueezeSideNone:
-		d.Alignment = AlignMixed
-		d.WhyItMatters = "At least one venue is balanced, so crowding is not a strong split."
-	case bc == yc:
-		d.Alignment = AlignSame
-		d.WhyItMatters = "Account crowds lean the same way on both venues."
-	default:
-		d.Alignment = AlignOpposite
-		d.Important = true
-		d.WhyItMatters = "More accounts are long on one venue and short on the other. A move can liquidate different crowds on each exchange."
-	}
-	return d
-}
-
-func compareRegime(bin, byb PositioningVenueReport) VenueSignalDiff {
-	d := VenueSignalDiff{
-		Metric:  "positioning",
-		Label:   "Price + OI regime",
-		Binance: bin.Label,
-		Bybit:   byb.Label,
-	}
-	if d.Binance == "" {
-		d.Binance = RegimeLabel(bin.Regime)
-	}
-	if d.Bybit == "" {
-		d.Bybit = RegimeLabel(byb.Regime)
-	}
-	bl := VenueLeanFromRegime(bin.Regime)
-	yl := VenueLeanFromRegime(byb.Regime)
-	switch {
-	case bin.Regime == RegimeNeutral || byb.Regime == RegimeNeutral:
-		d.Alignment = AlignMixed
-		d.WhyItMatters = "One venue is neutral, so positioning is not a clean opposite."
-	case bin.Regime == byb.Regime:
-		d.Alignment = AlignSame
-		d.WhyItMatters = "Both books show the same price+OI regime."
-	case bl != LeanMixed && yl != LeanMixed && bl != yl:
-		d.Alignment = AlignOpposite
-		d.Important = true
-		d.WhyItMatters = "One venue is adding/covering in a bullish way while the other is adding/unwinding in a bearish way. Combined OI can hide that split."
-	default:
-		d.Alignment = AlignMixed
-		d.WhyItMatters = "Regimes differ but they are not a clean bullish-vs-bearish opposite."
-	}
-	return d
-}
-
-func nzWindow(a, b string) string {
-	if a != "" {
-		return a
-	}
-	if b != "" {
-		return b
-	}
-	return "4h"
-}
-
-func dirAlign(a, b string) string {
-	if a == "" || b == "" || a == "flat" || b == "flat" {
-		return AlignMixed
-	}
-	if a == b {
-		return AlignSame
-	}
-	return AlignOpposite
-}
-
-func divergenceCopy(out VenueDivergenceReport, bin, byb PositioningVenueReport) (title, summary string) {
-	switch out.Alignment {
-	case AlignSame:
-		title = "Binance and Bybit are moving in the same direction"
-		summary = fmt.Sprintf("Both lean %s. Positioning: Binance %s, Bybit %s. No important opposite split in OI, funding, crowding, or regime.",
-			out.BinanceLean, nzLabel(bin), nzLabel(byb))
-	case AlignOpposite:
-		title = "Binance and Bybit are moving in opposite directions"
-		parts := importantDiffPhrases(out.Diffs)
-		summary = fmt.Sprintf("Binance leans %s (%s), Bybit leans %s (%s). %s That can matter because a single combined number (or watching only one exchange) hides who is adding risk.",
-			out.BinanceLean, nzLabel(bin), out.BybitLean, nzLabel(byb), parts)
-	default:
-		title = "Binance and Bybit are mixed — not a full opposite"
-		parts := importantDiffPhrases(out.Diffs)
-		if parts != "" && parts != "Lean is opposite even if some individual prints are soft." {
-			summary = fmt.Sprintf("Overall lean is not a clean opposite (Binance %s / Bybit %s). %s Combined OI can still hide that split.",
-				out.BinanceLean, out.BybitLean, parts)
-		} else {
-			summary = fmt.Sprintf("Binance %s (%s), Bybit %s (%s). Some signals differ, but not a clean opposite on every driver.",
-				out.BinanceLean, nzLabel(bin), out.BybitLean, nzLabel(byb))
+func compareOIViews(views []venueSnap) VenueSignalDiff {
+	window := "4h"
+	rows := make([]keyedReading, 0, len(views))
+	for _, v := range views {
+		if v.oiWindow != "" {
+			window = v.oiWindow
 		}
+		text := fmt.Sprintf("%s (%s)", v.oiDir, v.oiChange)
+		key := ""
+		if v.oiDir == "up" || v.oiDir == "down" {
+			key = v.oiDir
+		}
+		rows = append(rows, keyedReading{ex: v.ex, key: key, text: text})
+	}
+	d := finishDiff("oi_change", "Open interest ("+window+")", rows, true)
+	switch d.Alignment {
+	case AlignSame:
+		d.WhyItMatters = "These venues are changing open interest in the same direction."
+	case AlignOpposite:
+		d.WhyItMatters = "Open interest is rising on some venues and falling on others, so leverage is not one global book."
+	case AlignUnknown:
+		d.WhyItMatters = "Not enough venues printed an open-interest direction."
+	default:
+		d.WhyItMatters = "At least one venue’s open interest is flat, so there is no clean split yet."
+	}
+	return d
+}
+
+func compareFundingViews(views []venueSnap) VenueSignalDiff {
+	rows := make([]keyedReading, 0, len(views))
+	for _, v := range views {
+		dec, _ := FormatFundingRate(v.funding)
+		key := ""
+		if v.payer == "long" || v.payer == "short" {
+			key = v.payer
+		}
+		rows = append(rows, keyedReading{ex: v.ex, key: key, text: fmt.Sprintf("%s (%s)", v.payer, dec)})
+	}
+	d := finishDiff("funding", "Funding payer", rows, true)
+	switch d.Alignment {
+	case AlignSame:
+		d.WhyItMatters = "The same side pays funding on the venues that printed a rate."
+	case AlignOpposite:
+		d.WhyItMatters = "Opposite funding means one book is long-crowded while another is short-crowded."
+	case AlignUnknown:
+		d.WhyItMatters = "Not enough venues printed a funding payer."
+	default:
+		d.WhyItMatters = "Funding is near zero on at least one venue, so the payer split is weak."
+	}
+	return d
+}
+
+func compareCrowdingViews(views []venueSnap) VenueSignalDiff {
+	rows := make([]keyedReading, 0, len(views))
+	for _, v := range views {
+		if !v.hasCrowd {
+			rows = append(rows, keyedReading{ex: v.ex, text: "no account long/short"})
+			continue
+		}
+		key := ""
+		if v.crowd == SqueezeSideLong || v.crowd == SqueezeSideShort {
+			key = v.crowd
+		}
+		rows = append(rows, keyedReading{
+			ex: v.ex, key: key,
+			text: fmt.Sprintf("%s (%.1f%% long)", v.crowd, v.longShare*100),
+		})
+	}
+	d := finishDiff("crowding", "Account long/short", rows, true)
+	switch d.Alignment {
+	case AlignSame:
+		d.WhyItMatters = "Account crowds lean the same way on the venues that publish them."
+	case AlignOpposite:
+		d.WhyItMatters = "More accounts are long on one venue and short on another. A move can liquidate different crowds."
+	case AlignUnknown:
+		d.WhyItMatters = "Fewer than two venues publish account long/short, so crowding cannot split the books."
+	default:
+		d.WhyItMatters = "At least one venue is balanced, so crowding is not a strong split."
+	}
+	return d
+}
+
+func compareRegimeViews(views []venueSnap) VenueSignalDiff {
+	rows := make([]keyedReading, 0, len(views))
+	for _, v := range views {
+		key := ""
+		if v.lean == LeanBullish || v.lean == LeanBearish {
+			key = v.lean
+		}
+		rows = append(rows, keyedReading{ex: v.ex, key: key, text: v.label})
+	}
+	d := finishDiff("positioning", "Price + OI regime", rows, true)
+	switch d.Alignment {
+	case AlignSame:
+		d.WhyItMatters = "The books that have a direction show the same price and open-interest lean."
+	case AlignOpposite:
+		d.WhyItMatters = "One venue is bullish while another is bearish. Combined open interest can hide that split."
+	case AlignUnknown:
+		d.WhyItMatters = "Not enough venues have a bullish or bearish regime."
+	default:
+		d.WhyItMatters = "Regimes differ, but they are not a clean bullish-versus-bearish split."
+	}
+	return d
+}
+
+type keyedReading struct {
+	ex   Exchange
+	key  string
+	text string
+}
+
+func finishDiff(metric, label string, rows []keyedReading, oppositeMatters bool) VenueSignalDiff {
+	d := VenueSignalDiff{
+		Metric: metric, Label: label,
+		Readings: make([]VenueReading, 0, len(rows)),
+	}
+	known := make([]keyedReading, 0, len(rows))
+	for _, row := range rows {
+		d.Readings = append(d.Readings, VenueReading{Exchange: string(row.ex), Value: row.text})
+		switch row.ex {
+		case ExchangeBinance:
+			d.Binance = row.text
+		case ExchangeBybit:
+			d.Bybit = row.text
+		}
+		if row.key != "" {
+			known = append(known, row)
+		}
+	}
+	align, same, different := splitKeys(known)
+	d.Alignment = align
+	d.Same = same
+	d.Different = different
+	d.Important = oppositeMatters && align == AlignOpposite
+	return d
+}
+
+// splitKeys groups known keys. One key is same. Two opposite keys name the
+// smaller side as different. Three keys, or two that are not opposites, are mixed.
+func splitKeys(rows []keyedReading) (alignment string, same, different []string) {
+	if len(rows) < 2 {
+		return AlignUnknown, nil, nil
+	}
+	buckets := map[string][]string{}
+	order := []string{}
+	for _, row := range rows {
+		if _, ok := buckets[row.key]; !ok {
+			order = append(order, row.key)
+		}
+		buckets[row.key] = append(buckets[row.key], string(row.ex))
+	}
+	if len(order) == 1 {
+		return AlignSame, buckets[order[0]], nil
+	}
+	sort.SliceStable(order, func(i, j int) bool {
+		if len(buckets[order[i]]) != len(buckets[order[j]]) {
+			return len(buckets[order[i]]) > len(buckets[order[j]])
+		}
+		return order[i] < order[j]
+	})
+	if len(order) == 2 && keysOppose(order[0], order[1]) {
+		same = buckets[order[0]]
+		different = buckets[order[1]]
+		if len(same) == len(different) {
+			return AlignOpposite, nil, append(append([]string{}, same...), different...)
+		}
+		return AlignOpposite, same, different
+	}
+	all := make([]string, 0, len(rows))
+	for _, row := range rows {
+		all = append(all, string(row.ex))
+	}
+	return AlignMixed, nil, all
+}
+
+func keysOppose(a, b string) bool {
+	switch {
+	case (a == "up" && b == "down") || (a == "down" && b == "up"):
+		return true
+	case (a == LeanBullish && b == LeanBearish) || (a == LeanBearish && b == LeanBullish):
+		return true
+	case (a == "long" && b == "short") || (a == "short" && b == "long"):
+		return true
+	default:
+		return false
+	}
+}
+
+func leanGroups(views []venueSnap) (groups []VenueLeanGroup, outliers []string, alignment string, important bool) {
+	rows := make([]keyedReading, 0, len(views))
+	for _, v := range views {
+		key := ""
+		if v.lean == LeanBullish || v.lean == LeanBearish {
+			key = v.lean
+		}
+		rows = append(rows, keyedReading{ex: v.ex, key: key, text: v.lean})
+	}
+	buckets := map[string][]string{}
+	order := []string{}
+	for _, row := range rows {
+		if row.key == "" {
+			continue
+		}
+		if _, ok := buckets[row.key]; !ok {
+			order = append(order, row.key)
+		}
+		buckets[row.key] = append(buckets[row.key], string(row.ex))
+	}
+	sort.SliceStable(order, func(i, j int) bool {
+		if len(buckets[order[i]]) != len(buckets[order[j]]) {
+			return len(buckets[order[i]]) > len(buckets[order[j]])
+		}
+		return order[i] < order[j]
+	})
+	for _, key := range order {
+		groups = append(groups, VenueLeanGroup{Lean: key, Exchanges: buckets[key]})
+	}
+	if groups == nil {
+		groups = []VenueLeanGroup{}
+	}
+	switch len(order) {
+	case 0:
+		return groups, nil, AlignMixed, false
+	case 1:
+		return groups, nil, AlignSame, false
+	default:
+		if keysOppose(order[0], order[1]) && len(order) == 2 {
+			if len(buckets[order[0]]) > len(buckets[order[1]]) {
+				outliers = buckets[order[1]]
+			}
+			return groups, outliers, AlignOpposite, true
+		}
+		return groups, nil, AlignMixed, false
+	}
+}
+
+func divergenceCopy(out VenueDivergenceReport) (title, summary string) {
+	names := venueList(out.Venues)
+	switch out.Alignment {
+	case AlignUnknown:
+		return out.Title, out.Summary
+	case AlignSame:
+		lean := ""
+		if len(out.Groups) > 0 {
+			lean = out.Groups[0].Lean
+		}
+		title = names + " are moving the same way"
+		summary = fmt.Sprintf("%s all lean %s. %s", names, lean, sameMetricSentence(out.Diffs))
+	case AlignOpposite:
+		title = outlierTitle(out)
+		summary = groupSentence(out) + " " + importantDiffPhrases(out.Diffs)
+	default:
+		title = names + " are mixed"
+		summary = groupSentence(out) + " " + importantDiffPhrases(out.Diffs)
 	}
 	return title, strings.TrimSpace(summary)
 }
 
-func nzLabel(v PositioningVenueReport) string {
-	if v.Label != "" {
-		return v.Label
+func outlierTitle(out VenueDivergenceReport) string {
+	if len(out.Outliers) == 1 {
+		return venueTitle(out.Outliers[0]) + " is moving differently"
 	}
-	return RegimeLabel(v.Regime)
+	if len(out.Outliers) > 1 {
+		return joinNames(out.Outliers) + " are moving differently"
+	}
+	return venueList(out.Venues) + " do not share one direction"
+}
+
+func groupSentence(out VenueDivergenceReport) string {
+	if len(out.Groups) == 0 {
+		return "No venue has a clear bullish or bearish lean."
+	}
+	parts := make([]string, 0, len(out.Groups))
+	for _, g := range out.Groups {
+		parts = append(parts, fmt.Sprintf("%s lean %s", joinNames(g.Exchanges), g.Lean))
+	}
+	return strings.Join(parts, ". ") + "."
+}
+
+func sameMetricSentence(diffs []VenueSignalDiff) string {
+	n := 0
+	for _, d := range diffs {
+		if d.Alignment == AlignSame {
+			n++
+		}
+	}
+	if n == 0 {
+		return "The overall lean matches even where a single print is soft."
+	}
+	return fmt.Sprintf("%d of %d compared signals also match.", n, len(diffs))
 }
 
 func importantDiffPhrases(diffs []VenueSignalDiff) string {
 	var bits []string
 	for _, d := range diffs {
-		if !d.Important {
+		if d.Alignment != AlignOpposite && d.Alignment != AlignMixed {
 			continue
 		}
-		bits = append(bits, fmt.Sprintf("%s differs (%s vs %s).", d.Label, d.Binance, d.Bybit))
+		if len(d.Different) == 0 && d.Alignment != AlignOpposite {
+			continue
+		}
+		bits = append(bits, fmt.Sprintf("%s: %s.", d.Label, readingPhrase(d)))
 	}
 	if len(bits) == 0 {
-		return "Lean is opposite even if some individual prints are soft."
+		return "The leans differ even where a single print is soft."
 	}
 	return strings.Join(bits, " ")
+}
+
+func readingPhrase(d VenueSignalDiff) string {
+	parts := make([]string, 0, len(d.Readings))
+	for _, r := range d.Readings {
+		parts = append(parts, r.Exchange+" "+r.Value)
+	}
+	return strings.Join(parts, ", ")
+}
+
+func venueList(views []VenueLeanView) string {
+	names := make([]string, 0, len(views))
+	for _, v := range views {
+		names = append(names, venueTitle(v.Exchange))
+	}
+	return joinNames(names)
+}
+
+func venueTitle(ex string) string {
+	switch Exchange(ex) {
+	case ExchangeBinance:
+		return "Binance"
+	case ExchangeBybit:
+		return "Bybit"
+	case ExchangeOKX:
+		return "OKX"
+	default:
+		if ex == "" {
+			return "unknown"
+		}
+		return ex
+	}
+}
+
+func joinNames(names []string) string {
+	titled := make([]string, len(names))
+	for i, n := range names {
+		titled[i] = venueTitle(n)
+	}
+	switch len(titled) {
+	case 0:
+		return ""
+	case 1:
+		return titled[0]
+	case 2:
+		return titled[0] + " and " + titled[1]
+	default:
+		return strings.Join(titled[:len(titled)-1], ", ") + ", and " + titled[len(titled)-1]
+	}
 }
 
 // HasMeaningfulDivergence is true when the user should be alerted.

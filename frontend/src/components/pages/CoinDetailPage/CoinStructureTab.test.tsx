@@ -23,7 +23,21 @@ vi.mock('@/libs/api', async (importOriginal) => {
     }),
     useGetMarketSqueezeRiskQuery: hook,
     useGetMarketPositioningQuery: hook,
-    useGetMarketVenueDivergenceQuery: hook,
+    useGetMarketVenueDivergenceQuery: () => ({
+      ...empty,
+      data: {
+        summary: 'OKX is moving differently',
+        groups: [{ lean: 'bullish', exchanges: ['binance', 'bybit'] }],
+        outliers: ['okx'],
+        diffs: [],
+      },
+      currentData: {
+        summary: 'OKX is moving differently',
+        groups: [{ lean: 'bullish', exchanges: ['binance', 'bybit'] }],
+        outliers: ['okx'],
+        diffs: [],
+      },
+    }),
   };
 });
 
@@ -32,5 +46,7 @@ describe('CoinStructureTab', () => {
     renderWithProviders(<CoinStructureTab symbol="SOLUSDT" exchange="binance" />);
     expect(screen.getByText('SOL follows BTC (0.82) over 4h')).toBeInTheDocument();
     expect(screen.getByText('POC 94.2k')).toBeInTheDocument();
+    expect(screen.getByText('OKX is moving differently')).toBeInTheDocument();
+    expect(screen.getByText(/Moving differently: okx/)).toBeInTheDocument();
   });
 });

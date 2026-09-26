@@ -3105,13 +3105,16 @@ paths:
           $ref: '#/components/responses/Error'
   /api/v1/market/venue-divergence:
     get:
-      summary: Binance vs Bybit signal split
+      summary: Which futures venues move together
       description: |
-        Compares **Binance USD-M** and **Bybit linear** for one coin using
-        open-interest change, funding payer, account long/short crowding, and
-        price+OI positioning. Returns `same`, `opposite`, or `mixed`, lists
-        which metrics differ, and a short note on why a split can matter.
-        Informational only.
+        Compares **Binance USD-M**, **Bybit linear**, and **OKX USDT-swap**
+        for one coin using open-interest change, funding payer, account
+        long/short crowding, and price+OI positioning. `groups` lists venues
+        that share a bullish or bearish lean. `outliers` is the venue moving
+        the other way when the other two agree. Each `diffs[]` row has a
+        reading per venue plus `same` and `different`. OKX has no account
+        long/short, so it is left out of the crowding comparison. A missing
+        venue is skipped; two venues are still compared. Informational only.
       operationId: getMarketVenueDivergence
       tags: [Market]
       parameters:

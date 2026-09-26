@@ -366,7 +366,10 @@
     "levels": "Levels",
     "squeeze": "Squeeze risk",
     "positioning": "Positioning",
-    "divergence": "Venue divergence"
+    "divergence": "Venue divergence",
+    "sameWay": "Moving together",
+    "differentWay": "Moving differently",
+    "noOutlier": "No single outlier"
   },
   "paperTrade": {
     "title": "Paper trade",

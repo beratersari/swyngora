@@ -4841,9 +4841,11 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             get_venue_divergence,
             name="get_venue_divergence",
             description=(
-                "Compare Binance vs Bybit for one coin: same or opposite "
-                "direction. Lists which of OI, funding, crowding, and "
-                "positioning differ and why that split can matter."
+                "Compare Binance, Bybit, and OKX for one coin. groups lists "
+                "venues moving the same way. outliers names the venue moving "
+                "differently when the other two agree. Each of OI, funding, "
+                "crowding, and positioning has a reading per venue. OKX has "
+                "no account long/short."
             ),
             args_schema=VenueDivergenceInput,
         ),

@@ -115,6 +115,7 @@ import type {
   MarketVolumeSurgeScan,
   MarketVolumeSurgeScanQuery,
   MarketDeskReport,
+  VenueDivergenceReport,
   SymbolMarketQuery,
   VolumeProfileReport,
   FlowAtPricesReport,
@@ -180,6 +181,7 @@ export type {
   MarketVolumeSurgeScan,
   MarketVolumeSurgeHit,
   MarketDeskReport,
+  VenueDivergenceReport,
   VolumeProfileReport,
   VolumeProfileVenue,
   VolumeProfileBin,
@@ -593,7 +595,7 @@ export const marketApi = baseApi.injectEndpoints({
         params: compactParams({ ...arg }),
       }),
     }),
-    getMarketVenueDivergence: build.query<MarketDeskReport, SymbolMarketQuery>({
+    getMarketVenueDivergence: build.query<VenueDivergenceReport, SymbolMarketQuery>({
       query: (arg) => ({
         url: '/api/v1/market/venue-divergence',
         params: compactParams({ ...arg }),

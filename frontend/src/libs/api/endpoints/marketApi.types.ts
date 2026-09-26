@@ -358,6 +358,26 @@ export type FlowAtPricesReport = {
   combined?: FlowAtPricesVenue;
 };
 
+export type VenueDivergenceReport = {
+  symbol?: string;
+  alignment?: string;
+  title?: string;
+  summary?: string;
+  note?: string;
+  outliers?: string[];
+  groups?: { lean?: string; exchanges?: string[] }[];
+  venues?: { exchange?: string; lean?: string; regime?: string; oiChange?: string }[];
+  diffs?: {
+    metric?: string;
+    label?: string;
+    alignment?: string;
+    whyItMatters?: string;
+    same?: string[];
+    different?: string[];
+    readings?: { exchange?: string; value?: string }[];
+  }[];
+};
+
 export type MarketDeskReport = {
   symbol?: string;
   exchange?: string;

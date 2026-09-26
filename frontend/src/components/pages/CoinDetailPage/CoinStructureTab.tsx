@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { CoinInsightPanel, CoinInsightStack } from '@/components/organisms/CoinInsightPanel';
+import { VenueDivergenceBoard } from '@/components/organisms/VenueDivergenceBoard';
 import {
   rtkErrorMessage,
   useGetMarketCorrelationQuery,
@@ -35,13 +36,15 @@ export function CoinStructureTab({ symbol, exchange }: CoinStructureTabProps) {
     { key: 'div', title: t('structure.divergence'), q: div },
   ];
 
+  const divReport = rtkCurrent(div);
   return (
     <CoinInsightStack>
       {rows.map((row) => (
         <CoinInsightPanel
           key={row.key}
           title={row.title}
-          summary={reportSummary(rtkCurrent(row.q))}
+          summary={row.key === 'div' ? (divReport?.summary ?? '') : reportSummary(rtkCurrent(row.q))}
+          extra={row.key === 'div' ? <VenueDivergenceBoard report={divReport} /> : undefined}
           error={row.q.isError ? err(row.q.error) : null}
           isLoading={rtkCurrentPending(row.q)}
         />

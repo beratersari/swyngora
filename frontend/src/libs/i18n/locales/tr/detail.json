@@ -366,7 +366,10 @@
     "levels": "Seviyeler",
     "squeeze": "Sıkışma riski",
     "positioning": "Konumlanma",
-    "divergence": "Borsa ayrışması"
+    "divergence": "Borsa ayrışması",
+    "sameWay": "Birlikte hareket",
+    "differentWay": "Farklı hareket",
+    "noOutlier": "Tek bir ayrışan yok"
   },
   "paperTrade": {
     "title": "Kağıt işlem",

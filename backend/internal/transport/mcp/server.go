@@ -1103,7 +1103,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_venue_divergence",
-		mcp.WithDescription("Compare Binance vs Bybit for one coin: same direction or opposite. Shows which of OI change, funding, account crowding, and price+OI regime differ, plus a short why it matters. Use when the user asks if the two exchanges agree. Not financial advice."),
+		mcp.WithDescription("Compare Binance, Bybit, and OKX for one coin. groups lists venues moving the same way. outliers names the venue moving differently when the other two agree. Each metric (OI change, funding, account crowding, price+OI regime) includes a reading per venue. OKX has no account long/short. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")

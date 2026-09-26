@@ -654,7 +654,7 @@ func (c *APIClient) GetPositioning(ctx context.Context, exchange, symbol string)
 	return c.get(ctx, "/api/v1/market/positioning", q)
 }
 
-// GetVenueDivergence compares Binance vs Bybit signals for one coin.
+// GetVenueDivergence compares Binance, Bybit, and OKX for one coin.
 func (c *APIClient) GetVenueDivergence(ctx context.Context, symbol string) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)

@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Venue divergence includes OKX:** Binance, Bybit, and OKX are compared together. Groups show which venues share a lean, and outliers name the one moving differently (`GET /api/v1/market/venue-divergence`, MCP `get_venue_divergence`, coin Structure tab) (`docs/features/venue-divergence.md`)
 - **Funding arb history includes OKX:** past stretches now pick the long and short from settled Binance, Bybit, and OKX prints, the same three venues as the live quote. Signal review matches an OKX clock to the OKX print. The Funding tab on `/arb` looks up those stretches (`GET /api/v1/market/funding-arb/history`, MCP `get_funding_arb_history`) (`docs/features/funding-arb.md`)
 
 ### Added

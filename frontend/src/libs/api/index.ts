@@ -150,6 +150,7 @@ export type {
   MarketVolumeSurgeScan,
   MarketVolumeSurgeHit,
   MarketDeskReport,
+  VenueDivergenceReport,
   VolumeProfileReport,
   VolumeProfileVenue,
   VolumeProfileBin,
