@@ -151,6 +151,54 @@ func TestGetFundingArbHistory(t *testing.T) {
 	}
 }
 
+func TestGetFundingArbHistory_OKXShortUsesBybitFee(t *testing.T) {
+	from := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(24 * time.Hour)
+	bin := &fakeFunding{hist: []domain.FundingPoint{
+		{Time: from.Add(8 * time.Hour), Rate: 0.0001},
+		{Time: from.Add(16 * time.Hour), Rate: 0.0001},
+	}}
+	byb := &fakeFunding{hist: []domain.FundingPoint{
+		{Time: from.Add(8 * time.Hour), Rate: 0.001},
+		{Time: from.Add(16 * time.Hour), Rate: 0.001},
+	}}
+	okx := &fakeFunding{hist: []domain.FundingPoint{
+		{Time: from.Add(8 * time.Hour), Rate: 0.003},
+		{Time: from.Add(16 * time.Hour), Rate: 0.003},
+	}}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{},
+		domain.ExchangeBybit:   &fakeMarket{},
+	}, &fakeSupply{}).WithFundingRate(map[domain.Exchange]domain.FundingRatePort{
+		domain.ExchangeBinance: bin,
+		domain.ExchangeBybit:   byb,
+		domain.ExchangeOKX:     okx,
+	})
+	feeBinance := 0.0
+	feeBybit := 0.05 // percent; also the OKX leg. Round trip on 10000 = 10.
+	got, err := svc.GetFundingArbHistory(context.Background(), FundingArbHistoryParams{
+		Symbol: "BTCUSDT", From: from, To: to, Notional: 10_000,
+		FeeBinancePct: &feeBinance, FeeBybitPct: &feeBybit,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Runs) != 1 {
+		t.Fatalf("%+v", got)
+	}
+	run := got.Runs[0]
+	if run.LongExchange != "binance" || run.ShortExchange != "okx" {
+		t.Fatalf("sides %+v", run)
+	}
+	// 16:00 only: 10000 × (0.003 − 0.0001) = 29, minus round-trip 10.
+	if !strings.Contains(run.NetAfterFees, "19") {
+		t.Fatalf("net %s fees %s", run.NetAfterFees, run.RoundTripFees)
+	}
+	if run.RoundTripFees != "10" && run.RoundTripFees != "10.0" && run.RoundTripFees != "10.00" {
+		t.Fatalf("okx must use the bybit fee, got %s", run.RoundTripFees)
+	}
+}
+
 func TestScanFundingArb_BadFee(t *testing.T) {
 	bad := 12.0
 	_, err := fundingArbSvc().ScanFundingArb(context.Background(), FundingArbScanParams{FeeBinancePct: &bad})

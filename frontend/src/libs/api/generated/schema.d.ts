@@ -791,14 +791,17 @@ export interface paths {
         };
         /**
          * Past after-fee funding stretches for one coin
-         * @description Settled Binance USD-M and Bybit linear funding prints in `[from, to]`.
-         *     Groups consecutive prints with the same long/short pair into a run and
-         *     lists a run only when settled funding minus round-trip taker fees is
-         *     positive. The first clock of a run is the entry signal — that payment
-         *     is not collected (the position was not open before it). A run that
-         *     starts and ends on the same clock is not profit. A direction flip at
-         *     settlement still pays the old sides, then starts a new run. `from`/`to`
-         *     are RFC3339, YYYY-MM-DD (UTC), or unix ms. Max 30 days. Informational only.
+         * @description Settled Binance USD-M, Bybit linear, and OKX USDT-swap funding prints
+         *     in `[from, to]`. Long is the lowest known rate and short is the highest
+         *     among venues that have printed. Groups consecutive prints with the same
+         *     long/short pair into a run and lists a run only when settled funding
+         *     minus round-trip taker fees is positive. The first clock of a run is
+         *     the entry signal — that payment is not collected (the position was not
+         *     open before it). A run that starts and ends on the same clock is not
+         *     profit. A direction flip at settlement still pays the old sides, then
+         *     starts a new run. OKX uses `feeBybitPct` (there is no separate OKX fee).
+         *     `from`/`to` are RFC3339, YYYY-MM-DD (UTC), or unix ms. Max 30 days.
+         *     Informational only.
          */
         get: operations["getMarketFundingArbHistory"];
         put?: never;
@@ -1842,10 +1845,14 @@ export interface paths {
          *     USD-M aggTrades, Bybit recent trades), not candle volume smeared
          *     across high–low (that is `/volume-profile`). `exchange=all`
          *     (default) returns Binance and Bybit separately plus `combined`.
-         *     Use `window` (`5m` / `15m` / `1h`, default `15m`) or `startTime`
-         *     + `endTime` (max 1h). Optional `tickSize` sets the row width;
-         *     `minPrice` / `maxPrice` clip the ladder to a band. `truncated`
-         *     is true when the venue tape does not cover the whole window.
+         *     Use `window` (`5m` / `15m` / `1h` / `4h` / `1d` / `3d` / `7d`,
+         *     default `15m`) or `startTime` + `endTime` (max 7d). The live
+         *     tape is about the last hour on Binance and the newest ~1000
+         *     Bybit trades. Closed minutes are stored while this process runs
+         *     (about 7 days), so a longer lookback and Bybit further back use
+         *     that buy/sell and print-count ladder. Optional `tickSize` sets
+         *     the row width; `minPrice` / `maxPrice` clip the ladder to a band.
+         *     `truncated` is true when stored rows do not cover the whole window.
          *     `trades` is aggregated print count, not individual orders.
          *     Informational only.
          */
@@ -9658,6 +9665,7 @@ export interface operations {
                 to: string;
                 notional?: number;
                 feeBinancePct?: number;
+                /** @description Bybit taker fee percent. Also the OKX leg (default paper 0.10) */
                 feeBybitPct?: number;
             };
             header?: never;
@@ -10919,9 +10927,9 @@ export interface operations {
                 symbol: string;
                 /** @description binance | bybit | all (default all = both + combined) */
                 exchange?: string;
-                /** @description 5m | 15m | 1h (default 15m). Ignored when startTime/endTime are set. */
+                /** @description 5m | 15m | 1h | 4h | 1d | 3d | 7d (default 15m). Ignored when startTime/endTime are set. */
                 window?: string;
-                /** @description Range start (RFC3339 or unix ms). Max span 1h. */
+                /** @description Range start (RFC3339 or unix ms). Max span 7d. Stored minutes cover the lookback; the live tape alone does not. */
                 startTime?: string;
                 /** @description Range end (RFC3339 or unix ms) */
                 endTime?: string;

@@ -4696,8 +4696,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             get_funding_arb_history,
             name="get_funding_arb_history",
             description=(
-                "Past Binance vs Bybit funding opportunities for one coin in a "
-                "date range. Uses settled funding prints only. Each run is a "
+                "Past Binance, Bybit, and OKX funding opportunities for one coin "
+                "in a date range. Uses settled funding prints only. Long is the "
+                "lowest known rate and short is the highest. OKX uses the Bybit "
+                "fee. Each run is a "
                 "stretch of the same long/short pair and is listed only when "
                 "settled funding minus round-trip fees is positive. The first "
                 "clock of a run is the entry signal and is not collected "

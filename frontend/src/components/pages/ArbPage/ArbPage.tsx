@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Button, InputNumber, Segmented, Table, message } from 'antd';
+import { Button, Input, InputNumber, Segmented, Table, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { PageHeader } from '@/components/molecules/PageHeader';
 import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
+import { defaultFundingHistoryRange, FundingArbHistoryTable } from '@/components/organisms/FundingArbHistoryTable';
 import { FundingArbScanTable } from '@/components/organisms/FundingArbScanTable';
 import { PriceDiffOpportunityTable, type PriceDiffOppStatusFilter } from '@/components/organisms/PriceDiffOpportunityTable';
 import { PriceDiffScanTable } from '@/components/organisms/PriceDiffScanTable';
@@ -13,6 +14,7 @@ import {
   useCreatePriceDiffWatchMutation,
   useDeleteFundingArbWatchMutation,
   useDeletePriceDiffWatchMutation,
+  useLazyGetMarketFundingArbHistoryQuery,
   useLazyScanMarketFundingArbQuery,
   useLazyScanPriceDiffQuotesQuery,
   useListFundingArbWatchesQuery,
@@ -157,7 +159,10 @@ function PricePane() {
 function FundingPane() {
   const { t } = useTranslation(['arb', 'common']);
   const [notional, setNotional] = useState(10000);
+  const [historySymbol, setHistorySymbol] = useState('BTCUSDT');
+  const [historyRange, setHistoryRange] = useState(defaultFundingHistoryRange);
   const [scan, scanState] = useLazyScanMarketFundingArbQuery();
+  const [loadHistory, historyState] = useLazyGetMarketFundingArbHistoryQuery();
   const watches = useListFundingArbWatchesQuery();
   const signals = useListFundingArbSignalsQuery({ status: 'all', limit: 20 });
   const [createWatch, createState] = useCreateFundingArbWatchMutation();
@@ -198,6 +203,54 @@ function FundingPane() {
           </Button>
         </Toolbar>
         <FundingArbScanTable scan={scanState.data} isLoading={scanState.isFetching} />
+      </Section>
+      <Section>
+        <Text variant="label">{t('arb:funding.history')}</Text>
+        <Text variant="bodySm">{t('arb:funding.historyHint')}</Text>
+        <Toolbar>
+          <Field>
+            <Text variant="caption" color="secondary">
+              {t('arb:funding.symbol')}
+            </Text>
+            <SymbolSuggest exchange="binance" value={historySymbol} onChange={setHistorySymbol} />
+          </Field>
+          <Field>
+            <Text variant="caption" color="secondary">
+              {t('arb:funding.historyFrom')}
+            </Text>
+            <Input
+              value={historyRange.from}
+              onChange={(e) => setHistoryRange((prev) => ({ ...prev, from: e.target.value }))}
+            />
+          </Field>
+          <Field>
+            <Text variant="caption" color="secondary">
+              {t('arb:funding.historyTo')}
+            </Text>
+            <Input
+              value={historyRange.to}
+              onChange={(e) => setHistoryRange((prev) => ({ ...prev, to: e.target.value }))}
+            />
+          </Field>
+          <Button
+            loading={historyState.isFetching}
+            onClick={() => {
+              void loadHistory({
+                symbol: historySymbol,
+                from: historyRange.from,
+                to: historyRange.to,
+                notional,
+              })
+                .unwrap()
+                .catch((err) => {
+                  message.error(rtkErrorMessage(err, { resource: t('arb:funding.resource') }));
+                });
+            }}
+          >
+            {t('arb:funding.historyLookup')}
+          </Button>
+        </Toolbar>
+        <FundingArbHistoryTable history={historyState.data} isLoading={historyState.isFetching} />
       </Section>
       <Section>
         <Text variant="label">{t('arb:funding.signals')}</Text>

@@ -1330,14 +1330,17 @@ paths:
     get:
       summary: Past after-fee funding stretches for one coin
       description: |
-        Settled Binance USD-M and Bybit linear funding prints in `[from, to]`.
-        Groups consecutive prints with the same long/short pair into a run and
-        lists a run only when settled funding minus round-trip taker fees is
-        positive. The first clock of a run is the entry signal — that payment
-        is not collected (the position was not open before it). A run that
-        starts and ends on the same clock is not profit. A direction flip at
-        settlement still pays the old sides, then starts a new run. `from`/`to`
-        are RFC3339, YYYY-MM-DD (UTC), or unix ms. Max 30 days. Informational only.
+        Settled Binance USD-M, Bybit linear, and OKX USDT-swap funding prints
+        in `[from, to]`. Long is the lowest known rate and short is the highest
+        among venues that have printed. Groups consecutive prints with the same
+        long/short pair into a run and lists a run only when settled funding
+        minus round-trip taker fees is positive. The first clock of a run is
+        the entry signal — that payment is not collected (the position was not
+        open before it). A run that starts and ends on the same clock is not
+        profit. A direction flip at settlement still pays the old sides, then
+        starts a new run. OKX uses `feeBybitPct` (there is no separate OKX fee).
+        `from`/`to` are RFC3339, YYYY-MM-DD (UTC), or unix ms. Max 30 days.
+        Informational only.
       operationId: getMarketFundingArbHistory
       tags: [Market]
       parameters:
@@ -1361,6 +1364,7 @@ paths:
           schema: { type: number }
         - name: feeBybitPct
           in: query
+          description: Bybit taker fee percent. Also the OKX leg (default paper 0.10)
           schema: { type: number }
       responses:
         '200':

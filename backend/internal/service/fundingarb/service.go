@@ -602,18 +602,20 @@ func (s *Service) attachReviews(ctx context.Context, sigs []domain.FundingArbSig
 		}
 		ranges[sigs[i].Symbol] = cur
 	}
-	hist := map[string][2][]domain.FundingPoint{}
+	hist := map[string]map[domain.Exchange][]domain.FundingPoint{}
 	for symbol, sp := range ranges {
 		if !sp.to.After(sp.from) {
 			continue
 		}
-		bin, _ := s.settled.ListSettledFunding(ctx, domain.ExchangeBinance, symbol, sp.from, sp.to)
-		byb, _ := s.settled.ListSettledFunding(ctx, domain.ExchangeBybit, symbol, sp.from, sp.to)
-		hist[symbol] = [2][]domain.FundingPoint{bin, byb}
+		pts := map[domain.Exchange][]domain.FundingPoint{}
+		for _, ex := range domain.FuturesVenues() {
+			rows, _ := s.settled.ListSettledFunding(ctx, ex, symbol, sp.from, sp.to)
+			pts[ex] = rows
+		}
+		hist[symbol] = pts
 	}
 	for i := range sigs {
-		pts := hist[sigs[i].Symbol]
-		sigs[i].Review = domain.BuildFundingArbReview(sigs[i].Expected, pts[0], pts[1], now)
+		sigs[i].Review = domain.BuildFundingArbReview(sigs[i].Expected, hist[sigs[i].Symbol], now)
 	}
 }
 

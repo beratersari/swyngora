@@ -31,6 +31,8 @@ export type FundingArbWatch = components['schemas']['FundingArbWatch'];
 export type FundingArbScanQuery = NonNullable<
   operations['scanMarketFundingArb']['parameters']['query']
 >;
+export type MarketFundingArbHistory = components['schemas']['MarketFundingArbHistory'];
+export type FundingArbHistoryQuery = operations['getMarketFundingArbHistory']['parameters']['query'];
 export type CreateFundingArbWatchArg = {
   symbol?: string;
   quote?: string;
@@ -175,6 +177,12 @@ export const arbApi = baseApi.injectEndpoints({
         params: compactParams({ ...(arg ?? {}) }),
       }),
     }),
+    getMarketFundingArbHistory: build.query<MarketFundingArbHistory, FundingArbHistoryQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/funding-arb/history',
+        params: compactParams({ ...arg }),
+      }),
+    }),
     listFundingArbWatches: build.query<FundingArbWatchList, void>({
       query: () => '/api/v1/funding-arb/watches',
       providesTags: ['FundingArbWatch'],
@@ -222,6 +230,8 @@ export const {
   useGetPriceDiffOpportunityQuery,
   useScanMarketFundingArbQuery,
   useLazyScanMarketFundingArbQuery,
+  useGetMarketFundingArbHistoryQuery,
+  useLazyGetMarketFundingArbHistoryQuery,
   useListFundingArbWatchesQuery,
   useCreateFundingArbWatchMutation,
   useDeleteFundingArbWatchMutation,

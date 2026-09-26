@@ -68,12 +68,23 @@ type fundingHistEv struct {
 	Rate     float64
 }
 
-// BuildFundingArbHistory walks settled Binance and Bybit prints and keeps
-// only after-fee winning runs of a stable long/short pair.
-func BuildFundingArbHistory(symbol string, binance, bybit []FundingPoint, notional, feeBinance, feeBybit float64, from, to time.Time) *FundingArbHistoryReport {
+// FundingArbHistLeg is one venue's settled funding prints and its taker fee fraction.
+type FundingArbHistLeg struct {
+	Exchange Exchange
+	Points   []FundingPoint
+	FeeRate  float64
+}
+
+// BuildFundingArbHistory walks settled Binance, Bybit, and OKX prints and keeps
+// only after-fee winning runs of a stable long/short pair. Long is the lowest
+// known rate, short the highest, among venues that have printed so far.
+func BuildFundingArbHistory(symbol string, legs []FundingArbHistLeg, notional float64, from, to time.Time) *FundingArbHistoryReport {
 	symbol = NormalizeLiquidationSymbol(symbol)
 	from, to = from.UTC(), to.UTC()
-	rtFee := notional * (feeBinance + feeBybit) * 2
+	fees := map[Exchange]float64{}
+	for _, leg := range legs {
+		fees[leg.Exchange] = leg.FeeRate
+	}
 	out := &FundingArbHistoryReport{
 		Symbol:   symbol,
 		Notional: formatQty(notional),
@@ -82,9 +93,9 @@ func BuildFundingArbHistory(symbol string, binance, bybit []FundingPoint, notion
 		Runs:     []FundingArbHistoryRun{},
 		Note:     FundingArbDisclaimer,
 	}
-	evs := mergeFundingHist(binance, bybit, from, to)
+	evs := mergeFundingHist(legs, from, to)
 	if len(evs) == 0 {
-		out.Summary = "No settled Binance or Bybit funding payments in that range."
+		out.Summary = "No settled Binance, Bybit, or OKX funding payments in that range."
 		return out
 	}
 
@@ -96,7 +107,6 @@ func BuildFundingArbHistory(symbol string, binance, bybit []FundingPoint, notion
 	}
 	var (
 		last = map[Exchange]float64{}
-		have = map[Exchange]bool{}
 		cur  *rawRun
 		skip int
 		runs = []FundingArbHistoryRun{}
@@ -125,10 +135,14 @@ func BuildFundingArbHistory(symbol string, binance, bybit []FundingPoint, notion
 			run.end = e.Time
 		}
 	}
+	roundTrip := func(long, short Exchange) float64 {
+		return notional * (fees[long] + fees[short]) * 2
+	}
 	flush := func() {
 		if cur == nil {
 			return
 		}
+		rtFee := roundTrip(cur.long, cur.short)
 		net := cur.funding - rtFee
 		if net <= fundingArbWorthEps {
 			skip++
@@ -161,13 +175,12 @@ func BuildFundingArbHistory(symbol string, binance, bybit []FundingPoint, notion
 		t := evs[i].Time
 		j := i
 		for j < len(evs) && evs[j].Time.Equal(t) {
-			have[evs[j].Exchange] = true
 			last[evs[j].Exchange] = evs[j].Rate
 			j++
 		}
 		batch := evs[i:j]
 		i = j
-		if !have[ExchangeBinance] || !have[ExchangeBybit] {
+		if len(last) < 2 {
 			continue
 		}
 		long, short := pickHistSides(last)
@@ -208,33 +221,40 @@ func BuildFundingArbHistory(symbol string, binance, bybit []FundingPoint, notion
 }
 
 func pickHistSides(last map[Exchange]float64) (long, short Exchange) {
-	br, bok := last[ExchangeBinance]
-	yr, yok := last[ExchangeBybit]
-	if !bok || !yok {
+	type rateRow struct {
+		ex   Exchange
+		rate float64
+	}
+	rows := make([]rateRow, 0, len(last))
+	for ex, rate := range last {
+		rows = append(rows, rateRow{ex: ex, rate: rate})
+	}
+	if len(rows) < 2 {
 		return "", ""
 	}
-	if yr > br {
-		return ExchangeBinance, ExchangeBybit
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].rate != rows[j].rate {
+			return rows[i].rate < rows[j].rate
+		}
+		return string(rows[i].ex) < string(rows[j].ex)
+	})
+	if rows[0].rate == rows[len(rows)-1].rate {
+		return "", ""
 	}
-	if br > yr {
-		return ExchangeBybit, ExchangeBinance
-	}
-	return "", ""
+	return rows[0].ex, rows[len(rows)-1].ex
 }
 
-func mergeFundingHist(binance, bybit []FundingPoint, from, to time.Time) []fundingHistEv {
-	out := make([]fundingHistEv, 0, len(binance)+len(bybit))
-	add := func(ex Exchange, pts []FundingPoint) {
-		for _, p := range pts {
+func mergeFundingHist(legs []FundingArbHistLeg, from, to time.Time) []fundingHistEv {
+	out := make([]fundingHistEv, 0)
+	for _, leg := range legs {
+		for _, p := range leg.Points {
 			t := p.Time.UTC()
 			if t.IsZero() || t.Before(from) || t.After(to) {
 				continue
 			}
-			out = append(out, fundingHistEv{Time: t, Exchange: ex, Rate: p.Rate})
+			out = append(out, fundingHistEv{Time: t, Exchange: leg.Exchange, Rate: p.Rate})
 		}
 	}
-	add(ExchangeBinance, binance)
-	add(ExchangeBybit, bybit)
 	sort.SliceStable(out, func(i, j int) bool {
 		if !out[i].Time.Equal(out[j].Time) {
 			return out[i].Time.Before(out[j].Time)

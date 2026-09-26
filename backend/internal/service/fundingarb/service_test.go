@@ -384,3 +384,46 @@ func TestGetSignal_ReviewComparesSettledRates(t *testing.T) {
 		t.Fatalf("should not be worth it after weaker settle: %+v", got.Review)
 	}
 }
+
+func TestGetSignal_ReviewMatchesOKXPrint(t *testing.T) {
+	st, err := fundingarbstore.Open(filepath.Join(t.TempDir(), "fa.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	clk := time.Date(2026, 8, 20, 8, 0, 0, 0, time.UTC)
+	q := &fakeQuotes{rep: &domain.FundingArbReport{
+		Symbol: "BTCUSDT", HorizonNet: 20,
+		Trade: &domain.FundingArbTradeView{LongExchange: "binance", ShortExchange: "okx", WorthIt: true},
+		Expected: &domain.FundingArbExpected{
+			Notional: 10_000, HoldHours: 8, ExpectedNet: 20, HorizonFunding: 20, RoundTripFee: 0,
+			LongExchange: domain.ExchangeBinance, ShortExchange: domain.ExchangeOKX,
+			Payments: []domain.FundingArbExpectedPayment{
+				{Time: clk, Exchange: domain.ExchangeOKX, Rate: 0.002, Amount: 20},
+			},
+		},
+	}}
+	svc := New(st, q)
+	svc.SetSettledFunding(&fakeSettled{pts: map[string][]domain.FundingPoint{
+		"okx:BTCUSDT": {{Time: clk, Rate: 0.002}},
+	}})
+	if _, err := svc.CreateWatch(context.Background(), CreateInput{
+		ClientID: "client-a", Symbol: "BTCUSDT", Notional: 10000, HoldHours: 8, MinProfit: 5,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := svc.ProcessActiveWatches(context.Background(), clk.Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	sigs, err := svc.ListSignals(context.Background(), "client-a", "open", 10)
+	if err != nil || len(sigs) != 1 {
+		t.Fatalf("%+v %v", sigs, err)
+	}
+	got, err := svc.GetSignal(context.Background(), "client-a", sigs[0].ID)
+	if err != nil || got.Review == nil || got.Review.SettledCount != 1 || got.Review.MissingCount != 0 {
+		t.Fatalf("%+v %v", got, err)
+	}
+	if got.Review.ActualFunding != 20 || len(got.Review.Payments) != 1 || got.Review.Payments[0].Exchange != domain.ExchangeOKX {
+		t.Fatalf("%+v", got.Review)
+	}
+}

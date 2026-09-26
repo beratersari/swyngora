@@ -255,6 +255,14 @@ func TestResolveFundingArbRange(t *testing.T) {
 	}
 }
 
+func buildHist(symbol string, bin, byb, okx []FundingPoint, notional, feeBinance, feeBybit float64, from, to time.Time) *FundingArbHistoryReport {
+	return BuildFundingArbHistory(symbol, []FundingArbHistLeg{
+		{Exchange: ExchangeBinance, Points: bin, FeeRate: feeBinance},
+		{Exchange: ExchangeBybit, Points: byb, FeeRate: feeBybit},
+		{Exchange: ExchangeOKX, Points: okx, FeeRate: feeBybit},
+	}, notional, from, to)
+}
+
 func TestBuildFundingArbHistory_WinningRun(t *testing.T) {
 	from := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	to := from.Add(24 * time.Hour)
@@ -268,7 +276,7 @@ func TestBuildFundingArbHistory_WinningRun(t *testing.T) {
 	}
 	// 08:00 is the entry signal (not collected). 16:00 is the first hold:
 	// 10000 × 0.0019 = 19. Fees 4. Net 15.
-	got := BuildFundingArbHistory("BTCUSDT", bin, byb, 10_000, 0.0001, 0.0001, from, to)
+	got := buildHist("BTCUSDT", bin, byb, nil, 10_000, 0.0001, 0.0001, from, to)
 	if len(got.Runs) != 1 {
 		t.Fatalf("%+v", got)
 	}
@@ -289,6 +297,38 @@ func TestBuildFundingArbHistory_WinningRun(t *testing.T) {
 		t.Fatalf("duration %s", run.DurationHours)
 	}
 	if !strings.Contains(run.NetAfterFees, "15") {
+		t.Fatalf("net %s fund=%s", run.NetAfterFees, run.FundingAmount)
+	}
+}
+
+func TestBuildFundingArbHistory_OKXCanBeTheShort(t *testing.T) {
+	from := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(24 * time.Hour)
+	bin := []FundingPoint{
+		{Time: from.Add(8 * time.Hour), Rate: 0.0001},
+		{Time: from.Add(16 * time.Hour), Rate: 0.0001},
+	}
+	byb := []FundingPoint{
+		{Time: from.Add(8 * time.Hour), Rate: 0.001},
+		{Time: from.Add(16 * time.Hour), Rate: 0.001},
+	}
+	okx := []FundingPoint{
+		{Time: from.Add(8 * time.Hour), Rate: 0.003},
+		{Time: from.Add(16 * time.Hour), Rate: 0.003},
+	}
+	// 08:00 entry. 16:00 long binance 0.0001, short okx 0.003: 10000 × 0.0029 = 29.
+	got := buildHist("BTCUSDT", bin, byb, okx, 10_000, 0, 0, from, to)
+	if len(got.Runs) != 1 {
+		t.Fatalf("%+v", got)
+	}
+	run := got.Runs[0]
+	if run.LongExchange != "binance" || run.ShortExchange != "okx" {
+		t.Fatalf("sides %+v", run)
+	}
+	if run.PaymentCount != 2 {
+		t.Fatalf("pays %d want the binance and okx legs at 16:00", run.PaymentCount)
+	}
+	if !strings.Contains(run.NetAfterFees, "29") {
 		t.Fatalf("net %s fund=%s", run.NetAfterFees, run.FundingAmount)
 	}
 }
@@ -360,10 +400,10 @@ func TestBuildFundingArbHistory_SameClockNotProfit(t *testing.T) {
 	from := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
 	to := from.Add(24 * time.Hour)
 	at := from.Add(8 * time.Hour)
-	got := BuildFundingArbHistory("BTCUSDT",
+	got := buildHist("BTCUSDT",
 		[]FundingPoint{{Time: at, Rate: 0.0001}},
 		[]FundingPoint{{Time: at, Rate: 0.05}},
-		10_000, 0, 0, from, to)
+		nil, 10_000, 0, 0, from, to)
 	if len(got.Runs) != 0 {
 		t.Fatalf("08:00 start=end must not collect that payment %+v", got.Runs)
 	}
@@ -382,7 +422,7 @@ func TestBuildFundingArbHistory_SkipLosersAndFlip(t *testing.T) {
 	}
 	// 08:00 entry (not collected). 16:00 flips: old long binance / short bybit
 	// still receives that clock (-30 + 1 = -29) then the run ends. Fees 40.
-	got := BuildFundingArbHistory("ETHUSDT", bin, byb, 10_000, 0.001, 0.001, from, to)
+	got := buildHist("ETHUSDT", bin, byb, nil, 10_000, 0.001, 0.001, from, to)
 	if len(got.Runs) != 0 || got.SkippedUnprofitable < 1 {
 		t.Fatalf("%+v", got)
 	}
@@ -403,7 +443,7 @@ func TestBuildFundingArbHistory_FlipCollectsOldPayment(t *testing.T) {
 	}
 	// 08:00 entry. 16:00 same sides: 19. 00:00 flip: old sides still get
 	// -1.2 + 1.1 = -0.1. Fees 0. Net 18.9. New run starts at 00:00 (no collect).
-	got := BuildFundingArbHistory("BTCUSDT", bin, byb, 10_000, 0, 0, from, to)
+	got := buildHist("BTCUSDT", bin, byb, nil, 10_000, 0, 0, from, to)
 	if len(got.Runs) != 1 {
 		t.Fatalf("%+v", got)
 	}

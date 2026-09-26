@@ -2,8 +2,8 @@
 
 ## Goal
 
-Find **real, sized** trades from the **funding-rate gap** between Binance USD-M
-and Bybit linear perpetual. Show which venue to **long**, which to **short**,
+Find **real, sized** trades from the **funding-rate gap** between Binance USD-M,
+Bybit linear, and OKX USDT-swap perpetuals. Show which venue to **long**, which to **short**,
 fold in **taker fees** and each venue's **spot vs perpetual** price, then say
 about how much the entered size could earn after the next funding and over a
 hold window.
@@ -23,7 +23,7 @@ Fee at a clock: `notional × rate` (long pays when the rate is positive; short
 receives). A hold window with **no** clock in `(now, now+holdHours]` has
 **funding 0**.
 
-Web: `/arb` (Funding tab).
+Web: `/arb` (Funding tab), including past stretches for one coin.
 
 `GET /api/v1/market/funding-arb?symbol=BTCUSDT&notional=10000`
 
@@ -32,13 +32,14 @@ Web: `/arb` (Funding tab).
 - Later clocks in the window use the current predicted rate (the only future
   rate the venue publishes)
 - `trade` is omitted unless after-fee net is positive
-- Fees default to paper taker 0.10%; override with `feeBinancePct` / `feeBybitPct`
+- Fees default to paper taker 0.10%; override with `feeBinancePct` / `feeBybitPct` (`feeBybitPct` is also the OKX leg)
 
 `GET /api/v1/market/funding-arb/scan` — same math; **only after-fee winners**
 
 `GET /api/v1/market/funding-arb/history?symbol=BTCUSDT&from=2026-08-01&to=2026-08-08`
 
-- Settled prints from Binance `/fapi/v1/fundingRate` and Bybit `/v5/market/funding/history`
+- Settled prints from Binance `/fapi/v1/fundingRate`, Bybit `/v5/market/funding/history`, and OKX `/api/v5/public/funding-rate-history`
+- Long the lowest known rate and short the highest among Binance, Bybit, and OKX
 - Groups consecutive prints with the same long/short pair
 - The **first clock of a run is the entry signal** — that payment is not
   collected (the position was not open before it). A stretch that starts and
@@ -68,7 +69,7 @@ watches per client.
 When a watch opens a signal, the **predicted** payment schedule at that
 moment is stored. After those settlement clocks pass,
 `GET /api/v1/funding-arb/signals` and `GET /api/v1/funding-arb/signals/{id}`
-include `review`: actual settled rates versus that prediction, whether
+include `review`: actual settled Binance, Bybit, and OKX rates versus that prediction, whether
 the trade was still profitable after fees, and the difference
 (`deltaNet`). Clocks that have not printed yet are `pending`.
 
@@ -97,7 +98,7 @@ curl "http://localhost:8080/api/v1/market/funding-arb/history?symbol=BTCUSDT&fro
 
 ## Limits
 
-- Binance USD-M and Bybit linear only (not Coinbase, not inverse)
+- Binance USD-M, Bybit linear, and OKX USDT-swap (not Coinbase, not inverse). History uses the same three venues as the live quote.
 - Live quote uses the **predicted next** rate on each future clock; history uses settled prints only
 - Default 0.10% taker fees often need several settlements to break even
 - Visible last/mark vs spot only — no live book walk for the perp legs

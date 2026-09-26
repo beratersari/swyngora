@@ -72,7 +72,7 @@ func (s *Service) GetFundingArbHistory(ctx context.Context, in FundingArbHistory
 		pts []domain.FundingPoint
 		err error
 	}
-	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
+	want := domain.FuturesVenues()
 	ch := make(chan histJob, len(want))
 	for _, ex := range want {
 		go func() {
@@ -85,25 +85,24 @@ func (s *Service) GetFundingArbHistory(ctx context.Context, in FundingArbHistory
 			ch <- histJob{ex: ex, pts: pts, err: err}
 		}()
 	}
-	var bin, byb []domain.FundingPoint
+	legs := make([]domain.FundingArbHistLeg, 0, len(want))
 	var lastErr error
+	gotAny := false
 	for range want {
 		j := <-ch
 		if j.err != nil {
 			lastErr = j.err
 			continue
 		}
-		switch j.ex {
-		case domain.ExchangeBinance:
-			bin = j.pts
-		case domain.ExchangeBybit:
-			byb = j.pts
-		}
+		gotAny = true
+		legs = append(legs, domain.FundingArbHistLeg{
+			Exchange: j.ex, Points: j.pts, FeeRate: feeForFundingArb(j.ex, fees),
+		})
 	}
-	if bin == nil && byb == nil && lastErr != nil {
+	if !gotAny && lastErr != nil {
 		return nil, lastErr
 	}
-	return domain.BuildFundingArbHistory(symbol, bin, byb, notional, fees.binance, fees.bybit, from, to), nil
+	return domain.BuildFundingArbHistory(symbol, legs, notional, from, to), nil
 }
 
 // ListSettledFunding returns settled prints for one venue in [from, to].

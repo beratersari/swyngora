@@ -732,13 +732,13 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_funding_arb_history",
-		mcp.WithDescription("Past Binance vs Bybit funding opportunities for one coin in a date range. Uses settled funding prints only. Each run is a stretch of the same long/short pair; listed only when settled funding minus round-trip fees is positive. The first clock of a run is the entry signal — that payment is not collected because the position was not open before it. A direction flip at settlement still pays the old sides, then starts a new run. from/to are RFC3339 or YYYY-MM-DD (UTC), max 30 days. Not financial advice."),
+		mcp.WithDescription("Past Binance, Bybit, and OKX funding opportunities for one coin in a date range. Uses settled funding prints only. Long is the lowest known rate and short is the highest. Each run is a stretch of the same long/short pair; listed only when settled funding minus round-trip fees is positive. The first clock of a run is the entry signal — that payment is not collected because the position was not open before it. A direction flip at settlement still pays the old sides, then starts a new run. from/to are RFC3339 or YYYY-MM-DD (UTC), max 30 days. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("from", mcp.Required(), mcp.Description("Range start RFC3339 or YYYY-MM-DD")),
 		mcp.WithString("to", mcp.Required(), mcp.Description("Range end RFC3339 or YYYY-MM-DD")),
 		mcp.WithNumber("notional", mcp.Description("Quote size on each leg (default 10000)")),
 		mcp.WithNumber("feeBinancePct", mcp.Description("Binance taker fee percent (default paper 0.10)")),
-		mcp.WithNumber("feeBybitPct", mcp.Description("Bybit taker fee percent (default paper 0.10)")),
+		mcp.WithNumber("feeBybitPct", mcp.Description("Bybit taker fee percent. Also the OKX leg (default paper 0.10)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")
 		if err != nil {

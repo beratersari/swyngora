@@ -53,7 +53,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/funding-rate` | Predicted next perpetual funding + recent settlements (Binance USD-M + Bybit linear + OKX USDT-swap); `pressure` is OI-weighted combined predicted funding plus 1h/4h/24h change |
 | `GET` | `/api/v1/market/funding-arb` | Long cheaper-funding venue / short richer one; sized after-fee payout + spot-perp |
 | `GET` | `/api/v1/market/funding-arb/scan` | After-fee winners only (published settlements in the hold window) |
-| `GET` | `/api/v1/market/funding-arb/history` | Past after-fee stretches for one coin (`from`/`to`; first clock is entry only) |
+| `GET` | `/api/v1/market/funding-arb/history` | Past after-fee stretches for one coin (`from`/`to`; Binance, Bybit, and OKX; first clock is entry only) |
 | `POST`/`GET` | `/api/v1/funding-arb/watches` | Follow the scan (omit `symbol`) or one pair; notify when after-fee net ≥ `minProfit` |
 | `GET`/`PATCH`/`DELETE` | `/api/v1/funding-arb/watches/{id}` | Get / edit settings / delete a funding-arb follow |
 | `POST` | `/api/v1/funding-arb/watches/{id}/pause` | Pause a follow without deleting it |

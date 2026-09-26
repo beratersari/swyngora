@@ -82,6 +82,15 @@
     "result": "After settle",
     "pending": "Pending",
     "stillGood": "Still profitable",
-    "notGood": "Not profitable"
+    "notGood": "Not profitable",
+    "history": "Past stretches",
+    "historyHint": "Settled Binance, Bybit, and OKX prints. Long is the lowest known rate and short is the highest. The first clock of a run is the entry, not collected profit.",
+    "historyLookup": "Look up history",
+    "historyFrom": "From",
+    "historyTo": "To",
+    "historyEmpty": "No after-fee winning stretch in that range.",
+    "started": "Started",
+    "ended": "Ended",
+    "payments": "Payments"
   }
 }

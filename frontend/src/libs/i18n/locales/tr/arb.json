@@ -82,6 +82,15 @@
     "result": "Ödeme sonrası",
     "pending": "Bekliyor",
     "stillGood": "Hâlâ kârlı",
-    "notGood": "Kârlı değil"
+    "notGood": "Kârlı değil",
+    "history": "Geçmiş dilimler",
+    "historyHint": "Binance, Bybit ve OKX gerçekleşmiş ödemeleri. Long bilinen en düşük oran, short en yüksek orandır. Bir dilimin ilk saati giriş sinyalidir, toplanan kâr değildir.",
+    "historyLookup": "Geçmişe bak",
+    "historyFrom": "Başlangıç",
+    "historyTo": "Bitiş",
+    "historyEmpty": "Bu aralıkta ücret sonrası kazanan dilim yok.",
+    "started": "Başladı",
+    "ended": "Bitti",
+    "payments": "Ödemeler"
   }
 }

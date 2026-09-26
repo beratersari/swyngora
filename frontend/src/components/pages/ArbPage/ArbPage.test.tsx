@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '@/test/render';
 import { ArbPage } from './ArbPage';
 
@@ -26,5 +27,13 @@ describe('ArbPage', () => {
     renderWithProviders(<ArbPage />);
     expect(screen.getByText(/cross-exchange|çapraz borsa/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /scan books|kitapları tara/i })).toBeInTheDocument();
+  });
+
+  it('shows settled funding history on the funding tab', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ArbPage />);
+    await user.click(screen.getByText(/^funding$|^fonlama$/i));
+    expect(screen.getByRole('button', { name: /look up history|geçmişe bak/i })).toBeInTheDocument();
+    expect(screen.getByText(/binance, bybit, and okx|binance, bybit ve okx/i)).toBeInTheDocument();
   });
 });

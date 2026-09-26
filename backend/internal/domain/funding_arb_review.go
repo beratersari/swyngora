@@ -96,7 +96,7 @@ func FundingArbExpectedFromRaw(raw fundingArbTradeRaw) *FundingArbExpected {
 
 // BuildFundingArbReview scores settled prints against the predicted schedule.
 // Clocks after now are pending. A clock that has passed with no print is missing.
-func BuildFundingArbReview(exp *FundingArbExpected, binance, bybit []FundingPoint, now time.Time) *FundingArbReview {
+func BuildFundingArbReview(exp *FundingArbExpected, settled map[Exchange][]FundingPoint, now time.Time) *FundingArbReview {
 	if exp == nil || len(exp.Payments) == 0 {
 		return nil
 	}
@@ -115,10 +115,7 @@ func BuildFundingArbReview(exp *FundingArbExpected, binance, bybit []FundingPoin
 			Status: FundingArbReviewPending,
 		}
 		if !p.Time.After(now) {
-			pts := binance
-			if p.Exchange == ExchangeBybit {
-				pts = bybit
-			}
+			pts := settled[p.Exchange]
 			if pt, ok := findSettledFundingPrint(pts, p.Time); ok {
 				row.Status = FundingArbReviewSettled
 				row.ActualRate = pt.Rate
