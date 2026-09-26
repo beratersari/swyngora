@@ -35,6 +35,7 @@ type DataPort interface {
 	AnalyzeOrderBook(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error)
 	AnalyzeCombinedOrderBook(ctx context.Context, symbol string, rangePct float64) (json.RawMessage, error)
 	EstimateOrderBookImpact(ctx context.Context, exchange, symbol, side string, quantity, notional float64) (json.RawMessage, error)
+	ScanOrderBookImpact(ctx context.Context, exchange, quote, side string, notional float64, limit int) (json.RawMessage, error)
 	GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetOrderBookHeatmap(ctx context.Context, exchange, symbol, group string, windowSec int) (json.RawMessage, error)
 	GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -529,6 +530,21 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.AnalyzeCombinedOrderBook(ctx, symbol, req.GetFloat("rangePct", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("scan_market_impact",
+		mcp.WithDescription("Rank liquid coins by slippage for the same quote-sized market order. Walks live spot books. Buy consumes asks, sell consumes bids. exchange=all merges Binance, Coinbase, and Bybit. Default notional is 100000 quote. Wider slippage ranks first. exhausted means the visible book could not fill the whole order. Simulation only. Not financial advice."),
+		mcp.WithString("exchange", mcp.Description("binance | coinbase | bybit | all (default all)")),
+		mcp.WithString("quote", mcp.Description("Quote asset, default USDT")),
+		mcp.WithString("side", mcp.Description("buy or sell (default buy)")),
+		mcp.WithNumber("notional", mcp.Description("Shared quote size (default 100000)")),
+		mcp.WithNumber("limit", mcp.Description("How many liquid pairs (default 20, max 30)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.ScanOrderBookImpact(ctx, req.GetString("exchange", "all"), req.GetString("quote", "USDT"), req.GetString("side", "buy"), req.GetFloat("notional", 0), int(req.GetFloat("limit", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

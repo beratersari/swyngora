@@ -15,6 +15,7 @@ export const I18N_NAMESPACES = [
   'surges',
   'ordercount',
   'printsize',
+  'impact',
   'ai',
   'alerts',
   'compare',

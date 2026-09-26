@@ -98,8 +98,11 @@ func (s *Service) GetOrderCountOverview(ctx context.Context, exchange, quote str
 
 func (s *Service) orderCountUniverse(ctx context.Context, ex, quote string, limit int) ([]string, error) {
 	listEx := domain.ExchangeBinance
-	if ex == string(domain.ExchangeBybit) {
+	switch ex {
+	case string(domain.ExchangeBybit):
 		listEx = domain.ExchangeBybit
+	case string(domain.ExchangeCoinbase):
+		listEx = domain.ExchangeCoinbase
 	}
 	spot, err := s.ListSpotMarkets(ctx, string(listEx), domain.SpotListQuery{
 		QuoteAsset: quote,

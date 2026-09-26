@@ -51,7 +51,7 @@ Coin detail also has an **order heatmap** (resting bid/ask size over time) from 
 - Live local books on Binance, Coinbase, and Bybit (websocket; gap/drop resyncs).
 - `analysis` uses depth within ±`rangePct` of mid (default 2%) for pressure, imbalance, and walls. Walls include `behavior` (`short` / `persistent` / `suspicious`).
 - `GET /api/v1/market/orderbook/combined` sums all three venues in a symmetric ±% both sides can reach.
-- `GET /api/v1/market/orderbook/impact` walks live asks (buy) or bids (sell) for a size (`quantity` or `notional`) and returns average fill, slippage, and touch impact when leftover depth remains. If the visible side is wiped, impact is not calculated.
+- `GET /api/v1/market/orderbook/impact` walks live asks (buy) or bids (sell) for a size (`quantity` or `notional`) and returns average fill, slippage, and touch impact when leftover depth remains. If the visible side is wiped, impact is not calculated. `GET /api/v1/market/orderbook/impact/scan` ranks liquid pairs by that slippage for one shared quote size.
 - `GET /api/v1/market/orderbook/liquidity` scores 0–100 from ±0.1 / ±0.5 / ±1% bid/ask notional that the book actually covers; market-wide uses the common venue range.
 - `GET /api/v1/market/liquidations` rolling 5m/1h/4h/24h long vs short futures liquidations (Binance USD-M + Bybit linear). See [`liquidations.md`](liquidations.md).
 - `GET /api/v1/market/liquidation-cascade` short-burst long/short cascade vs typical (1m/5m/15m); one coin or `symbol=all`. See [`liquidations.md`](liquidations.md).

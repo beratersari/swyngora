@@ -18,6 +18,7 @@ type fakeMarket struct {
 	tickers      map[string]*domain.Ticker24h
 	spot         []domain.SpotMarket
 	prints       map[string][]domain.TakerPrint
+	books        map[string]*domain.RawOrderBook
 	printSyms    []string
 	err          error
 	tickerErr    error
@@ -122,6 +123,11 @@ func (f *fakeMarket) GetOrderBook(_ context.Context, q domain.OrderBookQuery) (*
 	}
 	if f.err != nil {
 		return nil, f.err
+	}
+	if f.books != nil {
+		if b, ok := f.books[strings.ToUpper(q.Symbol)]; ok {
+			return b, nil
+		}
 	}
 	return sampleRawBook(q.Symbol), nil
 }

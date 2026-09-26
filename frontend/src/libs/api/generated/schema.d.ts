@@ -492,6 +492,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/orderbook/impact/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rank coins by slippage for the same market order
+         * @description Walks the same quote-sized market order through each liquid pair's live
+         *     spot book and ranks by slippage versus mid, widest first. Buy consumes
+         *     asks; sell consumes bids. `exchange=all` merges Binance, Coinbase, and
+         *     Bybit. Default order is 100,000 quote (1,000 to 50,000,000). A book
+         *     that cannot fill the whole order is `exhausted`. Simulation only.
+         */
+        get: operations["scanSpotOrderBookImpact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/orderbook/impact": {
         parameters: {
             query?: never;
@@ -7157,6 +7181,37 @@ export interface components {
             venueCount?: number;
             live?: boolean;
             fills?: components["schemas"]["OrderBookImpactFill"][];
+        };
+        OrderBookImpactScanHit: {
+            symbol?: string;
+            scope?: string;
+            /** @enum {string} */
+            side?: "buy" | "sell";
+            slippagePct?: number;
+            slippageVsBestPct?: number;
+            impactPct?: number;
+            impactAvailable?: boolean;
+            exhausted?: boolean;
+            averagePrice?: string;
+            bestPrice?: string;
+            spentNotional?: string;
+            levelsUsed?: number;
+            summary?: string;
+            error?: string;
+        };
+        /** @description Same-size market order ranked by slippage across liquid pairs */
+        OrderBookImpactScan: {
+            exchange?: string;
+            quote?: string;
+            side?: string;
+            notional?: number;
+            universe?: number;
+            /** Format: date-time */
+            asOf?: string;
+            medianSlippagePct?: number;
+            exhaustedCoins?: number;
+            hits?: components["schemas"]["OrderBookImpactScanHit"][];
+            summary?: string;
             note?: string;
         };
         Supply: {
@@ -9604,6 +9659,37 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    scanSpotOrderBookImpact: {
+        parameters: {
+            query?: {
+                /** @description binance | coinbase | bybit | all (default all) */
+                exchange?: string;
+                quote?: string;
+                side?: "buy" | "sell";
+                /** @description Shared quote size. Default 100000. */
+                notional?: number;
+                /** @description How many liquid pairs (default 20, min 5, max 30) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Coins ranked by slippage for one order size */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderBookImpactScan"];
+                };
+            };
+            400: components["responses"]["Error"];
             502: components["responses"]["Error"];
         };
     };

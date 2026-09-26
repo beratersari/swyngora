@@ -288,6 +288,39 @@ func (b *Backend) EstimateOrderBookImpact(ctx context.Context, exchange, symbol,
 	})
 }
 
+func (b *Backend) ScanOrderBookImpact(ctx context.Context, exchange, quote, side string, notional float64, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.ScanOrderBookImpact(ctx, exchange, quote, side, notional, limit)
+	if err != nil {
+		return nil, err
+	}
+	if got == nil {
+		return mustJSON(map[string]any{})
+	}
+	hits := make([]map[string]any, 0, len(got.Hits))
+	for _, h := range got.Hits {
+		row := map[string]any{
+			"symbol": h.Symbol, "scope": h.Scope, "side": h.Side,
+			"slippagePct": h.SlippagePct, "slippageVsBestPct": h.SlippageVsBestPct,
+			"impactPct": h.ImpactPct, "impactAvailable": h.ImpactAvailable, "exhausted": h.Exhausted,
+			"averagePrice": h.AveragePrice, "bestPrice": h.BestPrice, "spentNotional": h.SpentNotional,
+			"levelsUsed": h.LevelsUsed, "summary": h.Summary,
+		}
+		if h.Error != "" {
+			row["error"] = h.Error
+		}
+		hits = append(hits, row)
+	}
+	return mustJSON(map[string]any{
+		"exchange": got.Exchange, "quote": got.Quote, "side": got.Side, "notional": got.Notional,
+		"universe": got.Universe, "asOf": got.AsOf.UTC().Format(time.RFC3339Nano),
+		"medianSlippagePct": got.MedianSlippagePct, "exhaustedCoins": got.ExhaustedCoins,
+		"hits": hits, "summary": got.Summary, "note": got.Note,
+	})
+}
+
 func (b *Backend) GetOptions(ctx context.Context, exchange, asset string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

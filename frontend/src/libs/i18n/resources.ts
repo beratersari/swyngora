@@ -6,6 +6,7 @@ import pumpsEn from './locales/en/pumps.json';
 import surgesEn from './locales/en/surges.json';
 import ordercountEn from './locales/en/ordercount.json';
 import printsizeEn from './locales/en/printsize.json';
+import impactEn from './locales/en/impact.json';
 import aiEn from './locales/en/ai.json';
 import alertsEn from './locales/en/alerts.json';
 import compareEn from './locales/en/compare.json';
@@ -26,6 +27,7 @@ import pumpsTr from './locales/tr/pumps.json';
 import surgesTr from './locales/tr/surges.json';
 import ordercountTr from './locales/tr/ordercount.json';
 import printsizeTr from './locales/tr/printsize.json';
+import impactTr from './locales/tr/impact.json';
 import aiTr from './locales/tr/ai.json';
 import alertsTr from './locales/tr/alerts.json';
 import compareTr from './locales/tr/compare.json';
@@ -53,6 +55,7 @@ export const resources = {
     surges: surgesEn,
     ordercount: ordercountEn,
     printsize: printsizeEn,
+    impact: impactEn,
     ai: aiEn,
     alerts: alertsEn,
     compare: compareEn,
@@ -75,6 +78,7 @@ export const resources = {
     surges: surgesTr,
     ordercount: ordercountTr,
     printsize: printsizeTr,
+    impact: impactTr,
     ai: aiTr,
     alerts: alertsTr,
     compare: compareTr,

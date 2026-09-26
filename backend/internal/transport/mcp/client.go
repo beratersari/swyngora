@@ -248,6 +248,27 @@ func (c *APIClient) EstimateOrderBookImpact(ctx context.Context, exchange, symbo
 	return c.get(ctx, "/api/v1/market/orderbook/impact", q)
 }
 
+// ScanOrderBookImpact ranks coins by slippage for one shared notional.
+func (c *APIClient) ScanOrderBookImpact(ctx context.Context, exchange, quote, side string, notional float64, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if quote != "" {
+		q.Set("quote", quote)
+	}
+	if side != "" {
+		q.Set("side", side)
+	}
+	if notional > 0 {
+		q.Set("notional", strconv.FormatFloat(notional, 'f', -1, 64))
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/orderbook/impact/scan", q)
+}
+
 // GetLiquidations returns rolling 5m/1h/4h/24h futures liquidation totals.
 func (c *APIClient) GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

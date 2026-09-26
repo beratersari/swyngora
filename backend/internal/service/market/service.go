@@ -1344,6 +1344,75 @@ func (s *Service) EstimateOrderBookImpact(ctx context.Context, exchange, symbol,
 	return &imp, nil
 }
 
+const impactScanDisclaimer = "Same quote-sized market order walked through each liquid pair's live spot book. Buy consumes asks, sell consumes bids. exchange=all merges Binance, Coinbase, and Bybit and takes the best prices first. Slippage is the average fill versus mid. A coin that cannot fill the whole order is marked exhausted. Simulation only — not a quote or financial advice."
+
+// ScanOrderBookImpact ranks liquid pairs by slippage for one shared notional.
+func (s *Service) ScanOrderBookImpact(ctx context.Context, exchange, quote, side string, notional float64, limit int) (*domain.ImpactScan, error) {
+	ex, err := domain.ParseImpactScanExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	side, err = domain.ParseImpactSide(side)
+	if err != nil {
+		return nil, err
+	}
+	notional, err = domain.ParseImpactScanNotional(notional)
+	if err != nil {
+		return nil, err
+	}
+	if quote == "" {
+		quote = "USDT"
+	}
+	limit = domain.ParseImpactScanLimit(limit)
+	listEx := ex
+	if listEx == "all" {
+		listEx = string(domain.ExchangeBinance)
+	}
+	symbols, err := s.orderCountUniverse(ctx, listEx, quote, limit)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	hits := make([]domain.ImpactScanHit, len(symbols))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 4)
+	for i, symbol := range symbols {
+		wg.Add(1)
+		go func(i int, symbol string) {
+			defer wg.Done()
+			select {
+			case <-ctx.Done():
+				return
+			case sem <- struct{}{}:
+			}
+			defer func() { <-sem }()
+			hits[i] = s.impactScanOne(ctx, ex, symbol, side, notional)
+		}(i, symbol)
+	}
+	wg.Wait()
+	out := domain.BuildImpactScan(ex, quote, side, notional, hits, now)
+	out.Note = impactScanDisclaimer
+	return &out, nil
+}
+
+func (s *Service) impactScanOne(ctx context.Context, exchange, symbol, side string, notional float64) domain.ImpactScanHit {
+	got, err := s.EstimateOrderBookImpact(ctx, exchange, symbol, side, 0, notional)
+	if err != nil {
+		return domain.ImpactScanHit{Symbol: symbol, Side: side, Error: err.Error(), Summary: err.Error()}
+	}
+	if got == nil {
+		return domain.ImpactScanHit{Symbol: symbol, Side: side, Error: "empty impact", Summary: "empty impact"}
+	}
+	return domain.ImpactScanHit{
+		Symbol: got.Symbol, Scope: got.Scope, Side: got.Side,
+		SlippagePct: got.SlippagePct, SlippageVsBestPct: got.SlippageVsBestPct,
+		ImpactPct: got.ImpactPct, ImpactAvailable: got.ImpactAvailable, Exhausted: got.Exhausted,
+		AveragePrice: got.AveragePrice, BestPrice: got.BestPrice, SpentNotional: got.SpentNotional,
+		LevelsUsed: got.LevelsUsed,
+		Summary:    fmt.Sprintf("%s %s slippage %.2f%% vs mid", got.Symbol, side, got.SlippagePct),
+	}
+}
+
 // GetTicker24h returns rolling 24h volume and price stats for a symbol.
 func (s *Service) GetTicker24h(ctx context.Context, exchange, symbol string) (*domain.Ticker24h, error) {
 	ex, err := s.ResolveExchange(exchange)

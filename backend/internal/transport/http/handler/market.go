@@ -431,6 +431,87 @@ func (h *MarketHandler) GetOrderBookImpact(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, impactToDTO(got))
 }
 
+// ScanOrderBookImpact handles GET /api/v1/market/orderbook/impact/scan.
+func (h *MarketHandler) ScanOrderBookImpact(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	notional := 0.0
+	if raw := strings.TrimSpace(q.Get("notional")); raw != "" {
+		n, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: notional must be a number", domain.ErrInvalidArgument))
+			return
+		}
+		notional = n
+	}
+	limit := 0
+	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: limit must be an integer", domain.ErrInvalidArgument))
+			return
+		}
+		limit = n
+	}
+	got, err := h.svc.ScanOrderBookImpact(r.Context(), q.Get("exchange"), q.Get("quote"), q.Get("side"), notional, limit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, impactScanToDTO(got))
+}
+
+type impactScanHitDTO struct {
+	Symbol            string  `json:"symbol"`
+	Scope             string  `json:"scope"`
+	Side              string  `json:"side"`
+	SlippagePct       float64 `json:"slippagePct"`
+	SlippageVsBestPct float64 `json:"slippageVsBestPct"`
+	ImpactPct         float64 `json:"impactPct"`
+	ImpactAvailable   bool    `json:"impactAvailable"`
+	Exhausted         bool    `json:"exhausted"`
+	AveragePrice      string  `json:"averagePrice"`
+	BestPrice         string  `json:"bestPrice"`
+	SpentNotional     string  `json:"spentNotional"`
+	LevelsUsed        int     `json:"levelsUsed"`
+	Summary           string  `json:"summary"`
+	Error             string  `json:"error,omitempty"`
+}
+
+type impactScanResponse struct {
+	Exchange          string             `json:"exchange"`
+	Quote             string             `json:"quote"`
+	Side              string             `json:"side"`
+	Notional          float64            `json:"notional"`
+	Universe          int                `json:"universe"`
+	AsOf              time.Time          `json:"asOf"`
+	MedianSlippagePct float64            `json:"medianSlippagePct"`
+	ExhaustedCoins    int                `json:"exhaustedCoins"`
+	Hits              []impactScanHitDTO `json:"hits"`
+	Summary           string             `json:"summary"`
+	Note              string             `json:"note"`
+}
+
+func impactScanToDTO(a *domain.ImpactScan) impactScanResponse {
+	if a == nil {
+		return impactScanResponse{}
+	}
+	hits := make([]impactScanHitDTO, 0, len(a.Hits))
+	for _, h := range a.Hits {
+		hits = append(hits, impactScanHitDTO{
+			Symbol: h.Symbol, Scope: h.Scope, Side: h.Side,
+			SlippagePct: h.SlippagePct, SlippageVsBestPct: h.SlippageVsBestPct,
+			ImpactPct: h.ImpactPct, ImpactAvailable: h.ImpactAvailable, Exhausted: h.Exhausted,
+			AveragePrice: h.AveragePrice, BestPrice: h.BestPrice, SpentNotional: h.SpentNotional,
+			LevelsUsed: h.LevelsUsed, Summary: h.Summary, Error: h.Error,
+		})
+	}
+	return impactScanResponse{
+		Exchange: a.Exchange, Quote: a.Quote, Side: a.Side, Notional: a.Notional,
+		Universe: a.Universe, AsOf: a.AsOf.UTC(), MedianSlippagePct: a.MedianSlippagePct,
+		ExhaustedCoins: a.ExhaustedCoins, Hits: hits, Summary: a.Summary, Note: a.Note,
+	}
+}
+
 type impactFillDTO struct {
 	Exchange           string `json:"exchange"`
 	Price              string `json:"price"`

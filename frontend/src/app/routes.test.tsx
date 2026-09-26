@@ -24,6 +24,9 @@ vi.mock('@/components/pages/OrderCountPage', () => ({
 vi.mock('@/components/pages/PrintSizePage', () => ({
   PrintSizePage: () => <div data-testid="printsize-page">Print size</div>,
 }));
+vi.mock('@/components/pages/ImpactPage', () => ({
+  ImpactPage: () => <div data-testid="impact-page">Impact</div>,
+}));
 vi.mock('@/components/pages/AiChatPage', () => ({
   AiChatPage: () => <div data-testid="ai-page">AI</div>,
 }));
@@ -75,6 +78,8 @@ describe('AppRoutes', () => {
     expect(screen.getByTestId('ordercount-page')).toBeInTheDocument();
     renderWithProviders(<AppRoutes />, { routerEntries: ['/print-size'] });
     expect(screen.getByTestId('printsize-page')).toBeInTheDocument();
+    renderWithProviders(<AppRoutes />, { routerEntries: ['/impact'] });
+    expect(screen.getByTestId('impact-page')).toBeInTheDocument();
     renderWithProviders(<AppRoutes />, { routerEntries: ['/ai'] });
     expect(screen.getByTestId('ai-page')).toBeInTheDocument();
     renderWithProviders(<AppRoutes />, { routerEntries: ['/heatmap'] });

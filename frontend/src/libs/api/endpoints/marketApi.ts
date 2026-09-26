@@ -99,6 +99,9 @@ import type {
   OrderCountMarketWindow,
   OrderCountOverviewQuery,
   OrderCountQuery,
+  ImpactScan,
+  ImpactScanHit,
+  ImpactScanQuery,
   MarketPressure,
   PressureQuery,
   Ticker24h,
@@ -214,6 +217,9 @@ export type {
   OrderCountCoin,
   OrderCountMarketWindow,
   OrderCountOverviewQuery,
+  ImpactScan,
+  ImpactScanHit,
+  ImpactScanQuery,
   MarketPressure,
   MarketForensics,
   MarketForensicsQuery,
@@ -653,6 +659,12 @@ export const marketApi = baseApi.injectEndpoints({
       }),
     }),
 
+    scanMarketImpact: build.query<ImpactScan, ImpactScanQuery | void>({
+      query: (arg) => ({
+        url: '/api/v1/market/orderbook/impact/scan',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
     getMarketOrderCountOverview: build.query<MarketOrderCountOverview, OrderCountOverviewQuery | void>({
       query: (arg) => ({
         url: '/api/v1/market/order-count/overview',
@@ -847,6 +859,7 @@ export const {
   useGetMarketPrintSizeOverviewQuery,
   useGetMarketPrintSizeQuery,
   useGetMarketBotTrackerQuery,
+  useScanMarketImpactQuery,
   useGetMarketOrderCountOverviewQuery,
   useGetMarketOrderCountQuery,
   useGetMarketPressureQuery,

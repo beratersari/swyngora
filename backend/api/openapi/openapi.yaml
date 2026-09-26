@@ -905,6 +905,47 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook/impact/scan:
+    get:
+      summary: Rank coins by slippage for the same market order
+      description: |
+        Walks the same quote-sized market order through each liquid pair's live
+        spot book and ranks by slippage versus mid, widest first. Buy consumes
+        asks; sell consumes bids. `exchange=all` merges Binance, Coinbase, and
+        Bybit. Default order is 100,000 quote (1,000 to 50,000,000). A book
+        that cannot fill the whole order is `exhausted`. Simulation only.
+      operationId: scanSpotOrderBookImpact
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          description: binance | coinbase | bybit | all (default all)
+          schema: { type: string, default: all }
+        - name: quote
+          in: query
+          schema: { type: string, default: USDT }
+        - name: side
+          in: query
+          schema: { type: string, enum: [buy, sell], default: buy }
+        - name: notional
+          in: query
+          description: Shared quote size. Default 100000.
+          schema: { type: number, default: 100000 }
+        - name: limit
+          in: query
+          description: How many liquid pairs (default 20, min 5, max 30)
+          schema: { type: integer, default: 20, minimum: 5, maximum: 30 }
+      responses:
+        '200':
+          description: Coins ranked by slippage for one order size
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderBookImpactScan'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/orderbook/impact:
     get:
       summary: Simulate market-order impact and slippage
@@ -11048,6 +11089,39 @@ components:
         fills:
           type: array
           items: { $ref: '#/components/schemas/OrderBookImpactFill' }
+    OrderBookImpactScanHit:
+      type: object
+      properties:
+        symbol: { type: string }
+        scope: { type: string }
+        side: { type: string, enum: [buy, sell] }
+        slippagePct: { type: number }
+        slippageVsBestPct: { type: number }
+        impactPct: { type: number }
+        impactAvailable: { type: boolean }
+        exhausted: { type: boolean }
+        averagePrice: { type: string }
+        bestPrice: { type: string }
+        spentNotional: { type: string }
+        levelsUsed: { type: integer }
+        summary: { type: string }
+        error: { type: string }
+    OrderBookImpactScan:
+      type: object
+      description: Same-size market order ranked by slippage across liquid pairs
+      properties:
+        exchange: { type: string }
+        quote: { type: string }
+        side: { type: string }
+        notional: { type: number }
+        universe: { type: integer }
+        asOf: { type: string, format: date-time }
+        medianSlippagePct: { type: number }
+        exhaustedCoins: { type: integer }
+        hits:
+          type: array
+          items: { $ref: '#/components/schemas/OrderBookImpactScanHit' }
+        summary: { type: string }
         note: { type: string }
     Supply:
       type: object

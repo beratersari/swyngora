@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Market order count ratio:** (buy prints − sell prints) / (buy + sell) from −1 to +1 over 1m, 5m, and 15m. The coin tape shows it above repeated size (`GET /api/v1/market/order-count`, MCP `get_order_count_ratio`) (`docs/features/order-count.md`)
+- **Whole-market slippage:** the same quote-sized market order walked through each liquid pair's spot book, ranked by slippage versus mid. The Impact page lists the widest books first (`GET /api/v1/market/orderbook/impact/scan`, MCP `scan_market_impact`) (`docs/features/order-book.md`)
 - **Whole-market print size:** average USDT per aggressive fill, summed across the liquid USDT pairs and compared with the same length just before, so the desk shows whether prints got larger or smaller. The Print size page ranks the pairs (`GET /api/v1/market/print-size/overview`, MCP `get_print_size_overview`) (`docs/features/print-size.md`)
 - **Whole-market order count:** the same ratio summed across the liquid USDT pairs, plus how many coins lean buy or sell. The Order count page ranks the pairs (`GET /api/v1/market/order-count/overview`, MCP `get_order_count_overview`) (`docs/features/order-count.md`)
 - **Repeated same-size prints:** a market-order size that hits at least 4 times inside any 60 seconds during the last 5 minutes, buy and sell apart. The coin tape lists the clips under print size (`GET /api/v1/market/bot-tracker`, MCP `get_bot_tracker`) (`docs/features/bot-tracker.md`)

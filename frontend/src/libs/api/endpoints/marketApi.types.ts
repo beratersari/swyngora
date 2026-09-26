@@ -521,6 +521,39 @@ export type OrderCountOverviewQuery = {
   quote?: string;
   limit?: number;
 };
+export type ImpactScanHit = {
+  symbol?: string;
+  scope?: string;
+  side?: string;
+  slippagePct?: number;
+  slippageVsBestPct?: number;
+  impactPct?: number;
+  impactAvailable?: boolean;
+  exhausted?: boolean;
+  averagePrice?: string;
+  bestPrice?: string;
+  spentNotional?: string;
+  summary?: string;
+};
+export type ImpactScan = {
+  exchange?: string;
+  quote?: string;
+  side?: string;
+  notional?: number;
+  universe?: number;
+  medianSlippagePct?: number;
+  exhaustedCoins?: number;
+  hits?: ImpactScanHit[];
+  summary?: string;
+  note?: string;
+};
+export type ImpactScanQuery = {
+  exchange?: string;
+  quote?: string;
+  side?: string;
+  notional?: number;
+  limit?: number;
+};
 export type MarketPressure = components['schemas']['MarketPressure'];
 export type PressureQuery = NonNullable<operations['getMarketPressure']['parameters']['query']>;
 export type MarketForensicsQuery = NonNullable<

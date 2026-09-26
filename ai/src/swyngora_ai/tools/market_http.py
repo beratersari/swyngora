@@ -1247,6 +1247,23 @@ class MarketImpactInput(BaseModel):
     )
 
 
+class MarketImpactScanInput(BaseModel):
+    exchange: str = Field(
+        default="all",
+        description="binance|coinbase|bybit|all (default all)",
+    )
+    quote: str = Field(default="USDT", description="Quote asset")
+    side: str = Field(default="buy", description="buy or sell")
+    notional: float = Field(
+        default=0,
+        description="Shared quote size for every coin (default 100000)",
+    )
+    limit: int = Field(
+        default=0,
+        description="How many liquid pairs (default 20, max 30)",
+    )
+
+
 class CandlesInput(BaseModel):
     symbol: str
     exchange: str = "binance"
@@ -2936,6 +2953,20 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if notional and notional > 0:
             params["notional"] = notional
         return http.get("/api/v1/market/orderbook/impact", params)
+
+    def scan_market_impact(
+        exchange: str = "all",
+        quote: str = "USDT",
+        side: str = "buy",
+        notional: float = 0,
+        limit: int = 0,
+    ) -> str:
+        params: dict[str, Any] = {"exchange": exchange, "quote": quote, "side": side}
+        if notional and notional > 0:
+            params["notional"] = notional
+        if limit:
+            params["limit"] = limit
+        return http.get("/api/v1/market/orderbook/impact/scan", params)
 
     def analyze_spot_orderbook(
         symbol: str,
@@ -5363,6 +5394,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "wiped and impact cannot be calculated. Simulation only — not a quote."
             ),
             args_schema=MarketImpactInput,
+        ),
+        StructuredTool.from_function(
+            scan_market_impact,
+            name="scan_market_impact",
+            description=(
+                "Rank liquid coins by slippage for the same quote-sized market "
+                "order. Default 100000 quote. Wider slippage is first. "
+                "exhausted means the visible book could not fill the whole order. "
+                "Use this to see which coins slip more for the same order."
+            ),
+            args_schema=MarketImpactScanInput,
         ),
         StructuredTool.from_function(
             get_candles,

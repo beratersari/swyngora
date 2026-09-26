@@ -1,0 +1,23 @@
+{
+  "title": "Kayma",
+  "subtitle": "Aynı USDT piyasa emri her likit çiftin canlı spot defterinde yürütülür. Orta fiyata göre daha geniş kayma önce gelir. Emrin tamamını dolduramayan defter eksik işaretlenir. Yalnızca benzetimdir — kotasyon veya yatırım tavsiyesi değildir.",
+  "load": "Piyasayı yükle",
+  "exchange": "Borsa",
+  "allVenues": "Tüm borsalar",
+  "side": "Yön",
+  "buy": "Alış",
+  "sell": "Satış",
+  "size": "Emir boyutu",
+  "notional": "{{size}} USDT",
+  "emptyTitle": "Defter yok",
+  "emptyHint": "Aynı emir için kaymayı karşılaştırmak üzere piyasayı yükleyin.",
+  "symbol": "Parite",
+  "slippage": "Ortaya göre",
+  "versusBest": "En iyiye göre",
+  "touch": "Dokunuş",
+  "exhausted": "Dolum",
+  "yes": "Kısmi",
+  "no": "Tam",
+  "loadFailed": "Kayma taraması alınamadı",
+  "resource": "kayma"
+}

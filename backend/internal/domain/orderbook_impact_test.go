@@ -3,6 +3,7 @@ package domain
 import (
 	"strconv"
 	"testing"
+	"time"
 )
 
 func TestSimulateMarketImpact_BuyQuantity(t *testing.T) {
@@ -168,6 +169,22 @@ func TestSimulateMarketImpact_NoNegativeSlip(t *testing.T) {
 	}
 	if got.ImpactAvailable || got.ImpactPct != 0 {
 		t.Fatalf("single-level wipe has no new best: %+v", got)
+	}
+}
+
+func TestBuildImpactScan_RanksWiderSlippageFirst(t *testing.T) {
+	now := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
+	got := BuildImpactScan("all", "USDT", ImpactSideBuy, 100_000, []ImpactScanHit{
+		{Symbol: "BTCUSDT", SlippagePct: 0.05, SpentNotional: "100000"},
+		{Symbol: "DOGEUSDT", SlippagePct: 1.4, SpentNotional: "100000", Exhausted: true},
+		{Symbol: "ETHUSDT", SlippagePct: 0.2, SpentNotional: "80000", Exhausted: true},
+		{Symbol: "XRPUSDT", Error: "empty"},
+	}, now)
+	if got.Universe != 3 || got.Hits[0].Symbol != "DOGEUSDT" || got.ExhaustedCoins != 2 {
+		t.Fatalf("%+v", got)
+	}
+	if got.MedianSlippagePct < 0.19 || got.MedianSlippagePct > 0.21 {
+		t.Fatalf("median %v", got.MedianSlippagePct)
 	}
 }
 

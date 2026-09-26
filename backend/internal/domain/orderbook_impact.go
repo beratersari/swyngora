@@ -5,6 +5,7 @@ import (
 	"math"
 	"sort"
 	"strings"
+	"time"
 )
 
 const (
@@ -14,6 +15,13 @@ const (
 	MaxImpactNotional   = 1e15
 	MaxImpactWalkRows   = 30
 	ImpactScopeCombined = "combined"
+
+	ImpactScanDefaultNotional = 100_000
+	impactScanMinNotional     = 1_000
+	impactScanMaxNotional     = 50_000_000
+	impactScanDefaultN        = 20
+	impactScanMinN            = 5
+	impactScanMaxN            = 30
 )
 
 // ImpactSourceLevel is one resting level tagged with its venue.
@@ -61,6 +69,131 @@ type OrderBookImpact struct {
 	VenueCount        int
 	Live              bool
 	Fills             []ImpactFill
+}
+
+// ImpactScanHit is one coin's slippage for the shared market order.
+type ImpactScanHit struct {
+	Symbol            string
+	Scope             string
+	Side              string
+	SlippagePct       float64
+	SlippageVsBestPct float64
+	ImpactPct         float64
+	ImpactAvailable   bool
+	Exhausted         bool
+	AveragePrice      string
+	BestPrice         string
+	SpentNotional     string
+	LevelsUsed        int
+	Summary           string
+	Error             string
+}
+
+// ImpactScan ranks coins by slippage for one shared quote size.
+type ImpactScan struct {
+	Exchange          string
+	Quote             string
+	Side              string
+	Notional          float64
+	Universe          int
+	AsOf              time.Time
+	MedianSlippagePct float64
+	ExhaustedCoins    int
+	Hits              []ImpactScanHit
+	Summary           string
+	Note              string
+}
+
+// ParseImpactScanExchange is binance, coinbase, bybit, or all.
+func ParseImpactScanExchange(raw string) (string, error) {
+	s := strings.ToLower(strings.TrimSpace(raw))
+	switch s {
+	case "", "all", "combined":
+		return "all", nil
+	case string(ExchangeBinance), string(ExchangeCoinbase), string(ExchangeBybit):
+		return s, nil
+	default:
+		return "", fmt.Errorf("%w: exchange must be binance, coinbase, bybit, or all", ErrInvalidArgument)
+	}
+}
+
+// ParseImpactScanNotional defaults to 100,000 quote and clamps the shared order.
+func ParseImpactScanNotional(n float64) (float64, error) {
+	if n == 0 {
+		return ImpactScanDefaultNotional, nil
+	}
+	if math.IsNaN(n) || math.IsInf(n, 0) || n < impactScanMinNotional || n > impactScanMaxNotional {
+		return 0, fmt.Errorf("%w: notional must be between %d and %d", ErrInvalidArgument, impactScanMinNotional, impactScanMaxNotional)
+	}
+	return n, nil
+}
+
+// ParseImpactScanLimit clamps how many liquid pairs are walked.
+func ParseImpactScanLimit(n int) int {
+	if n <= 0 {
+		return impactScanDefaultN
+	}
+	if n < impactScanMinN {
+		return impactScanMinN
+	}
+	if n > impactScanMaxN {
+		return impactScanMaxN
+	}
+	return n
+}
+
+// BuildImpactScan ranks filled coins by slippage versus mid, widest first.
+func BuildImpactScan(exchange, quote, side string, notional float64, hits []ImpactScanHit, now time.Time) ImpactScan {
+	usable := make([]ImpactScanHit, 0, len(hits))
+	var slips []float64
+	exhausted := 0
+	for _, h := range hits {
+		if h.Error != "" || h.Symbol == "" {
+			continue
+		}
+		usable = append(usable, h)
+		if h.SpentNotional != "" && h.SpentNotional != "0" {
+			slips = append(slips, h.SlippagePct)
+		}
+		if h.Exhausted {
+			exhausted++
+		}
+	}
+	sort.SliceStable(usable, func(i, j int) bool {
+		if usable[i].SlippagePct != usable[j].SlippagePct {
+			return usable[i].SlippagePct > usable[j].SlippagePct
+		}
+		return usable[i].Symbol < usable[j].Symbol
+	})
+	out := ImpactScan{
+		Exchange: exchange, Quote: quote, Side: side, Notional: notional,
+		Universe: len(usable), AsOf: now.UTC(),
+		MedianSlippagePct: impactMedian(slips), ExhaustedCoins: exhausted, Hits: usable,
+	}
+	out.Summary = explainImpactScan(out)
+	return out
+}
+
+func impactMedian(v []float64) float64 {
+	if len(v) == 0 {
+		return 0
+	}
+	cp := append([]float64(nil), v...)
+	sort.Float64s(cp)
+	mid := len(cp) / 2
+	if len(cp)%2 == 1 {
+		return cp[mid]
+	}
+	return (cp[mid-1] + cp[mid]) / 2
+}
+
+func explainImpactScan(s ImpactScan) string {
+	if len(s.Hits) == 0 {
+		return "No books to walk for that order."
+	}
+	worst := s.Hits[0]
+	return fmt.Sprintf("A %g %s %s slips %.2f%% at the median. %s is widest at %.2f%%. %d of %d books could not fill the whole order.",
+		s.Notional, s.Quote, s.Side, s.MedianSlippagePct, worst.Symbol, worst.SlippagePct, s.ExhaustedCoins, s.Universe)
 }
 
 // ParseImpactSide returns buy or sell. Empty defaults to buy.

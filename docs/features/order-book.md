@@ -44,6 +44,11 @@ and Bybit linear). This file is the **spot** book.
     bid reach and common ask reach). If all cover ±`rangePct` both ways, that
     requested band is used (`requestedReached`, `usedRangePct`). USD≈USDT.
   - Response: market-wide `pressure` / `imbalance`, per-venue breakdown, tagged walls.
+- `GET /api/v1/market/orderbook/impact/scan?notional=100000&side=buy`
+  - Walks that same quote size through the liquid USDT pairs and ranks by
+    slippage versus mid, widest first. Default order is 100,000 quote.
+    `exhausted` means the visible book could not fill the whole order.
+  - The Impact page lists the ranking.
 - `GET /api/v1/market/orderbook/impact?symbol=BTCUSDT&quantity=5&side=buy`
   - Walks live resting depth like a market order. Buy consumes **asks** (lowest first);
     sell consumes **bids** (highest first).

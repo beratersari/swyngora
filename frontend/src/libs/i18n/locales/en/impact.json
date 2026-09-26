@@ -1,0 +1,23 @@
+{
+  "title": "Slippage",
+  "subtitle": "The same USDT market order walked through each liquid pair's live spot book. Wider slippage versus the mid ranks first. A book that cannot fill the whole order is marked incomplete. Simulation only — not a quote or financial advice.",
+  "load": "Load market",
+  "exchange": "Exchange",
+  "allVenues": "All venues",
+  "side": "Side",
+  "buy": "Buy",
+  "sell": "Sell",
+  "size": "Order size",
+  "notional": "{{size}} USDT",
+  "emptyTitle": "No books",
+  "emptyHint": "Load the market to compare slippage for the same order.",
+  "symbol": "Pair",
+  "slippage": "Vs mid",
+  "versusBest": "Vs best",
+  "touch": "Touch move",
+  "exhausted": "Filled",
+  "yes": "Partial",
+  "no": "Full",
+  "loadFailed": "Slippage scan failed",
+  "resource": "slippage"
+}

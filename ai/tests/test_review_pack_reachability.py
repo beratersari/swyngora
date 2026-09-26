@@ -68,6 +68,7 @@ BOOK_FLOW_ANALYTICS = frozenset(
         "compare_orderbook_history",
         "get_orderbook_icebergs",
         "get_orderbook_liquidity_flow",
+        "scan_market_impact",
     }
 )
 
