@@ -52,6 +52,11 @@ describe('TapePanel', () => {
           },
         }}
         symbol="BTCUSDT"
+        botTracker={{
+          delta: 6,
+          summary: 'Repeated size: buy 57.89K × 6 in 30s.',
+          clusters: [{ side: 'buy', notional: '57889', count: 6, exchange: 'binance' }],
+        }}
         perpLiquidity={{
           bid: '2400000000',
           ask: '1800000000',
@@ -86,6 +91,9 @@ describe('TapePanel', () => {
     expect(screen.getByText('0.0100%')).toBeInTheDocument();
     expect(screen.getByText('25.00M')).toBeInTheDocument();
     expect(screen.getByText('buy flow')).toBeInTheDocument();
+    expect(screen.getByText('Repeated size')).toBeInTheDocument();
+    expect(screen.getByText('57.89K × 6')).toBeInTheDocument();
+    expect(screen.getByText(/Repeated size: buy 57.89K/)).toBeInTheDocument();
     expect(screen.getByText('Since day open')).toBeInTheDocument();
     expect(screen.getByText('1.20M')).toBeInTheDocument();
     expect(screen.getByText(/-400\.00K \(Partial\)/)).toBeInTheDocument();

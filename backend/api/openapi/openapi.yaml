@@ -2112,6 +2112,39 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/bot-tracker:
+    get:
+      summary: Repeated same-size market orders
+      description: |
+        Flags aggressive futures prints of about the **same USDT size**
+        that hit **4 or more times inside any 60 seconds** during the last
+        **5 minutes**. Buy and sell are counted apart. Sizes within about
+        **0.2%** share a clip. Prints under **5,000 USDT** are ignored.
+        `delta` is flagged buy prints minus flagged sell prints. Binance
+        pages aggTrades; Bybit and OKX use the newest public trades. A
+        repeated size is a pattern, not proof of a named bot. Informational only.
+      operationId: getMarketBotTracker
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | okx | all (default all)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Repeated same-size bursts per venue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketBotTracker'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/taker-flow:
     get:
       summary: Futures taker buy vs sell volume
@@ -10331,6 +10364,51 @@ components:
           type: array
           items: { $ref: '#/components/schemas/PrintSizeVenue' }
         combined: { $ref: '#/components/schemas/PrintSizeVenue' }
+        note: { type: string }
+    BotCluster:
+      type: object
+      properties:
+        exchange: { type: string }
+        side: { type: string, enum: [buy, sell] }
+        notional: { type: string }
+        count: { type: integer }
+        spanSec: { type: integer }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        totalNotional: { type: string }
+    BotTrackerVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        clusters:
+          type: array
+          items: { $ref: '#/components/schemas/BotCluster' }
+        buyCount: { type: integer }
+        sellCount: { type: integer }
+        delta: { type: integer }
+        summary: { type: string }
+        error: { type: string }
+    MarketBotTracker:
+      type: object
+      description: Same-size aggressive prints that repeat inside 60 seconds
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        asOf: { type: string, format: date-time }
+        window: { type: string }
+        burst: { type: string }
+        minCount: { type: integer }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/BotTrackerVenue' }
+        clusters:
+          type: array
+          items: { $ref: '#/components/schemas/BotCluster' }
+        buyCount: { type: integer }
+        sellCount: { type: integer }
+        delta: { type: integer }
+        summary: { type: string }
         note: { type: string }
     MarketFundingRate:
       type: object

@@ -1116,6 +1116,64 @@ func participationVenueMap(v domain.ParticipationVenue) map[string]any {
 	return out
 }
 
+func (b *Backend) GetBotTracker(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetBotTracker(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(botTrackerMap(got))
+}
+
+func botTrackerMap(got *domain.BotTrackerReport) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	venues := make([]map[string]any, 0, len(got.Venues))
+	for _, v := range got.Venues {
+		venues = append(venues, botTrackerVenueMap(v))
+	}
+	return map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange, "asOf": got.AsOf.UTC().Format(time.RFC3339Nano),
+		"window": got.Window, "burst": got.Burst, "minCount": got.MinCount,
+		"venues": venues, "clusters": botClustersMap(got.Clusters),
+		"buyCount": got.BuyCount, "sellCount": got.SellCount, "delta": got.Delta,
+		"summary": got.Summary, "note": got.Note,
+	}
+}
+
+func botTrackerVenueMap(v domain.BotTrackerVenue) map[string]any {
+	out := map[string]any{
+		"exchange": string(v.Exchange), "symbol": v.Symbol,
+		"clusters": botClustersMap(v.Clusters),
+		"buyCount": v.BuyCount, "sellCount": v.SellCount, "delta": v.Delta,
+		"summary": v.Summary,
+	}
+	if v.Error != "" {
+		out["error"] = v.Error
+	}
+	return out
+}
+
+func botClustersMap(in []domain.BotCluster) []map[string]any {
+	out := make([]map[string]any, 0, len(in))
+	for _, c := range in {
+		sec := int(c.Span.Round(time.Second) / time.Second)
+		if sec < 0 {
+			sec = 0
+		}
+		out = append(out, map[string]any{
+			"exchange": string(c.Exchange), "side": c.Side,
+			"notional": c.Notional, "count": c.Count, "spanSec": sec,
+			"from": c.From.UTC().Format(time.RFC3339Nano), "to": c.To.UTC().Format(time.RFC3339Nano),
+			"totalNotional": c.TotalNotional,
+		})
+	}
+	return out
+}
+
 func (b *Backend) GetPrintSize(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

@@ -77,6 +77,8 @@ export function TapePanel({
   symbol,
   printSize,
   printSizeError,
+  botTracker,
+  botTrackerError,
   pressure,
   pressureError,
   isLoading = false,
@@ -421,6 +423,43 @@ export function TapePanel({
         {printVenue?.summary || print15?.summary ? (
           <Text variant="caption" color="secondary">
             {printVenue?.summary || print15?.summary}
+          </Text>
+        ) : null}
+      </Block>
+
+      <Block>
+        <Text variant="label" color="primary">
+          {t('tape.botTracker')}
+        </Text>
+        {botTrackerError ? (
+          <Alert type="info" showIcon message={t('tape.botTracker')} description={botTrackerError} />
+        ) : (
+          <StatsGrid>
+            {(botTracker?.clusters ?? []).slice(0, 4).map((c) => (
+              <Stat
+                key={`${c.exchange}-${c.side}-${c.notional}`}
+                label={c.side === 'sell' ? t('tape.botSell') : t('tape.botBuy')}
+                value={`${formatTapeNum(c.notional)} × ${c.count ?? 0}`}
+                isLoading={isLoading}
+              />
+            ))}
+            {(botTracker?.clusters ?? []).length === 0 ? (
+              <Stat label={t('tape.botTracker')} value={t('tape.botNone')} isLoading={isLoading} />
+            ) : null}
+            <Stat
+              label={t('tape.botDelta')}
+              value={
+                botTracker?.delta === undefined || botTracker.delta === null
+                  ? '—'
+                  : String(botTracker.delta)
+              }
+              isLoading={isLoading}
+            />
+          </StatsGrid>
+        )}
+        {botTracker?.summary ? (
+          <Text variant="caption" color="secondary">
+            {botTracker.summary}
           </Text>
         ) : null}
       </Block>

@@ -2238,6 +2238,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"symbol": symbol, "exchange": exchange},
         )
 
+    def get_bot_tracker(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/bot-tracker",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
     def get_market_pressure(symbol: str, exchange: str = "all") -> str:
         return http.get(
             "/api/v1/market/pressure",
@@ -4880,6 +4886,18 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "high and you need to know if it was a few large market orders "
                 "(avg jumped, e.g. 20K to 180K) or many small prints. "
                 "read=few_large or many_small. Binance + Bybit."
+            ),
+            args_schema=TakerFlowInput,
+        ),
+        StructuredTool.from_function(
+            get_bot_tracker,
+            name="get_bot_tracker",
+            description=(
+                "Repeated same-size aggressive futures prints. A size is "
+                "flagged when it hits at least 4 times inside any 60 seconds "
+                "during the last 5 minutes. Buy and sell are separate. Use "
+                "this when the same market-order size keeps coming back, not "
+                "for the average print size. Not proof of a named bot."
             ),
             args_schema=TakerFlowInput,
         ),

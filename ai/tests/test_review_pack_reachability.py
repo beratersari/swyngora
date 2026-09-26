@@ -47,6 +47,7 @@ BOOK_FLOW_ANALYTICS = frozenset(
         "get_positioning",
         "get_venue_divergence",
         "get_print_size",
+        "get_bot_tracker",
         "get_flow_at_prices",
         "get_taker_flow",
         "get_net_position",

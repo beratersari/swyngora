@@ -619,9 +619,10 @@ export interface paths {
          * Perpetual bid-below vs ask-above depth
          * @description How much **perpetual** liquidity is waiting **below** vs **above**
          *     the price. Example: **40M bid within 1% below** mid and **15M ask
-         *     above**. `exchange=all` (default) returns **Binance USD-M** and
-         *     **Bybit linear** separately plus `combined` (sum of each venue's
-         *     own ±% band). `rangePct` is the headline band (default **1**,
+         *     above**. `exchange=all` (default) returns **Binance USD-M**,
+         *     **Bybit linear**, and **OKX USDT-swap** separately plus `combined`
+         *     (sum of each venue's own ±% band). OKX contract size is converted
+         *     to base before notional. `rangePct` is the headline band (default **1**,
          *     max 5). `bands` also include 0.1 / 0.25 / 0.5 / 2. `below` is
          *     resting bids; `above` is resting asks. `complete` is false when
          *     the snapshot does not reach that %. This is the **futures** book,
@@ -654,7 +655,7 @@ export interface paths {
          *     how close that book is to mid (e.g. **80M inside 0.1%** is **8% of
          *     the 1% book**, growing to 1.0B at 1%) and which coins fill each
          *     distance. Sampled while the desk runs. `exchange=all` (default)
-         *     adds Binance USD-M and Bybit linear per coin. `rangePct` default
+         *     adds Binance USD-M, Bybit linear, and OKX USDT-swap per coin. `rangePct` default
          *     **1**. `limit` default **20** (max 40). This is the **futures**
          *     book, not spot. Informational only.
          */
@@ -1010,7 +1011,7 @@ export interface paths {
         };
         /**
          * Futures vs spot basis (premium or discount)
-         * @description How far the perpetual is from spot/index on Binance USD-M and Bybit
+         * @description How far the perpetual is from spot/index on Binance USD-M, Bybit linear, and OKX USDT-swap
          *     linear. Returns the dollar gap, percent gap, premium/discount, whether
          *     the gap is expanding or shrinking (5m/1h/4h), a short read with funding
          *     and open interest, and whether both venues agree. `curve` compares
@@ -1271,7 +1272,7 @@ export interface paths {
         };
         /**
          * Average aggressive print size
-         * @description Average **USDT notional per taker fill** on Binance USD-M and Bybit
+         * @description Average **USDT notional per taker fill** on Binance USD-M, Bybit linear, and OKX USDT-swap
          *     linear, split buy vs sell. Windows are **5 minutes** and **15 minutes**,
          *     each compared to the same length just before. A jump from 20K to 180K
          *     means a few large market orders, not many small ones (`read=few_large`).
@@ -1279,6 +1280,32 @@ export interface paths {
          *     trades (minutes when busy). Informational only.
          */
         get: operations["getMarketPrintSize"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/bot-tracker": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Repeated same-size market orders
+         * @description Flags aggressive futures prints of about the **same USDT size**
+         *     that hit **4 or more times inside any 60 seconds** during the last
+         *     **5 minutes**. Buy and sell are counted apart. Sizes within about
+         *     **0.2%** share a clip. Prints under **5,000 USDT** are ignored.
+         *     `delta` is flagged buy prints minus flagged sell prints. Binance
+         *     pages aggTrades; Bybit and OKX use the newest public trades. A
+         *     repeated size is a pattern, not proof of a named bot. Informational only.
+         */
+        get: operations["getMarketBotTracker"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1296,7 +1323,7 @@ export interface paths {
         };
         /**
          * Futures taker buy vs sell volume
-         * @description Aggressive (taker) buy and sell volume on Binance USD-M and Bybit
+         * @description Aggressive (taker) buy and sell volume on Binance USD-M, Bybit linear, and OKX USDT-swap
          *     linear for the last **5 minutes, 1 hour, and 4 hours**. Returns buy
          *     notional, sell notional, delta, and a short read with price / OI /
          *     funding. This is who is hitting the book now — not the account
@@ -1385,7 +1412,13 @@ export interface paths {
          *     price and flow disagree. Divergence includes how long the split
          *     has been running and how far price and CVD moved. **15m / 1h /
          *     4h / 24h** windows show CVD change (not only the latest total)
-         *     and label `confirms`, `opposite`, or `absorption`. `exchange=all`
+         *     and label `confirms`, `opposite`, or `absorption`. **Anchors**
+         *     reset the sum at a clock instead of a rolling lookback: `day`
+         *     is 00:00 UTC, `4h` is the current 4-hour open (00/04/08/12/16/20
+         *     UTC). Each anchor's `cvd` is buy minus sell since that time, with
+         *     price change and the same confirms / opposite / absorption label.
+         *     `complete` is false when stored bars start after the anchor.
+         *     `exchange=all`
          *     (default) returns Binance and Bybit separately plus a combined
          *     series. Combined uses the overlapping **time range** (a missing
          *     5m slot is 0) and is `complete` when both venues are. Combined
@@ -1873,12 +1906,15 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Binance vs Bybit signal split
-         * @description Compares **Binance USD-M** and **Bybit linear** for one coin using
-         *     open-interest change, funding payer, account long/short crowding, and
-         *     price+OI positioning. Returns `same`, `opposite`, or `mixed`, lists
-         *     which metrics differ, and a short note on why a split can matter.
-         *     Informational only.
+         * Which futures venues move together
+         * @description Compares **Binance USD-M**, **Bybit linear**, and **OKX USDT-swap**
+         *     for one coin using open-interest change, funding payer, account
+         *     long/short crowding, and price+OI positioning. `groups` lists venues
+         *     that share a bullish or bearish lean. `outliers` is the venue moving
+         *     the other way when the other two agree. Each `diffs[]` row has a
+         *     reading per venue plus `same` and `different`. OKX has no account
+         *     long/short, so it is left out of the crowding comparison. A missing
+         *     venue is skipped; two venues are still compared. Informational only.
          */
         get: operations["getMarketVenueDivergence"];
         put?: never;
@@ -6467,6 +6503,46 @@ export interface components {
             combined?: components["schemas"]["PrintSizeVenue"];
             note?: string;
         };
+        BotCluster: {
+            exchange?: string;
+            /** @enum {string} */
+            side?: "buy" | "sell";
+            notional?: string;
+            count?: number;
+            spanSec?: number;
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            totalNotional?: string;
+        };
+        BotTrackerVenue: {
+            exchange?: string;
+            symbol?: string;
+            clusters?: components["schemas"]["BotCluster"][];
+            buyCount?: number;
+            sellCount?: number;
+            delta?: number;
+            summary?: string;
+            error?: string;
+        };
+        /** @description Same-size aggressive prints that repeat inside 60 seconds */
+        MarketBotTracker: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            window?: string;
+            burst?: string;
+            minCount?: number;
+            venues?: components["schemas"]["BotTrackerVenue"][];
+            clusters?: components["schemas"]["BotCluster"][];
+            buyCount?: number;
+            sellCount?: number;
+            delta?: number;
+            summary?: string;
+            note?: string;
+        };
         /** @description Predicted next funding plus recent settlements */
         MarketFundingRate: {
             symbol?: string;
@@ -9481,7 +9557,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all) */
+                /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
                 /** @description Headline ± percent of mid (default 1, 0.05–5) */
                 rangePct?: number;
@@ -9508,7 +9584,7 @@ export interface operations {
     getMarketPerpDepthOverview: {
         parameters: {
             query?: {
-                /** @description binance | bybit | all (default all) */
+                /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
                 /** @description Headline ± percent of mid (default 1, 0.05–5) */
                 rangePct?: number;
@@ -10313,6 +10389,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketPrintSize"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketBotTracker: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | okx | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Repeated same-size bursts per venue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketBotTracker"];
                 };
             };
             400: components["responses"]["Error"];

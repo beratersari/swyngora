@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Funding arb history includes OKX:** past stretches now pick the long and short from settled Binance, Bybit, and OKX prints, the same three venues as the live quote. Signal review matches an OKX clock to the OKX print. The Funding tab on `/arb` looks up those stretches (`GET /api/v1/market/funding-arb/history`, MCP `get_funding_arb_history`) (`docs/features/funding-arb.md`)
 
 ### Added
+- **Repeated same-size prints:** a market-order size that hits at least 4 times inside any 60 seconds during the last 5 minutes, buy and sell apart. The coin tape lists the clips under print size (`GET /api/v1/market/bot-tracker`, MCP `get_bot_tracker`) (`docs/features/bot-tracker.md`)
 - **Anchored CVD:** CVD since 00:00 UTC and since the current 4-hour open (00/04/08/12/16/20 UTC), separate from the rolling 15m/1h/4h/24h windows. The coin tape shows both (`GET /api/v1/market/cvd`, MCP `get_cvd`) (`docs/features/cvd.md`)
 - **Flow at prices footprint:** the coin Flow tab draws each price as sell vs buy bars, marks the busiest row (POC), and badges a level when one side is at least 3× the other (`docs/features/flow-at-prices.md`)
 - **Flow at prices history:** buy, sell, delta, and print counts at each price are kept for about 7 days while the server runs, so the ladder can look back 4h, 1d, 3d, or 7d. Bybit uses that store past the newest ~1000 trades. `GET /api/v1/market/flow-at-prices`, MCP `get_flow_at_prices`, coin Flow tab (`docs/features/flow-at-prices.md`)

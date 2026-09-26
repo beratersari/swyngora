@@ -72,6 +72,7 @@ type DataPort interface {
 	GetParticipation(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeShare(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetPrintSize(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetBotTracker(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetMarketPressure(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeProfile(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize float64) (json.RawMessage, error)
@@ -1159,6 +1160,22 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetPrintSize(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_bot_tracker",
+		mcp.WithDescription("Repeated same-size aggressive futures prints. A size is flagged when it hits at least 4 times inside any 60 seconds during the last 5 minutes. Buy and sell are separate. Sizes within about 0.2% count as the same clip. Prints under 5,000 USDT are ignored. delta is flagged buy prints minus flagged sell prints. Use this when you want to know if the same market-order size keeps coming back, not the average print size. Not proof of a named bot. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetBotTracker(ctx, req.GetString("exchange", "all"), symbol)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

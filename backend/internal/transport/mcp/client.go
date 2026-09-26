@@ -701,7 +701,16 @@ func (c *APIClient) GetParticipation(ctx context.Context, exchange, symbol strin
 	return c.get(ctx, "/api/v1/market/participation", q)
 }
 
-// GetPrintSize returns average aggressive print size vs the prior window.
+// GetBotTracker returns same-size market orders that repeat inside a minute.
+func (c *APIClient) GetBotTracker(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/bot-tracker", q)
+}
+
 func (c *APIClient) GetPrintSize(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)

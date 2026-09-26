@@ -47,6 +47,7 @@ import {
   useGetMarketPerpDepthOverviewQuery,
   useGetMarketParticipationQuery,
   useGetMarketPrintSizeQuery,
+  useGetMarketBotTrackerQuery,
   useGetMarketPressureQuery,
   useGetMarketSnapshotQuery,
   useGetTicker24hQuery,
@@ -424,6 +425,11 @@ export function CoinDetailPage() {
     refetchOnFocus: true,
   });
   const printSizeQuery = useGetMarketPrintSizeQuery(tapeQueryArg, {
+    skip: skipTape,
+    pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
+    refetchOnFocus: true,
+  });
+  const botTrackerQuery = useGetMarketBotTrackerQuery(tapeQueryArg, {
     skip: skipTape,
     pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
     refetchOnFocus: true,
@@ -1193,6 +1199,17 @@ export function CoinDetailPage() {
                             : null
                         }
                         printSize={rtkCurrent(printSizeQuery)}
+                        botTracker={rtkCurrent(botTrackerQuery)}
+                        botTrackerError={
+                          botTrackerQuery.isError
+                            ? rtkErrorMessage(botTrackerQuery.error, {
+                                resource: t('detail:resource.tape'),
+                                statusMessages: {
+                                  400: t('detail:tape.unsupported'),
+                                },
+                              })
+                            : null
+                        }
                         printSizeError={
                           printSizeQuery.isError
                             ? rtkErrorMessage(printSizeQuery.error, {
@@ -1222,6 +1239,7 @@ export function CoinDetailPage() {
                           rtkCurrentPending(volumeShareQuery) ||
                           rtkCurrentPending(perpLiqQuery) ||
                           rtkCurrentPending(participationQuery) ||
+                          rtkCurrentPending(botTrackerQuery) ||
                           rtkCurrentPending(printSizeQuery) ||
                           rtkCurrentPending(pressureQuery)
                         }
