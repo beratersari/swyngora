@@ -54,6 +54,7 @@ type Service struct {
 	futVol         map[domain.Exchange]domain.FuturesVolumePort
 	funding        map[domain.Exchange]domain.FundingRatePort
 	futDepth       map[domain.Exchange]domain.FuturesDepthPort
+	prints         map[domain.Exchange]domain.RecentPrintPort
 	longShort      map[domain.Exchange]domain.LongShortRatioPort
 	taker          map[domain.Exchange]domain.TakerFlowPort
 	takerStore     domain.TakerBucketStore
@@ -135,6 +136,21 @@ func (s *Service) WithOpenInterest(ports map[domain.Exchange]domain.OpenInterest
 		}
 	}
 	s.oi = cp
+	return s
+}
+
+// WithRecentPrints attaches aggressive-fill lists (OKX uses this; Binance and Bybit stay on the market port).
+func (s *Service) WithRecentPrints(ports map[domain.Exchange]domain.RecentPrintPort) *Service {
+	if s == nil {
+		return s
+	}
+	cp := make(map[domain.Exchange]domain.RecentPrintPort, len(ports))
+	for k, v := range ports {
+		if v != nil {
+			cp[k] = v
+		}
+	}
+	s.prints = cp
 	return s
 }
 
@@ -1250,6 +1266,25 @@ func (s *Service) futuresWant(exchange string) []domain.Exchange {
 	var out []domain.Exchange
 	for _, ex := range domain.FuturesVenues() {
 		if s != nil && (s.oiPort(ex) != nil || s.fundingPort(ex) != nil) {
+			out = append(out, ex)
+		}
+	}
+	if len(out) == 0 {
+		return []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
+	}
+	return out
+}
+
+// configuredFutures is Binance, Bybit, and OKX when exchange is all, keeping
+// only venues whose port is set. A named venue is returned even if unconfigured
+// so the caller can surface that error.
+func configuredFutures(exchange string, has func(domain.Exchange) bool) []domain.Exchange {
+	if exchange != "" && exchange != "all" {
+		return []domain.Exchange{domain.Exchange(exchange)}
+	}
+	var out []domain.Exchange
+	for _, ex := range domain.FuturesVenues() {
+		if has != nil && has(ex) {
 			out = append(out, ex)
 		}
 	}

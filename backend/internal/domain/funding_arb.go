@@ -638,11 +638,11 @@ func BuildFundingArbReport(symbol string, legs []FundingArbVenueInput, notional,
 	}
 	long, short, ok := pickFundingArbPair(sorted)
 	if !ok {
-		out.Summary = "Need predicted funding on both Binance and Bybit to pick a long and a short venue."
+		out.Summary = "Need predicted funding on at least two of Binance, Bybit, and OKX to pick a long and a short venue."
 		return out
 	}
 	if math.Abs(short.FundingRate-long.FundingRate) <= fundingArbFlatRate {
-		out.Summary = "Binance and Bybit predicted funding are the same, so there is no funding spread to collect."
+		out.Summary = "The known venues have the same predicted funding, so there is no funding spread to collect."
 		return out
 	}
 	raw := computeFundingArbTrade(long, short, notional, holdHours, now)

@@ -30,8 +30,14 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetMarketVolumeSurgeQuery: hook,
     useGetMarketTakerFlowQuery: () => ({
       ...empty,
-      data: { summary: 'Buyers in control' },
-      currentData: { summary: 'Buyers in control' },
+      data: {
+        summary: 'Buyers in control',
+        venues: [{ exchange: 'okx', summary: 'OKX buyers led the newest prints' }],
+      },
+      currentData: {
+        summary: 'Buyers in control',
+        venues: [{ exchange: 'okx', summary: 'OKX buyers led the newest prints' }],
+      },
     }),
     useGetMarketFlowAtPricesQuery: (arg: { window?: string }) => {
       flowWindows.push(arg.window ?? '');
@@ -70,6 +76,7 @@ describe('CoinFlowTab', () => {
     expect(screen.getByText('40M bid vs 15M ask')).toBeInTheDocument();
     expect(screen.getByText('okx')).toBeInTheDocument();
     expect(screen.getByText('Buyers in control')).toBeInTheDocument();
+    expect(screen.getByText('OKX buyers led the newest prints')).toBeInTheDocument();
     expect(screen.getByText('Most prints at 65520.')).toBeInTheDocument();
     expect(screen.getAllByText('POC').length).toBeGreaterThan(0);
     expect(screen.getByText(/9\.0× buy/i)).toBeInTheDocument();

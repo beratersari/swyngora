@@ -58,10 +58,13 @@ func TestGetNetPosition_UsesOIAndTaker(t *testing.T) {
 	}
 }
 
-func TestGetNetPosition_RejectsOKX(t *testing.T) {
+func TestGetNetPosition_OKXWithoutPorts(t *testing.T) {
 	svc := New(nil, nil)
-	_, err := svc.GetNetPosition(context.Background(), "okx", "BTCUSDT")
-	if err == nil {
-		t.Fatal("expected error")
+	got, err := svc.GetNetPosition(context.Background(), "okx", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || len(got.Venues) != 1 || got.Venues[0].Exchange != string(domain.ExchangeOKX) {
+		t.Fatalf("%+v", got)
 	}
 }

@@ -10,7 +10,7 @@ ratio (who already holds positions).
 
 `GET /api/v1/market/taker-flow?symbol=BTCUSDT`
 
-- `exchange=all` (default): **Binance** and **Bybit** separately plus `combined`.
+- `exchange=all` (default): **Binance**, **Bybit**, and **OKX** separately plus `combined`. OKX is the newest 500 public swap trades, so 1h and 4h stay incomplete until that list covers the window.
 - Windows: **5m**, **1h**, **4h**.
 - Each window: `buyNotional`, `sellNotional`, `delta` (buy − sell), `deltaPct`,
   `dominant` (`buy` / `sell` / `balanced`).

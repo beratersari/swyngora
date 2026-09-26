@@ -18,6 +18,7 @@ export function richerLine(richer: BasisRicher | undefined): 'richerFar' | 'rich
 
 export function venueLabel(exchange: string | undefined): string {
   if (!exchange) return '';
+  if (exchange.toLowerCase() === 'okx') return 'OKX';
   return exchange.charAt(0).toUpperCase() + exchange.slice(1);
 }
 

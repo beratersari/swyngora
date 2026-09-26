@@ -178,7 +178,7 @@ func TestBuildFundingArbReport_MissingVenue(t *testing.T) {
 	if got.Trade != nil {
 		t.Fatalf("no trade: %+v", got.Trade)
 	}
-	if !strings.Contains(got.Summary, "both") {
+	if !strings.Contains(got.Summary, "at least two") {
 		t.Fatalf("summary %s", got.Summary)
 	}
 }

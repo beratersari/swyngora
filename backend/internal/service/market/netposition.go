@@ -9,7 +9,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const netPositionNoteFallback = "Net long and net short need both open interest and taker buy/sell. OKX is not included."
+const netPositionNoteFallback = "Net long and net short need both open interest and taker buy/sell."
 
 // takerBucketSource is implemented by the Binance and Bybit clients.
 type takerBucketSource interface {
@@ -30,14 +30,8 @@ func (s *Service) GetNetPosition(ctx context.Context, exchange, symbol string) (
 	if err != nil {
 		return nil, err
 	}
-	if ex == string(domain.ExchangeOKX) {
-		return nil, fmt.Errorf("%w: net position needs binance, bybit, or all", domain.ErrInvalidArgument)
-	}
 	s.noteFutures(symbol)
-	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
-	if ex != "all" {
-		want = []domain.Exchange{domain.Exchange(ex)}
-	}
+	want := configuredFutures(ex, func(v domain.Exchange) bool { return s.oiPort(v) != nil && s.takerPort(v) != nil })
 	inputs := make([]domain.NetPositionVenueInput, len(want))
 	var wg sync.WaitGroup
 	for i, v := range want {

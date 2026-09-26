@@ -3,9 +3,10 @@
 ## Goal
 
 Show how far the **perpetual futures price** is from **spot/index** on Binance
-USD-M and Bybit linear: dollar gap, percent gap, premium or discount, whether
-that gap is getting bigger or smaller, and a short read with funding and open
-interest. Also say if both venues agree. Compare **listed dated futures** so
+USD-M, Bybit linear, and OKX USDT-swap: dollar gap, percent gap, premium or
+discount, whether that gap is getting bigger or smaller, and a short read with
+funding and open interest. Also say if the venues agree. OKX uses mark versus
+the USDT index. Dated-futures curve stays on the venues that list those contracts. Compare **listed dated futures** so
 you can see whether the near expiry is richer than the far expiry (backwardation)
 or the far expiry is richer (contango), and whether that curve is up or down.
 

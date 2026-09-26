@@ -25,10 +25,7 @@ func (s *Service) GetAbsorption(ctx context.Context, exchange, symbol string) (*
 	if s.liqWatch != nil {
 		s.liqWatch.Watch(symbol)
 	}
-	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
-	if ex != "all" {
-		want = []domain.Exchange{domain.Exchange(ex)}
-	}
+	want := configuredFutures(ex, func(v domain.Exchange) bool { return s.takerPort(v) != nil })
 	now := time.Now().UTC()
 	prices := s.cvdPrices(ctx, symbol)
 

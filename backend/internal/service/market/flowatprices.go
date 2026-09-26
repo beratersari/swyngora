@@ -34,10 +34,7 @@ func (s *Service) GetFlowAtPrices(ctx context.Context, exchange, symbol, window 
 		return nil, err
 	}
 	s.noteFlowSymbol(symbol)
-	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
-	if ex != "all" {
-		want = []domain.Exchange{domain.Exchange(ex)}
-	}
+	want := configuredFutures(ex, func(v domain.Exchange) bool { return s.printPort(v) != nil })
 
 	type fetched struct {
 		ex     domain.Exchange

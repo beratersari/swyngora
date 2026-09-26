@@ -21,7 +21,7 @@ import {
   useGetMarketWhalesQuery,
 } from '@/libs/api';
 import { rtkCurrent, rtkCurrentPending } from '@/libs/utils';
-import { perpStats, reportSummary, surgeStats } from './CoinFlowTab.helpers';
+import { perpStats, reportSummary, surgeStats, venueLines } from './CoinFlowTab.helpers';
 import { WhaleFollowList } from './WhaleFollowList';
 import type { CoinFlowTabProps } from './CoinFlowTab.types';
 
@@ -51,7 +51,7 @@ export function CoinFlowTab({ symbol, exchange }: CoinFlowTabProps) {
   const rows = [
     { key: 'perp', title: t('flow.perpDepth'), q: perp, stats: perpStats(rtkCurrent(perp)) },
     { key: 'surge', title: t('flow.surge'), q: surge, stats: surgeStats(rtkCurrent(surge)) },
-    { key: 'taker', title: t('flow.taker'), q: taker, stats: [] },
+    { key: 'taker', title: t('flow.taker'), q: taker, stats: venueLines(rtkCurrent(taker)) },
     { key: 'prices', title: t('flow.prices'), q: flow, stats: [] },
     { key: 'vwap', title: t('flow.vwap'), q: vwap, stats: [] },
     { key: 'profile', title: t('flow.profile'), q: profile, stats: [] },

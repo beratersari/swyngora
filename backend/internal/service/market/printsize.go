@@ -25,10 +25,7 @@ func (s *Service) GetPrintSize(ctx context.Context, exchange, symbol string) (*d
 	if s.liqWatch != nil {
 		s.liqWatch.Watch(symbol)
 	}
-	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
-	if ex != "all" {
-		want = []domain.Exchange{domain.Exchange(ex)}
-	}
+	want := configuredFutures(ex, func(v domain.Exchange) bool { return s.printPort(v) != nil })
 	now := time.Now().UTC()
 	from := now.Add(-domain.PrintSizeLookback())
 	out := &domain.PrintSizeReport{

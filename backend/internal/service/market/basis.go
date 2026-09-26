@@ -23,10 +23,7 @@ func (s *Service) GetBasis(ctx context.Context, exchange, symbol string) (*domai
 		return nil, err
 	}
 	s.noteFutures(symbol)
-	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
-	if ex != "all" {
-		want = []domain.Exchange{domain.Exchange(ex)}
-	}
+	want := configuredFutures(ex, func(v domain.Exchange) bool { return s.basisPort(v) != nil })
 	now := time.Now().UTC()
 	out := &domain.BasisReport{
 		Symbol:   symbol,

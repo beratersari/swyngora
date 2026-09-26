@@ -204,7 +204,7 @@ func (w *FlowAtPricesHistoryWorker) RunOnce(ctx context.Context) {
 	}
 	now := w.now().UTC()
 	for _, sym := range w.Svc.FlowSampleSymbols() {
-		for _, ex := range []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit} {
+		for _, ex := range configuredFutures("all", func(v domain.Exchange) bool { return w.Svc.printPort(v) != nil }) {
 			if ctx.Err() != nil {
 				return
 			}

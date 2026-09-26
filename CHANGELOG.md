@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **OKX on the futures tape that already has a public feed:** basis (mark versus index), taker buy/sell, CVD, absorption, print size, flow at prices, whales, participation, and net position include OKX next to Binance and Bybit. OKX taker uses the newest 500 swap trades. Spot-candle desks (volume profile, VWAP, volume surge, sweeps) and account long/short stay on the venues that publish them (`docs/features/basis.md`, `docs/features/taker-flow.md`)
 - **Perp depth includes OKX:** Binance USD-M, Bybit linear, and OKX USDT-swap books are shown separately and summed. OKX contract size is converted to base before notional. The coin Flow tab lists each venue (`GET /api/v1/market/perp-depth`, MCP `get_perp_depth`) (`docs/features/perp-depth.md`)
 - **Venue divergence includes OKX:** Binance, Bybit, and OKX are compared together. Groups show which venues share a lean, and outliers name the one moving differently (`GET /api/v1/market/venue-divergence`, MCP `get_venue_divergence`, coin Structure tab) (`docs/features/venue-divergence.md`)
 - **Funding arb history includes OKX:** past stretches now pick the long and short from settled Binance, Bybit, and OKX prints, the same three venues as the live quote. Signal review matches an OKX clock to the OKX print. The Funding tab on `/arb` looks up those stretches (`GET /api/v1/market/funding-arb/history`, MCP `get_funding_arb_history`) (`docs/features/funding-arb.md`)

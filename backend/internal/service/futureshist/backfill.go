@@ -165,7 +165,7 @@ func (b *Backfiller) Prepare(ctx context.Context, exchange, symbol string, lookb
 	defer cancel()
 	now := time.Now().UTC()
 	from := now.Add(-lookback)
-	exs := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
+	exs := domain.FuturesVenues()
 	if parsed, err := domain.ParseLiquidationExchange(exchange); err == nil && parsed != "all" {
 		exs = []domain.Exchange{domain.Exchange(parsed)}
 	}

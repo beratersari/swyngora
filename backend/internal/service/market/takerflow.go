@@ -10,7 +10,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const takerDisclaimer = "Taker buy/sell is aggressive market-order volume (who hit the book), not how many accounts are already long or short. Binance uses the public taker buy/sell series; Bybit uses live trades (4h is complete after this process has been collecting). Informational only — not financial advice."
+const takerDisclaimer = "Taker buy/sell is aggressive market-order volume (who hit the book), not how many accounts are already long or short. Binance uses the public taker buy/sell series; Bybit uses live trades (4h is complete after this process has been collecting); OKX uses the newest 500 public swap trades, so longer windows stay incomplete until that list covers them. Informational only — not financial advice."
 
 // GetTakerFlow returns aggressive futures buy vs sell volume for 5m / 1h / 4h.
 func (s *Service) GetTakerFlow(ctx context.Context, exchange, symbol string) (*domain.TakerFlowReport, error) {
@@ -26,10 +26,7 @@ func (s *Service) GetTakerFlow(ctx context.Context, exchange, symbol string) (*d
 	if s.liqWatch != nil {
 		s.liqWatch.Watch(symbol)
 	}
-	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
-	if ex != "all" {
-		want = []domain.Exchange{domain.Exchange(ex)}
-	}
+	want := configuredFutures(ex, func(v domain.Exchange) bool { return s.takerPort(v) != nil })
 	now := time.Now().UTC()
 	out := &domain.TakerFlowReport{
 		Symbol:   symbol,

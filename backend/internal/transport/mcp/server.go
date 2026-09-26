@@ -1150,7 +1150,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_print_size",
-		mcp.WithDescription("Average aggressive futures print size (USDT notional per taker fill) on Binance USD-M and Bybit linear. Windows are 5m and 15m vs the same length just before. Use this when volume is high and you need to know whether it was a few large market buys/sells or many small ones (e.g. buy avg jumped from 20K to 180K). kind=jumped/faded/stable; read=few_large/many_small. Not financial advice."),
+		mcp.WithDescription("Average aggressive futures print size (USDT notional per taker fill) on Binance USD-M, Bybit linear, and OKX USDT-swap. Windows are 5m and 15m vs the same length just before. Use this when volume is high and you need to know whether it was a few large market buys/sells or many small ones (e.g. buy avg jumped from 20K to 180K). kind=jumped/faded/stable; read=few_large/many_small. OKX is the newest 500 public trades. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -1198,7 +1198,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_taker_flow",
-		mcp.WithDescription("Aggressive futures buy vs sell volume (who is hitting the book) on Binance USD-M and Bybit linear for 5m, 1h, and 4h, plus a combined view and a short read with price/OI/funding. This is taker flow, not the account long/short ratio. Not financial advice."),
+		mcp.WithDescription("Aggressive futures buy vs sell volume (who is hitting the book) on Binance USD-M, Bybit linear, and OKX USDT-swap for 5m, 1h, and 4h, plus a combined view and a short read with price/OI/funding. OKX uses the newest 500 public trades, so longer windows can be incomplete. This is taker flow, not the account long/short ratio. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

@@ -1755,7 +1755,7 @@ paths:
     get:
       summary: Futures vs spot basis (premium or discount)
       description: |
-        How far the perpetual is from spot/index on Binance USD-M and Bybit
+        How far the perpetual is from spot/index on Binance USD-M, Bybit linear, and OKX USDT-swap
         linear. Returns the dollar gap, percent gap, premium/discount, whether
         the gap is expanding or shrinking (5m/1h/4h), a short read with funding
         and open interest, and whether both venues agree. `curve` compares
@@ -2084,7 +2084,7 @@ paths:
     get:
       summary: Average aggressive print size
       description: |
-        Average **USDT notional per taker fill** on Binance USD-M and Bybit
+        Average **USDT notional per taker fill** on Binance USD-M, Bybit linear, and OKX USDT-swap
         linear, split buy vs sell. Windows are **5 minutes** and **15 minutes**,
         each compared to the same length just before. A jump from 20K to 180K
         means a few large market orders, not many small ones (`read=few_large`).
@@ -2116,7 +2116,7 @@ paths:
     get:
       summary: Futures taker buy vs sell volume
       description: |
-        Aggressive (taker) buy and sell volume on Binance USD-M and Bybit
+        Aggressive (taker) buy and sell volume on Binance USD-M, Bybit linear, and OKX USDT-swap
         linear for the last **5 minutes, 1 hour, and 4 hours**. Returns buy
         notional, sell notional, delta, and a short read with price / OI /
         funding. This is who is hitting the book now — not the account

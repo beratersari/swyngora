@@ -33,9 +33,13 @@ func (s *Service) GetCVD(ctx context.Context, exchange, symbol string) (*domain.
 	if s.liqWatch != nil {
 		s.liqWatch.Watch(symbol)
 	}
-	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
-	if ex != "all" {
-		want = []domain.Exchange{domain.Exchange(ex)}
+	want := configuredFutures(ex, func(v domain.Exchange) bool { return s.takerPort(v) != nil })
+	spotWant := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
+	if ex != "all" && ex != string(domain.ExchangeOKX) {
+		spotWant = []domain.Exchange{domain.Exchange(ex)}
+	}
+	if ex == string(domain.ExchangeOKX) {
+		spotWant = nil
 	}
 	now := time.Now().UTC()
 	prices := s.cvdPrices(ctx, symbol)
@@ -67,8 +71,8 @@ func (s *Service) GetCVD(ctx context.Context, exchange, symbol string) (*domain.
 		out.Combined = domain.CombineCVDVenues(symbol, out.Venues, prices, now)
 	}
 
-	out.SpotVenues = make([]domain.CVDVenueSeries, 0, len(want))
-	for _, v := range want {
+	out.SpotVenues = make([]domain.CVDVenueSeries, 0, len(spotWant))
+	for _, v := range spotWant {
 		wg.Add(1)
 		go func(v domain.Exchange) {
 			defer wg.Done()

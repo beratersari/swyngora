@@ -92,7 +92,7 @@ func (s *Service) GetWhales(ctx context.Context, exchange, symbol string, minNot
 }
 
 func (s *Service) fetchWhalePrints(ctx context.Context, exchange string, symbols []string) []domain.TakerPrint {
-	venues := whaleVenues(exchange)
+	venues := s.whaleVenues(exchange)
 	if len(venues) == 0 || len(symbols) == 0 {
 		return nil
 	}
@@ -267,6 +267,11 @@ func (s *Service) whaleMcap(ctx context.Context, symbol string) float64 {
 }
 
 func (s *Service) printPort(ex domain.Exchange) domain.RecentPrintPort {
+	if s != nil && s.prints != nil {
+		if p := s.prints[ex]; p != nil {
+			return p
+		}
+	}
 	p, err := s.port(ex)
 	if err != nil || p == nil {
 		return nil
@@ -278,13 +283,17 @@ func (s *Service) printPort(ex domain.Exchange) domain.RecentPrintPort {
 	return rp
 }
 
-func whaleVenues(exchange string) []domain.Exchange {
+func (s *Service) whaleVenues(exchange string) []domain.Exchange {
 	switch exchange {
 	case string(domain.ExchangeBinance):
 		return []domain.Exchange{domain.ExchangeBinance}
 	case string(domain.ExchangeBybit):
 		return []domain.Exchange{domain.ExchangeBybit}
+	case string(domain.ExchangeOKX):
+		return []domain.Exchange{domain.ExchangeOKX}
 	default:
-		return []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
+		return configuredFutures(exchange, func(ex domain.Exchange) bool {
+			return s.printPort(ex) != nil
+		})
 	}
 }

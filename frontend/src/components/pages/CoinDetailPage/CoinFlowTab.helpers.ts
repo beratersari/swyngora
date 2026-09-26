@@ -32,6 +32,12 @@ export function perpStats(r?: MarketDeskReport | null): { label: string; value: 
   return rows;
 }
 
+export function venueLines(r?: MarketDeskReport | null): { label: string; value: string }[] {
+  return (r?.venues ?? [])
+    .filter((v) => v.exchange)
+    .map((v) => ({ label: v.exchange === 'okx' ? 'OKX' : (v.exchange ?? ''), value: v.summary || v.error || '—' }));
+}
+
 export function surgeStats(r?: MarketDeskReport | null): { label: string; value: string }[] {
   const venue = r?.combined ?? r?.venues?.[0];
   const win = venue?.windows?.find((x) => x.window === '15m') ?? venue?.windows?.[0];

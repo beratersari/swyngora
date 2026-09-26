@@ -22,10 +22,7 @@ func (s *Service) GetParticipation(ctx context.Context, exchange, symbol string)
 		return nil, err
 	}
 	s.noteFutures(symbol)
-	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
-	if ex != "all" {
-		want = []domain.Exchange{domain.Exchange(ex)}
-	}
+	want := configuredFutures(ex, func(v domain.Exchange) bool { return s.takerPort(v) != nil && s.oiPort(v) != nil })
 	now := time.Now().UTC()
 	out := &domain.ParticipationReport{
 		Symbol:   symbol,
