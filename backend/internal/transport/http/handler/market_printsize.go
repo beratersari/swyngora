@@ -1,11 +1,33 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
+
+// GetPrintSizeOverview handles GET /api/v1/market/print-size/overview.
+func (h *MarketHandler) GetPrintSizeOverview(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	limit := 0
+	if raw := q.Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: limit must be an integer", domain.ErrInvalidArgument))
+			return
+		}
+		limit = n
+	}
+	got, err := h.svc.GetPrintSizeOverview(r.Context(), q.Get("exchange"), q.Get("quote"), limit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, printSizeOverviewToDTO(got))
+}
 
 // GetPrintSize handles GET /api/v1/market/print-size.
 func (h *MarketHandler) GetPrintSize(w http.ResponseWriter, r *http.Request) {
@@ -74,6 +96,57 @@ func printSizeToDTO(a *domain.PrintSizeReport) printSizeResponse {
 		out.Combined = &c
 	}
 	return out
+}
+
+type printSizeMarketWindowDTO struct {
+	Window         string           `json:"window"`
+	Buy            printSizeSideDTO `json:"buy"`
+	Sell           printSizeSideDTO `json:"sell"`
+	Read           string           `json:"read"`
+	LargerCoins    int              `json:"largerCoins"`
+	SmallerCoins   int              `json:"smallerCoins"`
+	FewLargeCoins  int              `json:"fewLargeCoins"`
+	ManySmallCoins int              `json:"manySmallCoins"`
+	StableCoins    int              `json:"stableCoins"`
+	QuietCoins     int              `json:"quietCoins"`
+	Coins          int              `json:"coins"`
+	Complete       bool             `json:"complete"`
+	Summary        string           `json:"summary"`
+}
+
+type printSizeOverviewResponse struct {
+	Exchange string                     `json:"exchange"`
+	Quote    string                     `json:"quote"`
+	Universe int                        `json:"universe"`
+	AsOf     time.Time                  `json:"asOf"`
+	Windows  []printSizeMarketWindowDTO `json:"windows"`
+	Coins    []printSizeVenueDTO        `json:"coins"`
+	Summary  string                     `json:"summary"`
+	Note     string                     `json:"note"`
+}
+
+func printSizeOverviewToDTO(a *domain.PrintSizeOverview) printSizeOverviewResponse {
+	if a == nil {
+		return printSizeOverviewResponse{}
+	}
+	wins := make([]printSizeMarketWindowDTO, 0, len(a.Windows))
+	for _, w := range a.Windows {
+		wins = append(wins, printSizeMarketWindowDTO{
+			Window: w.Window, Buy: printSizeSideToDTO(w.Buy), Sell: printSizeSideToDTO(w.Sell),
+			Read: w.Read, LargerCoins: w.LargerCoins, SmallerCoins: w.SmallerCoins,
+			FewLargeCoins: w.FewLargeCoins, ManySmallCoins: w.ManySmallCoins,
+			StableCoins: w.StableCoins, QuietCoins: w.QuietCoins, Coins: w.Coins,
+			Complete: w.Complete, Summary: w.Summary,
+		})
+	}
+	coins := make([]printSizeVenueDTO, 0, len(a.Coins))
+	for _, c := range a.Coins {
+		coins = append(coins, printSizeVenueToDTO(c))
+	}
+	return printSizeOverviewResponse{
+		Exchange: a.Exchange, Quote: a.Quote, Universe: a.Universe, AsOf: a.AsOf.UTC(),
+		Windows: wins, Coins: coins, Summary: a.Summary, Note: a.Note,
+	}
 }
 
 func printSizeVenueToDTO(v domain.PrintSizeVenue) printSizeVenueDTO {

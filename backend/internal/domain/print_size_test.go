@@ -56,6 +56,44 @@ func TestBuildPrintSizeVenue_FewLargeBuys(t *testing.T) {
 	}
 }
 
+func TestBuildPrintSizeOverview_AveragesNotionalOverCount(t *testing.T) {
+	now := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
+	btcBuy := printSizeSide(400, 2, 40, 2)
+	ethBuy := printSizeSide(20, 2, 80, 2)
+	btc := PrintSizeVenue{Symbol: "BTCUSDT", Windows: []PrintSizeWindow{{
+		Window: PrintSizeWindow15m, Buy: btcBuy, Sell: printSizeSide(10, 1, 10, 1), Complete: true,
+	}}}
+	btc.Windows[0].Read = printSizeRead(btc.Windows[0].Buy, btc.Windows[0].Sell)
+	eth := PrintSizeVenue{Symbol: "ETHUSDT", Windows: []PrintSizeWindow{{
+		Window: PrintSizeWindow15m, Buy: ethBuy, Sell: printSizeSide(10, 1, 10, 1), Complete: true,
+	}}}
+	eth.Windows[0].Read = printSizeRead(eth.Windows[0].Buy, eth.Windows[0].Sell)
+	quiet := PrintSizeVenue{Symbol: "SOLUSDT", Windows: []PrintSizeWindow{{Window: PrintSizeWindow15m}}}
+	got := BuildPrintSizeOverview("binance", "USDT", []PrintSizeVenue{
+		eth, btc, quiet, {Symbol: "XRPUSDT", Error: "down"},
+	}, now)
+	if got.Universe != 3 || got.Coins[0].Symbol != "BTCUSDT" {
+		t.Fatalf("rank universe=%d first=%s", got.Universe, got.Coins[0].Symbol)
+	}
+	w := got.Windows[1]
+	if w.Window != PrintSizeWindow15m {
+		w = got.Windows[0]
+	}
+	// 420 / 4 = 105 vs 120 / 4 = 30. Averaging 200 and 10 would hide the busier coin.
+	if w.Buy.Avg < 104 || w.Buy.Avg > 106 || w.Buy.PriorAvg < 29 || w.Buy.PriorAvg > 31 || w.Buy.Kind != PrintSizeKindJumped {
+		t.Fatalf("market buy %+v", w.Buy)
+	}
+	if w.LargerCoins+w.FewLargeCoins < 1 || w.SmallerCoins < 1 || w.QuietCoins != 1 {
+		t.Fatalf("votes %+v btc=%s eth=%s", w, btc.Windows[0].Read, eth.Windows[0].Read)
+	}
+}
+
+func TestParsePrintSizeOverviewLimit(t *testing.T) {
+	if ParsePrintSizeOverviewLimit(0) != 20 || ParsePrintSizeOverviewLimit(2) != 5 || ParsePrintSizeOverviewLimit(99) != 30 {
+		t.Fatal("limit clamp")
+	}
+}
+
 func TestBuildPrintSizeVenue_ManySmallBuys(t *testing.T) {
 	now := time.Date(2026, 9, 19, 16, 0, 0, 0, time.UTC)
 	var prints []TakerPrint

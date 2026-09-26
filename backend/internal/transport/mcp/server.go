@@ -72,6 +72,7 @@ type DataPort interface {
 	GetParticipation(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeShare(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetPrintSize(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetPrintSizeOverview(ctx context.Context, exchange, quote string, limit int) (json.RawMessage, error)
 	GetBotTracker(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetOrderCount(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetOrderCountOverview(ctx context.Context, exchange, quote string, limit int) (json.RawMessage, error)
@@ -1162,6 +1163,19 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetPrintSize(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_print_size_overview",
+		mcp.WithDescription("Whole-market average print size. Sums aggressive futures notional and fill counts across the most liquid USDT pairs, then divides. Compares the last 5m and 15m with the same length just before, so you can see if prints got larger or smaller. A busier coin weighs more. largerCoins and smallerCoins are one vote per pair. Use this for the whole market, not one coin. Not financial advice."),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all)")),
+		mcp.WithString("quote", mcp.Description("Quote asset, default USDT")),
+		mcp.WithNumber("limit", mcp.Description("How many liquid pairs (default 20, max 30)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.GetPrintSizeOverview(ctx, req.GetString("exchange", "all"), req.GetString("quote", "USDT"), int(req.GetFloat("limit", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

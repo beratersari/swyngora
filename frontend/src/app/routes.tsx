@@ -14,6 +14,7 @@ import { PortfolioPage } from '@/components/pages/PortfolioPage';
 import { PumpsPage } from '@/components/pages/PumpsPage';
 import { SurgesPage } from '@/components/pages/SurgesPage';
 import { OrderCountPage } from '@/components/pages/OrderCountPage';
+import { PrintSizePage } from '@/components/pages/PrintSizePage';
 import { SignalsPage } from '@/components/pages/SignalsPage';
 import { SettingsPage } from '@/components/pages/SettingsPage';
 import { WatchlistPage } from '@/components/pages/WatchlistPage';
@@ -33,6 +34,7 @@ export function AppRoutes() {
       <Route path="/pumps" element={<PumpsPage />} />
       <Route path="/surges" element={<SurgesPage />} />
       <Route path="/order-count" element={<OrderCountPage />} />
+      <Route path="/print-size" element={<PrintSizePage />} />
       <Route path="/alerts" element={<AlertsPage />} />
       <Route path="/arb" element={<ArbPage />} />
       <Route path="/compare" element={<ComparePage />} />

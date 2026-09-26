@@ -1263,6 +1263,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/print-size/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whole-market average print size
+         * @description Sums aggressive futures notional and fill counts across the most liquid
+         *     USDT pairs, then divides. The market average is current versus the same
+         *     length just before, so it shows whether prints got larger or smaller.
+         *     A busier coin weighs more. `largerCoins` and `smallerCoins` are one vote
+         *     per pair. Windows are 5m and 15m. Default universe is 20 pairs (5–30).
+         *     Informational only.
+         */
+        get: operations["getMarketPrintSizeOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/print-size": {
         parameters: {
             query?: never;
@@ -6553,6 +6578,35 @@ export interface components {
             combined?: components["schemas"]["PrintSizeVenue"];
             note?: string;
         };
+        PrintSizeMarketWindow: {
+            /** @enum {string} */
+            window?: "5m" | "15m";
+            buy?: components["schemas"]["PrintSizeSide"];
+            sell?: components["schemas"]["PrintSizeSide"];
+            /** @enum {string} */
+            read?: "few_large" | "many_small" | "larger" | "smaller" | "stable";
+            largerCoins?: number;
+            smallerCoins?: number;
+            fewLargeCoins?: number;
+            manySmallCoins?: number;
+            stableCoins?: number;
+            quietCoins?: number;
+            coins?: number;
+            complete?: boolean;
+            summary?: string;
+        };
+        /** @description Average print size summed across liquid pairs */
+        MarketPrintSizeOverview: {
+            exchange?: string;
+            quote?: string;
+            universe?: number;
+            /** Format: date-time */
+            asOf?: string;
+            windows?: components["schemas"]["PrintSizeMarketWindow"][];
+            coins?: components["schemas"]["PrintSizeVenue"][];
+            summary?: string;
+            note?: string;
+        };
         BotCluster: {
             exchange?: string;
             /** @enum {string} */
@@ -10475,6 +10529,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketParticipation"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketPrintSizeOverview: {
+        parameters: {
+            query?: {
+                /** @description binance | bybit | okx | all (default all) */
+                exchange?: string;
+                quote?: string;
+                /** @description How many liquid pairs (default 20, min 5, max 30) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Market average print size plus each coin */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketPrintSizeOverview"];
                 };
             };
             400: components["responses"]["Error"];

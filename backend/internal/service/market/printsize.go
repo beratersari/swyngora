@@ -57,6 +57,74 @@ func (s *Service) GetPrintSize(ctx context.Context, exchange, symbol string) (*d
 	return out, nil
 }
 
+const printSizeOverviewDisclaimer = "Whole-market print size sums aggressive futures notional and fill counts across the most liquid USDT pairs, then divides. A busier coin weighs more in the average. Each pair also votes whether its own average got larger, smaller, a few large orders, or many small ones. Windows are 5m and 15m versus the same length just before. Informational only — not financial advice."
+
+// GetPrintSizeOverview reports whether average print size grew or shrank across liquid pairs.
+func (s *Service) GetPrintSizeOverview(ctx context.Context, exchange, quote string, limit int) (*domain.PrintSizeOverview, error) {
+	ex, err := domain.ParseTakerExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	if quote == "" {
+		quote = "USDT"
+	}
+	limit = domain.ParsePrintSizeOverviewLimit(limit)
+	symbols, err := s.orderCountUniverse(ctx, ex, quote, limit)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now().UTC()
+	from := now.Add(-domain.PrintSizeLookback())
+	coins := make([]domain.PrintSizeVenue, len(symbols))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 4)
+	for i, symbol := range symbols {
+		wg.Add(1)
+		go func(i int, symbol string) {
+			defer wg.Done()
+			select {
+			case <-ctx.Done():
+				return
+			case sem <- struct{}{}:
+			}
+			defer func() { <-sem }()
+			coins[i] = s.printSizeSymbol(ctx, ex, symbol, from, now)
+		}(i, symbol)
+	}
+	wg.Wait()
+	out := domain.BuildPrintSizeOverview(ex, quote, coins, now)
+	out.Note = printSizeOverviewDisclaimer
+	return &out, nil
+}
+
+func (s *Service) printSizeSymbol(ctx context.Context, ex, symbol string, from, to time.Time) domain.PrintSizeVenue {
+	want := configuredFutures(ex, func(v domain.Exchange) bool { return s.printPort(v) != nil })
+	venues := make([]domain.PrintSizeVenue, len(want))
+	var wg sync.WaitGroup
+	for i, v := range want {
+		wg.Add(1)
+		go func(i int, v domain.Exchange) {
+			defer wg.Done()
+			venues[i] = s.printSizeOne(ctx, v, symbol, from, to)
+		}(i, v)
+	}
+	wg.Wait()
+	if ex == "all" {
+		if combined := domain.CombinePrintSizeVenues(symbol, venues); combined != nil {
+			return *combined
+		}
+	}
+	for _, v := range venues {
+		if v.Error == "" {
+			return v
+		}
+	}
+	if len(venues) > 0 {
+		return venues[0]
+	}
+	return domain.PrintSizeVenue{Exchange: domain.Exchange(ex), Symbol: symbol, Error: "print size not configured", Summary: "print size not configured"}
+}
+
 func (s *Service) printSizeOne(ctx context.Context, ex domain.Exchange, symbol string, from, to time.Time) domain.PrintSizeVenue {
 	out := domain.PrintSizeVenue{Exchange: ex, Symbol: symbol, Windows: []domain.PrintSizeWindow{}}
 	prints := s.fetchPrintRange(ctx, ex, symbol, from, to)

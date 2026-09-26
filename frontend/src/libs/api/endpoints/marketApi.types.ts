@@ -417,6 +417,56 @@ export type MarketParticipation = components['schemas']['MarketParticipation'];
 export type ParticipationQuery = NonNullable<operations['getMarketParticipation']['parameters']['query']>;
 export type MarketPrintSize = components['schemas']['MarketPrintSize'];
 export type PrintSizeQuery = NonNullable<operations['getMarketPrintSize']['parameters']['query']>;
+export type PrintSizeSide = {
+  avg?: string;
+  priorAvg?: string;
+  count?: number;
+  priorCount?: number;
+  ratio?: string;
+  kind?: string;
+};
+export type PrintSizeCoinWindow = {
+  window?: string;
+  buy?: PrintSizeSide;
+  sell?: PrintSizeSide;
+  read?: string;
+  summary?: string;
+};
+export type PrintSizeCoin = {
+  exchange?: string;
+  symbol?: string;
+  windows?: PrintSizeCoinWindow[];
+  summary?: string;
+};
+export type PrintSizeMarketWindow = {
+  window?: string;
+  buy?: PrintSizeSide;
+  sell?: PrintSizeSide;
+  read?: string;
+  largerCoins?: number;
+  smallerCoins?: number;
+  fewLargeCoins?: number;
+  manySmallCoins?: number;
+  stableCoins?: number;
+  quietCoins?: number;
+  coins?: number;
+  summary?: string;
+};
+export type MarketPrintSizeOverview = {
+  exchange?: string;
+  quote?: string;
+  universe?: number;
+  asOf?: string;
+  windows?: PrintSizeMarketWindow[];
+  coins?: PrintSizeCoin[];
+  summary?: string;
+  note?: string;
+};
+export type PrintSizeOverviewQuery = {
+  exchange?: string;
+  quote?: string;
+  limit?: number;
+};
 export type MarketBotTracker = components['schemas']['MarketBotTracker'];
 export type BotCluster = components['schemas']['BotCluster'];
 export type BotTrackerQuery = NonNullable<operations['getMarketBotTracker']['parameters']['query']>;

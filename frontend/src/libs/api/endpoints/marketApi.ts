@@ -85,6 +85,10 @@ import type {
   MarketParticipation,
   ParticipationQuery,
   MarketPrintSize,
+  MarketPrintSizeOverview,
+  PrintSizeCoin,
+  PrintSizeMarketWindow,
+  PrintSizeOverviewQuery,
   PrintSizeQuery,
   MarketBotTracker,
   BotCluster,
@@ -199,6 +203,10 @@ export type {
   FlowAtPricesLevel,
   MarketParticipation,
   MarketPrintSize,
+  MarketPrintSizeOverview,
+  PrintSizeCoin,
+  PrintSizeMarketWindow,
+  PrintSizeOverviewQuery,
   MarketBotTracker,
   BotCluster,
   MarketOrderCount,
@@ -625,6 +633,12 @@ export const marketApi = baseApi.injectEndpoints({
       }),
     }),
 
+    getMarketPrintSizeOverview: build.query<MarketPrintSizeOverview, PrintSizeOverviewQuery | void>({
+      query: (arg) => ({
+        url: '/api/v1/market/print-size/overview',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
     getMarketPrintSize: build.query<MarketPrintSize, PrintSizeQuery>({
       query: (arg) => ({
         url: '/api/v1/market/print-size',
@@ -830,6 +844,7 @@ export const {
   useGetMarketPositioningQuery,
   useGetMarketVenueDivergenceQuery,
   useGetMarketParticipationQuery,
+  useGetMarketPrintSizeOverviewQuery,
   useGetMarketPrintSizeQuery,
   useGetMarketBotTrackerQuery,
   useGetMarketOrderCountOverviewQuery,

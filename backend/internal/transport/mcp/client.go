@@ -736,6 +736,21 @@ func (c *APIClient) GetBotTracker(ctx context.Context, exchange, symbol string) 
 	return c.get(ctx, "/api/v1/market/bot-tracker", q)
 }
 
+// GetPrintSizeOverview returns whether average print size grew across liquid pairs.
+func (c *APIClient) GetPrintSizeOverview(ctx context.Context, exchange, quote string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if quote != "" {
+		q.Set("quote", quote)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/print-size/overview", q)
+}
+
 func (c *APIClient) GetPrintSize(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)

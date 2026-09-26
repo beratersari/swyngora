@@ -675,6 +675,18 @@ class RSIHeatmapInput(BaseModel):
     )
 
 
+class PrintSizeOverviewInput(BaseModel):
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|okx|all (default all)",
+    )
+    quote: str = Field(default="USDT", description="Quote asset")
+    limit: int = Field(
+        default=0,
+        description="How many liquid pairs (default 20, max 30)",
+    )
+
+
 class OrderCountOverviewInput(BaseModel):
     exchange: str = Field(
         default="all",
@@ -2249,6 +2261,14 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             "/api/v1/market/print-size",
             {"symbol": symbol, "exchange": exchange},
         )
+
+    def get_print_size_overview(
+        exchange: str = "all", quote: str = "USDT", limit: int = 0
+    ) -> str:
+        params: dict[str, Any] = {"exchange": exchange, "quote": quote}
+        if limit:
+            params["limit"] = limit
+        return http.get("/api/v1/market/print-size/overview", params)
 
     def get_bot_tracker(symbol: str, exchange: str = "all") -> str:
         return http.get(
@@ -4914,6 +4934,18 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "read=few_large or many_small. Binance + Bybit."
             ),
             args_schema=TakerFlowInput,
+        ),
+        StructuredTool.from_function(
+            get_print_size_overview,
+            name="get_print_size_overview",
+            description=(
+                "Whole-market average print size. Sums aggressive futures "
+                "notional and fill counts across the liquid USDT pairs, then "
+                "divides. Compares 5m and 15m with the window just before so "
+                "you can see if prints got larger or smaller. A busier coin "
+                "weighs more. Use this for the whole market, not one coin."
+            ),
+            args_schema=PrintSizeOverviewInput,
         ),
         StructuredTool.from_function(
             get_bot_tracker,

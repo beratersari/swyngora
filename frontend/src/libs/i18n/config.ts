@@ -14,6 +14,7 @@ export const I18N_NAMESPACES = [
   'pumps',
   'surges',
   'ordercount',
+  'printsize',
   'ai',
   'alerts',
   'compare',

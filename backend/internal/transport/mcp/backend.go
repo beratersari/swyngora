@@ -1267,6 +1267,42 @@ func (b *Backend) GetPrintSize(ctx context.Context, exchange, symbol string) (js
 	return mustJSON(printSizeMap(got))
 }
 
+func (b *Backend) GetPrintSizeOverview(ctx context.Context, exchange, quote string, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetPrintSizeOverview(ctx, exchange, quote, limit)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(printSizeOverviewMap(got))
+}
+
+func printSizeOverviewMap(got *domain.PrintSizeOverview) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	wins := make([]map[string]any, 0, len(got.Windows))
+	for _, w := range got.Windows {
+		wins = append(wins, map[string]any{
+			"window": w.Window, "buy": printSizeSideMap(w.Buy), "sell": printSizeSideMap(w.Sell),
+			"read": w.Read, "largerCoins": w.LargerCoins, "smallerCoins": w.SmallerCoins,
+			"fewLargeCoins": w.FewLargeCoins, "manySmallCoins": w.ManySmallCoins,
+			"stableCoins": w.StableCoins, "quietCoins": w.QuietCoins, "coins": w.Coins,
+			"complete": w.Complete, "summary": w.Summary,
+		})
+	}
+	coins := make([]map[string]any, 0, len(got.Coins))
+	for _, c := range got.Coins {
+		coins = append(coins, printSizeVenueMap(c))
+	}
+	return map[string]any{
+		"exchange": got.Exchange, "quote": got.Quote, "universe": got.Universe,
+		"asOf": got.AsOf.UTC().Format(time.RFC3339Nano), "windows": wins, "coins": coins,
+		"summary": got.Summary, "note": got.Note,
+	}
+}
+
 func printSizeMap(got *domain.PrintSizeReport) map[string]any {
 	if got == nil {
 		return map[string]any{}

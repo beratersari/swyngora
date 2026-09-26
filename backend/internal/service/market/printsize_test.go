@@ -45,6 +45,44 @@ func TestGetPrintSize_BuyAvgJumped(t *testing.T) {
 	}
 }
 
+func TestGetPrintSizeOverview_SumsLiquidPairs(t *testing.T) {
+	now := time.Now().UTC()
+	var btc, eth []domain.TakerPrint
+	for i := 0; i < 4; i++ {
+		btc = append(btc, domain.TakerPrint{Side: domain.TakerSideBuy, Notional: 20_000, Time: now.Add(-20 * time.Minute)})
+		btc = append(btc, domain.TakerPrint{Side: domain.TakerSideBuy, Notional: 100_000, Time: now.Add(-2 * time.Minute)})
+		eth = append(eth, domain.TakerPrint{Side: domain.TakerSideBuy, Notional: 40_000, Time: now.Add(-20 * time.Minute)})
+		eth = append(eth, domain.TakerPrint{Side: domain.TakerSideBuy, Notional: 10_000, Time: now.Add(-2 * time.Minute)})
+	}
+	fm := &fakeMarket{
+		spot: []domain.SpotMarket{
+			{Symbol: "BTCUSDT", BaseAsset: "BTC", QuoteAsset: "USDT", Status: "TRADING", QuoteVolume: "1000"},
+			{Symbol: "ETHUSDT", BaseAsset: "ETH", QuoteAsset: "USDT", Status: "TRADING", QuoteVolume: "500"},
+		},
+		prints: map[string][]domain.TakerPrint{"BTCUSDT": btc, "ETHUSDT": eth},
+	}
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: fm,
+	}, &fakeSupply{})
+	got, err := svc.GetPrintSizeOverview(context.Background(), "binance", "USDT", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Universe != 2 {
+		t.Fatalf("universe %d", got.Universe)
+	}
+	var w domain.PrintSizeMarketWindow
+	for _, x := range got.Windows {
+		if x.Window == domain.PrintSizeWindow15m {
+			w = x
+		}
+	}
+	// Current 4*100k + 4*10k = 440k over 8 fills. Prior 4*20k + 4*40k = 240k over 8.
+	if w.Buy.Avg < 50_000 || w.Buy.Kind == "" || w.LargerCoins+w.SmallerCoins == 0 {
+		t.Fatalf("%+v", w)
+	}
+}
+
 func TestGetPrintSize_MissingSymbol(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{})
 	if _, err := svc.GetPrintSize(context.Background(), "all", ""); err == nil {

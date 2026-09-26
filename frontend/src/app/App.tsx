@@ -32,6 +32,7 @@ const NAV_ITEMS = [
   { to: '/pumps', key: 'nav.pumps' as const },
   { to: '/surges', key: 'nav.surges' as const },
   { to: '/order-count', key: 'nav.ordercount' as const },
+  { to: '/print-size', key: 'nav.printsize' as const },
   { to: '/alerts', key: 'nav.alerts' as const },
   { to: '/arb', key: 'nav.arb' as const },
   { to: '/compare', key: 'nav.compare' as const },

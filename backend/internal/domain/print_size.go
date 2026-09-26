@@ -393,6 +393,176 @@ func CombinePrintSizeVenues(symbol string, venues []PrintSizeVenue) *PrintSizeVe
 	return out
 }
 
+const (
+	printSizeOverviewDefault = 20
+	printSizeOverviewMin     = 5
+	printSizeOverviewMax     = 30
+)
+
+// PrintSizeMarketWindow is one lookback averaged across the followed coins.
+// Notionals and counts are added first, then the average is divided.
+// Coin counts are one vote per pair.
+type PrintSizeMarketWindow struct {
+	Window         string
+	Buy            PrintSizeSide
+	Sell           PrintSizeSide
+	Read           string
+	LargerCoins    int
+	SmallerCoins   int
+	FewLargeCoins  int
+	ManySmallCoins int
+	StableCoins    int
+	QuietCoins     int
+	Coins          int
+	Complete       bool
+	Summary        string
+}
+
+// PrintSizeOverview is the whole-market average print size.
+type PrintSizeOverview struct {
+	Exchange string
+	Quote    string
+	Universe int
+	AsOf     time.Time
+	Windows  []PrintSizeMarketWindow
+	Coins    []PrintSizeVenue
+	Summary  string
+	Note     string
+}
+
+// ParsePrintSizeOverviewLimit clamps how many liquid pairs the desk follows.
+func ParsePrintSizeOverviewLimit(n int) int {
+	if n <= 0 {
+		return printSizeOverviewDefault
+	}
+	if n < printSizeOverviewMin {
+		return printSizeOverviewMin
+	}
+	if n > printSizeOverviewMax {
+		return printSizeOverviewMax
+	}
+	return n
+}
+
+// BuildPrintSizeOverview sums notional and fill counts across coins, then re-averages.
+// Coins are ordered by the 15m size multiple, largest jump first.
+func BuildPrintSizeOverview(exchange, quote string, coins []PrintSizeVenue, now time.Time) PrintSizeOverview {
+	usable := make([]PrintSizeVenue, 0, len(coins))
+	for _, c := range coins {
+		if c.Error != "" || c.Symbol == "" {
+			continue
+		}
+		usable = append(usable, c)
+	}
+	out := PrintSizeOverview{
+		Exchange: exchange,
+		Quote:    quote,
+		Universe: len(usable),
+		AsOf:     now.UTC(),
+		Windows:  make([]PrintSizeMarketWindow, 0, len(PrintSizeWindows)),
+		Coins:    usable,
+	}
+	for _, spec := range PrintSizeWindows {
+		out.Windows = append(out.Windows, summarizePrintSizeMarket(usable, spec.ID, spec.Dur, now))
+	}
+	sort.SliceStable(out.Coins, func(i, j int) bool {
+		ri, rj := printSizeJump(out.Coins[i], PrintSizeWindow15m), printSizeJump(out.Coins[j], PrintSizeWindow15m)
+		if ri != rj {
+			return ri > rj
+		}
+		return out.Coins[i].Symbol < out.Coins[j].Symbol
+	})
+	out.Summary = explainPrintSizeOverview(out)
+	return out
+}
+
+func summarizePrintSizeMarket(coins []PrintSizeVenue, window string, dur time.Duration, now time.Time) PrintSizeMarketWindow {
+	var buyN, buyPN, sellN, sellPN float64
+	var buyC, buyPC, sellC, sellPC int
+	var larger, smaller, few, many, stable, quiet int
+	complete := false
+	for _, c := range coins {
+		w := pickPrintSizeWindow(c.Windows, window)
+		buyN += w.Buy.Notional
+		buyPN += w.Buy.PriorNotional
+		buyC += w.Buy.Count
+		buyPC += w.Buy.PriorCount
+		sellN += w.Sell.Notional
+		sellPN += w.Sell.PriorNotional
+		sellC += w.Sell.Count
+		sellPC += w.Sell.PriorCount
+		if w.Complete {
+			complete = true
+		}
+		switch printSizeCoinVote(w) {
+		case PrintSizeReadFewLarge:
+			few++
+		case PrintSizeReadManySmall:
+			many++
+		case PrintSizeReadLarger:
+			larger++
+		case PrintSizeReadSmaller:
+			smaller++
+		case "quiet":
+			quiet++
+		default:
+			stable++
+		}
+	}
+	win := PrintSizeWindow{
+		Window: window,
+		Buy:    printSizeSide(buyN, buyC, buyPN, buyPC),
+		Sell:   printSizeSide(sellN, sellC, sellPN, sellPC),
+		From:   now.Add(-dur),
+		To:     now,
+	}
+	win.Read = printSizeRead(win.Buy, win.Sell)
+	out := PrintSizeMarketWindow{
+		Window: win.Window, Buy: win.Buy, Sell: win.Sell, Read: win.Read,
+		LargerCoins: larger, SmallerCoins: smaller, FewLargeCoins: few, ManySmallCoins: many,
+		StableCoins: stable, QuietCoins: quiet, Coins: len(coins), Complete: complete,
+	}
+	out.Summary = explainPrintSizeMarketWindow(out, win)
+	return out
+}
+
+func printSizeCoinVote(w PrintSizeWindow) string {
+	if w.Buy.Count+w.Sell.Count == 0 {
+		return "quiet"
+	}
+	if w.Read != "" {
+		return w.Read
+	}
+	return printSizeRead(w.Buy, w.Sell)
+}
+
+func printSizeJump(v PrintSizeVenue, window string) float64 {
+	w := pickPrintSizeWindow(v.Windows, window)
+	jump := w.Buy.Ratio
+	if w.Sell.Ratio > jump {
+		jump = w.Sell.Ratio
+	}
+	return jump
+}
+
+func explainPrintSizeMarketWindow(m PrintSizeMarketWindow, w PrintSizeWindow) string {
+	head := printSizeWindowSummary(m.Window, w)
+	return fmt.Sprintf("%s %d coins larger, %d smaller, %d few large, %d many small, %d stable, %d quiet.",
+		head, m.LargerCoins, m.SmallerCoins, m.FewLargeCoins, m.ManySmallCoins, m.StableCoins, m.QuietCoins)
+}
+
+func explainPrintSizeOverview(r PrintSizeOverview) string {
+	for _, w := range r.Windows {
+		if w.Window == PrintSizeWindow15m && w.Summary != "" {
+			return w.Summary
+		}
+	}
+	if len(r.Windows) > 0 {
+		return r.Windows[0].Summary
+	}
+	return "No aggressive print-size tape yet."
+}
+
 // FilterPrintsInRange keeps fills in [from, to].
 func FilterPrintsInRange(prints []TakerPrint, from, to time.Time) []TakerPrint {
 	if len(prints) == 0 {

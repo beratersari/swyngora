@@ -1,0 +1,1 @@
+export { PrintSizePage } from './PrintSizePage';

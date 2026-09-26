@@ -199,6 +199,7 @@ func TestNewRouter_RoutesAndCORS(t *testing.T) {
 		{"/api/v1/market/participation?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/volume-share?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/print-size?symbol=BTCUSDT", http.StatusOK, nil},
+		{"/api/v1/market/print-size/overview", http.StatusOK, nil},
 		{"/api/v1/market/bot-tracker?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/order-count?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/order-count/overview", http.StatusOK, nil},

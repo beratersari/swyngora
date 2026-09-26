@@ -212,6 +212,7 @@ func TestReviewEvidence_MarketTapeRoutesPublicAndJSON(t *testing.T) {
 		{"/api/v1/market/cvd?symbol=BTCUSDT", http.StatusOK},
 		{"/api/v1/market/taker-flow?symbol=BTCUSDT", http.StatusOK},
 		{"/api/v1/market/print-size?symbol=BTCUSDT", http.StatusOK},
+		{"/api/v1/market/print-size/overview", http.StatusOK},
 		{"/api/v1/market/bot-tracker?symbol=BTCUSDT", http.StatusOK},
 		{"/api/v1/market/order-count?symbol=BTCUSDT", http.StatusOK},
 		{"/api/v1/market/order-count/overview", http.StatusOK},

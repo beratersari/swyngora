@@ -47,6 +47,7 @@ BOOK_FLOW_ANALYTICS = frozenset(
         "get_positioning",
         "get_venue_divergence",
         "get_print_size",
+        "get_print_size_overview",
         "get_bot_tracker",
         "get_order_count_ratio",
         "get_order_count_overview",
