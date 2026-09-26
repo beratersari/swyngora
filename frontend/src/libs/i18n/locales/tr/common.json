@@ -9,6 +9,7 @@
     "basis": "Baz",
     "pumps": "Pump",
     "surges": "Hacim",
+    "ordercount": "Emir sayısı",
     "ai": "AI",
     "alerts": "Uyarılar",
     "signals": "Sinyaller",

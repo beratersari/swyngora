@@ -1127,6 +1127,41 @@ func (b *Backend) GetOrderCount(ctx context.Context, exchange, symbol string) (j
 	return mustJSON(orderCountMap(got))
 }
 
+func (b *Backend) GetOrderCountOverview(ctx context.Context, exchange, quote string, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetOrderCountOverview(ctx, exchange, quote, limit)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(orderCountOverviewMap(got))
+}
+
+func orderCountOverviewMap(got *domain.OrderCountOverview) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	wins := make([]map[string]any, 0, len(got.Windows))
+	for _, w := range got.Windows {
+		wins = append(wins, map[string]any{
+			"window": w.Window, "buyCount": w.BuyCount, "sellCount": w.SellCount,
+			"total": w.Total, "delta": w.Delta, "ratio": w.Ratio, "lean": w.Lean,
+			"buyCoins": w.BuyCoins, "sellCoins": w.SellCoins, "balancedCoins": w.BalancedCoins,
+			"quietCoins": w.QuietCoins, "coins": w.Coins, "complete": w.Complete, "summary": w.Summary,
+		})
+	}
+	coins := make([]map[string]any, 0, len(got.Coins))
+	for _, c := range got.Coins {
+		coins = append(coins, orderCountVenueMap(c))
+	}
+	return map[string]any{
+		"exchange": got.Exchange, "quote": got.Quote, "universe": got.Universe,
+		"asOf": got.AsOf.UTC().Format(time.RFC3339Nano), "windows": wins, "coins": coins,
+		"summary": got.Summary, "note": got.Note,
+	}
+}
+
 func orderCountMap(got *domain.OrderCountReport) map[string]any {
 	if got == nil {
 		return map[string]any{}

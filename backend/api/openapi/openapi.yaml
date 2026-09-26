@@ -2145,6 +2145,41 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/order-count/overview:
+    get:
+      summary: Whole-market order count ratio
+      description: |
+        Sums aggressive futures print counts across the most liquid USDT pairs,
+        then divides. `ratio` is the same −1…+1 count ratio as one coin. A
+        busier coin counts for more of that ratio. `buyCoins`, `sellCoins`,
+        `balancedCoins`, and `quietCoins` are one vote per pair. Default
+        universe is 20 pairs (5–30). `exchange=all` sums Binance, Bybit, and
+        OKX per coin before the market sum. Informational only.
+      operationId: getMarketOrderCountOverview
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          description: binance | bybit | okx | all (default all)
+          schema: { type: string, default: all }
+        - name: quote
+          in: query
+          schema: { type: string, default: USDT }
+        - name: limit
+          in: query
+          description: How many liquid pairs (default 20, min 5, max 30)
+          schema: { type: integer, default: 20, minimum: 5, maximum: 30 }
+      responses:
+        '200':
+          description: Market print-count ratio plus each coin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketOrderCountOverview'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/order-count:
     get:
       summary: Market order count ratio
@@ -10475,6 +10510,39 @@ components:
           type: array
           items: { $ref: '#/components/schemas/OrderCountVenue' }
         combined: { $ref: '#/components/schemas/OrderCountVenue' }
+        summary: { type: string }
+        note: { type: string }
+    OrderCountMarketWindow:
+      type: object
+      properties:
+        window: { type: string, enum: [1m, 5m, 15m] }
+        buyCount: { type: integer }
+        sellCount: { type: integer }
+        total: { type: integer }
+        delta: { type: integer }
+        ratio: { type: string }
+        lean: { type: string, enum: [buy, sell, balanced] }
+        buyCoins: { type: integer }
+        sellCoins: { type: integer }
+        balancedCoins: { type: integer }
+        quietCoins: { type: integer }
+        coins: { type: integer }
+        complete: { type: boolean }
+        summary: { type: string }
+    MarketOrderCountOverview:
+      type: object
+      description: Print-count ratio summed across liquid pairs
+      properties:
+        exchange: { type: string }
+        quote: { type: string }
+        universe: { type: integer }
+        asOf: { type: string, format: date-time }
+        windows:
+          type: array
+          items: { $ref: '#/components/schemas/OrderCountMarketWindow' }
+        coins:
+          type: array
+          items: { $ref: '#/components/schemas/OrderCountVenue' }
         summary: { type: string }
         note: { type: string }
     MarketFundingRate:

@@ -90,6 +90,10 @@ import type {
   BotCluster,
   BotTrackerQuery,
   MarketOrderCount,
+  MarketOrderCountOverview,
+  OrderCountCoin,
+  OrderCountMarketWindow,
+  OrderCountOverviewQuery,
   OrderCountQuery,
   MarketPressure,
   PressureQuery,
@@ -198,6 +202,10 @@ export type {
   MarketBotTracker,
   BotCluster,
   MarketOrderCount,
+  MarketOrderCountOverview,
+  OrderCountCoin,
+  OrderCountMarketWindow,
+  OrderCountOverviewQuery,
   MarketPressure,
   MarketForensics,
   MarketForensicsQuery,
@@ -631,6 +639,12 @@ export const marketApi = baseApi.injectEndpoints({
       }),
     }),
 
+    getMarketOrderCountOverview: build.query<MarketOrderCountOverview, OrderCountOverviewQuery | void>({
+      query: (arg) => ({
+        url: '/api/v1/market/order-count/overview',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
     getMarketOrderCount: build.query<MarketOrderCount, OrderCountQuery>({
       query: (arg) => ({
         url: '/api/v1/market/order-count',
@@ -818,6 +832,7 @@ export const {
   useGetMarketParticipationQuery,
   useGetMarketPrintSizeQuery,
   useGetMarketBotTrackerQuery,
+  useGetMarketOrderCountOverviewQuery,
   useGetMarketOrderCountQuery,
   useGetMarketPressureQuery,
   useGetMarketForensicsQuery,

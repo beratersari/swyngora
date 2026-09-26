@@ -1,0 +1,21 @@
+{
+  "title": "Emir sayısı",
+  "subtitle": "Likit USDT çiftlerinde agresif vadeli işlem baskılarından kaçı alış, kaçı satış. Oran sayıları toplar, bu yüzden daha hareketli coin daha ağır basar. Coin dağılımı her çift için bir oy. Bilgi amaçlıdır, yatırım tavsiyesi değildir.",
+  "load": "Piyasayı yükle",
+  "exchange": "Borsa",
+  "allVenues": "Tüm borsalar",
+  "emptyTitle": "Baskı yok",
+  "emptyHint": "Bandın hangi tarafa vurduğunu görmek için piyasayı yükleyin.",
+  "symbol": "Parite",
+  "ratio": "Oran",
+  "lean": "Yön",
+  "leanBuy": "Alış",
+  "leanSell": "Satış",
+  "leanBalanced": "Dengede",
+  "buyCount": "Alış",
+  "sellCount": "Satış",
+  "read": "Okuma",
+  "coinSplit": "{{buy}} alış · {{sell}} satış · {{balanced}} dengede · {{quiet}} sessiz",
+  "loadFailed": "Piyasa emir sayısı alınamadı",
+  "resource": "emir sayısı"
+}

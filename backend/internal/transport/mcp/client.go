@@ -711,6 +711,21 @@ func (c *APIClient) GetOrderCount(ctx context.Context, exchange, symbol string) 
 	return c.get(ctx, "/api/v1/market/order-count", q)
 }
 
+// GetOrderCountOverview returns the print-count ratio across liquid pairs.
+func (c *APIClient) GetOrderCountOverview(ctx context.Context, exchange, quote string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if quote != "" {
+		q.Set("quote", quote)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/order-count/overview", q)
+}
+
 // GetBotTracker returns same-size market orders that repeat inside a minute.
 func (c *APIClient) GetBotTracker(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

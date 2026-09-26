@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Market order count ratio:** (buy prints − sell prints) / (buy + sell) from −1 to +1 over 1m, 5m, and 15m. The coin tape shows it above repeated size (`GET /api/v1/market/order-count`, MCP `get_order_count_ratio`) (`docs/features/order-count.md`)
+- **Whole-market order count:** the same ratio summed across the liquid USDT pairs, plus how many coins lean buy or sell. The Order count page ranks the pairs (`GET /api/v1/market/order-count/overview`, MCP `get_order_count_overview`) (`docs/features/order-count.md`)
 - **Repeated same-size prints:** a market-order size that hits at least 4 times inside any 60 seconds during the last 5 minutes, buy and sell apart. The coin tape lists the clips under print size (`GET /api/v1/market/bot-tracker`, MCP `get_bot_tracker`) (`docs/features/bot-tracker.md`)
 - **Anchored CVD:** CVD since 00:00 UTC and since the current 4-hour open (00/04/08/12/16/20 UTC), separate from the rolling 15m/1h/4h/24h windows. The coin tape shows both (`GET /api/v1/market/cvd`, MCP `get_cvd`) (`docs/features/cvd.md`)
 - **Flow at prices footprint:** the coin Flow tab draws each price as sell vs buy bars, marks the busiest row (POC), and badges a level when one side is at least 3× the other (`docs/features/flow-at-prices.md`)

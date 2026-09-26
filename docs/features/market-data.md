@@ -74,7 +74,7 @@ Coin detail also has an **order heatmap** (resting bid/ask size over time) from 
 - `GET /api/v1/market/pressure` one −1…+1 score from resting book, CVD, and absorption, plus 1h change. See [`market-pressure.md`](market-pressure.md).
 - `GET /api/v1/market/cvd` spot and futures CVD versus price (15m / 1h / 4h / 24h) plus anchored day (00:00 UTC) and current 4h open; venue split and spot-vs-futures split. See [`cvd.md`](cvd.md).
 - `GET /api/v1/market/bot-tracker` same-size aggressive prints that repeat at least 4 times inside 60 seconds. Buy, sell, and delta count only those clips. See [`bot-tracker.md`](bot-tracker.md).
-- `GET /api/v1/market/order-count` aggressive print counts and the −1…+1 buy/sell count ratio. See [`order-count.md`](order-count.md).
+- `GET /api/v1/market/order-count` aggressive print counts and the −1…+1 buy/sell count ratio. `GET /api/v1/market/order-count/overview` sums that ratio across the liquid USDT pairs. See [`order-count.md`](order-count.md).
 - `GET /api/v1/market/volume-profile` volume by price (POC + 70% value area, buy/sell); Binance and Bybit separately plus combined. See [`volume-profile.md`](volume-profile.md).
 - `GET /api/v1/market/flow-at-prices` buy vs sell USDT, print count, and delta at each price from aggressive futures prints (not candle smear). See [`flow-at-prices.md`](flow-at-prices.md).
 - `GET /api/v1/market/around` what happened around a time (before / during / after). See [`around.md`](around.md).

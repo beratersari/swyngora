@@ -53,6 +53,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_print_size` | Average aggressive print size (USDT per fill) 5m/15m vs the prior window; few large vs many small |
 | `get_bot_tracker` | Same-size aggressive prints repeating at least 4 times inside 60s over the last 5m; buy, sell, and delta count only those clips |
 | `get_order_count_ratio` | (buy print count − sell print count) / (buy + sell) from −1 to +1 over 1m/5m/15m |
+| `get_order_count_overview` | Same ratio summed across the liquid USDT pairs. Coin leans are one vote each |
 | `get_flow_at_prices` | Buy vs sell USDT, print count, and delta at each price. `window` 5m/15m/1h/4h/1d/3d/7d or `startTime`/`endTime` (max 7d). Live tape is about 1h (Bybit: newest ~1000 trades); stored minutes while the process runs cover the longer lookback. Optional `minPrice`/`maxPrice`/`tickSize` |
 | `get_market_pressure` | One −1…+1 score from resting book, CVD, and absorption when they disagree; `change1h` is that score vs ~1h ago |
 | `get_cvd` | Spot and futures CVD versus price; 15m/1h/4h/24h change; anchored day (00:00 UTC) and current 4h open; venue split, spot-vs-futures split, divergence duration |

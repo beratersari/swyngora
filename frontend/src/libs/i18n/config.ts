@@ -13,6 +13,7 @@ export const I18N_NAMESPACES = [
   'watchlist',
   'pumps',
   'surges',
+  'ordercount',
   'ai',
   'alerts',
   'compare',

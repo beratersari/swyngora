@@ -422,6 +422,55 @@ export type BotCluster = components['schemas']['BotCluster'];
 export type BotTrackerQuery = NonNullable<operations['getMarketBotTracker']['parameters']['query']>;
 export type MarketOrderCount = components['schemas']['MarketOrderCount'];
 export type OrderCountQuery = NonNullable<operations['getMarketOrderCount']['parameters']['query']>;
+export type OrderCountWindow = {
+  window?: string;
+  buyCount?: number;
+  sellCount?: number;
+  total?: number;
+  delta?: number;
+  ratio?: string;
+  lean?: string;
+  complete?: boolean;
+  summary?: string;
+};
+export type OrderCountCoin = {
+  exchange?: string;
+  symbol?: string;
+  windows?: OrderCountWindow[];
+  summary?: string;
+  error?: string;
+};
+export type OrderCountMarketWindow = {
+  window?: string;
+  buyCount?: number;
+  sellCount?: number;
+  total?: number;
+  delta?: number;
+  ratio?: string;
+  lean?: string;
+  buyCoins?: number;
+  sellCoins?: number;
+  balancedCoins?: number;
+  quietCoins?: number;
+  coins?: number;
+  complete?: boolean;
+  summary?: string;
+};
+export type MarketOrderCountOverview = {
+  exchange?: string;
+  quote?: string;
+  universe?: number;
+  asOf?: string;
+  windows?: OrderCountMarketWindow[];
+  coins?: OrderCountCoin[];
+  summary?: string;
+  note?: string;
+};
+export type OrderCountOverviewQuery = {
+  exchange?: string;
+  quote?: string;
+  limit?: number;
+};
 export type MarketPressure = components['schemas']['MarketPressure'];
 export type PressureQuery = NonNullable<operations['getMarketPressure']['parameters']['query']>;
 export type MarketForensicsQuery = NonNullable<

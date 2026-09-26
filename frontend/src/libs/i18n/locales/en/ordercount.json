@@ -1,0 +1,21 @@
+{
+  "title": "Order count",
+  "subtitle": "How many aggressive futures prints were buys versus sells across the liquid USDT pairs. The ratio sums the counts, so a busier coin weighs more. The coin split is one vote per pair. Informational only — not financial advice.",
+  "load": "Load market",
+  "exchange": "Exchange",
+  "allVenues": "All venues",
+  "emptyTitle": "No prints",
+  "emptyHint": "Load the market to see which side the tape is hitting.",
+  "symbol": "Pair",
+  "ratio": "Ratio",
+  "lean": "Lean",
+  "leanBuy": "Buy",
+  "leanSell": "Sell",
+  "leanBalanced": "Balanced",
+  "buyCount": "Buys",
+  "sellCount": "Sells",
+  "read": "Read",
+  "coinSplit": "{{buy}} buy · {{sell}} sell · {{balanced}} balanced · {{quiet}} quiet",
+  "loadFailed": "Market order count failed",
+  "resource": "order count"
+}

@@ -675,6 +675,18 @@ class RSIHeatmapInput(BaseModel):
     )
 
 
+class OrderCountOverviewInput(BaseModel):
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|okx|all (default all)",
+    )
+    quote: str = Field(default="USDT", description="Quote asset")
+    limit: int = Field(
+        default=0,
+        description="How many liquid pairs (default 20, max 30)",
+    )
+
+
 class VolumeSurgeScanInput(BaseModel):
     exchange: str = Field(
         default="binance",
@@ -2249,6 +2261,14 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             "/api/v1/market/order-count",
             {"symbol": symbol, "exchange": exchange},
         )
+
+    def get_order_count_overview(
+        exchange: str = "all", quote: str = "USDT", limit: int = 0
+    ) -> str:
+        params: dict[str, Any] = {"exchange": exchange, "quote": quote}
+        if limit:
+            params["limit"] = limit
+        return http.get("/api/v1/market/order-count/overview", params)
 
     def get_market_pressure(symbol: str, exchange: str = "all") -> str:
         return http.get(
@@ -4917,6 +4937,18 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "orders are buying or selling. Repeated clip size is get_bot_tracker."
             ),
             args_schema=TakerFlowInput,
+        ),
+        StructuredTool.from_function(
+            get_order_count_overview,
+            name="get_order_count_overview",
+            description=(
+                "Whole-market order count ratio. Sums aggressive buy and sell "
+                "print counts across the most liquid USDT pairs, then divides. "
+                "Ratio is -1 to +1. A busier coin counts for more of the ratio. "
+                "buyCoins and sellCoins are one vote per pair. Use this for the "
+                "whole market, not one coin."
+            ),
+            args_schema=OrderCountOverviewInput,
         ),
         StructuredTool.from_function(
             get_net_position,

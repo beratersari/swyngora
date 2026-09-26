@@ -1314,6 +1314,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/order-count/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whole-market order count ratio
+         * @description Sums aggressive futures print counts across the most liquid USDT pairs,
+         *     then divides. `ratio` is the same −1…+1 count ratio as one coin. A
+         *     busier coin counts for more of that ratio. `buyCoins`, `sellCoins`,
+         *     `balancedCoins`, and `quietCoins` are one vote per pair. Default
+         *     universe is 20 pairs (5–30). `exchange=all` sums Binance, Bybit, and
+         *     OKX per coin before the market sum. Informational only.
+         */
+        get: operations["getMarketOrderCountOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/order-count": {
         parameters: {
             query?: never;
@@ -6600,6 +6625,36 @@ export interface components {
             summary?: string;
             note?: string;
         };
+        OrderCountMarketWindow: {
+            /** @enum {string} */
+            window?: "1m" | "5m" | "15m";
+            buyCount?: number;
+            sellCount?: number;
+            total?: number;
+            delta?: number;
+            ratio?: string;
+            /** @enum {string} */
+            lean?: "buy" | "sell" | "balanced";
+            buyCoins?: number;
+            sellCoins?: number;
+            balancedCoins?: number;
+            quietCoins?: number;
+            coins?: number;
+            complete?: boolean;
+            summary?: string;
+        };
+        /** @description Print-count ratio summed across liquid pairs */
+        MarketOrderCountOverview: {
+            exchange?: string;
+            quote?: string;
+            universe?: number;
+            /** Format: date-time */
+            asOf?: string;
+            windows?: components["schemas"]["OrderCountMarketWindow"][];
+            coins?: components["schemas"]["OrderCountVenue"][];
+            summary?: string;
+            note?: string;
+        };
         /** @description Predicted next funding plus recent settlements */
         MarketFundingRate: {
             symbol?: string;
@@ -10472,6 +10527,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketBotTracker"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketOrderCountOverview: {
+        parameters: {
+            query?: {
+                /** @description binance | bybit | okx | all (default all) */
+                exchange?: string;
+                quote?: string;
+                /** @description How many liquid pairs (default 20, min 5, max 30) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Market print-count ratio plus each coin */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketOrderCountOverview"];
                 };
             };
             400: components["responses"]["Error"];

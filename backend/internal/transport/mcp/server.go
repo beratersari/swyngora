@@ -74,6 +74,7 @@ type DataPort interface {
 	GetPrintSize(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetBotTracker(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetOrderCount(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	GetOrderCountOverview(ctx context.Context, exchange, quote string, limit int) (json.RawMessage, error)
 	GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetMarketPressure(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeProfile(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize float64) (json.RawMessage, error)
@@ -1193,6 +1194,19 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetOrderCount(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_order_count_overview",
+		mcp.WithDescription("Whole-market order count ratio. Sums aggressive buy and sell print counts across the most liquid USDT pairs, then divides. Ratio is −1 (all sells) to +1 (all buys). A busier coin counts for more of the ratio. buyCoins, sellCoins, balancedCoins, and quietCoins are one vote per pair. Use this for whether the market tape is buy-heavy or sell-heavy, not for one coin. Not financial advice."),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all)")),
+		mcp.WithString("quote", mcp.Description("Quote asset, default USDT")),
+		mcp.WithNumber("limit", mcp.Description("How many liquid pairs (default 20, max 30)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.GetOrderCountOverview(ctx, req.GetString("exchange", "all"), req.GetString("quote", "USDT"), int(req.GetFloat("limit", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
