@@ -25,6 +25,7 @@ No API key. Base `https://www.okx.com`, public WS
 | `liqhub.go` | `liquidation-orders` SWAP websocket |
 | `liqhist.go` | REST `liquidation-orders?state=filled` backfill |
 | `futures_volume.go` | 5m SWAP candles (`volCcyQuote`) for volume share |
+| `futures_depth.go` | SWAP book (`/api/v5/market/books`); contract size × `ctVal` is base quantity |
 
 ## Symbols
 

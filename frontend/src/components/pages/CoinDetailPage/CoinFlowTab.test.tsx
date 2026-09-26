@@ -15,6 +15,10 @@ vi.mock('@/libs/api', async (importOriginal) => {
     combined: {
       headline: { below: { notional: '40000000' }, above: { notional: '15000000' }, lean: 'bid' },
     },
+    venues: [
+      { exchange: 'binance', headline: { below: { notional: '20000000' }, above: { notional: '8000000' } } },
+      { exchange: 'okx', headline: { below: { notional: '12000000' }, above: { notional: '4000000' } } },
+    ],
   };
   return {
     ...actual,
@@ -64,6 +68,7 @@ describe('CoinFlowTab', () => {
   it('shows perp depth and taker summaries', () => {
     renderWithProviders(<CoinFlowTab symbol="BTCUSDT" exchange="binance" />);
     expect(screen.getByText('40M bid vs 15M ask')).toBeInTheDocument();
+    expect(screen.getByText('okx')).toBeInTheDocument();
     expect(screen.getByText('Buyers in control')).toBeInTheDocument();
     expect(screen.getByText('Most prints at 65520.')).toBeInTheDocument();
     expect(screen.getAllByText('POC').length).toBeGreaterThan(0);

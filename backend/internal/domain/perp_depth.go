@@ -65,17 +65,17 @@ type PerpDepthReport struct {
 	Note     string
 }
 
-// ParsePerpDepthExchange is binance, bybit, or all.
+// ParsePerpDepthExchange is binance, bybit, okx, or all.
 func ParsePerpDepthExchange(raw string) (string, error) {
 	s := strings.ToLower(strings.TrimSpace(raw))
 	if s == "" || s == "all" || s == "combined" {
 		return "all", nil
 	}
 	switch Exchange(s) {
-	case ExchangeBinance, ExchangeBybit:
+	case ExchangeBinance, ExchangeBybit, ExchangeOKX:
 		return s, nil
 	default:
-		return "", fmt.Errorf("%w: exchange must be binance, bybit, or all", ErrInvalidArgument)
+		return "", fmt.Errorf("%w: exchange must be binance, bybit, okx, or all", ErrInvalidArgument)
 	}
 }
 

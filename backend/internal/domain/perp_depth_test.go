@@ -20,7 +20,11 @@ func TestParsePerpDepthExchange(t *testing.T) {
 	if err != nil || got != "all" {
 		t.Fatalf("%s %v", got, err)
 	}
-	if _, err := ParsePerpDepthExchange("okx"); !errors.Is(err, ErrInvalidArgument) {
+	got, err = ParsePerpDepthExchange("okx")
+	if err != nil || got != "okx" {
+		t.Fatalf("%s %v", got, err)
+	}
+	if _, err := ParsePerpDepthExchange("coinbase"); !errors.Is(err, ErrInvalidArgument) {
 		t.Fatalf("%v", err)
 	}
 }

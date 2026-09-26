@@ -309,6 +309,10 @@ func main() {
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,
 		domain.ExchangeOKX:     okxClient,
+	}).WithFuturesDepth(map[domain.Exchange]domain.FuturesDepthPort{
+		domain.ExchangeBinance: binanceClient,
+		domain.ExchangeBybit:   bybitClient,
+		domain.ExchangeOKX:     okxClient,
 	}).WithTakerBucketStore(futuresStore).WithBasis(map[domain.Exchange]domain.BasisPort{
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,

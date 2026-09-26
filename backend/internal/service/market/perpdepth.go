@@ -12,7 +12,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const perpDepthDisclaimer = "Resting USD-M / linear perpetual depth: bid notional within N% below mid vs ask notional within N% above. Binance USD-M (1000 levels) and Bybit linear (500 levels) separately plus combined. Combined adds each venue's own ±% band (not a shared price grid). Snapshot may not fully cover 2%. Informational only — not financial advice."
+const perpDepthDisclaimer = "Resting USD-M / linear / USDT-swap perpetual depth: bid notional within N% below mid vs ask notional within N% above. Binance USD-M (1000 levels), Bybit linear (500 levels), and OKX USDT-swap (400 levels, contracts converted to base) separately plus combined. Combined adds each venue's own ±% band (not a shared price grid). Snapshot may not fully cover 2%. Informational only — not financial advice."
 
 // GetPerpDepth returns bid-below vs ask-above liquidity on BTC (and other) perps.
 func (s *Service) GetPerpDepth(ctx context.Context, exchange, symbol string, rangePct float64) (*domain.PerpDepthReport, error) {
@@ -28,7 +28,7 @@ func (s *Service) GetPerpDepth(ctx context.Context, exchange, symbol string, ran
 	if err != nil {
 		return nil, err
 	}
-	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
+	want := domain.FuturesVenues()
 	if ex != "all" {
 		want = []domain.Exchange{domain.Exchange(ex)}
 	}
@@ -84,6 +84,11 @@ func (s *Service) GetPerpDepth(ctx context.Context, exchange, symbol string, ran
 }
 
 func (s *Service) futuresDepthPort(ex domain.Exchange) domain.FuturesDepthPort {
+	if s != nil && s.futDepth != nil {
+		if p := s.futDepth[ex]; p != nil {
+			return p
+		}
+	}
 	p, err := s.port(ex)
 	if err != nil || p == nil {
 		return nil

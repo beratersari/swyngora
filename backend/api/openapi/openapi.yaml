@@ -1070,9 +1070,10 @@ paths:
       description: |
         How much **perpetual** liquidity is waiting **below** vs **above**
         the price. Example: **40M bid within 1% below** mid and **15M ask
-        above**. `exchange=all` (default) returns **Binance USD-M** and
-        **Bybit linear** separately plus `combined` (sum of each venue's
-        own ±% band). `rangePct` is the headline band (default **1**,
+        above**. `exchange=all` (default) returns **Binance USD-M**,
+        **Bybit linear**, and **OKX USDT-swap** separately plus `combined`
+        (sum of each venue's own ±% band). OKX contract size is converted
+        to base before notional. `rangePct` is the headline band (default **1**,
         max 5). `bands` also include 0.1 / 0.25 / 0.5 / 2. `below` is
         resting bids; `above` is resting asks. `complete` is false when
         the snapshot does not reach that %. This is the **futures** book,
@@ -1086,7 +1087,7 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: binance | bybit | all (default all)
+          description: binance | bybit | okx | all (default all)
           schema: { type: string, default: all }
         - name: rangePct
           in: query
@@ -1115,7 +1116,7 @@ paths:
         how close that book is to mid (e.g. **80M inside 0.1%** is **8% of
         the 1% book**, growing to 1.0B at 1%) and which coins fill each
         distance. Sampled while the desk runs. `exchange=all` (default)
-        adds Binance USD-M and Bybit linear per coin. `rangePct` default
+        adds Binance USD-M, Bybit linear, and OKX USDT-swap per coin. `rangePct` default
         **1**. `limit` default **20** (max 40). This is the **futures**
         book, not spot. Informational only.
       operationId: getMarketPerpDepthOverview
@@ -1123,7 +1124,7 @@ paths:
       parameters:
         - name: exchange
           in: query
-          description: binance | bybit | all (default all)
+          description: binance | bybit | okx | all (default all)
           schema: { type: string, default: all }
         - name: rangePct
           in: query

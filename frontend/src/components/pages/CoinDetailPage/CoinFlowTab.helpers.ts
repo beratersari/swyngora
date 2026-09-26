@@ -14,12 +14,22 @@ export function reportSummary(r?: MarketDeskReport | null): string {
 
 export function perpStats(r?: MarketDeskReport | null): { label: string; value: string }[] {
   const h = r?.combined?.headline;
-  if (!h) return [];
-  return [
-    { label: 'Bid', value: formatCompactAmount(h.below?.notional) },
-    { label: 'Ask', value: formatCompactAmount(h.above?.notional) },
-    { label: 'Lean', value: h.lean || r?.combined?.lean || '—' },
-  ];
+  const rows: { label: string; value: string }[] = [];
+  if (h) {
+    rows.push(
+      { label: 'Bid', value: formatCompactAmount(h.below?.notional) },
+      { label: 'Ask', value: formatCompactAmount(h.above?.notional) },
+      { label: 'Lean', value: h.lean || r?.combined?.lean || '—' },
+    );
+  }
+  for (const v of r?.venues ?? []) {
+    if (!v.exchange || !v.headline) continue;
+    rows.push({
+      label: v.exchange,
+      value: `${formatCompactAmount(v.headline.below?.notional)} / ${formatCompactAmount(v.headline.above?.notional)}`,
+    });
+  }
+  return rows;
 }
 
 export function surgeStats(r?: MarketDeskReport | null): { label: string; value: string }[] {

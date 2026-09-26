@@ -393,6 +393,11 @@ export type MarketDeskReport = {
     exchange?: string;
     summary?: string;
     error?: string;
+    headline?: {
+      lean?: string;
+      below?: { notional?: string };
+      above?: { notional?: string };
+    };
     windows?: { window?: string; summary?: string; ratio?: string; grade?: string; dominant?: string }[];
   }[];
   windows?: { window?: string; summary?: string }[];

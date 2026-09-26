@@ -5,14 +5,15 @@
 Spot order books are already on the desk. For **BTC perpetual** (and other
 linear USDT perps), show how much liquidity is waiting **below** last vs
 **above** it — for example **40M bid within 1% below** and **15M ask
-above**. Binance and Bybit separately, plus combined.
+above**. Binance, Bybit, and OKX separately, plus combined.
 
 ## Behavior
 
 `GET /api/v1/market/perp-depth?symbol=BTCUSDT`
 
-- `exchange=all` (default): **Binance USD-M** and **Bybit linear**
-  separately plus `combined`
+- `exchange=all` (default): **Binance USD-M**, **Bybit linear**, and
+  **OKX USDT-swap** separately plus `combined`. OKX size is contracts
+  times `ctVal` (base), then notional is price times base.
 - `rangePct` is the headline band (default **1**, max 5)
 - `headline.below` is resting **bid** notional inside that % below mid
 - `headline.above` is resting **ask** notional inside that % above mid
@@ -23,6 +24,8 @@ above**. Binance and Bybit separately, plus combined.
 
 This is the **futures** book, not spot. Informational only — not
 financial advice.
+
+Web: coin detail **Flow** tab lists each venue's bid / ask under the combined total.
 
 ## Market-wide total
 
@@ -47,7 +50,7 @@ ETH 17%** of 2.4B bid + 1.8B ask).
   book is to mid. Example: **80M inside 0.1%** is **8% of the 1% book**;
   by 1% it is 1.0B. `leaders` are who fills that distance; `addedLeaders`
   are who added the extra size vs the previous tighter band.
-- `exchange=all` (default) adds Binance USD-M and Bybit linear per coin
+- `exchange=all` (default) adds Binance USD-M, Bybit linear, and OKX USDT-swap per coin
 - MCP: `get_perp_depth_overview`
 
 ## Where the code lives
@@ -55,7 +58,7 @@ ETH 17%** of 2.4B bid + 1.8B ask).
 | Layer | Path |
 |---|---|
 | Domain | `backend/internal/domain/perp_depth.go`, `perp_depth_overview.go` |
-| Adapters | `adapter/binance/futures_depth.go`, `adapter/bybit/futures_depth.go`, `adapter/perpdepthstore` |
+| Adapters | `adapter/binance/futures_depth.go`, `adapter/bybit/futures_depth.go`, `adapter/okx/futures_depth.go`, `adapter/perpdepthstore` |
 | Service | `GetPerpDepth`, `GetPerpDepthOverview`, `PerpDepthHistoryWorker` |
 | HTTP | `GET /api/v1/market/perp-depth`, `GET /api/v1/market/perp-depth/overview` |
 | MCP / AI | `get_perp_depth`, `get_perp_depth_overview` |

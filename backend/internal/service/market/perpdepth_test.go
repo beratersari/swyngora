@@ -37,11 +37,36 @@ func TestGetPerpDepth_Combined(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Combined == nil || len(got.Venues) != 2 {
+	if got.Combined == nil || len(got.Venues) != 3 {
 		t.Fatalf("%+v", got)
 	}
 	if got.Combined.Headline.Below.Notional < 70_000_000 {
 		t.Fatalf("combined %+v", got.Combined.Headline)
+	}
+}
+
+func TestGetPerpDepth_IncludesOKX(t *testing.T) {
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{},
+		domain.ExchangeBybit:   &fakeMarket{},
+	}, &fakeSupply{}).WithFuturesDepth(map[domain.Exchange]domain.FuturesDepthPort{
+		domain.ExchangeOKX: &fakeMarket{},
+	})
+	got, err := svc.GetPerpDepth(context.Background(), "all", "BTCUSDT", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var okx domain.PerpDepthVenue
+	for _, v := range got.Venues {
+		if v.Exchange == domain.ExchangeOKX {
+			okx = v
+		}
+	}
+	if okx.Error != "" || okx.Headline.Below.Notional < 39_000_000 {
+		t.Fatalf("okx %+v", okx)
+	}
+	if got.Combined == nil || got.Combined.Headline.Below.Notional < 100_000_000 {
+		t.Fatalf("combined %+v", got.Combined)
 	}
 }
 
@@ -111,7 +136,7 @@ func TestGetPerpDepthOverview_WindowsFromHistory(t *testing.T) {
 
 func TestGetPerpDepthOverview_BadExchange(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{})
-	if _, err := svc.GetPerpDepthOverview(context.Background(), "okx", 1, 10); !errors.Is(err, domain.ErrInvalidArgument) {
+	if _, err := svc.GetPerpDepthOverview(context.Background(), "coinbase", 1, 10); !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("%v", err)
 	}
 }

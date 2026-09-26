@@ -4634,7 +4634,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "How much perpetual liquidity is waiting below vs above the "
                 "price. Example: 40M bid within 1% below mid vs 15M ask above. "
-                "Binance USD-M and Bybit linear separately plus combined. "
+                "Binance USD-M, Bybit linear, and OKX USDT-swap separately plus combined. "
                 "range_pct default 1. This is the futures book, not spot."
             ),
             args_schema=PerpDepthInput,
@@ -4649,7 +4649,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "within 1% of mid; BTC 48%, ETH 17%. windows (15m/1h/4h) "
                 "compare bid vs ask share of that book (bids 55% → 65%) and "
                 "drivers name the coins that moved the mix. Sampled while "
-                "the desk runs. exchange=all adds Binance and Bybit per coin. "
+                "the desk runs. exchange=all adds Binance, Bybit, and OKX per coin. "
                 "range_pct default 1. limit default 20."
             ),
             args_schema=PerpDepthOverviewInput,

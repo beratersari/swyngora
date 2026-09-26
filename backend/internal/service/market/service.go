@@ -53,6 +53,7 @@ type Service struct {
 	oi             map[domain.Exchange]domain.OpenInterestPort
 	futVol         map[domain.Exchange]domain.FuturesVolumePort
 	funding        map[domain.Exchange]domain.FundingRatePort
+	futDepth       map[domain.Exchange]domain.FuturesDepthPort
 	longShort      map[domain.Exchange]domain.LongShortRatioPort
 	taker          map[domain.Exchange]domain.TakerFlowPort
 	takerStore     domain.TakerBucketStore
@@ -134,6 +135,21 @@ func (s *Service) WithOpenInterest(ports map[domain.Exchange]domain.OpenInterest
 		}
 	}
 	s.oi = cp
+	return s
+}
+
+// WithFuturesDepth attaches Binance USD-M / Bybit linear / OKX SWAP book snapshots.
+func (s *Service) WithFuturesDepth(ports map[domain.Exchange]domain.FuturesDepthPort) *Service {
+	if s == nil {
+		return s
+	}
+	cp := make(map[domain.Exchange]domain.FuturesDepthPort, len(ports))
+	for k, v := range ports {
+		if v != nil {
+			cp[k] = v
+		}
+	}
+	s.futDepth = cp
 	return s
 }
 
