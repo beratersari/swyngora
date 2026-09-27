@@ -554,6 +554,33 @@ export type ImpactScanQuery = {
   notional?: number;
   limit?: number;
 };
+export type WallScanHit = {
+  exchange?: string;
+  symbol?: string;
+  side?: string;
+  price?: string;
+  notional?: string;
+  distancePct?: string;
+  share?: number;
+  kind?: string;
+  appearCount?: number;
+  present?: boolean;
+};
+export type WallScan = {
+  exchange?: string;
+  quote?: string;
+  universe?: number;
+  suspicious?: number;
+  flickers?: number;
+  hits?: WallScanHit[];
+  summary?: string;
+  note?: string;
+};
+export type WallScanQuery = {
+  exchange?: string;
+  quote?: string;
+  limit?: number;
+};
 export type MarketPressure = components['schemas']['MarketPressure'];
 export type PressureQuery = NonNullable<operations['getMarketPressure']['parameters']['query']>;
 export type MarketForensicsQuery = NonNullable<

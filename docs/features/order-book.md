@@ -44,6 +44,14 @@ and Bybit linear). This file is the **spot** book.
     bid reach and common ask reach). If all cover ±`rangePct` both ways, that
     requested band is used (`requestedReached`, `usedRangePct`). USD≈USDT.
   - Response: market-wide `pressure` / `imbalance`, per-venue breakdown, tagged walls.
+- `GET /api/v1/market/orderbook/walls/scan`
+  - Ranks suspicious walls and brief flickers across the liquid USDT pairs
+    on Binance, Coinbase, and Bybit. A background sampler watches the top
+    liquid pairs while the process runs, so you do not open each coin.
+  - `kind=suspicious`: the same wall was added and pulled at least 4 times
+    inside 2 minutes. `kind=flicker`: it rested under about 20 seconds and
+    then left. Suspicious rows come first. The list is empty until sampling
+    has seen those pulls. The Walls page lists them.
 - `GET /api/v1/market/orderbook/impact/scan?notional=100000&side=buy`
   - Walks that same quote size through the liquid USDT pairs and ranks by
     slippage versus mid, widest first. Default order is 100,000 quote.
@@ -101,8 +109,8 @@ and Bybit linear). This file is the **spot** book.
 | Adapters | `adapter/{binance,coinbase,bybit}/depthhub.go` |
 | Service | `backend/internal/service/market` `GetSpotOrderBook`, `GetCombinedOrderBookAnalysis`, `EstimateOrderBookImpact`, `GetMarketLiquidity` |
 | HTTP | `GET /api/v1/market/orderbook`, `GET /api/v1/market/orderbook/combined`, `GET /api/v1/market/orderbook/impact`, `GET /api/v1/market/orderbook/liquidity`, `GET /api/v1/market/orderbook/heatmap`, `GET /api/v1/market/orderbook/history`, `GET /api/v1/market/orderbook/history/compare`, `GET /api/v1/market/orderbook/icebergs` |
-| MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook`, `analyze_market_orderbook`, `estimate_market_impact`, `get_market_liquidity`, `get_orderbook_heatmap`, `get_orderbook_history`, `compare_orderbook_history`, `get_orderbook_icebergs`, `get_orderbook_liquidity_flow`, `create_orderbook_alert` |
-| UI | `frontend` coin detail `OrderBookPanel` + `OrderDepthChart` + `OrderHeatmap` |
+| MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook`, `analyze_market_orderbook`, `estimate_market_impact`, `scan_market_impact`, `scan_suspicious_walls`, `get_market_liquidity`, `get_orderbook_heatmap`, `get_orderbook_history`, `compare_orderbook_history`, `get_orderbook_icebergs`, `get_orderbook_liquidity_flow`, `create_orderbook_alert` |
+| UI | `frontend` coin detail `OrderBookPanel` + `OrderDepthChart` + `OrderHeatmap`; market scan on `/walls` |
 
 ## How to verify
 
@@ -112,6 +120,7 @@ curl "http://localhost:8080/api/v1/market/orderbook?symbol=BTCUSDT&group=0.1&ran
 curl "http://localhost:8080/api/v1/market/orderbook?exchange=coinbase&symbol=BTC-USD&rangePct=2"
 curl "http://localhost:8080/api/v1/market/orderbook?exchange=bybit&symbol=BTCUSDT&rangePct=5"
 curl "http://localhost:8080/api/v1/market/orderbook/combined?symbol=BTCUSDT&rangePct=2"
+curl "http://localhost:8080/api/v1/market/orderbook/walls/scan"
 curl "http://localhost:8080/api/v1/market/orderbook/impact?symbol=BTCUSDT&quantity=5"
 curl "http://localhost:8080/api/v1/market/orderbook/impact?symbol=BTCUSDT&notional=1000000000&exchange=all"
 curl "http://localhost:8080/api/v1/market/orderbook/liquidity?symbol=BTCUSDT"

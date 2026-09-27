@@ -39,10 +39,15 @@ type WallMemory struct {
 type wallTrack struct {
 	exchange, symbol, side string
 	price                  float64
+	priceText              string
+	notional               string
+	distance               string
+	share                  float64
 	firstSeen              time.Time
 	lastSeen               time.Time
 	lastAbsent             time.Time
 	streakStart            time.Time
+	lastStreak             time.Duration
 	present                bool
 	appearCount            int
 	visible                time.Duration
@@ -88,6 +93,7 @@ func (m *WallMemory) Observe(now time.Time, exchange, symbol string, walls []Ord
 		} else {
 			m.touchPresentLocked(tr, now, px)
 		}
+		stampWall(tr, walls[i])
 		seen[tr] = struct{}{}
 		annotateWall(&walls[i], tr, now)
 	}
@@ -101,6 +107,13 @@ func (m *WallMemory) Observe(now time.Time, exchange, symbol string, walls []Ord
 		if tr.present {
 			if !tr.lastSeen.IsZero() && now.After(tr.lastSeen) {
 				tr.visible += now.Sub(tr.lastSeen)
+			}
+			start := tr.streakStart
+			if start.IsZero() {
+				start = tr.firstSeen
+			}
+			if !start.IsZero() && now.After(start) {
+				tr.lastStreak = now.Sub(start)
 			}
 			tr.present = false
 			tr.lastAbsent = now
@@ -267,6 +280,24 @@ func wallLife(tr *wallTrack, now time.Time) wallLifeView {
 		streak:   seconds1(streak),
 		visible:  seconds1(visible),
 		appears:  tr.appearCount,
+	}
+}
+
+func stampWall(tr *wallTrack, w OrderBookWall) {
+	if tr == nil {
+		return
+	}
+	if w.Price != "" {
+		tr.priceText = w.Price
+	}
+	if w.Notional != "" {
+		tr.notional = w.Notional
+	}
+	if w.DistancePct != "" {
+		tr.distance = w.DistancePct
+	}
+	if w.Share > 0 {
+		tr.share = w.Share
 	}
 }
 

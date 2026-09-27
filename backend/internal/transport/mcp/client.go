@@ -269,6 +269,21 @@ func (c *APIClient) ScanOrderBookImpact(ctx context.Context, exchange, quote, si
 	return c.get(ctx, "/api/v1/market/orderbook/impact/scan", q)
 }
 
+// ScanSuspiciousWalls lists flickering and briefly pulled walls across liquid pairs.
+func (c *APIClient) ScanSuspiciousWalls(ctx context.Context, exchange, quote string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if quote != "" {
+		q.Set("quote", quote)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/orderbook/walls/scan", q)
+}
+
 // GetLiquidations returns rolling 5m/1h/4h/24h futures liquidation totals.
 func (c *APIClient) GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

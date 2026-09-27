@@ -87,6 +87,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_orderbook_liquidity_flow` | Resting size traded vs pulled vs added (bid and ask) over 5m/15m/1h; `series` is the path over stored samples |
 | `estimate_market_impact` | Walk live depth for a simulated market buy/sell; impact only when a new best remains |
 | `scan_market_impact` | Rank liquid coins by slippage for the same quote-sized market order |
+| `scan_suspicious_walls` | Suspicious and flickering spot walls across the liquid USDT pairs |
 | `get_candles` | OHLCV |
 | `get_supply` | Supply snapshot |
 | `get_holders` | Holder count, concentration, top wallets (CMC → Coin Metrics → GeckoTerminal → Ethplorer → Routescan → Tronscan; CryptoID for some UTXO coins). `label` is a public attribution when known |

@@ -42,6 +42,7 @@ type Service struct {
 	heat           *domain.HeatmapTape
 	watchMu        sync.Mutex
 	wallWatch      map[string]wallWatch
+	wallScanPairs  map[domain.Exchange][]string
 	heatUniverse   map[domain.Exchange][]string
 	liq            *domain.LiquidationBook
 	liqWatch       LiquidationWatch

@@ -288,6 +288,34 @@ func (b *Backend) EstimateOrderBookImpact(ctx context.Context, exchange, symbol,
 	})
 }
 
+func (b *Backend) ScanSuspiciousWalls(ctx context.Context, exchange, quote string, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.ScanSuspiciousWalls(ctx, exchange, quote, limit)
+	if err != nil {
+		return nil, err
+	}
+	if got == nil {
+		return mustJSON(map[string]any{})
+	}
+	hits := make([]map[string]any, 0, len(got.Hits))
+	for _, h := range got.Hits {
+		hits = append(hits, map[string]any{
+			"exchange": h.Exchange, "symbol": h.Symbol, "side": h.Side, "price": h.Price,
+			"notional": h.Notional, "distancePct": h.DistancePct, "share": h.Share,
+			"kind": h.Kind, "appearCount": h.AppearCount, "ageSeconds": h.AgeSeconds,
+			"presentForSeconds": h.PresentForSeconds, "visibleSeconds": h.VisibleSeconds,
+			"present": h.Present, "lastSeen": h.LastSeen,
+		})
+	}
+	return mustJSON(map[string]any{
+		"exchange": got.Exchange, "quote": got.Quote, "universe": got.Universe, "asOf": got.AsOf,
+		"suspicious": got.Suspicious, "flickers": got.Flickers, "hits": hits,
+		"summary": got.Summary, "note": got.Note,
+	})
+}
+
 func (b *Backend) ScanOrderBookImpact(ctx context.Context, exchange, quote, side string, notional float64, limit int) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

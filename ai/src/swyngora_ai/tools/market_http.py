@@ -1247,6 +1247,18 @@ class MarketImpactInput(BaseModel):
     )
 
 
+class WallScanInput(BaseModel):
+    exchange: str = Field(
+        default="all",
+        description="binance|coinbase|bybit|all (default all)",
+    )
+    quote: str = Field(default="USDT", description="Quote asset")
+    limit: int = Field(
+        default=0,
+        description="How many walls to return (default 40, max 80)",
+    )
+
+
 class MarketImpactScanInput(BaseModel):
     exchange: str = Field(
         default="all",
@@ -2967,6 +2979,16 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if limit:
             params["limit"] = limit
         return http.get("/api/v1/market/orderbook/impact/scan", params)
+
+    def scan_suspicious_walls(
+        exchange: str = "all",
+        quote: str = "USDT",
+        limit: int = 0,
+    ) -> str:
+        params: dict[str, Any] = {"exchange": exchange, "quote": quote}
+        if limit:
+            params["limit"] = limit
+        return http.get("/api/v1/market/orderbook/walls/scan", params)
 
     def analyze_spot_orderbook(
         symbol: str,
@@ -5405,6 +5427,18 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Use this to see which coins slip more for the same order."
             ),
             args_schema=MarketImpactScanInput,
+        ),
+        StructuredTool.from_function(
+            scan_suspicious_walls,
+            name="scan_suspicious_walls",
+            description=(
+                "List suspicious and flickering spot walls across the liquid USDT "
+                "pairs so you do not open coins one by one. kind=suspicious means "
+                "the wall was added and pulled at least 4 times inside 2 minutes. "
+                "kind=flicker means it rested under about 20 seconds and then left. "
+                "Empty until the desk has been sampling. Not financial advice."
+            ),
+            args_schema=WallScanInput,
         ),
         StructuredTool.from_function(
             get_candles,

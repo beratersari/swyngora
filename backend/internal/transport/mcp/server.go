@@ -36,6 +36,7 @@ type DataPort interface {
 	AnalyzeCombinedOrderBook(ctx context.Context, symbol string, rangePct float64) (json.RawMessage, error)
 	EstimateOrderBookImpact(ctx context.Context, exchange, symbol, side string, quantity, notional float64) (json.RawMessage, error)
 	ScanOrderBookImpact(ctx context.Context, exchange, quote, side string, notional float64, limit int) (json.RawMessage, error)
+	ScanSuspiciousWalls(ctx context.Context, exchange, quote string, limit int) (json.RawMessage, error)
 	GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetOrderBookHeatmap(ctx context.Context, exchange, symbol, group string, windowSec int) (json.RawMessage, error)
 	GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -545,6 +546,19 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("limit", mcp.Description("How many liquid pairs (default 20, max 30)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.ScanOrderBookImpact(ctx, req.GetString("exchange", "all"), req.GetString("quote", "USDT"), req.GetString("side", "buy"), req.GetFloat("notional", 0), int(req.GetFloat("limit", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("scan_suspicious_walls",
+		mcp.WithDescription("Rank suspicious and flickering spot walls across the liquid USDT pairs. Suspicious means the same wall was added and pulled at least 4 times inside 2 minutes. A flicker rested under about 20 seconds and then left. exchange is binance, coinbase, bybit, or all. Empty until the desk has been sampling. Not financial advice."),
+		mcp.WithString("exchange", mcp.Description("binance | coinbase | bybit | all (default all)")),
+		mcp.WithString("quote", mcp.Description("Quote asset, default USDT")),
+		mcp.WithNumber("limit", mcp.Description("How many walls to return (default 40, max 80)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.ScanSuspiciousWalls(ctx, req.GetString("exchange", "all"), req.GetString("quote", "USDT"), int(req.GetFloat("limit", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

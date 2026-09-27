@@ -1,0 +1,1 @@
+export { WallsPage } from './WallsPage';

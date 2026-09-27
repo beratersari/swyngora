@@ -63,6 +63,7 @@ export {
   useGetMarketPrintSizeQuery,
   useGetMarketBotTrackerQuery,
   useScanMarketImpactQuery,
+  useScanSuspiciousWallsQuery,
   useGetMarketOrderCountOverviewQuery,
   useGetMarketOrderCountQuery,
   useGetMarketPressureQuery,

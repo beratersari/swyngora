@@ -830,6 +830,7 @@ func main() {
 	go okxLiq.Start(ctx)
 	go okxClient.StartInstrumentRefresh(ctx)
 	go marketSvc.StartWallSampler(ctx)
+	go marketSvc.StartWallScan(ctx)
 	go marketSvc.StartHeatmapWarmer(ctx)
 	logger.Info("order heatmap warmer started", "venues", []string{"binance", "coinbase", "bybit"})
 	go marketSvc.StartRSIHeatmapWarmer(ctx)

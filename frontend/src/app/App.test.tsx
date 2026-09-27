@@ -22,6 +22,7 @@ describe('App shell navigation', () => {
     expect(links.some((a) => a.getAttribute('href') === '/order-count')).toBe(true);
     expect(links.some((a) => a.getAttribute('href') === '/print-size')).toBe(true);
     expect(links.some((a) => a.getAttribute('href') === '/impact')).toBe(true);
+    expect(links.some((a) => a.getAttribute('href') === '/walls')).toBe(true);
     expect(links.some((a) => a.getAttribute('href') === '/ai')).toBe(true);
     expect(links.some((a) => a.getAttribute('href') === '/alerts')).toBe(true);
     expect(links.some((a) => a.getAttribute('href') === '/arb')).toBe(true);

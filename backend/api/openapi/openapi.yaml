@@ -946,6 +946,39 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook/walls/scan:
+    get:
+      summary: Scan suspicious walls and brief flickers across liquid pairs
+      description: |
+        Lists spot walls the desk has watched on the liquid USDT pairs.
+        `kind=suspicious` means the same wall was added and pulled at least
+        4 times inside 2 minutes. `kind=flicker` means a large wall rested
+        under about 20 seconds and then left. `exchange` is binance, coinbase,
+        bybit, or all. The list stays empty until this process has been sampling.
+        Not financial advice.
+      operationId: scanSuspiciousWalls
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          description: binance | coinbase | bybit | all (default all)
+          schema: { type: string, default: all }
+        - name: quote
+          in: query
+          schema: { type: string, default: USDT }
+        - name: limit
+          in: query
+          description: How many walls to return (default 40, max 80)
+          schema: { type: integer, default: 40, minimum: 1, maximum: 80 }
+      responses:
+        '200':
+          description: Suspicious walls and brief flickers, suspicious first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WallScan'
+        '400':
+          $ref: '#/components/responses/Error'
   /api/v1/market/orderbook/impact:
     get:
       summary: Simulate market-order impact and slippage
@@ -11121,6 +11154,38 @@ components:
         hits:
           type: array
           items: { $ref: '#/components/schemas/OrderBookImpactScanHit' }
+        summary: { type: string }
+        note: { type: string }
+    WallScanHit:
+      type: object
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        side: { type: string, enum: [bid, ask] }
+        price: { type: string }
+        notional: { type: string }
+        distancePct: { type: string, description: Percent from mid }
+        share: { type: number, description: Fraction of that side's band notional }
+        kind: { type: string, enum: [suspicious, flicker] }
+        appearCount: { type: integer }
+        ageSeconds: { type: number }
+        presentForSeconds: { type: number }
+        visibleSeconds: { type: number }
+        present: { type: boolean }
+        lastSeen: { type: string, format: date-time }
+    WallScan:
+      type: object
+      description: Suspicious walls and brief flickers across liquid spot books
+      properties:
+        exchange: { type: string }
+        quote: { type: string }
+        universe: { type: integer, description: Liquid books the background sampler is watching }
+        asOf: { type: string, format: date-time }
+        suspicious: { type: integer }
+        flickers: { type: integer }
+        hits:
+          type: array
+          items: { $ref: '#/components/schemas/WallScanHit' }
         summary: { type: string }
         note: { type: string }
     Supply:

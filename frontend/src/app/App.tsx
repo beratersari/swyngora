@@ -34,6 +34,7 @@ const NAV_ITEMS = [
   { to: '/order-count', key: 'nav.ordercount' as const },
   { to: '/print-size', key: 'nav.printsize' as const },
   { to: '/impact', key: 'nav.impact' as const },
+  { to: '/walls', key: 'nav.walls' as const },
   { to: '/alerts', key: 'nav.alerts' as const },
   { to: '/arb', key: 'nav.arb' as const },
   { to: '/compare', key: 'nav.compare' as const },

@@ -102,6 +102,8 @@ import type {
   ImpactScan,
   ImpactScanHit,
   ImpactScanQuery,
+  WallScan,
+  WallScanQuery,
   MarketPressure,
   PressureQuery,
   Ticker24h,
@@ -220,6 +222,8 @@ export type {
   ImpactScan,
   ImpactScanHit,
   ImpactScanQuery,
+  WallScan,
+  WallScanQuery,
   MarketPressure,
   MarketForensics,
   MarketForensicsQuery,
@@ -665,6 +669,12 @@ export const marketApi = baseApi.injectEndpoints({
         params: compactParams({ ...(arg ?? {}) }),
       }),
     }),
+    scanSuspiciousWalls: build.query<WallScan, WallScanQuery | void>({
+      query: (arg) => ({
+        url: '/api/v1/market/orderbook/walls/scan',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
     getMarketOrderCountOverview: build.query<MarketOrderCountOverview, OrderCountOverviewQuery | void>({
       query: (arg) => ({
         url: '/api/v1/market/order-count/overview',
@@ -860,6 +870,7 @@ export const {
   useGetMarketPrintSizeQuery,
   useGetMarketBotTrackerQuery,
   useScanMarketImpactQuery,
+  useScanSuspiciousWallsQuery,
   useGetMarketOrderCountOverviewQuery,
   useGetMarketOrderCountQuery,
   useGetMarketPressureQuery,
