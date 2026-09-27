@@ -133,8 +133,14 @@ func TestClampHeatmapWindowSeconds(t *testing.T) {
 	if got := ClampHeatmapWindowSeconds(10); got != 60 {
 		t.Fatalf("min %d", got)
 	}
-	if got := ClampHeatmapWindowSeconds(99999); got != 1800 {
-		t.Fatalf("max %d", got)
+	if got := ClampHeatmapWindowSeconds(99999); got != 99999 {
+		t.Fatalf("history passthrough %d", got)
+	}
+	if got := ClampHeatmapWindowSeconds(99999999); got != int(MaxHeatmapHistoryWindow/time.Second) {
+		t.Fatalf("history max %d", got)
+	}
+	if !HeatmapUsesHistory(4*3600) || HeatmapUsesHistory(900) {
+		t.Fatal("history cutoff")
 	}
 	if got := ClampHeatmapWindowSeconds(300); got != 300 {
 		t.Fatalf("passthrough %d", got)

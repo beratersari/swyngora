@@ -38,6 +38,8 @@ describe('OrderHeatmap', () => {
     expect(screen.getByTestId('order-heatmap-canvas')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '5m' }));
     expect(onWindowChange).toHaveBeenCalledWith(300);
+    expect(screen.getByRole('button', { name: '1h' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '7d' })).toBeInTheDocument();
   });
 
   it('shows empty copy when there is no tape yet', () => {

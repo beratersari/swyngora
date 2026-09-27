@@ -181,7 +181,7 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
   `create_funding_arb_watch` / `list_funding_arb_watches` / `list_funding_arb_signals` / `get_funding_arb_signal` → omit symbol to follow the scan and notify when a new coin's after-fee net ≥ min_profit; same coin while still above is not re-notified; after clocks pass, review compares settled rates to the predicted schedule;
   `get_long_short_ratio` → share of accounts that are long vs short (ratio / bias); on Binance `gap` is top long% minus crowd long% (+10 = top 65% vs crowd 55%) and `gapWindows` say if that spread is widening; `divergence` is top vs price (more long while price falls) with `since` / duration;
   `get_market_liquidity` → how liquid the book is (0–100 + grade, weaker side, only ±0.1/0.5/1% bands the book actually covers, per venue + common-range market-wide);
-  `get_orderbook_heatmap` → resting bid/ask size over the last few minutes (not executed volume);
+  `get_orderbook_heatmap` → resting bid/ask size over time (not executed volume); up to 30 minutes is the live tape, longer windows up to 7 days use stored ladders including brief walls and size moves;
   `get_orderbook_liquidity_flow` → when a bid/ask shrinks, how much was traded vs pulled vs added, plus a time series;
   `analyze_market_orderbook` → overall buy/sell pressure across Binance+Coinbase+Bybit in one ±range_pct band;
   `analyze_spot_orderbook` → one-venue pressure/walls (read wall `behavior`: persistent ≈ resting support/resistance, suspicious ≈ flicker/pulled often, short ≈ just appeared);

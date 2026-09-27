@@ -11,7 +11,12 @@ const (
 	// DefaultHeatmapWindow is how much resting-size history the UI asks for.
 	DefaultHeatmapWindow = 10 * time.Minute
 	MinHeatmapWindow     = 1 * time.Minute
-	MaxHeatmapWindow     = 30 * time.Minute
+	// MaxHeatmapWindow is the live 1s tape. Longer lookbacks use stored books.
+	MaxHeatmapWindow = 30 * time.Minute
+	// MaxHeatmapHistoryWindow matches the default order-book history retention.
+	MaxHeatmapHistoryWindow = 7 * 24 * time.Hour
+	// HeatmapHistoryMaxColumns caps a stored lookback so a multi-day map stays drawable.
+	HeatmapHistoryMaxColumns = 240
 	// HeatmapMinInterval collapses faster polls into one live column.
 	HeatmapMinInterval = 1 * time.Second
 	// Enough 1s samples to cover MaxHeatmapWindow (15m / 30m chips).
@@ -49,6 +54,8 @@ type OrderBookHeatmap struct {
 	To            time.Time
 	Columns       []HeatmapColumn
 	Live          bool
+	// Source is "live" for the in-memory tape and "history" for stored ladders.
+	Source string
 }
 
 // HeatmapTape keeps an in-memory ring of grouped book snapshots per venue pair.
@@ -77,19 +84,25 @@ func NewHeatmapTape() *HeatmapTape {
 }
 
 // ClampHeatmapWindowSeconds bounds the requested lookback (seconds).
+// Up to 30 minutes stays on the live tape. Longer requests use stored history, capped at 7 days.
 func ClampHeatmapWindowSeconds(n int) int {
 	if n <= 0 {
 		return int(DefaultHeatmapWindow / time.Second)
 	}
 	min := int(MinHeatmapWindow / time.Second)
-	max := int(MaxHeatmapWindow / time.Second)
 	if n < min {
 		return min
 	}
+	max := int(MaxHeatmapHistoryWindow / time.Second)
 	if n > max {
 		return max
 	}
 	return n
+}
+
+// HeatmapUsesHistory reports whether the lookback is longer than the live tape.
+func HeatmapUsesHistory(windowSec int) bool {
+	return windowSec > int(MaxHeatmapWindow/time.Second)
 }
 
 func heatmapKey(exchange, symbol string) string {
@@ -171,6 +184,7 @@ func (t *HeatmapTape) View(exchange, symbol string, window time.Duration) OrderB
 		Symbol:        strings.ToUpper(strings.TrimSpace(symbol)),
 		WindowSeconds: windowSec,
 		SampleEveryMs: int(HeatmapMinInterval / time.Millisecond),
+		Source:        "live",
 	}
 	if t == nil {
 		return out

@@ -43,6 +43,8 @@ import {
 import type { HeatHover, OrderHeatmapProps } from './OrderHeatmap.types';
 
 function windowLabel(seconds: number): string {
+  if (seconds % 86400 === 0) return `${seconds / 86400}d`;
+  if (seconds % 3600 === 0) return `${seconds / 3600}h`;
   if (seconds % 60 === 0) return `${seconds / 60}m`;
   return `${seconds}s`;
 }
@@ -255,7 +257,7 @@ export function OrderHeatmap({
         <Skeleton height={320} />
       ) : !hasTape ? (
         <Text variant="body" color="secondary">
-          {t('orderHeatmap.empty')}
+          {t(activeWindow > 1800 ? 'orderHeatmap.emptyHistory' : 'orderHeatmap.empty')}
         </Text>
       ) : (
         <MapFrame ref={frameRef}>

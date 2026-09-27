@@ -869,11 +869,12 @@ paths:
     get:
       summary: Resting order-book heatmap over time
       description: |
-        Recent **resting** bid/ask notional at each grouped price, sampled from
-        the live local book (not executed volume / footprint). Each column is
-        one snapshot. The tape fills while the pair is watched (detail page or
-        this endpoint) and is kept by the wall sampler. First response seeds
-        one column. Informational only.
+        Recent **resting** bid/ask notional at each grouped price (not executed
+        volume). Windows up to 30 minutes use the live 1s tape. Longer windows
+        use stored 1-minute ladders, with brief walls and other size moves
+        painted on the minute they happened. A multi-day window groups those
+        minutes so the map stays readable. History only exists while the desk
+        has been running (about 7 days). Informational only.
       operationId: getSpotOrderBookHeatmap
       tags: [Market]
       parameters:
@@ -890,8 +891,8 @@ paths:
           schema: { type: string, example: "0.1" }
         - name: window
           in: query
-          description: Lookback in seconds (60–1800, default 600)
-          schema: { type: integer, default: 600, minimum: 60, maximum: 1800, example: 600 }
+          description: Lookback in seconds (60–604800, default 600). Above 1800 uses stored book history.
+          schema: { type: integer, default: 600, minimum: 60, maximum: 604800, example: 600 }
       responses:
         '200':
           description: Heatmap tape
@@ -8700,6 +8701,7 @@ components:
           type: array
           items: { $ref: '#/components/schemas/OrderBookHeatmapColumn' }
         live: { type: boolean }
+        source: { type: string, enum: [live, history], description: live tape or stored ladders }
         note: { type: string }
     SpotOrderBook:
       type: object

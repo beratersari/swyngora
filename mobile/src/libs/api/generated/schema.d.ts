@@ -477,11 +477,12 @@ export interface paths {
         };
         /**
          * Resting order-book heatmap over time
-         * @description Recent **resting** bid/ask notional at each grouped price, sampled from
-         *     the live local book (not executed volume / footprint). Each column is
-         *     one snapshot. The tape fills while the pair is watched (detail page or
-         *     this endpoint) and is kept by the wall sampler. First response seeds
-         *     one column. Informational only.
+         * @description Recent **resting** bid/ask notional at each grouped price (not executed
+         *     volume). Windows up to 30 minutes use the live 1s tape. Longer windows
+         *     use stored 1-minute ladders, with brief walls and other size moves
+         *     painted on the minute they happened. A multi-day window groups those
+         *     minutes so the map stays readable. History only exists while the desk
+         *     has been running (about 7 days). Informational only.
          */
         get: operations["getSpotOrderBookHeatmap"];
         put?: never;
@@ -4505,6 +4506,11 @@ export interface components {
             to?: string;
             columns?: components["schemas"]["OrderBookHeatmapColumn"][];
             live?: boolean;
+            /**
+             * @description live tape or stored ladders
+             * @enum {string}
+             */
+            source?: "live" | "history";
             note?: string;
         };
         SpotOrderBook: {
@@ -9375,7 +9381,7 @@ export interface operations {
                 exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
                 /** @description Price bucket size (e.g. 0.1). Omit for a suggested default. */
                 group?: string;
-                /** @description Lookback in seconds (60–1800, default 600) */
+                /** @description Lookback in seconds (60–604800, default 600). Above 1800 uses stored book history. */
                 window?: number;
             };
             header?: never;

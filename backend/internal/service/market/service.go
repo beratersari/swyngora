@@ -653,6 +653,13 @@ func (s *Service) GetOrderBookHeatmap(ctx context.Context, exchange, symbol, gro
 		s.noteWallWatch(ex, symbol)
 		s.recordHeatFromRaw(ex, symbol, raw, groupSize)
 	}
+	if domain.HeatmapUsesHistory(windowSec) {
+		hist := s.orderBookHeatmapFromHistory(ctx, ex, symbol, windowSec)
+		if raw != nil {
+			hist.Live = raw.Live
+		}
+		return &hist, nil
+	}
 	if s.heat == nil {
 		s.heat = domain.NewHeatmapTape()
 	}

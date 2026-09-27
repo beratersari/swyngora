@@ -666,6 +666,53 @@ func TestGetOrderBookHeatmap_FallsBackToLiveBook(t *testing.T) {
 	}
 }
 
+type heatHist struct {
+	stubBookHist
+	flashes []domain.BookHistoryFlash
+	moves   []domain.BookHistoryMove
+}
+
+func (h heatHist) ListFlashes(context.Context, string, string, time.Time, time.Time) ([]domain.BookHistoryFlash, error) {
+	return h.flashes, nil
+}
+func (h heatHist) ListMoves(context.Context, string, string, time.Time, time.Time) ([]domain.BookHistoryMove, error) {
+	return h.moves, nil
+}
+
+func TestGetOrderBookHeatmap_UsesStoredLaddersForLongWindows(t *testing.T) {
+	minute := time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Minute)
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithBookHistory(heatHist{
+		stubBookHist: stubBookHist{snap: domain.BookHistorySnapshot{
+			SampledAt: minute, Mid: 100,
+			Bids: []domain.BookHistoryLevel{{Price: 99, Notional: 1000}},
+			Asks: []domain.BookHistoryLevel{{Price: 101, Notional: 400}},
+		}},
+		flashes: []domain.BookHistoryFlash{{Side: "bid", Price: 98, Notional: 5000, SeenFrom: minute.Add(5 * time.Second)}},
+		moves:   []domain.BookHistoryMove{{Side: "ask", Price: 101, PeakNotional: 2500, SeenFrom: minute.Add(8 * time.Second)}},
+	})
+	got, err := svc.GetOrderBookHeatmap(context.Background(), "binance", "BTCUSDT", "", 4*3600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Source != "history" || got.WindowSeconds != 4*3600 || len(got.Columns) != 1 {
+		t.Fatalf("source=%s window=%d cols=%d", got.Source, got.WindowSeconds, len(got.Columns))
+	}
+	var flash, moved bool
+	for _, lv := range got.Columns[0].Bids {
+		if lv.Price == "98" && lv.IsWall {
+			flash = true
+		}
+	}
+	for _, lv := range got.Columns[0].Asks {
+		if lv.Price == "101" && lv.Notional == "2500" {
+			moved = true
+		}
+	}
+	if !flash || !moved {
+		t.Fatalf("col %+v", got.Columns[0])
+	}
+}
+
 func TestWallWatchIdleOutlastsPersistentMin(t *testing.T) {
 	idle := wallWatchIdle()
 	need := domain.WallPersistentMin + wallSampleEvery

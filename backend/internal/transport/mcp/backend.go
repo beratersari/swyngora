@@ -2948,7 +2948,7 @@ func (b *Backend) GetOrderBookHeatmap(ctx context.Context, exchange, symbol, gro
 	}
 	return mustJSON(map[string]any{
 		"exchange": string(got.Exchange), "symbol": got.Symbol, "groupSize": got.GroupSize,
-		"windowSeconds": got.WindowSeconds, "sampleEveryMs": got.SampleEveryMs,
+		"windowSeconds": got.WindowSeconds, "sampleEveryMs": got.SampleEveryMs, "source": got.Source,
 		"from": from, "to": to, "columns": cols, "live": got.Live,
 		"note": "Resting bid/ask notional over time. Not executed volume.",
 	})
