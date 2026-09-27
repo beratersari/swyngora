@@ -136,6 +136,24 @@ func TestAttachPerpDepthWindows_SizeDriversRankWhoAddedMost(t *testing.T) {
 	}
 }
 
+func TestAttachPerpDepthHistory_KeepsSixHoursAndDropsOlder(t *testing.T) {
+	now := time.Date(2026, 9, 21, 16, 0, 0, 0, time.UTC)
+	live := BuildPerpDepthOverview("all", 1, []PerpDepthCoinInput{
+		{Symbol: "BTCUSDT", Base: "BTC", Bid: 80, Ask: 20, Complete: true},
+	}, now)
+	AttachPerpDepthHistory(live, []PerpDepthTotalPoint{
+		{Time: now.Add(-7 * time.Hour), Total: 50},
+		{Time: now.Add(-2 * time.Hour), Total: 400},
+		{Time: now.Add(-5 * time.Minute), Total: 900},
+	})
+	if len(live.History) != 2 || live.History[0].Total != 400 || live.History[1].Total != 900 {
+		t.Fatalf("%+v", live.History)
+	}
+	if !live.History[0].Time.Before(live.History[1].Time) {
+		t.Fatalf("order %+v", live.History)
+	}
+}
+
 func TestClassifyPerpDepthSize(t *testing.T) {
 	if ClassifyPerpDepthSize(5) != PerpDepthSizeThicker || ClassifyPerpDepthSize(-5) != PerpDepthSizeThinner {
 		t.Fatal("sides")

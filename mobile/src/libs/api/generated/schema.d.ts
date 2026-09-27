@@ -6345,6 +6345,13 @@ export interface components {
             /** @enum {string} */
             kind?: "thicker" | "thinner" | "steady";
         };
+        /** @description Summed perp bid+ask at one sampled minute */
+        MarketPerpDepthTotalPoint: {
+            /** Format: date-time */
+            time?: string;
+            /** @description Bid+ask notional at that minute */
+            total?: string;
+        };
         /** @description Bid vs ask share and total book size of the liquid-perp book now vs 15m / 1h / 4h ago */
         MarketPerpDepthShareWindow: {
             /** @enum {string} */
@@ -6401,6 +6408,8 @@ export interface components {
             leaders?: string[];
             missing?: string[];
             windows?: components["schemas"]["MarketPerpDepthShareWindow"][];
+            /** @description Total bid+ask each minute for the last 6 hours, oldest first */
+            history?: components["schemas"]["MarketPerpDepthTotalPoint"][];
             bands?: components["schemas"]["MarketPerpDepthOverviewBand"][];
             summary?: string;
             note?: string;

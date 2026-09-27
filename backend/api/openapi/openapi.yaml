@@ -10473,6 +10473,12 @@ components:
         base: { type: string }
         change: { type: string, description: "Signed USDT, this coin's bid+ask now minus past" }
         kind: { type: string, enum: [thicker, thinner, steady] }
+    MarketPerpDepthTotalPoint:
+      type: object
+      description: Summed perp bid+ask at one sampled minute
+      properties:
+        time: { type: string, format: date-time }
+        total: { type: string, description: Bid+ask notional at that minute }
     MarketPerpDepthShareWindow:
       type: object
       description: Bid vs ask share and total book size of the liquid-perp book now vs 15m / 1h / 4h ago
@@ -10527,6 +10533,10 @@ components:
         windows:
           type: array
           items: { $ref: '#/components/schemas/MarketPerpDepthShareWindow' }
+        history:
+          type: array
+          description: Total bid+ask each minute for the last 6 hours, oldest first
+          items: { $ref: '#/components/schemas/MarketPerpDepthTotalPoint' }
         bands:
           type: array
           items: { $ref: '#/components/schemas/MarketPerpDepthOverviewBand' }

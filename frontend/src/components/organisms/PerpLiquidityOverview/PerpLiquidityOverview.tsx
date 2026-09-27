@@ -18,6 +18,7 @@ import {
   mixLine,
   shareLabel,
 } from './helpers';
+import { PerpLiquidityDepthChart } from './PerpLiquidityDepthChart';
 import { DetailList, DetailRow, Head } from './PerpLiquidityOverview.styles';
 import type { PerpLiquidityOverviewProps } from './PerpLiquidityOverview.types';
 
@@ -126,6 +127,16 @@ export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLi
                 ))}
               </>
             ) : null}
+            <Text variant="caption" color="secondary">
+              {t('perpLiq.history')}
+            </Text>
+            {(data?.history?.length ?? 0) >= 2 ? (
+              <PerpLiquidityDepthChart history={data?.history} />
+            ) : (
+              <Text variant="caption" color="secondary">
+                {t('perpLiq.historyWait')}
+              </Text>
+            )}
             {(data?.windows ?? []).map((w) => (
               <DetailRow key={w.window}>
                 <Head>

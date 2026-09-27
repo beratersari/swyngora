@@ -30,6 +30,25 @@ export function mixLine(w?: MarketPerpDepthShareWindow | null): string {
   return `${w.pastBidPct}% → ${w.bidPct}%${chg}`;
 }
 
+/** Minute totals for the depth chart, oldest first. */
+export function depthHistoryLine(
+  points?: { time?: string; total?: string }[] | null,
+): { time: number; value: number }[] {
+  const out: { time: number; value: number }[] = [];
+  const seen = new Set<number>();
+  for (const p of points ?? []) {
+    const value = Number(p.total);
+    const ms = p.time ? Date.parse(p.time) : NaN;
+    if (!Number.isFinite(value) || value <= 0 || !Number.isFinite(ms)) continue;
+    const time = Math.floor(ms / 1000);
+    if (seen.has(time)) continue;
+    seen.add(time);
+    out.push({ time, value });
+  }
+  out.sort((a, b) => a.time - b.time);
+  return out;
+}
+
 /** Past total bid+ask to now, with the percent change. */
 export function depthLine(w?: MarketPerpDepthShareWindow | null): string {
   if (!w?.complete || w.pastTotal == null || w.pastTotal === '' || w.total == null || w.total === '') return '';

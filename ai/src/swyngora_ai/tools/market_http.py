@@ -4791,7 +4791,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "compare bid vs ask share of that book (bids 55% → 65%) and "
                 "whether total bid+ask got thicker or thinner (at least 5%). "
                 "drivers name the coins that moved the mix. sizeDrivers name "
-                "the coins that added or removed the most size. Sampled while "
+                "the coins that added or removed the most size. history is "
+                "total bid+ask each minute for the last 6 hours. Sampled while "
                 "the desk runs. exchange=all adds Binance, Bybit, and OKX per coin. "
                 "range_pct default 1. limit default 20."
             ),

@@ -960,6 +960,12 @@ func perpDepthOverviewMap(got *domain.PerpDepthOverview) map[string]any {
 		}
 		wins = append(wins, row)
 	}
+	history := make([]map[string]any, 0, len(got.History))
+	for _, p := range got.History {
+		history = append(history, map[string]any{
+			"time": p.Time.UTC().Format(time.RFC3339Nano), "total": formatQtyMCP(p.Total),
+		})
+	}
 	bands := make([]map[string]any, 0, len(got.Bands))
 	for _, b := range got.Bands {
 		rowCoins := make([]map[string]any, 0, len(b.Coins))
@@ -986,7 +992,7 @@ func perpDepthOverviewMap(got *domain.PerpDepthOverview) map[string]any {
 		"asOf": got.AsOf.UTC().Format(time.RFC3339Nano), "bid": formatQtyMCP(got.Bid), "ask": formatQtyMCP(got.Ask),
 		"total": formatQtyMCP(got.Total), "imbalance": domain.FormatSignedQty(got.Imbalance),
 		"bidPct": formatQtyMCP(got.BidPct), "askPct": formatQtyMCP(got.AskPct), "lean": got.Lean,
-		"coins": coins, "leaders": got.Leaders, "windows": wins, "bands": bands, "summary": got.Summary, "note": got.Note,
+		"coins": coins, "leaders": got.Leaders, "windows": wins, "history": history, "bands": bands, "summary": got.Summary, "note": got.Note,
 	}
 	if len(got.Missing) > 0 {
 		out["missing"] = got.Missing

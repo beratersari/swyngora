@@ -1,8 +1,25 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithTheme } from '@/test/render';
 import { PerpLiquidityOverview } from './PerpLiquidityOverview';
+
+vi.mock('lightweight-charts', () => ({
+  createChart: vi.fn(() => ({
+    addSeries: () => ({ setData: vi.fn() }),
+    timeScale: () => ({ fitContent: vi.fn() }),
+    applyOptions: vi.fn(),
+    remove: vi.fn(),
+  })),
+  LineSeries: {},
+}));
+
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 
 describe('PerpLiquidityOverview', () => {
   it('shows a bid versus ask bar and keeps bands and windows in the dialog', async () => {
@@ -59,5 +76,24 @@ describe('PerpLiquidityOverview', () => {
     expect(screen.getByText('400.00M → 500.00M (+25%) · Thicker')).toBeInTheDocument();
     expect(screen.getByText('ETH +100.00M, BTC +20.00M')).toBeInTheDocument();
     expect(screen.getByText('80.00M · 8%')).toBeInTheDocument();
+    expect(screen.getByText('The path shows up after this desk has been sampling.')).toBeInTheDocument();
+  });
+
+  it('draws the six-hour total once two minutes exist', async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <PerpLiquidityOverview
+        data={{
+          bid: '100',
+          ask: '100',
+          history: [
+            { time: '2026-09-21T14:00:00Z', total: '400' },
+            { time: '2026-09-21T16:00:00Z', total: '900' },
+          ],
+        }}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /Perp bid \/ ask/ }));
+    expect(await screen.findByTestId('perp-depth-history')).toBeInTheDocument();
   });
 });

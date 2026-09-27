@@ -49,7 +49,8 @@ ETH 17%** of 2.4B bid + 1.8B ask).
   `totalChangePct`). A move of at least 5% is `depthKind` `thicker` or
   `thinner`; a smaller move is `steady`. `sizeDrivers` ranks the coins
   that added or removed the most of that size (ETH +100M ahead of BTC +20M).
-  `complete` is false until the
+  `history` is total bid+ask each minute for the last 6 hours, so a slow
+  thicken looks different from a jump. `complete` is false until the
   desk has sampled that lookback.
 - `bands` (0.1 / 0.25 / 0.5 / 1, up to `rangePct`) show how close that
   book is to mid. Example: **80M inside 0.1%** is **8% of the 1% book**;

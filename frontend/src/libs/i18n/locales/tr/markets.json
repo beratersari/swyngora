@@ -10,6 +10,8 @@
     "leanEven": "Dengeli",
     "window": "{{window}} bid payı",
     "depth": "{{window}} defter boyutu",
+    "history": "Son 6 saatlik toplam defter",
+    "historyWait": "Yol, bu masa örneklemeye başladıktan sonra görünür.",
     "sizeDrivers": "{{names}}",
     "thicker": "Kalınlaştı",
     "thinner": "İnceldi",

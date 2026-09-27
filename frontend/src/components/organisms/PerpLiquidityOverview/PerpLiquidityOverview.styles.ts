@@ -12,6 +12,11 @@ export const DetailRow = styled.div`
   gap: 2px;
 `;
 
+export const ChartBox = styled.div`
+  width: 100%;
+  height: 120px;
+`;
+
 export const Head = styled.div`
   display: flex;
   align-items: baseline;

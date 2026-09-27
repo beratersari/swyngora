@@ -78,6 +78,47 @@ func (m *Memory) ListSamples(_ context.Context, exchange string, rangePct float6
 	return out, nil
 }
 
+// ListMinuteTotals sums bid+ask for each minute, oldest first.
+func (m *Memory) ListMinuteTotals(_ context.Context, exchange string, rangePct float64, from, to time.Time) ([]domain.PerpDepthTotalPoint, error) {
+	if m == nil {
+		return nil, nil
+	}
+	if exchange == "" {
+		exchange = "all"
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	type acc struct{ total float64 }
+	by := map[int64]acc{}
+	for _, r := range m.rows {
+		if r.Exchange != exchange || !almostRange(r.RangePct, rangePct) {
+			continue
+		}
+		if !from.IsZero() && r.Time.Before(from) {
+			continue
+		}
+		if !to.IsZero() && r.Time.After(to) {
+			continue
+		}
+		ms := r.Time.UTC().UnixMilli()
+		a := by[ms]
+		a.total += r.Bid + r.Ask
+		by[ms] = a
+	}
+	ms := make([]int64, 0, len(by))
+	for k, a := range by {
+		if a.total > 0 {
+			ms = append(ms, k)
+		}
+	}
+	sort.Slice(ms, func(i, j int) bool { return ms[i] < ms[j] })
+	out := make([]domain.PerpDepthTotalPoint, 0, len(ms))
+	for _, k := range ms {
+		out = append(out, domain.PerpDepthTotalPoint{Time: time.UnixMilli(k).UTC(), Total: by[k].total})
+	}
+	return out, nil
+}
+
 // PurgeOlderThan drops samples before cutoff.
 func (m *Memory) PurgeOlderThan(_ context.Context, cutoff time.Time) (int, error) {
 	if m == nil || cutoff.IsZero() {

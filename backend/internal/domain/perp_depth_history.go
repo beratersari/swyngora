@@ -22,6 +22,9 @@ const (
 	perpDepthShareMaxDrivers  = 5
 	PerpDepthHistoryListLimit = 8000
 	perpDepthSampleBucket     = time.Minute
+
+	// PerpDepthTotalChartSpan is how far back the total-book line is drawn.
+	PerpDepthTotalChartSpan = 6 * time.Hour
 )
 
 // PerpDepthShareWindows is 15m / 1h / 4h of market bid vs ask mix.
@@ -38,10 +41,18 @@ type PerpDepthSample struct {
 	Ask      float64
 }
 
+// PerpDepthTotalPoint is the summed bid+ask of the tracked book at one minute.
+type PerpDepthTotalPoint struct {
+	Time  time.Time
+	Total float64
+}
+
 // PerpDepthHistoryStore persists market-wide perp book samples.
 type PerpDepthHistoryStore interface {
 	InsertSamples(ctx context.Context, rows []PerpDepthSample) (inserted int, err error)
 	ListSamples(ctx context.Context, exchange string, rangePct float64, from, to time.Time) ([]PerpDepthSample, error)
+	// ListMinuteTotals returns one summed bid+ask per minute, oldest first.
+	ListMinuteTotals(ctx context.Context, exchange string, rangePct float64, from, to time.Time) ([]PerpDepthTotalPoint, error)
 	PurgeOlderThan(ctx context.Context, cutoff time.Time) (int, error)
 }
 
@@ -139,6 +150,31 @@ func AttachPerpDepthWindows(live *PerpDepthOverview, samples []PerpDepthSample) 
 		live.Windows = append(live.Windows, buildPerpDepthShareWindow(spec.ID, spec.Dur, live, groups, now))
 	}
 	live.Summary = ExplainPerpDepthOverview(*live)
+}
+
+// AttachPerpDepthHistory keeps summed bid+ask minutes inside the chart span.
+func AttachPerpDepthHistory(live *PerpDepthOverview, points []PerpDepthTotalPoint) {
+	if live == nil {
+		return
+	}
+	asOf := live.AsOf
+	if asOf.IsZero() {
+		asOf = time.Now().UTC()
+	}
+	from := asOf.Add(-PerpDepthTotalChartSpan)
+	out := make([]PerpDepthTotalPoint, 0, len(points))
+	for _, p := range points {
+		if p.Time.IsZero() || p.Total <= 0 {
+			continue
+		}
+		t := BucketPerpDepthSampleTime(p.Time)
+		if t.Before(from) || t.After(asOf.Add(time.Minute)) {
+			continue
+		}
+		out = append(out, PerpDepthTotalPoint{Time: t, Total: round4(p.Total)})
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Time.Before(out[j].Time) })
+	live.History = out
 }
 
 func groupPerpDepthSamples(rows []PerpDepthSample) map[int64][]PerpDepthCoinInput {

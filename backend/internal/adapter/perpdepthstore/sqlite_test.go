@@ -28,6 +28,10 @@ func TestSQLiteInsertListPurge(t *testing.T) {
 	if err != nil || len(got) != 2 {
 		t.Fatalf("list %+v %v", got, err)
 	}
+	totals, err := s.ListMinuteTotals(context.Background(), "all", 1, now.Add(-time.Minute), now.Add(time.Minute))
+	if err != nil || len(totals) != 1 || totals[0].Total != 120 {
+		t.Fatalf("totals %+v %v", totals, err)
+	}
 	dropped, err := s.PurgeOlderThan(context.Background(), now.Add(time.Minute))
 	if err != nil || dropped != 2 {
 		t.Fatalf("purge %d %v", dropped, err)

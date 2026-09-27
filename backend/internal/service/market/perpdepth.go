@@ -194,6 +194,12 @@ func (s *Service) attachPerpDepthWindows(ctx context.Context, out *domain.PerpDe
 		return
 	}
 	domain.AttachPerpDepthWindows(out, rows)
+	fromTotals := out.AsOf.Add(-domain.PerpDepthTotalChartSpan)
+	totals, err := s.perpHist.ListMinuteTotals(ctx, out.Exchange, out.RangePct, fromTotals, out.AsOf.Add(time.Minute))
+	if err != nil {
+		return
+	}
+	domain.AttachPerpDepthHistory(out, totals)
 }
 
 // PurgePerpDepthHistory drops samples older than cutoff.

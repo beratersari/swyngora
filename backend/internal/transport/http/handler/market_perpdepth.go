@@ -226,6 +226,11 @@ type perpDepthOverviewBandDTO struct {
 	Summary       string                         `json:"summary"`
 }
 
+type perpDepthTotalPointDTO struct {
+	Time  time.Time `json:"time"`
+	Total string    `json:"total"`
+}
+
 type perpDepthOverviewResponse struct {
 	Exchange  string                     `json:"exchange"`
 	RangePct  string                     `json:"rangePct"`
@@ -243,6 +248,7 @@ type perpDepthOverviewResponse struct {
 	Leaders   []string                   `json:"leaders"`
 	Missing   []string                   `json:"missing,omitempty"`
 	Windows   []perpDepthShareWindowDTO  `json:"windows"`
+	History   []perpDepthTotalPointDTO   `json:"history"`
 	Bands     []perpDepthOverviewBandDTO `json:"bands"`
 	Summary   string                     `json:"summary"`
 	Note      string                     `json:"note"`
@@ -297,6 +303,10 @@ func perpDepthOverviewToDTO(a *domain.PerpDepthOverview) perpDepthOverviewRespon
 		}
 		wins = append(wins, row)
 	}
+	history := make([]perpDepthTotalPointDTO, 0, len(a.History))
+	for _, p := range a.History {
+		history = append(history, perpDepthTotalPointDTO{Time: p.Time.UTC(), Total: formatHistQty(p.Total)})
+	}
 	bands := make([]perpDepthOverviewBandDTO, 0, len(a.Bands))
 	for _, b := range a.Bands {
 		rowCoins := make([]perpDepthOverviewBandCoinDTO, 0, len(b.Coins))
@@ -319,7 +329,7 @@ func perpDepthOverviewToDTO(a *domain.PerpDepthOverview) perpDepthOverviewRespon
 		Exchange: a.Exchange, RangePct: formatHistQty(a.RangePct), Universe: a.Universe, Known: a.Known,
 		AsOf: a.AsOf.UTC(), Bid: formatHistQty(a.Bid), Ask: formatHistQty(a.Ask), Total: formatHistQty(a.Total),
 		Imbalance: domain.FormatSignedQty(a.Imbalance), BidPct: formatHistQty(a.BidPct), AskPct: formatHistQty(a.AskPct),
-		Lean: a.Lean, Coins: coins, Leaders: a.Leaders, Missing: a.Missing, Windows: wins, Bands: bands,
+		Lean: a.Lean, Coins: coins, Leaders: a.Leaders, Missing: a.Missing, Windows: wins, History: history, Bands: bands,
 		Summary: a.Summary, Note: a.Note,
 	}
 }

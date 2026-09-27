@@ -10,6 +10,8 @@
     "leanEven": "Balanced",
     "window": "{{window}} bid share",
     "depth": "{{window}} book size",
+    "history": "Total book, last 6 hours",
+    "historyWait": "The path shows up after this desk has been sampling.",
     "sizeDrivers": "{{names}}",
     "thicker": "Thicker",
     "thinner": "Thinner",

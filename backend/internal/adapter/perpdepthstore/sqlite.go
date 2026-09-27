@@ -174,6 +174,47 @@ LIMIT ?
 	return out, rows.Err()
 }
 
+// ListMinuteTotals returns summed bid+ask per minute, oldest first.
+func (s *SQLite) ListMinuteTotals(ctx context.Context, exchange string, rangePct float64, from, to time.Time) ([]domain.PerpDepthTotalPoint, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	if exchange == "" {
+		exchange = "all"
+	}
+	if to.IsZero() {
+		to = time.Now().UTC().Add(time.Hour)
+	}
+	fromMs := int64(0)
+	if !from.IsZero() {
+		fromMs = from.UTC().UnixMilli()
+	}
+	rows, err := s.db.QueryContext(ctx, `
+SELECT sampled_at_ms, SUM(bid + ask)
+FROM perp_depth_samples
+WHERE exchange = ? AND range_mpct = ? AND sampled_at_ms >= ? AND sampled_at_ms <= ?
+GROUP BY sampled_at_ms
+ORDER BY sampled_at_ms ASC
+`, exchange, rangeMilliPct(rangePct), fromMs, to.UTC().UnixMilli())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]domain.PerpDepthTotalPoint, 0, 64)
+	for rows.Next() {
+		var ms int64
+		var total float64
+		if err := rows.Scan(&ms, &total); err != nil {
+			return nil, err
+		}
+		if total <= 0 {
+			continue
+		}
+		out = append(out, domain.PerpDepthTotalPoint{Time: time.UnixMilli(ms).UTC(), Total: total})
+	}
+	return out, rows.Err()
+}
+
 // PurgeOlderThan drops samples before cutoff.
 func (s *SQLite) PurgeOlderThan(ctx context.Context, cutoff time.Time) (int, error) {
 	if s == nil || s.db == nil || cutoff.IsZero() {
