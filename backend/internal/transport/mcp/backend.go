@@ -1569,6 +1569,17 @@ func (b *Backend) GetRSIHeatmap(ctx context.Context, exchange, quote, intervals,
 	return mustJSON(got)
 }
 
+func (b *Backend) GetSweepRecovery(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetSweepRecovery(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) GetLiquiditySweeps(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

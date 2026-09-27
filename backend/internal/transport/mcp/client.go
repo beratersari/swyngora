@@ -911,6 +911,18 @@ func (c *APIClient) GetLiquiditySweeps(ctx context.Context, exchange, symbol str
 	return c.get(ctx, "/api/v1/market/liquidity-sweeps", q)
 }
 
+// GetSweepRecovery returns how long depth took to refill after recent sweeps.
+func (c *APIClient) GetSweepRecovery(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if symbol != "" {
+		q.Set("symbol", symbol)
+	}
+	return c.get(ctx, "/api/v1/market/orderbook/recovery", q)
+}
+
 // GetAbsorption returns aggressive volume versus price hold (who is absorbing).
 func (c *APIClient) GetAbsorption(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

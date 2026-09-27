@@ -2350,6 +2350,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"symbol": symbol, "exchange": exchange},
         )
 
+    def get_sweep_recovery(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/orderbook/recovery",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
     def get_liquidity_sweeps(symbol: str, exchange: str = "all") -> str:
         return http.get(
             "/api/v1/market/liquidity-sweeps",
@@ -5156,6 +5162,16 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "or low that had already turned it back, then comes back. "
                 "Returns the level, how far through, how long to reclaim, "
                 "and volume during that poke."
+            ),
+            args_schema=TakerFlowInput,
+        ),
+        StructuredTool.from_function(
+            get_sweep_recovery,
+            name="get_sweep_recovery",
+            description=(
+                "How long spot depth took to refill after a liquidity sweep. "
+                "Clock starts when price comes back and stops when the swept "
+                "side is at least 80% of its pre-poke size, or after two hours."
             ),
             args_schema=TakerFlowInput,
         ),

@@ -64,6 +64,17 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetMarketVolumeProfileQuery: hook,
     useGetMarketAbsorptionQuery: hook,
     useGetMarketLiquiditySweepsQuery: hook,
+    useGetSweepRecoveryQuery: () => ({
+      ...empty,
+      data: {
+        summary: 'Typical refill was 5m.',
+        rows: [{ exchange: 'binance', side: 'high', level: '65000', recovered: true, recoverySeconds: 300 }],
+      },
+      currentData: {
+        summary: 'Typical refill was 5m.',
+        rows: [{ exchange: 'binance', side: 'high', level: '65000', recovered: true, recoverySeconds: 300 }],
+      },
+    }),
     useGetMarketWhalesQuery: hook,
     useGetMarketIcebergsQuery: hook,
     useGetMarketBookLiquidityFlowQuery: hook,
@@ -78,6 +89,8 @@ describe('CoinFlowTab', () => {
     expect(screen.getByText('Buyers in control')).toBeInTheDocument();
     expect(screen.getByText('OKX buyers led the newest prints')).toBeInTheDocument();
     expect(screen.getByText('Most prints at 65520.')).toBeInTheDocument();
+    expect(screen.getByText('Typical refill was 5m.')).toBeInTheDocument();
+    expect(screen.getByText(/65000/)).toHaveTextContent('5m');
     expect(screen.getAllByText('POC').length).toBeGreaterThan(0);
     expect(screen.getByText(/9\.0× buy/i)).toBeInTheDocument();
   });

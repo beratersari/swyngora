@@ -2639,6 +2639,38 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook/recovery:
+    get:
+      summary: How long the book took to refill after a liquidity sweep
+      description: |
+        For each recent sweep that has come back, compares stored 1-minute
+        spot ladders near the swept level. `beforeNotional` is the size on
+        that side just before the poke. The clock starts at `reclaimedAt`
+        and `recoverySeconds` is when that size is at least 80% restored.
+        `recovered=false` means it was still thin two hours later. Empty
+        until the desk has been sampling that pair. Informational only.
+      operationId: getSweepRecovery
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: binance | bybit | all (default all)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Refill clock for recent sweeps
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SweepRecoveryReport'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/absorption:
     get:
       summary: Absorption (large flow, little price)
@@ -11221,6 +11253,36 @@ components:
         hits:
           type: array
           items: { $ref: '#/components/schemas/OrderBookImpactScanHit' }
+        summary: { type: string }
+        note: { type: string }
+    SweepRecovery:
+      type: object
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        side: { type: string, enum: [high, low] }
+        level: { type: string }
+        piercedAt: { type: string, format: date-time }
+        reclaimedAt: { type: string, format: date-time }
+        beforeNotional: { type: string }
+        troughNotional: { type: string }
+        backNotional: { type: string }
+        recovered: { type: boolean }
+        recoverySeconds: { type: integer }
+        recoveredPct: { type: number }
+        summary: { type: string }
+    SweepRecoveryReport:
+      type: object
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        asOf: { type: string, format: date-time }
+        medianRecoverySeconds: { type: integer }
+        recovered: { type: integer }
+        pending: { type: integer }
+        rows:
+          type: array
+          items: { $ref: '#/components/schemas/SweepRecovery' }
         summary: { type: string }
         note: { type: string }
     BookGap:

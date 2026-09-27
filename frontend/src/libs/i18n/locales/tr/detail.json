@@ -363,6 +363,13 @@
     },
     "absorption": "Emilim",
     "sweeps": "Likidite süpürmeleri",
+    "recovery": {
+      "title": "Defter toparlanması",
+      "high": "Üst",
+      "low": "Alt",
+      "row": "{{side}} {{level}} · derinlik {{time}} içinde geri geldi",
+      "pending": "{{side}} {{level}} · 2 saat sonra hâlâ ince"
+    },
     "whales": "Balinalar",
     "whale": {
       "row": "{{side}} {{notional}} · {{intent}} · işlemde AP {{oi}} · {{after}}",

@@ -222,6 +222,7 @@ func TestNewRouter_RoutesAndCORS(t *testing.T) {
 		{"/api/v1/market/forensics/radar?since=7d", http.StatusOK, nil},
 		{"/api/v1/market/absorption?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/liquidity-sweeps?symbol=BTCUSDT", http.StatusOK, nil},
+		{"/api/v1/market/orderbook/recovery?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/basis?symbol=BTCUSDT", http.StatusOK, nil},
 		{"/api/v1/market/correlation?symbol=SOLUSDT", http.StatusOK, nil},
 		{"/api/v1/market/breadth", http.StatusOK, nil},

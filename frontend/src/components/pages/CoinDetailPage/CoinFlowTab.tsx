@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { IntervalRail } from '@/components/molecules/IntervalRail';
 import { CoinInsightPanel, CoinInsightStack } from '@/components/organisms/CoinInsightPanel';
 import { FlowFootprint } from '@/components/organisms/FlowFootprint';
+import { SweepRecoveryList } from '@/components/organisms/SweepRecoveryList';
 import { VolumeProfileLadder } from '@/components/organisms/VolumeProfileLadder';
 import { PositionSidePanel } from '@/components/organisms/PositionSidePanel';
 import {
@@ -12,6 +13,7 @@ import {
   useGetMarketFlowAtPricesQuery,
   useGetMarketIcebergsQuery,
   useGetMarketLiquiditySweepsQuery,
+  useGetSweepRecoveryQuery,
   useGetMarketPerpDepthQuery,
   useGetMarketTakerFlowQuery,
   useGetMarketNetPositionQuery,
@@ -44,6 +46,7 @@ export function CoinFlowTab({ symbol, exchange }: CoinFlowTabProps) {
   const profile = useGetMarketVolumeProfileQuery(tapeArg);
   const abs = useGetMarketAbsorptionQuery(arg);
   const sweeps = useGetMarketLiquiditySweepsQuery(arg);
+  const recovery = useGetSweepRecoveryQuery(arg);
   const whales = useGetMarketWhalesQuery(arg);
   const ice = useGetMarketIcebergsQuery(arg);
   const liq = useGetMarketBookLiquidityFlowQuery({ ...arg, window: '15m' });
@@ -57,6 +60,7 @@ export function CoinFlowTab({ symbol, exchange }: CoinFlowTabProps) {
     { key: 'profile', title: t('flow.profile'), q: profile, stats: [] },
     { key: 'abs', title: t('flow.absorption'), q: abs, stats: [] },
     { key: 'sweeps', title: t('flow.sweeps'), q: sweeps, stats: [] },
+    { key: 'recovery', title: t('flow.recovery.title'), q: recovery, stats: [] },
     { key: 'whales', title: t('flow.whales'), q: whales, stats: [] },
     { key: 'ice', title: t('flow.icebergs'), q: ice, stats: [] },
     { key: 'book', title: t('flow.bookFlow'), q: liq, stats: [] },
@@ -76,7 +80,9 @@ export function CoinFlowTab({ symbol, exchange }: CoinFlowTabProps) {
           summary={reportSummary(rtkCurrent(row.q))}
           stats={row.stats}
           extra={
-            row.key === 'whales' ? (
+            row.key === 'recovery' ? (
+              <SweepRecoveryList report={rtkCurrent(recovery)} />
+            ) : row.key === 'whales' ? (
               <WhaleFollowList events={rtkCurrent(whales)?.events} />
             ) : row.key === 'profile' ? (
               <VolumeProfileLadder report={rtkCurrent(profile)} />
