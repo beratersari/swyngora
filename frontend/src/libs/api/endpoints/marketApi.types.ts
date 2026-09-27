@@ -636,6 +636,44 @@ export type BookGapScanQuery = {
   rangePct?: number;
   limit?: number;
 };
+export type WideSpreadHit = {
+  exchange?: string;
+  symbol?: string;
+  base?: string;
+  currentPct?: string;
+  typicalPct?: string;
+  ratio?: string;
+  samples?: number;
+};
+export type WideSpreadScan = {
+  exchange?: string;
+  quote?: string;
+  known?: number;
+  ready?: number;
+  hits?: WideSpreadHit[];
+  summary?: string;
+  note?: string;
+};
+export type WideSpreadScanQuery = {
+  exchange?: string;
+  quote?: string;
+  limit?: number;
+};
+export type WideSpread = {
+  symbol?: string;
+  exchange?: string;
+  currentPct?: string;
+  typicalPct?: string;
+  ratio?: string;
+  samples?: number;
+  opened?: boolean;
+  summary?: string;
+  note?: string;
+};
+export type WideSpreadQuery = {
+  symbol: string;
+  exchange?: string;
+};
 export type MarketPressure = components['schemas']['MarketPressure'];
 export type PressureQuery = NonNullable<operations['getMarketPressure']['parameters']['query']>;
 export type MarketForensicsQuery = NonNullable<

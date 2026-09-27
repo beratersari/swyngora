@@ -36,6 +36,7 @@ const NAV_ITEMS = [
   { to: '/impact', key: 'nav.impact' as const },
   { to: '/walls', key: 'nav.walls' as const },
   { to: '/gaps', key: 'nav.gaps' as const },
+  { to: '/spreads', key: 'nav.spreads' as const },
   { to: '/alerts', key: 'nav.alerts' as const },
   { to: '/arb', key: 'nav.arb' as const },
   { to: '/compare', key: 'nav.compare' as const },

@@ -492,6 +492,140 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/orderbook/impact/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rank coins by slippage for the same market order
+         * @description Walks the same quote-sized market order through each liquid pair's live
+         *     spot book and ranks by slippage versus mid, widest first. Buy consumes
+         *     asks; sell consumes bids. `exchange=all` merges Binance, Coinbase, and
+         *     Bybit. Default order is 100,000 quote (1,000 to 50,000,000). A book
+         *     that cannot fill the whole order is `exhausted`. Simulation only.
+         */
+        get: operations["scanSpotOrderBookImpact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/orderbook/walls/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Scan suspicious walls and brief flickers across liquid pairs
+         * @description Lists spot walls the desk has watched on the liquid USDT pairs.
+         *     `kind=suspicious` means the same wall was added and pulled at least
+         *     4 times inside 2 minutes. `kind=flicker` means a large wall rested
+         *     under about 20 seconds and then left. `exchange` is binance, coinbase,
+         *     bybit, or all. The list stays empty until this process has been sampling.
+         *     Not financial advice.
+         */
+        get: operations["scanSuspiciousWalls"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/orderbook/gaps/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rank liquid pairs by which side of the book is thinner
+         * @description Walks the liquid USDT pairs and compares resting size above and below
+         *     mid. `easier=up` means asks in the band are well below bids, so a move
+         *     up meets less size. `easier=down` is the mirror. The most one-sided
+         *     books come first. One snapshot, not a forecast.
+         */
+        get: operations["scanBookGaps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/orderbook/spreads/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rank coins whose bid-ask spread opened versus their own typical
+         * @description Compares the latest top-of-book spread with the median of earlier
+         *     samples of that same book. A coin is listed at 1.5× its own typical.
+         *     Samples collect while this process watches the book. Widest ratio first.
+         */
+        get: operations["scanWideSpreads"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/orderbook/spread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One coin's bid-ask spread versus its own typical */
+        get: operations["getWideSpread"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/orderbook/gaps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find empty areas in the spot order book
+         * @description Splits ±rangePct of mid into 0.1% steps and joins steps that hold
+         *     under 15% of the typical step on that side. `easier=up` means a move
+         *     up meets less resting size. `exchange=all` sums Binance, Coinbase,
+         *     and Bybit. One snapshot, not a forecast.
+         */
+        get: operations["getBookGaps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/orderbook/impact": {
         parameters: {
             query?: never;
@@ -619,9 +753,10 @@ export interface paths {
          * Perpetual bid-below vs ask-above depth
          * @description How much **perpetual** liquidity is waiting **below** vs **above**
          *     the price. Example: **40M bid within 1% below** mid and **15M ask
-         *     above**. `exchange=all` (default) returns **Binance USD-M** and
-         *     **Bybit linear** separately plus `combined` (sum of each venue's
-         *     own ±% band). `rangePct` is the headline band (default **1**,
+         *     above**. `exchange=all` (default) returns **Binance USD-M**,
+         *     **Bybit linear**, and **OKX USDT-swap** separately plus `combined`
+         *     (sum of each venue's own ±% band). OKX contract size is converted
+         *     to base before notional. `rangePct` is the headline band (default **1**,
          *     max 5). `bands` also include 0.1 / 0.25 / 0.5 / 2. `below` is
          *     resting bids; `above` is resting asks. `complete` is false when
          *     the snapshot does not reach that %. This is the **futures** book,
@@ -654,7 +789,7 @@ export interface paths {
          *     how close that book is to mid (e.g. **80M inside 0.1%** is **8% of
          *     the 1% book**, growing to 1.0B at 1%) and which coins fill each
          *     distance. Sampled while the desk runs. `exchange=all` (default)
-         *     adds Binance USD-M and Bybit linear per coin. `rangePct` default
+         *     adds Binance USD-M, Bybit linear, and OKX USDT-swap per coin. `rangePct` default
          *     **1**. `limit` default **20** (max 40). This is the **futures**
          *     book, not spot. Informational only.
          */
@@ -1010,7 +1145,7 @@ export interface paths {
         };
         /**
          * Futures vs spot basis (premium or discount)
-         * @description How far the perpetual is from spot/index on Binance USD-M and Bybit
+         * @description How far the perpetual is from spot/index on Binance USD-M, Bybit linear, and OKX USDT-swap
          *     linear. Returns the dollar gap, percent gap, premium/discount, whether
          *     the gap is expanding or shrinking (5m/1h/4h), a short read with funding
          *     and open interest, and whether both venues agree. `curve` compares
@@ -1262,6 +1397,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/print-size/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whole-market average print size
+         * @description Sums aggressive futures notional and fill counts across the most liquid
+         *     USDT pairs, then divides. The market average is current versus the same
+         *     length just before, so it shows whether prints got larger or smaller.
+         *     A busier coin weighs more. `largerCoins` and `smallerCoins` are one vote
+         *     per pair. Windows are 5m and 15m. Default universe is 20 pairs (5–30).
+         *     Informational only.
+         */
+        get: operations["getMarketPrintSizeOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/print-size": {
         parameters: {
             query?: never;
@@ -1271,7 +1431,7 @@ export interface paths {
         };
         /**
          * Average aggressive print size
-         * @description Average **USDT notional per taker fill** on Binance USD-M and Bybit
+         * @description Average **USDT notional per taker fill** on Binance USD-M, Bybit linear, and OKX USDT-swap
          *     linear, split buy vs sell. Windows are **5 minutes** and **15 minutes**,
          *     each compared to the same length just before. A jump from 20K to 180K
          *     means a few large market orders, not many small ones (`read=few_large`).
@@ -1279,6 +1439,82 @@ export interface paths {
          *     trades (minutes when busy). Informational only.
          */
         get: operations["getMarketPrintSize"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/bot-tracker": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Repeated same-size market orders
+         * @description Flags aggressive futures prints of about the **same USDT size**
+         *     that hit **4 or more times inside any 60 seconds** during the last
+         *     **5 minutes**. Buy and sell are counted apart. Sizes within about
+         *     **0.2%** share a clip. Prints under **5,000 USDT** are ignored.
+         *     `delta` is flagged buy prints minus flagged sell prints. Binance
+         *     pages aggTrades; Bybit and OKX use the newest public trades. A
+         *     repeated size is a pattern, not proof of a named bot. Informational only.
+         */
+        get: operations["getMarketBotTracker"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/order-count/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whole-market order count ratio
+         * @description Sums aggressive futures print counts across the most liquid USDT pairs,
+         *     then divides. `ratio` is the same −1…+1 count ratio as one coin. A
+         *     busier coin counts for more of that ratio. `buyCoins`, `sellCoins`,
+         *     `balancedCoins`, and `quietCoins` are one vote per pair. Default
+         *     universe is 20 pairs (5–30). `exchange=all` sums Binance, Bybit, and
+         *     OKX per coin before the market sum. Informational only.
+         */
+        get: operations["getMarketOrderCountOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/order-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Market order count ratio
+         * @description Counts aggressive futures **prints**, not their USDT size, over
+         *     **1m / 5m / 15m**. `ratio` is (buy count − sell count) / (buy count +
+         *     sell count), from **−1** (all sells) to **+1** (all buys). `lean` is
+         *     buy, sell, or balanced (inside ±0.10). Combined sums the counts, then
+         *     divides. Binance pages aggTrades; Bybit and OKX use the newest public
+         *     trades. Informational only.
+         */
+        get: operations["getMarketOrderCount"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1296,7 +1532,7 @@ export interface paths {
         };
         /**
          * Futures taker buy vs sell volume
-         * @description Aggressive (taker) buy and sell volume on Binance USD-M and Bybit
+         * @description Aggressive (taker) buy and sell volume on Binance USD-M, Bybit linear, and OKX USDT-swap
          *     linear for the last **5 minutes, 1 hour, and 4 hours**. Returns buy
          *     notional, sell notional, delta, and a short read with price / OI /
          *     funding. This is who is hitting the book now — not the account
@@ -1385,7 +1621,13 @@ export interface paths {
          *     price and flow disagree. Divergence includes how long the split
          *     has been running and how far price and CVD moved. **15m / 1h /
          *     4h / 24h** windows show CVD change (not only the latest total)
-         *     and label `confirms`, `opposite`, or `absorption`. `exchange=all`
+         *     and label `confirms`, `opposite`, or `absorption`. **Anchors**
+         *     reset the sum at a clock instead of a rolling lookback: `day`
+         *     is 00:00 UTC, `4h` is the current 4-hour open (00/04/08/12/16/20
+         *     UTC). Each anchor's `cvd` is buy minus sell since that time, with
+         *     price change and the same confirms / opposite / absorption label.
+         *     `complete` is false when stored bars start after the anchor.
+         *     `exchange=all`
          *     (default) returns Binance and Bybit separately plus a combined
          *     series. Combined uses the overlapping **time range** (a missing
          *     5m slot is 0) and is `complete` when both venues are. Combined
@@ -1873,12 +2115,15 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Binance vs Bybit signal split
-         * @description Compares **Binance USD-M** and **Bybit linear** for one coin using
-         *     open-interest change, funding payer, account long/short crowding, and
-         *     price+OI positioning. Returns `same`, `opposite`, or `mixed`, lists
-         *     which metrics differ, and a short note on why a split can matter.
-         *     Informational only.
+         * Which futures venues move together
+         * @description Compares **Binance USD-M**, **Bybit linear**, and **OKX USDT-swap**
+         *     for one coin using open-interest change, funding payer, account
+         *     long/short crowding, and price+OI positioning. `groups` lists venues
+         *     that share a bullish or bearish lean. `outliers` is the venue moving
+         *     the other way when the other two agree. Each `diffs[]` row has a
+         *     reading per venue plus `same` and `different`. OKX has no account
+         *     long/short, so it is left out of the crowding comparison. A missing
+         *     venue is skipped; two venues are still compared. Informational only.
          */
         get: operations["getMarketVenueDivergence"];
         put?: never;
@@ -6467,6 +6712,137 @@ export interface components {
             combined?: components["schemas"]["PrintSizeVenue"];
             note?: string;
         };
+        PrintSizeMarketWindow: {
+            /** @enum {string} */
+            window?: "5m" | "15m";
+            buy?: components["schemas"]["PrintSizeSide"];
+            sell?: components["schemas"]["PrintSizeSide"];
+            /** @enum {string} */
+            read?: "few_large" | "many_small" | "larger" | "smaller" | "stable";
+            largerCoins?: number;
+            smallerCoins?: number;
+            fewLargeCoins?: number;
+            manySmallCoins?: number;
+            stableCoins?: number;
+            quietCoins?: number;
+            coins?: number;
+            complete?: boolean;
+            summary?: string;
+        };
+        /** @description Average print size summed across liquid pairs */
+        MarketPrintSizeOverview: {
+            exchange?: string;
+            quote?: string;
+            universe?: number;
+            /** Format: date-time */
+            asOf?: string;
+            windows?: components["schemas"]["PrintSizeMarketWindow"][];
+            coins?: components["schemas"]["PrintSizeVenue"][];
+            summary?: string;
+            note?: string;
+        };
+        BotCluster: {
+            exchange?: string;
+            /** @enum {string} */
+            side?: "buy" | "sell";
+            notional?: string;
+            count?: number;
+            spanSec?: number;
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            totalNotional?: string;
+        };
+        BotTrackerVenue: {
+            exchange?: string;
+            symbol?: string;
+            clusters?: components["schemas"]["BotCluster"][];
+            buyCount?: number;
+            sellCount?: number;
+            delta?: number;
+            summary?: string;
+            error?: string;
+        };
+        /** @description Same-size aggressive prints that repeat inside 60 seconds */
+        MarketBotTracker: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            window?: string;
+            burst?: string;
+            minCount?: number;
+            venues?: components["schemas"]["BotTrackerVenue"][];
+            clusters?: components["schemas"]["BotCluster"][];
+            buyCount?: number;
+            sellCount?: number;
+            delta?: number;
+            summary?: string;
+            note?: string;
+        };
+        OrderCountWindow: {
+            /** @enum {string} */
+            window?: "1m" | "5m" | "15m";
+            buyCount?: number;
+            sellCount?: number;
+            total?: number;
+            delta?: number;
+            /** @description (buy − sell) / (buy + sell), from −1 to +1 */
+            ratio?: string;
+            /** @enum {string} */
+            lean?: "buy" | "sell" | "balanced";
+            complete?: boolean;
+            summary?: string;
+        };
+        OrderCountVenue: {
+            exchange?: string;
+            symbol?: string;
+            windows?: components["schemas"]["OrderCountWindow"][];
+            summary?: string;
+            error?: string;
+        };
+        /** @description Aggressive print counts and the buy/sell count ratio */
+        MarketOrderCount: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            venues?: components["schemas"]["OrderCountVenue"][];
+            combined?: components["schemas"]["OrderCountVenue"];
+            summary?: string;
+            note?: string;
+        };
+        OrderCountMarketWindow: {
+            /** @enum {string} */
+            window?: "1m" | "5m" | "15m";
+            buyCount?: number;
+            sellCount?: number;
+            total?: number;
+            delta?: number;
+            ratio?: string;
+            /** @enum {string} */
+            lean?: "buy" | "sell" | "balanced";
+            buyCoins?: number;
+            sellCoins?: number;
+            balancedCoins?: number;
+            quietCoins?: number;
+            coins?: number;
+            complete?: boolean;
+            summary?: string;
+        };
+        /** @description Print-count ratio summed across liquid pairs */
+        MarketOrderCountOverview: {
+            exchange?: string;
+            quote?: string;
+            universe?: number;
+            /** Format: date-time */
+            asOf?: string;
+            windows?: components["schemas"]["OrderCountMarketWindow"][];
+            coins?: components["schemas"]["OrderCountVenue"][];
+            summary?: string;
+            note?: string;
+        };
         /** @description Predicted next funding plus recent settlements */
         MarketFundingRate: {
             symbol?: string;
@@ -6915,6 +7291,156 @@ export interface components {
             venueCount?: number;
             live?: boolean;
             fills?: components["schemas"]["OrderBookImpactFill"][];
+        };
+        OrderBookImpactScanHit: {
+            symbol?: string;
+            scope?: string;
+            /** @enum {string} */
+            side?: "buy" | "sell";
+            slippagePct?: number;
+            slippageVsBestPct?: number;
+            impactPct?: number;
+            impactAvailable?: boolean;
+            exhausted?: boolean;
+            averagePrice?: string;
+            bestPrice?: string;
+            spentNotional?: string;
+            levelsUsed?: number;
+            summary?: string;
+            error?: string;
+        };
+        /** @description Same-size market order ranked by slippage across liquid pairs */
+        OrderBookImpactScan: {
+            exchange?: string;
+            quote?: string;
+            side?: string;
+            notional?: number;
+            universe?: number;
+            /** Format: date-time */
+            asOf?: string;
+            medianSlippagePct?: number;
+            exhaustedCoins?: number;
+            hits?: components["schemas"]["OrderBookImpactScanHit"][];
+            summary?: string;
+            note?: string;
+        };
+        BookGap: {
+            /** @enum {string} */
+            side?: "bid" | "ask";
+            /** @enum {string} */
+            direction?: "up" | "down";
+            fromPrice?: string;
+            toPrice?: string;
+            fromPct?: number;
+            toPct?: number;
+            widthPct?: number;
+            notional?: string;
+        };
+        /** @description Empty areas in the spot book and which way is thinner */
+        BookGaps: {
+            symbol?: string;
+            exchange?: string;
+            midPrice?: string;
+            rangePct?: number;
+            /** @enum {string} */
+            easier?: "up" | "down" | "even";
+            upNotional?: string;
+            downNotional?: string;
+            upGapPct?: number;
+            downGapPct?: number;
+            gaps?: components["schemas"]["BookGap"][];
+            summary?: string;
+            note?: string;
+        };
+        BookGapScanHit: {
+            symbol?: string;
+            scope?: string;
+            /** @enum {string} */
+            easier?: "up" | "down" | "even";
+            upNotional?: string;
+            downNotional?: string;
+            upGapPct?: number;
+            downGapPct?: number;
+            widestSide?: string;
+            widestPct?: number;
+            summary?: string;
+            error?: string;
+        };
+        BookGapScan: {
+            exchange?: string;
+            quote?: string;
+            rangePct?: number;
+            universe?: number;
+            hits?: components["schemas"]["BookGapScanHit"][];
+            summary?: string;
+            note?: string;
+        };
+        WideSpreadHit: {
+            exchange?: string;
+            symbol?: string;
+            base?: string;
+            currentPct?: string;
+            typicalPct?: string;
+            ratio?: string;
+            samples?: number;
+            /** Format: date-time */
+            asOf?: string;
+        };
+        WideSpreadScan: {
+            exchange?: string;
+            quote?: string;
+            known?: number;
+            ready?: number;
+            hits?: components["schemas"]["WideSpreadHit"][];
+            summary?: string;
+            note?: string;
+        };
+        WideSpread: {
+            symbol?: string;
+            exchange?: string;
+            currentPct?: string;
+            typicalPct?: string;
+            ratio?: string;
+            samples?: number;
+            opened?: boolean;
+            /** Format: date-time */
+            asOf?: string;
+            summary?: string;
+            note?: string;
+        };
+        WallScanHit: {
+            exchange?: string;
+            symbol?: string;
+            /** @enum {string} */
+            side?: "bid" | "ask";
+            price?: string;
+            notional?: string;
+            /** @description Percent from mid */
+            distancePct?: string;
+            /** @description Fraction of that side's band notional */
+            share?: number;
+            /** @enum {string} */
+            kind?: "suspicious" | "flicker";
+            appearCount?: number;
+            ageSeconds?: number;
+            presentForSeconds?: number;
+            visibleSeconds?: number;
+            present?: boolean;
+            /** Format: date-time */
+            lastSeen?: string;
+        };
+        /** @description Suspicious walls and brief flickers across liquid spot books */
+        WallScan: {
+            exchange?: string;
+            quote?: string;
+            /** @description Liquid books the background sampler is watching */
+            universe?: number;
+            /** Format: date-time */
+            asOf?: string;
+            suspicious?: number;
+            flickers?: number;
+            hits?: components["schemas"]["WallScanHit"][];
+            summary?: string;
             note?: string;
         };
         Supply: {
@@ -9365,6 +9891,167 @@ export interface operations {
             502: components["responses"]["Error"];
         };
     };
+    scanSpotOrderBookImpact: {
+        parameters: {
+            query?: {
+                /** @description binance | coinbase | bybit | all (default all) */
+                exchange?: string;
+                quote?: string;
+                side?: "buy" | "sell";
+                /** @description Shared quote size. Default 100000. */
+                notional?: number;
+                /** @description How many liquid pairs (default 20, min 5, max 30) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Coins ranked by slippage for one order size */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderBookImpactScan"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    scanSuspiciousWalls: {
+        parameters: {
+            query?: {
+                /** @description binance | coinbase | bybit | all (default all) */
+                exchange?: string;
+                quote?: string;
+                /** @description How many walls to return (default 40, max 80) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Suspicious walls and brief flickers, suspicious first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WallScan"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    scanBookGaps: {
+        parameters: {
+            query?: {
+                exchange?: string;
+                quote?: string;
+                rangePct?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Coins ranked by the thinner side of the book */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookGapScan"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    scanWideSpreads: {
+        parameters: {
+            query?: {
+                exchange?: string;
+                quote?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Coins with an unusually wide spread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WideSpreadScan"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getWideSpread: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Spread versus typical */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WideSpread"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getBookGaps: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: string;
+                /** @description ±% of mid (0.5–5, default 2) */
+                rangePct?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Empty stretches and which way the book is thinner */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookGaps"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
     estimateSpotOrderBookImpact: {
         parameters: {
             query: {
@@ -9481,7 +10168,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all) */
+                /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
                 /** @description Headline ± percent of mid (default 1, 0.05–5) */
                 rangePct?: number;
@@ -9508,7 +10195,7 @@ export interface operations {
     getMarketPerpDepthOverview: {
         parameters: {
             query?: {
-                /** @description binance | bybit | all (default all) */
+                /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
                 /** @description Headline ± percent of mid (default 1, 0.05–5) */
                 rangePct?: number;
@@ -10293,6 +10980,34 @@ export interface operations {
             502: components["responses"]["Error"];
         };
     };
+    getMarketPrintSizeOverview: {
+        parameters: {
+            query?: {
+                /** @description binance | bybit | okx | all (default all) */
+                exchange?: string;
+                quote?: string;
+                /** @description How many liquid pairs (default 20, min 5, max 30) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Market average print size plus each coin */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketPrintSizeOverview"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
     getMarketPrintSize: {
         parameters: {
             query: {
@@ -10313,6 +11028,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketPrintSize"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketBotTracker: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | okx | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Repeated same-size bursts per venue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketBotTracker"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketOrderCountOverview: {
+        parameters: {
+            query?: {
+                /** @description binance | bybit | okx | all (default all) */
+                exchange?: string;
+                quote?: string;
+                /** @description How many liquid pairs (default 20, min 5, max 30) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Market print-count ratio plus each coin */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketOrderCountOverview"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketOrderCount: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | okx | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Buy vs sell print counts and the −1…+1 ratio */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketOrderCount"];
                 };
             };
             400: components["responses"]["Error"];

@@ -44,6 +44,9 @@ and Bybit linear). This file is the **spot** book.
     bid reach and common ask reach). If all cover ±`rangePct` both ways, that
     requested band is used (`requestedReached`, `usedRangePct`). USD≈USDT.
   - Response: market-wide `pressure` / `imbalance`, per-venue breakdown, tagged walls.
+- `GET /api/v1/market/orderbook/spreads/scan`
+  - Ranks books whose latest bid-ask spread is at least 1.5× that book's own
+    typical spread. See [`wide-spread.md`](wide-spread.md).
 - `GET /api/v1/market/orderbook/gaps?symbol=BTCUSDT&rangePct=2`
   - Finds price stretches inside ±2% of mid where a 0.1% step holds under
     15% of the typical step on that side. `easier=up` means asks in the band

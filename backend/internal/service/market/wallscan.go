@@ -92,6 +92,7 @@ func (s *Service) sampleWallBook(ctx context.Context, ex domain.Exchange, symbol
 		return
 	}
 	an := domain.AnalyzeOrderBook(*raw, domain.DefaultOrderBookRangePct)
+	s.noteSpread(ex, symbol, raw)
 	s.observeWalls(ex, symbol, an.Walls)
 }
 

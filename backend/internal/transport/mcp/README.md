@@ -90,6 +90,8 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `scan_suspicious_walls` | Suspicious and flickering spot walls across the liquid USDT pairs |
 | `get_book_gaps` | Empty stretches in the live spot book and whether up or down is thinner |
 | `scan_book_gaps` | Liquid pairs ranked by which side of the book is thinner |
+| `get_wide_spread` | One coin's top-of-book spread versus the median of earlier samples of that book. Opened at 1.5× typical |
+| `scan_wide_spreads` | Coins whose latest spread is at least 1.5× their own typical, widest first |
 | `get_candles` | OHLCV |
 | `get_supply` | Supply snapshot |
 | `get_holders` | Holder count, concentration, top wallets (CMC → Coin Metrics → GeckoTerminal → Ethplorer → Routescan → Tronscan; CryptoID for some UTXO coins). `label` is a public attribution when known |

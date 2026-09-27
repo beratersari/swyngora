@@ -354,6 +354,50 @@ func (b *Backend) ScanBookGaps(ctx context.Context, exchange, quote string, rang
 	})
 }
 
+func (b *Backend) GetWideSpread(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetWideSpread(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	if got == nil {
+		return mustJSON(map[string]any{})
+	}
+	return mustJSON(map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange,
+		"currentPct": formatQtyMCP(got.CurrentPct), "typicalPct": formatQtyMCP(got.TypicalPct),
+		"ratio": formatQtyMCP(got.Ratio), "samples": got.Samples, "opened": got.Opened,
+		"summary": got.Summary, "note": got.Note,
+	})
+}
+
+func (b *Backend) ScanWideSpreads(ctx context.Context, exchange, quote string, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.ScanWideSpreads(ctx, exchange, quote, limit)
+	if err != nil {
+		return nil, err
+	}
+	if got == nil {
+		return mustJSON(map[string]any{"hits": []any{}})
+	}
+	hits := make([]map[string]any, 0, len(got.Hits))
+	for _, h := range got.Hits {
+		hits = append(hits, map[string]any{
+			"exchange": string(h.Exchange), "symbol": h.Symbol, "base": h.Base,
+			"currentPct": formatQtyMCP(h.CurrentPct), "typicalPct": formatQtyMCP(h.TypicalPct),
+			"ratio": formatQtyMCP(h.Ratio), "samples": h.Samples,
+		})
+	}
+	return mustJSON(map[string]any{
+		"exchange": got.Exchange, "quote": got.Quote, "known": got.Known, "ready": got.Ready,
+		"hits": hits, "summary": got.Summary, "note": got.Note,
+	})
+}
+
 func bookGapsJSON(got *domain.BookGaps) map[string]any {
 	if got == nil {
 		return map[string]any{}

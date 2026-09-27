@@ -94,6 +94,7 @@ func (s *Service) sampleHeatSnapshot(ctx context.Context, ex domain.Exchange, sy
 	if err != nil || raw == nil {
 		return
 	}
+	s.noteSpread(ex, symbol, raw)
 	s.recordHeatFromRaw(ex, symbol, raw, 0)
 }
 

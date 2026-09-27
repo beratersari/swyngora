@@ -108,6 +108,10 @@ import type {
   BookGapsQuery,
   BookGapScan,
   BookGapScanQuery,
+  WideSpread,
+  WideSpreadQuery,
+  WideSpreadScan,
+  WideSpreadScanQuery,
   MarketPressure,
   PressureQuery,
   Ticker24h,
@@ -232,6 +236,11 @@ export type {
   BookGapsQuery,
   BookGapScan,
   BookGapScanQuery,
+  WideSpread,
+  WideSpreadQuery,
+  WideSpreadScan,
+  WideSpreadScanQuery,
+  WideSpreadHit,
   MarketPressure,
   MarketForensics,
   MarketForensicsQuery,
@@ -695,6 +704,18 @@ export const marketApi = baseApi.injectEndpoints({
         params: compactParams({ ...(arg ?? {}) }),
       }),
     }),
+    getWideSpread: build.query<WideSpread, WideSpreadQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/orderbook/spread',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+    scanWideSpreads: build.query<WideSpreadScan, WideSpreadScanQuery | void>({
+      query: (arg) => ({
+        url: '/api/v1/market/orderbook/spreads/scan',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
     getMarketOrderCountOverview: build.query<MarketOrderCountOverview, OrderCountOverviewQuery | void>({
       query: (arg) => ({
         url: '/api/v1/market/order-count/overview',
@@ -893,6 +914,8 @@ export const {
   useScanSuspiciousWallsQuery,
   useGetBookGapsQuery,
   useScanBookGapsQuery,
+  useGetWideSpreadQuery,
+  useScanWideSpreadsQuery,
   useGetMarketOrderCountOverviewQuery,
   useGetMarketOrderCountQuery,
   useGetMarketPressureQuery,

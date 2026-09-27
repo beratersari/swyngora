@@ -1,0 +1,15 @@
+{
+  "title": "Wide spreads",
+  "subtitle": "Coins whose bid-ask spread is at least 1.5× that coin's own recent typical. Samples collect while the desk watches the book.",
+  "load": "Load market",
+  "exchange": "Exchange",
+  "allVenues": "All venues",
+  "symbol": "Pair",
+  "current": "Now",
+  "typical": "Typical",
+  "ratio": "Versus typical",
+  "emptyTitle": "No unusually wide spreads",
+  "emptyHint": "Load the market to see which books have opened versus their own typical.",
+  "loadFailed": "Spread read failed",
+  "resource": "spreads"
+}

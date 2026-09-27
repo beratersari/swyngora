@@ -18,6 +18,7 @@ import { PrintSizePage } from '@/components/pages/PrintSizePage';
 import { ImpactPage } from '@/components/pages/ImpactPage';
 import { WallsPage } from '@/components/pages/WallsPage';
 import { GapsPage } from '@/components/pages/GapsPage';
+import { SpreadsPage } from '@/components/pages/SpreadsPage';
 import { SignalsPage } from '@/components/pages/SignalsPage';
 import { SettingsPage } from '@/components/pages/SettingsPage';
 import { WatchlistPage } from '@/components/pages/WatchlistPage';
@@ -41,6 +42,7 @@ export function AppRoutes() {
       <Route path="/impact" element={<ImpactPage />} />
       <Route path="/walls" element={<WallsPage />} />
       <Route path="/gaps" element={<GapsPage />} />
+      <Route path="/spreads" element={<SpreadsPage />} />
       <Route path="/alerts" element={<AlertsPage />} />
       <Route path="/arb" element={<ArbPage />} />
       <Route path="/compare" element={<ComparePage />} />

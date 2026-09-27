@@ -39,6 +39,8 @@ type DataPort interface {
 	ScanSuspiciousWalls(ctx context.Context, exchange, quote string, limit int) (json.RawMessage, error)
 	GetBookGaps(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error)
 	ScanBookGaps(ctx context.Context, exchange, quote string, rangePct float64, limit int) (json.RawMessage, error)
+	GetWideSpread(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	ScanWideSpreads(ctx context.Context, exchange, quote string, limit int) (json.RawMessage, error)
 	GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetOrderBookHeatmap(ctx context.Context, exchange, symbol, group string, windowSec int) (json.RawMessage, error)
 	GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -592,6 +594,35 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("limit", mcp.Description("How many liquid pairs (default 20, max 30)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.ScanBookGaps(ctx, req.GetString("exchange", "all"), req.GetString("quote", "USDT"), req.GetFloat("rangePct", 0), int(req.GetFloat("limit", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_wide_spread",
+		mcp.WithDescription("Compare a coin's current top-of-book bid-ask spread with the median of earlier samples of that same book. opened is true at 1.5× its own typical. Samples collect only while this process watches the book. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | coinbase | bybit | all (default all)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetWideSpread(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("scan_wide_spreads",
+		mcp.WithDescription("Rank spot books whose latest bid-ask spread is at least 1.5× that book's own typical spread. Widest ratio first. Empty until this process has sampled the books. Not financial advice."),
+		mcp.WithString("exchange", mcp.Description("binance | coinbase | bybit | all (default all)")),
+		mcp.WithString("quote", mcp.Description("Quote label, default USDT")),
+		mcp.WithNumber("limit", mcp.Description("How many coins (default 20, max 40)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.ScanWideSpreads(ctx, req.GetString("exchange", "all"), req.GetString("quote", "USDT"), int(req.GetFloat("limit", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

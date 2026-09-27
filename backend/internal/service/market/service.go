@@ -38,6 +38,7 @@ type Service struct {
 	delistEnabled  bool
 	delistSource   map[domain.Exchange]bool
 	walls          *domain.WallMemory
+	spreads        *domain.SpreadMemory
 	icebergs       *domain.IcebergMemory
 	heat           *domain.HeatmapTape
 	watchMu        sync.Mutex
@@ -584,6 +585,7 @@ func (s *Service) GetSpotOrderBook(ctx context.Context, exchange, symbol, group 
 		book.Symbol = symbol
 	}
 	s.recordWalls(ex, book.Symbol, book.Analysis.Walls)
+	s.noteSpread(ex, book.Symbol, raw)
 	s.recordHeatFromRaw(ex, book.Symbol, raw, groupSize)
 	s.observeIcebergs(ctx, ex, book.Symbol, raw)
 	if s.icebergs != nil {
@@ -1634,6 +1636,7 @@ func (s *Service) sampleWatchedWalls(ctx context.Context) {
 			continue
 		}
 		an := domain.AnalyzeOrderBook(*raw, domain.DefaultOrderBookRangePct)
+		s.noteSpread(w.exchange, w.symbol, raw)
 		s.observeWalls(w.exchange, w.symbol, an.Walls)
 		s.recordHeatFromRaw(w.exchange, w.symbol, raw, 0)
 		s.observeIcebergs(ctx, w.exchange, w.symbol, raw)
