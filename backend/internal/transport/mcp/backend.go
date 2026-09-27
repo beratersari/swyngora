@@ -935,6 +935,11 @@ func perpDepthOverviewMap(got *domain.PerpDepthOverview) map[string]any {
 			row["pastBidPct"] = formatQtyMCP(w.PastBidPct)
 			row["pastAskPct"] = formatQtyMCP(w.PastAskPct)
 			row["changePct"] = domain.FormatSignedPct(w.ChangePct)
+			row["total"] = formatQtyMCP(w.Total)
+			row["pastTotal"] = formatQtyMCP(w.PastTotal)
+			row["totalChange"] = domain.FormatSignedQty(w.TotalChange)
+			row["totalChangePct"] = domain.FormatSignedPct(w.TotalChangePct)
+			row["depthKind"] = w.DepthKind
 			if !w.SampleTime.IsZero() {
 				row["sampleTime"] = w.SampleTime.UTC().Format(time.RFC3339Nano)
 			}

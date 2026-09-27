@@ -164,6 +164,7 @@
     "perpLiqShare": "This coin",
     "perpLiqBidShare": "Of bids",
     "perpLiq1h": "1h bid share",
+    "perpLiqDepth": "1h book size",
     "shareBinance": "Binance",
     "shareBybit": "Bybit",
     "shareOkx": "OKX",

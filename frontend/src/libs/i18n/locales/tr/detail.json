@@ -164,6 +164,7 @@
     "perpLiqShare": "Bu coin",
     "perpLiqBidShare": "Bid payı",
     "perpLiq1h": "1s bid payı",
+    "perpLiqDepth": "1s defter boyutu",
     "shareBinance": "Binance",
     "shareBybit": "Bybit",
     "shareOkx": "OKX",

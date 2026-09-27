@@ -6336,7 +6336,7 @@ export interface components {
             /** @enum {string} */
             kind?: "bid_gained" | "ask_gained" | "stable";
         };
-        /** @description Bid vs ask share of the liquid-perp book now vs 15m / 1h / 4h ago */
+        /** @description Bid vs ask share and total book size of the liquid-perp book now vs 15m / 1h / 4h ago */
         MarketPerpDepthShareWindow: {
             /** @enum {string} */
             window?: "15m" | "1h" | "4h";
@@ -6346,10 +6346,23 @@ export interface components {
             /** @description Bid share of the book at the lookback */
             pastBidPct?: string;
             pastAskPct?: string;
-            /** @description Signed pp */
+            /** @description Signed pp, now bidPct minus past */
             changePct?: string;
             /** @enum {string} */
             kind?: "bid_gained" | "ask_gained" | "stable";
+            /** @description Live bid+ask notional */
+            total?: string;
+            /** @description Bid+ask notional at the lookback */
+            pastTotal?: string;
+            /** @description Signed USDT, now total minus past */
+            totalChange?: string;
+            /** @description Signed percent change of total bid+ask */
+            totalChangePct?: string;
+            /**
+             * @description Total book at least 5% larger or smaller
+             * @enum {string}
+             */
+            depthKind?: "thicker" | "thinner" | "steady";
             drivers?: components["schemas"]["MarketPerpDepthShareDriver"][];
             complete?: boolean;
             /** Format: date-time */

@@ -5,6 +5,7 @@ import {
   findPerpCoin,
   formatFundingPct,
   perpBidShareLine,
+  perpDepthLine,
   formatSignedFundingPct,
   formatSignedTapeNum,
   formatTapeNum,
@@ -299,6 +300,11 @@ export function TapePanel({
             <Stat
               label={t('tape.perpLiq1h')}
               value={perpBidShareLine(perp1h)}
+              isLoading={isLoading}
+            />
+            <Stat
+              label={t('tape.perpLiqDepth')}
+              value={perpDepthLine(perp1h)}
               isLoading={isLoading}
             />
           </StatsGrid>

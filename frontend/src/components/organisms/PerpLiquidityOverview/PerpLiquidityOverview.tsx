@@ -11,6 +11,7 @@ import {
   bandShareLabel,
   bidSharePct,
   distanceBands,
+  depthLine,
   driverNames,
   leaderCoins,
   mixLine,
@@ -134,6 +135,17 @@ export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLi
                     {w.complete ? mixLine(w) : t('perpLiq.windowWait')}
                   </Text>
                 </Head>
+                {w.complete && depthLine(w) ? (
+                  <Head>
+                    <Text variant="caption" color="secondary">
+                      {t('perpLiq.depth', { window: w.window })}
+                    </Text>
+                    <Text variant="numeric" color="primary">
+                      {depthLine(w)}
+                      {w.depthKind && w.depthKind !== 'steady' ? ` · ${t(`perpLiq.${w.depthKind}`)}` : ''}
+                    </Text>
+                  </Head>
+                ) : null}
                 {w.complete && driverNames(w) ? (
                   <Text variant="caption" color="secondary">
                     {t('perpLiq.drivers', { names: driverNames(w) })}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findPerpCoin, formatFundingPct, formatSignedFundingPct, formatTapeNum, perpBidShareLine, windowByName } from './TapePanel.helpers';
+import { findPerpCoin, formatFundingPct, formatSignedFundingPct, formatTapeNum, perpBidShareLine, perpDepthLine, windowByName } from './TapePanel.helpers';
 
 describe('TapePanel helpers', () => {
   it('compacts large notionals', () => {
@@ -26,6 +26,10 @@ describe('TapePanel helpers', () => {
     expect(perpBidShareLine({ complete: true, pastBidPct: '55', bidPct: '65', changePct: '+10' })).toBe(
       '55% → 65% (+10)',
     );
+    expect(
+      perpDepthLine({ complete: true, pastTotal: '400000000', total: '500000000', totalChangePct: '+25' }),
+    ).toBe('400.00M → 500.00M (+25%)');
+    expect(perpDepthLine({ complete: true })).toBe('—');
   });
 
   it('finds this coin in the market perp book', () => {

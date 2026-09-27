@@ -13,7 +13,12 @@ const (
 	PerpDepthShareAskGained = "ask_gained"
 	PerpDepthShareStable    = "stable"
 
+	PerpDepthSizeThicker = "thicker"
+	PerpDepthSizeThinner = "thinner"
+	PerpDepthSizeSteady  = "steady"
+
 	perpDepthShareMovePP      = 1.0
+	perpDepthSizeMovePct      = 5.0
 	perpDepthShareMaxDrivers  = 5
 	PerpDepthHistoryListLimit = 8000
 	perpDepthSampleBucket     = time.Minute
@@ -48,19 +53,24 @@ type PerpDepthShareDriver struct {
 	Kind      string  // bid_gained | ask_gained | stable
 }
 
-// PerpDepthShareWindow is live bid/ask mix vs that lookback.
+// PerpDepthShareWindow is live bid/ask mix and total book size vs that lookback.
 type PerpDepthShareWindow struct {
-	Window     string
-	BidPct     float64
-	AskPct     float64
-	PastBidPct float64
-	PastAskPct float64
-	ChangePct  float64 // bidPct now − past, percentage points
-	Kind       string
-	Drivers    []PerpDepthShareDriver
-	Complete   bool
-	SampleTime time.Time
-	Summary    string
+	Window         string
+	BidPct         float64
+	AskPct         float64
+	PastBidPct     float64
+	PastAskPct     float64
+	ChangePct      float64 // bidPct now − past, percentage points
+	Kind           string
+	Total          float64 // live bid+ask
+	PastTotal      float64
+	TotalChange    float64 // now − past, USDT
+	TotalChangePct float64 // percent change of total
+	DepthKind      string  // thicker | thinner | steady
+	Drivers        []PerpDepthShareDriver
+	Complete       bool
+	SampleTime     time.Time
+	Summary        string
 }
 
 // PerpBookBidPct is bid as a percent of bid+ask.
@@ -81,6 +91,19 @@ func ClassifyPerpDepthShare(changePct float64) string {
 		return PerpDepthShareAskGained
 	default:
 		return PerpDepthShareStable
+	}
+}
+
+// ClassifyPerpDepthSize labels a percent change in total bid+ask.
+// A move of at least 5% is thicker or thinner; smaller moves stay steady.
+func ClassifyPerpDepthSize(changePct float64) string {
+	switch {
+	case changePct >= perpDepthSizeMovePct:
+		return PerpDepthSizeThicker
+	case changePct <= -perpDepthSizeMovePct:
+		return PerpDepthSizeThinner
+	default:
+		return PerpDepthSizeSteady
 	}
 }
 
@@ -154,6 +177,11 @@ func buildPerpDepthShareWindow(id string, dur time.Duration, live *PerpDepthOver
 	out.PastAskPct = round4(100 - out.PastBidPct)
 	out.ChangePct = round4(out.BidPct - out.PastBidPct)
 	out.Kind = ClassifyPerpDepthShare(out.ChangePct)
+	out.Total = live.Total
+	out.PastTotal = pastTotal
+	out.TotalChange = round4(live.Total - pastTotal)
+	out.TotalChangePct = round4(100 * out.TotalChange / pastTotal)
+	out.DepthKind = ClassifyPerpDepthSize(out.TotalChangePct)
 	out.Drivers = perpDepthShareDrivers(live.Coins, pastCoins, live.Total, pastTotal, out.ChangePct)
 	out.Summary = ExplainPerpDepthShareWindow(out)
 	return out
@@ -256,8 +284,9 @@ func ExplainPerpDepthShareWindow(w PerpDepthShareWindow) string {
 	if !w.Complete {
 		return fmt.Sprintf("%s: not enough book history yet.", w.Window)
 	}
-	head := fmt.Sprintf("%s: bids were %s%% of the book, now %s%% (%s).",
-		w.Window, formatQty(w.PastBidPct), formatQty(w.BidPct), FormatSignedPct(w.ChangePct))
+	head := fmt.Sprintf("%s: bids were %s%% of the book, now %s%% (%s). Book was %s, now %s (%s) — %s.",
+		w.Window, formatQty(w.PastBidPct), formatQty(w.BidPct), FormatSignedPct(w.ChangePct),
+		formatQty(w.PastTotal), formatQty(w.Total), FormatSignedPct(w.TotalChangePct), perpDepthSizeWord(w.DepthKind))
 	names := make([]string, 0, 3)
 	for _, d := range w.Drivers {
 		if len(names) >= 3 {
@@ -286,6 +315,17 @@ func ExplainPerpDepthShareWindow(w PerpDepthShareWindow) string {
 		head += " " + joinList(names) + " moved the mix the most."
 	}
 	return head
+}
+
+func perpDepthSizeWord(kind string) string {
+	switch kind {
+	case PerpDepthSizeThicker:
+		return "thicker"
+	case PerpDepthSizeThinner:
+		return "thinner"
+	default:
+		return "about the same"
+	}
 }
 
 // PerpDepthSamplesFromOverview is the minute-bucket rows to persist.

@@ -8,6 +8,17 @@ export function formatSignedTapeNum(raw: string | number | null | undefined): st
   return body;
 }
 
+export function perpDepthLine(w?: {
+  complete?: boolean;
+  pastTotal?: string;
+  total?: string;
+  totalChangePct?: string;
+} | null): string {
+  if (!w?.complete || w.pastTotal == null || w.pastTotal === '' || w.total == null || w.total === '') return '—';
+  const chg = w.totalChangePct ? ` (${w.totalChangePct}%)` : '';
+  return `${formatTapeNum(w.pastTotal)} → ${formatTapeNum(w.total)}${chg}`;
+}
+
 export function perpBidShareLine(w?: {
   complete?: boolean;
   pastBidPct?: string;

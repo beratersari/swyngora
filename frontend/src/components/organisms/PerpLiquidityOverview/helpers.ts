@@ -30,6 +30,13 @@ export function mixLine(w?: MarketPerpDepthShareWindow | null): string {
   return `${w.pastBidPct}% → ${w.bidPct}%${chg}`;
 }
 
+/** Past total bid+ask to now, with the percent change. */
+export function depthLine(w?: MarketPerpDepthShareWindow | null): string {
+  if (!w?.complete || w.pastTotal == null || w.pastTotal === '' || w.total == null || w.total === '') return '';
+  const chg = w.totalChangePct ? ` (${w.totalChangePct}%)` : '';
+  return `${formatCompactAmount(w.pastTotal)} → ${formatCompactAmount(w.total)}${chg}`;
+}
+
 export function driverNames(w?: MarketPerpDepthShareWindow | null): string {
   const names = (w?.drivers ?? [])
     .filter((d) => d.base || d.symbol)

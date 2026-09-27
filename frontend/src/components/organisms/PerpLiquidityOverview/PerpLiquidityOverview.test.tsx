@@ -33,6 +33,10 @@ describe('PerpLiquidityOverview', () => {
               pastBidPct: '55',
               bidPct: '65',
               changePct: '+10',
+              pastTotal: '400000000',
+              total: '500000000',
+              totalChangePct: '+25',
+              depthKind: 'thicker',
               drivers: [{ base: 'ETH', changePct: '+10' }],
             },
           ],
@@ -48,6 +52,7 @@ describe('PerpLiquidityOverview', () => {
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
     expect(screen.getByText('48%')).toBeInTheDocument();
     expect(screen.getByText('55% → 65% (+10)')).toBeInTheDocument();
+    expect(screen.getByText('400.00M → 500.00M (+25%) · Thicker')).toBeInTheDocument();
     expect(screen.getByText('80.00M · 8%')).toBeInTheDocument();
   });
 });

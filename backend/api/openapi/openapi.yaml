@@ -10467,15 +10467,20 @@ components:
         kind: { type: string, enum: [bid_gained, ask_gained, stable] }
     MarketPerpDepthShareWindow:
       type: object
-      description: Bid vs ask share of the liquid-perp book now vs 15m / 1h / 4h ago
+      description: Bid vs ask share and total book size of the liquid-perp book now vs 15m / 1h / 4h ago
       properties:
         window: { type: string, enum: [15m, 1h, 4h] }
         bidPct: { type: string, description: Bid share of the book now (65 = 65%) }
         askPct: { type: string }
         pastBidPct: { type: string, description: Bid share of the book at the lookback }
         pastAskPct: { type: string }
-        changePct: { type: string, description: Signed pp, now bidPct minus past }
+        changePct: { type: string, description: "Signed pp, now bidPct minus past" }
         kind: { type: string, enum: [bid_gained, ask_gained, stable] }
+        total: { type: string, description: Live bid+ask notional }
+        pastTotal: { type: string, description: Bid+ask notional at the lookback }
+        totalChange: { type: string, description: "Signed USDT, now total minus past" }
+        totalChangePct: { type: string, description: Signed percent change of total bid+ask }
+        depthKind: { type: string, enum: [thicker, thinner, steady], description: Total book at least 5% larger or smaller }
         drivers:
           type: array
           items: { $ref: '#/components/schemas/MarketPerpDepthShareDriver' }

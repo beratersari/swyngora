@@ -172,17 +172,22 @@ type perpDepthShareDriverDTO struct {
 }
 
 type perpDepthShareWindowDTO struct {
-	Window     string                    `json:"window"`
-	BidPct     string                    `json:"bidPct"`
-	AskPct     string                    `json:"askPct"`
-	PastBidPct string                    `json:"pastBidPct,omitempty"`
-	PastAskPct string                    `json:"pastAskPct,omitempty"`
-	ChangePct  string                    `json:"changePct,omitempty"`
-	Kind       string                    `json:"kind"`
-	Drivers    []perpDepthShareDriverDTO `json:"drivers,omitempty"`
-	Complete   bool                      `json:"complete"`
-	SampleTime *time.Time                `json:"sampleTime,omitempty"`
-	Summary    string                    `json:"summary"`
+	Window         string                    `json:"window"`
+	BidPct         string                    `json:"bidPct"`
+	AskPct         string                    `json:"askPct"`
+	PastBidPct     string                    `json:"pastBidPct,omitempty"`
+	PastAskPct     string                    `json:"pastAskPct,omitempty"`
+	ChangePct      string                    `json:"changePct,omitempty"`
+	Kind           string                    `json:"kind"`
+	Total          string                    `json:"total,omitempty"`
+	PastTotal      string                    `json:"pastTotal,omitempty"`
+	TotalChange    string                    `json:"totalChange,omitempty"`
+	TotalChangePct string                    `json:"totalChangePct,omitempty"`
+	DepthKind      string                    `json:"depthKind,omitempty"`
+	Drivers        []perpDepthShareDriverDTO `json:"drivers,omitempty"`
+	Complete       bool                      `json:"complete"`
+	SampleTime     *time.Time                `json:"sampleTime,omitempty"`
+	Summary        string                    `json:"summary"`
 }
 
 type perpDepthOverviewBandCoinDTO struct {
@@ -258,6 +263,11 @@ func perpDepthOverviewToDTO(a *domain.PerpDepthOverview) perpDepthOverviewRespon
 			row.PastBidPct = formatHistQty(w.PastBidPct)
 			row.PastAskPct = formatHistQty(w.PastAskPct)
 			row.ChangePct = domain.FormatSignedPct(w.ChangePct)
+			row.Total = formatHistQty(w.Total)
+			row.PastTotal = formatHistQty(w.PastTotal)
+			row.TotalChange = domain.FormatSignedQty(w.TotalChange)
+			row.TotalChangePct = domain.FormatSignedPct(w.TotalChangePct)
+			row.DepthKind = w.DepthKind
 			if !w.SampleTime.IsZero() {
 				t := w.SampleTime.UTC()
 				row.SampleTime = &t

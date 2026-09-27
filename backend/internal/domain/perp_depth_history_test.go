@@ -41,6 +41,12 @@ func TestAttachPerpDepthWindows_BidShareRisesAndNamesDrivers(t *testing.T) {
 	if hour.Kind != PerpDepthShareBidGained {
 		t.Fatalf("kind %s", hour.Kind)
 	}
+	if hour.PastTotal != 400 || hour.Total != 400 || hour.TotalChange != 0 || hour.DepthKind != PerpDepthSizeSteady {
+		t.Fatalf("size %+v", hour)
+	}
+	if !strings.Contains(hour.Summary, "about the same") {
+		t.Fatalf("summary %s", hour.Summary)
+	}
 	if len(hour.Drivers) == 0 || hour.Drivers[0].Base != "ETH" || hour.Drivers[0].ChangePct < 9 {
 		t.Fatalf("drivers %+v", hour.Drivers)
 	}
@@ -64,6 +70,41 @@ func TestAttachPerpDepthWindows_IncompleteWithoutPast(t *testing.T) {
 		if w.Complete {
 			t.Fatalf("expected incomplete %+v", w)
 		}
+	}
+}
+
+func TestAttachPerpDepthWindows_TotalBookGetsThicker(t *testing.T) {
+	now := time.Date(2026, 9, 21, 16, 0, 0, 0, time.UTC)
+	live := BuildPerpDepthOverview("all", 1, []PerpDepthCoinInput{
+		{Symbol: "BTCUSDT", Base: "BTC", Bid: 300, Ask: 200, Complete: true},
+	}, now)
+	past := now.Add(-15 * time.Minute)
+	AttachPerpDepthWindows(live, []PerpDepthSample{
+		{Time: past, Exchange: "all", RangePct: 1, Symbol: "BTCUSDT", Base: "BTC", Bid: 200, Ask: 200},
+	})
+	var win PerpDepthShareWindow
+	for _, w := range live.Windows {
+		if w.Window == ParticipationWindow15m {
+			win = w
+		}
+	}
+	if !win.Complete || win.PastTotal != 400 || win.Total != 500 {
+		t.Fatalf("%+v", win)
+	}
+	if win.TotalChange != 100 || win.TotalChangePct != 25 || win.DepthKind != PerpDepthSizeThicker {
+		t.Fatalf("change %+v", win)
+	}
+	if !strings.Contains(win.Summary, "thicker") || !strings.Contains(win.Summary, "+25") {
+		t.Fatalf("summary %s", win.Summary)
+	}
+}
+
+func TestClassifyPerpDepthSize(t *testing.T) {
+	if ClassifyPerpDepthSize(5) != PerpDepthSizeThicker || ClassifyPerpDepthSize(-5) != PerpDepthSizeThinner {
+		t.Fatal("sides")
+	}
+	if ClassifyPerpDepthSize(4.9) != PerpDepthSizeSteady {
+		t.Fatal("steady")
 	}
 }
 
