@@ -40,6 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Perp book thickness:** the same 15m / 1h / 4h windows on the perp liquidity overview also show whether total bid+ask got larger or smaller (for example 400M → 500M, +25%, thicker). A move under 5% stays steady. Markets card and the coin tape 1h row (`GET /api/v1/market/perp-depth/overview`, MCP `get_perp_depth_overview`) (`docs/features/perp-depth.md`)
 - **Perp liquidity overview:** total bid vs ask waiting across the liquid perps we track (e.g. 2.4B bid / 1.8B ask within 1% of mid), plus which coins make up the biggest share of that book. Distance bands show how close that book is to mid (80M inside 0.1% is 8% of the 1% book, growing to 1.0B at 1%) and which coins fill each band. 15m / 1h / 4h windows compare bid vs ask share of that book (bids 55% → 65%) and name the coins that moved the mix. `GET /api/v1/market/perp-depth/overview`, MCP `get_perp_depth_overview`, Markets page, coin-detail tape (`docs/features/perp-depth.md`)
 
+### Fixed
+- **Backtest close size:** a stored order book that cannot hold the exit only closes the size on that side. Selling 10 into a 0.01 bid leaves the rest open (`bookShortCloses` on the Lab book) instead of booking the whole position at the thin print.
+
 ### Added
 - **Futures volume share:** how BTC volume splits across Binance / Bybit / OKX (e.g. 55/30/15) plus who gained or lost share vs the prior hour. `GET /api/v1/market/volume-share`, MCP `get_volume_share`, coin-detail tape (`docs/features/volume-share.md`)
 - **Participation ratio:** share of futures volume that stuck as new (or closed) open interest — OI USDT delta ÷ taker volume. 2B volume and OI +300M is 15%. Windows 15m / 1h / 4h. `GET /api/v1/market/participation`, MCP `get_participation`, coin-detail tape (`docs/features/participation.md`)

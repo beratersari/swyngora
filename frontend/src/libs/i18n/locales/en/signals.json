@@ -178,6 +178,7 @@
     "feePct": "Fee %",
     "slipPct": "Slippage % if no book",
     "bookLiquidity": "{{count}} fills walked the stored book · average slip {{slip}}%",
+    "bookShortCloses": "{{count}} closes stopped at the size on the book",
     "stopMovedToEntry": "Runner stop moved to entry",
     "outcome": "Result",
     "outcomeTp": "Take profit first",
