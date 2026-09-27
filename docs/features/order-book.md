@@ -55,6 +55,8 @@ and Bybit linear). This file is the **spot** book.
   - Ranks suspicious walls and brief flickers across the liquid USDT pairs
     on Binance, Coinbase, and Bybit. A background sampler watches the top
     liquid pairs while the process runs, so you do not open each coin.
+    Binance is sampled about once a second from the top 100 levels. A
+    Binance 429 or 418 pauses only Binance. Coinbase and Bybit keep sampling.
   - `kind=suspicious`: the same wall was added and pulled at least 4 times
     inside 2 minutes. `kind=flicker`: it rested under about 20 seconds and
     then left. Suspicious rows come first. The list is empty until sampling

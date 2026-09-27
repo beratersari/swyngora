@@ -2,6 +2,7 @@ package bookhist
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -63,12 +64,19 @@ func (w *Worker) RunFlashes(ctx context.Context) {
 		w.now = time.Now
 	}
 	now := w.now().UTC()
+	paused := map[domain.Exchange]bool{}
 	for _, job := range w.Hist.Jobs() {
 		if ctx.Err() != nil {
 			return
 		}
+		if paused[job.ex] {
+			continue
+		}
 		if _, err := w.Hist.SaveFlashes(ctx, job.ex, job.symbol, now); err != nil {
 			w.Logger.Debug("order book flash skip", "exchange", job.ex, "symbol", job.symbol, "err", err)
+			if errors.Is(err, domain.ErrRateLimited) {
+				paused[job.ex] = true
+			}
 		}
 	}
 }

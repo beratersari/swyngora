@@ -357,9 +357,9 @@ func (c *Client) getProduct(ctx context.Context, path string, params url.Values)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "swyngora-backend/0.1")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.doREST(req)
 	if err != nil {
-		return nil, fmt.Errorf("%w: product request failed: %v", domain.ErrUpstream, err)
+		return nil, restCallErr(err)
 	}
 	defer resp.Body.Close()
 

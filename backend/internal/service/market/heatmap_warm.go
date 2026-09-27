@@ -2,6 +2,7 @@ package market
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,8 +13,10 @@ import (
 )
 
 const (
-	heatmapWarmLimit          = 100
-	heatmapWarmGap            = 80 * time.Millisecond
+	heatmapWarmLimit = 100
+	heatmapWarmGap   = 80 * time.Millisecond
+	// Binance depth limit 100 costs 5 request weight. One call a second stays near 300/minute.
+	binanceHeatmapWarmGap     = time.Second
 	heatmapUniverseEvery      = 2 * time.Minute
 	heatmapWarmRequestTimeout = 4 * time.Second
 )
@@ -56,8 +59,15 @@ func (s *Service) StartHeatmapWarmer(ctx context.Context) {
 	wg.Wait()
 }
 
+func heatmapWarmGapFor(ex domain.Exchange) time.Duration {
+	if ex == domain.ExchangeBinance {
+		return binanceHeatmapWarmGap
+	}
+	return heatmapWarmGap
+}
+
 func (s *Service) warmVenueHeatmaps(ctx context.Context, ex domain.Exchange) {
-	tick := time.NewTicker(heatmapWarmGap)
+	tick := time.NewTicker(heatmapWarmGapFor(ex))
 	defer tick.Stop()
 	idx := 0
 	for {
@@ -74,15 +84,19 @@ func (s *Service) warmVenueHeatmaps(ctx context.Context, ex domain.Exchange) {
 			}
 			sym := pairs[idx]
 			idx++
-			s.sampleHeatSnapshot(ctx, ex, sym)
+			if err := s.sampleHeatSnapshot(ctx, ex, sym); errors.Is(err, domain.ErrRateLimited) {
+				if !sleepMarket(ctx, 15*time.Second) {
+					return
+				}
+			}
 		}
 	}
 }
 
-func (s *Service) sampleHeatSnapshot(ctx context.Context, ex domain.Exchange, symbol string) {
+func (s *Service) sampleHeatSnapshot(ctx context.Context, ex domain.Exchange, symbol string) error {
 	p, err := s.port(ex)
 	if err != nil {
-		return
+		return err
 	}
 	req, cancel := context.WithTimeout(ctx, heatmapWarmRequestTimeout)
 	defer cancel()
@@ -92,9 +106,21 @@ func (s *Service) sampleHeatSnapshot(ctx context.Context, ex domain.Exchange, sy
 		SnapshotOnly: true,
 	})
 	if err != nil || raw == nil {
-		return
+		return err
 	}
 	s.recordHeatFromRaw(ex, symbol, raw, 0)
+	return nil
+}
+
+func sleepMarket(ctx context.Context, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
+	}
 }
 
 func (s *Service) refreshHeatmapUniverse(ctx context.Context) {

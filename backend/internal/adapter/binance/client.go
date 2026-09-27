@@ -59,6 +59,7 @@ type Client struct {
 	wsDial        wsDialer
 	depthIdle     time.Duration
 	futuresBase   string // USD-M REST (fapi.binance.com)
+	gate          *restGate
 	oiCache       *cache.TTL[*domain.OpenInterestSeries]
 	oiSF          singleflight.Group
 	fundingCache  *cache.TTL[*domain.FundingSeries]
@@ -139,6 +140,7 @@ func NewClient(opts Options) *Client {
 		wsDial:         opts.WSDial,
 		depthIdle:      opts.DepthIdle,
 		futuresBase:    strings.TrimRight(opts.FuturesBaseURL, "/"),
+		gate:           newRestGate(),
 		oiCache:        opts.OpenInterestCache,
 	}
 	if c.futuresBase == "" {
@@ -744,9 +746,9 @@ func (c *Client) get(ctx context.Context, path string, params url.Values) ([]byt
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "swyngora-backend/0.1")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.doREST(req)
 	if err != nil {
-		return nil, fmt.Errorf("%w: request failed: %v", domain.ErrUpstream, err)
+		return nil, restCallErr(err)
 	}
 	defer resp.Body.Close()
 
@@ -771,6 +773,20 @@ func (c *Client) get(ctx context.Context, path string, params url.Values) ([]byt
 		return nil, fmt.Errorf("%w: status %d", domain.ErrUpstream, resp.StatusCode)
 	}
 	return body, nil
+}
+
+// doREST runs one Binance HTTP call through the shared pause and concurrency gate.
+func (c *Client) doREST(req *http.Request) (*http.Response, error) {
+	if err := c.gate.begin(req.Context()); err != nil {
+		return nil, err
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		c.gate.finish(nil)
+		return nil, err
+	}
+	c.gate.finish(resp)
+	return resp, nil
 }
 
 type binanceError struct {
