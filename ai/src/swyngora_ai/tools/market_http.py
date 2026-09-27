@@ -1247,6 +1247,19 @@ class MarketImpactInput(BaseModel):
     )
 
 
+class BookGapsInput(BaseModel):
+    symbol: str
+    exchange: str = Field(default="all", description="binance|coinbase|bybit|all")
+    range_pct: float = Field(default=0, description="±% of mid (default 2)")
+
+
+class BookGapScanInput(BaseModel):
+    exchange: str = Field(default="all", description="binance|coinbase|bybit|all")
+    quote: str = Field(default="USDT", description="Quote asset")
+    range_pct: float = Field(default=0, description="±% of mid (default 2)")
+    limit: int = Field(default=0, description="How many liquid pairs (default 20, max 30)")
+
+
 class WallScanInput(BaseModel):
     exchange: str = Field(
         default="all",
@@ -2989,6 +3002,29 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if limit:
             params["limit"] = limit
         return http.get("/api/v1/market/orderbook/walls/scan", params)
+
+    def get_book_gaps(
+        symbol: str,
+        exchange: str = "all",
+        range_pct: float = 0,
+    ) -> str:
+        params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
+        if range_pct and range_pct > 0:
+            params["rangePct"] = range_pct
+        return http.get("/api/v1/market/orderbook/gaps", params)
+
+    def scan_book_gaps(
+        exchange: str = "all",
+        quote: str = "USDT",
+        range_pct: float = 0,
+        limit: int = 0,
+    ) -> str:
+        params: dict[str, Any] = {"exchange": exchange, "quote": quote}
+        if range_pct and range_pct > 0:
+            params["rangePct"] = range_pct
+        if limit:
+            params["limit"] = limit
+        return http.get("/api/v1/market/orderbook/gaps/scan", params)
 
     def analyze_spot_orderbook(
         symbol: str,
@@ -5439,6 +5475,27 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Empty until the desk has been sampling. Not financial advice."
             ),
             args_schema=WallScanInput,
+        ),
+        StructuredTool.from_function(
+            get_book_gaps,
+            name="get_book_gaps",
+            description=(
+                "Find empty areas in the live spot book. easier=up means asks "
+                "near the price are much thinner than bids, so a move up meets "
+                "less resting size. easier=down is the mirror. Lists the empty "
+                "price stretches. One snapshot, not a forecast."
+            ),
+            args_schema=BookGapsInput,
+        ),
+        StructuredTool.from_function(
+            scan_book_gaps,
+            name="scan_book_gaps",
+            description=(
+                "Rank liquid coins by which side of the spot book is thinner. "
+                "Use this to see where price can move more easily up or down "
+                "without opening each coin."
+            ),
+            args_schema=BookGapScanInput,
         ),
         StructuredTool.from_function(
             get_candles,

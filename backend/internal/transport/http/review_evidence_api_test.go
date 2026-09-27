@@ -230,6 +230,8 @@ func TestReviewEvidence_MarketTapeRoutesPublicAndJSON(t *testing.T) {
 		{"/api/v1/market/whales?symbol=BTCUSDT", http.StatusOK},
 		{"/api/v1/market/orderbook/icebergs?symbol=BTCUSDT", http.StatusOK},
 		{"/api/v1/market/orderbook/walls/scan", http.StatusOK},
+		{"/api/v1/market/orderbook/gaps?symbol=BTCUSDT", http.StatusOK},
+		{"/api/v1/market/orderbook/gaps/scan", http.StatusOK},
 		{"/api/v1/market/orderbook/combined?symbol=BTCUSDT", http.StatusOK},
 		{"/api/v1/market/orderbook/liquidity?symbol=BTCUSDT", http.StatusOK},
 		{"/api/v1/market/liquidations?symbol=BTCUSDT", http.StatusOK},

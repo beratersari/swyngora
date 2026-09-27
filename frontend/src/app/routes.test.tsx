@@ -30,6 +30,9 @@ vi.mock('@/components/pages/ImpactPage', () => ({
 vi.mock('@/components/pages/WallsPage', () => ({
   WallsPage: () => <div data-testid="walls-page">Walls</div>,
 }));
+vi.mock('@/components/pages/GapsPage', () => ({
+  GapsPage: () => <div data-testid="gaps-page">Gaps</div>,
+}));
 vi.mock('@/components/pages/AiChatPage', () => ({
   AiChatPage: () => <div data-testid="ai-page">AI</div>,
 }));
@@ -85,6 +88,8 @@ describe('AppRoutes', () => {
     expect(screen.getByTestId('impact-page')).toBeInTheDocument();
     renderWithProviders(<AppRoutes />, { routerEntries: ['/walls'] });
     expect(screen.getByTestId('walls-page')).toBeInTheDocument();
+    renderWithProviders(<AppRoutes />, { routerEntries: ['/gaps'] });
+    expect(screen.getByTestId('gaps-page')).toBeInTheDocument();
     renderWithProviders(<AppRoutes />, { routerEntries: ['/ai'] });
     expect(screen.getByTestId('ai-page')).toBeInTheDocument();
     renderWithProviders(<AppRoutes />, { routerEntries: ['/heatmap'] });

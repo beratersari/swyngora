@@ -56,6 +56,8 @@ BOOK_TOOLS: frozenset[str] = frozenset(
         "estimate_market_impact",
         "scan_market_impact",
         "scan_suspicious_walls",
+        "get_book_gaps",
+        "scan_book_gaps",
         "analyze_swing",
         "scan_swing_setups",
         "list_custom_signal_factors",

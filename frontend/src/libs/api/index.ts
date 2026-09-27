@@ -64,6 +64,8 @@ export {
   useGetMarketBotTrackerQuery,
   useScanMarketImpactQuery,
   useScanSuspiciousWallsQuery,
+  useGetBookGapsQuery,
+  useScanBookGapsQuery,
   useGetMarketOrderCountOverviewQuery,
   useGetMarketOrderCountQuery,
   useGetMarketPressureQuery,

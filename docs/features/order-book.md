@@ -44,6 +44,13 @@ and Bybit linear). This file is the **spot** book.
     bid reach and common ask reach). If all cover ±`rangePct` both ways, that
     requested band is used (`requestedReached`, `usedRangePct`). USD≈USDT.
   - Response: market-wide `pressure` / `imbalance`, per-venue breakdown, tagged walls.
+- `GET /api/v1/market/orderbook/gaps?symbol=BTCUSDT&rangePct=2`
+  - Finds price stretches inside ±2% of mid where a 0.1% step holds under
+    15% of the typical step on that side. `easier=up` means asks in the band
+    are well below bids, so a move up meets less resting size. `easier=down`
+    is the mirror. The coin order book tab and the Empty book page show it.
+- `GET /api/v1/market/orderbook/gaps/scan`
+  - Same read across the liquid USDT pairs. The most one-sided books come first.
 - `GET /api/v1/market/orderbook/walls/scan`
   - Ranks suspicious walls and brief flickers across the liquid USDT pairs
     on Binance, Coinbase, and Bybit. A background sampler watches the top
@@ -109,8 +116,8 @@ and Bybit linear). This file is the **spot** book.
 | Adapters | `adapter/{binance,coinbase,bybit}/depthhub.go` |
 | Service | `backend/internal/service/market` `GetSpotOrderBook`, `GetCombinedOrderBookAnalysis`, `EstimateOrderBookImpact`, `GetMarketLiquidity` |
 | HTTP | `GET /api/v1/market/orderbook`, `GET /api/v1/market/orderbook/combined`, `GET /api/v1/market/orderbook/impact`, `GET /api/v1/market/orderbook/liquidity`, `GET /api/v1/market/orderbook/heatmap`, `GET /api/v1/market/orderbook/history`, `GET /api/v1/market/orderbook/history/compare`, `GET /api/v1/market/orderbook/icebergs` |
-| MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook`, `analyze_market_orderbook`, `estimate_market_impact`, `scan_market_impact`, `scan_suspicious_walls`, `get_market_liquidity`, `get_orderbook_heatmap`, `get_orderbook_history`, `compare_orderbook_history`, `get_orderbook_icebergs`, `get_orderbook_liquidity_flow`, `create_orderbook_alert` |
-| UI | `frontend` coin detail `OrderBookPanel` + `OrderDepthChart` + `OrderHeatmap`; market scan on `/walls` |
+| MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook`, `analyze_market_orderbook`, `estimate_market_impact`, `scan_market_impact`, `scan_suspicious_walls`, `get_book_gaps`, `scan_book_gaps`, `get_market_liquidity`, `get_orderbook_heatmap`, `get_orderbook_history`, `compare_orderbook_history`, `get_orderbook_icebergs`, `get_orderbook_liquidity_flow`, `create_orderbook_alert` |
+| UI | `frontend` coin detail `OrderBookPanel` + `OrderDepthChart` + `OrderHeatmap`; market scan on `/walls` and `/gaps`; coin order book shows empty areas |
 
 ## How to verify
 

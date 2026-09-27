@@ -979,6 +979,73 @@ paths:
                 $ref: '#/components/schemas/WallScan'
         '400':
           $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook/gaps/scan:
+    get:
+      summary: Rank liquid pairs by which side of the book is thinner
+      description: |
+        Walks the liquid USDT pairs and compares resting size above and below
+        mid. `easier=up` means asks in the band are well below bids, so a move
+        up meets less size. `easier=down` is the mirror. The most one-sided
+        books come first. One snapshot, not a forecast.
+      operationId: scanBookGaps
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          schema: { type: string, default: all }
+        - name: quote
+          in: query
+          schema: { type: string, default: USDT }
+        - name: rangePct
+          in: query
+          schema: { type: number, default: 2 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20, minimum: 5, maximum: 30 }
+      responses:
+        '200':
+          description: Coins ranked by the thinner side of the book
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookGapScan'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook/gaps:
+    get:
+      summary: Find empty areas in the spot order book
+      description: |
+        Splits ±rangePct of mid into 0.1% steps and joins steps that hold
+        under 15% of the typical step on that side. `easier=up` means a move
+        up meets less resting size. `exchange=all` sums Binance, Coinbase,
+        and Bybit. One snapshot, not a forecast.
+      operationId: getBookGaps
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          schema: { type: string, default: all }
+        - name: rangePct
+          in: query
+          description: ±% of mid (0.5–5, default 2)
+          schema: { type: number, default: 2 }
+      responses:
+        '200':
+          description: Empty stretches and which way the book is thinner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookGaps'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/orderbook/impact:
     get:
       summary: Simulate market-order impact and slippage
@@ -11154,6 +11221,61 @@ components:
         hits:
           type: array
           items: { $ref: '#/components/schemas/OrderBookImpactScanHit' }
+        summary: { type: string }
+        note: { type: string }
+    BookGap:
+      type: object
+      properties:
+        side: { type: string, enum: [bid, ask] }
+        direction: { type: string, enum: [up, down] }
+        fromPrice: { type: string }
+        toPrice: { type: string }
+        fromPct: { type: number }
+        toPct: { type: number }
+        widthPct: { type: number }
+        notional: { type: string }
+    BookGaps:
+      type: object
+      description: Empty areas in the spot book and which way is thinner
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        midPrice: { type: string }
+        rangePct: { type: number }
+        easier: { type: string, enum: [up, down, even] }
+        upNotional: { type: string }
+        downNotional: { type: string }
+        upGapPct: { type: number }
+        downGapPct: { type: number }
+        gaps:
+          type: array
+          items: { $ref: '#/components/schemas/BookGap' }
+        summary: { type: string }
+        note: { type: string }
+    BookGapScanHit:
+      type: object
+      properties:
+        symbol: { type: string }
+        scope: { type: string }
+        easier: { type: string, enum: [up, down, even] }
+        upNotional: { type: string }
+        downNotional: { type: string }
+        upGapPct: { type: number }
+        downGapPct: { type: number }
+        widestSide: { type: string }
+        widestPct: { type: number }
+        summary: { type: string }
+        error: { type: string }
+    BookGapScan:
+      type: object
+      properties:
+        exchange: { type: string }
+        quote: { type: string }
+        rangePct: { type: number }
+        universe: { type: integer }
+        hits:
+          type: array
+          items: { $ref: '#/components/schemas/BookGapScanHit' }
         summary: { type: string }
         note: { type: string }
     WallScanHit:

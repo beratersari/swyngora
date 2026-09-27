@@ -581,6 +581,61 @@ export type WallScanQuery = {
   quote?: string;
   limit?: number;
 };
+export type BookGap = {
+  side?: string;
+  direction?: string;
+  fromPrice?: string;
+  toPrice?: string;
+  fromPct?: number;
+  toPct?: number;
+  widthPct?: number;
+  notional?: string;
+};
+export type BookGaps = {
+  symbol?: string;
+  exchange?: string;
+  midPrice?: string;
+  rangePct?: number;
+  easier?: string;
+  upNotional?: string;
+  downNotional?: string;
+  upGapPct?: number;
+  downGapPct?: number;
+  gaps?: BookGap[];
+  summary?: string;
+  note?: string;
+};
+export type BookGapsQuery = {
+  symbol: string;
+  exchange?: string;
+  rangePct?: number;
+};
+export type BookGapScanHit = {
+  symbol?: string;
+  scope?: string;
+  easier?: string;
+  upNotional?: string;
+  downNotional?: string;
+  upGapPct?: number;
+  downGapPct?: number;
+  widestPct?: number;
+  summary?: string;
+};
+export type BookGapScan = {
+  exchange?: string;
+  quote?: string;
+  rangePct?: number;
+  universe?: number;
+  hits?: BookGapScanHit[];
+  summary?: string;
+  note?: string;
+};
+export type BookGapScanQuery = {
+  exchange?: string;
+  quote?: string;
+  rangePct?: number;
+  limit?: number;
+};
 export type MarketPressure = components['schemas']['MarketPressure'];
 export type PressureQuery = NonNullable<operations['getMarketPressure']['parameters']['query']>;
 export type MarketForensicsQuery = NonNullable<

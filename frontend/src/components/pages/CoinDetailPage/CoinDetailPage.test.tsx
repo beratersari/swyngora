@@ -37,6 +37,18 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetIndicatorsQuery: () => mockIndicators(),
     useGetSpotOrderBookQuery: () => mockOrderBook(),
     useGetSpotOrderBookHeatmapQuery: () => mockOrderHeatmap(),
+    useGetBookGapsQuery: () => ({
+      data: {
+        easier: 'up',
+        upNotional: '1000',
+        downNotional: '9000',
+        upGapPct: 30,
+        downGapPct: 5,
+        gaps: [{ direction: 'up', fromPrice: '100', toPrice: '101', widthPct: 0.5, notional: '10' }],
+      },
+      isError: false,
+      isFetching: false,
+    }),
     useGetOpenInterestQuery: () => mockOpenInterest(),
     useGetMarketLiquidationsQuery: () => mockLiquidations(),
     useGetMarketLiquidationHuntHeatmapQuery: () => mockLiqHeatmap(),
@@ -273,6 +285,7 @@ describe('CoinDetailPage', () => {
     expect(await screen.findByTestId('order-book')).toBeInTheDocument();
     expect(screen.getByTestId('order-depth-chart')).toBeInTheDocument();
     expect(screen.getByTestId('order-heatmap')).toBeInTheDocument();
+    expect(screen.getByTestId('book-gaps')).toBeInTheDocument();
   });
 
   it('opens tape tab with liquidation totals', async () => {

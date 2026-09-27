@@ -37,6 +37,8 @@ type DataPort interface {
 	EstimateOrderBookImpact(ctx context.Context, exchange, symbol, side string, quantity, notional float64) (json.RawMessage, error)
 	ScanOrderBookImpact(ctx context.Context, exchange, quote, side string, notional float64, limit int) (json.RawMessage, error)
 	ScanSuspiciousWalls(ctx context.Context, exchange, quote string, limit int) (json.RawMessage, error)
+	GetBookGaps(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error)
+	ScanBookGaps(ctx context.Context, exchange, quote string, rangePct float64, limit int) (json.RawMessage, error)
 	GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetOrderBookHeatmap(ctx context.Context, exchange, symbol, group string, windowSec int) (json.RawMessage, error)
 	GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -559,6 +561,37 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("limit", mcp.Description("How many walls to return (default 40, max 80)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.ScanSuspiciousWalls(ctx, req.GetString("exchange", "all"), req.GetString("quote", "USDT"), int(req.GetFloat("limit", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_book_gaps",
+		mcp.WithDescription("Find empty areas in the live spot book inside ±rangePct of mid (default 2%). A gap is a run of 0.1% steps with very little resting size. easier=up means asks are much thinner than bids, so a move up meets less size. easier=down is the mirror. exchange=all sums Binance, Coinbase, and Bybit. One snapshot, not a forecast. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | coinbase | bybit | all (default all)")),
+		mcp.WithNumber("rangePct", mcp.Description("±% of mid (0.5–5, default 2)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetBookGaps(ctx, req.GetString("exchange", "all"), symbol, req.GetFloat("rangePct", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("scan_book_gaps",
+		mcp.WithDescription("Rank liquid USDT pairs by which side of the spot book is thinner. easier=up means a move up meets less resting size. The thinnest one-sided books come first. Not financial advice."),
+		mcp.WithString("exchange", mcp.Description("binance | coinbase | bybit | all (default all)")),
+		mcp.WithString("quote", mcp.Description("Quote asset, default USDT")),
+		mcp.WithNumber("rangePct", mcp.Description("±% of mid (0.5–5, default 2)")),
+		mcp.WithNumber("limit", mcp.Description("How many liquid pairs (default 20, max 30)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.ScanBookGaps(ctx, req.GetString("exchange", "all"), req.GetString("quote", "USDT"), req.GetFloat("rangePct", 0), int(req.GetFloat("limit", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

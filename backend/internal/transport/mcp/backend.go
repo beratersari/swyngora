@@ -316,6 +316,63 @@ func (b *Backend) ScanSuspiciousWalls(ctx context.Context, exchange, quote strin
 	})
 }
 
+func (b *Backend) GetBookGaps(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetBookGaps(ctx, exchange, symbol, rangePct)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(bookGapsJSON(got))
+}
+
+func (b *Backend) ScanBookGaps(ctx context.Context, exchange, quote string, rangePct float64, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.ScanBookGaps(ctx, exchange, quote, rangePct, limit)
+	if err != nil {
+		return nil, err
+	}
+	if got == nil {
+		return mustJSON(map[string]any{})
+	}
+	hits := make([]map[string]any, 0, len(got.Hits))
+	for _, h := range got.Hits {
+		hits = append(hits, map[string]any{
+			"symbol": h.Symbol, "scope": h.Scope, "easier": h.Easier,
+			"upNotional": h.UpNotional, "downNotional": h.DownNotional,
+			"upGapPct": h.UpGapPct, "downGapPct": h.DownGapPct,
+			"widestSide": h.WidestSide, "widestPct": h.WidestPct,
+			"summary": h.Summary, "error": h.Error,
+		})
+	}
+	return mustJSON(map[string]any{
+		"exchange": got.Exchange, "quote": got.Quote, "rangePct": got.RangePct,
+		"universe": got.Universe, "hits": hits, "summary": got.Summary, "note": got.Note,
+	})
+}
+
+func bookGapsJSON(got *domain.BookGaps) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	gaps := make([]map[string]any, 0, len(got.Gaps))
+	for _, g := range got.Gaps {
+		gaps = append(gaps, map[string]any{
+			"side": g.Side, "direction": g.Direction, "fromPrice": g.FromPrice, "toPrice": g.ToPrice,
+			"fromPct": g.FromPct, "toPct": g.ToPct, "widthPct": g.WidthPct, "notional": g.Notional,
+		})
+	}
+	return map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange, "midPrice": got.MidPrice, "rangePct": got.RangePct,
+		"easier": got.Easier, "upNotional": got.UpNotional, "downNotional": got.DownNotional,
+		"upGapPct": got.UpGapPct, "downGapPct": got.DownGapPct, "gaps": gaps,
+		"summary": got.Summary, "note": got.Note,
+	}
+}
+
 func (b *Backend) ScanOrderBookImpact(ctx context.Context, exchange, quote, side string, notional float64, limit int) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

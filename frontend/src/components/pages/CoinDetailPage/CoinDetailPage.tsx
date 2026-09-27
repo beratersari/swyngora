@@ -17,6 +17,7 @@ import { PostDelistPanel } from '@/components/organisms/PostDelistPanel';
 import { TapePanel } from '@/components/organisms/TapePanel';
 import { PERP_LIQUIDITY_LIMIT } from '@/components/organisms/PerpLiquidityOverview';
 import { IndicatorPanel, emaColor } from '@/components/organisms/IndicatorPanel';
+import { BookGapsCard } from '@/components/organisms/BookGapsCard';
 import {
   OrderBookPanel,
   ORDER_BOOK_LEVELS,
@@ -1088,6 +1089,7 @@ export function CoinDetailPage() {
                           />
                         </SideStack>
                       </ChartAndBook>
+                      <BookGapsCard exchange={exchangeArg} symbol={symbol} />
                       <OrderHeatmap
                         data={rtkCurrent(orderHeatmapQuery)}
                         windowSeconds={orderHeatmapWindow}

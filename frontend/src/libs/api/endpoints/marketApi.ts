@@ -104,6 +104,10 @@ import type {
   ImpactScanQuery,
   WallScan,
   WallScanQuery,
+  BookGaps,
+  BookGapsQuery,
+  BookGapScan,
+  BookGapScanQuery,
   MarketPressure,
   PressureQuery,
   Ticker24h,
@@ -224,6 +228,10 @@ export type {
   ImpactScanQuery,
   WallScan,
   WallScanQuery,
+  BookGaps,
+  BookGapsQuery,
+  BookGapScan,
+  BookGapScanQuery,
   MarketPressure,
   MarketForensics,
   MarketForensicsQuery,
@@ -675,6 +683,18 @@ export const marketApi = baseApi.injectEndpoints({
         params: compactParams({ ...(arg ?? {}) }),
       }),
     }),
+    getBookGaps: build.query<BookGaps, BookGapsQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/orderbook/gaps',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+    scanBookGaps: build.query<BookGapScan, BookGapScanQuery | void>({
+      query: (arg) => ({
+        url: '/api/v1/market/orderbook/gaps/scan',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
     getMarketOrderCountOverview: build.query<MarketOrderCountOverview, OrderCountOverviewQuery | void>({
       query: (arg) => ({
         url: '/api/v1/market/order-count/overview',
@@ -871,6 +891,8 @@ export const {
   useGetMarketBotTrackerQuery,
   useScanMarketImpactQuery,
   useScanSuspiciousWallsQuery,
+  useGetBookGapsQuery,
+  useScanBookGapsQuery,
   useGetMarketOrderCountOverviewQuery,
   useGetMarketOrderCountQuery,
   useGetMarketPressureQuery,

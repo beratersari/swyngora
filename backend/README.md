@@ -42,6 +42,8 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/orderbook/impact` | Simulated market-order fill: average price, slippage, exhausted |
 | `GET` | `/api/v1/market/orderbook/impact/scan` | Same quote-sized order ranked by slippage across the liquid pairs |
 | `GET` | `/api/v1/market/orderbook/walls/scan` | Suspicious walls (added and pulled at least 4 times in 2 minutes) and brief flickers across the liquid USDT pairs |
+| `GET` | `/api/v1/market/orderbook/gaps` | Empty price stretches inside ±2% of mid, and whether a move up or down meets less resting size |
+| `GET` | `/api/v1/market/orderbook/gaps/scan` | Same read across the liquid USDT pairs, thinnest one-sided books first |
 | `GET` | `/api/v1/market/orderbook/liquidity` | 0–100 liquidity score from ±0.1/0.5/1% depth; per venue + market-wide |
 | `GET` | `/api/v1/market/orderbook/heatmap` | Resting bid/ask size over time (pre-warmed for all live crypto pairs; `window` seconds) |
 | `GET` | `/api/v1/market/liquidations` | Rolling 5m/1h/4h/24h futures long/short liquidations (Binance USD-M + Bybit linear); reconnect holes filled from that venue's history when available |

@@ -284,6 +284,39 @@ func (c *APIClient) ScanSuspiciousWalls(ctx context.Context, exchange, quote str
 	return c.get(ctx, "/api/v1/market/orderbook/walls/scan", q)
 }
 
+// GetBookGaps returns empty stretches in the live spot book.
+func (c *APIClient) GetBookGaps(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if symbol != "" {
+		q.Set("symbol", symbol)
+	}
+	if rangePct > 0 {
+		q.Set("rangePct", strconv.FormatFloat(rangePct, 'f', -1, 64))
+	}
+	return c.get(ctx, "/api/v1/market/orderbook/gaps", q)
+}
+
+// ScanBookGaps ranks liquid pairs by which side of the book is thinner.
+func (c *APIClient) ScanBookGaps(ctx context.Context, exchange, quote string, rangePct float64, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if quote != "" {
+		q.Set("quote", quote)
+	}
+	if rangePct > 0 {
+		q.Set("rangePct", strconv.FormatFloat(rangePct, 'f', -1, 64))
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/orderbook/gaps/scan", q)
+}
+
 // GetLiquidations returns rolling 5m/1h/4h/24h futures liquidation totals.
 func (c *APIClient) GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

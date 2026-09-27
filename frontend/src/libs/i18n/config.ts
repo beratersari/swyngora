@@ -17,6 +17,7 @@ export const I18N_NAMESPACES = [
   'printsize',
   'impact',
   'walls',
+  'gaps',
   'ai',
   'alerts',
   'compare',
