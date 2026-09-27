@@ -630,6 +630,29 @@ export type BookGapScan = {
   summary?: string;
   note?: string;
 };
+export type SweepRecoveryRow = {
+  exchange?: string;
+  symbol?: string;
+  side?: string;
+  level?: string;
+  beforeNotional?: string;
+  troughNotional?: string;
+  backNotional?: string;
+  recovered?: boolean;
+  recoverySeconds?: number;
+  recoveredPct?: number;
+  summary?: string;
+};
+export type SweepRecoveryReport = {
+  symbol?: string;
+  exchange?: string;
+  medianRecoverySeconds?: number;
+  recovered?: number;
+  pending?: number;
+  rows?: SweepRecoveryRow[];
+  summary?: string;
+  note?: string;
+};
 export type BookGapScanQuery = {
   exchange?: string;
   quote?: string;

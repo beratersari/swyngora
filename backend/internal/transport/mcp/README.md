@@ -69,6 +69,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `review_setup_radar` | Saved Setup Radar hits and whether price later matched the lean |
 | `get_vwap` | Volume-weighted average price from a start time (or window) to now; last vs VWAP; Binance, Bybit, combined |
 | `get_absorption` | Large market buys/sells vs little price move; absorbing side + strength (15m/1h/4h/24h + current run) |
+| `get_sweep_recovery` | How long spot depth took to refill after a liquidity sweep |
 | `get_liquidity_sweeps` | Poke through a prior high/low that comes back; level, excursion, reclaim time, volume |
 | `get_volume_surge` | Current 5m/15m/1h volume vs that coin's typical (median); buy/sell split |
 | `scan_volume_surges` | Rank coins whose volume is much higher than typical |

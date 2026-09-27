@@ -41,14 +41,17 @@ Informational only — not financial advice.
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/liquidity_sweep.go` |
-| Service | `backend/internal/service/market/sweep.go` |
-| HTTP | `GET /api/v1/market/liquidity-sweeps` |
-| MCP / AI | `get_liquidity_sweeps` |
+| Domain | `backend/internal/domain/liquidity_sweep.go`, `sweep_recovery.go` |
+| Service | `backend/internal/service/market/sweep.go`, `sweep_recovery.go` |
+| HTTP | `GET /api/v1/market/liquidity-sweeps`, `GET /api/v1/market/orderbook/recovery` |
+| MCP / AI | `get_liquidity_sweeps`, `get_sweep_recovery` |
+
+`GET /api/v1/market/orderbook/recovery?symbol=BTCUSDT` times the stored spot ladder after each sweep that has come back. `beforeNotional` is the size on the swept side just before the poke. `recoverySeconds` is how long after the return that size is at least 80% restored. `recovered=false` means it was still thin two hours later. The coin Flow tab lists the clock under Book recovery. Empty until this process has been sampling that pair.
 
 ## How to verify
 
 ```bash
 cd backend && go test ./internal/domain/ ./internal/service/market/ ./internal/transport/http/... -run Sweep
 curl "http://localhost:8080/api/v1/market/liquidity-sweeps?symbol=BTCUSDT"
+curl "http://localhost:8080/api/v1/market/orderbook/recovery?symbol=BTCUSDT"
 ```

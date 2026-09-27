@@ -108,6 +108,7 @@ import type {
   BookGapsQuery,
   BookGapScan,
   BookGapScanQuery,
+  SweepRecoveryReport,
   MarketPressure,
   PressureQuery,
   Ticker24h,
@@ -232,6 +233,7 @@ export type {
   BookGapsQuery,
   BookGapScan,
   BookGapScanQuery,
+  SweepRecoveryReport,
   MarketPressure,
   MarketForensics,
   MarketForensicsQuery,
@@ -583,6 +585,12 @@ export const marketApi = baseApi.injectEndpoints({
         params: compactParams({ ...arg }),
       }),
     }),
+    getSweepRecovery: build.query<SweepRecoveryReport, SymbolMarketQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/orderbook/recovery',
+        params: compactParams({ ...arg }),
+      }),
+    }),
     getMarketLiquiditySweeps: build.query<MarketDeskReport, SymbolMarketQuery>({
       query: (arg) => ({
         url: '/api/v1/market/liquidity-sweeps',
@@ -876,6 +884,7 @@ export const {
   useGetMarketVolumeProfileQuery,
   useGetMarketAbsorptionQuery,
   useGetMarketLiquiditySweepsQuery,
+  useGetSweepRecoveryQuery,
   useGetMarketWhalesQuery,
   useGetMarketIcebergsQuery,
   useGetMarketBookLiquidityFlowQuery,

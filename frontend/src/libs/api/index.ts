@@ -49,6 +49,7 @@ export {
   useGetMarketVolumeProfileQuery,
   useGetMarketAbsorptionQuery,
   useGetMarketLiquiditySweepsQuery,
+  useGetSweepRecoveryQuery,
   useGetMarketWhalesQuery,
   useGetMarketIcebergsQuery,
   useGetMarketBookLiquidityFlowQuery,

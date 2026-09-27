@@ -365,6 +365,13 @@
     },
     "absorption": "Absorption",
     "sweeps": "Liquidity sweeps",
+    "recovery": {
+      "title": "Book recovery",
+      "high": "Above",
+      "low": "Below",
+      "row": "{{side}} {{level}} · depth back in {{time}}",
+      "pending": "{{side}} {{level}} · still thin after 2h"
+    },
     "whales": "Whales",
     "whale": {
       "row": "{{side}} {{notional}} · {{intent}} · OI across the print {{oi}} · {{after}}",

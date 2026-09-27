@@ -98,6 +98,8 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/vwap` | Volume-weighted average price from a start time; last vs VWAP; Binance, Bybit, combined |
 | `GET` | `/api/v1/market/absorption` | Large market buys/sells vs price hold; which side is absorbing and how strong |
 | `GET` | `/api/v1/market/liquidity-sweeps` | Poke through a prior high/low that comes back; level, excursion, time, volume |
+| `GET` | `/api/v1/market/orderbook/recovery` | How long spot depth near a swept level took to return to 80% of its pre-poke size |
+| `GET` | `/api/v1/market/orderbook/recovery` | How long spot depth near a swept level took to return to 80% of its pre-poke size |
 | `GET` | `/api/v1/market/volume-surge` | Current 5m/15m/1h volume vs that coin's typical; buy/sell split |
 | `GET` | `/api/v1/market/volume-surge/scan` | Rank coins whose volume is much higher than their own typical |
 | `GET` | `/api/v1/market/basis` | Perp vs spot/index premium or discount, trend, funding/OI read; `curve` is near vs far dated futures plus history / windows / moves when that spread flipped or got steeper |
