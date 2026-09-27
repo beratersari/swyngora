@@ -91,6 +91,9 @@ and Bybit linear). This file is the **spot** book.
     1s samples so a 15m window can fill. Heatmap GET tries a REST snapshot
     first, then the same live websocket book as the ladder (Coinbase REST
     book often 502s).
+- `GET /api/v1/market/orderbook/spot-perp?symbol=BTCUSDT`
+  - Compares resting spot size with perpetual size at ±0.1% / ±0.5% / ±1% of mid
+    and says which book is thinner and which side is thinner. See [`spot-perp-book.md`](spot-perp-book.md).
 - `GET /api/v1/market/orderbook/liquidity?symbol=BTCUSDT`
   - Scores how easy the pair is to trade from resting bid/ask **notional**.
     Only **±0.1% / ±0.5% / ±1%** bands the book **actually reaches on both sides**
@@ -115,8 +118,8 @@ and Bybit linear). This file is the **spot** book.
 | Domain | `backend/internal/domain/orderbook.go`, `orderbook_analysis.go`, `orderbook_combine.go`, `orderbook_impact.go`, `orderbook_liquidity.go`, `orderbook_heatmap.go`, `wall_track.go`, `depthbook.go` |
 | Adapters | `adapter/{binance,coinbase,bybit}/depthhub.go` |
 | Service | `backend/internal/service/market` `GetSpotOrderBook`, `GetCombinedOrderBookAnalysis`, `EstimateOrderBookImpact`, `GetMarketLiquidity` |
-| HTTP | `GET /api/v1/market/orderbook`, `GET /api/v1/market/orderbook/combined`, `GET /api/v1/market/orderbook/impact`, `GET /api/v1/market/orderbook/liquidity`, `GET /api/v1/market/orderbook/heatmap`, `GET /api/v1/market/orderbook/history`, `GET /api/v1/market/orderbook/history/compare`, `GET /api/v1/market/orderbook/icebergs` |
-| MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook`, `analyze_market_orderbook`, `estimate_market_impact`, `scan_market_impact`, `scan_suspicious_walls`, `get_book_gaps`, `scan_book_gaps`, `get_market_liquidity`, `get_orderbook_heatmap`, `get_orderbook_history`, `compare_orderbook_history`, `get_orderbook_icebergs`, `get_orderbook_liquidity_flow`, `create_orderbook_alert` |
+| HTTP | `GET /api/v1/market/orderbook`, `GET /api/v1/market/orderbook/combined`, `GET /api/v1/market/orderbook/impact`, `GET /api/v1/market/orderbook/liquidity`, `GET /api/v1/market/orderbook/spot-perp`, `GET /api/v1/market/orderbook/heatmap`, `GET /api/v1/market/orderbook/history`, `GET /api/v1/market/orderbook/history/compare`, `GET /api/v1/market/orderbook/icebergs` |
+| MCP / AI | `get_spot_orderbook`, `analyze_spot_orderbook`, `analyze_market_orderbook`, `estimate_market_impact`, `scan_market_impact`, `scan_suspicious_walls`, `get_book_gaps`, `scan_book_gaps`, `get_market_liquidity`, `compare_spot_perp_liquidity`, `get_orderbook_heatmap`, `get_orderbook_history`, `compare_orderbook_history`, `get_orderbook_icebergs`, `get_orderbook_liquidity_flow`, `create_orderbook_alert` |
 | UI | `frontend` coin detail `OrderBookPanel` + `OrderDepthChart` + `OrderHeatmap`; market scan on `/walls` and `/gaps`; coin order book shows empty areas |
 
 ## How to verify

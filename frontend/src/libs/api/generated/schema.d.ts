@@ -468,6 +468,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/orderbook/spot-perp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compare spot and perpetual resting liquidity
+         * @description Sums resting bid and ask notional on the spot books and on the
+         *     perpetual books at the same ±0.1% / ±0.5% / ±1% of each book's mid.
+         *     Says which book is thinner and which side (bid or ask) is thinner
+         *     on each. A venue counts in a band only when that book reaches the
+         *     percent on both sides. Binance and Bybit rows compare that venue's
+         *     own spot book with its perp. Informational only.
+         */
+        get: operations["getSpotPerpLiquidity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/orderbook/heatmap": {
         parameters: {
             query?: never;
@@ -508,6 +533,77 @@ export interface paths {
          *     that cannot fill the whole order is `exhausted`. Simulation only.
          */
         get: operations["scanSpotOrderBookImpact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/orderbook/walls/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Scan suspicious walls and brief flickers across liquid pairs
+         * @description Lists spot walls the desk has watched on the liquid USDT pairs.
+         *     `kind=suspicious` means the same wall was added and pulled at least
+         *     4 times inside 2 minutes. `kind=flicker` means a large wall rested
+         *     under about 20 seconds and then left. `exchange` is binance, coinbase,
+         *     bybit, or all. The list stays empty until this process has been sampling.
+         *     Not financial advice.
+         */
+        get: operations["scanSuspiciousWalls"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/orderbook/gaps/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rank liquid pairs by which side of the book is thinner
+         * @description Walks the liquid USDT pairs and compares resting size above and below
+         *     mid. `easier=up` means asks in the band are well below bids, so a move
+         *     up meets less size. `easier=down` is the mirror. The most one-sided
+         *     books come first. One snapshot, not a forecast.
+         */
+        get: operations["scanBookGaps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/orderbook/gaps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find empty areas in the spot order book
+         * @description Splits ±rangePct of mid into 0.1% steps and joins steps that hold
+         *     under 15% of the typical step on that side. `easier=up` means a move
+         *     up meets less resting size. `exchange=all` sums Binance, Coinbase,
+         *     and Bybit. One snapshot, not a forecast.
+         */
+        get: operations["getBookGaps"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4845,6 +4941,67 @@ export interface components {
             venues?: components["schemas"]["VenueLiquidity"][];
             note?: string;
         };
+        SpotPerpBook: {
+            bidNotional?: string;
+            askNotional?: string;
+            total?: string;
+            /** @enum {string} */
+            thinnerSide?: "bid" | "ask" | "balanced";
+            /** @enum {string} */
+            strongerSide?: "bid" | "ask" | "balanced";
+            mid?: string;
+            coverPct?: string;
+            venueCount?: number;
+            complete?: boolean;
+        };
+        SpotPerpBand: {
+            rangePct?: string;
+            spotBid?: string;
+            spotAsk?: string;
+            perpBid?: string;
+            perpAsk?: string;
+            /** @enum {string} */
+            thinnerBook?: "spot" | "perp" | "even";
+            /** @enum {string} */
+            strongerBook?: "spot" | "perp" | "even";
+            /** @enum {string} */
+            spotThinnerSide?: "bid" | "ask" | "balanced";
+            /** @enum {string} */
+            perpThinnerSide?: "bid" | "ask" | "balanced";
+            complete?: boolean;
+        };
+        SpotPerpVenue: {
+            exchange?: string;
+            spotBid?: string;
+            spotAsk?: string;
+            perpBid?: string;
+            perpAsk?: string;
+            /** @enum {string} */
+            thinnerBook?: "spot" | "perp" | "even";
+            spotThinnerSide?: string;
+            perpThinnerSide?: string;
+            complete?: boolean;
+            error?: string;
+        };
+        /** @description Spot versus perpetual resting size at the same percent of mid */
+        SpotPerpLiquidity: {
+            symbol?: string;
+            rangePct?: string;
+            /** Format: date-time */
+            asOf?: string;
+            spot?: components["schemas"]["SpotPerpBook"];
+            perp?: components["schemas"]["SpotPerpBook"];
+            /** @enum {string} */
+            thinnerBook?: "spot" | "perp" | "even";
+            /** @enum {string} */
+            strongerBook?: "spot" | "perp" | "even";
+            /** @description Perp total divided by spot total at the headline band */
+            ratio?: string;
+            bands?: components["schemas"]["SpotPerpBand"][];
+            venues?: components["schemas"]["SpotPerpVenue"][];
+            summary?: string;
+            note?: string;
+        };
         LiquidationHit: {
             exchange?: string;
             /** @enum {string} */
@@ -7211,6 +7368,92 @@ export interface components {
             medianSlippagePct?: number;
             exhaustedCoins?: number;
             hits?: components["schemas"]["OrderBookImpactScanHit"][];
+            summary?: string;
+            note?: string;
+        };
+        BookGap: {
+            /** @enum {string} */
+            side?: "bid" | "ask";
+            /** @enum {string} */
+            direction?: "up" | "down";
+            fromPrice?: string;
+            toPrice?: string;
+            fromPct?: number;
+            toPct?: number;
+            widthPct?: number;
+            notional?: string;
+        };
+        /** @description Empty areas in the spot book and which way is thinner */
+        BookGaps: {
+            symbol?: string;
+            exchange?: string;
+            midPrice?: string;
+            rangePct?: number;
+            /** @enum {string} */
+            easier?: "up" | "down" | "even";
+            upNotional?: string;
+            downNotional?: string;
+            upGapPct?: number;
+            downGapPct?: number;
+            gaps?: components["schemas"]["BookGap"][];
+            summary?: string;
+            note?: string;
+        };
+        BookGapScanHit: {
+            symbol?: string;
+            scope?: string;
+            /** @enum {string} */
+            easier?: "up" | "down" | "even";
+            upNotional?: string;
+            downNotional?: string;
+            upGapPct?: number;
+            downGapPct?: number;
+            widestSide?: string;
+            widestPct?: number;
+            summary?: string;
+            error?: string;
+        };
+        BookGapScan: {
+            exchange?: string;
+            quote?: string;
+            rangePct?: number;
+            universe?: number;
+            hits?: components["schemas"]["BookGapScanHit"][];
+            summary?: string;
+            note?: string;
+        };
+        WallScanHit: {
+            exchange?: string;
+            symbol?: string;
+            /** @enum {string} */
+            side?: "bid" | "ask";
+            price?: string;
+            notional?: string;
+            /** @description Percent from mid */
+            distancePct?: string;
+            /** @description Fraction of that side's band notional */
+            share?: number;
+            /** @enum {string} */
+            kind?: "suspicious" | "flicker";
+            appearCount?: number;
+            ageSeconds?: number;
+            presentForSeconds?: number;
+            visibleSeconds?: number;
+            present?: boolean;
+            /** Format: date-time */
+            lastSeen?: string;
+        };
+        /** @description Suspicious walls and brief flickers across liquid spot books */
+        WallScan: {
+            exchange?: string;
+            quote?: string;
+            /** @description Liquid books the background sampler is watching */
+            universe?: number;
+            /** Format: date-time */
+            asOf?: string;
+            suspicious?: number;
+            flickers?: number;
+            hits?: components["schemas"]["WallScanHit"][];
             summary?: string;
             note?: string;
         };
@@ -9632,6 +9875,32 @@ export interface operations {
             502: components["responses"]["Error"];
         };
     };
+    getSpotPerpLiquidity: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description Headline ± percent of mid (0.1–1, default 1). Nearer bands are always included. */
+                rangePct?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Spot versus perp liquidity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpotPerpLiquidity"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
     getSpotOrderBookHeatmap: {
         parameters: {
             query: {
@@ -9687,6 +9956,87 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrderBookImpactScan"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    scanSuspiciousWalls: {
+        parameters: {
+            query?: {
+                /** @description binance | coinbase | bybit | all (default all) */
+                exchange?: string;
+                quote?: string;
+                /** @description How many walls to return (default 40, max 80) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Suspicious walls and brief flickers, suspicious first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WallScan"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    scanBookGaps: {
+        parameters: {
+            query?: {
+                exchange?: string;
+                quote?: string;
+                rangePct?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Coins ranked by the thinner side of the book */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookGapScan"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getBookGaps: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: string;
+                /** @description ±% of mid (0.5–5, default 2) */
+                rangePct?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Empty stretches and which way the book is thinner */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookGaps"];
                 };
             };
             400: components["responses"]["Error"];

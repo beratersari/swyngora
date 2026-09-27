@@ -48,6 +48,7 @@ type DataPort interface {
 	ScanLiquidationCascades(ctx context.Context, exchange string) (json.RawMessage, error)
 	GetOpenInterest(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetPerpDepth(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error)
+	CompareSpotPerpLiquidity(ctx context.Context, symbol string, rangePct float64) (json.RawMessage, error)
 	GetPerpDepthOverview(ctx context.Context, exchange string, rangePct float64, limit int) (json.RawMessage, error)
 	GetOptions(ctx context.Context, exchange, asset string) (json.RawMessage, error)
 	GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
@@ -708,6 +709,22 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetOpenInterest(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("compare_spot_perp_liquidity",
+		mcp.WithDescription("Compare resting liquidity in the spot book and the perpetual book at the same distance from mid (0.1% / 0.5% / 1%). Says which book is thinner and which side (bid or ask) is thinner on each. Spot sums Binance, Coinbase, and Bybit. Perp sums Binance USD-M, Bybit linear, and OKX. Binance and Bybit rows compare that venue's own two books. A venue counts in a band only when its book reaches that % on both sides. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithNumber("rangePct", mcp.Description("Headline ±% of mid (default 1, max 1)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CompareSpotPerpLiquidity(ctx, symbol, req.GetFloat("rangePct", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

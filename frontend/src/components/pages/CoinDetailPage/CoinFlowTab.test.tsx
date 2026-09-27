@@ -22,6 +22,43 @@ vi.mock('@/libs/api', async (importOriginal) => {
   };
   return {
     ...actual,
+    useGetSpotPerpLiquidityQuery: () => ({
+      ...empty,
+      data: {
+        summary: 'Within 1.0% of mid, the spot book is thinner.',
+        thinnerBook: 'spot',
+        spot: { bidNotional: '40000000', askNotional: '15000000', thinnerSide: 'ask' },
+        perp: { bidNotional: '120000000', askNotional: '90000000', thinnerSide: 'bid' },
+        venues: [
+          {
+            exchange: 'binance',
+            complete: true,
+            spotBid: '20000000',
+            spotAsk: '8000000',
+            perpBid: '60000000',
+            perpAsk: '40000000',
+            thinnerBook: 'spot',
+          },
+        ],
+      },
+      currentData: {
+        summary: 'Within 1.0% of mid, the spot book is thinner.',
+        thinnerBook: 'spot',
+        spot: { bidNotional: '40000000', askNotional: '15000000', thinnerSide: 'ask' },
+        perp: { bidNotional: '120000000', askNotional: '90000000', thinnerSide: 'bid' },
+        venues: [
+          {
+            exchange: 'binance',
+            complete: true,
+            spotBid: '20000000',
+            spotAsk: '8000000',
+            perpBid: '60000000',
+            perpAsk: '40000000',
+            thinnerBook: 'spot',
+          },
+        ],
+      },
+    }),
     useGetMarketPerpDepthQuery: () => ({
       ...empty,
       data: perp,
@@ -73,6 +110,8 @@ vi.mock('@/libs/api', async (importOriginal) => {
 describe('CoinFlowTab', () => {
   it('shows perp depth and taker summaries', () => {
     renderWithProviders(<CoinFlowTab symbol="BTCUSDT" exchange="binance" />);
+    expect(screen.getByText('Spot vs perp book')).toBeInTheDocument();
+    expect(screen.getByText('Within 1.0% of mid, the spot book is thinner.')).toBeInTheDocument();
     expect(screen.getByText('40M bid vs 15M ask')).toBeInTheDocument();
     expect(screen.getByText('okx')).toBeInTheDocument();
     expect(screen.getByText('Buyers in control')).toBeInTheDocument();

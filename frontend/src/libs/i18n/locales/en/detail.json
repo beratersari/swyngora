@@ -327,6 +327,18 @@
   },
   "flow": {
     "perpDepth": "Perp depth",
+    "spotPerp": {
+      "title": "Spot vs perp book",
+      "spotBid": "Spot bid",
+      "spotAsk": "Spot ask",
+      "perpBid": "Perp bid",
+      "perpAsk": "Perp ask",
+      "thinnerBook": "Thinner book",
+      "spotSide": "Spot thin side",
+      "perpSide": "Perp thin side",
+      "book": { "spot": "Spot", "perp": "Perp", "even": "Even" },
+      "side": { "bid": "Bids", "ask": "Asks", "balanced": "Balanced" }
+    },
     "surge": "Volume surge",
     "taker": "Taker flow",
     "prices": "Flow at prices",

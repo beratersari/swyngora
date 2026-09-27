@@ -1,5 +1,29 @@
-import type { MarketDeskReport } from '@/libs/api';
+import type { MarketDeskReport, SpotPerpLiquidity } from '@/libs/api';
 import { formatCompactAmount } from '@/libs/utils';
+
+export type SpotPerpFact = { key: string; value: string };
+
+export function spotPerpFacts(r?: SpotPerpLiquidity | null): SpotPerpFact[] {
+  if (!r?.spot && !r?.perp) return [];
+  return [
+    { key: 'spotBid', value: formatCompactAmount(r.spot?.bidNotional) },
+    { key: 'spotAsk', value: formatCompactAmount(r.spot?.askNotional) },
+    { key: 'perpBid', value: formatCompactAmount(r.perp?.bidNotional) },
+    { key: 'perpAsk', value: formatCompactAmount(r.perp?.askNotional) },
+    { key: 'thinnerBook', value: r.thinnerBook || '—' },
+    { key: 'spotSide', value: r.spot?.thinnerSide || '—' },
+    { key: 'perpSide', value: r.perp?.thinnerSide || '—' },
+  ];
+}
+
+export function spotPerpVenueLines(r?: SpotPerpLiquidity | null): string[] {
+  return (r?.venues ?? [])
+    .filter((v) => v.exchange)
+    .map((v) => {
+      if (!v.complete) return `${v.exchange}: ${v.error || '—'}`;
+      return `${v.exchange}: spot ${formatCompactAmount(v.spotBid)} / ${formatCompactAmount(v.spotAsk)} · perp ${formatCompactAmount(v.perpBid)} / ${formatCompactAmount(v.perpAsk)} · ${v.thinnerBook || '—'}`;
+    });
+}
 
 export function reportSummary(r?: MarketDeskReport | null): string {
   if (!r) return '';

@@ -413,6 +413,16 @@ func (c *APIClient) GetOpenInterest(ctx context.Context, exchange, symbol string
 	return c.get(ctx, "/api/v1/market/open-interest", q)
 }
 
+// CompareSpotPerpLiquidity compares spot and perp resting size at the same % of mid.
+func (c *APIClient) CompareSpotPerpLiquidity(ctx context.Context, symbol string, rangePct float64) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if rangePct > 0 {
+		q.Set("rangePct", strconv.FormatFloat(rangePct, 'f', -1, 64))
+	}
+	return c.get(ctx, "/api/v1/market/orderbook/spot-perp", q)
+}
+
 // GetPerpDepth returns bid-below vs ask-above perpetual depth.
 func (c *APIClient) GetPerpDepth(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error) {
 	q := url.Values{}

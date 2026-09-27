@@ -585,6 +585,14 @@ class OpenInterestInput(BaseModel):
     )
 
 
+class SpotPerpLiquidityInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    range_pct: float = Field(
+        default=1,
+        description="Headline ± percent of mid (default 1, max 1). Bands are 0.1 / 0.5 / 1.",
+    )
+
+
 class PerpDepthInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -2227,6 +2235,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             "/api/v1/market/open-interest",
             {"symbol": symbol, "exchange": exchange},
         )
+
+    def compare_spot_perp_liquidity(symbol: str, range_pct: float = 1) -> str:
+        params: dict[str, Any] = {"symbol": symbol}
+        if range_pct:
+            params["rangePct"] = range_pct
+        return http.get("/api/v1/market/orderbook/spot-perp", params)
 
     def get_perp_depth(symbol: str, exchange: str = "all", range_pct: float = 1) -> str:
         params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
@@ -4768,6 +4782,19 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Binance USD-M + Bybit linear + OKX. exchange=all sums venues."
             ),
             args_schema=OpenInterestInput,
+        ),
+        StructuredTool.from_function(
+            compare_spot_perp_liquidity,
+            name="compare_spot_perp_liquidity",
+            description=(
+                "Compare resting liquidity in the spot book and the perpetual "
+                "book at the same distance from mid (0.1% / 0.5% / 1%). Says "
+                "which book is thinner and which side (bid or ask) is thinner "
+                "on each. Spot sums Binance, Coinbase, and Bybit. Perp sums "
+                "Binance USD-M, Bybit linear, and OKX. Binance and Bybit rows "
+                "compare that venue's own two books."
+            ),
+            args_schema=SpotPerpLiquidityInput,
         ),
         StructuredTool.from_function(
             get_perp_depth,

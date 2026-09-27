@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Text } from '@/components/atoms/Text';
 import { IntervalRail } from '@/components/molecules/IntervalRail';
 import { CoinInsightPanel, CoinInsightStack } from '@/components/organisms/CoinInsightPanel';
 import { FlowFootprint } from '@/components/organisms/FlowFootprint';
@@ -12,6 +13,7 @@ import {
   useGetMarketFlowAtPricesQuery,
   useGetMarketIcebergsQuery,
   useGetMarketLiquiditySweepsQuery,
+  useGetSpotPerpLiquidityQuery,
   useGetMarketPerpDepthQuery,
   useGetMarketTakerFlowQuery,
   useGetMarketNetPositionQuery,
@@ -21,7 +23,7 @@ import {
   useGetMarketWhalesQuery,
 } from '@/libs/api';
 import { rtkCurrent, rtkCurrentPending } from '@/libs/utils';
-import { perpStats, reportSummary, surgeStats, venueLines } from './CoinFlowTab.helpers';
+import { perpStats, reportSummary, spotPerpFacts, spotPerpVenueLines, surgeStats, venueLines } from './CoinFlowTab.helpers';
 import { WhaleFollowList } from './WhaleFollowList';
 import type { CoinFlowTabProps } from './CoinFlowTab.types';
 
@@ -35,7 +37,11 @@ export function CoinFlowTab({ symbol, exchange }: CoinFlowTabProps) {
   const tapeArg = { symbol, exchange: 'all' as const };
   const err = (e: unknown) => rtkErrorMessage(e, { resource: t('resource.tape') });
 
+  const spotPerp = useGetSpotPerpLiquidityQuery({ symbol });
   const perp = useGetMarketPerpDepthQuery(tapeArg);
+  const spotPerpData = rtkCurrent(spotPerp);
+  const spotPerpLabel = (group: 'book' | 'side', value?: string) =>
+    value ? t(`flow.spotPerp.${group}.${value}`, { defaultValue: value }) : '—';
   const surge = useGetMarketVolumeSurgeQuery(tapeArg);
   const taker = useGetMarketTakerFlowQuery(tapeArg);
   const netPosition = useGetMarketNetPositionQuery(tapeArg);
@@ -49,6 +55,22 @@ export function CoinFlowTab({ symbol, exchange }: CoinFlowTabProps) {
   const liq = useGetMarketBookLiquidityFlowQuery({ ...arg, window: '15m' });
 
   const rows = [
+    {
+      key: 'spotPerp',
+      title: t('flow.spotPerp.title'),
+      q: spotPerp,
+      stats: spotPerpFacts(spotPerpData).map((fact) => ({
+        label: t(`flow.spotPerp.${fact.key}`),
+        value:
+          fact.key === 'thinnerBook'
+            ? spotPerpLabel('book', spotPerpData?.thinnerBook)
+            : fact.key === 'spotSide'
+              ? spotPerpLabel('side', spotPerpData?.spot?.thinnerSide)
+              : fact.key === 'perpSide'
+                ? spotPerpLabel('side', spotPerpData?.perp?.thinnerSide)
+                : fact.value,
+      })),
+    },
     { key: 'perp', title: t('flow.perpDepth'), q: perp, stats: perpStats(rtkCurrent(perp)) },
     { key: 'surge', title: t('flow.surge'), q: surge, stats: surgeStats(rtkCurrent(surge)) },
     { key: 'taker', title: t('flow.taker'), q: taker, stats: venueLines(rtkCurrent(taker)) },
@@ -76,7 +98,15 @@ export function CoinFlowTab({ symbol, exchange }: CoinFlowTabProps) {
           summary={reportSummary(rtkCurrent(row.q))}
           stats={row.stats}
           extra={
-            row.key === 'whales' ? (
+            row.key === 'spotPerp' ? (
+              <>
+                {spotPerpVenueLines(spotPerpData).map((line) => (
+                  <Text key={line} variant="caption" color="secondary">
+                    {line}
+                  </Text>
+                ))}
+              </>
+            ) : row.key === 'whales' ? (
               <WhaleFollowList events={rtkCurrent(whales)?.events} />
             ) : row.key === 'profile' ? (
               <VolumeProfileLadder report={rtkCurrent(profile)} />

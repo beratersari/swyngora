@@ -327,6 +327,18 @@
   },
   "flow": {
     "perpDepth": "Perp derinlik",
+    "spotPerp": {
+      "title": "Spot ve perp defter",
+      "spotBid": "Spot alış",
+      "spotAsk": "Spot satış",
+      "perpBid": "Perp alış",
+      "perpAsk": "Perp satış",
+      "thinnerBook": "İnce defter",
+      "spotSide": "Spot ince taraf",
+      "perpSide": "Perp ince taraf",
+      "book": { "spot": "Spot", "perp": "Perp", "even": "Dengeli" },
+      "side": { "bid": "Alış", "ask": "Satış", "balanced": "Dengeli" }
+    },
     "surge": "Hacim sıçraması",
     "taker": "Taker akışı",
     "prices": "Fiyatlarda akış",

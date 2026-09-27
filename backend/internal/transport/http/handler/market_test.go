@@ -1354,6 +1354,33 @@ func TestGetPrintSize_OK(t *testing.T) {
 	}
 }
 
+func TestGetSpotPerpLiquidity_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/spot-perp?symbol=BTCUSDT&rangePct=1", nil)
+	rr := httptest.NewRecorder()
+	h.GetSpotPerpLiquidity(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body spotPerpResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.ThinnerBook == "" || body.Summary == "" {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetSpotPerpLiquidity_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/orderbook/spot-perp", nil)
+	rr := httptest.NewRecorder()
+	h.GetSpotPerpLiquidity(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetPerpDepth_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/perp-depth?symbol=BTCUSDT&rangePct=1", nil)
