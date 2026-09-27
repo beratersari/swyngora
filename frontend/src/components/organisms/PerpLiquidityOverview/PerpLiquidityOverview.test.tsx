@@ -87,13 +87,15 @@ describe('PerpLiquidityOverview', () => {
           bid: '100',
           ask: '100',
           history: [
-            { time: '2026-09-21T14:00:00Z', total: '400' },
-            { time: '2026-09-21T16:00:00Z', total: '900' },
+            { time: '2026-09-21T14:00:00Z', total: '400', price: '100' },
+            { time: '2026-09-21T16:00:00Z', total: '900', price: '90' },
           ],
         }}
       />,
     );
     await user.click(screen.getByRole('button', { name: /Perp bid \/ ask/ }));
     expect(await screen.findByTestId('perp-depth-history')).toBeInTheDocument();
+    expect(screen.getByText('BTC')).toBeInTheDocument();
+    expect(screen.getByText('Book')).toBeInTheDocument();
   });
 });

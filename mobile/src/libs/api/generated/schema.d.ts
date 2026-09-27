@@ -6688,6 +6688,8 @@ export interface components {
             time?: string;
             /** @description Bid+ask notional at that minute */
             total?: string;
+            /** @description BTC close at that minute */
+            price?: string;
         };
         /** @description Bid vs ask share and total book size of the liquid-perp book now vs 15m / 1h / 4h ago */
         MarketPerpDepthShareWindow: {

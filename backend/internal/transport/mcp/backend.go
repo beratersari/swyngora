@@ -1055,9 +1055,13 @@ func perpDepthOverviewMap(got *domain.PerpDepthOverview) map[string]any {
 	}
 	history := make([]map[string]any, 0, len(got.History))
 	for _, p := range got.History {
-		history = append(history, map[string]any{
+		row := map[string]any{
 			"time": p.Time.UTC().Format(time.RFC3339Nano), "total": formatQtyMCP(p.Total),
-		})
+		}
+		if p.Price > 0 {
+			row["price"] = formatQtyMCP(p.Price)
+		}
+		history = append(history, row)
 	}
 	bands := make([]map[string]any, 0, len(got.Bands))
 	for _, b := range got.Bands {

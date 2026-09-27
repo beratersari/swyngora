@@ -200,6 +200,27 @@ func (s *Service) attachPerpDepthWindows(ctx context.Context, out *domain.PerpDe
 		return
 	}
 	domain.AttachPerpDepthHistory(out, totals)
+	s.attachPerpDepthBTC(ctx, out)
+}
+
+func (s *Service) attachPerpDepthBTC(ctx context.Context, out *domain.PerpDepthOverview) {
+	if s == nil || out == nil || len(out.History) < 2 {
+		return
+	}
+	start := out.History[0].Time
+	end := out.AsOf.Add(time.Minute)
+	ex := "binance"
+	if out.Exchange == string(domain.ExchangeBybit) {
+		ex = string(domain.ExchangeBybit)
+	}
+	candles, err := s.GetCandles(ctx, ex, "BTCUSDT", string(domain.Interval1m), 400, &start, &end)
+	if (err != nil || len(candles) == 0) && ex != string(domain.ExchangeBinance) {
+		candles, err = s.GetCandles(ctx, string(domain.ExchangeBinance), "BTCUSDT", string(domain.Interval1m), 400, &start, &end)
+	}
+	if err != nil || len(candles) == 0 {
+		return
+	}
+	domain.AttachPerpDepthPrices(out, candles)
 }
 
 // PurgePerpDepthHistory drops samples older than cutoff.

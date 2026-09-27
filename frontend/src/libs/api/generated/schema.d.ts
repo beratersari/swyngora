@@ -1749,6 +1749,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/orderbook/recovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How long the book took to refill after a liquidity sweep
+         * @description For each recent sweep that has come back, compares stored 1-minute
+         *     spot ladders near the swept level. `beforeNotional` is the size on
+         *     that side just before the poke. The clock starts at `reclaimedAt`
+         *     and `recoverySeconds` is when that size is at least 80% restored.
+         *     `recovered=false` means it was still thin two hours later. Empty
+         *     until the desk has been sampling that pair. Informational only.
+         */
+        get: operations["getSweepRecovery"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/absorption": {
         parameters: {
             query?: never;
@@ -6688,6 +6713,8 @@ export interface components {
             time?: string;
             /** @description Bid+ask notional at that minute */
             total?: string;
+            /** @description BTC close at that minute */
+            price?: string;
         };
         /** @description Bid vs ask share and total book size of the liquid-perp book now vs 15m / 1h / 4h ago */
         MarketPerpDepthShareWindow: {
@@ -7446,6 +7473,36 @@ export interface components {
             medianSlippagePct?: number;
             exhaustedCoins?: number;
             hits?: components["schemas"]["OrderBookImpactScanHit"][];
+            summary?: string;
+            note?: string;
+        };
+        SweepRecovery: {
+            exchange?: string;
+            symbol?: string;
+            /** @enum {string} */
+            side?: "high" | "low";
+            level?: string;
+            /** Format: date-time */
+            piercedAt?: string;
+            /** Format: date-time */
+            reclaimedAt?: string;
+            beforeNotional?: string;
+            troughNotional?: string;
+            backNotional?: string;
+            recovered?: boolean;
+            recoverySeconds?: number;
+            recoveredPct?: number;
+            summary?: string;
+        };
+        SweepRecoveryReport: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            medianRecoverySeconds?: number;
+            recovered?: number;
+            pending?: number;
+            rows?: components["schemas"]["SweepRecovery"][];
             summary?: string;
             note?: string;
         };
@@ -11445,6 +11502,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getSweepRecovery: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Refill clock for recent sweeps */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SweepRecoveryReport"];
                 };
             };
             400: components["responses"]["Error"];

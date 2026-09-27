@@ -10653,6 +10653,7 @@ components:
       properties:
         time: { type: string, format: date-time }
         total: { type: string, description: Bid+ask notional at that minute }
+        price: { type: string, description: BTC close at that minute }
     MarketPerpDepthShareWindow:
       type: object
       description: Bid vs ask share and total book size of the liquid-perp book now vs 15m / 1h / 4h ago

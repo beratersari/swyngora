@@ -5,6 +5,8 @@ import { SplitBar } from '@/components/atoms/SplitBar';
 import { Text } from '@/components/atoms/Text';
 import { DeskReadCard } from '@/components/molecules/DeskReadCard';
 import { financeColors } from '@/styles/tokens';
+import { PerpLiquidityDepthChart } from './PerpLiquidityDepthChart';
+import { DetailList, DetailRow, Head, Legend, Swatch } from './PerpLiquidityOverview.styles';
 import { formatCompactAmount } from '@/libs/utils';
 import {
   bandLeaderLabel,
@@ -18,8 +20,6 @@ import {
   mixLine,
   shareLabel,
 } from './helpers';
-import { PerpLiquidityDepthChart } from './PerpLiquidityDepthChart';
-import { DetailList, DetailRow, Head } from './PerpLiquidityOverview.styles';
 import type { PerpLiquidityOverviewProps } from './PerpLiquidityOverview.types';
 
 export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLiquidityOverviewProps) {
@@ -130,6 +130,18 @@ export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLi
             <Text variant="caption" color="secondary">
               {t('perpLiq.history')}
             </Text>
+            {(data?.history?.length ?? 0) >= 2 ? (
+              <Legend>
+                <Text variant="caption" color="secondary">
+                  <Swatch $color={financeColors.cobalt} />
+                  {t('perpLiq.book')}
+                </Text>
+                <Text variant="caption" color="secondary">
+                  <Swatch $color={financeColors.warning} />
+                  {t('perpLiq.btc')}
+                </Text>
+              </Legend>
+            ) : null}
             {(data?.history?.length ?? 0) >= 2 ? (
               <PerpLiquidityDepthChart history={data?.history} />
             ) : (

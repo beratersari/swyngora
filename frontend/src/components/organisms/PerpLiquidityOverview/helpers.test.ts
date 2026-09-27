@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bandLeaderLabel, bandShareLabel, bidSharePct, depthHistoryLine, depthLine, distanceBands, driverNames, leaderCoins, mixLine, shareLabel, sizeDriverLine } from './helpers';
+import { bandLeaderLabel, bandShareLabel, bidSharePct, depthHistoryLine, depthLine, depthPriceLine, distanceBands, driverNames, leaderCoins, mixLine, shareLabel, sizeDriverLine } from './helpers';
 
 describe('PerpLiquidityOverview helpers', () => {
   it('drops empty or errored coins then keeps the largest', () => {
@@ -47,6 +47,12 @@ describe('PerpLiquidityOverview helpers', () => {
     ]);
     expect(line.map((p) => p.value)).toEqual([400, 500]);
     expect(line[0].time).toBeLessThan(line[1].time);
+    expect(
+      depthPriceLine([
+        { time: '2026-09-21T14:00:00Z', price: '100' },
+        { time: '2026-09-21T16:00:00Z', price: '90' },
+      ]).map((p) => p.value),
+    ).toEqual([100, 90]);
   });
 
   it('names the coins that moved the book size, largest first', () => {

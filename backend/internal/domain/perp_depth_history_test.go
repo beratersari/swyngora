@@ -154,6 +154,24 @@ func TestAttachPerpDepthHistory_KeepsSixHoursAndDropsOlder(t *testing.T) {
 	}
 }
 
+func TestAttachPerpDepthPrices_MatchesBTCClose(t *testing.T) {
+	now := time.Date(2026, 9, 21, 16, 0, 0, 0, time.UTC)
+	live := BuildPerpDepthOverview("all", 1, []PerpDepthCoinInput{
+		{Symbol: "BTCUSDT", Base: "BTC", Bid: 80, Ask: 20, Complete: true},
+	}, now)
+	AttachPerpDepthHistory(live, []PerpDepthTotalPoint{
+		{Time: now.Add(-2 * time.Minute), Total: 400},
+		{Time: now.Add(-time.Minute), Total: 300},
+	})
+	AttachPerpDepthPrices(live, []Candle{
+		{OpenTime: now.Add(-2 * time.Minute), Close: "100"},
+		{OpenTime: now.Add(-time.Minute), Close: "90"},
+	})
+	if live.History[0].Price != 100 || live.History[1].Price != 90 {
+		t.Fatalf("%+v", live.History)
+	}
+}
+
 func TestClassifyPerpDepthSize(t *testing.T) {
 	if ClassifyPerpDepthSize(5) != PerpDepthSizeThicker || ClassifyPerpDepthSize(-5) != PerpDepthSizeThinner {
 		t.Fatal("sides")

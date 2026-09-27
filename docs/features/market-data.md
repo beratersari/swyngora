@@ -92,7 +92,7 @@ Coin detail also has an **order heatmap** (resting bid/ask size over time) from 
 - `GET /api/v1/market/basis` perp vs spot/index premium or discount, plus the listed futures curve (near vs far) and how that curve changed (flips / steeper). See [`basis.md`](basis.md).
 - `GET /api/v1/market/correlation` how similarly a coin moves with BTC and ETH (1h / 4h / 24h). See [`correlation.md`](correlation.md).
 - `GET /api/v1/market/breadth` how many followed coins are up vs down (1h / 4h / 24h). See [`breadth.md`](breadth.md).
-- `GET /api/v1/market/perp-depth/overview` total perp bid vs ask across those liquid coins, plus which coins dominate that book, how close the book is to mid (0.1% vs 1%), whether total bid+ask got thicker or thinner over 15m / 1h / 4h, and the last 6 hours of that total. See [`perp-depth.md`](perp-depth.md).
+- `GET /api/v1/market/perp-depth/overview` total perp bid vs ask across those liquid coins, plus which coins dominate that book, how close the book is to mid (0.1% vs 1%), whether total bid+ask got thicker or thinner over 15m / 1h / 4h, and the last 6 hours of that total next to BTC's price. See [`perp-depth.md`](perp-depth.md).
 - `GET /api/v1/market/volatility` how much a coin moved (range, vs normal, vs BTC/ETH). See [`volatility.md`](volatility.md).
 - `GET /api/v1/market/snapshot` price, volume, mcap, OI, funding, LS, and taker flow together. See [`snapshot.md`](snapshot.md).
 - `GET /api/v1/market/levels` support and resistance plus breakout strength. See [`levels.md`](levels.md).

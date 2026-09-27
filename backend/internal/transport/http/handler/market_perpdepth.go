@@ -229,6 +229,7 @@ type perpDepthOverviewBandDTO struct {
 type perpDepthTotalPointDTO struct {
 	Time  time.Time `json:"time"`
 	Total string    `json:"total"`
+	Price string    `json:"price,omitempty"`
 }
 
 type perpDepthOverviewResponse struct {
@@ -305,7 +306,11 @@ func perpDepthOverviewToDTO(a *domain.PerpDepthOverview) perpDepthOverviewRespon
 	}
 	history := make([]perpDepthTotalPointDTO, 0, len(a.History))
 	for _, p := range a.History {
-		history = append(history, perpDepthTotalPointDTO{Time: p.Time.UTC(), Total: formatHistQty(p.Total)})
+		row := perpDepthTotalPointDTO{Time: p.Time.UTC(), Total: formatHistQty(p.Total)}
+		if p.Price > 0 {
+			row.Price = formatHistQty(p.Price)
+		}
+		history = append(history, row)
 	}
 	bands := make([]perpDepthOverviewBandDTO, 0, len(a.Bands))
 	for _, b := range a.Bands {

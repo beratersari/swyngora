@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -41,10 +43,12 @@ type PerpDepthSample struct {
 	Ask      float64
 }
 
-// PerpDepthTotalPoint is the summed bid+ask of the tracked book at one minute.
+// PerpDepthTotalPoint is the summed bid+ask of the tracked book at one minute,
+// plus BTC's close so the chart can show price next to that size.
 type PerpDepthTotalPoint struct {
 	Time  time.Time
 	Total float64
+	Price float64
 }
 
 // PerpDepthHistoryStore persists market-wide perp book samples.
@@ -175,6 +179,32 @@ func AttachPerpDepthHistory(live *PerpDepthOverview, points []PerpDepthTotalPoin
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Time.Before(out[j].Time) })
 	live.History = out
+}
+
+// AttachPerpDepthPrices fills each history minute with the BTC close from that minute.
+func AttachPerpDepthPrices(live *PerpDepthOverview, candles []Candle) {
+	if live == nil || len(live.History) == 0 || len(candles) == 0 {
+		return
+	}
+	by := map[int64]float64{}
+	for _, c := range candles {
+		t := c.OpenTime
+		if t.IsZero() {
+			t = c.CloseTime
+		}
+		px, err := strconv.ParseFloat(strings.TrimSpace(c.Close), 64)
+		if err != nil || px <= 0 || t.IsZero() {
+			continue
+		}
+		by[BucketPerpDepthSampleTime(t).UnixMilli()] = px
+	}
+	for i := range live.History {
+		px, ok := by[live.History[i].Time.UnixMilli()]
+		if !ok {
+			continue
+		}
+		live.History[i].Price = round4(px)
+	}
 }
 
 func groupPerpDepthSamples(rows []PerpDepthSample) map[int64][]PerpDepthCoinInput {
