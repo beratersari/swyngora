@@ -59,6 +59,8 @@ BOOK_TOOLS: frozenset[str] = frozenset(
         "scan_suspicious_walls",
         "get_book_gaps",
         "scan_book_gaps",
+        "get_wide_spread",
+        "scan_wide_spreads",
         "analyze_swing",
         "scan_swing_setups",
         "list_custom_signal_factors",

@@ -1046,6 +1046,56 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook/spreads/scan:
+    get:
+      summary: Rank coins whose bid-ask spread opened versus their own typical
+      description: |
+        Compares the latest top-of-book spread with the median of earlier
+        samples of that same book. A coin is listed at 1.5× its own typical.
+        Samples collect while this process watches the book. Widest ratio first.
+      operationId: scanWideSpreads
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          schema: { type: string, default: all }
+        - name: quote
+          in: query
+          schema: { type: string, default: USDT }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20, minimum: 1, maximum: 40 }
+      responses:
+        '200':
+          description: Coins with an unusually wide spread
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WideSpreadScan'
+        '400':
+          $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook/spread:
+    get:
+      summary: One coin's bid-ask spread versus its own typical
+      operationId: getWideSpread
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Spread versus typical
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WideSpread'
+        '400':
+          $ref: '#/components/responses/Error'
   /api/v1/market/orderbook/gaps:
     get:
       summary: Find empty areas in the spot order book
@@ -11457,6 +11507,42 @@ components:
         hits:
           type: array
           items: { $ref: '#/components/schemas/BookGapScanHit' }
+        summary: { type: string }
+        note: { type: string }
+    WideSpreadHit:
+      type: object
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        base: { type: string }
+        currentPct: { type: string }
+        typicalPct: { type: string }
+        ratio: { type: string }
+        samples: { type: integer }
+        asOf: { type: string, format: date-time }
+    WideSpreadScan:
+      type: object
+      properties:
+        exchange: { type: string }
+        quote: { type: string }
+        known: { type: integer }
+        ready: { type: integer }
+        hits:
+          type: array
+          items: { $ref: '#/components/schemas/WideSpreadHit' }
+        summary: { type: string }
+        note: { type: string }
+    WideSpread:
+      type: object
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        currentPct: { type: string }
+        typicalPct: { type: string }
+        ratio: { type: string }
+        samples: { type: integer }
+        opened: { type: boolean }
+        asOf: { type: string, format: date-time }
         summary: { type: string }
         note: { type: string }
     WallScanHit:

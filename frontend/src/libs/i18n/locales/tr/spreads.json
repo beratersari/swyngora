@@ -1,0 +1,15 @@
+{
+  "title": "Geniş makas",
+  "subtitle": "Alış-satış makası kendi tipik makasının en az 1,5 katına açılan coinler. Örnekler masa kitabı izlerken birikir.",
+  "load": "Piyasayı yükle",
+  "exchange": "Borsa",
+  "allVenues": "Tüm borsalar",
+  "symbol": "Parite",
+  "current": "Şimdi",
+  "typical": "Tipik",
+  "ratio": "Tipiğe göre",
+  "emptyTitle": "Olağandışı geniş makas yok",
+  "emptyHint": "Kendi tipik makasına göre açılan defterleri görmek için piyasayı yükleyin.",
+  "loadFailed": "Makas okunamadı",
+  "resource": "makas"
+}

@@ -1268,6 +1268,17 @@ class BookGapScanInput(BaseModel):
     limit: int = Field(default=0, description="How many liquid pairs (default 20, max 30)")
 
 
+class WideSpreadInput(BaseModel):
+    symbol: str
+    exchange: str = Field(default="all", description="binance|coinbase|bybit|all")
+
+
+class WideSpreadScanInput(BaseModel):
+    exchange: str = Field(default="all", description="binance|coinbase|bybit|all")
+    quote: str = Field(default="USDT", description="Quote label")
+    limit: int = Field(default=0, description="How many coins (default 20, max 40)")
+
+
 class WallScanInput(BaseModel):
     exchange: str = Field(
         default="all",
@@ -3045,6 +3056,20 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if limit:
             params["limit"] = limit
         return http.get("/api/v1/market/orderbook/gaps/scan", params)
+
+    def get_wide_spread(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/orderbook/spread",
+            {"symbol": symbol, "exchange": exchange},
+        )
+
+    def scan_wide_spreads(
+        exchange: str = "all", quote: str = "USDT", limit: int = 0
+    ) -> str:
+        params: dict[str, Any] = {"exchange": exchange, "quote": quote}
+        if limit:
+            params["limit"] = limit
+        return http.get("/api/v1/market/orderbook/spreads/scan", params)
 
     def analyze_spot_orderbook(
         symbol: str,
@@ -5542,6 +5567,25 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "without opening each coin."
             ),
             args_schema=BookGapScanInput,
+        ),
+        StructuredTool.from_function(
+            get_wide_spread,
+            name="get_wide_spread",
+            description=(
+                "Compare a coin's current bid-ask spread with the median of "
+                "earlier samples of that same book. opened is true at 1.5× "
+                "its own typical."
+            ),
+            args_schema=WideSpreadInput,
+        ),
+        StructuredTool.from_function(
+            scan_wide_spreads,
+            name="scan_wide_spreads",
+            description=(
+                "Rank coins whose bid-ask spread is at least 1.5× that coin's "
+                "own typical spread. Widest first. Empty until books have been sampled."
+            ),
+            args_schema=WideSpreadScanInput,
         ),
         StructuredTool.from_function(
             get_candles,

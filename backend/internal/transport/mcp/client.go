@@ -317,6 +317,33 @@ func (c *APIClient) ScanBookGaps(ctx context.Context, exchange, quote string, ra
 	return c.get(ctx, "/api/v1/market/orderbook/gaps/scan", q)
 }
 
+// GetWideSpread compares one coin's spread with its own typical.
+func (c *APIClient) GetWideSpread(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if symbol != "" {
+		q.Set("symbol", symbol)
+	}
+	return c.get(ctx, "/api/v1/market/orderbook/spread", q)
+}
+
+// ScanWideSpreads ranks books that have opened versus their own typical spread.
+func (c *APIClient) ScanWideSpreads(ctx context.Context, exchange, quote string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if quote != "" {
+		q.Set("quote", quote)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/orderbook/spreads/scan", q)
+}
+
 // GetLiquidations returns rolling 5m/1h/4h/24h futures liquidation totals.
 func (c *APIClient) GetLiquidations(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

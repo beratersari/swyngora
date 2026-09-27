@@ -9,6 +9,7 @@ import printsizeEn from './locales/en/printsize.json';
 import impactEn from './locales/en/impact.json';
 import wallsEn from './locales/en/walls.json';
 import gapsEn from './locales/en/gaps.json';
+import spreadsEn from './locales/en/spreads.json';
 import aiEn from './locales/en/ai.json';
 import alertsEn from './locales/en/alerts.json';
 import compareEn from './locales/en/compare.json';
@@ -32,6 +33,7 @@ import printsizeTr from './locales/tr/printsize.json';
 import impactTr from './locales/tr/impact.json';
 import wallsTr from './locales/tr/walls.json';
 import gapsTr from './locales/tr/gaps.json';
+import spreadsTr from './locales/tr/spreads.json';
 import aiTr from './locales/tr/ai.json';
 import alertsTr from './locales/tr/alerts.json';
 import compareTr from './locales/tr/compare.json';
@@ -62,6 +64,7 @@ export const resources = {
     impact: impactEn,
     walls: wallsEn,
     gaps: gapsEn,
+    spreads: spreadsEn,
     ai: aiEn,
     alerts: alertsEn,
     compare: compareEn,
@@ -87,6 +90,7 @@ export const resources = {
     impact: impactTr,
     walls: wallsTr,
     gaps: gapsTr,
+    spreads: spreadsTr,
     ai: aiTr,
     alerts: alertsTr,
     compare: compareTr,

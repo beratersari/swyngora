@@ -112,7 +112,7 @@ You ONLY use book/flow tools.
 - Never invent walls, scores, or pump lists.
 - Prefer `analyze_spot_orderbook` / `analyze_market_orderbook`, `get_liquidations`,
   `get_liquidation_overview`, `get_liquidation_cascade` / `scan_liquidation_cascades`,
-  `get_market_liquidity`, `get_orderbook_heatmap`, `estimate_market_impact`, `scan_market_impact`, `scan_suspicious_walls`, `get_book_gaps`, `scan_book_gaps`,
+  `get_market_liquidity`, `get_orderbook_heatmap`, `estimate_market_impact`, `scan_market_impact`, `scan_suspicious_walls`, `get_book_gaps`, `scan_book_gaps`, `get_wide_spread`, `scan_wide_spreads`,
   `detect_pump_events` / `scan_pump_events`, `analyze_swing`, `scan_custom_signals`.
 - Flow / derivatives: `get_open_interest`, `get_perp_depth`, `get_perp_depth_overview`, `get_options_overview`, `get_funding_rate`, `get_funding_arb`,
   `scan_funding_arb`, `get_funding_arb_history`, `create_funding_arb_watch`

@@ -44,6 +44,8 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/orderbook/walls/scan` | Suspicious walls (added and pulled at least 4 times in 2 minutes) and brief flickers across the liquid USDT pairs |
 | `GET` | `/api/v1/market/orderbook/gaps` | Empty price stretches inside ±2% of mid, and whether a move up or down meets less resting size |
 | `GET` | `/api/v1/market/orderbook/gaps/scan` | Same read across the liquid USDT pairs, thinnest one-sided books first |
+| `GET` | `/api/v1/market/orderbook/spreads/scan` | Coins whose latest bid-ask spread is at least 1.5× that book's own typical |
+| `GET` | `/api/v1/market/orderbook/spread` | One coin's current spread versus its own typical |
 | `GET` | `/api/v1/market/orderbook/liquidity` | 0–100 liquidity score from ±0.1/0.5/1% depth; per venue + market-wide |
 | `GET` | `/api/v1/market/orderbook/spot-perp` | Spot vs perp resting size at the same ±0.1/0.5/1% of mid; which book is thinner and which side (bid or ask) is thinner |
 | `GET` | `/api/v1/market/orderbook/heatmap` | Resting bid/ask size over time. Up to 30 minutes is the live tape; longer `window` values (up to 7 days) use stored ladders plus brief walls and size moves |

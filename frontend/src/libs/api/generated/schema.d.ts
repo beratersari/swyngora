@@ -590,6 +590,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/orderbook/spreads/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rank coins whose bid-ask spread opened versus their own typical
+         * @description Compares the latest top-of-book spread with the median of earlier
+         *     samples of that same book. A coin is listed at 1.5× its own typical.
+         *     Samples collect while this process watches the book. Widest ratio first.
+         */
+        get: operations["scanWideSpreads"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/orderbook/spread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One coin's bid-ask spread versus its own typical */
+        get: operations["getWideSpread"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/orderbook/gaps": {
         parameters: {
             query?: never;
@@ -7461,6 +7500,39 @@ export interface components {
             summary?: string;
             note?: string;
         };
+        WideSpreadHit: {
+            exchange?: string;
+            symbol?: string;
+            base?: string;
+            currentPct?: string;
+            typicalPct?: string;
+            ratio?: string;
+            samples?: number;
+            /** Format: date-time */
+            asOf?: string;
+        };
+        WideSpreadScan: {
+            exchange?: string;
+            quote?: string;
+            known?: number;
+            ready?: number;
+            hits?: components["schemas"]["WideSpreadHit"][];
+            summary?: string;
+            note?: string;
+        };
+        WideSpread: {
+            symbol?: string;
+            exchange?: string;
+            currentPct?: string;
+            typicalPct?: string;
+            ratio?: string;
+            samples?: number;
+            opened?: boolean;
+            /** Format: date-time */
+            asOf?: string;
+            summary?: string;
+            note?: string;
+        };
         WallScanHit: {
             exchange?: string;
             symbol?: string;
@@ -10053,6 +10125,55 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             502: components["responses"]["Error"];
+        };
+    };
+    scanWideSpreads: {
+        parameters: {
+            query?: {
+                exchange?: string;
+                quote?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Coins with an unusually wide spread */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WideSpreadScan"];
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getWideSpread: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Spread versus typical */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WideSpread"];
+                };
+            };
+            400: components["responses"]["Error"];
         };
     };
     getBookGaps: {

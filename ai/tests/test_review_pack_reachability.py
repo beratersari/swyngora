@@ -73,6 +73,8 @@ BOOK_FLOW_ANALYTICS = frozenset(
         "scan_suspicious_walls",
         "get_book_gaps",
         "scan_book_gaps",
+        "get_wide_spread",
+        "scan_wide_spreads",
     }
 )
 

@@ -68,6 +68,8 @@ export {
   useScanSuspiciousWallsQuery,
   useGetBookGapsQuery,
   useScanBookGapsQuery,
+  useGetWideSpreadQuery,
+  useScanWideSpreadsQuery,
   useGetMarketOrderCountOverviewQuery,
   useGetMarketOrderCountQuery,
   useGetMarketPressureQuery,
@@ -204,6 +206,8 @@ export type {
   ScanPumpEventsResponse,
   RSIHeatmapQuery,
   RSIHeatmapResponse,
+  WideSpreadHit,
+  WideSpreadScan,
 } from './endpoints/marketApi';
 export {
   useGetWatchlistQuery,
