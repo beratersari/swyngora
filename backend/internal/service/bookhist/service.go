@@ -10,6 +10,10 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
+// bookFlashDepth is the top of book sampled between minute snapshots.
+// Binance charges 5 weight for 100 levels and 50 weight for 1,000.
+const bookFlashDepth = 100
+
 // Service writes and reads durable spot order-book samples.
 type Service struct {
 	Store  domain.BookHistoryStore
@@ -238,7 +242,7 @@ func (s *Service) SaveFlashes(ctx context.Context, ex domain.Exchange, symbol st
 	if symbol == "" {
 		return 0, nil
 	}
-	raw, err := p.GetOrderBook(ctx, domain.OrderBookQuery{Symbol: symbol, Limit: domain.MaxOrderBookRawLimit})
+	raw, err := p.GetOrderBook(ctx, domain.OrderBookQuery{Symbol: symbol, Limit: bookFlashDepth})
 	if err != nil {
 		return 0, err
 	}

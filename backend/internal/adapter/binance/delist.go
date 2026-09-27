@@ -41,9 +41,9 @@ func (c *Client) FetchSpotDelistSchedule(ctx context.Context) ([]domain.SpotDeli
 	req.Header.Set("User-Agent", "swyngora-backend/0.1")
 	req.Header.Set("X-MBX-APIKEY", key)
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.doREST(req)
 	if err != nil {
-		return nil, fmt.Errorf("%w: request failed: %v", domain.ErrUpstream, err)
+		return nil, restCallErr(err)
 	}
 	defer resp.Body.Close()
 
@@ -131,7 +131,7 @@ func (c *Client) fetchCMSWillDelistEntries(ctx context.Context) ([]domain.SpotDe
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "swyngora-backend/0.1")
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.doREST(req)
 	if err != nil {
 		return nil, err
 	}

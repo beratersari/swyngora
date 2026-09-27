@@ -2,6 +2,7 @@ package market
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -10,8 +11,11 @@ import (
 )
 
 const (
-	wallScanLimit          = 20
-	wallScanGap            = 250 * time.Millisecond
+	wallScanLimit = 20
+	wallScanGap   = 250 * time.Millisecond
+	// Near-mid walls fit in the top 100 levels. Binance charges 50 weight for 1,000 levels.
+	wallScanDepth          = 100
+	binanceWallScanGap     = time.Second
 	wallScanUniverseEvery  = 2 * time.Minute
 	wallScanRequestTimeout = 4 * time.Second
 )
@@ -53,8 +57,15 @@ func (s *Service) StartWallScan(ctx context.Context) {
 	wg.Wait()
 }
 
+func wallScanGapFor(ex domain.Exchange) time.Duration {
+	if ex == domain.ExchangeBinance {
+		return binanceWallScanGap
+	}
+	return wallScanGap
+}
+
 func (s *Service) scanVenueWalls(ctx context.Context, ex domain.Exchange) {
-	tick := time.NewTicker(wallScanGap)
+	tick := time.NewTicker(wallScanGapFor(ex))
 	defer tick.Stop()
 	idx := 0
 	for {
@@ -71,28 +82,33 @@ func (s *Service) scanVenueWalls(ctx context.Context, ex domain.Exchange) {
 			}
 			symbol := pairs[idx]
 			idx++
-			s.sampleWallBook(ctx, ex, symbol)
+			if err := s.sampleWallBook(ctx, ex, symbol); errors.Is(err, domain.ErrRateLimited) {
+				if !sleepMarket(ctx, 15*time.Second) {
+					return
+				}
+			}
 		}
 	}
 }
 
-func (s *Service) sampleWallBook(ctx context.Context, ex domain.Exchange, symbol string) {
+func (s *Service) sampleWallBook(ctx context.Context, ex domain.Exchange, symbol string) error {
 	p, err := s.port(ex)
 	if err != nil {
-		return
+		return err
 	}
 	req, cancel := context.WithTimeout(ctx, wallScanRequestTimeout)
 	defer cancel()
 	raw, err := p.GetOrderBook(req, domain.OrderBookQuery{
 		Symbol:       symbol,
-		Limit:        domain.MaxOrderBookRawLimit,
+		Limit:        wallScanDepth,
 		SnapshotOnly: true,
 	})
 	if err != nil || raw == nil {
-		return
+		return err
 	}
 	an := domain.AnalyzeOrderBook(*raw, domain.DefaultOrderBookRangePct)
 	s.observeWalls(ex, symbol, an.Walls)
+	return nil
 }
 
 func (s *Service) refreshWallScanUniverse(ctx context.Context) {
