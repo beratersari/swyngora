@@ -886,6 +886,55 @@ func (b *Backend) GetOpenInterest(ctx context.Context, exchange, symbol string) 
 	return mustJSON(out)
 }
 
+func (b *Backend) CompareSpotPerpLiquidity(ctx context.Context, symbol string, rangePct float64) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetSpotPerpLiquidity(ctx, symbol, rangePct)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(spotPerpMap(got))
+}
+
+func spotPerpMap(got *domain.SpotPerpLiquidity) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	bands := make([]map[string]any, 0, len(got.Bands))
+	for _, b := range got.Bands {
+		bands = append(bands, map[string]any{
+			"rangePct": formatQtyMCP(b.RangePct), "spotBid": formatQtyMCP(b.SpotBid), "spotAsk": formatQtyMCP(b.SpotAsk),
+			"perpBid": formatQtyMCP(b.PerpBid), "perpAsk": formatQtyMCP(b.PerpAsk),
+			"thinnerBook": b.ThinnerBook, "strongerBook": b.StrongerBook,
+			"spotThinnerSide": b.SpotThinnerSide, "perpThinnerSide": b.PerpThinnerSide, "complete": b.Complete,
+		})
+	}
+	venues := make([]map[string]any, 0, len(got.Venues))
+	for _, v := range got.Venues {
+		venues = append(venues, map[string]any{
+			"exchange": string(v.Exchange), "spotBid": formatQtyMCP(v.SpotBid), "spotAsk": formatQtyMCP(v.SpotAsk),
+			"perpBid": formatQtyMCP(v.PerpBid), "perpAsk": formatQtyMCP(v.PerpAsk),
+			"thinnerBook": v.ThinnerBook, "spotThinnerSide": v.SpotThinnerSide, "perpThinnerSide": v.PerpThinnerSide,
+			"complete": v.Complete, "error": v.Error,
+		})
+	}
+	return map[string]any{
+		"symbol": got.Symbol, "rangePct": formatQtyMCP(got.RangePct),
+		"spot": spotPerpBookMap(got.Spot), "perp": spotPerpBookMap(got.Perp),
+		"thinnerBook": got.ThinnerBook, "strongerBook": got.StrongerBook, "ratio": formatQtyMCP(got.Ratio),
+		"bands": bands, "venues": venues, "summary": got.Summary, "note": got.Note,
+	}
+}
+
+func spotPerpBookMap(b domain.SpotPerpBook) map[string]any {
+	return map[string]any{
+		"bidNotional": formatQtyMCP(b.BidNotional), "askNotional": formatQtyMCP(b.AskNotional), "total": formatQtyMCP(b.Total),
+		"thinnerSide": b.ThinnerSide, "strongerSide": b.StrongerSide, "mid": formatQtyMCP(b.Mid),
+		"coverPct": formatQtyMCP(b.CoverPct), "venueCount": b.VenueCount, "complete": b.Complete,
+	}
+}
+
 func (b *Backend) GetPerpDepth(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

@@ -393,6 +393,19 @@ class _Transport(httpx2.BaseTransport):
                     ],
                 },
             )
+        if request.url.path.endswith("/orderbook/spot-perp"):
+            return httpx2.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "rangePct": "1",
+                    "thinnerBook": "spot",
+                    "strongerBook": "perp",
+                    "spot": {"total": "1200000", "thinnerSide": "ask"},
+                    "perp": {"total": "55000000", "thinnerSide": "bid"},
+                    "summary": "Within 1.0% of mid, the spot book is thinner.",
+                },
+            )
         if request.url.path.endswith("/perp-depth"):
             return httpx2.Response(
                 200,
@@ -636,6 +649,13 @@ def test_market_tools_hit_api(monkeypatch):
     )
     assert vp["symbol"] == "BTCUSDT"
     assert vp["poc"]["price"] == "65200"
+
+    assert "compare_spot_perp_liquidity" in by_name
+    compared = json.loads(
+        by_name["compare_spot_perp_liquidity"].invoke({"symbol": "BTCUSDT", "range_pct": 1})
+    )
+    assert compared["thinnerBook"] == "spot"
+    assert compared["spot"]["thinnerSide"] == "ask"
 
     assert "get_perp_depth" in by_name
     perp = json.loads(

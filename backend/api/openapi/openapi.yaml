@@ -865,6 +865,38 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/orderbook/spot-perp:
+    get:
+      summary: Compare spot and perpetual resting liquidity
+      description: |
+        Sums resting bid and ask notional on the spot books and on the
+        perpetual books at the same ±0.1% / ±0.5% / ±1% of each book's mid.
+        Says which book is thinner and which side (bid or ask) is thinner
+        on each. A venue counts in a band only when that book reaches the
+        percent on both sides. Binance and Bybit rows compare that venue's
+        own spot book with its perp. Informational only.
+      operationId: getSpotPerpLiquidity
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: rangePct
+          in: query
+          description: Headline ± percent of mid (0.1–1, default 1). Nearer bands are always included.
+          schema: { type: number, default: 1, minimum: 0.1, maximum: 1, example: 1 }
+      responses:
+        '200':
+          description: Spot versus perp liquidity
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpotPerpLiquidity'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/orderbook/heatmap:
     get:
       summary: Resting order-book heatmap over time
@@ -8933,6 +8965,64 @@ components:
         venues:
           type: array
           items: { $ref: '#/components/schemas/VenueLiquidity' }
+        note: { type: string }
+    SpotPerpBook:
+      type: object
+      properties:
+        bidNotional: { type: string }
+        askNotional: { type: string }
+        total: { type: string }
+        thinnerSide: { type: string, enum: [bid, ask, balanced] }
+        strongerSide: { type: string, enum: [bid, ask, balanced] }
+        mid: { type: string }
+        coverPct: { type: string }
+        venueCount: { type: integer }
+        complete: { type: boolean }
+    SpotPerpBand:
+      type: object
+      properties:
+        rangePct: { type: string }
+        spotBid: { type: string }
+        spotAsk: { type: string }
+        perpBid: { type: string }
+        perpAsk: { type: string }
+        thinnerBook: { type: string, enum: [spot, perp, even] }
+        strongerBook: { type: string, enum: [spot, perp, even] }
+        spotThinnerSide: { type: string, enum: [bid, ask, balanced] }
+        perpThinnerSide: { type: string, enum: [bid, ask, balanced] }
+        complete: { type: boolean }
+    SpotPerpVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        spotBid: { type: string }
+        spotAsk: { type: string }
+        perpBid: { type: string }
+        perpAsk: { type: string }
+        thinnerBook: { type: string, enum: [spot, perp, even] }
+        spotThinnerSide: { type: string }
+        perpThinnerSide: { type: string }
+        complete: { type: boolean }
+        error: { type: string }
+    SpotPerpLiquidity:
+      type: object
+      description: Spot versus perpetual resting size at the same percent of mid
+      properties:
+        symbol: { type: string }
+        rangePct: { type: string }
+        asOf: { type: string, format: date-time }
+        spot: { $ref: '#/components/schemas/SpotPerpBook' }
+        perp: { $ref: '#/components/schemas/SpotPerpBook' }
+        thinnerBook: { type: string, enum: [spot, perp, even] }
+        strongerBook: { type: string, enum: [spot, perp, even] }
+        ratio: { type: string, description: Perp total divided by spot total at the headline band }
+        bands:
+          type: array
+          items: { $ref: '#/components/schemas/SpotPerpBand' }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/SpotPerpVenue' }
+        summary: { type: string }
         note: { type: string }
     LiquidationHit:
       type: object

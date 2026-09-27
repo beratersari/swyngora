@@ -22,7 +22,8 @@ above**. Binance, Bybit, and OKX separately, plus combined.
 - `complete` is false when the snapshot does not reach that %
 - Combined **adds** each venue's own ±% (not a shared price grid)
 
-This is the **futures** book, not spot. Informational only — not
+This is the **futures** book, not spot. Spot versus this perp book is
+[`spot-perp-book.md`](spot-perp-book.md). Informational only — not
 financial advice.
 
 Web: coin detail **Flow** tab lists each venue's bid / ask under the combined total.

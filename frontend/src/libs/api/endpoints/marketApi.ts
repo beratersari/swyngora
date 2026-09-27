@@ -78,6 +78,8 @@ import type {
   CvdQuery,
   MarketVolumeShare,
   VolumeShareQuery,
+  SpotPerpLiquidity,
+  SpotPerpQuery,
   MarketPerpDepthOverview,
   PerpDepthOverviewQuery,
   MarketPerpDepthShareWindow,
@@ -187,6 +189,10 @@ export type {
   MarketLiquidationCascadeScan,
   MarketCvd,
   MarketVolumeShare,
+  SpotPerpLiquidity,
+  SpotPerpBook,
+  SpotPerpVenue,
+  SpotPerpQuery,
   MarketPerpDepthOverview,
   MarketPerpDepthCoin,
   MarketPerpDepthShareWindow,
@@ -537,6 +543,12 @@ export const marketApi = baseApi.injectEndpoints({
       }),
     }),
 
+    getSpotPerpLiquidity: build.query<SpotPerpLiquidity, SpotPerpQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/orderbook/spot-perp',
+        params: compactParams({ ...arg }),
+      }),
+    }),
     getMarketPerpDepth: build.query<MarketDeskReport, SymbolMarketQuery>({
       query: (arg) => ({
         url: '/api/v1/market/perp-depth',
@@ -875,6 +887,7 @@ export const {
   useGetMarketFearGreedQuery,
   useScanMarketVolumeSurgesQuery,
   useLazyScanMarketVolumeSurgesQuery,
+  useGetSpotPerpLiquidityQuery,
   useGetMarketPerpDepthQuery,
   useGetMarketVolumeSurgeQuery,
   useGetMarketTakerFlowQuery,

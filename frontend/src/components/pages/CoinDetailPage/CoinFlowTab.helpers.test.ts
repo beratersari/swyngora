@@ -1,9 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { perpStats, reportSummary, surgeStats } from './CoinFlowTab.helpers';
+import { perpStats, reportSummary, spotPerpFacts, surgeStats } from './CoinFlowTab.helpers';
 
 describe('CoinFlowTab helpers', () => {
   it('prefers top-level summary', () => {
     expect(reportSummary({ summary: 'Buy flow', venues: [{ summary: 'other' }] })).toBe('Buy flow');
+  });
+
+  it('reads spot and perp notionals and which book is thinner', () => {
+    const facts = spotPerpFacts({
+      thinnerBook: 'spot',
+      spot: { bidNotional: '40000000', askNotional: '15000000', thinnerSide: 'ask' },
+      perp: { bidNotional: '120000000', askNotional: '90000000', thinnerSide: 'ask' },
+    });
+    expect(facts.find((f) => f.key === 'thinnerBook')?.value).toBe('spot');
+    expect(facts.find((f) => f.key === 'spotBid')?.value).toBeTruthy();
+    expect(facts.find((f) => f.key === 'perpAsk')?.value).toBeTruthy();
   });
 
   it('reads perp headline notionals', () => {

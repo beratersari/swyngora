@@ -468,6 +468,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/orderbook/spot-perp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compare spot and perpetual resting liquidity
+         * @description Sums resting bid and ask notional on the spot books and on the
+         *     perpetual books at the same ±0.1% / ±0.5% / ±1% of each book's mid.
+         *     Says which book is thinner and which side (bid or ask) is thinner
+         *     on each. A venue counts in a band only when that book reaches the
+         *     percent on both sides. Binance and Bybit rows compare that venue's
+         *     own spot book with its perp. Informational only.
+         */
+        get: operations["getSpotPerpLiquidity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/orderbook/heatmap": {
         parameters: {
             query?: never;
@@ -4920,6 +4945,67 @@ export interface components {
             venueCount?: number;
             market?: components["schemas"]["LiquidityScore"];
             venues?: components["schemas"]["VenueLiquidity"][];
+            note?: string;
+        };
+        SpotPerpBook: {
+            bidNotional?: string;
+            askNotional?: string;
+            total?: string;
+            /** @enum {string} */
+            thinnerSide?: "bid" | "ask" | "balanced";
+            /** @enum {string} */
+            strongerSide?: "bid" | "ask" | "balanced";
+            mid?: string;
+            coverPct?: string;
+            venueCount?: number;
+            complete?: boolean;
+        };
+        SpotPerpBand: {
+            rangePct?: string;
+            spotBid?: string;
+            spotAsk?: string;
+            perpBid?: string;
+            perpAsk?: string;
+            /** @enum {string} */
+            thinnerBook?: "spot" | "perp" | "even";
+            /** @enum {string} */
+            strongerBook?: "spot" | "perp" | "even";
+            /** @enum {string} */
+            spotThinnerSide?: "bid" | "ask" | "balanced";
+            /** @enum {string} */
+            perpThinnerSide?: "bid" | "ask" | "balanced";
+            complete?: boolean;
+        };
+        SpotPerpVenue: {
+            exchange?: string;
+            spotBid?: string;
+            spotAsk?: string;
+            perpBid?: string;
+            perpAsk?: string;
+            /** @enum {string} */
+            thinnerBook?: "spot" | "perp" | "even";
+            spotThinnerSide?: string;
+            perpThinnerSide?: string;
+            complete?: boolean;
+            error?: string;
+        };
+        /** @description Spot versus perpetual resting size at the same percent of mid */
+        SpotPerpLiquidity: {
+            symbol?: string;
+            rangePct?: string;
+            /** Format: date-time */
+            asOf?: string;
+            spot?: components["schemas"]["SpotPerpBook"];
+            perp?: components["schemas"]["SpotPerpBook"];
+            /** @enum {string} */
+            thinnerBook?: "spot" | "perp" | "even";
+            /** @enum {string} */
+            strongerBook?: "spot" | "perp" | "even";
+            /** @description Perp total divided by spot total at the headline band */
+            ratio?: string;
+            bands?: components["schemas"]["SpotPerpBand"][];
+            venues?: components["schemas"]["SpotPerpVenue"][];
+            summary?: string;
             note?: string;
         };
         LiquidationHit: {
@@ -9822,6 +9908,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketLiquidity"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getSpotPerpLiquidity: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description Headline ± percent of mid (0.1–1, default 1). Nearer bands are always included. */
+                rangePct?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Spot versus perp liquidity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpotPerpLiquidity"];
                 };
             };
             400: components["responses"]["Error"];
