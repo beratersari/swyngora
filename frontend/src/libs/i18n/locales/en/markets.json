@@ -10,6 +10,7 @@
     "leanEven": "Balanced",
     "window": "{{window}} bid share",
     "depth": "{{window}} book size",
+    "sizeDrivers": "{{names}}",
     "thicker": "Thicker",
     "thinner": "Thinner",
     "steady": "Steady",

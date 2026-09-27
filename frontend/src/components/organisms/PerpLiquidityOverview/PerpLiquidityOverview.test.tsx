@@ -37,6 +37,10 @@ describe('PerpLiquidityOverview', () => {
               total: '500000000',
               totalChangePct: '+25',
               depthKind: 'thicker',
+              sizeDrivers: [
+                { base: 'ETH', change: '+100000000' },
+                { base: 'BTC', change: '+20000000' },
+              ],
               drivers: [{ base: 'ETH', changePct: '+10' }],
             },
           ],
@@ -53,6 +57,7 @@ describe('PerpLiquidityOverview', () => {
     expect(screen.getByText('48%')).toBeInTheDocument();
     expect(screen.getByText('55% → 65% (+10)')).toBeInTheDocument();
     expect(screen.getByText('400.00M → 500.00M (+25%) · Thicker')).toBeInTheDocument();
+    expect(screen.getByText('ETH +100.00M, BTC +20.00M')).toBeInTheDocument();
     expect(screen.getByText('80.00M · 8%')).toBeInTheDocument();
   });
 });

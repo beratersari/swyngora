@@ -13,6 +13,7 @@ import {
   distanceBands,
   depthLine,
   driverNames,
+  sizeDriverLine,
   leaderCoins,
   mixLine,
   shareLabel,
@@ -145,6 +146,11 @@ export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLi
                       {w.depthKind && w.depthKind !== 'steady' ? ` · ${t(`perpLiq.${w.depthKind}`)}` : ''}
                     </Text>
                   </Head>
+                ) : null}
+                {w.complete && sizeDriverLine(w) ? (
+                  <Text variant="caption" color="secondary">
+                    {t('perpLiq.sizeDrivers', { names: sizeDriverLine(w) })}
+                  </Text>
                 ) : null}
                 {w.complete && driverNames(w) ? (
                   <Text variant="caption" color="secondary">

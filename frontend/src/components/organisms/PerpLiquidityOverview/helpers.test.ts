@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bandLeaderLabel, bandShareLabel, bidSharePct, depthLine, distanceBands, driverNames, leaderCoins, mixLine, shareLabel } from './helpers';
+import { bandLeaderLabel, bandShareLabel, bidSharePct, depthLine, distanceBands, driverNames, leaderCoins, mixLine, shareLabel, sizeDriverLine } from './helpers';
 
 describe('PerpLiquidityOverview helpers', () => {
   it('drops empty or errored coins then keeps the largest', () => {
@@ -37,6 +37,18 @@ describe('PerpLiquidityOverview helpers', () => {
       depthLine({ complete: true, pastTotal: '400000000', total: '500000000', totalChangePct: '+25' }),
     ).toBe('400.00M → 500.00M (+25%)');
     expect(depthLine({ complete: false, pastTotal: '1', total: '2' })).toBe('');
+  });
+
+  it('names the coins that moved the book size, largest first', () => {
+    expect(
+      sizeDriverLine({
+        sizeDrivers: [
+          { base: 'ETH', change: '+100000000' },
+          { base: 'BTC', change: '+20000000' },
+          { base: 'SOL', change: '-10000000' },
+        ],
+      }),
+    ).toBe('ETH +100.00M, BTC +20.00M, SOL -10.00M');
   });
 
   it('labels how much of the 1% book sits inside a tighter band', () => {

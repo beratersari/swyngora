@@ -53,6 +53,14 @@ type PerpDepthShareDriver struct {
 	Kind      string  // bid_gained | ask_gained | stable
 }
 
+// PerpDepthSizeDriver is one coin's signed change in bid+ask notional.
+type PerpDepthSizeDriver struct {
+	Symbol string
+	Base   string
+	Change float64 // USDT, now − past
+	Kind   string  // thicker | thinner | steady
+}
+
 // PerpDepthShareWindow is live bid/ask mix and total book size vs that lookback.
 type PerpDepthShareWindow struct {
 	Window         string
@@ -68,6 +76,7 @@ type PerpDepthShareWindow struct {
 	TotalChangePct float64 // percent change of total
 	DepthKind      string  // thicker | thinner | steady
 	Drivers        []PerpDepthShareDriver
+	SizeDrivers    []PerpDepthSizeDriver
 	Complete       bool
 	SampleTime     time.Time
 	Summary        string
@@ -151,8 +160,9 @@ func buildPerpDepthShareWindow(id string, dur time.Duration, live *PerpDepthOver
 		Window:  id,
 		BidPct:  live.BidPct,
 		AskPct:  live.AskPct,
-		Kind:    PerpDepthShareStable,
-		Drivers: []PerpDepthShareDriver{},
+		Kind:        PerpDepthShareStable,
+		Drivers:     []PerpDepthShareDriver{},
+		SizeDrivers: []PerpDepthSizeDriver{},
 	}
 	target := now.Add(-dur)
 	slack := perpDepthShareSlack(dur)
@@ -183,6 +193,7 @@ func buildPerpDepthShareWindow(id string, dur time.Duration, live *PerpDepthOver
 	out.TotalChangePct = round4(100 * out.TotalChange / pastTotal)
 	out.DepthKind = ClassifyPerpDepthSize(out.TotalChangePct)
 	out.Drivers = perpDepthShareDrivers(live.Coins, pastCoins, live.Total, pastTotal, out.ChangePct)
+	out.SizeDrivers = perpDepthSizeDrivers(live.Coins, pastCoins, out.TotalChange)
 	out.Summary = ExplainPerpDepthShareWindow(out)
 	return out
 }
@@ -279,6 +290,75 @@ func perpDepthShareDrivers(now []PerpDepthCoinShare, past []PerpDepthCoinInput, 
 	return out
 }
 
+func perpDepthSizeDrivers(now []PerpDepthCoinShare, past []PerpDepthCoinInput, marketChange float64) []PerpDepthSizeDriver {
+	pastBy := map[string]PerpDepthCoinInput{}
+	for _, c := range past {
+		pastBy[NormalizeLiquidationSymbol(c.Symbol)] = c
+	}
+	seen := map[string]struct{}{}
+	out := make([]PerpDepthSizeDriver, 0, len(now)+len(past))
+	add := func(symbol, base string, nowTotal, pastTotal float64) {
+		symbol = NormalizeLiquidationSymbol(symbol)
+		if symbol == "" {
+			return
+		}
+		if _, ok := seen[symbol]; ok {
+			return
+		}
+		seen[symbol] = struct{}{}
+		if base == "" {
+			base = prettyBase(symbol)
+		}
+		chg := round4(nowTotal - pastTotal)
+		if chg == 0 {
+			return
+		}
+		out = append(out, PerpDepthSizeDriver{
+			Symbol: symbol, Base: base, Change: chg, Kind: perpDepthSizeKind(chg),
+		})
+	}
+	for _, c := range now {
+		p := pastBy[c.Symbol]
+		add(c.Symbol, c.Base, c.Bid+c.Ask, p.Bid+p.Ask)
+	}
+	for _, p := range past {
+		sym := NormalizeLiquidationSymbol(p.Symbol)
+		if _, ok := seen[sym]; ok {
+			continue
+		}
+		add(p.Symbol, p.Base, 0, p.Bid+p.Ask)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if marketChange > 0 {
+			if out[i].Change != out[j].Change {
+				return out[i].Change > out[j].Change
+			}
+		} else if marketChange < 0 {
+			if out[i].Change != out[j].Change {
+				return out[i].Change < out[j].Change
+			}
+		} else if math.Abs(out[i].Change) != math.Abs(out[j].Change) {
+			return math.Abs(out[i].Change) > math.Abs(out[j].Change)
+		}
+		return out[i].Symbol < out[j].Symbol
+	})
+	if len(out) > perpDepthShareMaxDrivers {
+		out = out[:perpDepthShareMaxDrivers]
+	}
+	return out
+}
+
+func perpDepthSizeKind(change float64) string {
+	switch {
+	case change > 0:
+		return PerpDepthSizeThicker
+	case change < 0:
+		return PerpDepthSizeThinner
+	default:
+		return PerpDepthSizeSteady
+	}
+}
+
 // ExplainPerpDepthShareWindow writes bid share then → now plus who pushed it.
 func ExplainPerpDepthShareWindow(w PerpDepthShareWindow) string {
 	if !w.Complete {
@@ -314,7 +394,40 @@ func ExplainPerpDepthShareWindow(w PerpDepthShareWindow) string {
 	default:
 		head += " " + joinList(names) + " moved the mix the most."
 	}
+	if size := perpDepthSizeDriverSentence(w); size != "" {
+		head += " " + size
+	}
 	return head
+}
+
+func perpDepthSizeDriverSentence(w PerpDepthShareWindow) string {
+	names := make([]string, 0, 3)
+	for _, d := range w.SizeDrivers {
+		if len(names) >= 3 {
+			break
+		}
+		if w.DepthKind == PerpDepthSizeThicker && d.Change <= 0 {
+			continue
+		}
+		if w.DepthKind == PerpDepthSizeThinner && d.Change >= 0 {
+			continue
+		}
+		if d.Base == "" {
+			continue
+		}
+		names = append(names, d.Base)
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	switch w.DepthKind {
+	case PerpDepthSizeThicker:
+		return joinList(names) + " added the most size."
+	case PerpDepthSizeThinner:
+		return joinList(names) + " removed the most size."
+	default:
+		return joinList(names) + " moved the book size the most."
+	}
 }
 
 func perpDepthSizeWord(kind string) string {

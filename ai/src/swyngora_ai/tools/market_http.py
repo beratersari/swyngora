@@ -4790,7 +4790,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "within 1% of mid; BTC 48%, ETH 17%. windows (15m/1h/4h) "
                 "compare bid vs ask share of that book (bids 55% → 65%) and "
                 "whether total bid+ask got thicker or thinner (at least 5%). "
-                "drivers name the coins that moved the mix. Sampled while "
+                "drivers name the coins that moved the mix. sizeDrivers name "
+                "the coins that added or removed the most size. Sampled while "
                 "the desk runs. exchange=all adds Binance, Bybit, and OKX per coin. "
                 "range_pct default 1. limit default 20."
             ),

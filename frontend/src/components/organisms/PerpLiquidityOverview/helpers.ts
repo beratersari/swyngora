@@ -37,6 +37,23 @@ export function depthLine(w?: MarketPerpDepthShareWindow | null): string {
   return `${formatCompactAmount(w.pastTotal)} → ${formatCompactAmount(w.total)}${chg}`;
 }
 
+/** Coins that added or removed the most bid+ask, with the signed amount. */
+export function sizeDriverLine(w?: MarketPerpDepthShareWindow | null): string {
+  const parts = (w?.sizeDrivers ?? [])
+    .filter((d) => d.base || d.symbol)
+    .slice(0, 3)
+    .map((d) => {
+      const n = Number(d.change);
+      const name = d.base || d.symbol || '';
+      if (!Number.isFinite(n)) return name;
+      const body = formatCompactAmount(Math.abs(n));
+      if (n > 0) return `${name} +${body}`;
+      if (n < 0) return `${name} -${body}`;
+      return `${name} ${body}`;
+    });
+  return parts.filter(Boolean).join(', ');
+}
+
 export function driverNames(w?: MarketPerpDepthShareWindow | null): string {
   const names = (w?.drivers ?? [])
     .filter((d) => d.base || d.symbol)

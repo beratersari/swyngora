@@ -10465,6 +10465,14 @@ components:
         base: { type: string }
         changePct: { type: string, description: Signed percentage points of market bid share }
         kind: { type: string, enum: [bid_gained, ask_gained, stable] }
+    MarketPerpDepthSizeDriver:
+      type: object
+      description: One coin's change in bid+ask notional over the window
+      properties:
+        symbol: { type: string }
+        base: { type: string }
+        change: { type: string, description: "Signed USDT, this coin's bid+ask now minus past" }
+        kind: { type: string, enum: [thicker, thinner, steady] }
     MarketPerpDepthShareWindow:
       type: object
       description: Bid vs ask share and total book size of the liquid-perp book now vs 15m / 1h / 4h ago
@@ -10484,6 +10492,10 @@ components:
         drivers:
           type: array
           items: { $ref: '#/components/schemas/MarketPerpDepthShareDriver' }
+        sizeDrivers:
+          type: array
+          description: Coins that added or removed the most bid+ask, largest move first
+          items: { $ref: '#/components/schemas/MarketPerpDepthSizeDriver' }
         complete: { type: boolean }
         sampleTime: { type: string, format: date-time }
         summary: { type: string }

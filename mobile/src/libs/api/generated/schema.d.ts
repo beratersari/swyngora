@@ -6336,6 +6336,15 @@ export interface components {
             /** @enum {string} */
             kind?: "bid_gained" | "ask_gained" | "stable";
         };
+        /** @description One coin's change in bid+ask notional over the window */
+        MarketPerpDepthSizeDriver: {
+            symbol?: string;
+            base?: string;
+            /** @description Signed USDT, this coin's bid+ask now minus past */
+            change?: string;
+            /** @enum {string} */
+            kind?: "thicker" | "thinner" | "steady";
+        };
         /** @description Bid vs ask share and total book size of the liquid-perp book now vs 15m / 1h / 4h ago */
         MarketPerpDepthShareWindow: {
             /** @enum {string} */
@@ -6364,6 +6373,8 @@ export interface components {
              */
             depthKind?: "thicker" | "thinner" | "steady";
             drivers?: components["schemas"]["MarketPerpDepthShareDriver"][];
+            /** @description Coins that added or removed the most bid+ask, largest move first */
+            sizeDrivers?: components["schemas"]["MarketPerpDepthSizeDriver"][];
             complete?: boolean;
             /** Format: date-time */
             sampleTime?: string;

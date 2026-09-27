@@ -10,6 +10,7 @@
     "leanEven": "Dengeli",
     "window": "{{window}} bid payı",
     "depth": "{{window}} defter boyutu",
+    "sizeDrivers": "{{names}}",
     "thicker": "Kalınlaştı",
     "thinner": "İnceldi",
     "steady": "Aynı",

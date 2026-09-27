@@ -171,6 +171,13 @@ type perpDepthShareDriverDTO struct {
 	Kind      string `json:"kind"`
 }
 
+type perpDepthSizeDriverDTO struct {
+	Symbol string `json:"symbol"`
+	Base   string `json:"base"`
+	Change string `json:"change"`
+	Kind   string `json:"kind"`
+}
+
 type perpDepthShareWindowDTO struct {
 	Window         string                    `json:"window"`
 	BidPct         string                    `json:"bidPct"`
@@ -185,6 +192,7 @@ type perpDepthShareWindowDTO struct {
 	TotalChangePct string                    `json:"totalChangePct,omitempty"`
 	DepthKind      string                    `json:"depthKind,omitempty"`
 	Drivers        []perpDepthShareDriverDTO `json:"drivers,omitempty"`
+	SizeDrivers    []perpDepthSizeDriverDTO  `json:"sizeDrivers,omitempty"`
 	Complete       bool                      `json:"complete"`
 	SampleTime     *time.Time                `json:"sampleTime,omitempty"`
 	Summary        string                    `json:"summary"`
@@ -279,6 +287,13 @@ func perpDepthOverviewToDTO(a *domain.PerpDepthOverview) perpDepthOverviewRespon
 				})
 			}
 			row.Drivers = drivers
+			sizes := make([]perpDepthSizeDriverDTO, 0, len(w.SizeDrivers))
+			for _, d := range w.SizeDrivers {
+				sizes = append(sizes, perpDepthSizeDriverDTO{
+					Symbol: d.Symbol, Base: d.Base, Change: domain.FormatSignedQty(d.Change), Kind: d.Kind,
+				})
+			}
+			row.SizeDrivers = sizes
 		}
 		wins = append(wins, row)
 	}

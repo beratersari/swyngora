@@ -94,8 +94,45 @@ func TestAttachPerpDepthWindows_TotalBookGetsThicker(t *testing.T) {
 	if win.TotalChange != 100 || win.TotalChangePct != 25 || win.DepthKind != PerpDepthSizeThicker {
 		t.Fatalf("change %+v", win)
 	}
-	if !strings.Contains(win.Summary, "thicker") || !strings.Contains(win.Summary, "+25") {
+	if !strings.Contains(win.Summary, "thicker") || !strings.Contains(win.Summary, "+25") || !strings.Contains(win.Summary, "BTC added the most size") {
 		t.Fatalf("summary %s", win.Summary)
+	}
+	if len(win.SizeDrivers) != 1 || win.SizeDrivers[0].Base != "BTC" || win.SizeDrivers[0].Change != 100 || win.SizeDrivers[0].Kind != PerpDepthSizeThicker {
+		t.Fatalf("size drivers %+v", win.SizeDrivers)
+	}
+}
+
+func TestAttachPerpDepthWindows_SizeDriversRankWhoAddedMost(t *testing.T) {
+	now := time.Date(2026, 9, 21, 16, 0, 0, 0, time.UTC)
+	live := BuildPerpDepthOverview("all", 1, []PerpDepthCoinInput{
+		{Symbol: "ETHUSDT", Base: "ETH", Bid: 180, Ask: 20, Complete: true},
+		{Symbol: "BTCUSDT", Base: "BTC", Bid: 160, Ask: 140, Complete: true},
+		{Symbol: "SOLUSDT", Base: "SOL", Bid: 40, Ask: 60, Complete: true},
+	}, now)
+	// Then 400. Now ETH 200 (+100), BTC 300 (+20), SOL 100 (−20) = 600.
+	past := now.Add(-time.Hour)
+	AttachPerpDepthWindows(live, []PerpDepthSample{
+		{Time: past, Exchange: "all", RangePct: 1, Symbol: "ETHUSDT", Base: "ETH", Bid: 80, Ask: 20},
+		{Time: past, Exchange: "all", RangePct: 1, Symbol: "BTCUSDT", Base: "BTC", Bid: 140, Ask: 140},
+		{Time: past, Exchange: "all", RangePct: 1, Symbol: "SOLUSDT", Base: "SOL", Bid: 70, Ask: 50},
+	})
+	var hour PerpDepthShareWindow
+	for _, w := range live.Windows {
+		if w.Window == ParticipationWindow1h {
+			hour = w
+		}
+	}
+	if hour.DepthKind != PerpDepthSizeThicker || len(hour.SizeDrivers) < 2 {
+		t.Fatalf("%+v", hour)
+	}
+	if hour.SizeDrivers[0].Base != "ETH" || hour.SizeDrivers[0].Change != 100 {
+		t.Fatalf("first %+v", hour.SizeDrivers)
+	}
+	if hour.SizeDrivers[1].Base != "BTC" || hour.SizeDrivers[1].Change != 20 {
+		t.Fatalf("second %+v", hour.SizeDrivers)
+	}
+	if !strings.Contains(hour.Summary, "ETH and BTC added the most size") {
+		t.Fatalf("summary %s", hour.Summary)
 	}
 }
 

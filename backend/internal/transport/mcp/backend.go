@@ -950,6 +950,13 @@ func perpDepthOverviewMap(got *domain.PerpDepthOverview) map[string]any {
 				})
 			}
 			row["drivers"] = drivers
+			sizes := make([]map[string]any, 0, len(w.SizeDrivers))
+			for _, d := range w.SizeDrivers {
+				sizes = append(sizes, map[string]any{
+					"symbol": d.Symbol, "base": d.Base, "change": domain.FormatSignedQty(d.Change), "kind": d.Kind,
+				})
+			}
+			row["sizeDrivers"] = sizes
 		}
 		wins = append(wins, row)
 	}
