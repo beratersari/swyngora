@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- **Binance REST pauses after a ban:** background book sampling no longer keeps calling Binance after HTTP 418 or 429, or once the used-weight header reaches 1,800. Binance heatmaps and wall scans run about once a second on the top 100 levels, and book flashes use that same depth (`docs/features/order-book.md`)
+- **Binance REST pauses after a ban:** background book sampling no longer keeps calling Binance after HTTP 418 or 429, or once the used-weight header reaches 1,800. The pause is Binance only. Coinbase, Bybit, and OKX keep sampling. Binance heatmaps and wall scans run about once a second on the top 100 levels, and book flashes use that same depth (`docs/features/order-book.md`)
 - **Repeated-size counts:** buy, sell, and delta on the coin tape are labeled as the repeated clips only, so they are not read as every market order.
 - **OKX on the futures tape that already has a public feed:** basis (mark versus index), taker buy/sell, CVD, absorption, print size, flow at prices, whales, participation, and net position include OKX next to Binance and Bybit. OKX taker uses the newest 500 swap trades. Spot-candle desks (volume profile, VWAP, volume surge, sweeps) and account long/short stay on the venues that publish them (`docs/features/basis.md`, `docs/features/taker-flow.md`)
 - **Perp depth includes OKX:** Binance USD-M, Bybit linear, and OKX USDT-swap books are shown separately and summed. OKX contract size is converted to base before notional. The coin Flow tab lists each venue (`GET /api/v1/market/perp-depth`, MCP `get_perp_depth`) (`docs/features/perp-depth.md`)

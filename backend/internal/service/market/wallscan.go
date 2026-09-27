@@ -115,13 +115,20 @@ func (s *Service) refreshWallScanUniverse(ctx context.Context) {
 	if s == nil {
 		return
 	}
-	symbols, err := s.orderCountUniverse(ctx, string(domain.ExchangeBinance), "USDT", wallScanLimit)
-	if err != nil || len(symbols) == 0 {
-		return
-	}
 	next := map[domain.Exchange][]string{}
 	for _, ex := range []domain.Exchange{domain.ExchangeBinance, domain.ExchangeCoinbase, domain.ExchangeBybit} {
 		if _, err := s.port(ex); err != nil {
+			continue
+		}
+		quote := "USDT"
+		if ex == domain.ExchangeCoinbase {
+			quote = "USD"
+		}
+		symbols, err := s.orderCountUniverse(ctx, string(ex), quote, wallScanLimit)
+		if err != nil || len(symbols) == 0 {
+			if prev := s.wallScanList(ex); len(prev) > 0 {
+				next[ex] = prev
+			}
 			continue
 		}
 		rows := make([]string, 0, len(symbols))
