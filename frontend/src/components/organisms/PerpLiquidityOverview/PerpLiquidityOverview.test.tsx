@@ -128,6 +128,12 @@ describe('PerpLiquidityOverview', () => {
               follow: 'recovered',
               afterTotal: '700000000',
               drivers: [{ base: 'ETH', change: '+500000000', sharePct: '+83' }],
+              venueSpan: 'one',
+              venues: [
+                { exchange: 'binance', changePct: '-40' },
+                { exchange: 'bybit', changePct: '-1' },
+                { exchange: 'okx', changePct: '+2' },
+              ],
             },
           ],
         }}
@@ -141,5 +147,6 @@ describe('PerpLiquidityOverview', () => {
     expect(screen.getByText('15m later 99.50K (+0.51%)')).toBeInTheDocument();
     expect(screen.getByText('ETH +500.00M (+83%) · One coin')).toBeInTheDocument();
     expect(screen.getByText('15m later depth came back to 700.00M')).toBeInTheDocument();
+    expect(screen.getByText('Binance -40%, Bybit -1%, OKX +2% · One venue')).toBeInTheDocument();
   });
 });

@@ -252,7 +252,18 @@ type perpDepthBookMoveDTO struct {
 	AfterTotal     string                   `json:"afterTotal,omitempty"`
 	Follow         string                   `json:"follow,omitempty"`
 	FollowPct      string                   `json:"followPct,omitempty"`
+	Venues         []perpDepthMoveVenueDTO  `json:"venues,omitempty"`
+	VenueSpan      string                   `json:"venueSpan,omitempty"`
 	Summary        string                   `json:"summary"`
+}
+
+type perpDepthMoveVenueDTO struct {
+	Exchange  string `json:"exchange"`
+	PastTotal string `json:"pastTotal"`
+	Total     string `json:"total"`
+	Change    string `json:"change"`
+	ChangePct string `json:"changePct"`
+	With      bool   `json:"with"`
 }
 
 type perpDepthMoveDriverDTO struct {
@@ -377,6 +388,15 @@ func perpDepthOverviewToDTO(a *domain.PerpDepthOverview) perpDepthOverviewRespon
 			row.Follow = m.Follow
 			row.FollowPct = domain.FormatSignedPct(m.FollowPct)
 		}
+		venues := make([]perpDepthMoveVenueDTO, 0, len(m.Venues))
+		for _, v := range m.Venues {
+			venues = append(venues, perpDepthMoveVenueDTO{
+				Exchange: v.Exchange, PastTotal: formatHistQty(v.PastTotal), Total: formatHistQty(v.Total),
+				Change: domain.FormatSignedQty(v.Change), ChangePct: domain.FormatSignedPct(v.ChangePct), With: v.With,
+			})
+		}
+		row.Venues = venues
+		row.VenueSpan = m.VenueSpan
 		moves = append(moves, row)
 	}
 	bands := make([]perpDepthOverviewBandDTO, 0, len(a.Bands))

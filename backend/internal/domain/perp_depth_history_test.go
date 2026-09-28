@@ -302,6 +302,69 @@ func TestAttachPerpDepthMoves_SaysIfDepthCameBack(t *testing.T) {
 	}
 }
 
+func TestAttachPerpDepthMoveVenues_TogetherVersusOneExchange(t *testing.T) {
+	now := time.Date(2026, 9, 21, 16, 0, 0, 0, time.UTC)
+	from := now.Add(-10 * time.Minute)
+	to := now.Add(-4 * time.Minute)
+	live := BuildPerpDepthOverview("all", 1, []PerpDepthCoinInput{
+		{Symbol: "BTCUSDT", Base: "BTC", Bid: 80, Ask: 20, Complete: true},
+	}, now)
+	AttachPerpDepthHistory(live, []PerpDepthTotalPoint{
+		{Time: from, Total: 1000},
+		{Time: to, Total: 700},
+	})
+	together := map[string][]PerpDepthTotalPoint{
+		"binance": {{Time: from, Total: 500}, {Time: to, Total: 350}},
+		"bybit":   {{Time: from, Total: 300}, {Time: to, Total: 200}},
+		"okx":     {{Time: from, Total: 200}, {Time: to, Total: 150}},
+	}
+	AttachPerpDepthMoveVenues(live, together)
+	m := live.Moves[0]
+	if m.VenueSpan != PerpDepthMoveVenueAll || len(m.Venues) != 3 || !m.Venues[0].With {
+		t.Fatalf("%+v", m)
+	}
+	if !strings.Contains(m.Summary, "All three moved together") {
+		t.Fatalf("summary %s", m.Summary)
+	}
+
+	one := BuildPerpDepthOverview("all", 1, []PerpDepthCoinInput{
+		{Symbol: "BTCUSDT", Base: "BTC", Bid: 80, Ask: 20, Complete: true},
+	}, now)
+	AttachPerpDepthHistory(one, []PerpDepthTotalPoint{
+		{Time: from, Total: 1000},
+		{Time: to, Total: 700},
+	})
+	AttachPerpDepthMoveVenues(one, map[string][]PerpDepthTotalPoint{
+		"binance": {{Time: from, Total: 500}, {Time: to, Total: 200}},
+		"bybit":   {{Time: from, Total: 300}, {Time: to, Total: 295}},
+		"okx":     {{Time: from, Total: 200}, {Time: to, Total: 205}},
+	})
+	got := one.Moves[0]
+	if got.VenueSpan != PerpDepthMoveVenueOne || !got.Venues[0].With || got.Venues[1].With || got.Venues[2].With {
+		t.Fatalf("%+v", got.Venues)
+	}
+	if !strings.Contains(got.Summary, "Only Binance moved") {
+		t.Fatalf("summary %s", got.Summary)
+	}
+}
+
+func TestPerpDepthVenueSamples_KeepsEachExchange(t *testing.T) {
+	at := time.Date(2026, 9, 21, 16, 0, 30, 0, time.UTC)
+	rows := PerpDepthVenueSamples(at, 1, []PerpDepthCoinInput{{
+		Symbol: "BTCUSDT", Base: "BTC",
+		Venues: []PerpDepthVenueBook{
+			{Exchange: "binance", Bid: 40, Ask: 10},
+			{Exchange: "okx", Bid: 5, Ask: 5},
+		},
+	}})
+	if len(rows) != 2 || rows[0].Exchange != "binance" || rows[1].Exchange != "okx" || rows[0].Bid != 40 {
+		t.Fatalf("%+v", rows)
+	}
+	if !rows[0].Time.Equal(BucketPerpDepthSampleTime(at)) {
+		t.Fatalf("time %s", rows[0].Time)
+	}
+}
+
 func TestAttachPerpDepthMoves_SkipsSmallWiggles(t *testing.T) {
 	now := time.Date(2026, 9, 21, 16, 0, 0, 0, time.UTC)
 	live := BuildPerpDepthOverview("all", 1, []PerpDepthCoinInput{

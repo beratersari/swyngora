@@ -62,7 +62,12 @@ ETH 17%** of 2.4B bid + 1.8B ask).
   `follow` looks about 15 minutes after the move. `recovered` means at least
   half of it came back (a drop refills, a jump fades). `continued` means it
   kept going by at least another quarter of the move. `held` is in between.
-  The Markets perp card lists them under the six-hour chart. Telegram `/perpliq`
+  `venues` is each of Binance, Bybit, and OKX over those same minutes, once
+  that venue has been sampled at both ends. A venue is `with` the move when
+  its own bid+ask changed at least 5% in the same direction. `venueSpan` is
+  `all` when every venue did, `some` when at least two did, and `one` when a
+  single venue did and another venue was measured. The Markets perp card
+  lists the signed percents under the move. Telegram `/perpliq`
   prints up to three of those sentences.
   `complete` is false until the
   desk has sampled that lookback.

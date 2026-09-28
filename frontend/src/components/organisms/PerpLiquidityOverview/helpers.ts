@@ -107,6 +107,25 @@ export function moveFollowTotal(m?: { afterTotal?: string } | null): string {
   return formatCompactAmount(m.afterTotal);
 }
 
+const PERP_VENUE_LABEL: Record<string, string> = {
+  binance: 'Binance',
+  bybit: 'Bybit',
+  okx: 'OKX',
+};
+
+/** Each venue's percent change over the same minutes as the book move. */
+export function moveVenueLine(
+  m?: { venues?: { exchange?: string; changePct?: string }[] | null } | null,
+): string {
+  const parts = (m?.venues ?? [])
+    .filter((v) => v.exchange)
+    .map((v) => {
+      const name = PERP_VENUE_LABEL[v.exchange ?? ''] ?? v.exchange;
+      return v.changePct ? `${name} ${v.changePct}%` : name;
+    });
+  return parts.filter(Boolean).join(', ');
+}
+
 /** Coins that caused most of a jump or drop, with each coin's share of that move. */
 export function moveDriverLine(
   m?: { drivers?: { base?: string; symbol?: string; change?: string; sharePct?: string }[] | null } | null,

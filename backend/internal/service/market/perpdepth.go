@@ -152,6 +152,7 @@ func (s *Service) GetPerpDepthOverview(ctx context.Context, exchange string, ran
 			}
 			in.Bid, in.Ask, in.Lean, in.Complete, in.Error = perpDepthHeadline(rep)
 			in.Bands = perpDepthCoinBands(rep)
+			in.Venues = perpDepthVenueBooks(rep)
 			got[i] = fetched{in: in}
 		}(i, sym)
 	}
@@ -164,7 +165,7 @@ func (s *Service) GetPerpDepthOverview(ctx context.Context, exchange string, ran
 		coins = append(coins, f.in)
 	}
 	out := domain.BuildPerpDepthOverview(ex, rangePct, coins, time.Now().UTC())
-	s.persistPerpDepthOverview(ctx, out)
+	s.persistPerpDepthOverview(ctx, out, coins)
 	s.attachPerpDepthWindows(ctx, out)
 	if c := s.perpOverviewCache(); c != nil && out != nil {
 		cp := *out
@@ -173,11 +174,14 @@ func (s *Service) GetPerpDepthOverview(ctx context.Context, exchange string, ran
 	return out, nil
 }
 
-func (s *Service) persistPerpDepthOverview(ctx context.Context, out *domain.PerpDepthOverview) {
+func (s *Service) persistPerpDepthOverview(ctx context.Context, out *domain.PerpDepthOverview, coins []domain.PerpDepthCoinInput) {
 	if s == nil || s.perpHist == nil || out == nil {
 		return
 	}
 	rows := domain.PerpDepthSamplesFromOverview(out)
+	if out.Exchange == "all" {
+		rows = append(rows, domain.PerpDepthVenueSamples(out.AsOf, out.RangePct, coins)...)
+	}
 	if len(rows) == 0 {
 		return
 	}
@@ -206,6 +210,24 @@ func (s *Service) attachPerpDepthWindows(ctx context.Context, out *domain.PerpDe
 		return
 	}
 	domain.AttachPerpDepthMoveCoins(out, coinRows)
+	s.attachPerpDepthMoveVenues(ctx, out)
+}
+
+func (s *Service) attachPerpDepthMoveVenues(ctx context.Context, out *domain.PerpDepthOverview) {
+	if s == nil || s.perpHist == nil || out == nil || len(out.Moves) == 0 {
+		return
+	}
+	from := out.AsOf.Add(-domain.PerpDepthTotalChartSpan)
+	to := out.AsOf.Add(time.Minute)
+	by := map[string][]domain.PerpDepthTotalPoint{}
+	for _, ex := range domain.FuturesVenues() {
+		pts, err := s.perpHist.ListMinuteTotals(ctx, string(ex), out.RangePct, from, to)
+		if err != nil || len(pts) == 0 {
+			continue
+		}
+		by[string(ex)] = pts
+	}
+	domain.AttachPerpDepthMoveVenues(out, by)
 }
 
 func (s *Service) attachPerpDepthBTC(ctx context.Context, out *domain.PerpDepthOverview) {
@@ -360,6 +382,24 @@ func perpDepthBestVenue(rep *domain.PerpDepthReport) *domain.PerpDepthVenue {
 		}
 	}
 	return nil
+}
+
+func perpDepthVenueBooks(rep *domain.PerpDepthReport) []domain.PerpDepthVenueBook {
+	if rep == nil || rep.Exchange != "all" {
+		return nil
+	}
+	out := make([]domain.PerpDepthVenueBook, 0, len(rep.Venues))
+	for _, v := range rep.Venues {
+		if v.Error != "" {
+			continue
+		}
+		bid, ask := v.Headline.Below.Notional, v.Headline.Above.Notional
+		if bid+ask <= 0 {
+			continue
+		}
+		out = append(out, domain.PerpDepthVenueBook{Exchange: string(v.Exchange), Bid: bid, Ask: ask})
+	}
+	return out
 }
 
 func perpDepthHeadline(rep *domain.PerpDepthReport) (bid, ask float64, lean string, complete bool, errMsg string) {

@@ -814,7 +814,11 @@ export interface paths {
          *     65%) and `drivers` name the coins that moved the mix. `bands` show
          *     how close that book is to mid (e.g. **80M inside 0.1%** is **8% of
          *     the 1% book**, growing to 1.0B at 1%) and which coins fill each
-         *     distance. Sampled while the desk runs. `exchange=all` (default)
+         *     distance. `history` is total bid+ask each minute for the last 6 hours,
+         *     with BTC's close on the same minutes. `moves` are the largest jumps
+         *     and drops of at least 5% that finish within 15 minutes, plus BTC
+         *     during that stretch and 15 minutes later. Sampled while the desk runs.
+         *     `exchange=all` (default)
          *     adds Binance USD-M, Bybit linear, and OKX USDT-swap per coin. `rangePct` default
          *     **1**. `limit` default **20** (max 40). This is the **futures**
          *     book, not spot. Informational only.
@@ -6728,7 +6732,7 @@ export interface components {
             pastTotal?: string;
             /** @description Bid+ask at the end of the move */
             total?: string;
-            /** @description Signed USDT, end minus start */
+            /** @description Signed USDT */
             change?: string;
             /** @description Signed percent change of total bid+ask */
             changePct?: string;
@@ -6755,26 +6759,48 @@ export interface components {
             /** @description Coins that added or removed the most of this move, largest share first */
             drivers?: components["schemas"]["MarketPerpDepthMoveDriver"][];
             /**
-             * @description one coin caused at least half, two coins caused at least 60%, or the move was spread across the book
+             * @description one coin caused at least half
              * @enum {string}
              */
             span?: "one" | "few" | "broad";
             /** @description Bid+ask about 15 minutes after the move ended */
             afterTotal?: string;
             /**
-             * @description recovered means at least half the move came back, continued means it kept going by at least another quarter, held is in between
+             * @description recovered means at least half the move came back
              * @enum {string}
              */
             follow?: "recovered" | "continued" | "held";
             /** @description Percent of the move that was undone. Positive means depth came back toward the size before the move */
             followPct?: string;
+            /** @description Binance, Bybit, and OKX bid+ask over the same minutes. A venue is included only when both minutes were sampled. */
+            venues?: components["schemas"]["MarketPerpDepthMoveVenue"][];
+            /**
+             * @description all means Binance
+             * @enum {string}
+             */
+            venueSpan?: "all" | "some" | "one";
             summary?: string;
+        };
+        /** @description One venue's bid+ask change during a perp-book jump or drop */
+        MarketPerpDepthMoveVenue: {
+            /** @enum {string} */
+            exchange?: "binance" | "bybit" | "okx";
+            /** @description That venue's bid+ask at the start */
+            pastTotal?: string;
+            /** @description That venue's bid+ask at the end */
+            total?: string;
+            /** @description Signed USDT */
+            change?: string;
+            /** @description Signed percent change of that venue's bid+ask */
+            changePct?: string;
+            /** @description True when this venue moved at least 5% in the same direction as the combined book */
+            with?: boolean;
         };
         /** @description One coin's share of a perp-book jump or drop */
         MarketPerpDepthMoveDriver: {
             symbol?: string;
             base?: string;
-            /** @description Signed USDT, this coin's bid+ask at the end minus the start */
+            /** @description Signed USDT */
             change?: string;
             /** @description This coin's change as a percent of the market move */
             sharePct?: string;
@@ -6839,7 +6865,7 @@ export interface components {
             windows?: components["schemas"]["MarketPerpDepthShareWindow"][];
             /** @description Total bid+ask each minute for the last 6 hours, oldest first */
             history?: components["schemas"]["MarketPerpDepthTotalPoint"][];
-            /** @description Largest jumps and drops of at least 5% inside 15 minutes, biggest first, with BTC around each */
+            /** @description Largest jumps and drops of at least 5% inside 15 minutes, biggest first, with BTC around each and whether Binance, Bybit, and OKX moved together */
             moves?: components["schemas"]["MarketPerpDepthBookMove"][];
             bands?: components["schemas"]["MarketPerpDepthOverviewBand"][];
             summary?: string;

@@ -45,6 +45,11 @@ const (
 	PerpDepthMoveContinued = "continued"
 	PerpDepthMoveHeld      = "held"
 
+	// Whether Binance, Bybit, and OKX moved with the combined book.
+	PerpDepthMoveVenueAll  = "all"
+	PerpDepthMoveVenueSome = "some"
+	PerpDepthMoveVenueOne  = "one"
+
 	perpDepthMoveMaxSpan       = 15 * time.Minute
 	perpDepthMoveAfter         = 15 * time.Minute
 	perpDepthMoveAfterSlack    = 5 * time.Minute
@@ -100,7 +105,19 @@ type PerpDepthBookMove struct {
 	AfterTotal     float64
 	Follow         string  // recovered | continued | held
 	FollowPct      float64 // percent of the move undone; positive means depth came back
+	Venues         []PerpDepthMoveVenue
+	VenueSpan      string // all | some | one
 	Summary        string
+}
+
+// PerpDepthMoveVenue is one venue's bid+ask change over the same minutes as a book move.
+type PerpDepthMoveVenue struct {
+	Exchange  string
+	PastTotal float64
+	Total     float64
+	Change    float64
+	ChangePct float64
+	With      bool // at least 5% in the same direction as the combined book
 }
 
 // PerpDepthMoveDriver is one coin's share of a book jump or drop.
@@ -447,7 +464,132 @@ func explainPerpDepthBookMove(m PerpDepthBookMove) string {
 	if coins := perpDepthMoveCoinSentence(m); coins != "" {
 		s += " " + coins
 	}
+	if venues := perpDepthMoveVenueSentence(m); venues != "" {
+		s += " " + venues
+	}
 	return s
+}
+
+// AttachPerpDepthMoveVenues says whether Binance, Bybit, and OKX moved with the book.
+// A venue counts when its own bid+ask changed at least 5% in the same direction.
+// all means every venue did. some means at least two. one means a single venue,
+// with another venue measured so the rest of the book can be ruled out.
+func AttachPerpDepthMoveVenues(live *PerpDepthOverview, byExchange map[string][]PerpDepthTotalPoint) {
+	if live == nil {
+		return
+	}
+	for i := range live.Moves {
+		m := &live.Moves[i]
+		m.Venues = perpDepthMoveVenues(*m, byExchange)
+		m.VenueSpan = classifyPerpDepthMoveVenues(m.Venues)
+		m.Summary = explainPerpDepthBookMove(*m)
+	}
+}
+
+func perpDepthMoveVenues(m PerpDepthBookMove, byExchange map[string][]PerpDepthTotalPoint) []PerpDepthMoveVenue {
+	if m.Change == 0 || len(byExchange) == 0 {
+		return []PerpDepthMoveVenue{}
+	}
+	out := make([]PerpDepthMoveVenue, 0, len(FuturesVenues()))
+	for _, ex := range FuturesVenues() {
+		past, okPast := perpDepthTotalAt(byExchange[string(ex)], m.From)
+		now, okNow := perpDepthTotalAt(byExchange[string(ex)], m.To)
+		if !okPast || !okNow {
+			continue
+		}
+		chg := now - past
+		pct := 100 * chg / past
+		same := (m.Change > 0 && chg > 0) || (m.Change < 0 && chg < 0)
+		out = append(out, PerpDepthMoveVenue{
+			Exchange:  string(ex),
+			PastTotal: round4(past),
+			Total:     round4(now),
+			Change:    round4(chg),
+			ChangePct: round4(pct),
+			With:      same && math.Abs(pct) >= perpDepthMoveMinPct,
+		})
+	}
+	return out
+}
+
+func perpDepthTotalAt(pts []PerpDepthTotalPoint, at time.Time) (float64, bool) {
+	if at.IsZero() {
+		return 0, false
+	}
+	want := BucketPerpDepthSampleTime(at).UnixMilli()
+	for _, p := range pts {
+		if p.Total <= 0 {
+			continue
+		}
+		if BucketPerpDepthSampleTime(p.Time).UnixMilli() == want {
+			return p.Total, true
+		}
+	}
+	return 0, false
+}
+
+func classifyPerpDepthMoveVenues(venues []PerpDepthMoveVenue) string {
+	if len(venues) < 2 {
+		return ""
+	}
+	with := 0
+	for _, v := range venues {
+		if v.With {
+			with++
+		}
+	}
+	switch {
+	case with == len(FuturesVenues()) && len(venues) == len(FuturesVenues()):
+		return PerpDepthMoveVenueAll
+	case with >= 2:
+		return PerpDepthMoveVenueSome
+	case with == 1:
+		return PerpDepthMoveVenueOne
+	default:
+		return ""
+	}
+}
+
+func perpDepthMoveVenueSentence(m PerpDepthBookMove) string {
+	if m.VenueSpan == "" || len(m.Venues) < 2 {
+		return ""
+	}
+	parts := make([]string, 0, len(m.Venues))
+	with := make([]string, 0, len(m.Venues))
+	for _, v := range m.Venues {
+		name := perpDepthVenueName(v.Exchange)
+		parts = append(parts, name+" "+FormatSignedPct(v.ChangePct))
+		if v.With {
+			with = append(with, name)
+		}
+	}
+	head := strings.Join(parts, ", ") + "."
+	switch m.VenueSpan {
+	case PerpDepthMoveVenueAll:
+		return head + " All three moved together."
+	case PerpDepthMoveVenueOne:
+		if len(with) == 1 {
+			return head + " Only " + with[0] + " moved."
+		}
+	case PerpDepthMoveVenueSome:
+		if len(with) > 0 {
+			return head + " " + joinList(with) + " moved together."
+		}
+	}
+	return head
+}
+
+func perpDepthVenueName(ex string) string {
+	switch strings.ToLower(strings.TrimSpace(ex)) {
+	case string(ExchangeBinance):
+		return "Binance"
+	case string(ExchangeBybit):
+		return "Bybit"
+	case string(ExchangeOKX):
+		return "OKX"
+	default:
+		return ex
+	}
 }
 
 // AttachPerpDepthMoveCoins names the coins behind each jump or drop.
@@ -889,6 +1031,37 @@ func PerpDepthSamplesFromOverview(o *PerpDepthOverview) []PerpDepthSample {
 			Time: at, Exchange: o.Exchange, RangePct: o.RangePct,
 			Symbol: c.Symbol, Base: c.Base, Bid: c.Bid, Ask: c.Ask,
 		})
+	}
+	return out
+}
+
+// PerpDepthVenueSamples is one row per coin per venue, so a later move can
+// say whether Binance, Bybit, and OKX changed on the same minute.
+func PerpDepthVenueSamples(asOf time.Time, rangePct float64, coins []PerpDepthCoinInput) []PerpDepthSample {
+	if asOf.IsZero() {
+		return nil
+	}
+	at := BucketPerpDepthSampleTime(asOf)
+	out := make([]PerpDepthSample, 0, len(coins)*len(FuturesVenues()))
+	for _, c := range coins {
+		sym := NormalizeLiquidationSymbol(c.Symbol)
+		if sym == "" {
+			continue
+		}
+		base := c.Base
+		if base == "" {
+			base = prettyBase(sym)
+		}
+		for _, v := range c.Venues {
+			ex := strings.ToLower(strings.TrimSpace(v.Exchange))
+			if !IsFuturesVenue(Exchange(ex)) || v.Bid+v.Ask <= 0 {
+				continue
+			}
+			out = append(out, PerpDepthSample{
+				Time: at, Exchange: ex, RangePct: rangePct,
+				Symbol: sym, Base: base, Bid: v.Bid, Ask: v.Ask,
+			})
+		}
 	}
 	return out
 }

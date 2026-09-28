@@ -18,6 +18,7 @@ import {
   moveBookLine,
   moveDriverLine,
   moveDuringLine,
+  moveVenueLine,
   moveFollowTotal,
   driverNames,
   sizeDriverLine,
@@ -193,6 +194,12 @@ export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLi
                         <Text variant="caption" color="secondary">
                           {t('perpLiq.moveCoins', { names: moveDriverLine(m) })}
                           {m.span ? ` · ${t(`perpLiq.moveSpan_${m.span}`)}` : ''}
+                        </Text>
+                      ) : null}
+                      {moveVenueLine(m) ? (
+                        <Text variant="caption" color="secondary">
+                          {t('perpLiq.moveVenues', { names: moveVenueLine(m) })}
+                          {m.venueSpan ? ` · ${t(`perpLiq.moveVenue_${m.venueSpan}`)}` : ''}
                         </Text>
                       ) : null}
                     </DetailRow>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bandLeaderLabel, bandShareLabel, bidSharePct, depthHistoryLine, depthLine, depthPriceLine, distanceBands, driverNames, leaderCoins, mixLine, moveAfterLine, moveBookLine, moveDriverLine, moveDuringLine, shareLabel, sizeDriverLine } from './helpers';
+import { bandLeaderLabel, bandShareLabel, bidSharePct, depthHistoryLine, depthLine, depthPriceLine, distanceBands, driverNames, leaderCoins, mixLine, moveAfterLine, moveBookLine, moveDriverLine, moveDuringLine, moveVenueLine, shareLabel, sizeDriverLine } from './helpers';
 
 describe('PerpLiquidityOverview helpers', () => {
   it('drops empty or errored coins then keeps the largest', () => {
@@ -50,6 +50,15 @@ describe('PerpLiquidityOverview helpers', () => {
     expect(moveDriverLine({ drivers: [{ base: 'ETH', change: '+500000000', sharePct: '+83' }] })).toBe(
       'ETH +500.00M (+83%)',
     );
+    expect(
+      moveVenueLine({
+        venues: [
+          { exchange: 'binance', changePct: '-40' },
+          { exchange: 'bybit', changePct: '-1.7' },
+          { exchange: 'okx', changePct: '+2.5' },
+        ],
+      }),
+    ).toBe('Binance -40%, Bybit -1.7%, OKX +2.5%');
   });
 
   it('formats total book size then to now', () => {

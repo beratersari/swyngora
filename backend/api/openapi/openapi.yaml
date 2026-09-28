@@ -10684,7 +10684,22 @@ components:
         afterTotal: { type: string, description: Bid+ask about 15 minutes after the move ended }
         follow: { type: string, enum: [recovered, continued, held], description: recovered means at least half the move came back, continued means it kept going by at least another quarter, held is in between }
         followPct: { type: string, description: Percent of the move that was undone. Positive means depth came back toward the size before the move }
+        venues:
+          type: array
+          description: Binance, Bybit, and OKX bid+ask over the same minutes. A venue is included only when both minutes were sampled.
+          items: { $ref: '#/components/schemas/MarketPerpDepthMoveVenue' }
+        venueSpan: { type: string, enum: [all, some, one], description: all means Binance, Bybit, and OKX each moved at least 5% the same way. some means at least two did. one means a single venue did, and another venue was measured. }
         summary: { type: string }
+    MarketPerpDepthMoveVenue:
+      type: object
+      description: One venue's bid+ask change during a perp-book jump or drop
+      properties:
+        exchange: { type: string, enum: [binance, bybit, okx] }
+        pastTotal: { type: string, description: That venue's bid+ask at the start }
+        total: { type: string, description: That venue's bid+ask at the end }
+        change: { type: string, description: Signed USDT, end minus start }
+        changePct: { type: string, description: Signed percent change of that venue's bid+ask }
+        with: { type: boolean, description: True when this venue moved at least 5% in the same direction as the combined book }
     MarketPerpDepthMoveDriver:
       type: object
       description: One coin's share of a perp-book jump or drop
@@ -10754,7 +10769,7 @@ components:
           items: { $ref: '#/components/schemas/MarketPerpDepthTotalPoint' }
         moves:
           type: array
-          description: Largest jumps and drops of at least 5% inside 15 minutes, biggest first, with BTC around each
+          description: Largest jumps and drops of at least 5% inside 15 minutes, biggest first, with BTC around each and whether Binance, Bybit, and OKX moved together
           items: { $ref: '#/components/schemas/MarketPerpDepthBookMove' }
         bands:
           type: array
