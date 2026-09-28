@@ -97,5 +97,43 @@ describe('PerpLiquidityOverview', () => {
     expect(await screen.findByTestId('perp-depth-history')).toBeInTheDocument();
     expect(screen.getByText('BTC')).toBeInTheDocument();
     expect(screen.getByText('Book')).toBeInTheDocument();
+    expect(screen.getByText('No jump or drop of 5% inside 15 minutes yet.')).toBeInTheDocument();
+  });
+
+  it('lists the biggest book jump with BTC during and after', async () => {
+    const user = userEvent.setup();
+    renderWithTheme(
+      <PerpLiquidityOverview
+        data={{
+          bid: '100',
+          ask: '100',
+          history: [
+            { time: '2026-09-21T14:00:00Z', total: '400000000', price: '100000' },
+            { time: '2026-09-21T14:06:00Z', total: '900000000', price: '99000' },
+          ],
+          moves: [
+            {
+              kind: 'jump',
+              from: '2026-09-21T14:00:00Z',
+              to: '2026-09-21T14:06:00Z',
+              pastTotal: '400000000',
+              total: '900000000',
+              changePct: '+125',
+              priceFrom: '100000',
+              priceTo: '99000',
+              priceChangePct: '-1',
+              priceAfter: '99500',
+              priceAfterPct: '+0.51',
+            },
+          ],
+        }}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /Perp bid \/ ask/ }));
+    expect(await screen.findByText('Biggest book moves')).toBeInTheDocument();
+    expect(screen.getByText('Jump')).toBeInTheDocument();
+    expect(screen.getByText('400.00M → 900.00M (+125%)')).toBeInTheDocument();
+    expect(screen.getByText('BTC 100.00K → 99.00K (-1%)')).toBeInTheDocument();
+    expect(screen.getByText('15m later 99.50K (+0.51%)')).toBeInTheDocument();
   });
 });

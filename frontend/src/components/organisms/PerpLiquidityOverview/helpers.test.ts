@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bandLeaderLabel, bandShareLabel, bidSharePct, depthHistoryLine, depthLine, depthPriceLine, distanceBands, driverNames, leaderCoins, mixLine, shareLabel, sizeDriverLine } from './helpers';
+import { bandLeaderLabel, bandShareLabel, bidSharePct, depthHistoryLine, depthLine, depthPriceLine, distanceBands, driverNames, leaderCoins, mixLine, moveAfterLine, moveBookLine, moveDuringLine, shareLabel, sizeDriverLine } from './helpers';
 
 describe('PerpLiquidityOverview helpers', () => {
   it('drops empty or errored coins then keeps the largest', () => {
@@ -30,6 +30,23 @@ describe('PerpLiquidityOverview helpers', () => {
     expect(driverNames({ drivers: [{ base: 'ETH', changePct: '+10' }, { base: 'SOL' }] })).toBe(
       'ETH, SOL',
     );
+  });
+
+  it('formats a book jump and the BTC path around it', () => {
+    const move = {
+      pastTotal: '400000000',
+      total: '900000000',
+      changePct: '+125',
+      priceFrom: '100000',
+      priceTo: '99000',
+      priceChangePct: '-1',
+      priceAfter: '99500',
+      priceAfterPct: '+0.5',
+    };
+    expect(moveBookLine(move)).toBe('400.00M → 900.00M (+125%)');
+    expect(moveDuringLine(move)).toBe('100.00K → 99.00K (-1%)');
+    expect(moveAfterLine(move)).toBe('99.50K (+0.5%)');
+    expect(moveDuringLine({})).toBe('');
   });
 
   it('formats total book size then to now', () => {

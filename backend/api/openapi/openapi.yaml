@@ -1339,7 +1339,11 @@ paths:
         65%) and `drivers` name the coins that moved the mix. `bands` show
         how close that book is to mid (e.g. **80M inside 0.1%** is **8% of
         the 1% book**, growing to 1.0B at 1%) and which coins fill each
-        distance. Sampled while the desk runs. `exchange=all` (default)
+        distance. `history` is total bid+ask each minute for the last 6 hours,
+        with BTC's close on the same minutes. `moves` are the largest jumps
+        and drops of at least 5% that finish within 15 minutes, plus BTC
+        during that stretch and 15 minutes later. Sampled while the desk runs.
+        `exchange=all` (default)
         adds Binance USD-M, Bybit linear, and OKX USDT-swap per coin. `rangePct` default
         **1**. `limit` default **20** (max 40). This is the **futures**
         book, not spot. Informational only.
@@ -10654,6 +10658,25 @@ components:
         time: { type: string, format: date-time }
         total: { type: string, description: Bid+ask notional at that minute }
         price: { type: string, description: BTC close at that minute }
+    MarketPerpDepthBookMove:
+      type: object
+      description: A sharp rise or fall in total perp bid+ask, with BTC around it
+      properties:
+        kind: { type: string, enum: [jump, drop] }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        pastTotal: { type: string, description: Bid+ask at the start of the move }
+        total: { type: string, description: Bid+ask at the end of the move }
+        change: { type: string, description: Signed USDT, end minus start }
+        changePct: { type: string, description: Signed percent change of total bid+ask }
+        priceFrom: { type: string, description: BTC close at the start }
+        priceTo: { type: string, description: BTC close at the end }
+        priceAfter: { type: string, description: BTC close about 15 minutes after the end }
+        priceChangePct: { type: string, description: Signed BTC percent during the depth move }
+        priceAfterPct: { type: string, description: Signed BTC percent from the end to 15 minutes later }
+        priceKind: { type: string, enum: [up, down, flat], description: BTC during the depth move. Flat is under 0.2% }
+        afterKind: { type: string, enum: [up, down, flat], description: BTC in the 15 minutes after the depth move }
+        summary: { type: string }
     MarketPerpDepthShareWindow:
       type: object
       description: Bid vs ask share and total book size of the liquid-perp book now vs 15m / 1h / 4h ago
@@ -10712,6 +10735,10 @@ components:
           type: array
           description: Total bid+ask each minute for the last 6 hours, oldest first
           items: { $ref: '#/components/schemas/MarketPerpDepthTotalPoint' }
+        moves:
+          type: array
+          description: Largest jumps and drops of at least 5% inside 15 minutes, biggest first, with BTC around each
+          items: { $ref: '#/components/schemas/MarketPerpDepthBookMove' }
         bands:
           type: array
           items: { $ref: '#/components/schemas/MarketPerpDepthOverviewBand' }

@@ -14,6 +14,9 @@ import {
   bidSharePct,
   distanceBands,
   depthLine,
+  moveAfterLine,
+  moveBookLine,
+  moveDuringLine,
   driverNames,
   sizeDriverLine,
   leaderCoins,
@@ -149,6 +152,41 @@ export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLi
                 {t('perpLiq.historyWait')}
               </Text>
             )}
+            {(data?.history?.length ?? 0) >= 2 ? (
+              <>
+                <Text variant="caption" color="secondary">
+                  {t('perpLiq.moves')}
+                </Text>
+                {(data?.moves?.length ?? 0) === 0 ? (
+                  <Text variant="caption" color="secondary">
+                    {t('perpLiq.movesWait')}
+                  </Text>
+                ) : (
+                  (data?.moves ?? []).map((m) => (
+                    <DetailRow key={`${m.kind}-${m.from}-${m.to}`}>
+                      <Head>
+                        <Text variant="caption" color="secondary">
+                          {t(m.kind === 'drop' ? 'perpLiq.moveDrop' : 'perpLiq.moveJump')}
+                        </Text>
+                        <Text variant="numeric" color="primary">
+                          {moveBookLine(m)}
+                        </Text>
+                      </Head>
+                      {moveDuringLine(m) ? (
+                        <Text variant="caption" color="secondary">
+                          {t('perpLiq.moveBtc', { line: moveDuringLine(m) })}
+                        </Text>
+                      ) : null}
+                      {moveAfterLine(m) ? (
+                        <Text variant="caption" color="secondary">
+                          {t('perpLiq.moveAfter', { line: moveAfterLine(m) })}
+                        </Text>
+                      ) : null}
+                    </DetailRow>
+                  ))
+                )}
+              </>
+            ) : null}
             {(data?.windows ?? []).map((w) => (
               <DetailRow key={w.window}>
                 <Head>

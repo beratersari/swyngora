@@ -535,6 +535,17 @@ func FormatPerpDepthOverview(o *domain.PerpDepthOverview) string {
 		}
 		b.WriteString("  " + w.Summary + "\n")
 	}
+	shown := 0
+	for _, m := range o.Moves {
+		if m.Summary == "" {
+			continue
+		}
+		if shown >= 3 {
+			break
+		}
+		b.WriteString("  " + m.Summary + "\n")
+		shown++
+	}
 	n := 0
 	for _, c := range o.Coins {
 		if c.Error != "" || c.Total <= 0 {

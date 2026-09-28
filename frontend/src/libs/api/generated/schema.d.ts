@@ -6716,6 +6716,44 @@ export interface components {
             /** @description BTC close at that minute */
             price?: string;
         };
+        /** @description A sharp rise or fall in total perp bid+ask, with BTC around it */
+        MarketPerpDepthBookMove: {
+            /** @enum {string} */
+            kind?: "jump" | "drop";
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            /** @description Bid+ask at the start of the move */
+            pastTotal?: string;
+            /** @description Bid+ask at the end of the move */
+            total?: string;
+            /** @description Signed USDT, end minus start */
+            change?: string;
+            /** @description Signed percent change of total bid+ask */
+            changePct?: string;
+            /** @description BTC close at the start */
+            priceFrom?: string;
+            /** @description BTC close at the end */
+            priceTo?: string;
+            /** @description BTC close about 15 minutes after the end */
+            priceAfter?: string;
+            /** @description Signed BTC percent during the depth move */
+            priceChangePct?: string;
+            /** @description Signed BTC percent from the end to 15 minutes later */
+            priceAfterPct?: string;
+            /**
+             * @description BTC during the depth move. Flat is under 0.2%
+             * @enum {string}
+             */
+            priceKind?: "up" | "down" | "flat";
+            /**
+             * @description BTC in the 15 minutes after the depth move
+             * @enum {string}
+             */
+            afterKind?: "up" | "down" | "flat";
+            summary?: string;
+        };
         /** @description Bid vs ask share and total book size of the liquid-perp book now vs 15m / 1h / 4h ago */
         MarketPerpDepthShareWindow: {
             /** @enum {string} */
@@ -6774,6 +6812,8 @@ export interface components {
             windows?: components["schemas"]["MarketPerpDepthShareWindow"][];
             /** @description Total bid+ask each minute for the last 6 hours, oldest first */
             history?: components["schemas"]["MarketPerpDepthTotalPoint"][];
+            /** @description Largest jumps and drops of at least 5% inside 15 minutes, biggest first, with BTC around each */
+            moves?: components["schemas"]["MarketPerpDepthBookMove"][];
             bands?: components["schemas"]["MarketPerpDepthOverviewBand"][];
             summary?: string;
             note?: string;

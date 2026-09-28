@@ -27,6 +27,20 @@ const (
 
 	// PerpDepthTotalChartSpan is how far back the total-book line is drawn.
 	PerpDepthTotalChartSpan = 6 * time.Hour
+
+	PerpDepthMoveJump = "jump"
+	PerpDepthMoveDrop = "drop"
+
+	PerpDepthPriceUp   = "up"
+	PerpDepthPriceDown = "down"
+	PerpDepthPriceFlat = "flat"
+
+	perpDepthMoveMaxSpan    = 15 * time.Minute
+	perpDepthMoveAfter      = 15 * time.Minute
+	perpDepthMoveAfterSlack = 5 * time.Minute
+	perpDepthMoveMinPct     = 5.0
+	perpDepthMoveKeep       = 3
+	perpDepthPriceFlatPct   = 0.2
 )
 
 // PerpDepthShareWindows is 15m / 1h / 4h of market bid vs ask mix.
@@ -49,6 +63,25 @@ type PerpDepthTotalPoint struct {
 	Time  time.Time
 	Total float64
 	Price float64
+}
+
+// PerpDepthBookMove is a sharp rise or fall in total bid+ask, with BTC around it.
+type PerpDepthBookMove struct {
+	Kind           string // jump | drop
+	From           time.Time
+	To             time.Time
+	PastTotal      float64
+	Total          float64
+	Change         float64
+	ChangePct      float64
+	PriceFrom      float64
+	PriceTo        float64
+	PriceAfter     float64
+	PriceChangePct float64
+	PriceAfterPct  float64
+	PriceKind      string // up | down | flat
+	AfterKind      string
+	Summary        string
 }
 
 // PerpDepthHistoryStore persists market-wide perp book samples.
@@ -179,6 +212,7 @@ func AttachPerpDepthHistory(live *PerpDepthOverview, points []PerpDepthTotalPoin
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Time.Before(out[j].Time) })
 	live.History = out
+	AttachPerpDepthMoves(live)
 }
 
 // AttachPerpDepthPrices fills each history minute with the BTC close from that minute.
@@ -205,6 +239,158 @@ func AttachPerpDepthPrices(live *PerpDepthOverview, candles []Candle) {
 		}
 		live.History[i].Price = round4(px)
 	}
+	AttachPerpDepthMoves(live)
+}
+
+type perpDepthMoveCand struct {
+	from, to int
+	change   float64
+	pct      float64
+}
+
+// AttachPerpDepthMoves ranks the largest jumps and drops that finish within 15 minutes.
+// A move must change total bid+ask by at least 5%. Up to three of each are kept, and
+// they do not overlap. BTC is the close at the start, at the end, and 15 minutes later.
+func AttachPerpDepthMoves(live *PerpDepthOverview) {
+	if live == nil {
+		return
+	}
+	pts := live.History
+	var jumps, drops []perpDepthMoveCand
+	for i := 0; i < len(pts); i++ {
+		if pts[i].Total <= 0 {
+			continue
+		}
+		for j := i + 1; j < len(pts); j++ {
+			dt := pts[j].Time.Sub(pts[i].Time)
+			if dt < time.Minute {
+				continue
+			}
+			if dt > perpDepthMoveMaxSpan {
+				break
+			}
+			chg := pts[j].Total - pts[i].Total
+			pct := 100 * chg / pts[i].Total
+			switch {
+			case pct >= perpDepthMoveMinPct:
+				jumps = append(jumps, perpDepthMoveCand{i, j, chg, pct})
+			case pct <= -perpDepthMoveMinPct:
+				drops = append(drops, perpDepthMoveCand{i, j, chg, pct})
+			}
+		}
+	}
+	picked := append(pickPerpDepthMoves(jumps), pickPerpDepthMoves(drops)...)
+	out := make([]PerpDepthBookMove, 0, len(picked))
+	for _, c := range picked {
+		out = append(out, buildPerpDepthBookMove(pts, c))
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		ai, aj := math.Abs(out[i].Change), math.Abs(out[j].Change)
+		if ai != aj {
+			return ai > aj
+		}
+		return out[i].From.Before(out[j].From)
+	})
+	live.Moves = out
+}
+
+func pickPerpDepthMoves(cands []perpDepthMoveCand) []perpDepthMoveCand {
+	sort.SliceStable(cands, func(i, j int) bool {
+		ai, aj := math.Abs(cands[i].change), math.Abs(cands[j].change)
+		if ai != aj {
+			return ai > aj
+		}
+		return cands[i].from < cands[j].from
+	})
+	picked := make([]perpDepthMoveCand, 0, perpDepthMoveKeep)
+	for _, c := range cands {
+		over := false
+		for _, p := range picked {
+			if c.from < p.to && p.from < c.to {
+				over = true
+				break
+			}
+		}
+		if over {
+			continue
+		}
+		picked = append(picked, c)
+		if len(picked) == perpDepthMoveKeep {
+			break
+		}
+	}
+	return picked
+}
+
+func buildPerpDepthBookMove(pts []PerpDepthTotalPoint, c perpDepthMoveCand) PerpDepthBookMove {
+	a, b := pts[c.from], pts[c.to]
+	kind := PerpDepthMoveJump
+	if c.change < 0 {
+		kind = PerpDepthMoveDrop
+	}
+	m := PerpDepthBookMove{
+		Kind: kind, From: a.Time, To: b.Time,
+		PastTotal: round4(a.Total), Total: round4(b.Total),
+		Change: round4(c.change), ChangePct: round4(c.pct),
+	}
+	if a.Price > 0 && b.Price > 0 {
+		m.PriceFrom = round4(a.Price)
+		m.PriceTo = round4(b.Price)
+		m.PriceChangePct = round4(100 * (b.Price - a.Price) / a.Price)
+		m.PriceKind = classifyPerpDepthPrice(m.PriceChangePct)
+	}
+	if after, ok := perpDepthPriceAfter(pts, b.Time); ok {
+		m.PriceAfter = round4(after.Price)
+		if b.Price > 0 {
+			m.PriceAfterPct = round4(100 * (after.Price - b.Price) / b.Price)
+			m.AfterKind = classifyPerpDepthPrice(m.PriceAfterPct)
+		}
+	}
+	m.Summary = explainPerpDepthBookMove(m)
+	return m
+}
+
+func perpDepthPriceAfter(pts []PerpDepthTotalPoint, end time.Time) (PerpDepthTotalPoint, bool) {
+	want := end.Add(perpDepthMoveAfter)
+	late := want.Add(perpDepthMoveAfterSlack)
+	for _, p := range pts {
+		if p.Price <= 0 || p.Time.Before(want) {
+			continue
+		}
+		if p.Time.After(late) {
+			break
+		}
+		return p, true
+	}
+	return PerpDepthTotalPoint{}, false
+}
+
+func classifyPerpDepthPrice(pct float64) string {
+	switch {
+	case pct >= perpDepthPriceFlatPct:
+		return PerpDepthPriceUp
+	case pct <= -perpDepthPriceFlatPct:
+		return PerpDepthPriceDown
+	default:
+		return PerpDepthPriceFlat
+	}
+}
+
+func explainPerpDepthBookMove(m PerpDepthBookMove) string {
+	verb := "jumped"
+	if m.Kind == PerpDepthMoveDrop {
+		verb = "dropped"
+	}
+	s := fmt.Sprintf("Book %s from %s to %s (%s) between %s and %s.",
+		verb, formatQty(m.PastTotal), formatQty(m.Total), FormatSignedPct(m.ChangePct),
+		m.From.UTC().Format("15:04"), m.To.UTC().Format("15:04"))
+	if m.PriceFrom > 0 && m.PriceTo > 0 {
+		s += fmt.Sprintf(" BTC %s → %s (%s).", formatQty(m.PriceFrom), formatQty(m.PriceTo), FormatSignedPct(m.PriceChangePct))
+	}
+	if m.PriceAfter > 0 {
+		s += fmt.Sprintf(" 15m later BTC %s (%s).", formatQty(m.PriceAfter), FormatSignedPct(m.PriceAfterPct))
+	}
+	return s
 }
 
 func groupPerpDepthSamples(rows []PerpDepthSample) map[int64][]PerpDepthCoinInput {
@@ -223,9 +409,9 @@ func groupPerpDepthSamples(rows []PerpDepthSample) map[int64][]PerpDepthCoinInpu
 
 func buildPerpDepthShareWindow(id string, dur time.Duration, live *PerpDepthOverview, groups map[int64][]PerpDepthCoinInput, now time.Time) PerpDepthShareWindow {
 	out := PerpDepthShareWindow{
-		Window:  id,
-		BidPct:  live.BidPct,
-		AskPct:  live.AskPct,
+		Window:      id,
+		BidPct:      live.BidPct,
+		AskPct:      live.AskPct,
 		Kind:        PerpDepthShareStable,
 		Drivers:     []PerpDepthShareDriver{},
 		SizeDrivers: []PerpDepthSizeDriver{},

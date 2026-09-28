@@ -172,6 +172,67 @@ func TestAttachPerpDepthPrices_MatchesBTCClose(t *testing.T) {
 	}
 }
 
+func TestAttachPerpDepthMoves_RanksJumpAndDropWithBTC(t *testing.T) {
+	now := time.Date(2026, 9, 21, 16, 0, 0, 0, time.UTC)
+	live := BuildPerpDepthOverview("all", 1, []PerpDepthCoinInput{
+		{Symbol: "BTCUSDT", Base: "BTC", Bid: 80, Ask: 20, Complete: true},
+	}, now)
+	base := now.Add(-70 * time.Minute)
+	pts := []PerpDepthTotalPoint{
+		{Time: base, Total: 1000},
+		{Time: base.Add(6 * time.Minute), Total: 1600},
+		{Time: base.Add(21 * time.Minute), Total: 1610},
+		{Time: base.Add(40 * time.Minute), Total: 1000},
+		{Time: base.Add(46 * time.Minute), Total: 700},
+		{Time: base.Add(61 * time.Minute), Total: 700},
+	}
+	AttachPerpDepthHistory(live, pts)
+	AttachPerpDepthPrices(live, []Candle{
+		{OpenTime: base, Close: "100000"},
+		{OpenTime: base.Add(6 * time.Minute), Close: "99000"},
+		{OpenTime: base.Add(21 * time.Minute), Close: "99100"},
+		{OpenTime: base.Add(40 * time.Minute), Close: "100000"},
+		{OpenTime: base.Add(46 * time.Minute), Close: "97000"},
+		{OpenTime: base.Add(61 * time.Minute), Close: "98000"},
+	})
+	if len(live.Moves) < 2 {
+		t.Fatalf("moves %+v", live.Moves)
+	}
+	jump, drop := live.Moves[0], live.Moves[1]
+	if jump.Kind != PerpDepthMoveJump || jump.PastTotal != 1000 || jump.Total != 1600 {
+		t.Fatalf("jump %+v", jump)
+	}
+	if jump.PriceFrom != 100000 || jump.PriceTo != 99000 || jump.PriceKind != PerpDepthPriceDown {
+		t.Fatalf("jump price %+v", jump)
+	}
+	if jump.PriceAfter != 99100 || jump.AfterKind != PerpDepthPriceFlat {
+		t.Fatalf("jump after %+v", jump)
+	}
+	if !strings.Contains(jump.Summary, "jumped") || !strings.Contains(jump.Summary, "BTC") {
+		t.Fatalf("summary %s", jump.Summary)
+	}
+	if drop.Kind != PerpDepthMoveDrop || drop.PastTotal != 1000 || drop.Total != 700 {
+		t.Fatalf("drop %+v", drop)
+	}
+	if drop.PriceKind != PerpDepthPriceDown || drop.PriceAfter != 98000 || drop.AfterKind != PerpDepthPriceUp {
+		t.Fatalf("drop price %+v", drop)
+	}
+}
+
+func TestAttachPerpDepthMoves_SkipsSmallWiggles(t *testing.T) {
+	now := time.Date(2026, 9, 21, 16, 0, 0, 0, time.UTC)
+	live := BuildPerpDepthOverview("all", 1, []PerpDepthCoinInput{
+		{Symbol: "BTCUSDT", Base: "BTC", Bid: 80, Ask: 20, Complete: true},
+	}, now)
+	AttachPerpDepthHistory(live, []PerpDepthTotalPoint{
+		{Time: now.Add(-10 * time.Minute), Total: 1000},
+		{Time: now.Add(-5 * time.Minute), Total: 1040},
+	})
+	if len(live.Moves) != 0 {
+		t.Fatalf("%+v", live.Moves)
+	}
+}
+
 func TestClassifyPerpDepthSize(t *testing.T) {
 	if ClassifyPerpDepthSize(5) != PerpDepthSizeThicker || ClassifyPerpDepthSize(-5) != PerpDepthSizeThinner {
 		t.Fatal("sides")

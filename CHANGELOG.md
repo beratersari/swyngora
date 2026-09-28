@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Perp book jumps and drops:** the largest rises and falls in the six-hour perp book (at least 5% inside 15 minutes), with BTC's price during each move and 15 minutes later. Listed under the book chart on Markets (`moves` on `GET /api/v1/market/perp-depth/overview`, MCP `get_perp_depth_overview`) (`docs/features/perp-depth.md`)
+
 ### Changed
 - **Binance REST pauses after a ban:** background book sampling no longer keeps calling Binance after HTTP 418 or 429, or once the used-weight header reaches 1,800. The pause is Binance only. Coinbase, Bybit, and OKX keep sampling. Binance heatmaps and wall scans run about once a second on the top 100 levels, and book flashes use that same depth (`docs/features/order-book.md`)
 - **Repeated-size counts:** buy, sell, and delta on the coin tape are labeled as the repeated clips only, so they are not read as every market order.

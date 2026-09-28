@@ -75,6 +75,39 @@ export function depthLine(w?: MarketPerpDepthShareWindow | null): string {
   return `${formatCompactAmount(w.pastTotal)} → ${formatCompactAmount(w.total)}${chg}`;
 }
 
+export type PerpBookMove = {
+  kind?: string;
+  pastTotal?: string;
+  total?: string;
+  changePct?: string;
+  priceFrom?: string;
+  priceTo?: string;
+  priceAfter?: string;
+  priceChangePct?: string;
+  priceAfterPct?: string;
+};
+
+/** Past total to the end of a jump or drop, with the percent change. */
+export function moveBookLine(m?: PerpBookMove | null): string {
+  if (!m?.pastTotal || !m.total) return '';
+  const chg = m.changePct ? ` (${m.changePct}%)` : '';
+  return `${formatCompactAmount(m.pastTotal)} → ${formatCompactAmount(m.total)}${chg}`;
+}
+
+/** BTC from the start of the depth move to the end. */
+export function moveDuringLine(m?: PerpBookMove | null): string {
+  if (!m?.priceFrom || !m.priceTo) return '';
+  const chg = m.priceChangePct ? ` (${m.priceChangePct}%)` : '';
+  return `${formatCompactAmount(m.priceFrom)} → ${formatCompactAmount(m.priceTo)}${chg}`;
+}
+
+/** BTC about 15 minutes after the depth move ended. */
+export function moveAfterLine(m?: PerpBookMove | null): string {
+  if (!m?.priceAfter) return '';
+  const chg = m.priceAfterPct ? ` (${m.priceAfterPct}%)` : '';
+  return `${formatCompactAmount(m.priceAfter)}${chg}`;
+}
+
 /** Coins that added or removed the most bid+ask, with the signed amount. */
 export function sizeDriverLine(w?: MarketPerpDepthShareWindow | null): string {
   const parts = (w?.sizeDrivers ?? [])

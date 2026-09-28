@@ -146,6 +146,20 @@ func TestPerpDepthOverviewCommand(t *testing.T) {
 	}
 }
 
+func TestFormatPerpDepthOverview_IncludesBookMoves(t *testing.T) {
+	now := time.Date(2026, 9, 21, 16, 0, 0, 0, time.UTC)
+	out := FormatPerpDepthOverview(&domain.PerpDepthOverview{
+		Exchange: "all", RangePct: 1, Known: 2, Summary: "2 liquid perps.",
+		Moves: []domain.PerpDepthBookMove{{
+			Kind: domain.PerpDepthMoveDrop, Summary: "Book dropped from 1000 to 700 (-30) between 15:10 and 15:16. BTC 100000 → 97000 (-3).",
+			From: now.Add(-20 * time.Minute), To: now.Add(-14 * time.Minute),
+		}},
+	})
+	if !strings.Contains(out, "Book dropped") || !strings.Contains(out, "BTC") {
+		t.Fatalf("%s", out)
+	}
+}
+
 func TestFearGreedCommand(t *testing.T) {
 	r := newTestRouter(t)
 	out := r.Handle(context.Background(), 13, 13, "/fear")

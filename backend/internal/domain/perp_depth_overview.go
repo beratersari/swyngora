@@ -70,6 +70,7 @@ type PerpDepthOverview struct {
 	Missing   []string
 	Windows   []PerpDepthShareWindow
 	History   []PerpDepthTotalPoint
+	Moves     []PerpDepthBookMove
 	Bands     []PerpDepthOverviewBand
 	Summary   string
 	Note      string
@@ -138,8 +139,9 @@ func BuildPerpDepthOverview(exchange string, rangePct float64, coins []PerpDepth
 		Missing:  []string{},
 		Windows:  []PerpDepthShareWindow{},
 		History:  []PerpDepthTotalPoint{},
+		Moves:    []PerpDepthBookMove{},
 		Bands:    []PerpDepthOverviewBand{},
-		Note:     "Resting USD-M / linear perpetual depth across the most liquid USDT coins we follow. Bid is notional within N% below each coin's own mid; ask is notional within N% above. bands show how that book grows from 0.1% out to the headline (e.g. 80M inside 0.1% vs 1.0B at 1%) and which coins fill each distance. Combined exchange=all adds Binance, Bybit, and OKX for each coin. windows compare bid vs ask share of that book 15m / 1h / 4h ago (sampled while the desk runs), which coins moved the mix, and whether total bid+ask got thicker or thinner (at least 5%), plus which coins added or removed the most of that size. history is that total each minute for the last 6 hours, with BTC's close on the same minutes. Informational only — not financial advice.",
+		Note:     "Resting USD-M / linear perpetual depth across the most liquid USDT coins we follow. Bid is notional within N% below each coin's own mid; ask is notional within N% above. bands show how that book grows from 0.1% out to the headline (e.g. 80M inside 0.1% vs 1.0B at 1%) and which coins fill each distance. Combined exchange=all adds Binance, Bybit, and OKX for each coin. windows compare bid vs ask share of that book 15m / 1h / 4h ago (sampled while the desk runs), which coins moved the mix, and whether total bid+ask got thicker or thinner (at least 5%), plus which coins added or removed the most of that size. history is that total each minute for the last 6 hours, with BTC's close on the same minutes. moves are the largest jumps and drops of at least 5% that finish within 15 minutes, plus what BTC did during each and 15 minutes later. Informational only — not financial advice.",
 	}
 	rows := make([]PerpDepthCoinShare, 0, len(coins))
 	var bid, ask float64
