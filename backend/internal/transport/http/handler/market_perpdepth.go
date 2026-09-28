@@ -274,6 +274,12 @@ type perpDepthMoveDriverDTO struct {
 	Kind     string `json:"kind"`
 }
 
+type perpDepthHistoryGapDTO struct {
+	Time    time.Time `json:"time"`
+	Missing []string  `json:"missing"`
+	Stale   []string  `json:"stale"`
+}
+
 type perpDepthOverviewResponse struct {
 	Exchange  string                     `json:"exchange"`
 	RangePct  string                     `json:"rangePct"`
@@ -293,6 +299,7 @@ type perpDepthOverviewResponse struct {
 	Windows   []perpDepthShareWindowDTO  `json:"windows"`
 	History   []perpDepthTotalPointDTO   `json:"history"`
 	Moves     []perpDepthBookMoveDTO     `json:"moves"`
+	Gaps      []perpDepthHistoryGapDTO   `json:"gaps"`
 	Bands     []perpDepthOverviewBandDTO `json:"bands"`
 	Summary   string                     `json:"summary"`
 	Note      string                     `json:"note"`
@@ -401,6 +408,17 @@ func perpDepthOverviewToDTO(a *domain.PerpDepthOverview) perpDepthOverviewRespon
 		row.VenueSpan = m.VenueSpan
 		moves = append(moves, row)
 	}
+	gaps := make([]perpDepthHistoryGapDTO, 0, len(a.Gaps))
+	for _, g := range a.Gaps {
+		missing, stale := g.Missing, g.Stale
+		if missing == nil {
+			missing = []string{}
+		}
+		if stale == nil {
+			stale = []string{}
+		}
+		gaps = append(gaps, perpDepthHistoryGapDTO{Time: g.Time.UTC(), Missing: missing, Stale: stale})
+	}
 	bands := make([]perpDepthOverviewBandDTO, 0, len(a.Bands))
 	for _, b := range a.Bands {
 		rowCoins := make([]perpDepthOverviewBandCoinDTO, 0, len(b.Coins))
@@ -423,7 +441,7 @@ func perpDepthOverviewToDTO(a *domain.PerpDepthOverview) perpDepthOverviewRespon
 		Exchange: a.Exchange, RangePct: formatHistQty(a.RangePct), Universe: a.Universe, Known: a.Known,
 		AsOf: a.AsOf.UTC(), Bid: formatHistQty(a.Bid), Ask: formatHistQty(a.Ask), Total: formatHistQty(a.Total),
 		Imbalance: domain.FormatSignedQty(a.Imbalance), BidPct: formatHistQty(a.BidPct), AskPct: formatHistQty(a.AskPct),
-		Lean: a.Lean, Coins: coins, Leaders: a.Leaders, Missing: a.Missing, Windows: wins, History: history, Moves: moves, Bands: bands,
+		Lean: a.Lean, Coins: coins, Leaders: a.Leaders, Missing: a.Missing, Windows: wins, History: history, Moves: moves, Gaps: gaps, Bands: bands,
 		Summary: a.Summary, Note: a.Note, Coverage: coverageToDTO(a.Coverage), Definite: a.Definite,
 	}
 }

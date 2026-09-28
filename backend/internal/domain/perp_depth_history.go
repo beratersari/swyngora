@@ -129,12 +129,28 @@ type PerpDepthMoveDriver struct {
 	Kind     string  // thicker | thinner | steady
 }
 
+// PerpDepthHistoryGap is a minute that was not stored because a venue was missing or old.
+// It has no total, so it cannot move the thicker/thinner read.
+type PerpDepthHistoryGap struct {
+	Time     time.Time
+	Exchange string
+	RangePct float64
+	Missing  []string
+	Stale    []string
+}
+
 // PerpDepthHistoryStore persists market-wide perp book samples.
 type PerpDepthHistoryStore interface {
 	InsertSamples(ctx context.Context, rows []PerpDepthSample) (inserted int, err error)
 	ListSamples(ctx context.Context, exchange string, rangePct float64, from, to time.Time) ([]PerpDepthSample, error)
 	// ListMinuteTotals returns one summed bid+ask per minute, oldest first.
 	ListMinuteTotals(ctx context.Context, exchange string, rangePct float64, from, to time.Time) ([]PerpDepthTotalPoint, error)
+	// InsertGap records why a minute has no total. A minute that already has samples is left alone.
+	InsertGap(ctx context.Context, gap PerpDepthHistoryGap) error
+	// ListGaps returns gap minutes in [from, to], oldest first.
+	ListGaps(ctx context.Context, exchange string, rangePct float64, from, to time.Time) ([]PerpDepthHistoryGap, error)
+	// ClearGap drops a gap once that minute has a complete total.
+	ClearGap(ctx context.Context, exchange string, rangePct float64, at time.Time) error
 	PurgeOlderThan(ctx context.Context, cutoff time.Time) (int, error)
 }
 
@@ -714,6 +730,32 @@ func perpDepthMoveCoinSentence(m PerpDepthBookMove) string {
 	default:
 		return ""
 	}
+}
+
+// AttachPerpDepthGaps keeps gap reasons inside the chart span.
+func AttachPerpDepthGaps(live *PerpDepthOverview, gaps []PerpDepthHistoryGap) {
+	if live == nil {
+		return
+	}
+	asOf := live.AsOf
+	if asOf.IsZero() {
+		asOf = time.Now().UTC()
+	}
+	from := asOf.Add(-PerpDepthTotalChartSpan)
+	out := make([]PerpDepthHistoryGap, 0, len(gaps))
+	for _, g := range gaps {
+		if g.Time.IsZero() || (len(g.Missing) == 0 && len(g.Stale) == 0) {
+			continue
+		}
+		t := BucketPerpDepthSampleTime(g.Time)
+		if t.Before(from) || t.After(asOf.Add(time.Minute)) {
+			continue
+		}
+		g.Time = t
+		out = append(out, g)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Time.Before(out[j].Time) })
+	live.Gaps = out
 }
 
 func groupPerpDepthSamples(rows []PerpDepthSample) map[int64][]PerpDepthCoinInput {

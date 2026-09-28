@@ -13,6 +13,7 @@ import {
   bandLeaderLabel,
   bandShareLabel,
   bidSharePct,
+  historyGapRanges,
   distanceBands,
   depthLine,
   moveAfterLine,
@@ -33,6 +34,7 @@ export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLi
   const { t } = useTranslation(['markets', 'common']);
   const [open, setOpen] = useState(false);
   const leaders = leaderCoins(data);
+  const gapLines = historyGapRanges(data?.gaps);
   const bands = distanceBands(data);
   const leanKey = data?.lean === 'bid' ? 'perpLiq.leanBid' : data?.lean === 'ask' ? 'perpLiq.leanAsk' : 'perpLiq.leanEven';
   const share = bidSharePct(data);
@@ -165,6 +167,15 @@ export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLi
                 {t('perpLiq.historyWait')}
               </Text>
             )}
+            {gapLines.map((gap) => (
+              <Text key={gap.key} variant="caption" color="secondary" data-testid="perp-depth-gap">
+                {gap.missing && gap.stale
+                  ? t('perpLiq.gapBoth', { when: gap.when, missing: gap.missing, stale: gap.stale })
+                  : gap.missing
+                    ? t('perpLiq.gapMissing', { when: gap.when, venues: gap.missing })
+                    : t('perpLiq.gapStale', { when: gap.when, venues: gap.stale })}
+              </Text>
+            ))}
             {(data?.history?.length ?? 0) >= 2 ? (
               <>
                 <Text variant="caption" color="secondary">

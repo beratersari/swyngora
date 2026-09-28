@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bandLeaderLabel, bandShareLabel, bidSharePct, depthHistoryLine, depthLine, depthPriceLine, distanceBands, driverNames, leaderCoins, mixLine, moveAfterLine, moveBookLine, moveDriverLine, moveDuringLine, moveVenueLine, shareLabel, sizeDriverLine } from './helpers';
+import { bandLeaderLabel, bandShareLabel, bidSharePct, depthHistoryLine, depthLine, depthPriceLine, distanceBands, driverNames, historyGapRanges, leaderCoins, mixLine, moveAfterLine, moveBookLine, moveDriverLine, moveDuringLine, moveVenueLine, shareLabel, sizeDriverLine } from './helpers';
 
 describe('PerpLiquidityOverview helpers', () => {
   it('drops empty or errored coins then keeps the largest', () => {
@@ -66,6 +66,19 @@ describe('PerpLiquidityOverview helpers', () => {
       depthLine({ complete: true, pastTotal: '400000000', total: '500000000', totalChangePct: '+25' }),
     ).toBe('400.00M → 500.00M (+25%)');
     expect(depthLine({ complete: false, pastTotal: '1', total: '2' })).toBe('');
+  });
+
+  it('joins a run of skipped minutes that share the same venues', () => {
+    expect(
+      historyGapRanges([
+        { time: '2026-09-28T12:04:00Z', missing: ['okx'] },
+        { time: '2026-09-28T12:05:00Z', missing: ['okx'] },
+        { time: '2026-09-28T12:08:00Z', missing: ['okx'], stale: ['bybit'] },
+      ]),
+    ).toMatchObject([
+      { when: '12:04–12:05', missing: 'okx', stale: '' },
+      { when: '12:08', missing: 'okx', stale: 'bybit' },
+    ]);
   });
 
   it('keeps minute totals in time order for the depth chart', () => {

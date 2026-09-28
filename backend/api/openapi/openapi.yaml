@@ -10711,6 +10711,17 @@ components:
         change: { type: string, description: Signed USDT, this coin's bid+ask at the end minus the start }
         sharePct: { type: string, description: This coin's change as a percent of the market move }
         kind: { type: string, enum: [thicker, thinner, steady] }
+    MarketPerpDepthHistoryGap:
+      type: object
+      description: A minute left out of the total line because a venue was missing or old
+      properties:
+        time: { type: string, format: date-time }
+        missing:
+          type: array
+          items: { type: string }
+        stale:
+          type: array
+          items: { type: string }
     MarketPerpDepthShareWindow:
       type: object
       description: Bid vs ask share and total book size of the liquid-perp book now vs 15m / 1h / 4h ago
@@ -10773,6 +10784,10 @@ components:
           type: array
           description: Largest jumps and drops of at least 5% inside 15 minutes, biggest first, with BTC around each and whether Binance, Bybit, and OKX moved together
           items: { $ref: '#/components/schemas/MarketPerpDepthBookMove' }
+        gaps:
+          type: array
+          description: Minutes skipped because a venue was missing or old. These are not totals.
+          items: { $ref: '#/components/schemas/MarketPerpDepthHistoryGap' }
         bands:
           type: array
           items: { $ref: '#/components/schemas/MarketPerpDepthOverviewBand' }

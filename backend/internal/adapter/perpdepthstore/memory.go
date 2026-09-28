@@ -13,6 +13,7 @@ import (
 type Memory struct {
 	mu   sync.Mutex
 	rows []domain.PerpDepthSample
+	gaps []domain.PerpDepthHistoryGap
 }
 
 // InsertSamples upserts one-minute buckets.
@@ -119,6 +120,81 @@ func (m *Memory) ListMinuteTotals(_ context.Context, exchange string, rangePct f
 	return out, nil
 }
 
+// InsertGap records a minute that has no total. A minute that already has samples is left alone.
+func (m *Memory) InsertGap(_ context.Context, gap domain.PerpDepthHistoryGap) error {
+	if m == nil || gap.Time.IsZero() || (len(gap.Missing) == 0 && len(gap.Stale) == 0) {
+		return nil
+	}
+	if gap.Exchange == "" {
+		gap.Exchange = "all"
+	}
+	gap.Time = domain.BucketPerpDepthSampleTime(gap.Time)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, r := range m.rows {
+		if r.Exchange == gap.Exchange && r.Time.Equal(gap.Time) && almostRange(r.RangePct, gap.RangePct) {
+			return nil
+		}
+	}
+	for i := range m.gaps {
+		if m.gaps[i].Exchange == gap.Exchange && m.gaps[i].Time.Equal(gap.Time) && almostRange(m.gaps[i].RangePct, gap.RangePct) {
+			m.gaps[i] = gap
+			return nil
+		}
+	}
+	m.gaps = append(m.gaps, gap)
+	return nil
+}
+
+// ListGaps returns gap minutes in [from, to], oldest first.
+func (m *Memory) ListGaps(_ context.Context, exchange string, rangePct float64, from, to time.Time) ([]domain.PerpDepthHistoryGap, error) {
+	if m == nil {
+		return nil, nil
+	}
+	if exchange == "" {
+		exchange = "all"
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]domain.PerpDepthHistoryGap, 0)
+	for _, g := range m.gaps {
+		if g.Exchange != exchange || !almostRange(g.RangePct, rangePct) {
+			continue
+		}
+		if !from.IsZero() && g.Time.Before(from) {
+			continue
+		}
+		if !to.IsZero() && g.Time.After(to) {
+			continue
+		}
+		out = append(out, g)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Time.Before(out[j].Time) })
+	return out, nil
+}
+
+// ClearGap drops a gap once that minute has a complete total.
+func (m *Memory) ClearGap(_ context.Context, exchange string, rangePct float64, at time.Time) error {
+	if m == nil || at.IsZero() {
+		return nil
+	}
+	if exchange == "" {
+		exchange = "all"
+	}
+	at = domain.BucketPerpDepthSampleTime(at)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	kept := m.gaps[:0]
+	for _, g := range m.gaps {
+		if g.Exchange == exchange && g.Time.Equal(at) && almostRange(g.RangePct, rangePct) {
+			continue
+		}
+		kept = append(kept, g)
+	}
+	m.gaps = kept
+	return nil
+}
+
 // PurgeOlderThan drops samples before cutoff.
 func (m *Memory) PurgeOlderThan(_ context.Context, cutoff time.Time) (int, error) {
 	if m == nil || cutoff.IsZero() {
@@ -136,6 +212,15 @@ func (m *Memory) PurgeOlderThan(_ context.Context, cutoff time.Time) (int, error
 		kept = append(kept, r)
 	}
 	m.rows = kept
+	next := make([]domain.PerpDepthHistoryGap, 0, len(m.gaps))
+	for _, g := range m.gaps {
+		if g.Time.Before(cutoff) {
+			n++
+			continue
+		}
+		next = append(next, g)
+	}
+	m.gaps = next
 	return n, nil
 }
 

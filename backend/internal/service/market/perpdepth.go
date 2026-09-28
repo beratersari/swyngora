@@ -221,14 +221,28 @@ func (s *Service) persistPerpDepthOverview(ctx context.Context, out *domain.Perp
 	if s == nil || s.perpHist == nil || out == nil {
 		return
 	}
-	rows := domain.PerpDepthSamplesFromOverview(out)
-	if out.Exchange == "all" {
-		rows = append(rows, domain.PerpDepthVenueSamples(out.AsOf, out.RangePct, coins)...)
-	}
-	if len(rows) == 0 {
+	if out.Definite {
+		rows := domain.PerpDepthSamplesFromOverview(out)
+		if out.Exchange == "all" {
+			rows = append(rows, domain.PerpDepthVenueSamples(out.AsOf, out.RangePct, coins)...)
+		}
+		if len(rows) == 0 {
+			return
+		}
+		if _, err := s.perpHist.InsertSamples(ctx, rows); err != nil {
+			return
+		}
+		_ = s.perpHist.ClearGap(ctx, out.Exchange, out.RangePct, out.AsOf)
 		return
 	}
-	_, _ = s.perpHist.InsertSamples(ctx, rows)
+	if len(out.Coverage.Missing) == 0 && len(out.Coverage.Stale) == 0 {
+		return
+	}
+	_ = s.perpHist.InsertGap(ctx, domain.PerpDepthHistoryGap{
+		Time: out.AsOf, Exchange: out.Exchange, RangePct: out.RangePct,
+		Missing: append([]string{}, out.Coverage.Missing...),
+		Stale:   append([]string{}, out.Coverage.Stale...),
+	})
 }
 
 func (s *Service) attachPerpDepthWindows(ctx context.Context, out *domain.PerpDepthOverview) {
@@ -254,6 +268,11 @@ func (s *Service) attachPerpDepthWindows(ctx context.Context, out *domain.PerpDe
 	}
 	domain.AttachPerpDepthMoveCoins(out, coinRows)
 	s.attachPerpDepthMoveVenues(ctx, out)
+	gaps, err := s.perpHist.ListGaps(ctx, out.Exchange, out.RangePct, fromTotals, out.AsOf.Add(time.Minute))
+	if err != nil {
+		return
+	}
+	domain.AttachPerpDepthGaps(out, gaps)
 }
 
 func (s *Service) attachPerpDepthMoveVenues(ctx context.Context, out *domain.PerpDepthOverview) {

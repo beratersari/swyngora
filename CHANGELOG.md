@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Perp book jumps and drops:** the largest rises and falls in the six-hour perp book (at least 5% inside 15 minutes), with BTC's price during each move and 15 minutes later. Listed under the book chart on Markets (`moves` on `GET /api/v1/market/perp-depth/overview`, MCP `get_perp_depth_overview`) (`docs/features/perp-depth.md`)
 
 ### Changed
+- **Perp depth chart names gap venues:** a minute left out because Binance, Bybit, or OKX was missing or old is listed under the six-hour total, without putting that minute on the line (`docs/features/perp-depth.md`)
 - **Perp depth history skips an incomplete venue set:** a minute is stored only when Binance, Bybit, and OKX are all fresh, so a missing venue does not make the book look thicker or thinner when it returns (`docs/features/perp-depth.md`)
 - **Market-wide venue coverage:** combined Binance, Bybit, and OKX reads on order count, print size, liquidations, and perp depth name each venue as fresh, old, or missing. When any venue is missing or old, `definite` is false and the page does not state a market lean (`docs/features/venue-coverage.md`)
 - **Binance REST pauses after a ban:** background book sampling no longer keeps calling Binance after HTTP 418 or 429, or once the used-weight header reaches 1,800. The pause is Binance only. Coinbase, Bybit, and OKX keep sampling. Binance heatmaps and wall scans run about once a second on the top 100 levels, and book flashes use that same depth (`docs/features/order-book.md`)

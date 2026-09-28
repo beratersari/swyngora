@@ -30,6 +30,62 @@ export function mixLine(w?: MarketPerpDepthShareWindow | null): string {
   return `${w.pastBidPct}% → ${w.bidPct}%${chg}`;
 }
 
+export type HistoryGap = { time?: string; missing?: string[]; stale?: string[] };
+
+function gapClock(ms: number): string {
+  const d = new Date(ms);
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const mm = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+function sameVenues(a: string[], b: string[]): boolean {
+  return a.join(',') === b.join(',');
+}
+
+/** Consecutive skipped minutes with the same missing and old venues. */
+export function historyGapRanges(gaps?: HistoryGap[] | null): {
+  key: string;
+  when: string;
+  missing: string;
+  stale: string;
+}[] {
+  const rows = (gaps ?? [])
+    .map((g) => ({
+      ms: g.time ? Date.parse(g.time) : NaN,
+      missing: [...(g.missing ?? [])],
+      stale: [...(g.stale ?? [])],
+    }))
+    .filter((g) => Number.isFinite(g.ms) && (g.missing.length > 0 || g.stale.length > 0))
+    .sort((a, b) => a.ms - b.ms);
+  const out: { key: string; when: string; missing: string; stale: string; endMs: number; missingList: string[]; staleList: string[] }[] = [];
+  for (const row of rows) {
+    const last = out[out.length - 1];
+    const continues =
+      last != null &&
+      row.ms - last.endMs <= 60_000 &&
+      sameVenues(row.missing, last.missingList) &&
+      sameVenues(row.stale, last.staleList);
+    if (!continues || last == null) {
+      out.push({
+        key: String(row.ms),
+        when: gapClock(row.ms),
+        missing: row.missing.join(', '),
+        stale: row.stale.join(', '),
+        endMs: row.ms,
+        missingList: row.missing,
+        staleList: row.stale,
+      });
+      continue;
+    }
+    const start = last.when.slice(0, 5);
+    last.when = `${start}–${gapClock(row.ms)}`;
+    last.endMs = row.ms;
+    last.key = `${last.key}-${row.ms}`;
+  }
+  return out.map(({ key, when, missing, stale }) => ({ key, when, missing, stale }));
+}
+
 /** Minute totals for the depth chart, oldest first. */
 export function depthHistoryLine(
   points?: { time?: string; total?: string }[] | null,

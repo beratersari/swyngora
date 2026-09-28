@@ -90,6 +90,10 @@ describe('PerpLiquidityOverview', () => {
             { time: '2026-09-21T14:00:00Z', total: '400', price: '100' },
             { time: '2026-09-21T16:00:00Z', total: '900', price: '90' },
           ],
+          gaps: [
+            { time: '2026-09-28T12:04:00Z', missing: ['okx'], stale: [] },
+            { time: '2026-09-28T12:05:00Z', missing: ['okx'], stale: [] },
+          ],
         }}
       />,
     );
@@ -97,6 +101,7 @@ describe('PerpLiquidityOverview', () => {
     expect(await screen.findByTestId('perp-depth-history')).toBeInTheDocument();
     expect(screen.getByText('BTC')).toBeInTheDocument();
     expect(screen.getByText('Book')).toBeInTheDocument();
+    expect(screen.getByTestId('perp-depth-gap')).toHaveTextContent('12:04–12:05 UTC: okx missing');
     expect(screen.getByText('No jump or drop of 5% inside 15 minutes yet.')).toBeInTheDocument();
   });
 

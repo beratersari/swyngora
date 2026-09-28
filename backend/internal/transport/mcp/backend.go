@@ -1100,6 +1100,19 @@ func perpDepthOverviewMap(got *domain.PerpDepthOverview) map[string]any {
 		}
 		moves = append(moves, row)
 	}
+	gaps := make([]map[string]any, 0, len(got.Gaps))
+	for _, g := range got.Gaps {
+		missing, stale := g.Missing, g.Stale
+		if missing == nil {
+			missing = []string{}
+		}
+		if stale == nil {
+			stale = []string{}
+		}
+		gaps = append(gaps, map[string]any{
+			"time": g.Time.UTC().Format(time.RFC3339Nano), "missing": missing, "stale": stale,
+		})
+	}
 	bands := make([]map[string]any, 0, len(got.Bands))
 	for _, b := range got.Bands {
 		rowCoins := make([]map[string]any, 0, len(b.Coins))
@@ -1126,7 +1139,7 @@ func perpDepthOverviewMap(got *domain.PerpDepthOverview) map[string]any {
 		"asOf": got.AsOf.UTC().Format(time.RFC3339Nano), "bid": formatQtyMCP(got.Bid), "ask": formatQtyMCP(got.Ask),
 		"total": formatQtyMCP(got.Total), "imbalance": domain.FormatSignedQty(got.Imbalance),
 		"bidPct": formatQtyMCP(got.BidPct), "askPct": formatQtyMCP(got.AskPct), "lean": got.Lean,
-		"coins": coins, "leaders": got.Leaders, "windows": wins, "history": history, "moves": moves, "bands": bands, "summary": got.Summary, "note": got.Note,
+		"coins": coins, "leaders": got.Leaders, "windows": wins, "history": history, "moves": moves, "gaps": gaps, "bands": bands, "summary": got.Summary, "note": got.Note,
 		"coverage": coverageMap(got.Coverage), "definite": got.Definite,
 	}
 	if len(got.Missing) > 0 {

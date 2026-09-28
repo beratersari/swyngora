@@ -137,6 +137,16 @@ func TestGetPerpDepthOverview_MissingVenueWithholdsLean(t *testing.T) {
 	if len(rows) != 0 {
 		t.Fatalf("incomplete book was stored: %+v", rows)
 	}
+	gaps, err := store.ListGaps(context.Background(), "all", 1, time.Now().Add(-time.Hour), time.Now().Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(gaps) != 1 || len(gaps[0].Missing) != 1 || gaps[0].Missing[0] != "okx" {
+		t.Fatalf("gaps %+v", gaps)
+	}
+	if len(got.Gaps) != 1 || got.Gaps[0].Missing[0] != "okx" {
+		t.Fatalf("overview gaps %+v", got.Gaps)
+	}
 }
 
 func TestGetPerpDepthOverview_WindowsFromHistory(t *testing.T) {

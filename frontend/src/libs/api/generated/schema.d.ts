@@ -6810,6 +6810,13 @@ export interface components {
             /** @enum {string} */
             kind?: "thicker" | "thinner" | "steady";
         };
+        /** @description A minute left out of the total line because a venue was missing or old */
+        MarketPerpDepthHistoryGap: {
+            /** Format: date-time */
+            time?: string;
+            missing?: string[];
+            stale?: string[];
+        };
         /** @description Bid vs ask share and total book size of the liquid-perp book now vs 15m / 1h / 4h ago */
         MarketPerpDepthShareWindow: {
             /** @enum {string} */
@@ -6870,6 +6877,8 @@ export interface components {
             history?: components["schemas"]["MarketPerpDepthTotalPoint"][];
             /** @description Largest jumps and drops of at least 5% inside 15 minutes, biggest first, with BTC around each and whether Binance, Bybit, and OKX moved together */
             moves?: components["schemas"]["MarketPerpDepthBookMove"][];
+            /** @description Minutes skipped because a venue was missing or old. These are not totals. */
+            gaps?: components["schemas"]["MarketPerpDepthHistoryGap"][];
             bands?: components["schemas"]["MarketPerpDepthOverviewBand"][];
             summary?: string;
             note?: string;
