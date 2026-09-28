@@ -82,6 +82,8 @@ type PerpDepthOverview struct {
 	Bands     []PerpDepthOverviewBand
 	Summary   string
 	Note      string
+	Coverage  MarketCoverage
+	Definite  bool
 }
 
 // PerpDepthOverviewBandCoin is one coin's slice of a ±% market-wide band.

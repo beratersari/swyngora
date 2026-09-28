@@ -33,6 +33,7 @@ import {
   huntWeightQueryParams,
   parseHuntWeightDraft,
 } from '@/components/organisms/LiquidationHunt/helpers';
+import { VenueCoverage } from '@/components/molecules/VenueCoverage';
 import { LiquidationFeedHealth } from '@/components/organisms/LiquidationFeedHealth';
 import { LiquidationTreemap } from '@/components/organisms/LiquidationTreemap';
 import { LiquidationWindowCards } from '@/components/organisms/LiquidationWindowCards';
@@ -322,7 +323,11 @@ export function LiquidationsPage() {
         />
       ) : null}
 
-      {view === 'overview' ? (
+      {view === 'overview' && overview?.definite === false ? (
+        <VenueCoverage coverage={overview.coverage} />
+      ) : null}
+
+      {view === 'overview' && overview?.definite !== false ? (
         <OverviewLayout>
           <MapCol>
             <LiquidationTreemap

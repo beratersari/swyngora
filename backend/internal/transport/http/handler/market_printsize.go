@@ -123,6 +123,8 @@ type printSizeOverviewResponse struct {
 	Coins    []printSizeVenueDTO        `json:"coins"`
 	Summary  string                     `json:"summary"`
 	Note     string                     `json:"note"`
+	Coverage marketCoverageDTO          `json:"coverage"`
+	Definite bool                       `json:"definite"`
 }
 
 func printSizeOverviewToDTO(a *domain.PrintSizeOverview) printSizeOverviewResponse {
@@ -146,6 +148,7 @@ func printSizeOverviewToDTO(a *domain.PrintSizeOverview) printSizeOverviewRespon
 	return printSizeOverviewResponse{
 		Exchange: a.Exchange, Quote: a.Quote, Universe: a.Universe, AsOf: a.AsOf.UTC(),
 		Windows: wins, Coins: coins, Summary: a.Summary, Note: a.Note,
+		Coverage: coverageToDTO(a.Coverage), Definite: a.Definite,
 	}
 }
 

@@ -296,6 +296,8 @@ type perpDepthOverviewResponse struct {
 	Bands     []perpDepthOverviewBandDTO `json:"bands"`
 	Summary   string                     `json:"summary"`
 	Note      string                     `json:"note"`
+	Coverage  marketCoverageDTO          `json:"coverage"`
+	Definite  bool                       `json:"definite"`
 }
 
 func perpDepthOverviewToDTO(a *domain.PerpDepthOverview) perpDepthOverviewResponse {
@@ -422,6 +424,6 @@ func perpDepthOverviewToDTO(a *domain.PerpDepthOverview) perpDepthOverviewRespon
 		AsOf: a.AsOf.UTC(), Bid: formatHistQty(a.Bid), Ask: formatHistQty(a.Ask), Total: formatHistQty(a.Total),
 		Imbalance: domain.FormatSignedQty(a.Imbalance), BidPct: formatHistQty(a.BidPct), AskPct: formatHistQty(a.AskPct),
 		Lean: a.Lean, Coins: coins, Leaders: a.Leaders, Missing: a.Missing, Windows: wins, History: history, Moves: moves, Bands: bands,
-		Summary: a.Summary, Note: a.Note,
+		Summary: a.Summary, Note: a.Note, Coverage: coverageToDTO(a.Coverage), Definite: a.Definite,
 	}
 }

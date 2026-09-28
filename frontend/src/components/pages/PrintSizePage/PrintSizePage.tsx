@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { PageHeader } from '@/components/molecules/PageHeader';
+import { VenueCoverage } from '@/components/molecules/VenueCoverage';
 import { PrintSizeTable } from '@/components/organisms/PrintSizeTable';
 import { rtkErrorMessage, useGetMarketPrintSizeOverviewQuery } from '@/libs/api';
 import {
@@ -90,7 +91,11 @@ export function PrintSizePage() {
         />
       ) : null}
 
-      {hasLoaded && query.isSuccess ? (
+      {hasLoaded && query.isSuccess && query.data?.definite === false ? (
+        <VenueCoverage coverage={query.data.coverage} />
+      ) : null}
+
+      {hasLoaded && query.isSuccess && query.data?.definite !== false ? (
         <WindowGrid>
           {PRINT_SIZE_WINDOWS.map((id) => {
             const win = windowById(query.data?.windows, id);
@@ -130,16 +135,16 @@ export function PrintSizePage() {
         </WindowGrid>
       ) : null}
 
-      {active?.summary ? (
+      {query.data?.definite !== false && active?.summary ? (
         <Text variant="caption" color="secondary">
           {active.summary}
         </Text>
       ) : null}
 
       <PrintSizeTable
-        rows={rows}
+        rows={query.data?.definite === false ? [] : rows}
         loading={query.isFetching}
-        hasLoaded={hasLoaded}
+        hasLoaded={hasLoaded && query.data?.definite !== false}
         emptyHint={t('printsize:emptyHint')}
         emptyTitle={t('printsize:emptyTitle')}
         columns={{

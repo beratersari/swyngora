@@ -75,6 +75,7 @@ type PrintSizeVenue struct {
 	Summary  string
 	Error    string
 	Span     time.Duration // oldest→newest print we actually have
+	Newest   time.Time
 }
 
 // PrintSizeReport is the API result.
@@ -121,6 +122,7 @@ func BuildPrintSizeVenue(ex Exchange, symbol string, prints []TakerPrint, now ti
 	}
 	if !oldest.IsZero() && !newest.IsZero() {
 		out.Span = newest.Sub(oldest)
+		out.Newest = newest
 	}
 	sort.SliceStable(clean, func(i, j int) bool { return clean[i].Time.Before(clean[j].Time) })
 	for _, w := range PrintSizeWindows {
@@ -428,6 +430,8 @@ type PrintSizeOverview struct {
 	Coins    []PrintSizeVenue
 	Summary  string
 	Note     string
+	Coverage MarketCoverage
+	Definite bool
 }
 
 // ParsePrintSizeOverviewLimit clamps how many liquid pairs the desk follows.

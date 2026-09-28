@@ -66,12 +66,20 @@ func (s *Service) GetPerpDepth(ctx context.Context, exchange, symbol string, ran
 	}
 	for _, f := range got {
 		if f.err != nil && (f.book == nil || (len(f.book.Bids) == 0 && len(f.book.Asks) == 0)) {
-			out.Venues = append(out.Venues, domain.PerpDepthVenue{
+			row := domain.PerpDepthVenue{
 				Exchange: f.ex, Symbol: symbol, Error: f.err.Error(), Summary: f.err.Error(),
-			})
+			}
+			if f.book != nil {
+				row.AsOf = f.book.FetchedAt
+			}
+			out.Venues = append(out.Venues, row)
 			continue
 		}
-		out.Venues = append(out.Venues, domain.BuildPerpDepthVenue(f.ex, symbol, f.book, rangePct))
+		row := domain.BuildPerpDepthVenue(f.ex, symbol, f.book, rangePct)
+		if f.book != nil {
+			row.AsOf = f.book.FetchedAt
+		}
+		out.Venues = append(out.Venues, row)
 	}
 	sort.Slice(out.Venues, func(i, j int) bool {
 		return string(out.Venues[i].Exchange) < string(out.Venues[j].Exchange)
@@ -81,6 +89,32 @@ func (s *Service) GetPerpDepth(ctx context.Context, exchange, symbol string, ran
 	}
 	out.Summary = domain.ExplainPerpDepthReport(*out)
 	return out, nil
+}
+
+func perpCoverageSamples(exchange string, rep *domain.PerpDepthReport, err error) []domain.VenueSample {
+	want := domain.ExpectedFuturesVenues(exchange)
+	if err != nil || rep == nil {
+		out := make([]domain.VenueSample, len(want))
+		for i, ex := range want {
+			out[i] = domain.VenueSample{Exchange: ex}
+		}
+		return out
+	}
+	out := make([]domain.VenueSample, 0, len(rep.Venues))
+	seen := map[domain.Exchange]bool{}
+	for _, v := range rep.Venues {
+		if v.Exchange == "" || v.Exchange == "all" || seen[v.Exchange] {
+			continue
+		}
+		seen[v.Exchange] = true
+		out = append(out, domain.VenueSample{Exchange: v.Exchange, OK: v.Error == "", At: v.AsOf})
+	}
+	for _, ex := range want {
+		if !seen[ex] {
+			out = append(out, domain.VenueSample{Exchange: ex})
+		}
+	}
+	return out
 }
 
 func (s *Service) futuresDepthPort(ex domain.Exchange) domain.FuturesDepthPort {
@@ -126,7 +160,8 @@ func (s *Service) GetPerpDepthOverview(ctx context.Context, exchange string, ran
 
 	symbols := s.perpOverviewUniverse(ctx, limit)
 	type fetched struct {
-		in domain.PerpDepthCoinInput
+		in      domain.PerpDepthCoinInput
+		samples []domain.VenueSample
 	}
 	got := make([]fetched, len(symbols))
 	var wg sync.WaitGroup
@@ -145,15 +180,16 @@ func (s *Service) GetPerpDepthOverview(ctx context.Context, exchange string, ran
 			rep, ferr := s.GetPerpDepth(ctx, ex, sym, rangePct)
 			base, _ := domain.SplitBaseQuote(domain.ExchangeBinance, sym)
 			in := domain.PerpDepthCoinInput{Symbol: sym, Base: base}
+			samples := perpCoverageSamples(ex, rep, ferr)
 			if ferr != nil {
 				in.Error = ferr.Error()
-				got[i] = fetched{in: in}
+				got[i] = fetched{in: in, samples: samples}
 				return
 			}
 			in.Bid, in.Ask, in.Lean, in.Complete, in.Error = perpDepthHeadline(rep)
 			in.Bands = perpDepthCoinBands(rep)
 			in.Venues = perpDepthVenueBooks(rep)
-			got[i] = fetched{in: in}
+			got[i] = fetched{in: in, samples: samples}
 		}(i, sym)
 	}
 	wg.Wait()
@@ -164,9 +200,15 @@ func (s *Service) GetPerpDepthOverview(ctx context.Context, exchange string, ran
 		}
 		coins = append(coins, f.in)
 	}
-	out := domain.BuildPerpDepthOverview(ex, rangePct, coins, time.Now().UTC())
+	now := time.Now().UTC()
+	out := domain.BuildPerpDepthOverview(ex, rangePct, coins, now)
+	samples := make([]domain.VenueSample, 0, len(got)*3)
+	for _, f := range got {
+		samples = append(samples, f.samples...)
+	}
 	s.persistPerpDepthOverview(ctx, out, coins)
 	s.attachPerpDepthWindows(ctx, out)
+	domain.ApplyPerpDepthCoverage(out, samples, now)
 	if c := s.perpOverviewCache(); c != nil && out != nil {
 		cp := *out
 		c.Set(key, &cp)

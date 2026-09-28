@@ -9170,6 +9170,8 @@ components:
           items: { $ref: '#/components/schemas/MarketLiquidationCoin' }
         feed: { $ref: '#/components/schemas/LiquidationFeed' }
         note: { type: string }
+        coverage: { $ref: '#/components/schemas/MarketVenueCoverage' }
+        definite: { type: boolean, description: False when any expected venue is missing or old. Totals are not a market read. }
     MarketLiquidationLeverageSlice:
       type: object
       properties:
@@ -10776,6 +10778,8 @@ components:
           items: { $ref: '#/components/schemas/MarketPerpDepthOverviewBand' }
         summary: { type: string }
         note: { type: string }
+        coverage: { $ref: '#/components/schemas/MarketVenueCoverage' }
+        definite: { type: boolean, description: False when any expected venue book is missing or old. The lean is not a market read. }
     MarketPerpDepthOverviewBandCoin:
       type: object
       description: One coin's share of a ±% market-wide perp band
@@ -10901,6 +10905,8 @@ components:
           items: { $ref: '#/components/schemas/PrintSizeVenue' }
         summary: { type: string }
         note: { type: string }
+        coverage: { $ref: '#/components/schemas/MarketVenueCoverage' }
+        definite: { type: boolean, description: False when any expected venue is missing or old. The size read is not a market result. }
     BotCluster:
       type: object
       properties:
@@ -10998,6 +11004,31 @@ components:
         coins: { type: integer }
         complete: { type: boolean }
         summary: { type: string }
+    MarketVenueRead:
+      type: object
+      description: One futures venue on a combined market read
+      properties:
+        exchange: { type: string, enum: [binance, bybit, okx] }
+        status: { type: string, enum: [fresh, stale, missing] }
+        asOf: { type: string, format: date-time }
+        ageSec: { type: integer, description: Seconds since asOf. Zero when the venue is missing or answered with no timestamp. }
+    MarketVenueCoverage:
+      type: object
+      description: >
+        Whether Binance, Bybit, and OKX are fresh. complete is false when any
+        expected venue is missing or old. definite on the parent read is then
+        false and the market lean must not be treated as a result.
+      properties:
+        complete: { type: boolean }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/MarketVenueRead' }
+        missing:
+          type: array
+          items: { type: string }
+        stale:
+          type: array
+          items: { type: string }
     MarketOrderCountOverview:
       type: object
       description: Print-count ratio summed across liquid pairs
@@ -11014,6 +11045,8 @@ components:
           items: { $ref: '#/components/schemas/OrderCountVenue' }
         summary: { type: string }
         note: { type: string }
+        coverage: { $ref: '#/components/schemas/MarketVenueCoverage' }
+        definite: { type: boolean, description: False when any expected venue is missing or old. The ratio is not a market read. }
     MarketFundingRate:
       type: object
       description: Predicted next funding plus recent settlements

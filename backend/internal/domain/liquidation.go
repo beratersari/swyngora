@@ -112,6 +112,8 @@ type LiquidationOverview struct {
 	Windows         []LiquidationWindowTotals
 	Coins           []LiquidationCoinTile
 	Feed            LiquidationFeed
+	Coverage        MarketCoverage
+	Definite        bool
 }
 
 // LiquidationCoverage is durable live-socket time for one venue or one pair.
@@ -800,6 +802,7 @@ func (b *LiquidationBook) Overview(exchange, coinWindow string, limit int) *Liqu
 	for _, r := range rows {
 		out.Coins = append(out.Coins, r.tile)
 	}
+	ApplyLiquidationCoverage(out, now)
 	return out
 }
 

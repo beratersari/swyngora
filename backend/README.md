@@ -60,7 +60,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/print-size/overview` | Same average summed across the liquid USDT pairs, plus how many coins got larger or smaller |
 | `GET` | `/api/v1/market/bot-tracker` | Same-size aggressive prints that repeat at least 4 times inside any 60s during the last 5m. Buy, sell, and delta count only those clips |
 | `GET` | `/api/v1/market/order-count` | Aggressive print counts and (buy − sell) / (buy + sell) from −1 to +1 over 1m/5m/15m |
-| `GET` | `/api/v1/market/order-count/overview` | Same ratio summed across the liquid USDT pairs, plus how many coins lean buy or sell |
+| `GET` | `/api/v1/market/order-count/overview` | Same ratio summed across the liquid USDT pairs, plus how many coins lean buy or sell. `definite` is false when Binance, Bybit, or OKX is missing or old |
 | `GET` | `/api/v1/market/funding-rate` | Predicted next perpetual funding + recent settlements (Binance USD-M + Bybit linear + OKX USDT-swap); `pressure` is OI-weighted combined predicted funding plus 1h/4h/24h change |
 | `GET` | `/api/v1/market/funding-arb` | Long cheaper-funding venue / short richer one; sized after-fee payout + spot-perp |
 | `GET` | `/api/v1/market/funding-arb/scan` | After-fee winners only (published settlements in the hold window) |

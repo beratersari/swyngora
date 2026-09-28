@@ -54,6 +54,7 @@ type OrderCountVenue struct {
 	Windows  []OrderCountWindow
 	Summary  string
 	Error    string
+	Newest   time.Time // newest aggressive print; zero when the venue printed nothing
 }
 
 // OrderCountReport is the API result.
@@ -85,6 +86,9 @@ func BuildOrderCount(ex Exchange, symbol string, prints []TakerPrint, now time.T
 		clean = append(clean, p)
 		if oldest.IsZero() || p.Time.Before(oldest) {
 			oldest = p.Time
+		}
+		if out.Newest.IsZero() || p.Time.After(out.Newest) {
+			out.Newest = p.Time
 		}
 	}
 	for _, w := range OrderCountWindows {
@@ -232,6 +236,8 @@ type OrderCountOverview struct {
 	Coins    []OrderCountVenue
 	Summary  string
 	Note     string
+	Coverage MarketCoverage
+	Definite bool
 }
 
 // ParseOrderCountOverviewLimit clamps how many liquid pairs the desk follows.

@@ -15,6 +15,7 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
   - Market-wide **1h / 4h / 12h / 24h** totals (no symbol)
   - `window` (default `24h`) ranks `coins` by total notional for a treemap
   - `limit` default 50, max 100
+  - `coverage` names each venue fresh, old, or missing. `definite` is false when any venue is missing or old, and the page does not present the totals as the market (`docs/features/venue-coverage.md`)
 - Each window includes:
   - `longNotional` / `shortNotional` / `totalNotional` (USDT)
   - `count`

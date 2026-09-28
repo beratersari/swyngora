@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { PageHeader } from '@/components/molecules/PageHeader';
+import { VenueCoverage } from '@/components/molecules/VenueCoverage';
 import { OrderCountTable } from '@/components/organisms/OrderCountTable';
 import { rtkErrorMessage, useGetMarketOrderCountOverviewQuery } from '@/libs/api';
 import {
@@ -88,7 +89,11 @@ export function OrderCountPage() {
         />
       ) : null}
 
-      {hasLoaded && query.isSuccess ? (
+      {hasLoaded && query.isSuccess && query.data?.definite === false ? (
+        <VenueCoverage coverage={query.data.coverage} />
+      ) : null}
+
+      {hasLoaded && query.isSuccess && query.data?.definite !== false ? (
         <WindowGrid>
           {ORDER_COUNT_WINDOWS.map((id) => {
             const win = windowById(query.data?.windows, id);
@@ -119,16 +124,16 @@ export function OrderCountPage() {
         </WindowGrid>
       ) : null}
 
-      {active?.summary ? (
+      {query.data?.definite !== false && active?.summary ? (
         <Text variant="caption" color="secondary">
           {active.summary}
         </Text>
       ) : null}
 
       <OrderCountTable
-        rows={rows}
+        rows={query.data?.definite === false ? [] : rows}
         loading={query.isFetching}
-        hasLoaded={hasLoaded}
+        hasLoaded={hasLoaded && query.data?.definite !== false}
         emptyHint={t('ordercount:emptyHint')}
         emptyTitle={t('ordercount:emptyTitle')}
         columns={{

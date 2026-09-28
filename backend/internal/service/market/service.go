@@ -867,12 +867,14 @@ func (s *Service) GetLiquidationOverview(ctx context.Context, exchange, window s
 	}
 	lim := domain.ClampLiquidationOverviewLimit(limit)
 	if s.liq == nil {
-		return &domain.LiquidationOverview{
+		out := &domain.LiquidationOverview{
 			Exchange:   ex,
 			CoinWindow: win,
 			Windows:    []domain.LiquidationWindowTotals{},
 			Coins:      []domain.LiquidationCoinTile{},
-		}, nil
+		}
+		domain.ApplyLiquidationCoverage(out, time.Now().UTC())
+		return out, nil
 	}
 	return s.liq.Overview(ex, win, lim), nil
 }

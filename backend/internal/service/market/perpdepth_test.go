@@ -81,7 +81,9 @@ func TestGetPerpDepthOverview_TotalsAndLeaders(t *testing.T) {
 	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
 		domain.ExchangeBinance: &fakeMarket{},
 		domain.ExchangeBybit:   &fakeMarket{},
-	}, &fakeSupply{})
+	}, &fakeSupply{}).WithFuturesDepth(map[domain.Exchange]domain.FuturesDepthPort{
+		domain.ExchangeOKX: &fakeMarket{},
+	})
 	got, err := svc.GetPerpDepthOverview(context.Background(), "all", 1, 10)
 	if err != nil {
 		t.Fatal(err)
@@ -92,8 +94,8 @@ func TestGetPerpDepthOverview_TotalsAndLeaders(t *testing.T) {
 	if len(got.Coins) == 0 || got.Coins[0].SharePct <= 0 {
 		t.Fatalf("coins %+v", got.Coins)
 	}
-	if got.Summary == "" || !strings.Contains(strings.ToLower(got.Summary), "bid") {
-		t.Fatalf("summary %s", got.Summary)
+	if !got.Definite || got.Summary == "" || !strings.Contains(strings.ToLower(got.Summary), "bid") {
+		t.Fatalf("summary %s definite %v coverage %+v", got.Summary, got.Definite, got.Coverage)
 	}
 	if len(got.Bands) < 2 {
 		t.Fatalf("bands %+v", got.Bands)
@@ -106,6 +108,26 @@ func TestGetPerpDepthOverview_TotalsAndLeaders(t *testing.T) {
 	}
 	if near.Total <= 0 || near.OfHeadlinePct <= 0 || near.OfHeadlinePct >= 100 {
 		t.Fatalf("near band %+v", near)
+	}
+}
+
+func TestGetPerpDepthOverview_MissingVenueWithholdsLean(t *testing.T) {
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{},
+		domain.ExchangeBybit:   &fakeMarket{},
+	}, &fakeSupply{})
+	got, err := svc.GetPerpDepthOverview(context.Background(), "all", 1, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Definite || got.Lean != "" {
+		t.Fatalf("definite %v lean %q", got.Definite, got.Lean)
+	}
+	if len(got.Coverage.Missing) != 1 || got.Coverage.Missing[0] != "okx" {
+		t.Fatalf("coverage %+v", got.Coverage)
+	}
+	if !strings.Contains(got.Summary, "No market read") || !strings.Contains(got.Summary, "okx") {
+		t.Fatalf("summary %s", got.Summary)
 	}
 }
 

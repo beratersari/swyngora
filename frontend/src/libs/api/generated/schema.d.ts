@@ -5175,6 +5175,9 @@ export interface components {
             coins?: components["schemas"]["MarketLiquidationCoin"][];
             feed?: components["schemas"]["LiquidationFeed"];
             note?: string;
+            coverage?: components["schemas"]["MarketVenueCoverage"];
+            /** @description False when any expected venue is missing or old. Totals are not a market read. */
+            definite?: boolean;
         };
         MarketLiquidationLeverageSlice: {
             /** @enum {integer} */
@@ -6870,6 +6873,9 @@ export interface components {
             bands?: components["schemas"]["MarketPerpDepthOverviewBand"][];
             summary?: string;
             note?: string;
+            coverage?: components["schemas"]["MarketVenueCoverage"];
+            /** @description False when any expected venue book is missing or old. The lean is not a market read. */
+            definite?: boolean;
         };
         /** @description One coin's share of a ±% market-wide perp band */
         MarketPerpDepthOverviewBandCoin: {
@@ -6985,6 +6991,9 @@ export interface components {
             coins?: components["schemas"]["PrintSizeVenue"][];
             summary?: string;
             note?: string;
+            coverage?: components["schemas"]["MarketVenueCoverage"];
+            /** @description False when any expected venue is missing or old. The size read is not a market result. */
+            definite?: boolean;
         };
         BotCluster: {
             exchange?: string;
@@ -7076,6 +7085,24 @@ export interface components {
             complete?: boolean;
             summary?: string;
         };
+        /** @description One futures venue on a combined market read */
+        MarketVenueRead: {
+            /** @enum {string} */
+            exchange?: "binance" | "bybit" | "okx";
+            /** @enum {string} */
+            status?: "fresh" | "stale" | "missing";
+            /** Format: date-time */
+            asOf?: string;
+            /** @description Seconds since asOf. Zero when the venue is missing or answered with no timestamp. */
+            ageSec?: number;
+        };
+        /** @description Whether Binance, Bybit, and OKX are fresh. complete is false when any expected venue is missing or old. definite on the parent read is then false and the market lean must not be treated as a result. */
+        MarketVenueCoverage: {
+            complete?: boolean;
+            venues?: components["schemas"]["MarketVenueRead"][];
+            missing?: string[];
+            stale?: string[];
+        };
         /** @description Print-count ratio summed across liquid pairs */
         MarketOrderCountOverview: {
             exchange?: string;
@@ -7087,6 +7114,9 @@ export interface components {
             coins?: components["schemas"]["OrderCountVenue"][];
             summary?: string;
             note?: string;
+            coverage?: components["schemas"]["MarketVenueCoverage"];
+            /** @description False when any expected venue is missing or old. The ratio is not a market read. */
+            definite?: boolean;
         };
         /** @description Predicted next funding plus recent settlements */
         MarketFundingRate: {

@@ -40,6 +40,14 @@
     "nasdaq": "Nasdaq",
     "bist": "BIST"
   },
+  "coverage": {
+    "incomplete": "Her borsa güncel olmadan piyasa sonucu yok.",
+    "complete": "Binance, Bybit ve OKX güncel.",
+    "fresh": "güncel",
+    "stale": "eski",
+    "missing": "yok",
+    "age": "{{age}} eski"
+  },
   "tape": {
     "aria": "Canlı piyasa fiyatları",
     "sourceAria": "Fiyat şeridi kaynağı",

@@ -106,6 +106,40 @@ type orderCountMarketWindowDTO struct {
 	Summary       string `json:"summary"`
 }
 
+type venueReadDTO struct {
+	Exchange string    `json:"exchange"`
+	Status   string    `json:"status"`
+	AsOf     time.Time `json:"asOf,omitempty"`
+	AgeSec   int       `json:"ageSec"`
+}
+
+type marketCoverageDTO struct {
+	Complete bool           `json:"complete"`
+	Venues   []venueReadDTO `json:"venues"`
+	Missing  []string       `json:"missing"`
+	Stale    []string       `json:"stale"`
+}
+
+func coverageToDTO(c domain.MarketCoverage) marketCoverageDTO {
+	venues := make([]venueReadDTO, 0, len(c.Venues))
+	for _, v := range c.Venues {
+		row := venueReadDTO{Exchange: string(v.Exchange), Status: v.Status, AgeSec: v.AgeSec}
+		if !v.AsOf.IsZero() {
+			row.AsOf = v.AsOf.UTC()
+		}
+		venues = append(venues, row)
+	}
+	missing := c.Missing
+	if missing == nil {
+		missing = []string{}
+	}
+	stale := c.Stale
+	if stale == nil {
+		stale = []string{}
+	}
+	return marketCoverageDTO{Complete: c.Complete, Venues: venues, Missing: missing, Stale: stale}
+}
+
 type orderCountOverviewResponse struct {
 	Exchange string                      `json:"exchange"`
 	Quote    string                      `json:"quote"`
@@ -115,6 +149,8 @@ type orderCountOverviewResponse struct {
 	Coins    []orderCountVenueDTO        `json:"coins"`
 	Summary  string                      `json:"summary"`
 	Note     string                      `json:"note"`
+	Coverage marketCoverageDTO           `json:"coverage"`
+	Definite bool                        `json:"definite"`
 }
 
 func orderCountOverviewToDTO(a *domain.OrderCountOverview) orderCountOverviewResponse {
@@ -138,6 +174,7 @@ func orderCountOverviewToDTO(a *domain.OrderCountOverview) orderCountOverviewRes
 	return orderCountOverviewResponse{
 		Exchange: a.Exchange, Quote: a.Quote, Universe: a.Universe, AsOf: a.AsOf.UTC(),
 		Windows: wins, Coins: coins, Summary: a.Summary, Note: a.Note,
+		Coverage: coverageToDTO(a.Coverage), Definite: a.Definite,
 	}
 }
 

@@ -75,6 +75,7 @@ func (s *Service) GetOrderCountOverview(ctx context.Context, exchange, quote str
 	now := time.Now().UTC()
 	from := now.Add(-domain.OrderCountLookback())
 	coins := make([]domain.OrderCountVenue, len(symbols))
+	parts := make([][]domain.VenueSample, len(symbols))
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 4)
 	for i, symbol := range symbols {
@@ -87,12 +88,17 @@ func (s *Service) GetOrderCountOverview(ctx context.Context, exchange, quote str
 			case sem <- struct{}{}:
 			}
 			defer func() { <-sem }()
-			coins[i] = s.orderCountSymbol(ctx, ex, symbol, from, now)
+			coins[i], parts[i] = s.orderCountSymbol(ctx, ex, symbol, from, now)
 		}(i, symbol)
 	}
 	wg.Wait()
+	samples := make([]domain.VenueSample, 0, len(symbols)*3)
+	for _, part := range parts {
+		samples = append(samples, part...)
+	}
 	out := domain.BuildOrderCountOverview(ex, quote, coins, now)
 	out.Note = orderCountOverviewDisclaimer
+	domain.ApplyOrderCountCoverage(&out, samples, now)
 	return &out, nil
 }
 
@@ -136,7 +142,7 @@ func (s *Service) orderCountUniverse(ctx context.Context, ex, quote string, limi
 	return out, nil
 }
 
-func (s *Service) orderCountSymbol(ctx context.Context, ex, symbol string, from, to time.Time) domain.OrderCountVenue {
+func (s *Service) orderCountSymbol(ctx context.Context, ex, symbol string, from, to time.Time) (domain.OrderCountVenue, []domain.VenueSample) {
 	want := configuredFutures(ex, func(v domain.Exchange) bool { return s.printPort(v) != nil })
 	venues := make([]domain.OrderCountVenue, len(want))
 	var wg sync.WaitGroup
@@ -148,26 +154,41 @@ func (s *Service) orderCountSymbol(ctx context.Context, ex, symbol string, from,
 		}(i, v)
 	}
 	wg.Wait()
+	samples := venueSamplesFromOrderCount(venues)
 	if ex == "all" {
 		if combined := domain.CombineOrderCount(symbol, venues); combined != nil {
-			return *combined
+			return *combined, samples
 		}
 	}
 	for _, v := range venues {
 		if v.Error == "" {
-			return v
+			return v, samples
 		}
 	}
 	if len(venues) > 0 {
-		return venues[0]
+		return venues[0], samples
 	}
-	return domain.OrderCountVenue{Exchange: domain.Exchange(ex), Symbol: symbol, Error: "order count not configured", Summary: "order count not configured"}
+	return domain.OrderCountVenue{Exchange: domain.Exchange(ex), Symbol: symbol, Error: "order count not configured", Summary: "order count not configured"}, samples
+}
+
+func venueSamplesFromOrderCount(venues []domain.OrderCountVenue) []domain.VenueSample {
+	out := make([]domain.VenueSample, 0, len(venues))
+	for _, v := range venues {
+		if v.Exchange == "" || v.Exchange == "all" {
+			continue
+		}
+		out = append(out, domain.VenueSample{Exchange: v.Exchange, OK: v.Error == "", At: v.Newest})
+	}
+	return out
 }
 
 func (s *Service) orderCountOne(ctx context.Context, ex domain.Exchange, symbol string, from, to time.Time) domain.OrderCountVenue {
 	if s.printPort(ex) == nil {
 		return domain.OrderCountVenue{Exchange: ex, Symbol: symbol, Error: "order count not configured", Summary: "order count not configured"}
 	}
-	prints := s.fetchPrintRange(ctx, ex, symbol, from, to)
+	prints, err := s.fetchPrintRangeResult(ctx, ex, symbol, from, to)
+	if err != nil {
+		return domain.OrderCountVenue{Exchange: ex, Symbol: symbol, Error: err.Error(), Summary: err.Error()}
+	}
 	return domain.BuildOrderCount(ex, symbol, prints, to)
 }

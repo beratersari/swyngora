@@ -17,6 +17,7 @@ buy vs sell, and whether that average just jumped (e.g. 20K → 180K in
 - Each window is compared with the same length just before, so the average shows whether prints got larger or smaller
 - `largerCoins`, `smallerCoins`, `fewLargeCoins`, and `manySmallCoins` are one vote per pair
 - Default universe is 20 pairs (5–30). The Print size page lists 5m and 15m and ranks the pairs
+- `coverage` names Binance, Bybit, and OKX as fresh, old, or missing. `definite` is false when any of them is missing or old, and the page does not show a market size read (`docs/features/venue-coverage.md`)
 
 One coin:
 

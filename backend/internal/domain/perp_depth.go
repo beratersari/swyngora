@@ -51,6 +51,7 @@ type PerpDepthVenue struct {
 	Bands       []PerpDepthBand
 	Summary     string
 	Error       string
+	AsOf        time.Time
 }
 
 // PerpDepthReport is the API result.

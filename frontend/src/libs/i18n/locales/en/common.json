@@ -40,6 +40,14 @@
     "nasdaq": "Nasdaq",
     "bist": "BIST"
   },
+  "coverage": {
+    "incomplete": "No market read until every venue is fresh.",
+    "complete": "Binance, Bybit, and OKX are fresh.",
+    "fresh": "fresh",
+    "stale": "old",
+    "missing": "missing",
+    "age": "{{age}} old"
+  },
   "tape": {
     "aria": "Live market prices",
     "sourceAria": "Price tape source",

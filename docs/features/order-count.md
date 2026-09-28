@@ -15,6 +15,7 @@ back. This read is **how many** aggressive prints were buys versus sells.
 - `buyCoins`, `sellCoins`, `balancedCoins`, and `quietCoins` are one vote per pair
 - Default universe is 20 pairs (5–30). `exchange=all` sums Binance, Bybit, and OKX on each coin first
 - The Order count page lists those windows and ranks the pairs
+- `coverage` names Binance, Bybit, and OKX as fresh, old, or missing. `definite` is false when any of them is missing or old, and the page does not show a market ratio (`docs/features/venue-coverage.md`)
 
 One coin:
 

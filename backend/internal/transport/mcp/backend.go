@@ -1127,6 +1127,7 @@ func perpDepthOverviewMap(got *domain.PerpDepthOverview) map[string]any {
 		"total": formatQtyMCP(got.Total), "imbalance": domain.FormatSignedQty(got.Imbalance),
 		"bidPct": formatQtyMCP(got.BidPct), "askPct": formatQtyMCP(got.AskPct), "lean": got.Lean,
 		"coins": coins, "leaders": got.Leaders, "windows": wins, "history": history, "moves": moves, "bands": bands, "summary": got.Summary, "note": got.Note,
+		"coverage": coverageMap(got.Coverage), "definite": got.Definite,
 	}
 	if len(got.Missing) > 0 {
 		out["missing"] = got.Missing
@@ -1408,6 +1409,25 @@ func (b *Backend) GetOrderCountOverview(ctx context.Context, exchange, quote str
 	return mustJSON(orderCountOverviewMap(got))
 }
 
+func coverageMap(c domain.MarketCoverage) map[string]any {
+	venues := make([]map[string]any, 0, len(c.Venues))
+	for _, v := range c.Venues {
+		row := map[string]any{"exchange": string(v.Exchange), "status": v.Status, "ageSec": v.AgeSec}
+		if !v.AsOf.IsZero() {
+			row["asOf"] = v.AsOf.UTC().Format(time.RFC3339Nano)
+		}
+		venues = append(venues, row)
+	}
+	missing, stale := c.Missing, c.Stale
+	if missing == nil {
+		missing = []string{}
+	}
+	if stale == nil {
+		stale = []string{}
+	}
+	return map[string]any{"complete": c.Complete, "venues": venues, "missing": missing, "stale": stale}
+}
+
 func orderCountOverviewMap(got *domain.OrderCountOverview) map[string]any {
 	if got == nil {
 		return map[string]any{}
@@ -1429,6 +1449,7 @@ func orderCountOverviewMap(got *domain.OrderCountOverview) map[string]any {
 		"exchange": got.Exchange, "quote": got.Quote, "universe": got.Universe,
 		"asOf": got.AsOf.UTC().Format(time.RFC3339Nano), "windows": wins, "coins": coins,
 		"summary": got.Summary, "note": got.Note,
+		"coverage": coverageMap(got.Coverage), "definite": got.Definite,
 	}
 }
 
@@ -1570,6 +1591,7 @@ func printSizeOverviewMap(got *domain.PrintSizeOverview) map[string]any {
 		"exchange": got.Exchange, "quote": got.Quote, "universe": got.Universe,
 		"asOf": got.AsOf.UTC().Format(time.RFC3339Nano), "windows": wins, "coins": coins,
 		"summary": got.Summary, "note": got.Note,
+		"coverage": coverageMap(got.Coverage), "definite": got.Definite,
 	}
 }
 
@@ -2889,7 +2911,8 @@ func (b *Backend) GetLiquidationOverview(ctx context.Context, exchange, window s
 	return mustJSON(map[string]any{
 		"exchange": got.Exchange, "coinWindow": got.CoinWindow, "collectingSince": since,
 		"live": got.Live, "venueCount": got.VenueCount, "windows": wins, "coins": coins,
-		"feed": liquidationFeedJSON(got.Feed),
+		"feed":     liquidationFeedJSON(got.Feed),
+		"coverage": coverageMap(got.Coverage), "definite": got.Definite,
 	})
 }
 

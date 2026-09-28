@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { SplitBar } from '@/components/atoms/SplitBar';
 import { Text } from '@/components/atoms/Text';
 import { DeskReadCard } from '@/components/molecules/DeskReadCard';
+import { VenueCoverage } from '@/components/molecules/VenueCoverage';
 import { financeColors } from '@/styles/tokens';
 import { PerpLiquidityDepthChart } from './PerpLiquidityDepthChart';
 import { DetailList, DetailRow, Head, Legend, Swatch } from './PerpLiquidityOverview.styles';
@@ -29,7 +30,7 @@ import {
 import type { PerpLiquidityOverviewProps } from './PerpLiquidityOverview.types';
 
 export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLiquidityOverviewProps) {
-  const { t } = useTranslation('markets');
+  const { t } = useTranslation(['markets', 'common']);
   const [open, setOpen] = useState(false);
   const leaders = leaderCoins(data);
   const bands = distanceBands(data);
@@ -42,9 +43,16 @@ export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLi
     <>
       <DeskReadCard
         title={t('perpLiq.title')}
-        value={data?.lean ? t(leanKey) : '—'}
-        caption={data?.bid || data?.ask ? `${bid} / ${ask}` : undefined}
+        value={data?.definite === false || !data?.lean ? '—' : t(leanKey)}
+        caption={
+          data?.definite === false
+            ? t('common:coverage.incomplete')
+            : data?.bid || data?.ask
+              ? `${bid} / ${ask}`
+              : undefined
+        }
         visual={
+          data?.definite === false ? undefined : (
           <SplitBar
             ariaLabel={share == null ? t('perpLiq.title') : `${t('perpLiq.title')} ${Math.round(share)}`}
             parts={[
@@ -52,6 +60,7 @@ export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLi
               { key: 'ask', pct: Number(data?.ask) || 0, color: financeColors.down },
             ]}
           />
+          )
         }
         isLoading={isLoading}
         onClick={() => setOpen(true)}
@@ -68,6 +77,7 @@ export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLi
           <Alert type="info" showIcon message={t('perpLiq.title')} description={error} />
         ) : (
           <DetailList>
+            {data?.definite === false ? <VenueCoverage coverage={data.coverage} /> : null}
             <Text variant="caption" color="secondary">
               {t('perpLiq.subtitle', { pct: data?.rangePct ?? '1' })}
             </Text>

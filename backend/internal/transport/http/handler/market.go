@@ -885,6 +885,8 @@ type liquidationOverviewResponse struct {
 	Coins           []liquidationCoinDTO   `json:"coins"`
 	Feed            liquidationFeedDTO     `json:"feed"`
 	Note            string                 `json:"note"`
+	Coverage        marketCoverageDTO      `json:"coverage"`
+	Definite        bool                   `json:"definite"`
 }
 
 func liquidationOverviewToDTO(a *domain.LiquidationOverview) liquidationOverviewResponse {
@@ -930,7 +932,8 @@ func liquidationOverviewToDTO(a *domain.LiquidationOverview) liquidationOverview
 	return liquidationOverviewResponse{
 		Exchange: a.Exchange, CoinWindow: a.CoinWindow, CollectingSince: since,
 		Live: a.Live, VenueCount: a.VenueCount, Windows: wins, Coins: coins, Feed: feedToDTO(a.Feed),
-		Note: "Market-wide Binance USD-M, Bybit linear, and OKX USDT-swap liquidations. windows are 1h/4h/12h/24h totals. coins are ranked by total notional in coinWindow. Combined complete/live require every futures venue; a missing venue is listed in feed.missing and is never replaced. feed.missingSeconds is still-unfilled disconnect time. Notional is quote (USDT). Informational only.",
+		Note:     "Market-wide Binance USD-M, Bybit linear, and OKX USDT-swap liquidations. windows are 1h/4h/12h/24h totals. coins are ranked by total notional in coinWindow. Combined complete/live require every futures venue; a missing venue is listed in feed.missing and is never replaced. coverage names each venue as fresh, old, or missing. definite is false when any venue is missing or old, and the totals are not a market read. feed.missingSeconds is still-unfilled disconnect time. Notional is quote (USDT). Informational only.",
+		Coverage: coverageToDTO(a.Coverage), Definite: a.Definite,
 	}
 }
 

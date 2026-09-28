@@ -465,6 +465,8 @@ export type MarketPrintSizeOverview = {
   coins?: PrintSizeCoin[];
   summary?: string;
   note?: string;
+  coverage?: MarketVenueCoverage;
+  definite?: boolean;
 };
 export type PrintSizeOverviewQuery = {
   exchange?: string;
@@ -510,6 +512,18 @@ export type OrderCountMarketWindow = {
   complete?: boolean;
   summary?: string;
 };
+export type MarketVenueRead = {
+  exchange?: string;
+  status?: string;
+  asOf?: string;
+  ageSec?: number;
+};
+export type MarketVenueCoverage = {
+  complete?: boolean;
+  venues?: MarketVenueRead[];
+  missing?: string[];
+  stale?: string[];
+};
 export type MarketOrderCountOverview = {
   exchange?: string;
   quote?: string;
@@ -519,6 +533,8 @@ export type MarketOrderCountOverview = {
   coins?: OrderCountCoin[];
   summary?: string;
   note?: string;
+  coverage?: MarketVenueCoverage;
+  definite?: boolean;
 };
 export type OrderCountOverviewQuery = {
   exchange?: string;
