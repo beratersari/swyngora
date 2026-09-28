@@ -1,4 +1,5 @@
 import type { PortfolioEquityPoint, PortfolioPerformancePeriod } from '@/libs/api';
+import { formatCompactAmount } from '@/libs/utils';
 import { TickMarkType, type Time } from 'lightweight-charts';
 
 export type EquityLinePoint = { time: Time; value: number };
@@ -43,6 +44,43 @@ export function toEquityLineData(
     return [{ time: earlier, value: startEq }, only];
   }
   return deduped;
+}
+
+export type DrawdownRead = {
+  maxDrawdown?: number;
+  maxDrawdownPct?: number | null;
+  drawdownFrom?: string;
+  drawdownTo?: string;
+};
+
+/** Largest drop and the clock it ran between. Empty when equity never fell. */
+export function drawdownLine(read?: DrawdownRead | null, locale?: string): string {
+  const drop = read?.maxDrawdown;
+  if (drop == null || !Number.isFinite(drop) || drop <= 0) return '';
+  const pct =
+    read?.maxDrawdownPct != null && Number.isFinite(read.maxDrawdownPct)
+      ? ` (${trimPct(read.maxDrawdownPct)}%)`
+      : '';
+  const when = drawdownWindow(read?.drawdownFrom, read?.drawdownTo, locale);
+  const size = formatCompactAmount(drop);
+  return when ? `${size}${pct} · ${when}` : `${size}${pct}`;
+}
+
+function trimPct(n: number): string {
+  const s = n.toFixed(2);
+  return s.replace(/\.?0+$/, '');
+}
+
+function drawdownWindow(from?: string, to?: string, locale?: string): string {
+  const a = from ? new Date(from) : null;
+  const b = to ? new Date(to) : null;
+  if (!a || !b || Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return '';
+  const loc = locale || undefined;
+  const sameDay = a.toDateString() === b.toDateString();
+  const opts: Intl.DateTimeFormatOptions = sameDay
+    ? { hour: '2-digit', minute: '2-digit' }
+    : { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+  return `${a.toLocaleString(loc, opts)} → ${b.toLocaleString(loc, opts)}`;
 }
 
 export function equitySpanSeconds(data: EquityLinePoint[]): number {

@@ -138,6 +138,9 @@ MCP: `deposit_portfolio_cash`, `withdraw_portfolio_cash`, `transfer_portfolio_ca
 | `startEquity` / `endEquity` | Mark-to-market equity at window start (carry-forward last sample) and now |
 | `changeAmount` | `endEquity - startEquity` (portfolio currency; equity jumps if you deposit/withdraw) |
 | `changePct` | Percent vs `startEquity`; `null` if start is ~0 |
+| `maxDrawdown` | Largest peak-to-trough drop in the window (portfolio currency, 0 when equity never fell) |
+| `maxDrawdownPct` | That drop as a percent of the peak; `null` when the peak is ~0 |
+| `drawdownFrom` / `drawdownTo` | When the peak was printed and when equity reached the trough |
 | `partial` | Portfolio created after the requested window start |
 | `points[]` | `{ t, equity, cashBalance, positionsValue, marginEquity }` time series (includes live last point) |
 

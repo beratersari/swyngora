@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TickMarkType } from 'lightweight-charts';
 import {
+  drawdownLine,
   formatEquityTickMark,
   toEquityLineData,
 } from './PortfolioEquityChart.helpers';
@@ -26,6 +27,26 @@ describe('toEquityLineData', () => {
     expect(data[0].value).toBe(10000);
     expect(data[1].value).toBe(9990);
     expect(Number(data[0].time)).toBeLessThan(Number(data[1].time));
+  });
+});
+
+describe('drawdownLine', () => {
+  it('names the largest drop and the times it ran between', () => {
+    const line = drawdownLine(
+      {
+        maxDrawdown: 4000,
+        maxDrawdownPct: 33.333,
+        drawdownFrom: '2026-08-01T11:00:00.000Z',
+        drawdownTo: '2026-08-01T15:00:00.000Z',
+      },
+      'en-US',
+    );
+    expect(line.startsWith('4.00K (33.33%) · ')).toBe(true);
+    expect(line).toContain('→');
+  });
+
+  it('stays empty when equity never fell', () => {
+    expect(drawdownLine({ maxDrawdown: 0 })).toBe('');
   });
 });
 

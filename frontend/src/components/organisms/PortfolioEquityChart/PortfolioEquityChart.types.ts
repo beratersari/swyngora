@@ -5,6 +5,10 @@ export type PortfolioEquityChartProps = {
   /** Used to seed a visible 2-point series when the API returns a single live mark. */
   startEquity?: number;
   startAt?: string;
+  maxDrawdown?: number;
+  maxDrawdownPct?: number | null;
+  drawdownFrom?: string;
+  drawdownTo?: string;
   period: PortfolioPerformancePeriod;
   onPeriodChange: (p: PortfolioPerformancePeriod) => void;
   isLoading?: boolean;

@@ -3209,7 +3209,8 @@ export interface paths {
         /**
          * Get paper portfolio performance history
          * @description Equity samples over 1d / 1w / 1m / 3m for a chart, plus P&L from the start of
-         *     that window as amount and percent. Background worker stores mark-to-market
+         *     that window as amount and percent, and the largest peak-to-trough drop
+         *     (maxDrawdown, drawdownFrom, drawdownTo). Background worker stores mark-to-market
          *     buckets (default 15m). Live equity is always the last point.
          *     Paper trading only — not real money.
          */
@@ -8474,6 +8475,20 @@ export interface components {
             changePct?: number | null;
             /** @description True when the portfolio is younger than the requested period */
             partial?: boolean;
+            /** @description Largest peak-to-trough equity drop in the window (portfolio currency, 0 when equity never fell) */
+            maxDrawdown?: number;
+            /** @description That drop as a percent of the peak; null when the peak is ~0 or there was no drop */
+            maxDrawdownPct?: number | null;
+            /**
+             * Format: date-time
+             * @description When the peak before the max drawdown was printed
+             */
+            drawdownFrom?: string;
+            /**
+             * Format: date-time
+             * @description When equity reached the trough of the max drawdown
+             */
+            drawdownTo?: string;
             pointCount?: number;
             points?: components["schemas"]["PortfolioEquityPoint"][];
             note?: string;

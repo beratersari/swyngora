@@ -87,6 +87,14 @@ type PortfolioPerformance struct {
 	Partial    bool
 	PointCount int
 	Points     []EquityPoint
+	// MaxDrawdown is the largest peak-to-trough drop in the window (portfolio currency, ≥ 0).
+	MaxDrawdown float64
+	// MaxDrawdownPct is that drop as a percent of the peak; nil when the peak is ~0.
+	MaxDrawdownPct *float64
+	// DrawdownFrom is when the peak before that drop was printed.
+	DrawdownFrom time.Time
+	// DrawdownTo is when equity reached the trough.
+	DrawdownTo time.Time
 	Note       string
 }
 
@@ -182,19 +190,61 @@ func AssemblePerformance(
 		endEquity = points[len(points)-1].Equity
 	}
 	chg := endEquity - startEquity
+	ddAmt, ddPct, ddFrom, ddTo := MaxDrawdown(points)
 	return PortfolioPerformance{
-		ClientID:     clientID,
-		Currency:     currency,
-		Period:       period,
-		StartAt:      windowStart,
-		EndAt:        endAt,
-		StartEquity:  startEquity,
-		EndEquity:    endEquity,
-		ChangeAmount: chg,
-		ChangePct:    PerformanceChangePct(startEquity, endEquity),
-		Partial:      partial,
-		PointCount:   len(points),
-		Points:       points,
-		Note:         note,
+		ClientID:       clientID,
+		Currency:       currency,
+		Period:         period,
+		StartAt:        windowStart,
+		EndAt:          endAt,
+		StartEquity:    startEquity,
+		EndEquity:      endEquity,
+		ChangeAmount:   chg,
+		ChangePct:      PerformanceChangePct(startEquity, endEquity),
+		Partial:        partial,
+		PointCount:     len(points),
+		Points:         points,
+		MaxDrawdown:    ddAmt,
+		MaxDrawdownPct: ddPct,
+		DrawdownFrom:   ddFrom,
+		DrawdownTo:     ddTo,
+		Note:           note,
 	}
+}
+
+// MaxDrawdown is the largest fall from a running peak to a later trough.
+// Amount is peak minus trough (0 when equity never fell). Percent is that
+// amount over the peak. From is the peak time; to is the trough time.
+func MaxDrawdown(points []EquityPoint) (amount float64, pct *float64, from, to time.Time) {
+	if len(points) == 0 {
+		return 0, nil, time.Time{}, time.Time{}
+	}
+	peak := points[0].Equity
+	peakAt := points[0].Time
+	best := 0.0
+	bestFrom, bestTo := time.Time{}, time.Time{}
+	bestPeak := peak
+	for _, p := range points {
+		if p.Equity > peak+perfPctEpsilon {
+			peak = p.Equity
+			peakAt = p.Time
+			continue
+		}
+		drop := peak - p.Equity
+		if drop > best+perfPctEpsilon {
+			best = drop
+			bestFrom = peakAt
+			bestTo = p.Time
+			bestPeak = peak
+		}
+	}
+	if best <= perfPctEpsilon {
+		return 0, nil, time.Time{}, time.Time{}
+	}
+	var outPct *float64
+	if math.Abs(bestPeak) >= perfPctEpsilon {
+		v := best / bestPeak * 100
+		outPct = &v
+	}
+	return best, outPct, bestFrom, bestTo
 }

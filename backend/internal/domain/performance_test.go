@@ -80,6 +80,35 @@ func TestAssemblePerformance_CarryForwardAndLive(t *testing.T) {
 	}
 }
 
+func TestMaxDrawdown_PeakToTroughTimes(t *testing.T) {
+	t0 := time.Date(2026, 8, 1, 10, 0, 0, 0, time.UTC)
+	pts := []EquityPoint{
+		{Time: t0, Equity: 10000},
+		{Time: t0.Add(time.Hour), Equity: 12000},
+		{Time: t0.Add(2 * time.Hour), Equity: 9000},
+		{Time: t0.Add(3 * time.Hour), Equity: 11000},
+		{Time: t0.Add(4 * time.Hour), Equity: 8000},
+	}
+	amt, pct, from, to := MaxDrawdown(pts)
+	if math.Abs(amt-4000) > 1e-9 {
+		t.Fatalf("amount=%v", amt)
+	}
+	if pct == nil || math.Abs(*pct-4000.0/12000*100) > 1e-9 {
+		t.Fatalf("pct=%v", pct)
+	}
+	if !from.Equal(t0.Add(time.Hour)) || !to.Equal(t0.Add(4*time.Hour)) {
+		t.Fatalf("window %s → %s", from, to)
+	}
+
+	flat, flatPct, flatFrom, _ := MaxDrawdown([]EquityPoint{
+		{Time: t0, Equity: 100},
+		{Time: t0.Add(time.Hour), Equity: 110},
+	})
+	if flat != 0 || flatPct != nil || !flatFrom.IsZero() {
+		t.Fatalf("rising book should have no drawdown: %v %v %s", flat, flatPct, flatFrom)
+	}
+}
+
 func TestAssemblePerformance_YoungPortfolio(t *testing.T) {
 	created := time.Date(2026, 8, 6, 0, 0, 0, 0, time.UTC)
 	end := time.Date(2026, 8, 7, 0, 0, 0, 0, time.UTC)

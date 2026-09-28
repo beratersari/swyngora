@@ -3032,7 +3032,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_portfolio_performance",
-		mcp.WithDescription("Paper portfolio equity over 1d/1w/1m/3m plus P&L amount and percent from the start of that window. Use for history/charts. Simulated only."),
+		mcp.WithDescription("Paper portfolio equity over 1d/1w/1m/3m plus P&L amount and percent from the start of that window, and the largest peak-to-trough drop (maxDrawdown) with drawdownFrom and drawdownTo. Use for history/charts. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("period", mcp.Description("Lookback: 1d, 1w (default), 1m, or 3m")),

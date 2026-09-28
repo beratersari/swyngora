@@ -45,6 +45,7 @@
   },
   "equityChart": {
     "title": "Özkaynak",
+    "drawdown": "En büyük düşüş {{line}}",
     "empty": "Henüz örnek yok — işlem yapın veya sonraki anlık görüntüyü bekleyin.",
     "loadFailed": "Performans yüklenemedi"
   },

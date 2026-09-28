@@ -45,6 +45,7 @@
   },
   "equityChart": {
     "title": "Equity",
+    "drawdown": "Max drawdown {{line}}",
     "empty": "No equity samples yet — trade or wait for the next snapshot.",
     "loadFailed": "Could not load performance"
   },

@@ -18,6 +18,7 @@ import {
   equitySpanSeconds,
   formatEquityCrosshairTime,
   formatEquityTickMark,
+  drawdownLine,
   toEquityLineData,
 } from './PortfolioEquityChart.helpers';
 import { ChartBox, ChartShell, ChartToolbar } from './PortfolioEquityChart.styles';
@@ -34,6 +35,10 @@ export function PortfolioEquityChart({
   points = [],
   startEquity,
   startAt,
+  maxDrawdown,
+  maxDrawdownPct,
+  drawdownFrom,
+  drawdownTo,
   period,
   onPeriodChange,
   isLoading,
@@ -54,6 +59,10 @@ export function PortfolioEquityChart({
     [points, startEquity, startAt],
   );
   const spanSec = useMemo(() => equitySpanSeconds(lineData), [lineData]);
+  const dropLine = useMemo(
+    () => drawdownLine({ maxDrawdown, maxDrawdownPct, drawdownFrom, drawdownTo }, i18n.language),
+    [maxDrawdown, maxDrawdownPct, drawdownFrom, drawdownTo, i18n.language],
+  );
   const ready = lineData.length > 0;
 
   periodRef.current = period;
@@ -175,6 +184,11 @@ export function PortfolioEquityChart({
           onChange={(v) => onPeriodChange(v as PortfolioPerformancePeriod)}
         />
       </ChartToolbar>
+      {dropLine ? (
+        <Text variant="caption" color="secondary">
+          {t('equityChart.drawdown', { line: dropLine })}
+        </Text>
+      ) : null}
       {isError ? (
         <DeskEmpty title={t('equityChart.loadFailed')} />
       ) : isLoading && !ready ? (

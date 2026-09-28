@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Portfolio max drawdown:** equity history for 1d, 1w, 1m, and 3m also names the largest peak-to-trough drop and the times it ran from high to low (`maxDrawdown`, `drawdownFrom`, `drawdownTo` on `GET /api/v1/portfolio/performance`). The equity chart on Portfolio shows that line (`docs/features/paper-trading.md`)
 - **Which venues moved the perp book:** each sharp jump or drop lists Binance, Bybit, and OKX over the same minutes, and whether all three moved together, more than one did, or only one venue did (`venues` and `venueSpan` on `moves` of `GET /api/v1/market/perp-depth/overview`) (`docs/features/perp-depth.md`)
 - **Perp book after a jump or drop:** each sharp move says whether depth came back, kept going, or held in the next 15 minutes (`follow` on `moves` of `GET /api/v1/market/perp-depth/overview`) (`docs/features/perp-depth.md`)
 - **Who moved the perp book:** each sharp jump or drop names the coins that added or removed the most of it, and whether that was one coin, a few coins, or the whole book (`drivers` and `span` on `moves` of `GET /api/v1/market/perp-depth/overview`) (`docs/features/perp-depth.md`)
