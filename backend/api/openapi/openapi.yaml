@@ -10603,8 +10603,9 @@ components:
         priorVolume: { type: string }
         priorSharePct: { type: string }
         changePct: { type: string, description: Signed percentage-point change vs the prior window }
-        kind: { type: string, enum: [gained, lost, stable] }
+        kind: { type: string, enum: [gained, lost, stable, missing] }
         complete: { type: boolean }
+        priorKnown: { type: boolean, description: False when this venue has no bars in the earlier window. Its share is not treated as 0. }
     MarketVolumeShareWindow:
       type: object
       properties:
@@ -10619,6 +10620,10 @@ components:
           items: { type: string }
         lost:
           type: array
+          items: { type: string }
+        missing:
+          type: array
+          description: Venues with no earlier window. Gained and lost ignore them.
           items: { type: string }
         complete: { type: boolean }
         summary: { type: string }

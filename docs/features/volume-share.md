@@ -17,8 +17,9 @@ e.g. **55% Binance, 30% Bybit, 15% OKX** — and whether those shares
   - `venues[].volume` — USDT quote volume
   - `priorSharePct` / `changePct` — mix vs the **same length just before**
     (1h now vs the hour before)
-  - `kind` — `gained` / `lost` / `stable` (≥ 1 percentage point)
-  - `gained` / `lost` — venue names that moved
+  - `kind` — `gained` / `lost` / `stable` (≥ 1 percentage point), or `missing` when that venue has no bars in the earlier window
+  - `gained` / `lost` — venue names that moved, only among venues that have both windows
+  - `missing` — venues with no earlier window. Their prior share is not treated as 0, so they are not called a gain
 
 Source: 5-minute perpetual **quote-volume** klines (not spot). Informational
 only — not financial advice.
@@ -45,5 +46,5 @@ curl -s "http://localhost:8080/api/v1/market/volume-share?symbol=BTCUSDT" | jq "
 
 - Quote volume from 5m klines, not taker buy/sell (`get_taker_flow`).
 - OKX uses `volCcyQuote` on USDT-swap candles.
-- A missing venue is omitted from the mix (shares renormalize to the venues that returned bars).
+- A venue with no earlier window stays in the current mix, is listed in `missing`, and is left out of gained/lost. Share change is calculated only among venues that have both windows.
 - Informational only — not financial advice.

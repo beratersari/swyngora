@@ -1320,7 +1320,8 @@ func volumeShareMap(got *domain.VolumeShareReport) map[string]any {
 				"exchange": string(v.Exchange), "volume": v.Volume, "sharePct": v.SharePct,
 				"kind": v.Kind, "complete": v.Complete,
 			}
-			if w.Prior > 0 {
+			row["priorKnown"] = v.PriorKnown
+			if v.PriorKnown {
 				row["priorVolume"] = v.PriorVolume
 				row["priorSharePct"] = v.PriorSharePct
 				row["changePct"] = v.ChangePct
@@ -1339,6 +1340,9 @@ func volumeShareMap(got *domain.VolumeShareReport) map[string]any {
 		}
 		if len(w.Lost) > 0 {
 			win["lost"] = w.Lost
+		}
+		if len(w.Missing) > 0 {
+			win["missing"] = w.Missing
 		}
 		windows = append(windows, win)
 	}

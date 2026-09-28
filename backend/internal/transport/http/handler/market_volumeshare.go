@@ -27,6 +27,7 @@ type volumeShareVenueDTO struct {
 	ChangePct     string `json:"changePct,omitempty"`
 	Kind          string `json:"kind"`
 	Complete      bool   `json:"complete"`
+	PriorKnown    bool   `json:"priorKnown"`
 }
 
 type volumeShareWindowDTO struct {
@@ -36,6 +37,7 @@ type volumeShareWindowDTO struct {
 	Venues   []volumeShareVenueDTO `json:"venues"`
 	Gained   []string              `json:"gained,omitempty"`
 	Lost     []string              `json:"lost,omitempty"`
+	Missing  []string              `json:"missing,omitempty"`
 	Complete bool                  `json:"complete"`
 	Summary  string                `json:"summary"`
 }
@@ -59,8 +61,9 @@ func volumeShareToDTO(a *domain.VolumeShareReport) volumeShareResponse {
 			row := volumeShareVenueDTO{
 				Exchange: string(v.Exchange), Volume: formatHistQty(v.Volume),
 				SharePct: formatHistQty(v.SharePct), Kind: v.Kind, Complete: v.Complete,
+				PriorKnown: v.PriorKnown,
 			}
-			if w.Prior > 0 {
+			if v.PriorKnown {
 				row.PriorVolume = formatHistQty(v.PriorVolume)
 				row.PriorSharePct = formatHistQty(v.PriorSharePct)
 				row.ChangePct = domain.FormatSignedPct(v.ChangePct)
@@ -69,7 +72,7 @@ func volumeShareToDTO(a *domain.VolumeShareReport) volumeShareResponse {
 		}
 		win := volumeShareWindowDTO{
 			Window: w.Window, Total: formatHistQty(w.Total), Venues: venues,
-			Gained: w.Gained, Lost: w.Lost, Complete: w.Complete, Summary: w.Summary,
+			Gained: w.Gained, Lost: w.Lost, Missing: w.Missing, Complete: w.Complete, Summary: w.Summary,
 		}
 		if w.Prior > 0 {
 			win.Prior = formatHistQty(w.Prior)

@@ -170,6 +170,8 @@
     "shareOkx": "OKX",
     "share1h": "1h mix",
     "shareMove": "{{gained}} gained · {{lost}} lost",
+    "shareMissing": "No earlier window for {{venues}}",
+    "shareNoData": "No data",
     "shareStable": "Little change",
     "printSize": "Print size",
     "avgBuy": "Avg buy",

@@ -1,3 +1,23 @@
+export function sharePctText(
+  venue: { complete?: boolean; sharePct?: string } | undefined,
+  missingLabel: string,
+): string {
+  if (!venue || venue.complete === false) return missingLabel;
+  return venue.sharePct ? `${venue.sharePct}%` : '—';
+}
+
+export function shareMoveText(
+  win: { gained?: string[]; lost?: string[]; missing?: string[] } | null | undefined,
+  text: { move: string; missing: string; stable: string },
+): string {
+  const moved = (win?.gained?.length ?? 0) > 0 || (win?.lost?.length ?? 0) > 0;
+  const missing = (win?.missing?.length ?? 0) > 0;
+  if (moved && missing) return `${text.move} · ${text.missing}`;
+  if (moved) return text.move;
+  if (missing) return text.missing;
+  return text.stable;
+}
+
 export function formatSignedTapeNum(raw: string | number | null | undefined): string {
   if (raw === null || raw === undefined || raw === '') return '—';
   const n = typeof raw === 'number' ? raw : Number(raw);

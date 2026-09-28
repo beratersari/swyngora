@@ -9,6 +9,8 @@ import {
   formatSignedFundingPct,
   formatSignedTapeNum,
   formatTapeNum,
+  shareMoveText,
+  sharePctText,
   windowByName,
 } from './TapePanel.helpers';
 import { PositionSidePanel } from '@/components/organisms/PositionSidePanel';
@@ -235,29 +237,29 @@ export function TapePanel({
           <StatsGrid>
             <Stat
               label={t('tape.shareBinance')}
-              value={shareOf('binance')?.sharePct ? `${shareOf('binance')?.sharePct}%` : '—'}
+              value={sharePctText(shareOf('binance'), t('tape.shareNoData'))}
               isLoading={isLoading}
             />
             <Stat
               label={t('tape.shareBybit')}
-              value={shareOf('bybit')?.sharePct ? `${shareOf('bybit')?.sharePct}%` : '—'}
+              value={sharePctText(shareOf('bybit'), t('tape.shareNoData'))}
               isLoading={isLoading}
             />
             <Stat
               label={t('tape.shareOkx')}
-              value={shareOf('okx')?.sharePct ? `${shareOf('okx')?.sharePct}%` : '—'}
+              value={sharePctText(shareOf('okx'), t('tape.shareNoData'))}
               isLoading={isLoading}
             />
             <Stat
               label={t('tape.share1h')}
-              value={
-                share1h?.gained?.length || share1h?.lost?.length
-                  ? t('tape.shareMove', {
-                      gained: (share1h?.gained ?? []).join(', ') || '—',
-                      lost: (share1h?.lost ?? []).join(', ') || '—',
-                    })
-                  : t('tape.shareStable')
-              }
+              value={shareMoveText(share1h, {
+                move: t('tape.shareMove', {
+                  gained: (share1h?.gained ?? []).join(', ') || '—',
+                  lost: (share1h?.lost ?? []).join(', ') || '—',
+                }),
+                missing: t('tape.shareMissing', { venues: (share1h?.missing ?? []).join(', ') }),
+                stable: t('tape.shareStable'),
+              })}
               isLoading={isLoading}
             />
           </StatsGrid>

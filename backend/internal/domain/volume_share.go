@@ -11,9 +11,10 @@ const (
 	VolumeShareWindow1h  = ParticipationWindow1h
 	VolumeShareWindow4h  = ParticipationWindow4h
 
-	VolumeShareGained = "gained"
-	VolumeShareLost   = "lost"
-	VolumeShareStable = "stable"
+	VolumeShareGained  = "gained"
+	VolumeShareLost    = "lost"
+	VolumeShareStable  = "stable"
+	VolumeShareMissing = "missing"
 
 	// 1 percentage point before calling a venue's mix a gain or loss.
 	volumeShareMovePts = 1.0
@@ -37,9 +38,10 @@ type VolumeShareVenue struct {
 	SharePct      float64
 	PriorVolume   float64
 	PriorSharePct float64
-	ChangePct     float64 // percentage points vs the prior window
-	Kind          string  // gained | lost | stable
+	ChangePct     float64 // percentage points vs the prior window, among venues that have both
+	Kind          string  // gained | lost | stable | missing
 	Complete      bool
+	PriorKnown    bool // false when this venue has no bars in the earlier window
 }
 
 // VolumeShareWindow is the mix of venues in one lookback, vs the same length just before.
@@ -50,6 +52,7 @@ type VolumeShareWindow struct {
 	Venues   []VolumeShareVenue
 	Gained   []string
 	Lost     []string
+	Missing  []string // venues with no earlier window; not treated as 0% share
 	Complete bool
 	Summary  string
 }
@@ -117,13 +120,8 @@ func volumeShareOrder(exchange string, series map[Exchange][]FuturesVolumeBar) [
 	if exchange != "" && exchange != "all" {
 		return []Exchange{Exchange(exchange)}
 	}
-	out := make([]Exchange, 0, 3)
-	for _, ex := range FuturesVenues() {
-		if _, ok := series[ex]; ok {
-			out = append(out, ex)
-		}
-	}
-	return out
+	_ = series
+	return FuturesVenues()
 }
 
 func buildVolumeShareWindow(id string, dur time.Duration, order []Exchange, series map[Exchange][]FuturesVolumeBar, now time.Time) VolumeShareWindow {
@@ -144,21 +142,34 @@ func buildVolumeShareWindow(id string, dur time.Duration, order []Exchange, seri
 		priorTotal += p
 	}
 	out := VolumeShareWindow{Window: id, Total: total, Prior: priorTotal, Complete: total > 0 && priorTotal > 0}
-	venues := make([]VolumeShareVenue, 0, len(rows))
-	var gained, lost []string
+	var cmpCur, cmpPri float64
 	for _, r := range rows {
-		v := VolumeShareVenue{Exchange: r.ex, Volume: r.vol, PriorVolume: r.prior, Kind: VolumeShareStable, Complete: r.nCur > 0}
-		if total > 0 {
+		if r.nCur > 0 && r.nPri > 0 {
+			cmpCur += r.vol
+			cmpPri += r.prior
+		}
+	}
+	venues := make([]VolumeShareVenue, 0, len(rows))
+	var gained, lost, missing []string
+	for _, r := range rows {
+		priorKnown := r.nPri > 0
+		curKnown := r.nCur > 0
+		v := VolumeShareVenue{
+			Exchange: r.ex, Volume: r.vol, PriorVolume: r.prior,
+			Kind: VolumeShareStable, Complete: curKnown, PriorKnown: priorKnown,
+		}
+		if total > 0 && curKnown {
 			v.SharePct = r.vol / total * 100
 		}
-		if priorTotal > 0 {
-			v.PriorSharePct = r.prior / priorTotal * 100
-			v.ChangePct = v.SharePct - v.PriorSharePct
+		if !priorKnown || !curKnown {
+			v.Kind = VolumeShareMissing
+			out.Complete = false
+			missing = append(missing, prettyFuturesVenue(r.ex))
+		} else if cmpCur > 0 && cmpPri > 0 {
+			v.PriorSharePct = r.prior / cmpPri * 100
+			v.ChangePct = r.vol/cmpCur*100 - v.PriorSharePct
 			v.Kind = ClassifyVolumeShare(v.ChangePct)
 		} else {
-			out.Complete = false
-		}
-		if r.nCur == 0 {
 			out.Complete = false
 		}
 		switch v.Kind {
@@ -178,6 +189,7 @@ func buildVolumeShareWindow(id string, dur time.Duration, order []Exchange, seri
 	out.Venues = venues
 	out.Gained = gained
 	out.Lost = lost
+	out.Missing = missing
 	out.Summary = ExplainVolumeShareWindow(out)
 	return out
 }
@@ -189,9 +201,15 @@ func ExplainVolumeShareWindow(w VolumeShareWindow) string {
 	}
 	parts := make([]string, 0, len(w.Venues))
 	for _, v := range w.Venues {
+		if v.Kind == VolumeShareMissing && v.SharePct == 0 {
+			continue
+		}
 		parts = append(parts, fmt.Sprintf("%s %s%%", prettyFuturesVenue(v.Exchange), formatFixed(v.SharePct, 0)))
 	}
 	head := w.Window + ": " + joinList(parts) + "."
+	if len(w.Missing) > 0 {
+		head += " No earlier window for " + joinList(w.Missing) + "."
+	}
 	switch {
 	case len(w.Gained) > 0 && len(w.Lost) > 0:
 		return head + " " + joinList(w.Gained) + " gained share; " + joinList(w.Lost) + " lost share."

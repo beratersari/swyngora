@@ -6661,8 +6661,10 @@ export interface components {
             /** @description Signed percentage-point change vs the prior window */
             changePct?: string;
             /** @enum {string} */
-            kind?: "gained" | "lost" | "stable";
+            kind?: "gained" | "lost" | "stable" | "missing";
             complete?: boolean;
+            /** @description False when this venue has no bars in the earlier window. Its share is not treated as 0. */
+            priorKnown?: boolean;
         };
         MarketVolumeShareWindow: {
             /** @enum {string} */
@@ -6672,6 +6674,8 @@ export interface components {
             venues?: components["schemas"]["MarketVolumeShareVenue"][];
             gained?: string[];
             lost?: string[];
+            /** @description Venues with no earlier window. Gained and lost ignore them. */
+            missing?: string[];
             complete?: boolean;
             summary?: string;
         };

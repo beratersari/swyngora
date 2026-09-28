@@ -2,6 +2,7 @@ package domain
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -45,6 +46,46 @@ func TestBuildVolumeShare_ExampleMixAndChange(t *testing.T) {
 	}
 	if len(h1.Gained) != 1 || h1.Gained[0] != "Binance" || len(h1.Lost) != 1 || h1.Lost[0] != "Bybit" {
 		t.Fatalf("gained=%v lost=%v summary=%s", h1.Gained, h1.Lost, h1.Summary)
+	}
+}
+
+func TestBuildVolumeShare_MissingPriorIsNotAGain(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 4, 2, 12, 0, 0, 0, time.UTC)
+	// OKX has only the current hour. Prior mix is Binance 60 / Bybit 40.
+	// Current among those two is still 60 / 40, plus OKX volume that must not count as a gain from 0.
+	series := map[Exchange][]FuturesVolumeBar{
+		ExchangeBinance: volumeBars(now, 60, 60),
+		ExchangeBybit:   volumeBars(now, 40, 40),
+		ExchangeOKX:     volumeBars(now, 20, 0),
+	}
+	got := BuildVolumeShare("all", "BTCUSDT", series, now)
+	var h1 *VolumeShareWindow
+	for i := range got.Windows {
+		if got.Windows[i].Window == VolumeShareWindow1h {
+			h1 = &got.Windows[i]
+		}
+	}
+	if h1 == nil {
+		t.Fatal("missing 1h")
+	}
+	var okx VolumeShareVenue
+	for _, v := range h1.Venues {
+		if v.Exchange == ExchangeOKX {
+			okx = v
+		}
+		if v.Exchange != ExchangeOKX && v.Kind != VolumeShareStable {
+			t.Fatalf("%s kind %s change %v", v.Exchange, v.Kind, v.ChangePct)
+		}
+	}
+	if okx.Kind != VolumeShareMissing || okx.PriorKnown || len(h1.Gained) != 0 || len(h1.Lost) != 0 {
+		t.Fatalf("okx %+v gained %v lost %v", okx, h1.Gained, h1.Lost)
+	}
+	if len(h1.Missing) != 1 || h1.Missing[0] != "OKX" {
+		t.Fatalf("missing %v summary %s", h1.Missing, h1.Summary)
+	}
+	if !strings.Contains(h1.Summary, "No earlier window for OKX") {
+		t.Fatalf("summary %s", h1.Summary)
 	}
 }
 

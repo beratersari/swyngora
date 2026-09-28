@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findPerpCoin, formatFundingPct, formatSignedFundingPct, formatTapeNum, perpBidShareLine, perpDepthLine, windowByName } from './TapePanel.helpers';
+import { findPerpCoin, formatFundingPct, formatSignedFundingPct, formatTapeNum, perpBidShareLine, perpDepthLine, shareMoveText, sharePctText, windowByName } from './TapePanel.helpers';
 
 describe('TapePanel helpers', () => {
   it('compacts large notionals', () => {
@@ -16,6 +16,20 @@ describe('TapePanel helpers', () => {
     expect(formatSignedFundingPct('+0.001')).toBe('+0.0010%');
     expect(formatSignedFundingPct('-0.002')).toBe('-0.0020%');
     expect(formatSignedFundingPct(null)).toBe('—');
+  });
+
+  it('does not call a missing earlier window a share gain', () => {
+    expect(sharePctText({ complete: true, sharePct: '20' }, 'No data')).toBe('20%');
+    expect(sharePctText({ complete: false }, 'No data')).toBe('No data');
+    expect(
+      shareMoveText(
+        { gained: ['Binance'], lost: ['Bybit'], missing: ['OKX'] },
+        { move: 'Binance gained · Bybit lost', missing: 'No earlier window for OKX', stable: 'Little change' },
+      ),
+    ).toBe('Binance gained · Bybit lost · No earlier window for OKX');
+    expect(shareMoveText({ missing: ['OKX'] }, { move: '', missing: 'No earlier window for OKX', stable: 'Little change' })).toBe(
+      'No earlier window for OKX',
+    );
   });
 
   it('picks a named window', () => {
