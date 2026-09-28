@@ -125,6 +125,8 @@ describe('PerpLiquidityOverview', () => {
               priceAfter: '99500',
               priceAfterPct: '+0.51',
               span: 'one',
+              follow: 'recovered',
+              afterTotal: '700000000',
               drivers: [{ base: 'ETH', change: '+500000000', sharePct: '+83' }],
             },
           ],
@@ -138,5 +140,6 @@ describe('PerpLiquidityOverview', () => {
     expect(screen.getByText('BTC 100.00K → 99.00K (-1%)')).toBeInTheDocument();
     expect(screen.getByText('15m later 99.50K (+0.51%)')).toBeInTheDocument();
     expect(screen.getByText('ETH +500.00M (+83%) · One coin')).toBeInTheDocument();
+    expect(screen.getByText('15m later depth came back to 700.00M')).toBeInTheDocument();
   });
 });

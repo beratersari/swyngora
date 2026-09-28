@@ -59,6 +59,9 @@ ETH 17%** of 2.4B bid + 1.8B ask).
   `drivers` rank the coins that added or removed the most of that move.
   `span` is `one` when one coin is at least half the move, `few` when two
   coins are at least 60%, and `broad` when the change is spread across the book.
+  `follow` looks about 15 minutes after the move. `recovered` means at least
+  half of it came back (a drop refills, a jump fades). `continued` means it
+  kept going by at least another quarter of the move. `held` is in between.
   The Markets perp card lists them under the six-hour chart. Telegram `/perpliq`
   prints up to three of those sentences.
   `complete` is false until the

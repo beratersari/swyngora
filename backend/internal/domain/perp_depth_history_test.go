@@ -271,6 +271,37 @@ func TestAttachPerpDepthMoveCoins_OneCoinVersusTheBook(t *testing.T) {
 	}
 }
 
+func TestAttachPerpDepthMoves_SaysIfDepthCameBack(t *testing.T) {
+	now := time.Date(2026, 9, 21, 16, 0, 0, 0, time.UTC)
+	base := now.Add(-40 * time.Minute)
+	live := BuildPerpDepthOverview("all", 1, []PerpDepthCoinInput{
+		{Symbol: "BTCUSDT", Base: "BTC", Bid: 80, Ask: 20, Complete: true},
+	}, now)
+	AttachPerpDepthHistory(live, []PerpDepthTotalPoint{
+		{Time: base, Total: 1000},
+		{Time: base.Add(6 * time.Minute), Total: 400},
+		{Time: base.Add(21 * time.Minute), Total: 850},
+	})
+	if len(live.Moves) == 0 || live.Moves[0].Kind != PerpDepthMoveDrop || live.Moves[0].Follow != PerpDepthMoveRecovered || live.Moves[0].AfterTotal != 850 {
+		t.Fatalf("%+v", live.Moves)
+	}
+	if !strings.Contains(live.Moves[0].Summary, "came back") {
+		t.Fatalf("summary %s", live.Moves[0].Summary)
+	}
+
+	kept := BuildPerpDepthOverview("all", 1, []PerpDepthCoinInput{
+		{Symbol: "BTCUSDT", Base: "BTC", Bid: 80, Ask: 20, Complete: true},
+	}, now)
+	AttachPerpDepthHistory(kept, []PerpDepthTotalPoint{
+		{Time: base, Total: 1000},
+		{Time: base.Add(6 * time.Minute), Total: 400},
+		{Time: base.Add(21 * time.Minute), Total: 200},
+	})
+	if kept.Moves[0].Follow != PerpDepthMoveContinued || !strings.Contains(kept.Moves[0].Summary, "kept going") {
+		t.Fatalf("%+v %s", kept.Moves[0], kept.Moves[0].Summary)
+	}
+}
+
 func TestAttachPerpDepthMoves_SkipsSmallWiggles(t *testing.T) {
 	now := time.Date(2026, 9, 21, 16, 0, 0, 0, time.UTC)
 	live := BuildPerpDepthOverview("all", 1, []PerpDepthCoinInput{

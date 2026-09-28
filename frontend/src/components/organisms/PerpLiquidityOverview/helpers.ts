@@ -101,6 +101,12 @@ export function moveDuringLine(m?: PerpBookMove | null): string {
   return `${formatCompactAmount(m.priceFrom)} → ${formatCompactAmount(m.priceTo)}${chg}`;
 }
 
+/** Book size about 15 minutes after the move. */
+export function moveFollowTotal(m?: { afterTotal?: string } | null): string {
+  if (!m?.afterTotal) return '';
+  return formatCompactAmount(m.afterTotal);
+}
+
 /** Coins that caused most of a jump or drop, with each coin's share of that move. */
 export function moveDriverLine(
   m?: { drivers?: { base?: string; symbol?: string; change?: string; sharePct?: string }[] | null } | null,

@@ -18,6 +18,7 @@ import {
   moveBookLine,
   moveDriverLine,
   moveDuringLine,
+  moveFollowTotal,
   driverNames,
   sizeDriverLine,
   leaderCoins,
@@ -181,6 +182,11 @@ export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLi
                       {moveAfterLine(m) ? (
                         <Text variant="caption" color="secondary">
                           {t('perpLiq.moveAfter', { line: moveAfterLine(m) })}
+                        </Text>
+                      ) : null}
+                      {m.follow && moveFollowTotal(m) ? (
+                        <Text variant="caption" color="secondary">
+                          {t(`perpLiq.moveFollow_${m.follow}`, { total: moveFollowTotal(m) })}
                         </Text>
                       ) : null}
                       {moveDriverLine(m) ? (

@@ -40,14 +40,21 @@ const (
 	PerpDepthMoveSpanFew   = "few"
 	PerpDepthMoveSpanBroad = "broad"
 
-	perpDepthMoveMaxSpan    = 15 * time.Minute
-	perpDepthMoveAfter      = 15 * time.Minute
-	perpDepthMoveAfterSlack = 5 * time.Minute
-	perpDepthMoveMinPct     = 5.0
-	perpDepthMoveKeep       = 3
-	perpDepthPriceFlatPct   = 0.2
-	perpDepthMoveOneShare   = 50.0
-	perpDepthMoveFewShare   = 60.0
+	// What the book did in the 15 minutes after a jump or drop.
+	PerpDepthMoveRecovered = "recovered"
+	PerpDepthMoveContinued = "continued"
+	PerpDepthMoveHeld      = "held"
+
+	perpDepthMoveMaxSpan       = 15 * time.Minute
+	perpDepthMoveAfter         = 15 * time.Minute
+	perpDepthMoveAfterSlack    = 5 * time.Minute
+	perpDepthMoveMinPct        = 5.0
+	perpDepthMoveKeep          = 3
+	perpDepthPriceFlatPct      = 0.2
+	perpDepthMoveOneShare      = 50.0
+	perpDepthMoveFewShare      = 60.0
+	perpDepthMoveRecoverShare  = 0.5
+	perpDepthMoveContinueShare = 0.25
 )
 
 // PerpDepthShareWindows is 15m / 1h / 4h of market bid vs ask mix.
@@ -90,6 +97,9 @@ type PerpDepthBookMove struct {
 	AfterKind      string
 	Drivers        []PerpDepthMoveDriver
 	Span           string // one | few | broad
+	AfterTotal     float64
+	Follow         string  // recovered | continued | held
+	FollowPct      float64 // percent of the move undone; positive means depth came back
 	Summary        string
 }
 
@@ -358,9 +368,11 @@ func buildPerpDepthBookMove(pts []PerpDepthTotalPoint, c perpDepthMoveCand) Perp
 		m.PriceChangePct = round4(100 * (b.Price - a.Price) / a.Price)
 		m.PriceKind = classifyPerpDepthPrice(m.PriceChangePct)
 	}
-	if after, ok := perpDepthPriceAfter(pts, b.Time); ok {
-		m.PriceAfter = round4(after.Price)
-		if b.Price > 0 {
+	if after, ok := perpDepthBookAfter(pts, b.Time); ok {
+		m.AfterTotal = round4(after.Total)
+		m.Follow, m.FollowPct = classifyPerpDepthMoveFollow(a.Total, b.Total, after.Total)
+		if after.Price > 0 && b.Price > 0 {
+			m.PriceAfter = round4(after.Price)
 			m.PriceAfterPct = round4(100 * (after.Price - b.Price) / b.Price)
 			m.AfterKind = classifyPerpDepthPrice(m.PriceAfterPct)
 		}
@@ -369,11 +381,11 @@ func buildPerpDepthBookMove(pts []PerpDepthTotalPoint, c perpDepthMoveCand) Perp
 	return m
 }
 
-func perpDepthPriceAfter(pts []PerpDepthTotalPoint, end time.Time) (PerpDepthTotalPoint, bool) {
+func perpDepthBookAfter(pts []PerpDepthTotalPoint, end time.Time) (PerpDepthTotalPoint, bool) {
 	want := end.Add(perpDepthMoveAfter)
 	late := want.Add(perpDepthMoveAfterSlack)
 	for _, p := range pts {
-		if p.Price <= 0 || p.Time.Before(want) {
+		if p.Total <= 0 || p.Time.Before(want) {
 			continue
 		}
 		if p.Time.After(late) {
@@ -382,6 +394,26 @@ func perpDepthPriceAfter(pts []PerpDepthTotalPoint, end time.Time) (PerpDepthTot
 		return p, true
 	}
 	return PerpDepthTotalPoint{}, false
+}
+
+// classifyPerpDepthMoveFollow says whether the next 15 minutes undid the move.
+// Half the move coming back is recovered. Another quarter in the same direction
+// means the move kept going. Between those, the book held.
+func classifyPerpDepthMoveFollow(start, end, after float64) (string, float64) {
+	delta := start - end
+	if delta == 0 {
+		return PerpDepthMoveHeld, 0
+	}
+	undone := (after - end) / delta
+	pct := round4(100 * undone)
+	switch {
+	case undone >= perpDepthMoveRecoverShare:
+		return PerpDepthMoveRecovered, pct
+	case undone <= -perpDepthMoveContinueShare:
+		return PerpDepthMoveContinued, pct
+	default:
+		return PerpDepthMoveHeld, pct
+	}
 }
 
 func classifyPerpDepthPrice(pct float64) string {
@@ -408,6 +440,9 @@ func explainPerpDepthBookMove(m PerpDepthBookMove) string {
 	}
 	if m.PriceAfter > 0 {
 		s += fmt.Sprintf(" 15m later BTC %s (%s).", formatQty(m.PriceAfter), FormatSignedPct(m.PriceAfterPct))
+	}
+	if follow := perpDepthMoveFollowSentence(m); follow != "" {
+		s += " " + follow
 	}
 	if coins := perpDepthMoveCoinSentence(m); coins != "" {
 		s += " " + coins
@@ -487,6 +522,21 @@ func classifyPerpDepthMoveSpan(drivers []PerpDepthMoveDriver, marketChange float
 		return PerpDepthMoveSpanFew
 	}
 	return PerpDepthMoveSpanBroad
+}
+
+func perpDepthMoveFollowSentence(m PerpDepthBookMove) string {
+	if m.Follow == "" || m.AfterTotal <= 0 {
+		return ""
+	}
+	size := formatQty(m.AfterTotal)
+	switch m.Follow {
+	case PerpDepthMoveRecovered:
+		return fmt.Sprintf("15m later depth came back to %s.", size)
+	case PerpDepthMoveContinued:
+		return fmt.Sprintf("15m later the move kept going to %s.", size)
+	default:
+		return fmt.Sprintf("15m later depth held near %s.", size)
+	}
 }
 
 func perpDepthMoveCoinSentence(m PerpDepthBookMove) string {

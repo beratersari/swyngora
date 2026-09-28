@@ -1093,6 +1093,11 @@ func perpDepthOverviewMap(got *domain.PerpDepthOverview) map[string]any {
 		if m.Span != "" {
 			row["span"] = m.Span
 		}
+		if m.AfterTotal > 0 {
+			row["afterTotal"] = formatQtyMCP(m.AfterTotal)
+			row["follow"] = m.Follow
+			row["followPct"] = domain.FormatSignedPct(m.FollowPct)
+		}
 		moves = append(moves, row)
 	}
 	bands := make([]map[string]any, 0, len(got.Bands))

@@ -10681,6 +10681,9 @@ components:
           description: Coins that added or removed the most of this move, largest share first
           items: { $ref: '#/components/schemas/MarketPerpDepthMoveDriver' }
         span: { type: string, enum: [one, few, broad], description: one coin caused at least half, two coins caused at least 60%, or the move was spread across the book }
+        afterTotal: { type: string, description: Bid+ask about 15 minutes after the move ended }
+        follow: { type: string, enum: [recovered, continued, held], description: recovered means at least half the move came back, continued means it kept going by at least another quarter, held is in between }
+        followPct: { type: string, description: Percent of the move that was undone. Positive means depth came back toward the size before the move }
         summary: { type: string }
     MarketPerpDepthMoveDriver:
       type: object

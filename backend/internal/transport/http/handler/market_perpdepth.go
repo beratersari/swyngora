@@ -249,6 +249,9 @@ type perpDepthBookMoveDTO struct {
 	AfterKind      string                   `json:"afterKind,omitempty"`
 	Drivers        []perpDepthMoveDriverDTO `json:"drivers,omitempty"`
 	Span           string                   `json:"span,omitempty"`
+	AfterTotal     string                   `json:"afterTotal,omitempty"`
+	Follow         string                   `json:"follow,omitempty"`
+	FollowPct      string                   `json:"followPct,omitempty"`
 	Summary        string                   `json:"summary"`
 }
 
@@ -369,6 +372,11 @@ func perpDepthOverviewToDTO(a *domain.PerpDepthOverview) perpDepthOverviewRespon
 		}
 		row.Drivers = drivers
 		row.Span = m.Span
+		if m.AfterTotal > 0 {
+			row.AfterTotal = formatHistQty(m.AfterTotal)
+			row.Follow = m.Follow
+			row.FollowPct = domain.FormatSignedPct(m.FollowPct)
+		}
 		moves = append(moves, row)
 	}
 	bands := make([]perpDepthOverviewBandDTO, 0, len(a.Bands))

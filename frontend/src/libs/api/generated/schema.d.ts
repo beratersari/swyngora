@@ -6759,6 +6759,15 @@ export interface components {
              * @enum {string}
              */
             span?: "one" | "few" | "broad";
+            /** @description Bid+ask about 15 minutes after the move ended */
+            afterTotal?: string;
+            /**
+             * @description recovered means at least half the move came back, continued means it kept going by at least another quarter, held is in between
+             * @enum {string}
+             */
+            follow?: "recovered" | "continued" | "held";
+            /** @description Percent of the move that was undone. Positive means depth came back toward the size before the move */
+            followPct?: string;
             summary?: string;
         };
         /** @description One coin's share of a perp-book jump or drop */
