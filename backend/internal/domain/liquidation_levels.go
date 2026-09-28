@@ -584,7 +584,7 @@ func sum4(v [4]float64) float64 {
 func ParseLiquidationLevelsRange(raw string) (HuntHeatmapSpec, error) {
 	spec, err := ParseHuntHeatmapRange(raw)
 	if err != nil {
-		return spec, fmt.Errorf("%w: range must be 12h, 24h, 3d, or 7d", ErrInvalidArgument)
+		return spec, fmt.Errorf("%w: range must be 12h, 24h, 3d, 7d, 14d, or 30d", ErrInvalidArgument)
 	}
 	return spec, nil
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -68,6 +69,34 @@ func TestGetOpenInterestSeries_OK_AndCache(t *testing.T) {
 	}
 	if hits != firstHits {
 		t.Fatalf("cache should skip upstream, hits %d → %d", firstHits, hits)
+	}
+}
+
+func TestListOpenInterestHistory_PagesHourly(t *testing.T) {
+	from := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(2 * time.Hour)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/futures/data/openInterestHist" {
+			t.Fatalf("path %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("period") != "1h" {
+			t.Fatalf("period %s", r.URL.Query().Get("period"))
+		}
+		start, _ := strconv.ParseInt(r.URL.Query().Get("startTime"), 10, 64)
+		rows := []map[string]any{
+			{"sumOpenInterest": "1", "sumOpenInterestValue": "100", "timestamp": start},
+			{"sumOpenInterest": "2", "sumOpenInterestValue": "200", "timestamp": start + int64(time.Hour/time.Millisecond)},
+		}
+		_ = json.NewEncoder(w).Encode(rows)
+	}))
+	defer srv.Close()
+	c := NewClient(Options{FuturesBaseURL: srv.URL, HTTPClient: srv.Client()})
+	got, err := c.ListOpenInterestHistory(context.Background(), "BTCUSDT", from, to)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) < 2 || got[0].Value != 100 {
+		t.Fatalf("%+v", got)
 	}
 }
 

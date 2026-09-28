@@ -10,7 +10,7 @@ import (
 )
 
 // GetLiquidationHuntHeatmap builds a price × time liquidation intensity map.
-// range is 12h, 24h, 3d, or 7d. exchange=all returns Binance, Bybit, and combined.
+// range is 12h, 24h, 3d, 7d, 14d, or 30d. exchange=all returns Binance, Bybit, and combined.
 func (s *Service) GetLiquidationHuntHeatmap(ctx context.Context, exchange, symbol, rawRange string) (*domain.HuntHeatmapReport, error) {
 	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
 	if err != nil {

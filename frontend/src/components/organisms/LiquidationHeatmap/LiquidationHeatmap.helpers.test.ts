@@ -157,5 +157,6 @@ describe('LiquidationHeatmap helpers', () => {
     expect(formatLiqNotional(0)).toBe('—');
     expect(formatLiqTime(Date.parse('2026-08-29T12:30:00Z'), '24h')).toMatch(/\d{2}:\d{2}/);
     expect(formatLiqTime(Date.parse('2026-08-29T12:30:00Z'), '7d')).toMatch(/\d{2}-\d{2}/);
+    expect(formatLiqTime(Date.parse('2026-08-29T12:30:00Z'), '30d')).toMatch(/\d{2}-\d{2}/);
   });
 });

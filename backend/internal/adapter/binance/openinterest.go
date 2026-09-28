@@ -152,11 +152,69 @@ func (c *Client) fetchMarkPrice(ctx context.Context, symbol string) (float64, er
 	return px, nil
 }
 
+// ListOpenInterestHistory pages 1-hour USD-M open interest in [from, to].
+func (c *Client) ListOpenInterestHistory(ctx context.Context, symbol string, from, to time.Time) ([]domain.OpenInterestPoint, error) {
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return nil, err
+	}
+	if c == nil {
+		return nil, fmt.Errorf("%w: binance client", domain.ErrUpstream)
+	}
+	from, to = from.UTC(), to.UTC()
+	if !to.After(from) {
+		return nil, fmt.Errorf("%w: to must be after from", domain.ErrInvalidArgument)
+	}
+	// The hist endpoint returns the newest `limit` rows inside the window,
+	// so walk endTime backward until the page reaches `from`.
+	const page = 500
+	var out []domain.OpenInterestPoint
+	end := to
+	for i := 0; i < 8; i++ {
+		if ctx.Err() != nil {
+			return out, ctx.Err()
+		}
+		q := url.Values{}
+		q.Set("symbol", symbol)
+		q.Set("period", "1h")
+		q.Set("limit", strconv.Itoa(page))
+		q.Set("startTime", strconv.FormatInt(from.UnixMilli(), 10))
+		q.Set("endTime", strconv.FormatInt(end.UnixMilli(), 10))
+		batch, err := c.fetchOIHistQuery(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		if len(batch) == 0 {
+			break
+		}
+		out = append(out, batch...)
+		oldest := batch[0].Time
+		for _, p := range batch[1:] {
+			if p.Time.Before(oldest) {
+				oldest = p.Time
+			}
+		}
+		if !oldest.After(from) || len(batch) < page {
+			break
+		}
+		next := oldest.Add(-time.Millisecond)
+		if !next.Before(end) {
+			break
+		}
+		end = next
+	}
+	return domain.SortOpenInterestHistory(out), nil
+}
+
 func (c *Client) fetchOIHist(ctx context.Context, symbol string) ([]domain.OpenInterestPoint, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)
 	q.Set("period", "5m")
 	q.Set("limit", "300")
+	return c.fetchOIHistQuery(ctx, q)
+}
+
+func (c *Client) fetchOIHistQuery(ctx context.Context, q url.Values) ([]domain.OpenInterestPoint, error) {
 	body, err := c.getFutures(ctx, "/futures/data/openInterestHist", q)
 	if err != nil {
 		return nil, err

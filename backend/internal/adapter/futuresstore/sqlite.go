@@ -259,6 +259,32 @@ INSERT OR IGNORE INTO futures_liquidations (
 	return n > 0, nil
 }
 
+// EarliestSnapshot is the oldest settled sample for one metric, venue, and symbol.
+func (s *SQLite) EarliestSnapshot(ctx context.Context, metric string, exchange domain.Exchange, symbol string) (time.Time, bool, error) {
+	if s == nil || s.db == nil {
+		return time.Time{}, false, fmt.Errorf("futures store is nil")
+	}
+	symbol = domain.NormalizeLiquidationSymbol(symbol)
+	if metric == "" || exchange == "" || symbol == "" {
+		return time.Time{}, false, fmt.Errorf("%w: incomplete snapshot query", domain.ErrInvalidArgument)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var ms sql.NullInt64
+	err := s.db.QueryRowContext(ctx, `
+SELECT MIN(sampled_at_ms) FROM futures_snapshots
+WHERE metric = ? AND exchange = ? AND symbol = ? AND predicted = 0`,
+		metric, string(exchange), symbol,
+	).Scan(&ms)
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	if !ms.Valid || ms.Int64 <= 0 {
+		return time.Time{}, false, nil
+	}
+	return time.UnixMilli(ms.Int64).UTC(), true, nil
+}
+
 // ListSnapshots returns samples newest first.
 func (s *SQLite) ListSnapshots(ctx context.Context, q domain.FuturesHistoryQuery) ([]domain.FuturesSnapshot, error) {
 	if s == nil || s.db == nil {

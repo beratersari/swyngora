@@ -3702,7 +3702,9 @@ paths:
         the hunt leverage mix (tilted by funding), blended account long/short,
         and observed liquidation prints in that column.
 
-        `range` is 12h, 24h, 3d, or 7d. Binance and Bybit are modeled
+        `range` is 12h, 24h, 3d, 7d, 14d, or 30d. 14d and 30d use the
+        startup archive of 1-hour open interest, funding, and long/short.
+        Binance and Bybit are modeled
         separately and each venue uses only its own candles (never the
         other exchange's price). `combined` is the sum of their cells.
         `review` scores whether later price reached the hot zones within
@@ -3719,7 +3721,7 @@ paths:
         - name: range
           in: query
           description: 12h | 24h | 3d | 7d
-          schema: { type: string, default: 24h, enum: [12h, 24h, 3d, 7d] }
+          schema: { type: string, default: 24h, enum: [12h, 24h, 3d, 7d, 14d, 30d] }
         - name: exchange
           in: query
           description: binance | bybit | okx | all (default all = all futures venues + combined)
@@ -3771,7 +3773,7 @@ paths:
         - name: range
           in: query
           description: 12h | 24h | 3d | 7d (totals clamp to 24h)
-          schema: { type: string, default: 24h, enum: [12h, 24h, 3d, 7d] }
+          schema: { type: string, default: 24h, enum: [12h, 24h, 3d, 7d, 14d, 30d] }
       responses:
         '200':
           description: Price-level bars or time-total bars
@@ -9972,7 +9974,7 @@ components:
       description: Price × time estimated liquidation intensity
       properties:
         symbol: { type: string }
-        range: { type: string, enum: [12h, 24h, 3d, 7d] }
+        range: { type: string, enum: [12h, 24h, 3d, 7d, 14d, 30d] }
         from: { type: string, format: date-time }
         to: { type: string, format: date-time }
         stepSec: { type: integer }

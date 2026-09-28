@@ -68,6 +68,12 @@ type OpenInterestPort interface {
 	GetOpenInterestSeries(ctx context.Context, symbol string) (*OpenInterestSeries, error)
 }
 
+// OpenInterestHistoryPort pages coarse open-interest history for the archive.
+// The live series stays on OpenInterestPort; this is the 1-hour lookback.
+type OpenInterestHistoryPort interface {
+	ListOpenInterestHistory(ctx context.Context, symbol string, from, to time.Time) ([]OpenInterestPoint, error)
+}
+
 // FuturesDepthPort loads a perpetual futures bid/ask snapshot.
 // Implemented by Binance USD-M and Bybit linear adapters.
 type FuturesDepthPort interface {
@@ -92,6 +98,11 @@ type FundingRatePort interface {
 // Implemented by Binance USD-M and Bybit linear adapters.
 type LongShortRatioPort interface {
 	GetLongShortSeries(ctx context.Context, symbol string, limit int) (*LongShortSeries, error)
+}
+
+// LongShortHistoryPort pages coarse long/short history for the archive.
+type LongShortHistoryPort interface {
+	ListLongShortHistory(ctx context.Context, symbol string, from, to time.Time) ([]LongShortHistoryPoint, error)
 }
 
 // OptionsChainPort loads listed option quotes plus the 30-day IV index (DVOL).

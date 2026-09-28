@@ -617,6 +617,16 @@ func main() {
 		Retain:   cfg.FuturesHistoryRetention,
 		Logger:   logger,
 	}).Start(ctx)
+	go (&futureshist.Archive{
+		Hist: futuresHist,
+		Liq: map[domain.Exchange]domain.LiquidationHistoryPort{
+			domain.ExchangeBinance: binanceClient,
+			domain.ExchangeBybit:   bybitClient,
+			domain.ExchangeOKX:     okxClient,
+		},
+		Lookback: cfg.FuturesHistoryRetention,
+		Logger:   logger,
+	}).Start(ctx)
 	go (&bookhist.Worker{
 		Hist:     bookHist,
 		Interval: cfg.OrderBookHistoryInterval,

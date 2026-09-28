@@ -158,6 +158,60 @@ func (c *Client) fetchLinearTicker(ctx context.Context, symbol string) (bybitLin
 	}, nil
 }
 
+// ListOpenInterestHistory pages 1-hour linear open interest and prices it with 1h closes.
+func (c *Client) ListOpenInterestHistory(ctx context.Context, symbol string, from, to time.Time) ([]domain.OpenInterestPoint, error) {
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return nil, err
+	}
+	if c == nil {
+		return nil, fmt.Errorf("%w: bybit client", domain.ErrUpstream)
+	}
+	from, to = from.UTC(), to.UTC()
+	if !to.After(from) {
+		return nil, fmt.Errorf("%w: to must be after from", domain.ErrInvalidArgument)
+	}
+	var out []domain.OpenInterestPoint
+	end := to.UnixMilli()
+	for page := 0; page < 8; page++ {
+		if ctx.Err() != nil {
+			return out, ctx.Err()
+		}
+		batch, err := c.fetchOIPageAt(ctx, symbol, "1h", end)
+		if err != nil {
+			return nil, err
+		}
+		if len(batch) == 0 {
+			break
+		}
+		out = append(out, batch...)
+		oldest := batch[0].Time
+		for _, p := range batch[1:] {
+			if p.Time.Before(oldest) {
+				oldest = p.Time
+			}
+		}
+		if !oldest.After(from) || len(batch) < 200 {
+			break
+		}
+		next := oldest.UnixMilli() - 1
+		if next >= end {
+			break
+		}
+		end = next
+	}
+	closes, _ := c.listHourCloses(ctx, symbol, from, to)
+	for i := range out {
+		if out[i].Value > 0 || out[i].Time.Before(from) || out[i].Time.After(to) {
+			continue
+		}
+		if px := closeNear(closes, out[i].Time, 2*time.Hour); px > 0 {
+			out[i].Value = out[i].Contracts * px
+		}
+	}
+	return domain.SortOpenInterestHistory(out), nil
+}
+
 func (c *Client) fetchLinearOIHist(ctx context.Context, symbol string) ([]domain.OpenInterestPoint, error) {
 	// 200 * 5min = 16.6h; second page covers the rest of 24h.
 	first, err := c.fetchOIPage(ctx, symbol, 0)
@@ -175,10 +229,14 @@ func (c *Client) fetchLinearOIHist(ctx context.Context, symbol string) ([]domain
 }
 
 func (c *Client) fetchOIPage(ctx context.Context, symbol string, endTimeMs int64) ([]domain.OpenInterestPoint, error) {
+	return c.fetchOIPageAt(ctx, symbol, "5min", endTimeMs)
+}
+
+func (c *Client) fetchOIPageAt(ctx context.Context, symbol, interval string, endTimeMs int64) ([]domain.OpenInterestPoint, error) {
 	q := url.Values{}
 	q.Set("category", "linear")
 	q.Set("symbol", symbol)
-	q.Set("intervalTime", "5min")
+	q.Set("intervalTime", interval)
 	q.Set("limit", "200")
 	if endTimeMs > 0 {
 		q.Set("endTime", strconv.FormatInt(endTimeMs, 10))
@@ -258,6 +316,97 @@ func (c *Client) fetchLinearCloses(ctx context.Context, symbol string) (map[int6
 		out[ms] = closePx
 	}
 	return out, nil
+}
+
+func (c *Client) listHourCloses(ctx context.Context, symbol string, from, to time.Time) (map[int64]float64, error) {
+	out := map[int64]float64{}
+	start := from.UTC().UnixMilli()
+	end := to.UTC().UnixMilli()
+	for page := 0; page < 6; page++ {
+		if ctx.Err() != nil {
+			return out, ctx.Err()
+		}
+		q := url.Values{}
+		q.Set("category", "linear")
+		q.Set("symbol", symbol)
+		q.Set("interval", "60")
+		q.Set("start", strconv.FormatInt(start, 10))
+		q.Set("limit", "200")
+		body, err := c.get(ctx, "/v5/market/kline", q)
+		if err != nil {
+			return out, err
+		}
+		var raw struct {
+			RetCode int    `json:"retCode"`
+			RetMsg  string `json:"retMsg"`
+			Result  struct {
+				List [][]string `json:"list"`
+			} `json:"result"`
+		}
+		if err := json.Unmarshal(body, &raw); err != nil {
+			return out, fmt.Errorf("%w: kline decode: %v", domain.ErrUpstream, err)
+		}
+		if raw.RetCode != 0 {
+			return out, mapBybitError(raw.RetCode, raw.RetMsg)
+		}
+		if len(raw.Result.List) == 0 {
+			break
+		}
+		var newest int64
+		for _, row := range raw.Result.List {
+			if len(row) < 5 {
+				continue
+			}
+			ms, err1 := strconv.ParseInt(row[0], 10, 64)
+			closePx, err2 := strconv.ParseFloat(row[4], 64)
+			if err1 != nil || err2 != nil || closePx <= 0 {
+				continue
+			}
+			out[ms] = closePx
+			if ms > newest {
+				newest = ms
+			}
+		}
+		if newest <= start || len(raw.Result.List) < 200 || newest >= end {
+			break
+		}
+		start = newest + 1
+	}
+	return out, nil
+}
+
+func closeNear(px map[int64]float64, at time.Time, slack time.Duration) float64 {
+	if len(px) == 0 || at.IsZero() {
+		return 0
+	}
+	ms := at.UnixMilli()
+	if v, ok := px[ms]; ok {
+		return v
+	}
+	bucket := at.UTC().Truncate(time.Hour).UnixMilli()
+	if v, ok := px[bucket]; ok {
+		return v
+	}
+	bestDt := int64(-1)
+	var best int64
+	limit := int64(slack / time.Millisecond)
+	for k := range px {
+		dt := ms - k
+		if dt < 0 {
+			dt = -dt
+		}
+		if dt > limit {
+			continue
+		}
+		if bestDt < 0 || dt < bestDt {
+			bestDt = dt
+			best = k
+		}
+	}
+	if bestDt < 0 {
+		return 0
+	}
+	return px[best]
 }
 
 func closeAt(px map[int64]float64, at time.Time) float64 {

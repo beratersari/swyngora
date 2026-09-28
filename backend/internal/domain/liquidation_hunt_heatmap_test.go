@@ -14,6 +14,14 @@ func TestParseHuntHeatmapRange(t *testing.T) {
 	if err != nil || s.Window != 168*time.Hour || s.Step != 2*time.Hour {
 		t.Fatalf("%+v %v", s, err)
 	}
+	s, err = ParseHuntHeatmapRange("30d")
+	if err != nil || s.Window != 30*24*time.Hour || s.Step != 6*time.Hour {
+		t.Fatalf("%+v %v", s, err)
+	}
+	cols := HuntHeatmapColumns(s, time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC))
+	if len(cols) != 120 {
+		t.Fatalf("30d cols=%d", len(cols))
+	}
 	if _, err := ParseHuntHeatmapRange("9h"); err == nil {
 		t.Fatal("expected invalid range")
 	}

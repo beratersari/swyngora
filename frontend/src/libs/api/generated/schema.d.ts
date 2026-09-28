@@ -2314,7 +2314,9 @@ export interface paths {
          *     the hunt leverage mix (tilted by funding), blended account long/short,
          *     and observed liquidation prints in that column.
          *
-         *     `range` is 12h, 24h, 3d, or 7d. Binance and Bybit are modeled
+         *     `range` is 12h, 24h, 3d, 7d, 14d, or 30d. 14d and 30d use the
+         *     startup archive of 1-hour open interest, funding, and long/short.
+         *     Binance and Bybit are modeled
          *     separately and each venue uses only its own candles (never the
          *     other exchange's price). `combined` is the sum of their cells.
          *     `review` scores whether later price reached the hot zones within
@@ -5945,7 +5947,7 @@ export interface components {
         LiquidationHuntHeatmap: {
             symbol?: string;
             /** @enum {string} */
-            range?: "12h" | "24h" | "3d" | "7d";
+            range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d";
             /** Format: date-time */
             from?: string;
             /** Format: date-time */
@@ -12310,7 +12312,7 @@ export interface operations {
             query: {
                 symbol: string;
                 /** @description 12h | 24h | 3d | 7d */
-                range?: "12h" | "24h" | "3d" | "7d";
+                range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d";
                 /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
             };
@@ -12341,7 +12343,7 @@ export interface operations {
                 /** @description binance | bybit | okx | all (default all = combined) */
                 exchange?: string;
                 /** @description 12h | 24h | 3d | 7d (totals clamp to 24h) */
-                range?: "12h" | "24h" | "3d" | "7d";
+                range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d";
             };
             header?: never;
             path?: never;

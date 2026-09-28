@@ -24,6 +24,17 @@ type LongShortPoint struct {
 	Ratio      float64 // long/short; 1 = even
 }
 
+// LongShortHistoryPoint is one coarse archive sample.
+// TopAccLongShare and SizeLongShare are 0 when that venue does not publish them.
+type LongShortHistoryPoint struct {
+	Time            time.Time
+	LongShare       float64
+	ShortShare      float64
+	Ratio           float64
+	TopAccLongShare float64
+	SizeLongShare   float64
+}
+
 // LongShortSeries is one venue's latest sample plus recent history.
 type LongShortSeries struct {
 	Exchange Exchange

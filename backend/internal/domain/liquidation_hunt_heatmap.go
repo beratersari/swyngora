@@ -11,6 +11,8 @@ const (
 	HuntHeatmapPriceBins = 48
 	// MaxHuntHeatmapHistory is how many OI / LS / funding rows we load per metric.
 	MaxHuntHeatmapHistory = 2500
+	// HuntHeatmapMaxColumns caps a 30-day map (6h columns → 120).
+	HuntHeatmapMaxColumns = 128
 )
 
 // HuntHeatmapRange is a fixed lookback for the price×time intensity grid.
@@ -21,6 +23,8 @@ const (
 	HuntHeatmap24h HuntHeatmapRange = "24h"
 	HuntHeatmap3d  HuntHeatmapRange = "3d"
 	HuntHeatmap7d  HuntHeatmapRange = "7d"
+	HuntHeatmap14d HuntHeatmapRange = "14d"
+	HuntHeatmap30d HuntHeatmapRange = "30d"
 )
 
 // HuntHeatmapSpec is window + column step + candle interval for a range.
@@ -38,9 +42,11 @@ var HuntHeatmapSpecs = []HuntHeatmapSpec{
 	{Range: HuntHeatmap24h, Window: 24 * time.Hour, Step: 30 * time.Minute, CandleIV: "15m", CandleLim: 110},
 	{Range: HuntHeatmap3d, Window: 72 * time.Hour, Step: time.Hour, CandleIV: "1h", CandleLim: 80},
 	{Range: HuntHeatmap7d, Window: 168 * time.Hour, Step: 2 * time.Hour, CandleIV: "1h", CandleLim: 180},
+	{Range: HuntHeatmap14d, Window: 14 * 24 * time.Hour, Step: 4 * time.Hour, CandleIV: "4h", CandleLim: 90},
+	{Range: HuntHeatmap30d, Window: 30 * 24 * time.Hour, Step: 6 * time.Hour, CandleIV: "4h", CandleLim: 190},
 }
 
-// ParseHuntHeatmapRange accepts 12h, 24h, 3d, 7d (default 24h).
+// ParseHuntHeatmapRange accepts 12h, 24h, 3d, 7d, 14d, 30d (default 24h).
 func ParseHuntHeatmapRange(raw string) (HuntHeatmapSpec, error) {
 	s := strings.ToLower(strings.TrimSpace(raw))
 	if s == "" {
@@ -55,8 +61,12 @@ func ParseHuntHeatmapRange(raw string) (HuntHeatmapSpec, error) {
 		return HuntHeatmapSpecs[2], nil
 	case "7d", "168h", "1w":
 		return HuntHeatmapSpecs[3], nil
+	case "14d", "336h", "2w":
+		return HuntHeatmapSpecs[4], nil
+	case "30d", "720h":
+		return HuntHeatmapSpecs[5], nil
 	default:
-		return HuntHeatmapSpec{}, fmt.Errorf("%w: range must be 12h, 24h, 3d, or 7d", ErrInvalidArgument)
+		return HuntHeatmapSpec{}, fmt.Errorf("%w: range must be 12h, 24h, 3d, 7d, 14d, or 30d", ErrInvalidArgument)
 	}
 }
 
@@ -133,7 +143,7 @@ func HuntHeatmapColumns(spec HuntHeatmapSpec, to time.Time) []time.Time {
 	out := make([]time.Time, 0, int(spec.Window/spec.Step)+1)
 	for t := from.Add(spec.Step); !t.After(to); t = t.Add(spec.Step) {
 		out = append(out, t)
-		if len(out) >= HuntHeatmapMaxCols() {
+		if len(out) >= HuntHeatmapMaxColumns {
 			break
 		}
 	}
@@ -141,7 +151,7 @@ func HuntHeatmapColumns(spec HuntHeatmapSpec, to time.Time) []time.Time {
 }
 
 // HuntHeatmapMaxCols is a hard cap on time columns.
-func HuntHeatmapMaxCols() int { return 96 }
+func HuntHeatmapMaxCols() int { return HuntHeatmapMaxColumns }
 
 // BuildHuntHeatmap projects the hunt liquidation model onto a price × time grid.
 func BuildHuntHeatmap(in HuntHeatmapInput) HuntHeatmapReport {

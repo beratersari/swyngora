@@ -35,6 +35,10 @@ func TestInsertSnapshot_NoDuplicates(t *testing.T) {
 	if err != nil || len(got) != 1 || got[0].Contracts != 100 {
 		t.Fatalf("%+v %v", got, err)
 	}
+	earliest, ok, err := s.EarliestSnapshot(context.Background(), domain.FuturesMetricOpenInterest, domain.ExchangeBinance, "BTCUSDT")
+	if err != nil || !ok || !earliest.Equal(at) {
+		t.Fatalf("earliest %v %v %v", earliest, ok, err)
+	}
 }
 
 func TestInsertSnapshot_VenuesIndependent(t *testing.T) {
