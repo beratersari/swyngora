@@ -206,6 +206,7 @@ func (s *Service) GetPerpDepthOverview(ctx context.Context, exchange string, ran
 	for _, f := range got {
 		samples = append(samples, f.samples...)
 	}
+	domain.ApplyPerpDepthCoverage(out, samples, now)
 	s.persistPerpDepthOverview(ctx, out, coins)
 	s.attachPerpDepthWindows(ctx, out)
 	domain.ApplyPerpDepthCoverage(out, samples, now)

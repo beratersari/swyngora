@@ -21,6 +21,8 @@ Each expected venue is `fresh`, `stale`, or `missing`.
 
 `coverage.complete` and `definite` are true only when every expected venue is fresh. A single-venue request only has to cover that venue. When `definite` is false the summary says which venues are missing and which are old, and the order-count lean, print-size read, and perp bid/ask lean are cleared. Liquidation totals stay in the payload for inspection, and the Liquidations page does not present them as the market.
 
+Perp depth history stores a minute only when `definite` is true. A missing or old venue is left out of that minute, so the six-hour total and the thicker/thinner windows do not treat the gap as a real change in book size.
+
 The same fields are on the matching MCP tools.
 
 ## Where the code lives

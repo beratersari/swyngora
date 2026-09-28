@@ -136,6 +136,21 @@ func TestAttachPerpDepthWindows_SizeDriversRankWhoAddedMost(t *testing.T) {
 	}
 }
 
+func TestPerpDepthSamplesFromOverview_SkipsIncompleteVenueSet(t *testing.T) {
+	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+	live := BuildPerpDepthOverview("all", 1, []PerpDepthCoinInput{
+		{Symbol: "BTCUSDT", Base: "BTC", Bid: 80, Ask: 20, Complete: true},
+	}, now)
+	if rows := PerpDepthSamplesFromOverview(live); rows != nil {
+		t.Fatalf("incomplete overview stored %+v", rows)
+	}
+	live.Definite = true
+	rows := PerpDepthSamplesFromOverview(live)
+	if len(rows) != 1 || rows[0].Symbol != "BTCUSDT" || rows[0].Bid != 80 {
+		t.Fatalf("complete overview %+v", rows)
+	}
+}
+
 func TestAttachPerpDepthHistory_KeepsSixHoursAndDropsOlder(t *testing.T) {
 	now := time.Date(2026, 9, 21, 16, 0, 0, 0, time.UTC)
 	live := BuildPerpDepthOverview("all", 1, []PerpDepthCoinInput{

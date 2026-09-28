@@ -40,7 +40,7 @@ which coins make up the biggest part of that book (example: **BTC 48% /
 ETH 17%** of 2.4B bid + 1.8B ask).
 
 - `bid` / `ask` / `total` are USDT notional
-- `coverage` names Binance, Bybit, and OKX as fresh, old, or missing. `definite` is false when a book is missing or older than 45 seconds, and the Markets card does not state a bid/ask lean (`docs/features/venue-coverage.md`)
+- `coverage` names Binance, Bybit, and OKX as fresh, old, or missing. `definite` is false when a book is missing or older than 45 seconds, and the Markets card does not state a bid/ask lean. That minute is not written into history, so the book does not look thicker or thinner when the venue returns (`docs/features/venue-coverage.md`)
 - `coins[].sharePct` is that coin's percent of bid+ask
 - `coins[].bidSharePct` / `askSharePct` are percent of each side
 - `leaders` are the top bases by total share

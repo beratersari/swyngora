@@ -112,10 +112,11 @@ func TestGetPerpDepthOverview_TotalsAndLeaders(t *testing.T) {
 }
 
 func TestGetPerpDepthOverview_MissingVenueWithholdsLean(t *testing.T) {
+	store := &perpdepthstore.Memory{}
 	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
 		domain.ExchangeBinance: &fakeMarket{},
 		domain.ExchangeBybit:   &fakeMarket{},
-	}, &fakeSupply{})
+	}, &fakeSupply{}).WithPerpDepthHistory(store)
 	got, err := svc.GetPerpDepthOverview(context.Background(), "all", 1, 10)
 	if err != nil {
 		t.Fatal(err)
@@ -128,6 +129,13 @@ func TestGetPerpDepthOverview_MissingVenueWithholdsLean(t *testing.T) {
 	}
 	if !strings.Contains(got.Summary, "No market read") || !strings.Contains(got.Summary, "okx") {
 		t.Fatalf("summary %s", got.Summary)
+	}
+	rows, err := store.ListSamples(context.Background(), "all", 1, time.Now().Add(-time.Hour), time.Now().Add(time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("incomplete book was stored: %+v", rows)
 	}
 }
 

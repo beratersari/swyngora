@@ -1017,8 +1017,10 @@ func perpDepthSizeWord(kind string) string {
 }
 
 // PerpDepthSamplesFromOverview is the minute-bucket rows to persist.
+// An incomplete venue set is not stored: a missing book would shrink the
+// total, and the next complete minute would look thicker or thinner.
 func PerpDepthSamplesFromOverview(o *PerpDepthOverview) []PerpDepthSample {
-	if o == nil || o.AsOf.IsZero() {
+	if o == nil || o.AsOf.IsZero() || !o.Definite {
 		return nil
 	}
 	at := BucketPerpDepthSampleTime(o.AsOf)
