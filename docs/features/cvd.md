@@ -32,6 +32,9 @@ Useful when:
   and the same confirms / opposite / absorption label. `complete` is
   false when the stored bars start after the anchor — the number is
   then only the bars on hand. The coin tape shows both next to last CVD.
+  The coin price chart draws the same resets as two lines under the
+  candles, plus each candle's buy−sell `delta` as a histogram. Both use
+  the combined futures points when `exchange=all`.
 - Combined **adds** each venue’s delta on the overlapping **time range**
   (a quiet 5m slot on one side is treated as 0, not a hole). Combined
   `complete` follows both venues — one missing 5m bucket at the start

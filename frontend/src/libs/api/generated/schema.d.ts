@@ -6640,6 +6640,52 @@ export interface components {
             /** Format: date-time */
             sampleTime?: string;
         };
+        /** @description One 5-minute aggressive buy-minus-sell bar */
+        MarketCvdPoint: {
+            /** Format: date-time */
+            time?: string;
+            price?: string;
+            /** @description Buy notional minus sell notional on this bar */
+            delta?: string;
+            /** @description Running sum from the start of the series */
+            cvd?: string;
+            buyNotional?: string;
+            sellNotional?: string;
+        };
+        MarketCvdAnchor: {
+            /** @enum {string} */
+            anchor?: "day" | "4h";
+            /** Format: date-time */
+            from?: string;
+            /** @description Buy minus sell since from */
+            cvd?: string;
+            complete?: boolean;
+        };
+        MarketCvdSeries: {
+            exchange?: string;
+            lastCvd?: string;
+            lastPrice?: string;
+            summary?: string;
+            complete?: boolean;
+            points?: components["schemas"]["MarketCvdPoint"][];
+            anchors?: components["schemas"]["MarketCvdAnchor"][];
+        };
+        /**
+         * @description Futures CVD for Binance and Bybit, plus combined. `points` are 5-minute
+         *     bars. Anchors reset the sum at 00:00 UTC (`day`) and the current 4-hour
+         *     open (`4h`). The coin chart rebases those points onto candle times.
+         */
+        MarketCvdReport: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            summary?: string;
+            note?: string;
+            venues?: components["schemas"]["MarketCvdSeries"][];
+            combined?: components["schemas"]["MarketCvdSeries"];
+            spotCombined?: components["schemas"]["MarketCvdSeries"];
+        };
         /** @description Combined −1…+1 market pressure from book, CVD, and absorption */
         MarketPressure: {
             symbol?: string;
@@ -11555,7 +11601,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["MarketCvdReport"];
                 };
             };
             400: components["responses"]["Error"];

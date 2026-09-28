@@ -33,6 +33,16 @@
     "pumpPresets": "Preset",
     "pumpMarkers": "Pump markers",
     "signalMarkers": "Swing markers",
+    "delta": "Buy − sell",
+    "cvd": "CVD",
+    "cvdDay": "CVD since 00:00 UTC",
+    "cvd4h": "CVD since 4h open",
+    "liqLevels": "Liquidation levels",
+    "liqSide": {
+      "long": "Long",
+      "short": "Short"
+    },
+    "tapeHint": "Buy − sell is aggressive futures flow in each candle. CVD resets at 00:00 UTC and at the current 4-hour open. Dashed lines are the strongest estimated 10×, 25×, 50×, and 100× liquidation prices. Informational only.",
     "pumpOn": "On",
     "pumpOff": "Off",
     "pumpHint": "Markers when |return| ≥ threshold (informational only)",

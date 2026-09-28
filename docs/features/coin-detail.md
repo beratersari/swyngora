@@ -35,6 +35,8 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 | Supply stats | `GET` | `/api/v1/market/supply` | DET-A §7 |
 | Holder snapshot | `GET` | `/api/v1/market/holders` | [`holders.md`](holders.md) |
 | Candle chart | `GET` | `/api/v1/market/candles` | DET-A §8 |
+| CVD pane and buy−sell histogram on that chart | `GET` | `/api/v1/market/cvd` | [`cvd.md`](cvd.md) |
+| Estimated 10×–100× liquidation prices on that chart | `GET` | `/api/v1/market/liquidation-levels` | [`liquidations.md`](liquidations.md) |
 | After-delist movement | `GET` | `/api/v1/market/post-delist` | [`delist-schedule.md`](delist-schedule.md) |
 | RSI/EMA series | `GET` | `/api/v1/market/indicators` | DET-B §5 |
 | Spot order book | `GET` | `/api/v1/market/orderbook` | [`order-book.md`](order-book.md) |

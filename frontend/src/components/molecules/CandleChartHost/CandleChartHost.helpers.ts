@@ -1,4 +1,4 @@
-import type { CandlestickData, LineData, Time } from 'lightweight-charts';
+import type { CandlestickData, HistogramData, LineData, Time } from 'lightweight-charts';
 import type { ChartCandle, ChartLinePoint } from '@/libs/utils';
 import type { CandleChartOverlay } from './CandleChartHost.types';
 
@@ -125,6 +125,32 @@ export function toCandlestickData(data: ChartCandle[]): CandlestickData<Time>[] 
  * Map overlay line points → Lightweight Charts line data.
  * Sorts by time and drops duplicates (library requires strictly ascending times).
  */
+/** Histogram bars, with an optional per-bar color. Duplicate times keep the later bar. */
+export function toHistogramData(
+  points: (ChartLinePoint & { color?: string })[],
+): HistogramData<Time>[] {
+  if (!points.length) return [];
+  const sorted = [...points]
+    .filter((p) => Number.isFinite(p.time) && Number.isFinite(p.value))
+    .sort((a, b) => a.time - b.time);
+  const out: HistogramData<Time>[] = [];
+  let lastTime: number | null = null;
+  for (const p of sorted) {
+    const point: HistogramData<Time> = {
+      time: p.time as Time,
+      value: p.value,
+      ...(p.color ? { color: p.color } : {}),
+    };
+    if (lastTime !== null && p.time === lastTime) {
+      out[out.length - 1] = point;
+      continue;
+    }
+    out.push(point);
+    lastTime = p.time;
+  }
+  return out;
+}
+
 export function toLineData(points: ChartLinePoint[]): LineData<Time>[] {
   if (!points.length) return [];
   const sorted = [...points]

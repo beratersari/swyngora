@@ -50,4 +50,27 @@ describe('DetailChartToolbar', () => {
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
     expect(screen.getByRole('switch')).toBeInTheDocument();
   });
+
+  it('toggles delta, CVD, and liquidation levels', async () => {
+    const user = userEvent.setup();
+    const onDelta = vi.fn();
+    const onCvd = vi.fn();
+    const onLevels = vi.fn();
+    renderWithTheme(
+      <DetailChartToolbar
+        intervals={['1h']}
+        interval="1h"
+        onIntervalChange={() => undefined}
+        onShowDeltaChange={onDelta}
+        onShowCvdChange={onCvd}
+        onShowLiqLevelsChange={onLevels}
+      />,
+    );
+    await user.click(screen.getByRole('switch', { name: /buy − sell|alış − satış/i }));
+    await user.click(screen.getByRole('switch', { name: /^cvd$/i }));
+    await user.click(screen.getByRole('switch', { name: /liquidation levels|likidasyon seviyeleri/i }));
+    expect(onDelta.mock.calls[0]?.[0]).toBe(false);
+    expect(onCvd.mock.calls[0]?.[0]).toBe(false);
+    expect(onLevels.mock.calls[0]?.[0]).toBe(false);
+  });
 });

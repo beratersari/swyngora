@@ -2,10 +2,13 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
 import {
   CandlestickSeries,
   CrosshairMode,
+  HistogramSeries,
   LineSeries,
+  LineStyle,
   createChart,
   createSeriesMarkers,
   type IChartApi,
+  type IPriceLine,
   type ISeriesApi,
   type ISeriesMarkersPluginApi,
   type ISeriesPrimitive,
@@ -17,7 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import { CHART_LOCALIZATION, CHART_TIME_SCALE } from '@/libs/utils';
 import { semanticColors } from '@/styles/tokens';
-import type { CandleChartHostProps } from './CandleChartHost.types';
+import type { CandleChartHostProps, CandleChartLowerSeries } from './CandleChartHost.types';
 import {
   DEFAULT_HEIGHT,
   HISTORY_LOAD_THRESHOLD,
@@ -40,6 +43,7 @@ import {
   initialVisibleLogicalRange,
   overlaysSignature,
   toCandlestickData,
+  toHistogramData,
   toLineData,
 } from './CandleChartHost.helpers';
 
@@ -54,6 +58,8 @@ import {
 export function CandleChartHost({
   data,
   overlays = [],
+  lowerSeries = [],
+  priceLines = [],
   markers = [],
   vertLines = [],
   barDurationSec,
@@ -73,6 +79,12 @@ export function CandleChartHost({
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const markersPluginRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const overlayRefs = useRef<Map<string, ISeriesApi<'Line'>>>(new Map());
+  const lowerRefs = useRef<Map<string, ISeriesApi<'Line'> | ISeriesApi<'Histogram'>>>(new Map());
+  const lowerPaneRef = useRef<Map<string, number>>(new Map());
+  const lowerKindRef = useRef<Map<string, CandleChartLowerSeries['kind']>>(new Map());
+  const lastLowerSigRef = useRef('');
+  const priceLineRefs = useRef<IPriceLine[]>([]);
+  const lastPriceLineSigRef = useRef('');
   const vertPrimitivesRef = useRef<ISeriesPrimitive<Time>[]>([]);
   const lastVertSigRef = useRef<string>('');
   const lastCandleSigRef = useRef<string>('');
@@ -192,6 +204,12 @@ export function CandleChartHost({
       chartRef.current = null;
       seriesRef.current = null;
       overlayRefs.current.clear();
+      lowerRefs.current.clear();
+      lowerPaneRef.current.clear();
+      lowerKindRef.current.clear();
+      lastLowerSigRef.current = '';
+      priceLineRefs.current = [];
+      lastPriceLineSigRef.current = '';
       lastCandleSigRef.current = '';
       lastOverlaySigRef.current = '';
       lastMarkersSigRef.current = '';
@@ -223,6 +241,9 @@ export function CandleChartHost({
     lastMarkersSigRef.current = '';
     lastPriceFormatKeyRef.current = '';
     lastVertSigRef.current = '';
+    // Force the pane and price-line effects to rebind after a new symbol.
+    lastLowerSigRef.current = 'pending';
+    lastPriceLineSigRef.current = 'pending';
   }, [seriesKey]);
 
   // Sync candles + overlays when content changes.
@@ -352,6 +373,134 @@ export function CandleChartHost({
       }
     }
   }, [data, overlays, seriesKey]);
+
+  useLayoutEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+
+    const sig = lowerSeries
+      .map((s) => {
+        let sum = 0;
+        for (const point of s.data) sum += point.value;
+        const last = s.data[s.data.length - 1];
+        return `${s.id}:${s.pane}:${s.kind}:${s.color}:${s.downColor ?? ''}:${s.title ?? ''}:${s.data.length}:${s.data[0]?.time ?? ''}:${last?.time ?? ''}:${sum}`;
+      })
+      .join('||');
+    if (sig === lastLowerSigRef.current) return;
+    lastLowerSigRef.current = sig;
+
+    const nextIds = new Set(lowerSeries.map((s) => s.id));
+    for (const [id, series] of lowerRefs.current) {
+      const next = lowerSeries.find((s) => s.id === id);
+      const paneChanged = next != null && lowerPaneRef.current.get(id) !== next.pane;
+      const kindChanged = next != null && lowerKindRef.current.get(id) !== next.kind;
+      if (!nextIds.has(id) || paneChanged || kindChanged) {
+        chart.removeSeries(series);
+        lowerRefs.current.delete(id);
+        lowerPaneRef.current.delete(id);
+        lowerKindRef.current.delete(id);
+      }
+    }
+
+    for (const s of lowerSeries) {
+      let series = lowerRefs.current.get(s.id);
+      if (!series) {
+        const common = {
+          color: s.color,
+          title: s.title ?? s.id,
+          priceLineVisible: false,
+          lastValueVisible: true,
+          priceFormat: { type: 'volume' as const },
+        };
+        series =
+          s.kind === 'histogram'
+            ? chart.addSeries(HistogramSeries, common, s.pane)
+            : chart.addSeries(LineSeries, { ...common, lineWidth: 2 }, s.pane);
+        lowerRefs.current.set(s.id, series);
+        lowerPaneRef.current.set(s.id, s.pane);
+        lowerKindRef.current.set(s.id, s.kind);
+      } else {
+        series.applyOptions({ color: s.color, title: s.title ?? s.id });
+      }
+      if (s.kind === 'histogram') {
+        const down = s.downColor ?? s.color;
+        (series as ISeriesApi<'Histogram'>).setData(
+          toHistogramData(
+            s.data.map((point) => ({
+              ...point,
+              color: point.value < 0 ? down : s.color,
+            })),
+          ),
+        );
+      } else {
+        (series as ISeriesApi<'Line'>).setData(toLineData(s.data));
+      }
+    }
+
+    const panes = chart.panes();
+    panes[0]?.setStretchFactor(3);
+    for (let i = 1; i < panes.length; i += 1) {
+      panes[i]?.setStretchFactor(1);
+    }
+  }, [lowerSeries, seriesKey]);
+
+  useLayoutEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+
+    const sig = priceLines
+      .map((line) => `${line.id}:${line.price}:${line.color}:${line.title}`)
+      .join('|');
+    if (sig === lastPriceLineSigRef.current) return;
+    lastPriceLineSigRef.current = sig;
+
+    for (const line of priceLineRefs.current) {
+      try {
+        series.removePriceLine(line);
+      } catch {
+        // series may already have dropped the line
+      }
+    }
+    priceLineRefs.current = [];
+
+    const prices: number[] = [];
+    for (const line of priceLines) {
+      if (!Number.isFinite(line.price)) continue;
+      prices.push(line.price);
+      priceLineRefs.current.push(
+        series.createPriceLine({
+          price: line.price,
+          color: line.color,
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: line.title,
+        }),
+      );
+    }
+    // Keep 10×–25× pockets on screen when they sit near the candles.
+    // Farther than 12% stays off the scale so one distant level cannot flatten price.
+    if (prices.length === 0) {
+      series.applyOptions({ autoscaleInfoProvider: undefined });
+      return;
+    }
+    series.applyOptions({
+      autoscaleInfoProvider: (original) => {
+        const base = original();
+        if (!base?.priceRange) return base;
+        let min = base.priceRange.minValue;
+        let max = base.priceRange.maxValue;
+        const mid = (min + max) / 2;
+        const cap = Math.abs(mid) * 0.12;
+        for (const price of prices) {
+          if (Math.abs(price - mid) > cap) continue;
+          min = Math.min(min, price);
+          max = Math.max(max, price);
+        }
+        return { ...base, priceRange: { minValue: min, maxValue: max } };
+      },
+    });
+  }, [priceLines, seriesKey]);
 
   /**
    * Markers live in a separate effect so:

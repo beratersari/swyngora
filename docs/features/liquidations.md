@@ -8,6 +8,7 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
 
 ## Behavior
 
+- The coin price chart draws the strongest estimated **10× / 25× / 50× / 100×** long level at or below last and short level at or above last as dashed prices. Longs use the down color, shorts the up color. The full map stays on `/liquidations`.
 - `GET /api/v1/market/liquidations?symbol=BTCUSDT`
   - `exchange=all` (default) sums **Binance USD-M**, **Bybit linear perpetual**, and **OKX USDT-swap**
   - `exchange=binance`, `bybit`, or `okx` for one venue

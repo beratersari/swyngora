@@ -10,12 +10,17 @@ const subscribeVisibleLogicalRangeChange = vi.fn();
 const unsubscribeVisibleLogicalRangeChange = vi.fn();
 const getVisibleLogicalRange = vi.fn(() => null);
 const setVisibleLogicalRange = vi.fn();
+const createPriceLine = vi.fn(() => ({ remove: vi.fn() }));
+const removePriceLine = vi.fn();
+const setStretchFactor = vi.fn();
 const addSeries = vi.fn(() => ({
   setData,
   applyOptions,
   setMarkers: vi.fn(),
   attachPrimitive: vi.fn(),
   detachPrimitive: vi.fn(),
+  createPriceLine,
+  removePriceLine,
 }));
 
 vi.mock('lightweight-charts', () => ({
@@ -32,10 +37,13 @@ vi.mock('lightweight-charts', () => ({
       setVisibleLogicalRange,
     }),
     priceScale: () => ({ applyOptions: vi.fn() }),
+    panes: () => [{ setStretchFactor }, { setStretchFactor }],
   })),
   createSeriesMarkers: vi.fn(() => ({ setMarkers: vi.fn(), markers: () => [] })),
   CandlestickSeries: 'CandlestickSeries',
   LineSeries: 'LineSeries',
+  HistogramSeries: 'HistogramSeries',
+  LineStyle: { Solid: 0, Dashed: 2 },
   CrosshairMode: { Normal: 0, Magnet: 1 },
   ColorType: { Solid: 0 },
 }));
@@ -43,9 +51,23 @@ vi.mock('lightweight-charts', () => ({
 import { createChart } from 'lightweight-charts';
 import { CandleChartHost } from './CandleChartHost';
 
+function seriesStub(extra?: Record<string, unknown>) {
+  return {
+    setData,
+    applyOptions,
+    setMarkers: vi.fn(),
+    attachPrimitive: vi.fn(),
+    detachPrimitive: vi.fn(),
+    createPriceLine,
+    removePriceLine,
+    ...extra,
+  };
+}
+
 describe('CandleChartHost', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    addSeries.mockImplementation(() => seriesStub());
   });
 
   it('shows skeleton when loading with no data', () => {
@@ -71,13 +93,7 @@ describe('CandleChartHost', () => {
 
   it('snaps vertical lines onto existing candles without a whitespace series', () => {
     const attachPrimitive = vi.fn();
-    addSeries.mockImplementation(() => ({
-      setData,
-      applyOptions,
-      setMarkers: vi.fn(),
-      attachPrimitive,
-      detachPrimitive: vi.fn(),
-    }));
+    addSeries.mockImplementation(() => seriesStub({ attachPrimitive }));
     renderWithTheme(
       <CandleChartHost
         data={[
@@ -89,5 +105,44 @@ describe('CandleChartHost', () => {
     );
     expect(addSeries).toHaveBeenCalledTimes(1);
     expect(attachPrimitive).toHaveBeenCalledTimes(1);
+  });
+
+  it('adds a delta histogram pane and dashed liquidation prices', () => {
+    renderWithTheme(
+      <CandleChartHost
+        data={[
+          { time: 100, open: 1, high: 2, low: 0.5, close: 1.5 },
+          { time: 200, open: 1.5, high: 2.2, low: 1.4, close: 2 },
+        ]}
+        lowerSeries={[
+          {
+            id: 'delta',
+            pane: 1,
+            kind: 'histogram',
+            color: '#16C784',
+            downColor: '#EA3943',
+            title: 'Buy − sell',
+            data: [
+              { time: 100, value: 5 },
+              { time: 200, value: -2 },
+            ],
+          },
+        ]}
+        priceLines={[{ id: 'liq-long', price: 90, color: '#EA3943', title: '100× Long' }]}
+      />,
+    );
+    expect(addSeries).toHaveBeenCalledWith(
+      'HistogramSeries',
+      expect.objectContaining({ title: 'Buy − sell' }),
+      1,
+    );
+    expect(setData).toHaveBeenCalledWith([
+      { time: 100, value: 5, color: '#16C784' },
+      { time: 200, value: -2, color: '#EA3943' },
+    ]);
+    expect(createPriceLine).toHaveBeenCalledWith(
+      expect.objectContaining({ price: 90, title: '100× Long', lineStyle: 2 }),
+    );
+    expect(setStretchFactor).toHaveBeenCalled();
   });
 });

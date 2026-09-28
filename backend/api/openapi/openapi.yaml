@@ -2618,7 +2618,7 @@ paths:
           description: Per-venue and optional combined CVD vs price
           content:
             application/json:
-              schema: { type: object }
+              schema: { $ref: '#/components/schemas/MarketCvdReport' }
         '400':
           $ref: '#/components/responses/Error'
         '502':
@@ -10581,6 +10581,54 @@ components:
         kind: { type: string, enum: [more_buy, more_sell, flipped, stable] }
         complete: { type: boolean }
         sampleTime: { type: string, format: date-time }
+    MarketCvdPoint:
+      type: object
+      description: One 5-minute aggressive buy-minus-sell bar
+      properties:
+        time: { type: string, format: date-time }
+        price: { type: string }
+        delta: { type: string, description: Buy notional minus sell notional on this bar }
+        cvd: { type: string, description: Running sum from the start of the series }
+        buyNotional: { type: string }
+        sellNotional: { type: string }
+    MarketCvdAnchor:
+      type: object
+      properties:
+        anchor: { type: string, enum: [day, 4h] }
+        from: { type: string, format: date-time }
+        cvd: { type: string, description: Buy minus sell since from }
+        complete: { type: boolean }
+    MarketCvdSeries:
+      type: object
+      properties:
+        exchange: { type: string }
+        lastCvd: { type: string }
+        lastPrice: { type: string }
+        summary: { type: string }
+        complete: { type: boolean }
+        points:
+          type: array
+          items: { $ref: '#/components/schemas/MarketCvdPoint' }
+        anchors:
+          type: array
+          items: { $ref: '#/components/schemas/MarketCvdAnchor' }
+    MarketCvdReport:
+      type: object
+      description: |
+        Futures CVD for Binance and Bybit, plus combined. `points` are 5-minute
+        bars. Anchors reset the sum at 00:00 UTC (`day`) and the current 4-hour
+        open (`4h`). The coin chart rebases those points onto candle times.
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        asOf: { type: string, format: date-time }
+        summary: { type: string }
+        note: { type: string }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/MarketCvdSeries' }
+        combined: { $ref: '#/components/schemas/MarketCvdSeries' }
+        spotCombined: { $ref: '#/components/schemas/MarketCvdSeries' }
     MarketPressure:
       type: object
       description: Combined −1…+1 market pressure from book, CVD, and absorption

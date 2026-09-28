@@ -11,6 +11,26 @@ export type CandleChartOverlay = {
   title?: string;
 };
 
+/** One series in a pane under the candles. Pane 1 is the first lower pane. */
+export type CandleChartLowerSeries = {
+  id: string;
+  pane: number;
+  kind: 'line' | 'histogram';
+  data: ChartLinePoint[];
+  color: string;
+  /** Histogram bars below zero. Line series ignore this. */
+  downColor?: string;
+  title?: string;
+};
+
+/** Horizontal price on the candle scale (estimated liquidation levels). */
+export type CandleChartPriceLine = {
+  id: string;
+  price: number;
+  color: string;
+  title: string;
+};
+
 /** Chart markers (pump/dump events) aligned to bar times (UTC seconds). */
 export type CandleChartMarker = {
   time: number;
@@ -24,6 +44,10 @@ export type CandleChartHostProps = WithLoadingProps & {
   data: ChartCandle[];
   /** Optional EMA (or other) line overlays on the price scale */
   overlays?: CandleChartOverlay[];
+  /** CVD and buy−sell delta in panes under the candles. Same time scale. */
+  lowerSeries?: CandleChartLowerSeries[];
+  /** Dashed prices on the candle scale, such as estimated liquidation levels. */
+  priceLines?: CandleChartPriceLine[];
   /** Optional event markers (e.g. pump scanner hits) */
   markers?: CandleChartMarker[];
   /** Full-height vertical event lines (delist announce / halt). */

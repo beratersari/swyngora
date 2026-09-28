@@ -33,6 +33,16 @@
     "pumpPresets": "Hazır",
     "pumpMarkers": "Pump işaretleri",
     "signalMarkers": "Salınım işaretleri",
+    "delta": "Alış − satış",
+    "cvd": "CVD",
+    "cvdDay": "CVD 00:00 UTC’den beri",
+    "cvd4h": "CVD 4s açılışından beri",
+    "liqLevels": "Likidasyon seviyeleri",
+    "liqSide": {
+      "long": "Long",
+      "short": "Short"
+    },
+    "tapeHint": "Alış − satış, her mumdaki agresif vadeli akıştır. CVD 00:00 UTC’de ve geçerli 4 saatlik açılışta sıfırlanır. Kesik çizgiler tahmini 10×, 25×, 50× ve 100× likidasyon fiyatlarının en güçlüsüdür. Yalnızca bilgi amaçlıdır.",
     "pumpOn": "Açık",
     "pumpOff": "Kapalı",
     "pumpHint": "|getiri| ≥ eşik olduğunda işaret (yalnızca bilgilendirme)",

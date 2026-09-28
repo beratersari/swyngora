@@ -6,8 +6,10 @@ import { Text } from '@/components/atoms/Text';
 import { CandleChartHost } from '@/components/molecules/CandleChartHost';
 import { snapMarkersToCandleTimes } from '@/components/molecules/CandleChartHost/CandleChartHost.markers';
 import type {
+  CandleChartLowerSeries,
   CandleChartMarker,
   CandleChartOverlay,
+  CandleChartPriceLine,
 } from '@/components/molecules/CandleChartHost/CandleChartHost.types';
 import { DetailChartToolbar } from '@/components/organisms/DetailChartToolbar';
 import { DetailHeader } from '@/components/organisms/DetailHeader';
@@ -46,6 +48,7 @@ import {
   useGetMarketNetPositionQuery,
   useGetMarketLiquidationsQuery,
   useGetMarketCvdQuery,
+  useGetMarketLiquidationLevelsQuery,
   useGetMarketVolumeShareQuery,
   useGetMarketPerpDepthOverviewQuery,
   useGetMarketParticipationQuery,
@@ -142,6 +145,12 @@ import {
   pumpEventsToChartMarkers,
   scannerResultsToChartMarkers,
 } from './CoinDetailPage.helpers';
+import {
+  anchoredCvdByCandle,
+  deltaByCandle,
+  futuresCvdSeries,
+  liquidationChartLevels,
+} from './chartTape';
 import { CoinFlowTab } from './CoinFlowTab';
 import { PastOrderBook } from './PastOrderBook';
 import { CoinStructureTab } from './CoinStructureTab';
@@ -186,6 +195,9 @@ export function CoinDetailPage() {
   const [orderBookGroup, setOrderBookGroup] = useState('');
   const [orderHeatmapWindow, setOrderHeatmapWindow] = useState(DEFAULT_ORDER_HEATMAP_WINDOW);
   const [showSignalMarkers, setShowSignalMarkers] = useState(true);
+  const [showDelta, setShowDelta] = useState(true);
+  const [showCvd, setShowCvd] = useState(true);
+  const [showLiqLevels, setShowLiqLevels] = useState(true);
   /** Guards against applying history pages after exchange/symbol/interval change. */
   const historyRequestIdRef = useRef(0);
 
@@ -414,6 +426,14 @@ export function CoinDetailPage() {
     pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
     refetchOnFocus: true,
   });
+  const liqLevelsQuery = useGetMarketLiquidationLevelsQuery(
+    { symbol: perpSymbol, exchange: 'all', range: '24h' },
+    {
+      skip: skipTape || !showLiqLevels,
+      pollingInterval: visible && showLiqLevels ? 60_000 : 0,
+      refetchOnFocus: true,
+    },
+  );
   const volumeShareQuery = useGetMarketVolumeShareQuery(tapeQueryArg, {
     skip: skipTape,
     pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
@@ -727,6 +747,76 @@ export function CoinDetailPage() {
     return lines;
   }, [showEma, emaPeriods, overlayPoints, chartData, mergedCandles.length, t]);
 
+  const barDurationSec = candleIntervalSeconds(interval);
+  const tapeCvd = useMemo(() => futuresCvdSeries(rtkCurrent(cvdQuery)), [cvdQuery]);
+  const lowerSeries: CandleChartLowerSeries[] = useMemo(() => {
+    if (isEquity || barDurationSec <= 0) return [];
+    const series: CandleChartLowerSeries[] = [];
+    let pane = 1;
+    if (showDelta) {
+      const delta = deltaByCandle(chartData, tapeCvd.points, barDurationSec);
+      if (delta.length > 0) {
+        series.push({
+          id: 'delta',
+          pane,
+          kind: 'histogram',
+          title: t('detail:chart.delta'),
+          color: semanticColors.chart.up,
+          downColor: semanticColors.chart.down,
+          data: delta,
+        });
+        pane += 1;
+      }
+    }
+    if (showCvd) {
+      const day =
+        tapeCvd.dayFrom != null
+          ? anchoredCvdByCandle(chartData, tapeCvd.points, tapeCvd.dayFrom, barDurationSec)
+          : [];
+      const block =
+        tapeCvd.blockFrom != null
+          ? anchoredCvdByCandle(chartData, tapeCvd.points, tapeCvd.blockFrom, barDurationSec)
+          : [];
+      if (day.length > 0 || block.length > 0) {
+        if (day.length > 0) {
+          series.push({
+            id: 'cvd-day',
+            pane,
+            kind: 'line',
+            title: t('detail:chart.cvdDay'),
+            color: semanticColors.accent.default,
+            data: day,
+          });
+        }
+        if (block.length > 0) {
+          series.push({
+            id: 'cvd-4h',
+            pane,
+            kind: 'line',
+            title: t('detail:chart.cvd4h'),
+            color: semanticColors.status.warning,
+            data: block,
+          });
+        }
+      }
+    }
+    return series;
+  }, [isEquity, barDurationSec, showDelta, showCvd, chartData, tapeCvd, t]);
+
+  const chartPriceLines: CandleChartPriceLine[] = useMemo(() => {
+    if (isEquity || !showLiqLevels) return [];
+    const sideLabel = (side: 'long' | 'short') => t(`detail:chart.liqSide.${side}`);
+    return liquidationChartLevels(rtkCurrent(liqLevelsQuery)).map((line) => ({
+      id: line.id,
+      price: line.price,
+      color: line.side === 'long' ? semanticColors.chart.down : semanticColors.chart.up,
+      title:
+        line.leverages.length > 0
+          ? `${line.leverages.map((n) => `${n}×`).join(' · ')} ${sideLabel(line.side)}`
+          : sideLabel(line.side),
+    }));
+  }, [isEquity, showLiqLevels, liqLevelsQuery, t]);
+
   const chartMarkers: CandleChartMarker[] = useMemo(() => {
     const barSec = intervalToSeconds(interval);
     const maxDist = barSec > 0 ? barSec * 1.5 : 3600;
@@ -984,6 +1074,12 @@ export function CoinDetailPage() {
           onShowPumpMarkersChange={isEquity ? undefined : setShowPumpMarkers}
           showSignalMarkers={showSignalMarkers}
           onShowSignalMarkersChange={isEquity ? undefined : setShowSignalMarkers}
+          showDelta={showDelta}
+          onShowDeltaChange={isEquity ? undefined : setShowDelta}
+          showCvd={showCvd}
+          onShowCvdChange={isEquity ? undefined : setShowCvd}
+          showLiqLevels={showLiqLevels}
+          onShowLiqLevelsChange={isEquity ? undefined : setShowLiqLevels}
           onRefresh={refreshAll}
           isFetching={
             seriesFetching ||
@@ -1034,12 +1130,19 @@ export function CoinDetailPage() {
                 })}
               />
             ) : null}
+            {!isEquity && (showDelta || showCvd || showLiqLevels) ? (
+              <Text variant="caption" color="secondary">
+                {t('detail:chart.tapeHint')}
+              </Text>
+            ) : null}
             <CandleChartHost
               data={chartData}
               overlays={overlays}
+              lowerSeries={lowerSeries}
+              priceLines={chartPriceLines}
               markers={chartMarkers}
               vertLines={chartVertLines}
-              barDurationSec={candleIntervalSeconds(interval)}
+              barDurationSec={barDurationSec}
               isLoading={seriesLoading}
               seriesKey={chartSeriesKey}
               isLoadingMore={isLoadingMore}
@@ -1050,7 +1153,15 @@ export function CoinDetailPage() {
                   ? allCandles.length
                   : mergedCandles.length
               }
-              height={isPhone ? PHONE_CHART_HEIGHT : DESK_CHART_HEIGHT}
+              height={
+                (isPhone ? PHONE_CHART_HEIGHT : DESK_CHART_HEIGHT) +
+                (lowerSeries.some((s) => s.id === 'delta') ? (isPhone ? 72 : 120) : 0) +
+                (lowerSeries.some((s) => s.id === 'cvd-day' || s.id === 'cvd-4h')
+                  ? isPhone
+                    ? 72
+                    : 120
+                  : 0)
+              }
             />
           </>
         )}

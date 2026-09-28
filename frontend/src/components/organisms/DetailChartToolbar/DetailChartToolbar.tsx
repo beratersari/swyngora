@@ -20,6 +20,12 @@ export function DetailChartToolbar({
   onShowPumpMarkersChange,
   showSignalMarkers = true,
   onShowSignalMarkersChange,
+  showDelta = true,
+  onShowDeltaChange,
+  showCvd = true,
+  onShowCvdChange,
+  showLiqLevels = true,
+  onShowLiqLevelsChange,
 }: DetailChartToolbarProps) {
   const { t } = useTranslation(['detail', 'common']);
 
@@ -85,6 +91,48 @@ export function DetailChartToolbar({
             checked={showSignalMarkers}
             onChange={onShowSignalMarkersChange}
             aria-label={t('detail:chart.signalMarkers')}
+          />
+        </InlineField>
+      ) : null}
+
+      {onShowDeltaChange ? (
+        <InlineField>
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.delta')}
+          </Text>
+          <Switch
+            size="small"
+            checked={showDelta}
+            onChange={onShowDeltaChange}
+            aria-label={t('detail:chart.delta')}
+          />
+        </InlineField>
+      ) : null}
+
+      {onShowCvdChange ? (
+        <InlineField>
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.cvd')}
+          </Text>
+          <Switch
+            size="small"
+            checked={showCvd}
+            onChange={onShowCvdChange}
+            aria-label={t('detail:chart.cvd')}
+          />
+        </InlineField>
+      ) : null}
+
+      {onShowLiqLevelsChange ? (
+        <InlineField>
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.liqLevels')}
+          </Text>
+          <Switch
+            size="small"
+            checked={showLiqLevels}
+            onChange={onShowLiqLevelsChange}
+            aria-label={t('detail:chart.liqLevels')}
           />
         </InlineField>
       ) : null}

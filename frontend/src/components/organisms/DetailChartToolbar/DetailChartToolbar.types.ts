@@ -13,4 +13,13 @@ export type DetailChartToolbarProps = {
   onShowPumpMarkersChange?: (show: boolean) => void;
   showSignalMarkers?: boolean;
   onShowSignalMarkersChange?: (show: boolean) => void;
+  /** Aggressive buy−sell histogram under the candles. */
+  showDelta?: boolean;
+  onShowDeltaChange?: (show: boolean) => void;
+  /** Anchored CVD lines under the candles. */
+  showCvd?: boolean;
+  onShowCvdChange?: (show: boolean) => void;
+  /** Estimated liquidation prices on the candle scale. */
+  showLiqLevels?: boolean;
+  onShowLiqLevelsChange?: (show: boolean) => void;
 };

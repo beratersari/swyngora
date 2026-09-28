@@ -734,6 +734,15 @@ export type MarketForensicsRadarQuery = {
   limit?: number;
 };
 
+export type MarketCvdPoint = {
+  time?: string;
+  price?: string;
+  delta?: string;
+  cvd?: string;
+  buyNotional?: string;
+  sellNotional?: string;
+};
+
 export type MarketCvdVenue = {
   exchange?: string;
   lastCvd?: string;
@@ -741,6 +750,7 @@ export type MarketCvdVenue = {
   summary?: string;
   error?: string;
   complete?: boolean;
+  points?: MarketCvdPoint[];
   windows?: { window?: string; cvdChange?: string; label?: string; complete?: boolean }[];
   anchors?: {
     anchor?: string;
