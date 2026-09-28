@@ -1598,6 +1598,9 @@ class RiskLimitsSetInput(BaseModel):
     max_asset_weight_pct: float = Field(
         default=0, description="e.g. 30 = max one coin % of equity; 0 disables"
     )
+    max_exposure_pct: float = Field(
+        default=0, description="e.g. 60 = max all coins together as % of equity; 0 disables"
+    )
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
@@ -3638,6 +3641,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         client_id: str,
         max_daily_loss_pct: float = 0,
         max_asset_weight_pct: float = 0,
+        max_exposure_pct: float = 0,
         portfolio_id: str = "",
     ) -> str:
         body: dict[str, Any] = {}
@@ -3645,6 +3649,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["maxDailyLossPct"] = max_daily_loss_pct
         if max_asset_weight_pct:
             body["maxAssetWeightPct"] = max_asset_weight_pct
+        if max_exposure_pct:
+            body["maxExposurePct"] = max_exposure_pct
         if portfolio_id:
             body["portfolioId"] = portfolio_id
         q = f"/api/v1/portfolio/risk-limits?clientId={client_id}"
@@ -6033,7 +6039,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         StructuredTool.from_function(
             set_portfolio_risk_limits,
             name="set_portfolio_risk_limits",
-            description="Set optional risk limits (daily loss % and/or max coin weight %). Does not close positions.",
+            description="Set optional risk limits (daily loss %, max one-coin weight %, and/or max total exposure %). Does not close positions.",
             args_schema=RiskLimitsSetInput,
         ),
         StructuredTool.from_function(

@@ -544,7 +544,7 @@ func buildCSV(pl *payload) ([]byte, error) {
 			}
 			if b.RiskLimits != nil {
 				riskRows = append(riskRows, []string{
-					b.ID, derefF64(b.RiskLimits.MaxDailyLossPct), derefF64(b.RiskLimits.MaxAssetWeightPct),
+					b.ID, derefF64(b.RiskLimits.MaxDailyLossPct), derefF64(b.RiskLimits.MaxAssetWeightPct), derefF64(b.RiskLimits.MaxExposurePct),
 					b.RiskLimits.DayKey, f64(b.RiskLimits.DayStartEquity), b.RiskLimits.UpdatedAt,
 				})
 			}
@@ -611,7 +611,7 @@ func buildCSV(pl *payload) ([]byte, error) {
 			"summary", "createdAt",
 		}, rbAttRows)
 		_ = writeSection("portfolio_risk_limits", []string{
-			"portfolioId", "maxDailyLossPct", "maxAssetWeightPct", "dayKey", "dayStartEquity", "updatedAt",
+			"portfolioId", "maxDailyLossPct", "maxAssetWeightPct", "maxExposurePct", "dayKey", "dayStartEquity", "updatedAt",
 		}, riskRows)
 	}
 	if pl.CustomSignals != nil {

@@ -43,6 +43,13 @@
     "margin": "Marj özkaynağı {{now}} → {{next}}",
     "liquidated": "{{n}} marj pozisyonu likide olur"
   },
+  "risk": {
+    "title": "Toplam risk",
+    "hint": "Tüm coinler birlikte özkaynağın bu payını geçince yeni alışlar durur. Açık pozisyonlar kapanmaz.",
+    "now": "Şimdi {{line}}",
+    "limit": "En fazla toplam risk %",
+    "save": "Kaydet"
+  },
   "equityChart": {
     "title": "Özkaynak",
     "drawdown": "En büyük düşüş {{line}}",

@@ -4339,13 +4339,13 @@ func (b *Backend) GetPortfolioRiskLimits(ctx context.Context, clientID string) (
 	return mustJSON(riskLimitsViewMap(v))
 }
 
-func (b *Backend) PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct *float64) (json.RawMessage, error) {
+func (b *Backend) PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct, maxExposurePct *float64) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
 	v, err := b.Portfolio.SetRiskLimits(ctx, portfolio.RiskLimitsInput{
 		PortfolioID: PortfolioIDFrom(ctx),
-		ClientID:    clientID, MaxDailyLossPct: maxDailyLossPct, MaxAssetWeightPct: maxAssetWeightPct,
+		ClientID:    clientID, MaxDailyLossPct: maxDailyLossPct, MaxAssetWeightPct: maxAssetWeightPct, MaxExposurePct: maxExposurePct,
 	})
 	if err != nil {
 		return nil, err
@@ -4364,7 +4364,10 @@ func (b *Backend) DeletePortfolioRiskLimits(ctx context.Context, clientID string
 }
 
 func riskLimitsViewMap(v *portfolio.RiskLimitsView) map[string]any {
-	lim := map[string]any{"maxDailyLossPct": v.Limits.MaxDailyLossPct, "maxAssetWeightPct": v.Limits.MaxAssetWeightPct}
+	lim := map[string]any{
+		"maxDailyLossPct": v.Limits.MaxDailyLossPct, "maxAssetWeightPct": v.Limits.MaxAssetWeightPct,
+		"maxExposurePct": v.Limits.MaxExposurePct,
+	}
 	if !v.Limits.UpdatedAt.IsZero() {
 		lim["updatedAt"] = v.Limits.UpdatedAt.UTC().Format(time.RFC3339Nano)
 	}
@@ -4380,7 +4383,9 @@ func riskLimitsViewMap(v *portfolio.RiskLimitsView) map[string]any {
 			"dayKey": v.Status.DayKey, "timezone": "UTC",
 			"startOfDayEquity": v.Status.StartOfDayEquity, "equity": v.Status.Equity,
 			"dailyPnl": v.Status.DailyPnL, "dailyPnlPct": v.Status.DailyPnLPct,
-			"dailyLossLimitHit": v.Status.DailyLossLimitHit, "assets": assets,
+			"dailyLossLimitHit": v.Status.DailyLossLimitHit,
+			"exposureValue": v.Status.ExposureValue, "exposurePct": v.Status.ExposurePct,
+			"exposureLimitHit": v.Status.ExposureLimitHit, "assets": assets,
 			"canOpenSpotBuy": v.Status.CanOpenSpotBuy, "canOpenMargin": v.Status.CanOpenMargin,
 			"blockReasons": v.Status.BlockReasons,
 		},

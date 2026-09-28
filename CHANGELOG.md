@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Portfolio total exposure limit:** an optional cap on all coins together, so many small positions cannot add up past it. New buys and margin opens are blocked; existing size is left in place (`maxExposurePct` on `GET`/`PUT /api/v1/portfolio/risk-limits`). The Portfolio page shows the live exposure and the cap (`docs/features/risk-limits.md`)
 - **Portfolio max drawdown:** equity history for 1d, 1w, 1m, and 3m also names the largest peak-to-trough drop and the times it ran from high to low (`maxDrawdown`, `drawdownFrom`, `drawdownTo` on `GET /api/v1/portfolio/performance`). The equity chart on Portfolio shows that line (`docs/features/paper-trading.md`)
 - **Which venues moved the perp book:** each sharp jump or drop lists Binance, Bybit, and OKX over the same minutes, and whether all three moved together, more than one did, or only one venue did (`venues` and `venueSpan` on `moves` of `GET /api/v1/market/perp-depth/overview`) (`docs/features/perp-depth.md`)
 - **Perp book after a jump or drop:** each sharp move says whether depth came back, kept going, or held in the next 15 minutes (`follow` on `moves` of `GET /api/v1/market/perp-depth/overview`) (`docs/features/perp-depth.md`)

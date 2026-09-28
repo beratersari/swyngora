@@ -8828,6 +8828,8 @@ export interface components {
             limits?: {
                 maxDailyLossPct?: number | null;
                 maxAssetWeightPct?: number | null;
+                /** @description Block new buys once all coins together exceed this percent of equity. Above 100 allows margin gross. Null disables. */
+                maxExposurePct?: number | null;
                 /** Format: date-time */
                 updatedAt?: string;
             };
@@ -8841,6 +8843,11 @@ export interface components {
                 dailyPnl?: number;
                 dailyPnlPct?: number;
                 dailyLossLimitHit?: boolean;
+                /** @description Spot market value plus open margin notional across coins */
+                exposureValue?: number;
+                /** @description exposureValue as a percent of equity */
+                exposurePct?: number;
+                exposureLimitHit?: boolean;
                 assets?: {
                     asset?: string;
                     value?: number;
@@ -14247,6 +14254,11 @@ export interface operations {
                      * @example 30
                      */
                     maxAssetWeightPct?: number | null;
+                    /**
+                     * @description Block new buys once all coins together would exceed this percent of equity. Above 100 allows margin gross.
+                     * @example 60
+                     */
+                    maxExposurePct?: number | null;
                 };
             };
         };

@@ -43,6 +43,13 @@
     "margin": "Margin equity {{now}} → {{next}}",
     "liquidated": "{{n}} margin position would be liquidated"
   },
+  "risk": {
+    "title": "Total exposure",
+    "hint": "New buys stop once all coins together pass this share of equity. Positions you already hold stay open.",
+    "now": "Now {{line}}",
+    "limit": "Max total exposure %",
+    "save": "Save"
+  },
   "equityChart": {
     "title": "Equity",
     "drawdown": "Max drawdown {{line}}",

@@ -5817,6 +5817,13 @@ paths:
                   maximum: 100
                   description: Block new buys/opens that would make one coin more than this % of equity
                   example: 30
+                maxExposurePct:
+                  type: number
+                  nullable: true
+                  exclusiveMinimum: 0
+                  maximum: 1000
+                  description: Block new buys once all coins together would exceed this percent of equity. Above 100 allows margin gross.
+                  example: 60
       responses:
         '200':
           description: Updated limits + status
@@ -12833,6 +12840,7 @@ components:
           properties:
             maxDailyLossPct: { type: number, nullable: true }
             maxAssetWeightPct: { type: number, nullable: true }
+            maxExposurePct: { type: number, nullable: true, description: "Block new buys once all coins together exceed this percent of equity. Above 100 allows margin gross. Null disables." }
             updatedAt: { type: string, format: date-time }
         status:
           type: object
@@ -12844,6 +12852,9 @@ components:
             dailyPnl: { type: number }
             dailyPnlPct: { type: number }
             dailyLossLimitHit: { type: boolean }
+            exposureValue: { type: number, description: Spot market value plus open margin notional across coins }
+            exposurePct: { type: number, description: exposureValue as a percent of equity }
+            exposureLimitHit: { type: boolean }
             assets:
               type: array
               items:

@@ -35,7 +35,7 @@ Transfer tries are stored so you can see which request **completed** and which *
 | `GET` | `/api/v1/portfolio/transfers/attempts` | Transfer request tries (completed / replayed / conflict) |
 | `GET` | `/api/v1/portfolio/cash-movements` | Deposit / withdraw / transfer history (newest first; includes opening) |
 | `GET` | `/api/v1/portfolio/performance` | Equity series + period P&L (`period=1d\|1w\|1m\|3m`) |
-| `GET`/`PUT`/`DELETE` | `/api/v1/portfolio/risk-limits` | Optional daily-loss % and max coin weight % (block new buys/margin only) |
+| `GET`/`PUT`/`DELETE` | `/api/v1/portfolio/risk-limits` | Optional daily-loss %, max coin weight %, and max total exposure % (block new buys/margin only) |
 | `POST` | `/api/v1/portfolio/orders` | Market or pending order (see below); optional `Idempotency-Key` |
 | `GET` | `/api/v1/portfolio/orders` | List pending orders (`status` default `open`) |
 | `GET` | `/api/v1/portfolio/orders/{id}` | One order + last price + amend hints for the edit screen |

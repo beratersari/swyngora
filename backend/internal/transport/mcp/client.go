@@ -2087,7 +2087,7 @@ func (c *APIClient) GetPortfolioRiskLimits(ctx context.Context, clientID string)
 	return c.get(ctx, "/api/v1/portfolio/risk-limits", q)
 }
 
-func (c *APIClient) PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct *float64) (json.RawMessage, error) {
+func (c *APIClient) PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct, maxExposurePct *float64) (json.RawMessage, error) {
 	q := url.Values{}
 	if clientID != "" {
 		q.Set("clientId", clientID)
@@ -2102,6 +2102,9 @@ func (c *APIClient) PutPortfolioRiskLimits(ctx context.Context, clientID string,
 	}
 	if maxAssetWeightPct != nil {
 		body["maxAssetWeightPct"] = *maxAssetWeightPct
+	}
+	if maxExposurePct != nil {
+		body["maxExposurePct"] = *maxExposurePct
 	}
 	return c.sendJSON(ctx, http.MethodPut, path, body)
 }

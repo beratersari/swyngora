@@ -175,7 +175,7 @@ type DataPort interface {
 	ListTransferAttempts(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	StressPortfolio(ctx context.Context, clientID, moves string) (json.RawMessage, error)
 	GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
-	PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct *float64) (json.RawMessage, error)
+	PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct, maxExposurePct *float64) (json.RawMessage, error)
 	DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetPaperTradingCosts(ctx context.Context, exchange string) (json.RawMessage, error)
 	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string) (json.RawMessage, error)
@@ -3089,11 +3089,12 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("set_portfolio_risk_limits",
-		mcp.WithDescription("Set optional paper risk limits. maxDailyLossPct e.g. 5 blocks new buys/margin when today's MTM loss hits 5%. maxAssetWeightPct e.g. 30 blocks new buys that would push one coin over 30%. Omit a value to disable that rule. Does not close positions."),
+		mcp.WithDescription("Set optional paper risk limits. maxDailyLossPct e.g. 5 blocks new buys/margin when today's MTM loss hits 5%. maxAssetWeightPct e.g. 30 blocks new buys that would push one coin over 30%. maxExposurePct e.g. 60 blocks new buys once all coins together would exceed 60% of equity. Omit a value to disable that rule. Does not close positions."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithNumber("maxDailyLossPct", mcp.Description("0 or omit to disable; else 0.01-100")),
 		mcp.WithNumber("maxAssetWeightPct", mcp.Description("0 or omit to disable; else 0.01-100")),
+		mcp.WithNumber("maxExposurePct", mcp.Description("0 or omit to disable; else 0.01-1000. Total coin exposure as a percent of equity")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -3107,7 +3108,11 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if v := req.GetFloat("maxAssetWeightPct", 0); v > 0 {
 			weight = &v
 		}
-		raw, err := api.PutPortfolioRiskLimits(ctx, clientID, daily, weight)
+		var exposure *float64
+		if v := req.GetFloat("maxExposurePct", 0); v > 0 {
+			exposure = &v
+		}
+		raw, err := api.PutPortfolioRiskLimits(ctx, clientID, daily, weight, exposure)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

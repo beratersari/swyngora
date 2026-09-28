@@ -592,10 +592,13 @@ func (s *SQLite) txInsertSnapshot(ctx context.Context, tx *sql.Tx, snap domain.P
 		if err := domain.ValidateOptionalRiskPct(lim.MaxAssetWeightPct, "maxAssetWeightPct"); err != nil {
 			return nil
 		}
+		if err := domain.ValidateOptionalExposurePct(lim.MaxExposurePct); err != nil {
+			return nil
+		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO risk_limits (client_id, max_daily_loss_pct, max_asset_weight_pct, day_key, day_start_equity, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?)
-		`, lim.ClientID, nullFloatPtr(lim.MaxDailyLossPct), nullFloatPtr(lim.MaxAssetWeightPct),
+			INSERT INTO risk_limits (client_id, max_daily_loss_pct, max_asset_weight_pct, max_exposure_pct, day_key, day_start_equity, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+		`, lim.ClientID, nullFloatPtr(lim.MaxDailyLossPct), nullFloatPtr(lim.MaxAssetWeightPct), nullFloatPtr(lim.MaxExposurePct),
 			lim.DayKey, lim.DayStartEquity, fmtTime(lim.UpdatedAt)); err != nil {
 			return err
 		}

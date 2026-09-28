@@ -136,6 +136,7 @@ type portfolioRebalanceAttemptPayload struct {
 type portfolioRiskPayload struct {
 	MaxDailyLossPct   *float64 `json:"maxDailyLossPct,omitempty"`
 	MaxAssetWeightPct *float64 `json:"maxAssetWeightPct,omitempty"`
+	MaxExposurePct    *float64 `json:"maxExposurePct,omitempty"`
 	DayKey            string   `json:"dayKey,omitempty"`
 	DayStartEquity    float64  `json:"dayStartEquity,omitempty"`
 	UpdatedAt         string   `json:"updatedAt"`
@@ -443,6 +444,7 @@ func snapshotToPayload(snap domain.PortfolioSnapshot) portfolioBookPayload {
 	if snap.RiskLimits != nil {
 		p.RiskLimits = &portfolioRiskPayload{
 			MaxDailyLossPct: snap.RiskLimits.MaxDailyLossPct, MaxAssetWeightPct: snap.RiskLimits.MaxAssetWeightPct,
+			MaxExposurePct: snap.RiskLimits.MaxExposurePct,
 			DayKey: snap.RiskLimits.DayKey, DayStartEquity: snap.RiskLimits.DayStartEquity,
 			UpdatedAt: rfcNano(snap.RiskLimits.UpdatedAt),
 		}

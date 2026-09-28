@@ -377,6 +377,7 @@ CREATE TABLE IF NOT EXISTS risk_limits (
 	client_id             TEXT PRIMARY KEY NOT NULL,
 	max_daily_loss_pct    REAL,
 	max_asset_weight_pct  REAL,
+	max_exposure_pct      REAL,
 	day_key               TEXT NOT NULL DEFAULT '',
 	day_start_equity      REAL NOT NULL DEFAULT 0,
 	updated_at            TEXT NOT NULL,
@@ -510,6 +511,7 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_
 		`ALTER TABLE allocation_rebalance_legs ADD COLUMN last_price REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE allocation_rebalance_legs ADD COLUMN fee REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE allocation_rebalance_legs ADD COLUMN slippage REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE risk_limits ADD COLUMN max_exposure_pct REAL`,
 	}
 	for _, q := range alters {
 		if err := sqliteutil.ExecAllowExists(s.db, q); err != nil {
@@ -2724,9 +2726,9 @@ func (s *SQLite) ListRebalanceResults(ctx context.Context, clientID, basketID st
 
 func scanRiskLimits(row scannable) (*domain.RiskLimits, error) {
 	var lim domain.RiskLimits
-	var loss, weight sql.NullFloat64
+	var loss, weight, exposure sql.NullFloat64
 	var updated string
-	if err := row.Scan(&lim.ClientID, &loss, &weight, &lim.DayKey, &lim.DayStartEquity, &updated); err != nil {
+	if err := row.Scan(&lim.ClientID, &loss, &weight, &exposure, &lim.DayKey, &lim.DayStartEquity, &updated); err != nil {
 		return nil, err
 	}
 	if loss.Valid {
@@ -2736,6 +2738,10 @@ func scanRiskLimits(row scannable) (*domain.RiskLimits, error) {
 	if weight.Valid {
 		v := weight.Float64
 		lim.MaxAssetWeightPct = &v
+	}
+	if exposure.Valid {
+		v := exposure.Float64
+		lim.MaxExposurePct = &v
 	}
 	lim.UpdatedAt = parseTime(updated)
 	return &lim, nil
@@ -2751,7 +2757,7 @@ func nullFloatPtr(p *float64) any {
 // GetRiskLimits returns saved limits or ErrNotFound.
 func (s *SQLite) GetRiskLimits(ctx context.Context, clientID string) (*domain.RiskLimits, error) {
 	row := s.db.QueryRowContext(ctx, `
-		SELECT client_id, max_daily_loss_pct, max_asset_weight_pct, day_key, day_start_equity, updated_at
+		SELECT client_id, max_daily_loss_pct, max_asset_weight_pct, max_exposure_pct, day_key, day_start_equity, updated_at
 		FROM risk_limits WHERE client_id = ?
 	`, clientID)
 	lim, err := scanRiskLimits(row)
@@ -2769,15 +2775,16 @@ func (s *SQLite) UpsertRiskLimits(ctx context.Context, lim domain.RiskLimits) (*
 		lim.UpdatedAt = time.Now().UTC()
 	}
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO risk_limits (client_id, max_daily_loss_pct, max_asset_weight_pct, day_key, day_start_equity, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO risk_limits (client_id, max_daily_loss_pct, max_asset_weight_pct, max_exposure_pct, day_key, day_start_equity, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(client_id) DO UPDATE SET
 			max_daily_loss_pct = excluded.max_daily_loss_pct,
 			max_asset_weight_pct = excluded.max_asset_weight_pct,
+			max_exposure_pct = excluded.max_exposure_pct,
 			day_key = excluded.day_key,
 			day_start_equity = excluded.day_start_equity,
 			updated_at = excluded.updated_at
-	`, lim.ClientID, nullFloatPtr(lim.MaxDailyLossPct), nullFloatPtr(lim.MaxAssetWeightPct),
+	`, lim.ClientID, nullFloatPtr(lim.MaxDailyLossPct), nullFloatPtr(lim.MaxAssetWeightPct), nullFloatPtr(lim.MaxExposurePct),
 		lim.DayKey, lim.DayStartEquity, lim.UpdatedAt.UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return nil, err

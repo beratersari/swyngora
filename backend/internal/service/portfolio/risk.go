@@ -17,6 +17,7 @@ type RiskLimitsInput struct {
 	PortfolioID       string
 	MaxDailyLossPct   *float64
 	MaxAssetWeightPct *float64
+	MaxExposurePct    *float64
 }
 
 // RiskLimitsView is GET payload for the settings screen (limits + live status).
@@ -59,6 +60,9 @@ func (s *Service) SetRiskLimits(ctx context.Context, in RiskLimitsInput) (*RiskL
 	if err := domain.ValidateOptionalRiskPct(in.MaxAssetWeightPct, "maxAssetWeightPct"); err != nil {
 		return nil, err
 	}
+	if err := domain.ValidateOptionalExposurePct(in.MaxExposurePct); err != nil {
+		return nil, err
+	}
 	_, snap, err := s.loadRiskWithDaySnapshot(ctx, p)
 	if err != nil {
 		return nil, err
@@ -66,6 +70,7 @@ func (s *Service) SetRiskLimits(ctx context.Context, in RiskLimitsInput) (*RiskL
 	now := time.Now().UTC()
 	saved, err := s.store.UpsertRiskLimits(ctx, domain.RiskLimits{
 		ClientID: bookID, MaxDailyLossPct: in.MaxDailyLossPct, MaxAssetWeightPct: in.MaxAssetWeightPct,
+		MaxExposurePct: in.MaxExposurePct,
 		DayKey: snap.DayKey, DayStartEquity: snap.DayStartEquity, UpdatedAt: now,
 	})
 	if err != nil {
@@ -97,7 +102,7 @@ func (s *Service) guardNewRisk(ctx context.Context, clientID, asset string, addi
 	if err != nil {
 		return err
 	}
-	if existing.MaxDailyLossPct == nil && existing.MaxAssetWeightPct == nil {
+	if existing.MaxDailyLossPct == nil && existing.MaxAssetWeightPct == nil && existing.MaxExposurePct == nil {
 		return nil
 	}
 	p, err := s.store.GetPortfolio(ctx, clientID)
@@ -120,7 +125,7 @@ func (s *Service) guardNewRisk(ctx context.Context, clientID, asset string, addi
 			break
 		}
 	}
-	reasons := domain.RiskLimitMessages(lim, st.StartOfDayEquity, st.Equity, asset, assetVal, additionalNotional)
+	reasons := domain.RiskLimitMessages(lim, st.StartOfDayEquity, st.Equity, asset, assetVal, st.ExposureValue, additionalNotional)
 	if len(reasons) == 0 {
 		return nil
 	}
@@ -184,13 +189,26 @@ func (s *Service) buildRiskStatus(ctx context.Context, p *domain.Portfolio, lim,
 	if lim.MaxAssetWeightPct != nil {
 		maxW = *lim.MaxAssetWeightPct
 	}
+	var exposure float64
 	for _, w := range weights {
+		exposure += w.Value
 		if maxW > 0 && w.WeightPct > maxW+1e-9 {
 			w.AtOrOverLimit = true
 		}
 		st.Assets = append(st.Assets, w)
 	}
-	if !st.DailyLossLimitHit {
+	st.ExposureValue = exposure
+	if view.Equity > domain.PositionEpsilon {
+		st.ExposurePct = 100 * exposure / view.Equity
+	}
+	if lim.MaxExposurePct != nil && st.ExposurePct > *lim.MaxExposurePct+1e-9 {
+		st.ExposureLimitHit = true
+		st.CanOpenSpotBuy = false
+		st.CanOpenMargin = false
+		st.BlockReasons = append(st.BlockReasons, fmt.Sprintf("total exposure %.2f%% is over the %.2f%% limit",
+			st.ExposurePct, *lim.MaxExposurePct))
+	}
+	if !st.DailyLossLimitHit && !st.ExposureLimitHit {
 		// Concentration does not globally disable all buys — only the heavy coin (checked per order).
 		st.CanOpenSpotBuy = true
 		st.CanOpenMargin = true

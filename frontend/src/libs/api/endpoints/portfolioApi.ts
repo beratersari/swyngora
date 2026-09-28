@@ -4,6 +4,7 @@ import type { MarketExchange } from './marketApi';
 
 export type PortfolioSummary = components['schemas']['PortfolioSummary'];
 export type PortfolioPerformance = components['schemas']['PortfolioPerformance'];
+export type RiskLimitsView = components['schemas']['RiskLimitsView'];
 export type PortfolioEquityPoint = components['schemas']['PortfolioEquityPoint'];
 export type PortfolioPerformancePeriod = NonNullable<
   NonNullable<components['schemas']['PortfolioPerformance']['period']>
@@ -536,6 +537,30 @@ export const portfolioApi = baseApi.injectEndpoints({
       }),
       providesTags: ['Portfolio'],
     }),
+    getPortfolioRiskLimits: build.query<RiskLimitsView, BookArg | void>({
+      query: (arg) => ({
+        url: '/api/v1/portfolio/risk-limits',
+        params: bookParams(arg?.portfolioId),
+      }),
+      providesTags: ['Portfolio'],
+    }),
+    setPortfolioRiskLimits: build.mutation<
+      RiskLimitsView,
+      {
+        portfolioId?: string;
+        maxDailyLossPct?: number | null;
+        maxAssetWeightPct?: number | null;
+        maxExposurePct?: number | null;
+      }
+    >({
+      query: ({ portfolioId, ...body }) => ({
+        url: '/api/v1/portfolio/risk-limits',
+        method: 'PUT',
+        params: bookParams(portfolioId),
+        body,
+      }),
+      invalidatesTags: ['Portfolio'],
+    }),
     stressPortfolio: build.mutation<
       PortfolioStressReport,
       { portfolioId?: string; moves: { asset: string; movePct: number }[] }
@@ -564,6 +589,8 @@ export const {
   useRenamePortfolioMutation,
   useDeletePortfolioMutation,
   useGetPortfolioPerformanceQuery,
+  useGetPortfolioRiskLimitsQuery,
+  useSetPortfolioRiskLimitsMutation,
   useStressPortfolioMutation,
   useListPortfolioCashMovementsQuery,
   useDepositPortfolioCashMutation,

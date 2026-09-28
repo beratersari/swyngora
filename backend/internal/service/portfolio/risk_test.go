@@ -47,6 +47,37 @@ func TestRiskLimits_BlockConcentrationBuyAllowSell(t *testing.T) {
 	}
 }
 
+func TestRiskLimits_TotalExposureBlocksAnotherCoin(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{
+		"binance|BTCUSDT": "100", "binance|ETHUSDT": "50", "binance|SOLUSDT": "20",
+	}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "risk-e", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "risk-e", Symbol: "BTCUSDT", Side: "buy", Quantity: 20}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "risk-e", Symbol: "ETHUSDT", Side: "buy", Quantity: 20}); err != nil {
+		t.Fatal(err)
+	}
+	capPct := 25.0
+	if _, err := svc.SetRiskLimits(ctx, RiskLimitsInput{ClientID: "risk-e", MaxExposurePct: &capPct}); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "risk-e", Symbol: "SOLUSDT", Side: "buy", Quantity: 1})
+	if !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("want total exposure block: %v", err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "risk-e", Symbol: "ETHUSDT", Side: "sell", Quantity: 1}); err != nil {
+		t.Fatalf("sell must stay allowed: %v", err)
+	}
+	view, err := svc.GetRiskLimitsView(ctx, "risk-e")
+	if err != nil || !view.Status.ExposureLimitHit || view.Status.ExposurePct < 25 {
+		t.Fatalf("%+v %v", view, err)
+	}
+}
+
 func TestRiskLimits_DailyLossBlocksBuyAndMargin(t *testing.T) {
 	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
 	svc := newSvc(t, px)

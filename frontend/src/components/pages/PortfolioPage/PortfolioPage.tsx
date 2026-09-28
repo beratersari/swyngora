@@ -9,6 +9,7 @@ import { PaperTradeForm, type PaperTradeFormValues } from '@/components/organism
 import { PortfolioBookSelect } from '@/components/organisms/PortfolioBookSelect';
 import { PortfolioCashPanel } from '@/components/organisms/PortfolioCashPanel';
 import { PortfolioEquityChart } from '@/components/organisms/PortfolioEquityChart';
+import { PortfolioRiskLimits } from '@/components/organisms/PortfolioRiskLimits';
 import { PortfolioMarginPositionsTable } from '@/components/organisms/PortfolioMarginPositionsTable';
 import { PortfolioOrdersTable } from '@/components/organisms/PortfolioOrdersTable';
 import { PortfolioPositionsTable } from '@/components/organisms/PortfolioPositionsTable';
@@ -425,6 +426,12 @@ export function PortfolioPage() {
                 }}
                 onSubmit={onMargin}
               />
+            </PanelCard>
+          </Section>
+
+          <Section>
+            <PanelCard>
+              <PortfolioRiskLimits portfolioId={bookId} disabled={needBook} />
             </PanelCard>
           </Section>
 

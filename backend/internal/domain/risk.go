@@ -10,6 +10,8 @@ import (
 const (
 	MinRiskLimitPct = 0.01
 	MaxRiskLimitPct = 100.0
+	// MaxExposureLimitPct allows a gross book above 100% of equity when margin is open.
+	MaxExposureLimitPct = 1000.0
 )
 
 // RiskLimits are per-client optional brakes on new risk (buys / new margin opens).
@@ -18,6 +20,7 @@ type RiskLimits struct {
 	ClientID           string
 	MaxDailyLossPct    *float64 // e.g. 5 = block new risk if today is down >= 5%
 	MaxAssetWeightPct  *float64 // e.g. 30 = block new buys that push one coin over 30%
+	MaxExposurePct     *float64 // e.g. 60 = block new buys once all coins together exceed 60% of equity
 	DayKey             string   // UTC date YYYY-MM-DD for start-of-day equity snapshot
 	DayStartEquity     float64
 	UpdatedAt          time.Time
@@ -39,6 +42,9 @@ type RiskStatus struct {
 	DailyPnL           float64
 	DailyPnLPct        float64
 	DailyLossLimitHit  bool
+	ExposureValue      float64
+	ExposurePct        float64
+	ExposureLimitHit   bool
 	Assets             []RiskAssetWeight
 	CanOpenSpotBuy     bool
 	CanOpenMargin      bool
@@ -48,6 +54,18 @@ type RiskStatus struct {
 // UTCDayKey is the UTC calendar day used for daily-loss windows.
 func UTCDayKey(t time.Time) string {
 	return t.UTC().Format("2006-01-02")
+}
+
+// ValidateOptionalExposurePct accepts nil (disabled) or (0, 1000].
+func ValidateOptionalExposurePct(p *float64) error {
+	if p == nil {
+		return nil
+	}
+	v := *p
+	if v < MinRiskLimitPct || v > MaxExposureLimitPct || math.IsNaN(v) || math.IsInf(v, 0) {
+		return fmt.Errorf("%w: maxExposurePct must be between %g and %g, or omitted to disable", ErrInvalidArgument, MinRiskLimitPct, MaxExposureLimitPct)
+	}
+	return nil
 }
 
 // ValidateOptionalRiskPct accepts nil (disabled) or (0, 100].
@@ -100,8 +118,21 @@ func AssetWeightLimitHit(equity, currentAssetValue, additionalNotional, maxWeigh
 	return ProjectedAssetWeightPct(equity, currentAssetValue, additionalNotional) > maxWeightPct+1e-9
 }
 
+// ProjectedExposurePct is all coins together, plus the new order, as a percent of equity.
+func ProjectedExposurePct(equity, currentExposure, additionalNotional float64) float64 {
+	return ProjectedAssetWeightPct(equity, currentExposure, additionalNotional)
+}
+
+// ExposureLimitHit reports whether a new add would push total coin exposure over the cap.
+func ExposureLimitHit(equity, currentExposure, additionalNotional, maxExposurePct float64) bool {
+	if maxExposurePct <= 0 {
+		return false
+	}
+	return ProjectedExposurePct(equity, currentExposure, additionalNotional) > maxExposurePct+1e-9
+}
+
 // RiskLimitMessages formats user-facing block reasons (empty if none fire).
-func RiskLimitMessages(limits RiskLimits, startEquity, equityNow float64, asset string, assetValue, additionalNotional float64) []string {
+func RiskLimitMessages(limits RiskLimits, startEquity, equityNow float64, asset string, assetValue, exposureValue, additionalNotional float64) []string {
 	var reasons []string
 	if limits.MaxDailyLossPct != nil && DailyLossLimitHit(startEquity, equityNow, *limits.MaxDailyLossPct) {
 		reasons = append(reasons, fmt.Sprintf("daily loss limit reached (%.2f%% loss >= %.2f%%)",
@@ -112,6 +143,12 @@ func RiskLimitMessages(limits RiskLimits, startEquity, equityNow float64, asset 
 		proj := ProjectedAssetWeightPct(equityNow, assetValue, additionalNotional)
 		reasons = append(reasons, fmt.Sprintf("%s would be %.2f%% of the portfolio (limit %.2f%%)",
 			asset, proj, *limits.MaxAssetWeightPct))
+	}
+	if limits.MaxExposurePct != nil && additionalNotional > 0 &&
+		ExposureLimitHit(equityNow, exposureValue, additionalNotional, *limits.MaxExposurePct) {
+		proj := ProjectedExposurePct(equityNow, exposureValue, additionalNotional)
+		reasons = append(reasons, fmt.Sprintf("total exposure would be %.2f%% of the portfolio (limit %.2f%%)",
+			proj, *limits.MaxExposurePct))
 	}
 	return reasons
 }

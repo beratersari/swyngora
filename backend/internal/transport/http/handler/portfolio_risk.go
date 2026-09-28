@@ -12,12 +12,14 @@ import (
 type riskLimitsBody struct {
 	MaxDailyLossPct   *float64 `json:"maxDailyLossPct"`
 	MaxAssetWeightPct *float64 `json:"maxAssetWeightPct"`
+	MaxExposurePct    *float64 `json:"maxExposurePct"`
 }
 
 func riskLimitsViewDTO(v *portfolio.RiskLimitsView) map[string]any {
 	lim := map[string]any{
 		"maxDailyLossPct":   v.Limits.MaxDailyLossPct,
 		"maxAssetWeightPct": v.Limits.MaxAssetWeightPct,
+		"maxExposurePct":    v.Limits.MaxExposurePct,
 	}
 	if !v.Limits.UpdatedAt.IsZero() {
 		lim["updatedAt"] = v.Limits.UpdatedAt.UTC().Format(time.RFC3339Nano)
@@ -39,6 +41,9 @@ func riskLimitsViewDTO(v *portfolio.RiskLimitsView) map[string]any {
 			"dailyPnl":          v.Status.DailyPnL,
 			"dailyPnlPct":       v.Status.DailyPnLPct,
 			"dailyLossLimitHit": v.Status.DailyLossLimitHit,
+			"exposureValue":     v.Status.ExposureValue,
+			"exposurePct":       v.Status.ExposurePct,
+			"exposureLimitHit":  v.Status.ExposureLimitHit,
 			"assets":            assets,
 			"canOpenSpotBuy":    v.Status.CanOpenSpotBuy,
 			"canOpenMargin":     v.Status.CanOpenMargin,
@@ -66,7 +71,8 @@ func (h *PortfolioHandler) PutRiskLimits(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	v, err := h.svc.SetRiskLimits(r.Context(), portfolio.RiskLimitsInput{
-		ClientID: clientIDFrom(r), PortfolioID: portfolioIDFrom(r), MaxDailyLossPct: body.MaxDailyLossPct, MaxAssetWeightPct: body.MaxAssetWeightPct,
+		ClientID: clientIDFrom(r), PortfolioID: portfolioIDFrom(r),
+		MaxDailyLossPct: body.MaxDailyLossPct, MaxAssetWeightPct: body.MaxAssetWeightPct, MaxExposurePct: body.MaxExposurePct,
 	})
 	if err != nil {
 		writeError(w, err)

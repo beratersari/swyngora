@@ -140,7 +140,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/portfolio/cash-movements` | Deposit / withdraw / transfer history |
 | `GET` | `/api/v1/portfolio/performance` | Equity history + period P&L (`1d`/`1w`/`1m`/`3m`) plus the largest peak-to-trough drop and when it ran |
 | `POST` | `/api/v1/portfolio/stress` | What-if: equity, total P&L, and margin after asset percent moves (e.g. BTC −10, ETH −15) |
-| `GET`/`PUT`/`DELETE` | `/api/v1/portfolio/risk-limits` | Optional risk brakes (daily loss %, max coin weight); block new buys/margin only |
+| `GET`/`PUT`/`DELETE` | `/api/v1/portfolio/risk-limits` | Optional risk brakes (daily loss %, max coin weight, max total exposure); block new buys/margin only |
 | `GET` | `/api/v1/portfolio/trading-costs` | Per-exchange paper taker fee and slippage |
 | `POST` | `/api/v1/portfolio/orders` | Paper market or pending (`limit_buy` / `limit_sell` / `stop_loss`); optional `Idempotency-Key` |
 | `GET` | `/api/v1/portfolio/orders` | List pending orders (default: open) |
