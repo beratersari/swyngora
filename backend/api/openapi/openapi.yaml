@@ -10676,7 +10676,21 @@ components:
         priceAfterPct: { type: string, description: Signed BTC percent from the end to 15 minutes later }
         priceKind: { type: string, enum: [up, down, flat], description: BTC during the depth move. Flat is under 0.2% }
         afterKind: { type: string, enum: [up, down, flat], description: BTC in the 15 minutes after the depth move }
+        drivers:
+          type: array
+          description: Coins that added or removed the most of this move, largest share first
+          items: { $ref: '#/components/schemas/MarketPerpDepthMoveDriver' }
+        span: { type: string, enum: [one, few, broad], description: one coin caused at least half, two coins caused at least 60%, or the move was spread across the book }
         summary: { type: string }
+    MarketPerpDepthMoveDriver:
+      type: object
+      description: One coin's share of a perp-book jump or drop
+      properties:
+        symbol: { type: string }
+        base: { type: string }
+        change: { type: string, description: Signed USDT, this coin's bid+ask at the end minus the start }
+        sharePct: { type: string, description: This coin's change as a percent of the market move }
+        kind: { type: string, enum: [thicker, thinner, steady] }
     MarketPerpDepthShareWindow:
       type: object
       description: Bid vs ask share and total book size of the liquid-perp book now vs 15m / 1h / 4h ago

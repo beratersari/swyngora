@@ -201,6 +201,11 @@ func (s *Service) attachPerpDepthWindows(ctx context.Context, out *domain.PerpDe
 	}
 	domain.AttachPerpDepthHistory(out, totals)
 	s.attachPerpDepthBTC(ctx, out)
+	coinRows, err := s.perpHist.ListSamples(ctx, out.Exchange, out.RangePct, fromTotals, out.AsOf.Add(time.Minute))
+	if err != nil {
+		return
+	}
+	domain.AttachPerpDepthMoveCoins(out, coinRows)
 }
 
 func (s *Service) attachPerpDepthBTC(ctx context.Context, out *domain.PerpDepthOverview) {

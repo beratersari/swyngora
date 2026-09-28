@@ -219,6 +219,58 @@ func TestAttachPerpDepthMoves_RanksJumpAndDropWithBTC(t *testing.T) {
 	}
 }
 
+func TestAttachPerpDepthMoveCoins_OneCoinVersusTheBook(t *testing.T) {
+	now := time.Date(2026, 9, 21, 16, 0, 0, 0, time.UTC)
+	live := BuildPerpDepthOverview("all", 1, []PerpDepthCoinInput{
+		{Symbol: "BTCUSDT", Base: "BTC", Bid: 80, Ask: 20, Complete: true},
+	}, now)
+	from := now.Add(-10 * time.Minute)
+	to := now.Add(-4 * time.Minute)
+	AttachPerpDepthHistory(live, []PerpDepthTotalPoint{
+		{Time: from, Total: 1000},
+		{Time: to, Total: 1600},
+	})
+	AttachPerpDepthMoveCoins(live, []PerpDepthSample{
+		{Time: from, Symbol: "ETHUSDT", Base: "ETH", Bid: 200, Ask: 200},
+		{Time: from, Symbol: "BTCUSDT", Base: "BTC", Bid: 300, Ask: 300},
+		{Time: to, Symbol: "ETHUSDT", Base: "ETH", Bid: 700, Ask: 300},
+		{Time: to, Symbol: "BTCUSDT", Base: "BTC", Bid: 320, Ask: 280},
+	})
+	if len(live.Moves) != 1 {
+		t.Fatalf("moves %+v", live.Moves)
+	}
+	m := live.Moves[0]
+	if m.Span != PerpDepthMoveSpanOne || len(m.Drivers) == 0 || m.Drivers[0].Base != "ETH" {
+		t.Fatalf("%+v", m)
+	}
+	if m.Drivers[0].SharePct < 50 {
+		t.Fatalf("share %+v", m.Drivers[0])
+	}
+	if !strings.Contains(m.Summary, "ETH caused most of it") {
+		t.Fatalf("summary %s", m.Summary)
+	}
+
+	broad := BuildPerpDepthOverview("all", 1, []PerpDepthCoinInput{
+		{Symbol: "BTCUSDT", Base: "BTC", Bid: 80, Ask: 20, Complete: true},
+	}, now)
+	AttachPerpDepthHistory(broad, []PerpDepthTotalPoint{
+		{Time: from, Total: 1000},
+		{Time: to, Total: 1600},
+	})
+	samples := make([]PerpDepthSample, 0, 12)
+	for i, base := range []string{"AAA", "BBB", "CCC", "DDD", "EEE", "FFF"} {
+		sym := base + "USDT"
+		samples = append(samples,
+			PerpDepthSample{Time: from, Symbol: sym, Base: base, Bid: 80, Ask: 80},
+			PerpDepthSample{Time: to, Symbol: sym, Base: base, Bid: 80 + float64(50+i), Ask: 80},
+		)
+	}
+	AttachPerpDepthMoveCoins(broad, samples)
+	if broad.Moves[0].Span != PerpDepthMoveSpanBroad || !strings.Contains(broad.Moves[0].Summary, "Spread across the book") {
+		t.Fatalf("%+v %s", broad.Moves[0].Drivers, broad.Moves[0].Summary)
+	}
+}
+
 func TestAttachPerpDepthMoves_SkipsSmallWiggles(t *testing.T) {
 	now := time.Date(2026, 9, 21, 16, 0, 0, 0, time.UTC)
 	live := BuildPerpDepthOverview("all", 1, []PerpDepthCoinInput{

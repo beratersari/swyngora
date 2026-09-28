@@ -16,6 +16,7 @@ import {
   depthLine,
   moveAfterLine,
   moveBookLine,
+  moveDriverLine,
   moveDuringLine,
   driverNames,
   sizeDriverLine,
@@ -180,6 +181,12 @@ export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLi
                       {moveAfterLine(m) ? (
                         <Text variant="caption" color="secondary">
                           {t('perpLiq.moveAfter', { line: moveAfterLine(m) })}
+                        </Text>
+                      ) : null}
+                      {moveDriverLine(m) ? (
+                        <Text variant="caption" color="secondary">
+                          {t('perpLiq.moveCoins', { names: moveDriverLine(m) })}
+                          {m.span ? ` · ${t(`perpLiq.moveSpan_${m.span}`)}` : ''}
                         </Text>
                       ) : null}
                     </DetailRow>

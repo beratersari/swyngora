@@ -233,21 +233,31 @@ type perpDepthTotalPointDTO struct {
 }
 
 type perpDepthBookMoveDTO struct {
-	Kind           string    `json:"kind"`
-	From           time.Time `json:"from"`
-	To             time.Time `json:"to"`
-	PastTotal      string    `json:"pastTotal"`
-	Total          string    `json:"total"`
-	Change         string    `json:"change"`
-	ChangePct      string    `json:"changePct"`
-	PriceFrom      string    `json:"priceFrom,omitempty"`
-	PriceTo        string    `json:"priceTo,omitempty"`
-	PriceAfter     string    `json:"priceAfter,omitempty"`
-	PriceChangePct string    `json:"priceChangePct,omitempty"`
-	PriceAfterPct  string    `json:"priceAfterPct,omitempty"`
-	PriceKind      string    `json:"priceKind,omitempty"`
-	AfterKind      string    `json:"afterKind,omitempty"`
-	Summary        string    `json:"summary"`
+	Kind           string                   `json:"kind"`
+	From           time.Time                `json:"from"`
+	To             time.Time                `json:"to"`
+	PastTotal      string                   `json:"pastTotal"`
+	Total          string                   `json:"total"`
+	Change         string                   `json:"change"`
+	ChangePct      string                   `json:"changePct"`
+	PriceFrom      string                   `json:"priceFrom,omitempty"`
+	PriceTo        string                   `json:"priceTo,omitempty"`
+	PriceAfter     string                   `json:"priceAfter,omitempty"`
+	PriceChangePct string                   `json:"priceChangePct,omitempty"`
+	PriceAfterPct  string                   `json:"priceAfterPct,omitempty"`
+	PriceKind      string                   `json:"priceKind,omitempty"`
+	AfterKind      string                   `json:"afterKind,omitempty"`
+	Drivers        []perpDepthMoveDriverDTO `json:"drivers,omitempty"`
+	Span           string                   `json:"span,omitempty"`
+	Summary        string                   `json:"summary"`
+}
+
+type perpDepthMoveDriverDTO struct {
+	Symbol   string `json:"symbol"`
+	Base     string `json:"base"`
+	Change   string `json:"change"`
+	SharePct string `json:"sharePct"`
+	Kind     string `json:"kind"`
 }
 
 type perpDepthOverviewResponse struct {
@@ -350,6 +360,15 @@ func perpDepthOverviewToDTO(a *domain.PerpDepthOverview) perpDepthOverviewRespon
 			row.PriceAfterPct = domain.FormatSignedPct(m.PriceAfterPct)
 			row.AfterKind = m.AfterKind
 		}
+		drivers := make([]perpDepthMoveDriverDTO, 0, len(m.Drivers))
+		for _, d := range m.Drivers {
+			drivers = append(drivers, perpDepthMoveDriverDTO{
+				Symbol: d.Symbol, Base: d.Base, Change: domain.FormatSignedQty(d.Change),
+				SharePct: domain.FormatSignedPct(d.SharePct), Kind: d.Kind,
+			})
+		}
+		row.Drivers = drivers
+		row.Span = m.Span
 		moves = append(moves, row)
 	}
 	bands := make([]perpDepthOverviewBandDTO, 0, len(a.Bands))

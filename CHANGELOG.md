@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Who moved the perp book:** each sharp jump or drop names the coins that added or removed the most of it, and whether that was one coin, a few coins, or the whole book (`drivers` and `span` on `moves` of `GET /api/v1/market/perp-depth/overview`) (`docs/features/perp-depth.md`)
 - **Perp book jumps and drops:** the largest rises and falls in the six-hour perp book (at least 5% inside 15 minutes), with BTC's price during each move and 15 minutes later. Listed under the book chart on Markets (`moves` on `GET /api/v1/market/perp-depth/overview`, MCP `get_perp_depth_overview`) (`docs/features/perp-depth.md`)
 
 ### Changed

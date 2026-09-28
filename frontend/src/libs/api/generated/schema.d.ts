@@ -6752,7 +6752,25 @@ export interface components {
              * @enum {string}
              */
             afterKind?: "up" | "down" | "flat";
+            /** @description Coins that added or removed the most of this move, largest share first */
+            drivers?: components["schemas"]["MarketPerpDepthMoveDriver"][];
+            /**
+             * @description one coin caused at least half, two coins caused at least 60%, or the move was spread across the book
+             * @enum {string}
+             */
+            span?: "one" | "few" | "broad";
             summary?: string;
+        };
+        /** @description One coin's share of a perp-book jump or drop */
+        MarketPerpDepthMoveDriver: {
+            symbol?: string;
+            base?: string;
+            /** @description Signed USDT, this coin's bid+ask at the end minus the start */
+            change?: string;
+            /** @description This coin's change as a percent of the market move */
+            sharePct?: string;
+            /** @enum {string} */
+            kind?: "thicker" | "thinner" | "steady";
         };
         /** @description Bid vs ask share and total book size of the liquid-perp book now vs 15m / 1h / 4h ago */
         MarketPerpDepthShareWindow: {

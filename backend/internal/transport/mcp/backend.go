@@ -1082,6 +1082,17 @@ func perpDepthOverviewMap(got *domain.PerpDepthOverview) map[string]any {
 			row["priceAfterPct"] = domain.FormatSignedPct(m.PriceAfterPct)
 			row["afterKind"] = m.AfterKind
 		}
+		drivers := make([]map[string]any, 0, len(m.Drivers))
+		for _, d := range m.Drivers {
+			drivers = append(drivers, map[string]any{
+				"symbol": d.Symbol, "base": d.Base, "change": domain.FormatSignedQty(d.Change),
+				"sharePct": domain.FormatSignedPct(d.SharePct), "kind": d.Kind,
+			})
+		}
+		row["drivers"] = drivers
+		if m.Span != "" {
+			row["span"] = m.Span
+		}
 		moves = append(moves, row)
 	}
 	bands := make([]map[string]any, 0, len(got.Bands))

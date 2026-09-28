@@ -35,12 +35,19 @@ const (
 	PerpDepthPriceDown = "down"
 	PerpDepthPriceFlat = "flat"
 
+	// How much of a book move sits in the coins that moved with it.
+	PerpDepthMoveSpanOne   = "one"
+	PerpDepthMoveSpanFew   = "few"
+	PerpDepthMoveSpanBroad = "broad"
+
 	perpDepthMoveMaxSpan    = 15 * time.Minute
 	perpDepthMoveAfter      = 15 * time.Minute
 	perpDepthMoveAfterSlack = 5 * time.Minute
 	perpDepthMoveMinPct     = 5.0
 	perpDepthMoveKeep       = 3
 	perpDepthPriceFlatPct   = 0.2
+	perpDepthMoveOneShare   = 50.0
+	perpDepthMoveFewShare   = 60.0
 )
 
 // PerpDepthShareWindows is 15m / 1h / 4h of market bid vs ask mix.
@@ -81,7 +88,18 @@ type PerpDepthBookMove struct {
 	PriceAfterPct  float64
 	PriceKind      string // up | down | flat
 	AfterKind      string
+	Drivers        []PerpDepthMoveDriver
+	Span           string // one | few | broad
 	Summary        string
+}
+
+// PerpDepthMoveDriver is one coin's share of a book jump or drop.
+type PerpDepthMoveDriver struct {
+	Symbol   string
+	Base     string
+	Change   float64 // USDT, end − start
+	SharePct float64 // this change as a percent of the market move
+	Kind     string  // thicker | thinner | steady
 }
 
 // PerpDepthHistoryStore persists market-wide perp book samples.
@@ -332,6 +350,7 @@ func buildPerpDepthBookMove(pts []PerpDepthTotalPoint, c perpDepthMoveCand) Perp
 		Kind: kind, From: a.Time, To: b.Time,
 		PastTotal: round4(a.Total), Total: round4(b.Total),
 		Change: round4(c.change), ChangePct: round4(c.pct),
+		Drivers: []PerpDepthMoveDriver{},
 	}
 	if a.Price > 0 && b.Price > 0 {
 		m.PriceFrom = round4(a.Price)
@@ -390,7 +409,119 @@ func explainPerpDepthBookMove(m PerpDepthBookMove) string {
 	if m.PriceAfter > 0 {
 		s += fmt.Sprintf(" 15m later BTC %s (%s).", formatQty(m.PriceAfter), FormatSignedPct(m.PriceAfterPct))
 	}
+	if coins := perpDepthMoveCoinSentence(m); coins != "" {
+		s += " " + coins
+	}
 	return s
+}
+
+// AttachPerpDepthMoveCoins names the coins behind each jump or drop.
+// One coin at half the move or more is span one. Two coins at 60% or more
+// is span few. Anything wider is spread across the book.
+func AttachPerpDepthMoveCoins(live *PerpDepthOverview, samples []PerpDepthSample) {
+	if live == nil {
+		return
+	}
+	groups := groupPerpDepthSamples(samples)
+	for i := range live.Moves {
+		m := &live.Moves[i]
+		m.Drivers = []PerpDepthMoveDriver{}
+		m.Span = ""
+		if m.Change == 0 {
+			m.Summary = explainPerpDepthBookMove(*m)
+			continue
+		}
+		_, past, okPast := nearestPerpDepthGroup(groups, m.From, time.Minute)
+		_, now, okNow := nearestPerpDepthGroup(groups, m.To, time.Minute)
+		if !okPast || !okNow {
+			m.Summary = explainPerpDepthBookMove(*m)
+			continue
+		}
+		sized := perpDepthSizeDrivers(perpDepthCoinsAsShares(now), past, m.Change)
+		drivers := make([]PerpDepthMoveDriver, 0, len(sized))
+		for _, d := range sized {
+			drivers = append(drivers, PerpDepthMoveDriver{
+				Symbol: d.Symbol, Base: d.Base, Change: d.Change, Kind: d.Kind,
+				SharePct: round4(100 * d.Change / m.Change),
+			})
+		}
+		m.Drivers = drivers
+		m.Span = classifyPerpDepthMoveSpan(drivers, m.Change)
+		m.Summary = explainPerpDepthBookMove(*m)
+	}
+}
+
+func perpDepthCoinsAsShares(in []PerpDepthCoinInput) []PerpDepthCoinShare {
+	out := make([]PerpDepthCoinShare, 0, len(in))
+	for _, c := range in {
+		out = append(out, PerpDepthCoinShare{Symbol: c.Symbol, Base: c.Base, Bid: c.Bid, Ask: c.Ask})
+	}
+	return out
+}
+
+func classifyPerpDepthMoveSpan(drivers []PerpDepthMoveDriver, marketChange float64) string {
+	same := make([]float64, 0, 2)
+	for _, d := range drivers {
+		if marketChange > 0 && d.Change <= 0 {
+			continue
+		}
+		if marketChange < 0 && d.Change >= 0 {
+			continue
+		}
+		same = append(same, d.SharePct)
+		if len(same) == 2 {
+			break
+		}
+	}
+	if len(same) == 0 {
+		return PerpDepthMoveSpanBroad
+	}
+	if same[0] >= perpDepthMoveOneShare {
+		return PerpDepthMoveSpanOne
+	}
+	two := same[0]
+	if len(same) > 1 {
+		two += same[1]
+	}
+	if two >= perpDepthMoveFewShare {
+		return PerpDepthMoveSpanFew
+	}
+	return PerpDepthMoveSpanBroad
+}
+
+func perpDepthMoveCoinSentence(m PerpDepthBookMove) string {
+	names := make([]string, 0, 2)
+	for _, d := range m.Drivers {
+		if len(names) >= 2 {
+			break
+		}
+		if m.Change > 0 && d.Change <= 0 {
+			continue
+		}
+		if m.Change < 0 && d.Change >= 0 {
+			continue
+		}
+		if d.Base == "" {
+			continue
+		}
+		names = append(names, d.Base)
+	}
+	switch m.Span {
+	case PerpDepthMoveSpanOne:
+		if len(names) == 0 {
+			return ""
+		}
+		return names[0] + " caused most of it."
+	case PerpDepthMoveSpanFew:
+		if len(names) == 0 {
+			return ""
+		}
+		return joinList(names) + " caused most of it."
+	case PerpDepthMoveSpanBroad:
+		return "Spread across the book."
+	default:
+		return ""
+	}
 }
 
 func groupPerpDepthSamples(rows []PerpDepthSample) map[int64][]PerpDepthCoinInput {

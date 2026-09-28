@@ -56,6 +56,9 @@ ETH 17%** of 2.4B bid + 1.8B ask).
   drops of at least 5% that finish within 15 minutes (up to three of each,
   no overlap). Each names BTC's close at the start, at the end, and about
   15 minutes later when that minute exists. A BTC move under 0.2% is flat.
+  `drivers` rank the coins that added or removed the most of that move.
+  `span` is `one` when one coin is at least half the move, `few` when two
+  coins are at least 60%, and `broad` when the change is spread across the book.
   The Markets perp card lists them under the six-hour chart. Telegram `/perpliq`
   prints up to three of those sentences.
   `complete` is false until the

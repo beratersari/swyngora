@@ -101,6 +101,26 @@ export function moveDuringLine(m?: PerpBookMove | null): string {
   return `${formatCompactAmount(m.priceFrom)} → ${formatCompactAmount(m.priceTo)}${chg}`;
 }
 
+/** Coins that caused most of a jump or drop, with each coin's share of that move. */
+export function moveDriverLine(
+  m?: { drivers?: { base?: string; symbol?: string; change?: string; sharePct?: string }[] | null } | null,
+): string {
+  const parts = (m?.drivers ?? [])
+    .filter((d) => d.base || d.symbol)
+    .slice(0, 3)
+    .map((d) => {
+      const name = d.base || d.symbol || '';
+      const n = Number(d.change);
+      const share = d.sharePct ? ` (${d.sharePct}%)` : '';
+      if (!Number.isFinite(n)) return `${name}${share}`;
+      const body = formatCompactAmount(Math.abs(n));
+      if (n > 0) return `${name} +${body}${share}`;
+      if (n < 0) return `${name} -${body}${share}`;
+      return `${name} ${body}${share}`;
+    });
+  return parts.filter(Boolean).join(', ');
+}
+
 /** BTC about 15 minutes after the depth move ended. */
 export function moveAfterLine(m?: PerpBookMove | null): string {
   if (!m?.priceAfter) return '';
