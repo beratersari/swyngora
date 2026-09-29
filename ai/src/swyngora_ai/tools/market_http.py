@@ -1106,6 +1106,14 @@ class FuturesHistoryInput(BaseModel):
     end: str = Field(default="", description="RFC3339 or unix ms")
 
 
+class UnusualInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|okx|all (default all, venues stay separate)",
+    )
+
+
 class LongShortInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -2808,6 +2816,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if end:
             params["to"] = end
         return http.get("/api/v1/market/futures-history", params)
+
+    def get_unusual_context(symbol: str, exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/unusual",
+            {"symbol": symbol, "exchange": exchange},
+        )
 
     def get_long_short_ratio(symbol: str, exchange: str = "all", limit: int = 24) -> str:
         return http.get(
@@ -5517,6 +5531,21 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "metric=open_interest|funding|long_short|liquidations."
             ),
             args_schema=FuturesHistoryInput,
+        ),
+        StructuredTool.from_function(
+            get_unusual_context,
+            name="get_unusual_context",
+            description=(
+                "Whether funding, 24h open-interest change, the last "
+                "completed liquidation hour, the last completed CVD day, "
+                "and the latest hour of average spread are high or low "
+                "versus this coin's own stored history on that venue. "
+                "Print size stays unknown: only the previous 15 minutes "
+                "are kept. exchange=all returns Binance, Bybit, and OKX "
+                "separately. The span is the stored sample span. Too few "
+                "samples stay unknown. Informational only, not advice."
+            ),
+            args_schema=UnusualInput,
         ),
         StructuredTool.from_function(
             get_market_liquidity,

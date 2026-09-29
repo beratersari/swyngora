@@ -72,6 +72,8 @@ import type {
   LiquidationCascadeQuery,
   LiquidationCascadeScanQuery,
   MarketCvd,
+  MarketUnusual,
+  UnusualQuery,
   OpenInterestQuery,
   LiquidationsQuery,
   LiquidationOverviewQuery,
@@ -192,6 +194,8 @@ export type {
   MarketLiquidationCascade,
   MarketLiquidationCascadeScan,
   MarketCvd,
+  MarketUnusual,
+  UnusualQuery,
   MarketVolumeShare,
   SpotPerpLiquidity,
   SpotPerpBook,
@@ -516,6 +520,13 @@ export const marketApi = baseApi.injectEndpoints({
     getMarketCvd: build.query<MarketCvd, CvdQuery>({
       query: (arg) => ({
         url: '/api/v1/market/cvd',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
+    getMarketUnusual: build.query<MarketUnusual, UnusualQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/unusual',
         params: compactParams({ ...(arg ?? {}) }),
       }),
     }),
@@ -902,6 +913,7 @@ export const {
   useGetMarketLiquidationMaxPainQuery,
   useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketCvdQuery,
+  useGetMarketUnusualQuery,
   useGetMarketVolumeShareQuery,
   useGetMarketPerpDepthOverviewQuery,
   useGetMarketBreadthQuery,

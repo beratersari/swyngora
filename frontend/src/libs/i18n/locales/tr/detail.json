@@ -136,6 +136,48 @@
   "tape": {
     "title": "Vadeli bant",
     "subtitle": "Açık faiz, fonlama, likidasyonlar ve CVD — Binance USD-M ve Bybit linear. Yalnızca bilgilendirme.",
+    "unusual": {
+      "title": "Kendi geçmişine göre",
+      "subtitle": "Her sayı, bu coinin bu borsadaki kayıtlı örnekleriyle karşılaştırılır. Aralık, o örneklerin gerçekte kapsadığı süredir. Yalnızca bilgilendirme.",
+      "checking": "Kayıtlı geçmişe bakılıyor…",
+      "metric": {
+        "funding": "Fonlama",
+        "open_interest": "Açık faiz",
+        "liquidations": "Likidasyonlar",
+        "cvd": "CVD",
+        "spread": "Spread",
+        "print_size": "İşlem boyutu"
+      },
+      "band": {
+        "extreme_high": "aşırı yüksek",
+        "high": "yüksek",
+        "typical": "olağan",
+        "low": "düşük",
+        "extreme_low": "aşırı düşük",
+        "unknown": "bilinmiyor"
+      },
+      "kind": {
+        "predicted": "Tahmini fonlama",
+        "settled": "Kesinleşmiş fonlama"
+      },
+      "line": {
+        "funding": "{{kind}} {{current}}, {{span}} içindeki {{samples}} kayıtlı kesinleşmeye göre {{band}} (yüzdelik {{percentile}}).",
+        "open_interest": "Son 24 saatlik açık faiz değişimi {{current}}, {{span}} içindeki {{samples}} önceki 24 saatlik değişime göre {{band}} (yüzdelik {{percentile}}).",
+        "liquidations": "Son tamamlanan saatin likidasyonları {{current}}, {{span}} içindeki {{samples}} tamamlanan saate göre {{band}} (yüzdelik {{percentile}}).",
+        "cvd": "Son tamamlanan günün net agresif akışı {{current}}, {{span}} içindeki {{samples}} önceki güne göre {{band}} (yüzdelik {{percentile}}).",
+        "spread": "Son saatin ortalama spreadi {{current}}, {{span}} içindeki {{samples}} önceki saate göre {{band}} (yüzdelik {{percentile}})."
+      },
+      "few": "{{metric}} için {{span}} boyunca {{samples}} kayıtlı örnek var. Olağan ya da olağandışı demek için en az {{need}} örnek gerekir.",
+      "noSample": "{{metric}} için karşılaştırılacak kayıtlı örnek yok.",
+      "noBook": "Bu borsanın burada spot emir defteri yok, bu yüzden spread kendi geçmişine göre bilinmiyor.",
+      "printSize": "İşlem boyutu yalnızca önceki 15 dakika ile karşılaştırılır. Daha uzun kayıtlı bir geçmiş yok.",
+      "span": {
+        "hour": "{{count}} saat",
+        "hours": "{{count}} saat",
+        "days": "{{count}} gün",
+        "underHour": "bir saatten kısa"
+      }
+    },
     "oi": "Açık faiz",
     "netPosition": "Net long / short",
     "netPositionHint": "Açık faiz ve taker alış/satıştan. Artı, o tarafın büyüdüğü anlamına gelir.",

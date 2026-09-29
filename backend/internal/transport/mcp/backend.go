@@ -2170,6 +2170,17 @@ func (b *Backend) GetFuturesHistory(ctx context.Context, metric, exchange, symbo
 	return mustJSON(futuresHistoryMap(metric, exchange, symbol, got))
 }
 
+func (b *Backend) GetUnusual(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetUnusual(ctx, exchange, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func futuresHistoryMap(metric, exchange, symbol string, raw any) map[string]any {
 	metric, _ = domain.ParseFuturesMetric(metric)
 	exchange, _ = domain.ParseOpenInterestExchange(exchange)
@@ -4384,7 +4395,7 @@ func riskLimitsViewMap(v *portfolio.RiskLimitsView) map[string]any {
 			"startOfDayEquity": v.Status.StartOfDayEquity, "equity": v.Status.Equity,
 			"dailyPnl": v.Status.DailyPnL, "dailyPnlPct": v.Status.DailyPnLPct,
 			"dailyLossLimitHit": v.Status.DailyLossLimitHit,
-			"exposureValue": v.Status.ExposureValue, "exposurePct": v.Status.ExposurePct,
+			"exposureValue":     v.Status.ExposureValue, "exposurePct": v.Status.ExposurePct,
 			"exposureLimitHit": v.Status.ExposureLimitHit, "assets": assets,
 			"canOpenSpotBuy": v.Status.CanOpenSpotBuy, "canOpenMargin": v.Status.CanOpenMargin,
 			"blockReasons": v.Status.BlockReasons,

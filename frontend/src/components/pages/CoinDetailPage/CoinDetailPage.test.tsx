@@ -53,6 +53,13 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetMarketLiquidationsQuery: () => mockLiquidations(),
     useGetMarketLiquidationHuntHeatmapQuery: () => mockLiqHeatmap(),
     useGetMarketCvdQuery: () => mockCvd(),
+    useGetMarketUnusualQuery: () => ({
+      data: undefined,
+      currentData: undefined,
+      isError: false,
+      isFetching: false,
+      isLoading: false,
+    }),
     useGetMarketLiquidationLevelsQuery: () => ({ data: undefined, isError: false, isFetching: false }),
     useGetMarketPrintSizeQuery: () => ({ data: undefined, isError: false, isFetching: false }),
     useGetMarketBotTrackerQuery: () => ({ data: undefined, isError: false, isFetching: false }),

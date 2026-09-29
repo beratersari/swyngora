@@ -36,6 +36,7 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 | Holder snapshot | `GET` | `/api/v1/market/holders` | [`holders.md`](holders.md) |
 | Candle chart | `GET` | `/api/v1/market/candles` | DET-A §8 |
 | CVD pane and buy−sell histogram on that chart | `GET` | `/api/v1/market/cvd` | [`cvd.md`](cvd.md) |
+| Tape: usual or unusual versus stored history | `GET` | `/api/v1/market/unusual` | [`unusual-context.md`](unusual-context.md) |
 | Estimated 10×–100× liquidation prices on that chart | `GET` | `/api/v1/market/liquidation-levels` | [`liquidations.md`](liquidations.md) |
 | After-delist movement | `GET` | `/api/v1/market/post-delist` | [`delist-schedule.md`](delist-schedule.md) |
 | RSI/EMA series | `GET` | `/api/v1/market/indicators` | DET-B §5 |

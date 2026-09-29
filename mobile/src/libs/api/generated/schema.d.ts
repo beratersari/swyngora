@@ -814,7 +814,11 @@ export interface paths {
          *     65%) and `drivers` name the coins that moved the mix. `bands` show
          *     how close that book is to mid (e.g. **80M inside 0.1%** is **8% of
          *     the 1% book**, growing to 1.0B at 1%) and which coins fill each
-         *     distance. Sampled while the desk runs. `exchange=all` (default)
+         *     distance. `history` is total bid+ask each minute for the last 6 hours,
+         *     with BTC's close on the same minutes. `moves` are the largest jumps
+         *     and drops of at least 5% that finish within 15 minutes, plus BTC
+         *     during that stretch and 15 minutes later. Sampled while the desk runs.
+         *     `exchange=all` (default)
          *     adds Binance USD-M, Bybit linear, and OKX USDT-swap per coin. `rangePct` default
          *     **1**. `limit` default **20** (max 40). This is the **futures**
          *     book, not spot. Informational only.
@@ -1154,6 +1158,39 @@ export interface paths {
          *     failing does not drop the other. Survives process restarts.
          */
         get: operations["getMarketFuturesHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/unusual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether a coin's tape is unusual versus its own stored history
+         * @description Compares the current reading with past samples of the same series on
+         *     the same venue. Funding uses the fresh predicted rate when one was
+         *     stored in the last 30 minutes, otherwise the latest settlement, against
+         *     stored settlements. Open interest uses the latest non-overlapping 24h
+         *     percent change. Liquidations use the last completed clock hour, with
+         *     quiet hours counted as zero between the first and last stored print.
+         *     CVD uses the last completed UTC day of aggressive buy minus sell.
+         *     Spread uses the latest hour's average top-of-book percent from the
+         *     spot book (about 7 days are kept). Print size stays unknown: only the
+         *     previous 15 minutes of trades are kept. Fewer than 20 past daily
+         *     samples, or 24 past hourly samples, stays unknown. The span is the
+         *     stored sample span. exchange=all returns Binance, Bybit, and OKX
+         *     separately. OKX has no spot book, so its spread is unknown.
+         *     Informational only — not financial advice.
+         */
+        get: operations["getMarketUnusual"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1749,6 +1786,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/orderbook/recovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How long the book took to refill after a liquidity sweep
+         * @description For each recent sweep that has come back, compares stored 1-minute
+         *     spot ladders near the swept level. `beforeNotional` is the size on
+         *     that side just before the poke. The clock starts at `reclaimedAt`
+         *     and `recoverySeconds` is when that size is at least 80% restored.
+         *     `recovered=false` means it was still thin two hours later. Empty
+         *     until the desk has been sampling that pair. Informational only.
+         */
+        get: operations["getSweepRecovery"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/absorption": {
         parameters: {
             query?: never;
@@ -2285,9 +2347,18 @@ export interface paths {
          *     the hunt leverage mix (tilted by funding), blended account long/short,
          *     and observed liquidation prints in that column.
          *
-         *     `range` is 12h, 24h, 3d, or 7d. Binance and Bybit are modeled
+         *     `range` is 12h, 24h, 3d, 7d, 14d, 30d, or 90d. 14d, 30d, and 90d use the
+         *     startup archive. Public backfill follows each endpoint: Binance open
+         *     interest and long/short are 30 days, OKX hourly open interest is the
+         *     latest 1,440 points, and Bybit open interest goes back to listing
+         *     (this archive keeps 90 days). 90d is one column per day. Binance
+         *     columns older than the public 30 days are only hours this process
+         *     already recorded. Observed liquidation prints in a column are the
+         *     ones already stored; public REST refills about 7 days, not the whole 90.
+         *     Binance and Bybit are modeled
          *     separately and each venue uses only its own candles (never the
-         *     other exchange's price). `combined` is the sum of their cells.
+         *     other exchange's price). `combined` sums a column only when both
+         *     Binance and Bybit have open interest there.
          *     `review` scores whether later price reached the hot zones within
          *     1h / 4h / 12h, time-to-hit, hit rate / false signals, and whether
          *     observed liquidations in that zone rose. Not a live book and not
@@ -3178,7 +3249,8 @@ export interface paths {
         /**
          * Get paper portfolio performance history
          * @description Equity samples over 1d / 1w / 1m / 3m for a chart, plus P&L from the start of
-         *     that window as amount and percent. Background worker stores mark-to-market
+         *     that window as amount and percent, and the largest peak-to-trough drop
+         *     (maxDrawdown, drawdownFrom, drawdownTo). Background worker stores mark-to-market
          *     buckets (default 15m). Live equity is always the last point.
          *     Paper trading only — not real money.
          */
@@ -5146,6 +5218,9 @@ export interface components {
             coins?: components["schemas"]["MarketLiquidationCoin"][];
             feed?: components["schemas"]["LiquidationFeed"];
             note?: string;
+            coverage?: components["schemas"]["MarketVenueCoverage"];
+            /** @description False when any expected venue is missing or old. Totals are not a market read. */
+            definite?: boolean;
         };
         MarketLiquidationLeverageSlice: {
             /** @enum {integer} */
@@ -5517,6 +5592,46 @@ export interface components {
             asOf?: string;
             venues?: components["schemas"]["MarketBasisVenue"][];
             agreement?: components["schemas"]["MarketBasisAgreement"];
+            note?: string;
+        };
+        MarketUnusualReading: {
+            /** @enum {string} */
+            metric?: "funding" | "open_interest" | "liquidations" | "cvd" | "spread" | "print_size";
+            /** @enum {string} */
+            band?: "unknown" | "extreme_high" | "high" | "typical" | "low" | "extreme_low";
+            /** @enum {string} */
+            reason?: "few_samples" | "no_stored_history" | "no_book" | "no_sample";
+            current?: number;
+            median?: number;
+            /** @description Midrank of the current value in the past samples, rounded. Meaningful when band is not unknown. */
+            percentile?: number;
+            samples?: number;
+            minSamples?: number;
+            /** @description Hours from the first past sample to the last. This is the stored span, not a promised 30 days. */
+            spanHours?: number;
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            /** Format: date-time */
+            currentAt?: string;
+            /** @enum {string} */
+            unit?: "rate" | "pct_change" | "notional" | "signed_notional" | "spread_pct";
+            /** @enum {string} */
+            label?: "predicted" | "settled" | "24h_change" | "completed_hour" | "completed_day" | "latest_hour";
+            summary?: string;
+        };
+        MarketUnusualVenue: {
+            exchange?: string;
+            readings?: components["schemas"]["MarketUnusualReading"][];
+        };
+        /** @description Per-venue context versus stored history. Venues are scored separately. */
+        MarketUnusual: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            venues?: components["schemas"]["MarketUnusualVenue"][];
             note?: string;
         };
         MarketLiquidationCascadeHit: {
@@ -5913,7 +6028,7 @@ export interface components {
         LiquidationHuntHeatmap: {
             symbol?: string;
             /** @enum {string} */
-            range?: "12h" | "24h" | "3d" | "7d";
+            range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d" | "90d";
             /** Format: date-time */
             from?: string;
             /** Format: date-time */
@@ -6608,6 +6723,52 @@ export interface components {
             /** Format: date-time */
             sampleTime?: string;
         };
+        /** @description One 5-minute aggressive buy-minus-sell bar */
+        MarketCvdPoint: {
+            /** Format: date-time */
+            time?: string;
+            price?: string;
+            /** @description Buy notional minus sell notional on this bar */
+            delta?: string;
+            /** @description Running sum from the start of the series */
+            cvd?: string;
+            buyNotional?: string;
+            sellNotional?: string;
+        };
+        MarketCvdAnchor: {
+            /** @enum {string} */
+            anchor?: "day" | "4h";
+            /** Format: date-time */
+            from?: string;
+            /** @description Buy minus sell since from */
+            cvd?: string;
+            complete?: boolean;
+        };
+        MarketCvdSeries: {
+            exchange?: string;
+            lastCvd?: string;
+            lastPrice?: string;
+            summary?: string;
+            complete?: boolean;
+            points?: components["schemas"]["MarketCvdPoint"][];
+            anchors?: components["schemas"]["MarketCvdAnchor"][];
+        };
+        /**
+         * @description Futures CVD for Binance and Bybit, plus combined. `points` are 5-minute
+         *     bars. Anchors reset the sum at 00:00 UTC (`day`) and the current 4-hour
+         *     open (`4h`). The coin chart rebases those points onto candle times.
+         */
+        MarketCvdReport: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            summary?: string;
+            note?: string;
+            venues?: components["schemas"]["MarketCvdSeries"][];
+            combined?: components["schemas"]["MarketCvdSeries"];
+            spotCombined?: components["schemas"]["MarketCvdSeries"];
+        };
         /** @description Combined −1…+1 market pressure from book, CVD, and absorption */
         MarketPressure: {
             symbol?: string;
@@ -6629,8 +6790,10 @@ export interface components {
             /** @description Signed percentage-point change vs the prior window */
             changePct?: string;
             /** @enum {string} */
-            kind?: "gained" | "lost" | "stable";
+            kind?: "gained" | "lost" | "stable" | "missing";
             complete?: boolean;
+            /** @description False when this venue has no bars in the earlier window. Its share is not treated as 0. */
+            priorKnown?: boolean;
         };
         MarketVolumeShareWindow: {
             /** @enum {string} */
@@ -6640,6 +6803,8 @@ export interface components {
             venues?: components["schemas"]["MarketVolumeShareVenue"][];
             gained?: string[];
             lost?: string[];
+            /** @description Venues with no earlier window. Gained and lost ignore them. */
+            missing?: string[];
             complete?: boolean;
             summary?: string;
         };
@@ -6690,6 +6855,100 @@ export interface components {
             total?: string;
             /** @description BTC close at that minute */
             price?: string;
+        };
+        /** @description A sharp rise or fall in total perp bid+ask, with BTC around it */
+        MarketPerpDepthBookMove: {
+            /** @enum {string} */
+            kind?: "jump" | "drop";
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            /** @description Bid+ask at the start of the move */
+            pastTotal?: string;
+            /** @description Bid+ask at the end of the move */
+            total?: string;
+            /** @description Signed USDT */
+            change?: string;
+            /** @description Signed percent change of total bid+ask */
+            changePct?: string;
+            /** @description BTC close at the start */
+            priceFrom?: string;
+            /** @description BTC close at the end */
+            priceTo?: string;
+            /** @description BTC close about 15 minutes after the end */
+            priceAfter?: string;
+            /** @description Signed BTC percent during the depth move */
+            priceChangePct?: string;
+            /** @description Signed BTC percent from the end to 15 minutes later */
+            priceAfterPct?: string;
+            /**
+             * @description BTC during the depth move. Flat is under 0.2%
+             * @enum {string}
+             */
+            priceKind?: "up" | "down" | "flat";
+            /**
+             * @description BTC in the 15 minutes after the depth move
+             * @enum {string}
+             */
+            afterKind?: "up" | "down" | "flat";
+            /** @description Coins that added or removed the most of this move, largest share first */
+            drivers?: components["schemas"]["MarketPerpDepthMoveDriver"][];
+            /**
+             * @description one coin caused at least half
+             * @enum {string}
+             */
+            span?: "one" | "few" | "broad";
+            /** @description Bid+ask about 15 minutes after the move ended */
+            afterTotal?: string;
+            /**
+             * @description recovered means at least half the move came back
+             * @enum {string}
+             */
+            follow?: "recovered" | "continued" | "held";
+            /** @description Percent of the move that was undone. Positive means depth came back toward the size before the move */
+            followPct?: string;
+            /** @description Binance, Bybit, and OKX bid+ask over the same minutes. A venue is included only when both minutes were sampled. */
+            venues?: components["schemas"]["MarketPerpDepthMoveVenue"][];
+            /**
+             * @description all means Binance
+             * @enum {string}
+             */
+            venueSpan?: "all" | "some" | "one";
+            summary?: string;
+        };
+        /** @description One venue's bid+ask change during a perp-book jump or drop */
+        MarketPerpDepthMoveVenue: {
+            /** @enum {string} */
+            exchange?: "binance" | "bybit" | "okx";
+            /** @description That venue's bid+ask at the start */
+            pastTotal?: string;
+            /** @description That venue's bid+ask at the end */
+            total?: string;
+            /** @description Signed USDT */
+            change?: string;
+            /** @description Signed percent change of that venue's bid+ask */
+            changePct?: string;
+            /** @description True when this venue moved at least 5% in the same direction as the combined book */
+            with?: boolean;
+        };
+        /** @description One coin's share of a perp-book jump or drop */
+        MarketPerpDepthMoveDriver: {
+            symbol?: string;
+            base?: string;
+            /** @description Signed USDT */
+            change?: string;
+            /** @description This coin's change as a percent of the market move */
+            sharePct?: string;
+            /** @enum {string} */
+            kind?: "thicker" | "thinner" | "steady";
+        };
+        /** @description A minute left out of the total line because a venue was missing or old */
+        MarketPerpDepthHistoryGap: {
+            /** Format: date-time */
+            time?: string;
+            missing?: string[];
+            stale?: string[];
         };
         /** @description Bid vs ask share and total book size of the liquid-perp book now vs 15m / 1h / 4h ago */
         MarketPerpDepthShareWindow: {
@@ -6749,9 +7008,16 @@ export interface components {
             windows?: components["schemas"]["MarketPerpDepthShareWindow"][];
             /** @description Total bid+ask each minute for the last 6 hours, oldest first */
             history?: components["schemas"]["MarketPerpDepthTotalPoint"][];
+            /** @description Largest jumps and drops of at least 5% inside 15 minutes, biggest first, with BTC around each and whether Binance, Bybit, and OKX moved together */
+            moves?: components["schemas"]["MarketPerpDepthBookMove"][];
+            /** @description Minutes skipped because a venue was missing or old. These are not totals. */
+            gaps?: components["schemas"]["MarketPerpDepthHistoryGap"][];
             bands?: components["schemas"]["MarketPerpDepthOverviewBand"][];
             summary?: string;
             note?: string;
+            coverage?: components["schemas"]["MarketVenueCoverage"];
+            /** @description False when any expected venue book is missing or old. The lean is not a market read. */
+            definite?: boolean;
         };
         /** @description One coin's share of a ±% market-wide perp band */
         MarketPerpDepthOverviewBandCoin: {
@@ -6867,6 +7133,9 @@ export interface components {
             coins?: components["schemas"]["PrintSizeVenue"][];
             summary?: string;
             note?: string;
+            coverage?: components["schemas"]["MarketVenueCoverage"];
+            /** @description False when any expected venue is missing or old. The size read is not a market result. */
+            definite?: boolean;
         };
         BotCluster: {
             exchange?: string;
@@ -6958,6 +7227,24 @@ export interface components {
             complete?: boolean;
             summary?: string;
         };
+        /** @description One futures venue on a combined market read */
+        MarketVenueRead: {
+            /** @enum {string} */
+            exchange?: "binance" | "bybit" | "okx";
+            /** @enum {string} */
+            status?: "fresh" | "stale" | "missing";
+            /** Format: date-time */
+            asOf?: string;
+            /** @description Seconds since asOf. Zero when the venue is missing or answered with no timestamp. */
+            ageSec?: number;
+        };
+        /** @description Whether Binance, Bybit, and OKX are fresh. complete is false when any expected venue is missing or old. definite on the parent read is then false and the market lean must not be treated as a result. */
+        MarketVenueCoverage: {
+            complete?: boolean;
+            venues?: components["schemas"]["MarketVenueRead"][];
+            missing?: string[];
+            stale?: string[];
+        };
         /** @description Print-count ratio summed across liquid pairs */
         MarketOrderCountOverview: {
             exchange?: string;
@@ -6969,6 +7256,9 @@ export interface components {
             coins?: components["schemas"]["OrderCountVenue"][];
             summary?: string;
             note?: string;
+            coverage?: components["schemas"]["MarketVenueCoverage"];
+            /** @description False when any expected venue is missing or old. The ratio is not a market read. */
+            definite?: boolean;
         };
         /** @description Predicted next funding plus recent settlements */
         MarketFundingRate: {
@@ -7448,6 +7738,36 @@ export interface components {
             medianSlippagePct?: number;
             exhaustedCoins?: number;
             hits?: components["schemas"]["OrderBookImpactScanHit"][];
+            summary?: string;
+            note?: string;
+        };
+        SweepRecovery: {
+            exchange?: string;
+            symbol?: string;
+            /** @enum {string} */
+            side?: "high" | "low";
+            level?: string;
+            /** Format: date-time */
+            piercedAt?: string;
+            /** Format: date-time */
+            reclaimedAt?: string;
+            beforeNotional?: string;
+            troughNotional?: string;
+            backNotional?: string;
+            recovered?: boolean;
+            recoverySeconds?: number;
+            recoveredPct?: number;
+            summary?: string;
+        };
+        SweepRecoveryReport: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            medianRecoverySeconds?: number;
+            recovered?: number;
+            pending?: number;
+            rows?: components["schemas"]["SweepRecovery"][];
             summary?: string;
             note?: string;
         };
@@ -8235,6 +8555,20 @@ export interface components {
             changePct?: number | null;
             /** @description True when the portfolio is younger than the requested period */
             partial?: boolean;
+            /** @description Largest peak-to-trough equity drop in the window (portfolio currency, 0 when equity never fell) */
+            maxDrawdown?: number;
+            /** @description That drop as a percent of the peak; null when the peak is ~0 or there was no drop */
+            maxDrawdownPct?: number | null;
+            /**
+             * Format: date-time
+             * @description When the peak before the max drawdown was printed
+             */
+            drawdownFrom?: string;
+            /**
+             * Format: date-time
+             * @description When equity reached the trough of the max drawdown
+             */
+            drawdownTo?: string;
             pointCount?: number;
             points?: components["schemas"]["PortfolioEquityPoint"][];
             note?: string;
@@ -8574,6 +8908,8 @@ export interface components {
             limits?: {
                 maxDailyLossPct?: number | null;
                 maxAssetWeightPct?: number | null;
+                /** @description Block new buys once all coins together exceed this percent of equity. Above 100 allows margin gross. Null disables. */
+                maxExposurePct?: number | null;
                 /** Format: date-time */
                 updatedAt?: string;
             };
@@ -8587,6 +8923,11 @@ export interface components {
                 dailyPnl?: number;
                 dailyPnlPct?: number;
                 dailyLossLimitHit?: boolean;
+                /** @description Spot market value plus open margin notional across coins */
+                exposureValue?: number;
+                /** @description exposureValue as a percent of equity */
+                exposurePct?: number;
+                exposureLimitHit?: boolean;
                 assets?: {
                     asset?: string;
                     value?: number;
@@ -10872,6 +11213,31 @@ export interface operations {
             502: components["responses"]["Error"];
         };
     };
+    getMarketUnusual: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: "binance" | "bybit" | "okx" | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue readings versus stored history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketUnusual"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
     getMarketBasis: {
         parameters: {
             query: {
@@ -11364,7 +11730,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["MarketCvdReport"];
                 };
             };
             400: components["responses"]["Error"];
@@ -11447,6 +11813,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getSweepRecovery: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | all (default all) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Refill clock for recent sweeps */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SweepRecoveryReport"];
                 };
             };
             400: components["responses"]["Error"];
@@ -12046,8 +12438,8 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description 12h | 24h | 3d | 7d */
-                range?: "12h" | "24h" | "3d" | "7d";
+                /** @description 12h | 24h | 3d | 7d | 14d | 30d | 90d */
+                range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d" | "90d";
                 /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
             };
@@ -12078,7 +12470,7 @@ export interface operations {
                 /** @description binance | bybit | okx | all (default all = combined) */
                 exchange?: string;
                 /** @description 12h | 24h | 3d | 7d (totals clamp to 24h) */
-                range?: "12h" | "24h" | "3d" | "7d";
+                range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d";
             };
             header?: never;
             path?: never;
@@ -13967,6 +14359,11 @@ export interface operations {
                      * @example 30
                      */
                     maxAssetWeightPct?: number | null;
+                    /**
+                     * @description Block new buys once all coins together would exceed this percent of equity. Above 100 allows margin gross.
+                     * @example 60
+                     */
+                    maxExposurePct?: number | null;
                 };
             };
         };

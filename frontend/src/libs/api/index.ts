@@ -34,6 +34,7 @@ export {
   useGetMarketLiquidationMaxPainQuery,
   useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketCvdQuery,
+  useGetMarketUnusualQuery,
   useGetMarketVolumeShareQuery,
   useGetMarketPerpDepthOverviewQuery,
   useGetMarketBreadthQuery,
@@ -88,6 +89,8 @@ export type {
   DelistScheduleResponse,
   DelistScheduleItem,
   PostDelistResponse,
+  MarketUnusualReading,
+  MarketUnusualVenue,
 } from './endpoints/marketApi.types';
 export type {
   SpotMarket,
@@ -144,6 +147,8 @@ export type {
   MarketLiquidationCascade,
   MarketLiquidationCascadeScan,
   MarketCvd,
+  MarketUnusual,
+  UnusualQuery,
   MarketVolumeShare,
   SpotPerpLiquidity,
   SpotPerpBook,

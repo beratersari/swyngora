@@ -1166,6 +1166,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/unusual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether a coin's tape is unusual versus its own stored history
+         * @description Compares the current reading with past samples of the same series on
+         *     the same venue. Funding uses the fresh predicted rate when one was
+         *     stored in the last 30 minutes, otherwise the latest settlement, against
+         *     stored settlements. Open interest uses the latest non-overlapping 24h
+         *     percent change. Liquidations use the last completed clock hour, with
+         *     quiet hours counted as zero between the first and last stored print.
+         *     CVD uses the last completed UTC day of aggressive buy minus sell.
+         *     Spread uses the latest hour's average top-of-book percent from the
+         *     spot book (about 7 days are kept). Print size stays unknown: only the
+         *     previous 15 minutes of trades are kept. Fewer than 20 past daily
+         *     samples, or 24 past hourly samples, stays unknown. The span is the
+         *     stored sample span. exchange=all returns Binance, Bybit, and OKX
+         *     separately. OKX has no spot book, so its spread is unknown.
+         *     Informational only — not financial advice.
+         */
+        get: operations["getMarketUnusual"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/basis": {
         parameters: {
             query?: never;
@@ -5559,6 +5592,46 @@ export interface components {
             asOf?: string;
             venues?: components["schemas"]["MarketBasisVenue"][];
             agreement?: components["schemas"]["MarketBasisAgreement"];
+            note?: string;
+        };
+        MarketUnusualReading: {
+            /** @enum {string} */
+            metric?: "funding" | "open_interest" | "liquidations" | "cvd" | "spread" | "print_size";
+            /** @enum {string} */
+            band?: "unknown" | "extreme_high" | "high" | "typical" | "low" | "extreme_low";
+            /** @enum {string} */
+            reason?: "few_samples" | "no_stored_history" | "no_book" | "no_sample";
+            current?: number;
+            median?: number;
+            /** @description Midrank of the current value in the past samples, rounded. Meaningful when band is not unknown. */
+            percentile?: number;
+            samples?: number;
+            minSamples?: number;
+            /** @description Hours from the first past sample to the last. This is the stored span, not a promised 30 days. */
+            spanHours?: number;
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            /** Format: date-time */
+            currentAt?: string;
+            /** @enum {string} */
+            unit?: "rate" | "pct_change" | "notional" | "signed_notional" | "spread_pct";
+            /** @enum {string} */
+            label?: "predicted" | "settled" | "24h_change" | "completed_hour" | "completed_day" | "latest_hour";
+            summary?: string;
+        };
+        MarketUnusualVenue: {
+            exchange?: string;
+            readings?: components["schemas"]["MarketUnusualReading"][];
+        };
+        /** @description Per-venue context versus stored history. Venues are scored separately. */
+        MarketUnusual: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            asOf?: string;
+            venues?: components["schemas"]["MarketUnusualVenue"][];
             note?: string;
         };
         MarketLiquidationCascadeHit: {
@@ -11134,6 +11207,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketUnusual: {
+        parameters: {
+            query: {
+                symbol: string;
+                exchange?: "binance" | "bybit" | "okx" | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue readings versus stored history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketUnusual"];
                 };
             };
             400: components["responses"]["Error"];

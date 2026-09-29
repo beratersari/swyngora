@@ -73,6 +73,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/funding-arb/signals/{id}` | One crossing plus predicted-vs-settled review |
 | `GET` | `/api/v1/market/long-short-ratio` | Account long/short ratio + recent 5m history; Binance `gap` is top long% minus crowd long%; `divergence` is top vs price (more long while price falls) |
 | `GET` | `/api/v1/market/futures-history` | Durable stored OI / funding / long-short / liquidation history |
+| `GET` | `/api/v1/market/unusual` | Whether funding, 24h open-interest change, completed-hour liquidations, completed-day CVD, and hourly spread are high or low versus that coin’s own stored samples. Venues stay separate. Print size stays unknown |
 | `GET` | `/api/v1/market/liquidation-max-pain` | Largest estimated liquidation pockets above (shorts) and below (longs) last price — not the hunt target |
 | `GET` | `/api/v1/market/liquidation-hunt` | Hypothetical per-venue hunt: spot size to reach liq zones + desk result + up/down ease scores (requested percents stay as given; missing factors add 0; `scoreCompare` has separate up/down factor effects and the largest custom-weight mover per side) + cascade paths |
 | `GET` | `/api/v1/market/liquidation-hunt/heatmap` | Price × time liquidation intensity (12h/24h/3d/7d; own-venue prices; Binance, Bybit, combined; 1h/4h/12h review) |

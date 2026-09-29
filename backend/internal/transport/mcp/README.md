@@ -41,6 +41,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_funding_arb_signal` | One crossing plus predicted-vs-settled review |
 | `get_long_short_ratio` | Account long/short plus Binance top-trader layers; `gap` is top long% minus crowd long%; `divergence` is top vs price with `since` / duration; `gapWindows` say if that spread is widening; `split` when crowd and size disagree |
 | `get_futures_history` | Durable stored OI / funding / long-short / liquidation history |
+| `get_unusual_context` | Funding, 24h open-interest change, completed-hour liquidations, completed-day CVD, and hourly spread versus that coin’s own stored samples. Venues stay separate. The span is the stored span. Print size stays unknown |
 | `get_liquidation_max_pain` | Largest estimated liquidation pockets above (shorts) and below (longs) last price — not the hunt target |
 | `estimate_liquidation_hunt` | Hypothetical per-venue hunt: spot size to reach liq zones + desk result + up/down ease scores (optional custom weight* mix summing to 100; percents stay as given — missing factors add 0 and are not redistributed; scoreCompare has separate upFactors/downFactors, usedVenues/missingVenues on combined rows, and upLargestChange/downLargestChange) and cascade paths (running fuel pool, hop strength, stall) |
 | `get_liquidation_heatmap` | Price × time liquidation intensity (12h/24h/3d/7d; Binance, Bybit, combined; own-venue prices; 1h/4h/12h hit review) |

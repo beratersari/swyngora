@@ -63,6 +63,8 @@ server restart and can be queried later by users or the AI.
 | HTTP | `GET /api/v1/market/futures-history` |
 | MCP / AI | `get_futures_history` |
 
+`GET /api/v1/market/unusual` reads this store to say whether funding, open-interest change, liquidation notional, and daily CVD are high or low versus the samples already kept. It does not change how far each endpoint is backfilled. See `docs/features/unusual-context.md`.
+
 ## Config
 
 | Variable | Default |

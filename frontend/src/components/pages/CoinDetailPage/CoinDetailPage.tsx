@@ -17,6 +17,7 @@ import { DetailStats } from '@/components/organisms/DetailStats';
 import { HolderPanel } from '@/components/organisms/HolderPanel';
 import { PostDelistPanel } from '@/components/organisms/PostDelistPanel';
 import { TapePanel } from '@/components/organisms/TapePanel';
+import { UnusualContext, UNUSUAL_POLL_MS } from '@/components/organisms/UnusualContext';
 import { PERP_LIQUIDITY_LIMIT } from '@/components/organisms/PerpLiquidityOverview';
 import { IndicatorPanel, emaColor } from '@/components/organisms/IndicatorPanel';
 import { BookGapsCard } from '@/components/organisms/BookGapsCard';
@@ -48,6 +49,7 @@ import {
   useGetMarketNetPositionQuery,
   useGetMarketLiquidationsQuery,
   useGetMarketCvdQuery,
+  useGetMarketUnusualQuery,
   useGetMarketLiquidationLevelsQuery,
   useGetMarketVolumeShareQuery,
   useGetMarketPerpDepthOverviewQuery,
@@ -424,6 +426,11 @@ export function CoinDetailPage() {
   const cvdQuery = useGetMarketCvdQuery(tapeQueryArg, {
     skip: skipTape,
     pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
+    refetchOnFocus: true,
+  });
+  const unusualQuery = useGetMarketUnusualQuery(tapeQueryArg, {
+    skip: skipTape,
+    pollingInterval: visible ? UNUSUAL_POLL_MS : 0,
     refetchOnFocus: true,
   });
   const liqLevelsQuery = useGetMarketLiquidationLevelsQuery(
@@ -1231,6 +1238,17 @@ export function CoinDetailPage() {
                   label: t('detail:tabs.tape'),
                   children: (
                     <TabStack>
+                      <UnusualContext
+                        report={rtkCurrent(unusualQuery)}
+                        isLoading={rtkCurrentPending(unusualQuery)}
+                        error={
+                          unusualQuery.isError
+                            ? rtkErrorMessage(unusualQuery.error, {
+                                resource: t('detail:resource.tape'),
+                              })
+                            : null
+                        }
+                      />
                       <TapePanel
                         openInterest={rtkCurrent(openInterestQuery)}
                         netPosition={rtkCurrent(netPositionQuery)}

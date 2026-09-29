@@ -68,6 +68,7 @@ type DataPort interface {
 	GetFundingArbSignal(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error)
+	GetUnusual(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLiquidationHunt(ctx context.Context, exchange, symbol string, weights domain.HuntScoreWeights) (json.RawMessage, error)
 	GetLiquidationHuntHeatmap(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error)
 	GetLiquidationMaxPain(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -1111,6 +1112,22 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetFuturesHistory(ctx, metric, req.GetString("exchange", "all"), symbol, req.GetString("from", ""), req.GetString("to", ""), int(req.GetFloat("limit", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_unusual_context",
+		mcp.WithDescription("Says whether funding, the latest 24h open-interest change, the last completed hour of liquidations, the last completed UTC day of CVD, and the latest hour's average spread are high or low versus this coin's own stored history on that venue. Print size stays unknown because only the previous 15 minutes are kept. exchange=all returns Binance, Bybit, and OKX separately. The span is the stored sample span. Too few samples stay unknown. Informational only — not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetUnusual(ctx, req.GetString("exchange", "all"), symbol)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

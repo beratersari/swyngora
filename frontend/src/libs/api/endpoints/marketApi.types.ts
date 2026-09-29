@@ -138,6 +138,10 @@ export type LiquidationCascadeScanQuery = NonNullable<
   operations['scanMarketLiquidationCascades']['parameters']['query']
 >;
 export type CvdQuery = NonNullable<operations['getMarketCVD']['parameters']['query']>;
+export type MarketUnusualReading = components['schemas']['MarketUnusualReading'];
+export type MarketUnusualVenue = components['schemas']['MarketUnusualVenue'];
+export type MarketUnusual = components['schemas']['MarketUnusual'];
+export type UnusualQuery = NonNullable<operations['getMarketUnusual']['parameters']['query']>;
 export type MarketVolumeShare = components['schemas']['MarketVolumeShare'];
 export type VolumeShareQuery = NonNullable<operations['getMarketVolumeShare']['parameters']['query']>;
 export type SpotPerpLiquidity = components['schemas']['SpotPerpLiquidity'];

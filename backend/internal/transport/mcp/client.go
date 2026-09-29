@@ -1398,6 +1398,16 @@ func (c *APIClient) GetFuturesHistory(ctx context.Context, metric, exchange, sym
 	return c.get(ctx, "/api/v1/market/futures-history", q)
 }
 
+// GetUnusual returns whether stored funding, open interest, liquidations, CVD, and spread look unusual.
+func (c *APIClient) GetUnusual(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	return c.get(ctx, "/api/v1/market/unusual", q)
+}
+
 // GetMarketLiquidity scores ±0.1 / ±0.5 / ±1% depth per venue and market-wide.
 func (c *APIClient) GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

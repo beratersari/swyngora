@@ -136,6 +136,48 @@
   "tape": {
     "title": "Futures tape",
     "subtitle": "Open interest, funding, liquidations, and CVD from Binance USD-M and Bybit linear. Informational only.",
+    "unusual": {
+      "title": "Versus its own history",
+      "subtitle": "Each figure is this coin on this venue compared with stored samples. The span is how long those samples actually cover. Informational only.",
+      "checking": "Checking stored history…",
+      "metric": {
+        "funding": "Funding",
+        "open_interest": "Open interest",
+        "liquidations": "Liquidations",
+        "cvd": "CVD",
+        "spread": "Spread",
+        "print_size": "Print size"
+      },
+      "band": {
+        "extreme_high": "extremely high",
+        "high": "high",
+        "typical": "typical",
+        "low": "low",
+        "extreme_low": "extremely low",
+        "unknown": "unknown"
+      },
+      "kind": {
+        "predicted": "Predicted funding",
+        "settled": "Settled funding"
+      },
+      "line": {
+        "funding": "{{kind}} is {{current}}, {{band}} versus {{samples}} stored settlements over {{span}} (percentile {{percentile}}).",
+        "open_interest": "The latest 24h open-interest change is {{current}}, {{band}} versus {{samples}} earlier 24h changes over {{span}} (percentile {{percentile}}).",
+        "liquidations": "Last completed hour liquidations are {{current}}, {{band}} versus {{samples}} completed hours over {{span}} (percentile {{percentile}}).",
+        "cvd": "Last completed day's net aggressive flow is {{current}}, {{band}} versus {{samples}} earlier days over {{span}} (percentile {{percentile}}).",
+        "spread": "The latest hour's average spread is {{current}}, {{band}} versus {{samples}} earlier hours over {{span}} (percentile {{percentile}})."
+      },
+      "few": "{{metric}} has {{samples}} stored samples over {{span}}. At least {{need}} are needed before calling it usual or unusual.",
+      "noSample": "{{metric}} has no stored sample to compare yet.",
+      "noBook": "This venue has no spot book here, so spread versus its own history is unknown.",
+      "printSize": "Print size is only compared with the previous 15 minutes. There is no longer stored history.",
+      "span": {
+        "hour": "{{count}} hour",
+        "hours": "{{count}} hours",
+        "days": "{{count}} days",
+        "underHour": "under an hour"
+      }
+    },
     "oi": "Open interest",
     "netPosition": "Net long / short",
     "netPositionHint": "From open interest and taker buy/sell. Positive means that side grew.",
