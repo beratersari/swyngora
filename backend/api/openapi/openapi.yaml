@@ -3703,13 +3703,17 @@ paths:
         and observed liquidation prints in that column.
 
         `range` is 12h, 24h, 3d, 7d, 14d, 30d, or 90d. 14d, 30d, and 90d use the
-        startup archive of 1-hour open interest, funding, and long/short
-        (kept 90 days). 90d is one column per day. Observed liquidation
-        prints in a column are the ones already stored; public REST refills
-        about 7 days, not the whole 90.
+        startup archive. Public backfill follows each endpoint: Binance open
+        interest and long/short are 30 days, OKX hourly open interest is the
+        latest 1,440 points, and Bybit open interest goes back to listing
+        (this archive keeps 90 days). 90d is one column per day. Binance
+        columns older than the public 30 days are only hours this process
+        already recorded. Observed liquidation prints in a column are the
+        ones already stored; public REST refills about 7 days, not the whole 90.
         Binance and Bybit are modeled
         separately and each venue uses only its own candles (never the
-        other exchange's price). `combined` is the sum of their cells.
+        other exchange's price). `combined` sums a column only when both
+        Binance and Bybit have open interest there.
         `review` scores whether later price reached the hot zones within
         1h / 4h / 12h, time-to-hit, hit rate / false signals, and whether
         observed liquidations in that zone rose. Not a live book and not

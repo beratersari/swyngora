@@ -12,10 +12,12 @@ import (
 const archiveSlack = 48 * time.Hour
 
 // Archive pages public 1-hour open interest, funding, and long/short history
-// into the futures store on startup, up to 90 days. A later start skips a
-// series that already reaches the back of that window. Liquidation prints
-// are filled only for the public force-order window (about 7 days); older
-// prints are the ones the websocket already stored.
+// into the futures store on startup. Each series stops at the lookback that
+// endpoint documents (see domain.PublicFuturesHistoryLookback), and never
+// past FuturesHistoryMaxLookback. A later start skips a series that already
+// reaches the back of that window. Liquidation prints are filled only for
+// the public force-order window (about 7 days); older prints are the ones
+// the websocket already stored.
 type Archive struct {
 	Hist     *Service
 	Liq      map[domain.Exchange]domain.LiquidationHistoryPort
@@ -39,11 +41,8 @@ func (a *Archive) Start(ctx context.Context) {
 	if a.now == nil {
 		a.now = time.Now
 	}
-	if a.Lookback <= 0 || a.Lookback > domain.FuturesHistoryMaxLookback {
-		a.Lookback = domain.FuturesHistoryMaxLookback
-	}
 	now := a.now().UTC()
-	from := now.Add(-a.Lookback)
+	from := a.retentionFrom(now)
 	symbols := append([]string{}, a.Hist.Seeds...)
 	if len(symbols) == 0 {
 		symbols = append(symbols, domain.DefaultFuturesHistorySymbols...)
@@ -59,19 +58,19 @@ func (a *Archive) Start(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
-			n, stop := a.fillOI(ctx, ex, sym, from, now)
+			n, stop := a.fillOI(ctx, ex, sym, now)
 			oiN += n
 			if stop {
 				a.finish(oiN, fundN, lsN, liqN, true)
 				return
 			}
-			n, stop = a.fillFunding(ctx, ex, sym, from, now)
+			n, stop = a.fillFunding(ctx, ex, sym, now)
 			fundN += n
 			if stop {
 				a.finish(oiN, fundN, lsN, liqN, true)
 				return
 			}
-			n, stop = a.fillLongShort(ctx, ex, sym, from, now)
+			n, stop = a.fillLongShort(ctx, ex, sym, now)
 			lsN += n
 			if stop {
 				a.finish(oiN, fundN, lsN, liqN, true)
@@ -88,6 +87,29 @@ func (a *Archive) finish(oiN, fundN, lsN, liqN int, limited bool) {
 		"open_interest", oiN, "funding", fundN, "long_short", lsN, "liquidations", liqN, "rate_limited", limited)
 }
 
+func (a *Archive) retentionFrom(now time.Time) time.Time {
+	look := a.Lookback
+	if look <= 0 || look > domain.FuturesHistoryMaxLookback {
+		look = domain.FuturesHistoryMaxLookback
+	}
+	return now.UTC().Add(-look)
+}
+
+// historyFrom is the start of the public window for this series.
+// The second result is false when this archive does not request it.
+func (a *Archive) historyFrom(ex domain.Exchange, metric string, now time.Time) (time.Time, bool) {
+	public := domain.PublicFuturesHistoryLookback(ex, metric, now)
+	if public <= 0 {
+		return time.Time{}, false
+	}
+	from := a.retentionFrom(now)
+	earliest := now.Add(-public)
+	if from.Before(earliest) {
+		from = earliest
+	}
+	return from, true
+}
+
 func (a *Archive) covered(ctx context.Context, metric string, ex domain.Exchange, symbol string, from time.Time) bool {
 	clock, ok := a.Hist.Store.(snapshotClock)
 	if !ok {
@@ -100,9 +122,13 @@ func (a *Archive) covered(ctx context.Context, metric string, ex domain.Exchange
 	return !at.After(from.Add(archiveSlack))
 }
 
-func (a *Archive) fillOI(ctx context.Context, ex domain.Exchange, symbol string, from, now time.Time) (int, bool) {
+func (a *Archive) fillOI(ctx context.Context, ex domain.Exchange, symbol string, now time.Time) (int, bool) {
 	port, ok := a.Hist.OI[ex].(domain.OpenInterestHistoryPort)
 	if !ok || port == nil {
+		return 0, false
+	}
+	from, ok := a.historyFrom(ex, domain.FuturesMetricOpenInterest, now)
+	if !ok {
 		return 0, false
 	}
 	if a.covered(ctx, domain.FuturesMetricOpenInterest, ex, symbol, from) {
@@ -132,9 +158,13 @@ func (a *Archive) fillOI(ctx context.Context, ex domain.Exchange, symbol string,
 	return n, false
 }
 
-func (a *Archive) fillFunding(ctx context.Context, ex domain.Exchange, symbol string, from, now time.Time) (int, bool) {
+func (a *Archive) fillFunding(ctx context.Context, ex domain.Exchange, symbol string, now time.Time) (int, bool) {
 	port := a.Hist.Funding[ex]
 	if port == nil {
+		return 0, false
+	}
+	from, ok := a.historyFrom(ex, domain.FuturesMetricFunding, now)
+	if !ok {
 		return 0, false
 	}
 	if a.covered(ctx, domain.FuturesMetricFunding, ex, symbol, from) {
@@ -163,9 +193,13 @@ func (a *Archive) fillFunding(ctx context.Context, ex domain.Exchange, symbol st
 	return n, false
 }
 
-func (a *Archive) fillLongShort(ctx context.Context, ex domain.Exchange, symbol string, from, now time.Time) (int, bool) {
+func (a *Archive) fillLongShort(ctx context.Context, ex domain.Exchange, symbol string, now time.Time) (int, bool) {
 	port, ok := a.Hist.LS[ex].(domain.LongShortHistoryPort)
 	if !ok || port == nil {
+		return 0, false
+	}
+	from, ok := a.historyFrom(ex, domain.FuturesMetricLongShort, now)
+	if !ok {
 		return 0, false
 	}
 	if a.covered(ctx, domain.FuturesMetricLongShort, ex, symbol, from) {

@@ -131,6 +131,8 @@ func (c *Client) ListLongShortHistory(ctx context.Context, symbol string, from, 
 	if !to.After(from) {
 		return nil, fmt.Errorf("%w: to must be after from", domain.ErrInvalidArgument)
 	}
+	// Global, top-account, and top-position ratios each keep only the latest 30 days.
+	from = domain.ClampPublicHistoryFrom(domain.ExchangeBinance, domain.FuturesMetricLongShort, from, to)
 	global, err := c.pageLongShort(ctx, symbol, "/futures/data/globalLongShortAccountRatio", from, to)
 	if err != nil {
 		return nil, err

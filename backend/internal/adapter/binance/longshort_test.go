@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -64,5 +65,25 @@ func TestGetLongShortSeries_InvalidSymbol(t *testing.T) {
 	_, err := c.GetLongShortSeries(context.Background(), "  ", 0)
 	if !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestListLongShortHistory_ClampsToThirtyDays(t *testing.T) {
+	to := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+	from := to.Add(-90 * 24 * time.Hour)
+	wantStart := to.Add(-domain.BinanceLongShortHistoryLookback).UnixMilli()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start, _ := strconv.ParseInt(r.URL.Query().Get("startTime"), 10, 64)
+		if start != wantStart {
+			t.Errorf("%s startTime %d want %d", r.URL.Path, start, wantStart)
+		}
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{"longAccount": "0.6", "shortAccount": "0.4", "longShortRatio": "1.5", "timestamp": start},
+		})
+	}))
+	defer srv.Close()
+	c := NewClient(Options{FuturesBaseURL: srv.URL, HTTPClient: srv.Client()})
+	if _, err := c.ListLongShortHistory(context.Background(), "BTCUSDT", from, to); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -201,6 +201,8 @@ func (c *Client) ListFundingHistory(ctx context.Context, symbol string, from, to
 	if !to.After(from) {
 		return nil, fmt.Errorf("%w: to must be after from", domain.ErrInvalidArgument)
 	}
+	// /v5/market/funding/history documents no day cap. The archive still stops at 90 days.
+	from = domain.ClampPublicHistoryFrom(domain.ExchangeBybit, domain.FuturesMetricFunding, from, to)
 	const page = 200
 	var out []domain.FundingPoint
 	cursor := from

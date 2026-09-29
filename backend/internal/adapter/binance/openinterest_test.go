@@ -100,6 +100,26 @@ func TestListOpenInterestHistory_PagesHourly(t *testing.T) {
 	}
 }
 
+func TestListOpenInterestHistory_ClampsToThirtyDays(t *testing.T) {
+	to := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+	from := to.Add(-90 * 24 * time.Hour)
+	wantStart := to.Add(-domain.BinanceOpenInterestHistoryLookback).UnixMilli()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start, _ := strconv.ParseInt(r.URL.Query().Get("startTime"), 10, 64)
+		if start != wantStart {
+			t.Errorf("startTime %d want %d", start, wantStart)
+		}
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{"sumOpenInterest": "1", "sumOpenInterestValue": "100", "timestamp": start},
+		})
+	}))
+	defer srv.Close()
+	c := NewClient(Options{FuturesBaseURL: srv.URL, HTTPClient: srv.Client()})
+	if _, err := c.ListOpenInterestHistory(context.Background(), "BTCUSDT", from, to); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestGetOpenInterestSeries_InvalidSymbol(t *testing.T) {
 	c := NewClient(Options{FuturesBaseURL: "http://example.invalid"})
 	_, err := c.GetOpenInterestSeries(context.Background(), "  ")

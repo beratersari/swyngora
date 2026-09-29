@@ -189,6 +189,8 @@ func (c *Client) ListFundingHistory(ctx context.Context, symbol string, from, to
 	if !to.After(from) {
 		return nil, nil
 	}
+	// /api/v5/public/funding-rate-history returns at most three months.
+	from = domain.ClampPublicHistoryFrom(domain.ExchangeOKX, domain.FuturesMetricFunding, from, to)
 	var out []domain.FundingPoint
 	after := ""
 	for i := 0; i < 20; i++ {

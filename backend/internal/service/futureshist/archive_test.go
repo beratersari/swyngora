@@ -61,39 +61,48 @@ type histOI struct {
 	points []domain.OpenInterestPoint
 	calls  int
 	err    error
+	from   time.Time
+	to     time.Time
 }
 
 func (h *histOI) GetOpenInterestSeries(context.Context, string) (*domain.OpenInterestSeries, error) {
 	return nil, nil
 }
-func (h *histOI) ListOpenInterestHistory(context.Context, string, time.Time, time.Time) ([]domain.OpenInterestPoint, error) {
+func (h *histOI) ListOpenInterestHistory(_ context.Context, _ string, from, to time.Time) ([]domain.OpenInterestPoint, error) {
 	h.calls++
+	h.from, h.to = from, to
 	return h.points, h.err
 }
 
 type histFund struct {
 	points []domain.FundingPoint
 	calls  int
+	from   time.Time
+	to     time.Time
 }
 
 func (h *histFund) GetFundingSeries(context.Context, string, int) (*domain.FundingSeries, error) {
 	return nil, nil
 }
-func (h *histFund) ListFundingHistory(context.Context, string, time.Time, time.Time) ([]domain.FundingPoint, error) {
+func (h *histFund) ListFundingHistory(_ context.Context, _ string, from, to time.Time) ([]domain.FundingPoint, error) {
 	h.calls++
+	h.from, h.to = from, to
 	return h.points, nil
 }
 
 type histLS struct {
 	points []domain.LongShortHistoryPoint
 	calls  int
+	from   time.Time
+	to     time.Time
 }
 
 func (h *histLS) GetLongShortSeries(context.Context, string, int) (*domain.LongShortSeries, error) {
 	return nil, nil
 }
-func (h *histLS) ListLongShortHistory(context.Context, string, time.Time, time.Time) ([]domain.LongShortHistoryPoint, error) {
+func (h *histLS) ListLongShortHistory(_ context.Context, _ string, from, to time.Time) ([]domain.LongShortHistoryPoint, error) {
 	h.calls++
+	h.from, h.to = from, to
 	return h.points, nil
 }
 
@@ -153,7 +162,7 @@ func TestArchiveBackfillInsertsAndSkipsWhenCovered(t *testing.T) {
 	}
 }
 
-func TestArchiveLookbackCapsAtNinetyDays(t *testing.T) {
+func TestArchiveBackfillStopsAtDocumentedWindow(t *testing.T) {
 	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
 	store := &archiveStore{snaps: []domain.FuturesSnapshot{{
 		Metric:    domain.FuturesMetricOpenInterest,
@@ -172,9 +181,60 @@ func TestArchiveLookbackCapsAtNinetyDays(t *testing.T) {
 	if oi.calls != 0 {
 		t.Fatalf("a day already covered by a 40-day row, calls=%d", oi.calls)
 	}
+	// Binance open interest is only the latest 30 days, so a 40-day row covers it.
 	(&Archive{Hist: svc, Lookback: 400 * 24 * time.Hour, now: func() time.Time { return now }}).Start(context.Background())
-	if oi.calls != 1 {
-		t.Fatalf("90-day window should refetch, calls=%d", oi.calls)
+	if oi.calls != 0 {
+		t.Fatalf("binance oi public window is 30 days, calls=%d", oi.calls)
+	}
+
+	bybitOI := &histOI{}
+	bybitSvc := &Service{
+		Store: &archiveStore{snaps: []domain.FuturesSnapshot{{
+			Metric: domain.FuturesMetricOpenInterest, Exchange: domain.ExchangeBybit, Symbol: "BTCUSDT",
+			SampledAt: now.Add(-40 * 24 * time.Hour), Value: 1,
+		}}},
+		OI:    map[domain.Exchange]domain.OpenInterestPort{domain.ExchangeBybit: bybitOI},
+		Seeds: []string{"BTCUSDT"},
+	}
+	(&Archive{Hist: bybitSvc, Lookback: domain.FuturesHistoryMaxLookback, now: func() time.Time { return now }}).Start(context.Background())
+	if bybitOI.calls != 1 || !bybitOI.from.Equal(now.Add(-domain.FuturesHistoryMaxLookback)) {
+		t.Fatalf("bybit oi calls=%d from=%s", bybitOI.calls, bybitOI.from)
+	}
+
+	binanceLS := &histLS{}
+	lsSvc := &Service{
+		Store: &archiveStore{},
+		LS:    map[domain.Exchange]domain.LongShortRatioPort{domain.ExchangeBinance: binanceLS},
+		Seeds: []string{"BTCUSDT"},
+	}
+	(&Archive{Hist: lsSvc, Lookback: domain.FuturesHistoryMaxLookback, now: func() time.Time { return now }}).Start(context.Background())
+	if binanceLS.calls != 1 || !binanceLS.from.Equal(now.Add(-domain.BinanceLongShortHistoryLookback)) {
+		t.Fatalf("binance long short calls=%d from=%s", binanceLS.calls, binanceLS.from)
+	}
+
+	okxOI := &histOI{}
+	okxSvc := &Service{
+		Store: &archiveStore{},
+		OI:    map[domain.Exchange]domain.OpenInterestPort{domain.ExchangeOKX: okxOI},
+		Seeds: []string{"BTCUSDT"},
+	}
+	(&Archive{Hist: okxSvc, Lookback: domain.FuturesHistoryMaxLookback, now: func() time.Time { return now }}).Start(context.Background())
+	wantOKX := now.Add(-time.Duration(domain.OKXOpenInterestHistoryEntries) * time.Hour)
+	if okxOI.calls != 1 || !okxOI.from.Equal(wantOKX) {
+		t.Fatalf("okx oi calls=%d from=%s want %s", okxOI.calls, okxOI.from, wantOKX)
+	}
+
+	may := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	okxFund := &histFund{}
+	fundSvc := &Service{
+		Store:   &archiveStore{},
+		Funding: map[domain.Exchange]domain.FundingRatePort{domain.ExchangeOKX: okxFund},
+		Seeds:   []string{"BTCUSDT"},
+	}
+	(&Archive{Hist: fundSvc, Lookback: domain.FuturesHistoryMaxLookback, now: func() time.Time { return may }}).Start(context.Background())
+	wantFund := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)
+	if okxFund.calls != 1 || !okxFund.from.Equal(wantFund) {
+		t.Fatalf("okx funding calls=%d from=%s", okxFund.calls, okxFund.from)
 	}
 }
 

@@ -15,11 +15,100 @@ const (
 	DefaultFuturesHistoryLimit = 200
 	MaxFuturesHistoryLimit     = 2500
 
-	// FuturesHistoryMaxLookback is the longest startup archive window.
-	// Public 1-hour open interest, funding, and long/short are paged back
-	// this far for the seed pairs. A venue that keeps less returns a shorter series.
+	// FuturesHistoryMaxLookback is how long stored rows stay useful to the
+	// 90-day heatmap, and the longest public backfill requested when that
+	// endpoint documents at least this much history.
 	FuturesHistoryMaxLookback = 90 * 24 * time.Hour
+
+	// BinanceOpenInterestHistoryLookback is GET /futures/data/openInterestHist.
+	// The legacy USD-M page says only the latest 1 month is available. The
+	// official USD-M connector says only the latest 30 days is available.
+	BinanceOpenInterestHistoryLookback = 30 * 24 * time.Hour
+
+	// BinanceLongShortHistoryLookback is
+	// GET /futures/data/globalLongShortAccountRatio,
+	// GET /futures/data/topLongShortAccountRatio, and
+	// GET /futures/data/topLongShortPositionRatio.
+	// Each page says only the latest 30 days is available.
+	BinanceLongShortHistoryLookback = 30 * 24 * time.Hour
+
+	// OKXOpenInterestHistoryEntries is
+	// GET /api/v5/rubik/stat/contracts/open-interest-history:
+	// the endpoint returns at most the latest 1,440 entries.
+	// The archive requests period 1H, so the cap is 1,440 hours.
+	OKXOpenInterestHistoryEntries = 1440
 )
+
+// PublicFuturesHistoryLookback is how far startup may ask that venue for
+// this metric. Zero means this archive does not request it.
+//
+// Bybit GET /v5/market/open-interest can be queried back to the symbol's
+// launch. Bybit GET /v5/market/account-ratio can start at 20 July 2020.
+// Bybit GET /v5/market/funding/history and Binance GET /fapi/v1/fundingRate
+// do not document a shorter day cap. Those series use FuturesHistoryMaxLookback.
+// OKX GET /api/v5/public/funding-rate-history returns at most three months.
+func PublicFuturesHistoryLookback(ex Exchange, metric string, to time.Time) time.Duration {
+	if to.IsZero() {
+		to = time.Now().UTC()
+	}
+	to = to.UTC()
+	switch metric {
+	case FuturesMetricOpenInterest:
+		switch ex {
+		case ExchangeBinance:
+			return BinanceOpenInterestHistoryLookback
+		case ExchangeOKX:
+			return OKXOpenInterestHistoryEntries * time.Hour
+		default:
+			return FuturesHistoryMaxLookback
+		}
+	case FuturesMetricLongShort:
+		switch ex {
+		case ExchangeBinance:
+			return BinanceLongShortHistoryLookback
+		case ExchangeOKX:
+			return 0
+		default:
+			return FuturesHistoryMaxLookback
+		}
+	case FuturesMetricFunding:
+		if ex == ExchangeOKX {
+			return okxFundingHistoryLookback(to)
+		}
+		return FuturesHistoryMaxLookback
+	default:
+		return FuturesHistoryMaxLookback
+	}
+}
+
+// okxFundingHistoryLookback is the shorter of three calendar months and
+// FuturesHistoryMaxLookback. Three months is what
+// GET /api/v5/public/funding-rate-history documents.
+func okxFundingHistoryLookback(to time.Time) time.Duration {
+	span := to.Sub(to.AddDate(0, -3, 0))
+	if span <= 0 || span > FuturesHistoryMaxLookback {
+		return FuturesHistoryMaxLookback
+	}
+	return span
+}
+
+// ClampPublicHistoryFrom raises from so [from, to] stays inside
+// PublicFuturesHistoryLookback for that series. to is the end of the request.
+func ClampPublicHistoryFrom(ex Exchange, metric string, from, to time.Time) time.Time {
+	if !to.After(from) {
+		return from.UTC()
+	}
+	from, to = from.UTC(), to.UTC()
+	max := PublicFuturesHistoryLookback(ex, metric, to)
+	if max <= 0 {
+		return from
+	}
+	earliest := to.Add(-max)
+	if from.Before(earliest) {
+		return earliest
+	}
+	return from
+}
 
 // FuturesHistoryPageBudget is how many hourly pages of pageSize cover
 // FuturesHistoryMaxLookback, plus one page so the walk can pass the boundary.

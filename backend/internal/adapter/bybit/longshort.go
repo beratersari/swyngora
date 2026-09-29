@@ -117,6 +117,8 @@ func (c *Client) ListLongShortHistory(ctx context.Context, symbol string, from, 
 	if !to.After(from) {
 		return nil, fmt.Errorf("%w: to must be after from", domain.ErrInvalidArgument)
 	}
+	// /v5/market/account-ratio can start at 20 July 2020. This archive keeps 90 days.
+	from = domain.ClampPublicHistoryFrom(domain.ExchangeBybit, domain.FuturesMetricLongShort, from, to)
 	var pts []domain.LongShortPoint
 	end := to.UnixMilli()
 	for page := 0; page < domain.FuturesHistoryPageBudget(200); page++ {

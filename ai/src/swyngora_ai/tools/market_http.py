@@ -634,7 +634,8 @@ class LiquidationHeatmapInput(BaseModel):
         default="24h",
         description=(
             "12h | 24h | 3d | 7d | 14d | 30d | 90d (default 24h). "
-            "90d is one column per day from the stored archive."
+            "90d is one column per day. Binance public open interest "
+            "and long/short history are 30 days."
         ),
     )
     exchange: str = Field(
@@ -5025,9 +5026,13 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Price × time liquidation intensity map (CoinGlass-style) from "
                 "historical open interest, price, the hunt leverage mix, and "
                 "observed liquidations. range=12h|24h|3d|7d|14d|30d|90d. "
-                "14d, 30d, and 90d use the stored hourly archive; 90d is one "
-                "column per day. Returns Binance, "
-                "Bybit, and combined (sum) grids. Not financial advice."
+                "90d is one column per day. Binance public open interest and "
+                "long/short are 30 days; older Binance columns are only rows "
+                "this process already stored. Bybit public open interest goes "
+                "back to listing and this archive keeps 90 days. OKX hourly "
+                "open interest is the latest 1,440 points. Combined sums a "
+                "column only when both venues have open interest. "
+                "Returns Binance, Bybit, and combined grids. Not financial advice."
             ),
             args_schema=LiquidationHeatmapInput,
         ),

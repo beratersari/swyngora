@@ -171,6 +171,9 @@ func (c *Client) ListOpenInterestHistory(ctx context.Context, symbol string, fro
 	if !to.After(from) {
 		return nil, fmt.Errorf("%w: to must be after from", domain.ErrInvalidArgument)
 	}
+	// /v5/market/open-interest can be queried back to the symbol launch.
+	// This archive keeps 90 days.
+	from = domain.ClampPublicHistoryFrom(domain.ExchangeBybit, domain.FuturesMetricOpenInterest, from, to)
 	var out []domain.OpenInterestPoint
 	end := to.UnixMilli()
 	for page := 0; page < domain.FuturesHistoryPageBudget(200); page++ {

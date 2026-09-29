@@ -191,10 +191,15 @@ exchange.
 
 MCP: `get_liquidation_heatmap`.
 
-14-day, 30-day, and 90-day maps need the startup archive of hourly open
-interest, funding, and long/short (kept 90 days). The 90-day map uses one
-column per day. Observed prints in a column are whatever is already stored.
-Public force-order history refills about 7 days, not the whole 90.
+14-day, 30-day, and 90-day maps read the startup archive. Public backfill
+follows each endpoint: Binance open interest and long/short are 30 days,
+OKX hourly open interest is the latest 1,440 points, and Bybit open interest
+goes back to the symbol listing (this archive keeps 90 days). The 90-day map
+uses one column per day. Binance columns older than the public 30 days are
+only hours this process already recorded. `combined` still sums a column
+only when both venues have their own price and open interest. Observed
+prints in a column are whatever is already stored. Public force-order
+history refills about 7 days, not the whole 90.
 
 On the product web app the same grid is the **Liquidation heatmap** on
 `/liquidations`: ranges 12h / 24h / 3d / 7d / 14d / 30d / 90d, venue

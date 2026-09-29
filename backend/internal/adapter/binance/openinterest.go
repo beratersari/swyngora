@@ -165,6 +165,8 @@ func (c *Client) ListOpenInterestHistory(ctx context.Context, symbol string, fro
 	if !to.After(from) {
 		return nil, fmt.Errorf("%w: to must be after from", domain.ErrInvalidArgument)
 	}
+	// /futures/data/openInterestHist keeps only the latest 30 days.
+	from = domain.ClampPublicHistoryFrom(domain.ExchangeBinance, domain.FuturesMetricOpenInterest, from, to)
 	// The hist endpoint returns the newest `limit` rows inside the window,
 	// so walk endTime backward until the page reaches `from`.
 	const page = 500

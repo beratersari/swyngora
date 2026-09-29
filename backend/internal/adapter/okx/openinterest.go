@@ -127,6 +127,9 @@ func (c *Client) ListOpenInterestHistory(ctx context.Context, symbol string, fro
 	if !to.After(from) {
 		return nil, fmt.Errorf("%w: to must be after from", domain.ErrInvalidArgument)
 	}
+	// period=1H on /api/v5/rubik/stat/contracts/open-interest-history
+	// returns at most the latest 1,440 entries.
+	from = domain.ClampPublicHistoryFrom(domain.ExchangeOKX, domain.FuturesMetricOpenInterest, from, to)
 	var out []domain.OpenInterestPoint
 	end := to.UnixMilli()
 	for page := 0; page < domain.FuturesHistoryPageBudget(100); page++ {

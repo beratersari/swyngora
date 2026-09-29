@@ -25,12 +25,29 @@ server restart and can be queried later by users or the AI.
   so later hunt / liquidation-level replays can use size when the crowd
   leans the other way.
 - Rows older than `FUTURES_HISTORY_RETENTION` (default 90 days) are purged.
-- Startup pages public 1-hour open interest, funding, and long/short back
-  to that window (at most 90 days) for the seed pairs. A later start skips
-  a series whose earliest row already reaches the back of the window.
+  That retention is how long **stored** rows are kept, including samples the
+  process recorded itself. It is not a promise that every public history
+  endpoint can backfill 90 days.
+- Startup pages public 1-hour history for the seed pairs only as far as that
+  endpoint documents, and never past 90 days. A later start skips a series
+  whose earliest row already reaches the back of **that** window.
+
+| Series | Endpoint | Public window this archive requests |
+|---|---|---|
+| Binance open interest | `GET /futures/data/openInterestHist` | Latest 30 days. The legacy page says the latest 1 month; the official USD-M connector says the latest 30 days. |
+| Binance long/short | `GET /futures/data/globalLongShortAccountRatio`, `topLongShortAccountRatio`, `topLongShortPositionRatio` | Latest 30 days on each page. |
+| Binance funding | `GET /fapi/v1/fundingRate` | No day cap in the docs. This archive requests 90 days. |
+| Bybit open interest | `GET /v5/market/open-interest` | Back to the symbol's launch time. This archive requests 90 days. |
+| Bybit long/short | `GET /v5/market/account-ratio` | Earliest start is 20 July 2020. This archive requests 90 days. |
+| Bybit funding | `GET /v5/market/funding/history` | No day cap in the docs. This archive requests 90 days. |
+| OKX open interest | `GET /api/v5/rubik/stat/contracts/open-interest-history` with `period=1H` | Latest 1,440 entries, which is 1,440 hours at 1H. |
+| OKX funding | `GET /api/v5/public/funding-rate-history` | Up to three months, and not past 90 days. |
+| OKX long/short | — | Not requested. There is no OKX long/short history client in this archive. |
+
 - Liquidation prints are kept for the same retention. Public REST only
   refills about the last 7 days (Binance rejects a wider force-order
-  window). Older prints are the ones the websocket already stored.
+  window; Bybit recent-liquidation and OKX liquidation-orders are recent
+  prints). Older prints are the ones the websocket already stored.
 
 `GET /api/v1/market/futures-history?metric=open_interest&symbol=BTCUSDT`
 
