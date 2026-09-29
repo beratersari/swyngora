@@ -66,7 +66,7 @@ Coin detail also has an **order heatmap** (resting bid/ask size over time) from 
 - `GET /api/v1/market/long-short-ratio` account long/short ratio plus recent 5m history; Binance `gap` is top long% minus crowd long%; `divergence` is top vs price (more long while price falls) with when it started. See [`long-short-ratio.md`](long-short-ratio.md).
 - `GET /api/v1/market/futures-history` durable stored OI / funding / long-short / liquidation rows. See [`futures-history.md`](futures-history.md).
 - `GET /api/v1/market/liquidation-hunt` hypothetical per-venue hunt (spot size to reach estimated liq zones + desk result + up/down ease scores). See [`liquidation-hunt.md`](liquidation-hunt.md).
-- `GET /api/v1/market/liquidation-hunt/heatmap` price × time liquidation intensity (12h/24h/3d/7d; each venue's own price; Binance, Bybit, combined; 1h/4h/12h review scored only when later price and liquidation history are complete). See [`liquidation-hunt.md`](liquidation-hunt.md).
+- `GET /api/v1/market/liquidation-hunt/heatmap` price × time liquidation intensity (12h/24h/3d/7d/14d/30d/90d; each venue's own price; Binance, Bybit, combined; 90d is daily columns from the 90-day archive; 1h/4h/12h review scored only when later price and liquidation history are complete). See [`liquidation-hunt.md`](liquidation-hunt.md).
 - `GET /api/v1/market/squeeze-risk` long/short squeeze risk scores per venue + combined. See [`squeeze-risk.md`](squeeze-risk.md).
 - `GET /api/v1/market/positioning` price + open-interest regime (buildup / unwinding / covering) per venue + combined. See [`positioning.md`](positioning.md).
 - `GET /api/v1/market/venue-divergence` Binance, Bybit, and OKX: who moves together and who is the outlier. See [`venue-divergence.md`](venue-divergence.md).

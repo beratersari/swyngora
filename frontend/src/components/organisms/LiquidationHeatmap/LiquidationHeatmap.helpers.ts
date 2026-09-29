@@ -214,7 +214,7 @@ export function formatLiqTime(timeMs: number, range?: string): string {
   const d = new Date(timeMs);
   const hh = String(d.getHours()).padStart(2, '0');
   const mm = String(d.getMinutes()).padStart(2, '0');
-  if (range === '3d' || range === '7d' || range === '14d' || range === '30d') {
+  if (range === '3d' || range === '7d' || range === '14d' || range === '30d' || range === '90d') {
     const mo = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${mo}-${day} ${hh}:${mm}`;

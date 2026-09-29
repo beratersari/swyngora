@@ -2314,8 +2314,11 @@ export interface paths {
          *     the hunt leverage mix (tilted by funding), blended account long/short,
          *     and observed liquidation prints in that column.
          *
-         *     `range` is 12h, 24h, 3d, 7d, 14d, or 30d. 14d and 30d use the
-         *     startup archive of 1-hour open interest, funding, and long/short.
+         *     `range` is 12h, 24h, 3d, 7d, 14d, 30d, or 90d. 14d, 30d, and 90d use the
+         *     startup archive of 1-hour open interest, funding, and long/short
+         *     (kept 90 days). 90d is one column per day. Observed liquidation
+         *     prints in a column are the ones already stored; public REST refills
+         *     about 7 days, not the whole 90.
          *     Binance and Bybit are modeled
          *     separately and each venue uses only its own candles (never the
          *     other exchange's price). `combined` is the sum of their cells.
@@ -5948,7 +5951,7 @@ export interface components {
         LiquidationHuntHeatmap: {
             symbol?: string;
             /** @enum {string} */
-            range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d";
+            range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d" | "90d";
             /** Format: date-time */
             from?: string;
             /** Format: date-time */
@@ -12333,8 +12336,8 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description 12h | 24h | 3d | 7d */
-                range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d";
+                /** @description 12h | 24h | 3d | 7d | 14d | 30d | 90d */
+                range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d" | "90d";
                 /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
             };

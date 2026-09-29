@@ -163,7 +163,7 @@ func (c *Client) pageLongShort(ctx context.Context, symbol, path string, from, t
 	const page = 500
 	var out []domain.LongShortPoint
 	end := to
-	for i := 0; i < 6; i++ {
+	for i := 0; i < domain.FuturesHistoryPageBudget(page); i++ {
 		if ctx.Err() != nil {
 			return out, ctx.Err()
 		}

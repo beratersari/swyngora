@@ -14,7 +14,23 @@ const (
 
 	DefaultFuturesHistoryLimit = 200
 	MaxFuturesHistoryLimit     = 2500
+
+	// FuturesHistoryMaxLookback is the longest startup archive window.
+	// Public 1-hour open interest, funding, and long/short are paged back
+	// this far for the seed pairs. A venue that keeps less returns a shorter series.
+	FuturesHistoryMaxLookback = 90 * 24 * time.Hour
 )
+
+// FuturesHistoryPageBudget is how many hourly pages of pageSize cover
+// FuturesHistoryMaxLookback, plus one page so the walk can pass the boundary.
+func FuturesHistoryPageBudget(pageSize int) int {
+	if pageSize <= 0 {
+		return 1
+	}
+	hours := int(FuturesHistoryMaxLookback / time.Hour)
+	pages := (hours + pageSize - 1) / pageSize
+	return pages + 1
+}
 
 // DefaultFuturesHistorySymbols are always sampled by the background worker.
 var DefaultFuturesHistorySymbols = []string{

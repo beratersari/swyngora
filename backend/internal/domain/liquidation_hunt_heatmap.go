@@ -11,7 +11,7 @@ const (
 	HuntHeatmapPriceBins = 48
 	// MaxHuntHeatmapHistory is how many OI / LS / funding rows we load per metric.
 	MaxHuntHeatmapHistory = 2500
-	// HuntHeatmapMaxColumns caps a 30-day map (6h columns → 120).
+	// HuntHeatmapMaxColumns caps the time axis (30d at 6h is 120; 90d at 1d is 90).
 	HuntHeatmapMaxColumns = 128
 )
 
@@ -25,6 +25,7 @@ const (
 	HuntHeatmap7d  HuntHeatmapRange = "7d"
 	HuntHeatmap14d HuntHeatmapRange = "14d"
 	HuntHeatmap30d HuntHeatmapRange = "30d"
+	HuntHeatmap90d HuntHeatmapRange = "90d"
 )
 
 // HuntHeatmapSpec is window + column step + candle interval for a range.
@@ -44,9 +45,10 @@ var HuntHeatmapSpecs = []HuntHeatmapSpec{
 	{Range: HuntHeatmap7d, Window: 168 * time.Hour, Step: 2 * time.Hour, CandleIV: "1h", CandleLim: 180},
 	{Range: HuntHeatmap14d, Window: 14 * 24 * time.Hour, Step: 4 * time.Hour, CandleIV: "4h", CandleLim: 90},
 	{Range: HuntHeatmap30d, Window: 30 * 24 * time.Hour, Step: 6 * time.Hour, CandleIV: "4h", CandleLim: 190},
+	{Range: HuntHeatmap90d, Window: 90 * 24 * time.Hour, Step: 24 * time.Hour, CandleIV: "1d", CandleLim: 100},
 }
 
-// ParseHuntHeatmapRange accepts 12h, 24h, 3d, 7d, 14d, 30d (default 24h).
+// ParseHuntHeatmapRange accepts 12h, 24h, 3d, 7d, 14d, 30d, 90d (default 24h).
 func ParseHuntHeatmapRange(raw string) (HuntHeatmapSpec, error) {
 	s := strings.ToLower(strings.TrimSpace(raw))
 	if s == "" {
@@ -65,8 +67,10 @@ func ParseHuntHeatmapRange(raw string) (HuntHeatmapSpec, error) {
 		return HuntHeatmapSpecs[4], nil
 	case "30d", "720h":
 		return HuntHeatmapSpecs[5], nil
+	case "90d", "2160h":
+		return HuntHeatmapSpecs[6], nil
 	default:
-		return HuntHeatmapSpec{}, fmt.Errorf("%w: range must be 12h, 24h, 3d, 7d, 14d, or 30d", ErrInvalidArgument)
+		return HuntHeatmapSpec{}, fmt.Errorf("%w: range must be 12h, 24h, 3d, 7d, 14d, 30d, or 90d", ErrInvalidArgument)
 	}
 }
 

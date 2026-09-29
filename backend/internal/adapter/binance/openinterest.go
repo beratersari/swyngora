@@ -170,7 +170,7 @@ func (c *Client) ListOpenInterestHistory(ctx context.Context, symbol string, fro
 	const page = 500
 	var out []domain.OpenInterestPoint
 	end := to
-	for i := 0; i < 8; i++ {
+	for i := 0; i < domain.FuturesHistoryPageBudget(page); i++ {
 		if ctx.Err() != nil {
 			return out, ctx.Err()
 		}

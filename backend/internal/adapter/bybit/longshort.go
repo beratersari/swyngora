@@ -119,7 +119,7 @@ func (c *Client) ListLongShortHistory(ctx context.Context, symbol string, from, 
 	}
 	var pts []domain.LongShortPoint
 	end := to.UnixMilli()
-	for page := 0; page < 8; page++ {
+	for page := 0; page < domain.FuturesHistoryPageBudget(200); page++ {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}

@@ -142,6 +142,9 @@ estimated liquidation notional** at that price in that column.
 | `24h` | 24 hours | 30 minutes |
 | `3d` | 3 days | 1 hour |
 | `7d` | 7 days | 2 hours |
+| `14d` | 14 days | 4 hours |
+| `30d` | 30 days | 6 hours |
+| `90d` | 90 days | 1 day |
 
 Each column uses historical **open interest**, **that venue's own price**
 (spot candles from that exchange only), the same **leverage mix** as the hunt
@@ -188,7 +191,13 @@ exchange.
 
 MCP: `get_liquidation_heatmap`.
 
-On the product web app the same grid is the **Liquidation heatmap** on coin
-detail → Tape: ranges 12h / 24h / 3d / 7d, venue Combined / Binance / Bybit,
-and All / Longs / Shorts, plus the 1h / 4h / 12h hit-rate table. Combined is
-the sum of venue cells.
+14-day, 30-day, and 90-day maps need the startup archive of hourly open
+interest, funding, and long/short (kept 90 days). The 90-day map uses one
+column per day. Observed prints in a column are whatever is already stored.
+Public force-order history refills about 7 days, not the whole 90.
+
+On the product web app the same grid is the **Liquidation heatmap** on
+`/liquidations`: ranges 12h / 24h / 3d / 7d / 14d / 30d / 90d, venue
+Combined / Binance / Bybit, and All / Longs / Shorts, plus the 1h / 4h / 12h
+hit-rate table. Combined is the sum of venue cells. The coin chart still
+loads price from the exchange, which already pages back past 90 days.

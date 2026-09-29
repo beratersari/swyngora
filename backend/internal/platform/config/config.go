@@ -338,9 +338,10 @@ func Load() Config {
 		AccountDBPath:        getenv("ACCOUNT_DB_PATH", "data/accounts.db"),
 		AccountPurgeInterval: positiveDurationEnv("ACCOUNT_PURGE_INTERVAL", 1*time.Hour),
 
-		FuturesHistoryDBPath:    getenv("FUTURES_HISTORY_DB_PATH", "data/futures.db"),
-		FuturesHistoryInterval:  positiveDurationEnv("FUTURES_HISTORY_INTERVAL", 5*time.Minute),
-		FuturesHistoryRetention: positiveDurationEnv("FUTURES_HISTORY_RETENTION", 30*24*time.Hour),
+		FuturesHistoryDBPath:   getenv("FUTURES_HISTORY_DB_PATH", "data/futures.db"),
+		FuturesHistoryInterval: positiveDurationEnv("FUTURES_HISTORY_INTERVAL", 5*time.Minute),
+		// Default matches domain.FuturesHistoryMaxLookback (90 days).
+		FuturesHistoryRetention: positiveDurationEnv("FUTURES_HISTORY_RETENTION", 90*24*time.Hour),
 		FuturesHistorySymbols:   parseCSVList(os.Getenv("FUTURES_HISTORY_SYMBOLS")),
 
 		OrderBookHistoryDBPath:    getenv("ORDERBOOK_HISTORY_DB_PATH", "data/orderbook.db"),

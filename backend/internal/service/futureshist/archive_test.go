@@ -99,9 +99,11 @@ func (h *histLS) ListLongShortHistory(context.Context, string, time.Time, time.T
 
 type histLiq struct {
 	events []domain.LiquidationEvent
+	query  domain.LiquidationHistoryQuery
 }
 
-func (h *histLiq) ListLiquidationHistory(context.Context, domain.LiquidationHistoryQuery) (domain.LiquidationHistoryResult, error) {
+func (h *histLiq) ListLiquidationHistory(_ context.Context, q domain.LiquidationHistoryQuery) (domain.LiquidationHistoryResult, error) {
+	h.query = q
 	return domain.LiquidationHistoryResult{Events: h.events}, nil
 }
 
@@ -148,6 +150,53 @@ func TestArchiveBackfillInsertsAndSkipsWhenCovered(t *testing.T) {
 	arch.Start(context.Background())
 	if oi.calls != 1 || fund.calls != 1 || ls.calls != 1 {
 		t.Fatalf("second pass should skip, oi=%d fund=%d ls=%d", oi.calls, fund.calls, ls.calls)
+	}
+}
+
+func TestArchiveLookbackCapsAtNinetyDays(t *testing.T) {
+	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+	store := &archiveStore{snaps: []domain.FuturesSnapshot{{
+		Metric:    domain.FuturesMetricOpenInterest,
+		Exchange:  domain.ExchangeBinance,
+		Symbol:    "BTCUSDT",
+		SampledAt: now.Add(-40 * 24 * time.Hour),
+		Value:     1,
+	}}}
+	oi := &histOI{}
+	svc := &Service{
+		Store: store,
+		OI:    map[domain.Exchange]domain.OpenInterestPort{domain.ExchangeBinance: oi},
+		Seeds: []string{"BTCUSDT"},
+	}
+	(&Archive{Hist: svc, Lookback: 24 * time.Hour, now: func() time.Time { return now }}).Start(context.Background())
+	if oi.calls != 0 {
+		t.Fatalf("a day already covered by a 40-day row, calls=%d", oi.calls)
+	}
+	(&Archive{Hist: svc, Lookback: 400 * 24 * time.Hour, now: func() time.Time { return now }}).Start(context.Background())
+	if oi.calls != 1 {
+		t.Fatalf("90-day window should refetch, calls=%d", oi.calls)
+	}
+}
+
+func TestArchiveLiquidationFillUsesPublicWindow(t *testing.T) {
+	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+	liq := &histLiq{events: []domain.LiquidationEvent{{
+		Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Side: "long",
+		Time: now.Add(-time.Hour), Price: 100, Quantity: 1, Notional: 100,
+	}}}
+	store := &archiveStore{}
+	svc := &Service{Store: store, Seeds: []string{"BTCUSDT"}}
+	(&Archive{
+		Hist: svc, Lookback: domain.FuturesHistoryMaxLookback,
+		Liq: map[domain.Exchange]domain.LiquidationHistoryPort{domain.ExchangeBinance: liq},
+		now: func() time.Time { return now },
+	}).Start(context.Background())
+	if len(store.liqs) != 1 {
+		t.Fatalf("liqs=%d", len(store.liqs))
+	}
+	span := liq.query.To.Sub(liq.query.From)
+	if span != domain.LiquidationHistoryMaxLookback {
+		t.Fatalf("liquidation query span %v", span)
 	}
 }
 

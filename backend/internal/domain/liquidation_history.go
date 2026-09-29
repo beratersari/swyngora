@@ -7,13 +7,21 @@ import (
 
 const minLiquidationGapFill = time.Second
 
+// LiquidationHistoryMaxLookback is the longest public force-order window
+// the startup archive requests. Binance rejects a wider start and end.
+// Prints older than this are only the ones already stored from the websocket.
+const LiquidationHistoryMaxLookback = 7 * 24 * time.Hour
+
 // LiquidationHistoryQuery asks one venue for prints in [From, To].
 // Symbols empty means venue-wide when the source supports it.
+// MaxWindow, when set, replaces the 24-hour reconnect cap. The archive
+// sets it so a startup fill can use the public force-order window.
 type LiquidationHistoryQuery struct {
-	Exchange Exchange
-	Symbols  []string
-	From     time.Time
-	To       time.Time
+	Exchange  Exchange
+	Symbols   []string
+	From      time.Time
+	To        time.Time
+	MaxWindow time.Duration
 }
 
 // LiquidationHistoryResult is one venue's answer for a gap window.
@@ -258,8 +266,15 @@ func NormalizeHistoryQuery(q LiquidationHistoryQuery) (LiquidationHistoryQuery, 
 	if q.To.Sub(q.From) < minLiquidationGapFill {
 		return q, false
 	}
-	if q.To.Sub(q.From) > liquidationRetain {
-		q.From = q.To.Add(-liquidationRetain)
+	cap := liquidationRetain
+	if q.MaxWindow > 0 {
+		cap = q.MaxWindow
+		if cap > LiquidationHistoryMaxLookback {
+			cap = LiquidationHistoryMaxLookback
+		}
+	}
+	if q.To.Sub(q.From) > cap {
+		q.From = q.To.Add(-cap)
 	}
 	syms := make([]string, 0, len(q.Symbols))
 	seen := map[string]struct{}{}

@@ -98,6 +98,8 @@ describe('LiquidationHeatmap', () => {
     expect(screen.getByText('Price gap · 1h/12h')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '12h' }));
     expect(onRangeChange).toHaveBeenCalledWith('12h');
+    await user.click(screen.getByRole('button', { name: '90d' }));
+    expect(onRangeChange).toHaveBeenCalledWith('90d');
     await user.click(screen.getByRole('button', { name: 'Binance' }));
     expect(onVenueChange).toHaveBeenCalledWith('binance');
     await user.click(screen.getByRole('button', { name: 'Longs' }));

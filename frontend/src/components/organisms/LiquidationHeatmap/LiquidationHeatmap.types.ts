@@ -12,7 +12,7 @@ export type {
   LiquidationHuntHeatmapReviewVenue,
 };
 
-export type LiqHeatRange = '12h' | '24h' | '3d' | '7d' | '14d' | '30d';
+export type LiqHeatRange = '12h' | '24h' | '3d' | '7d' | '14d' | '30d' | '90d';
 export type LiqHeatVenue = 'combined' | 'binance' | 'bybit' | 'okx';
 export type LiqHeatSide = 'totals' | 'longs' | 'shorts';
 

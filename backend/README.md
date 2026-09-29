@@ -377,7 +377,7 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `ACCOUNT_PURGE_INTERVAL` | `1h` | How often expired closed accounts are purged |
 | `FUTURES_HISTORY_DB_PATH` | `data/futures.db` | SQLite archive for OI, funding, long/short, liquidations |
 | `FUTURES_HISTORY_INTERVAL` | `5m` | Snapshot worker cadence |
-| `FUTURES_HISTORY_RETENTION` | `720h` | How long stored futures rows are kept. Startup pages public 1-hour open interest, funding, and long/short for the seed pairs, capped at 30 days |
+| `FUTURES_HISTORY_RETENTION` | `2160h` | How long stored futures rows are kept. Startup pages public 1-hour open interest, funding, and long/short for the seed pairs, capped at 90 days. Public liquidation history refills about 7 days |
 | `FUTURES_HISTORY_SYMBOLS` | _(optional CSV)_ | Extra pairs always sampled (majors are built-in) |
 | `ORDERBOOK_HISTORY_DB_PATH` | `data/orderbook.db` | SQLite archive for spot book samples |
 | `ORDERBOOK_HISTORY_INTERVAL` | `1m` | Book snapshot worker cadence |

@@ -583,8 +583,8 @@ func sum4(v [4]float64) float64 {
 // Err if range is not a hunt window — re-export helper for callers.
 func ParseLiquidationLevelsRange(raw string) (HuntHeatmapSpec, error) {
 	spec, err := ParseHuntHeatmapRange(raw)
-	if err != nil {
-		return spec, fmt.Errorf("%w: range must be 12h, 24h, 3d, 7d, 14d, or 30d", ErrInvalidArgument)
+	if err != nil || spec.Range == HuntHeatmap90d {
+		return HuntHeatmapSpec{}, fmt.Errorf("%w: range must be 12h, 24h, 3d, 7d, 14d, or 30d", ErrInvalidArgument)
 	}
 	return spec, nil
 }

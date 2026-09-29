@@ -25,6 +25,17 @@ func TestParseHuntHeatmapRange(t *testing.T) {
 	if _, err := ParseHuntHeatmapRange("9h"); err == nil {
 		t.Fatal("expected invalid range")
 	}
+	s, err = ParseHuntHeatmapRange("90d")
+	if err != nil || s.Window != 90*24*time.Hour || s.Step != 24*time.Hour || s.CandleIV != "1d" {
+		t.Fatalf("%+v %v", s, err)
+	}
+	cols = HuntHeatmapColumns(s, time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC))
+	if len(cols) != 90 || len(cols) > HuntHeatmapMaxColumns {
+		t.Fatalf("90d cols=%d", len(cols))
+	}
+	if _, err := ParseLiquidationLevelsRange("90d"); err == nil {
+		t.Fatal("price-level chart stays on the shorter ranges")
+	}
 }
 
 func TestHuntHeatmapColumnsAligned(t *testing.T) {

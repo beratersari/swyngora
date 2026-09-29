@@ -1170,9 +1170,9 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_liquidation_heatmap",
-		mcp.WithDescription("CoinGlass-style price × time liquidation intensity map from historical open interest, each venue's own price (never borrowed from the other exchange), the hunt leverage mix, and observed liquidation prints. range=12h|24h|3d|7d|14d|30d. 14d and 30d need the startup archive of 1-hour open interest, funding, and long/short. Returns Binance, Bybit, and combined (sum) grids plus a review: totals and a per-signal list (price area, 1h/4h/12h hit or miss, time-to-hit, how much later price and liquidation history was available, labeled gaps). Rates use only validated signals. Not financial advice."),
+		mcp.WithDescription("CoinGlass-style price × time liquidation intensity map from historical open interest, each venue's own price (never borrowed from the other exchange), the hunt leverage mix, and observed liquidation prints. range=12h|24h|3d|7d|14d|30d|90d. 14d, 30d, and 90d need the startup archive of 1-hour open interest, funding, and long/short (kept 90 days). 90d is one column per day. Public liquidation history refills about 7 days; older prints are only what this process already stored. Returns Binance, Bybit, and combined (sum) grids plus a review: totals and a per-signal list (price area, 1h/4h/12h hit or miss, time-to-hit, how much later price and liquidation history was available, labeled gaps). Rates use only validated signals. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
-		mcp.WithString("range", mcp.Description("12h | 24h | 3d | 7d | 14d | 30d (default 24h)")),
+		mcp.WithString("range", mcp.Description("12h | 24h | 3d | 7d | 14d | 30d | 90d (default 24h)")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")

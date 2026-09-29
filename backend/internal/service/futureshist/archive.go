@@ -12,8 +12,10 @@ import (
 const archiveSlack = 48 * time.Hour
 
 // Archive pages public 1-hour open interest, funding, and long/short history
-// into the futures store on startup. A later start skips a series that already
-// reaches the back of the retention window.
+// into the futures store on startup, up to 90 days. A later start skips a
+// series that already reaches the back of that window. Liquidation prints
+// are filled only for the public force-order window (about 7 days); older
+// prints are the ones the websocket already stored.
 type Archive struct {
 	Hist     *Service
 	Liq      map[domain.Exchange]domain.LiquidationHistoryPort
@@ -37,8 +39,8 @@ func (a *Archive) Start(ctx context.Context) {
 	if a.now == nil {
 		a.now = time.Now
 	}
-	if a.Lookback <= 0 || a.Lookback > 30*24*time.Hour {
-		a.Lookback = 30 * 24 * time.Hour
+	if a.Lookback <= 0 || a.Lookback > domain.FuturesHistoryMaxLookback {
+		a.Lookback = domain.FuturesHistoryMaxLookback
 	}
 	now := a.now().UTC()
 	from := now.Add(-a.Lookback)
@@ -199,12 +201,20 @@ func (a *Archive) fillLongShort(ctx context.Context, ex domain.Exchange, symbol 
 
 func (a *Archive) fillLiquidations(ctx context.Context, symbols []string, from, now time.Time) int {
 	n := 0
+	liqFrom := from
+	if max := now.Add(-domain.LiquidationHistoryMaxLookback); liqFrom.Before(max) {
+		liqFrom = max
+	}
 	for ex, src := range a.Liq {
 		if src == nil || ctx.Err() != nil {
 			continue
 		}
 		res, err := src.ListLiquidationHistory(ctx, domain.LiquidationHistoryQuery{
-			Exchange: ex, Symbols: symbols, From: from, To: now,
+			Exchange:  ex,
+			Symbols:   symbols,
+			From:      liqFrom,
+			To:        now,
+			MaxWindow: domain.LiquidationHistoryMaxLookback,
 		})
 		if errors.Is(err, domain.ErrRateLimited) {
 			a.Logger.Info("futures archive liquidation fill paused", "exchange", ex)

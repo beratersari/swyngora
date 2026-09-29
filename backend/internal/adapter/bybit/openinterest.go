@@ -173,7 +173,7 @@ func (c *Client) ListOpenInterestHistory(ctx context.Context, symbol string, fro
 	}
 	var out []domain.OpenInterestPoint
 	end := to.UnixMilli()
-	for page := 0; page < 8; page++ {
+	for page := 0; page < domain.FuturesHistoryPageBudget(200); page++ {
 		if ctx.Err() != nil {
 			return out, ctx.Err()
 		}
@@ -322,7 +322,7 @@ func (c *Client) listHourCloses(ctx context.Context, symbol string, from, to tim
 	out := map[int64]float64{}
 	start := from.UTC().UnixMilli()
 	end := to.UTC().UnixMilli()
-	for page := 0; page < 6; page++ {
+	for page := 0; page < domain.FuturesHistoryPageBudget(200); page++ {
 		if ctx.Err() != nil {
 			return out, ctx.Err()
 		}

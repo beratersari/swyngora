@@ -54,6 +54,7 @@ func TestLoad_Defaults(t *testing.T) {
 	t.Setenv("WEBHOOK_HTTP_TIMEOUT", "")
 	t.Setenv("WEBHOOK_MAX_ATTEMPTS", "")
 	t.Setenv("PORTFOLIO_DB_PATH", "")
+	t.Setenv("FUTURES_HISTORY_RETENTION", "")
 
 	cfg := Load()
 	if cfg.HTTPAddr != "127.0.0.1:8080" {
@@ -85,6 +86,9 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 	if cfg.OpenInterestCacheTTL != 30*time.Second {
 		t.Fatalf("oi ttl=%v", cfg.OpenInterestCacheTTL)
+	}
+	if cfg.FuturesHistoryRetention != 90*24*time.Hour {
+		t.Fatalf("futures retention=%v", cfg.FuturesHistoryRetention)
 	}
 	if cfg.OptionsCacheTTL != 30*time.Second || cfg.DeribitBaseURL != "https://www.deribit.com" {
 		t.Fatalf("options ttl=%v deribit=%s", cfg.OptionsCacheTTL, cfg.DeribitBaseURL)

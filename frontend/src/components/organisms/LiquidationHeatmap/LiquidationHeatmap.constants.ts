@@ -2,7 +2,7 @@ import type { LiqHeatRange } from './LiquidationHeatmap.types';
 
 export const LIQ_HEATMAP_POLL_MS = 60_000;
 
-export const LIQ_HEATMAP_RANGES: readonly LiqHeatRange[] = ['12h', '24h', '3d', '7d', '14d', '30d'];
+export const LIQ_HEATMAP_RANGES: readonly LiqHeatRange[] = ['12h', '24h', '3d', '7d', '14d', '30d', '90d'];
 
 export const DEFAULT_LIQ_HEATMAP_RANGE: LiqHeatRange = '24h';
 

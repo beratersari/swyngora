@@ -24,7 +24,13 @@ server restart and can be queried later by users or the AI.
   position** (`sizeLongPct`) and top-trader account (`topAccLongPct`) shares
   so later hunt / liquidation-level replays can use size when the crowd
   leans the other way.
-- Rows older than `FUTURES_HISTORY_RETENTION` (default 30 days) are purged.
+- Rows older than `FUTURES_HISTORY_RETENTION` (default 90 days) are purged.
+- Startup pages public 1-hour open interest, funding, and long/short back
+  to that window (at most 90 days) for the seed pairs. A later start skips
+  a series whose earliest row already reaches the back of the window.
+- Liquidation prints are kept for the same retention. Public REST only
+  refills about the last 7 days (Binance rejects a wider force-order
+  window). Older prints are the ones the websocket already stored.
 
 `GET /api/v1/market/futures-history?metric=open_interest&symbol=BTCUSDT`
 
@@ -46,7 +52,7 @@ server restart and can be queried later by users or the AI.
 |---|---|
 | `FUTURES_HISTORY_DB_PATH` | `data/futures.db` |
 | `FUTURES_HISTORY_INTERVAL` | `5m` |
-| `FUTURES_HISTORY_RETENTION` | `720h` |
+| `FUTURES_HISTORY_RETENTION` | `2160h` (90 days) |
 | `FUTURES_HISTORY_SYMBOLS` | extra CSV pairs (BTC/ETH/SOL/… always included) |
 
 ## How to verify

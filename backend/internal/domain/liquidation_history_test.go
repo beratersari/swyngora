@@ -200,6 +200,30 @@ func TestSubtractGapInterval_SplitsMiddle(t *testing.T) {
 	}
 }
 
+func TestNormalizeHistoryQuery_ArchiveWindow(t *testing.T) {
+	to := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+	q, ok := NormalizeHistoryQuery(LiquidationHistoryQuery{
+		Exchange:  ExchangeBinance,
+		From:      to.Add(-90 * 24 * time.Hour),
+		To:        to,
+		MaxWindow: 30 * 24 * time.Hour,
+	})
+	if !ok {
+		t.Fatal("expected a bounded window")
+	}
+	if q.To.Sub(q.From) != LiquidationHistoryMaxLookback {
+		t.Fatalf("span %v", q.To.Sub(q.From))
+	}
+	q, ok = NormalizeHistoryQuery(LiquidationHistoryQuery{
+		Exchange: ExchangeBinance,
+		From:     to.Add(-90 * 24 * time.Hour),
+		To:       to,
+	})
+	if !ok || q.To.Sub(q.From) != 24*time.Hour {
+		t.Fatalf("reconnect cap %+v ok=%v", q, ok)
+	}
+}
+
 func TestNormalizeHistoryQuery_RejectsTiny(t *testing.T) {
 	q, ok := NormalizeHistoryQuery(LiquidationHistoryQuery{
 		Exchange: ExchangeBybit,

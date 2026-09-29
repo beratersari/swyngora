@@ -630,7 +630,13 @@ class LiquidationHuntInput(BaseModel):
 
 class LiquidationHeatmapInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
-    range: str = Field(default="24h", description="12h | 24h | 3d | 7d")
+    range: str = Field(
+        default="24h",
+        description=(
+            "12h | 24h | 3d | 7d | 14d | 30d | 90d (default 24h). "
+            "90d is one column per day from the stored archive."
+        ),
+    )
     exchange: str = Field(
         default="all",
         description="binance|bybit|all (default all = both + combined)",
@@ -5018,7 +5024,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "Price × time liquidation intensity map (CoinGlass-style) from "
                 "historical open interest, price, the hunt leverage mix, and "
-                "observed liquidations. range=12h|24h|3d|7d. Returns Binance, "
+                "observed liquidations. range=12h|24h|3d|7d|14d|30d|90d. "
+                "14d, 30d, and 90d use the stored hourly archive; 90d is one "
+                "column per day. Returns Binance, "
                 "Bybit, and combined (sum) grids. Not financial advice."
             ),
             args_schema=LiquidationHeatmapInput,
