@@ -5,6 +5,15 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { CandleChartHost } from '@/components/molecules/CandleChartHost';
 import { snapMarkersToCandleTimes } from '@/components/molecules/CandleChartHost/CandleChartHost.markers';
+import {
+  bookHeatColumns,
+  crowdTopSeries,
+  footprintLevels,
+  footprintWindow,
+  formatRecordedSpan,
+  futuresRecorded,
+  liquidationProfile,
+} from './chartDesk';
 import type {
   CandleChartLowerSeries,
   CandleChartMarker,
@@ -49,6 +58,9 @@ import {
   useGetMarketNetPositionQuery,
   useGetMarketLiquidationsQuery,
   useGetMarketCvdQuery,
+  useGetMarketLongShortRatioQuery,
+  useGetMarketHistorySpanQuery,
+  useGetMarketFlowAtPricesQuery,
   useGetMarketUnusualQuery,
   useGetMarketLiquidationLevelsQuery,
   useGetMarketVolumeShareQuery,
@@ -200,6 +212,10 @@ export function CoinDetailPage() {
   const [showDelta, setShowDelta] = useState(true);
   const [showCvd, setShowCvd] = useState(true);
   const [showLiqLevels, setShowLiqLevels] = useState(true);
+  const [showBook, setShowBook] = useState(true);
+  const [showFootprint, setShowFootprint] = useState(true);
+  const [showCrowd, setShowCrowd] = useState(true);
+  const [footWindow, setFootWindow] = useState<'5m' | '15m' | '1h' | '4h' | '1d' | '3d' | '7d'>('1h');
   /** Guards against applying history pages after exchange/symbol/interval change. */
   const historyRequestIdRef = useRef(0);
 
@@ -433,6 +449,34 @@ export function CoinDetailPage() {
     pollingInterval: visible ? UNUSUAL_POLL_MS : 0,
     refetchOnFocus: true,
   });
+  const chartBookQuery = useGetSpotOrderBookHeatmapQuery(
+    { exchange: exchangeArg, symbol, window: 1800 },
+    {
+      skip: skipTape || !showBook,
+      pollingInterval: visible && showBook ? ORDER_HEATMAP_POLL_MS : 0,
+      refetchOnFocus: true,
+    },
+  );
+  const footprintQuery = useGetMarketFlowAtPricesQuery(
+    { exchange: 'all', symbol: perpSymbol, window: footWindow },
+    {
+      skip: skipTape || !showFootprint,
+      pollingInterval: visible && showFootprint ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
+      refetchOnFocus: true,
+    },
+  );
+  const longShortQuery = useGetMarketLongShortRatioQuery(
+    { exchange: 'binance', symbol: perpSymbol, limit: 100 },
+    {
+      skip: skipTape || !showCrowd,
+      pollingInterval: visible && showCrowd ? 60_000 : 0,
+      refetchOnFocus: true,
+    },
+  );
+  const historySpanQuery = useGetMarketHistorySpanQuery(
+    { symbol: perpSymbol },
+    { skip: skipTape, refetchOnFocus: true },
+  );
   const liqLevelsQuery = useGetMarketLiquidationLevelsQuery(
     { symbol: perpSymbol, exchange: 'all', range: '24h' },
     {
@@ -805,10 +849,21 @@ export function CoinDetailPage() {
             data: block,
           });
         }
+        pane += 1;
       }
     }
+    if (showCrowd) {
+      series.push(
+        ...crowdTopSeries(
+          rtkCurrent(longShortQuery),
+          { crowd: t('detail:chart.crowdLine'), top: t('detail:chart.topLine') },
+          { crowd: semanticColors.accent.default, top: semanticColors.status.warning },
+          pane,
+        ),
+      );
+    }
     return series;
-  }, [isEquity, barDurationSec, showDelta, showCvd, chartData, tapeCvd, t]);
+  }, [isEquity, barDurationSec, showDelta, showCvd, showCrowd, chartData, tapeCvd, longShortQuery, t]);
 
   const chartPriceLines: CandleChartPriceLine[] = useMemo(() => {
     if (isEquity || !showLiqLevels) return [];
@@ -823,6 +878,41 @@ export function CoinDetailPage() {
           : sideLabel(line.side),
     }));
   }, [isEquity, showLiqLevels, liqLevelsQuery, t]);
+
+  const chartBookHeat = useMemo(
+    () => (isEquity || !showBook ? [] : bookHeatColumns(rtkCurrent(chartBookQuery))),
+    [isEquity, showBook, chartBookQuery],
+  );
+  const chartFootprint = useMemo(
+    () => (isEquity || !showFootprint ? [] : footprintLevels(rtkCurrent(footprintQuery))),
+    [isEquity, showFootprint, footprintQuery],
+  );
+  const chartLiqProfile = useMemo(
+    () => (isEquity || !showLiqLevels ? [] : liquidationProfile(rtkCurrent(liqLevelsQuery))),
+    [isEquity, showLiqLevels, liqLevelsQuery],
+  );
+  const onVisibleSpan = useCallback((from: number, to: number) => {
+    const next = footprintWindow(to - from);
+    setFootWindow((prev) => (prev === next ? prev : next));
+  }, []);
+  const recordedLine = useMemo(() => {
+    if (isEquity) return '';
+    const rows = futuresRecorded(rtkCurrent(historySpanQuery));
+    if (rows.length === 0) {
+      return historySpanQuery.isSuccess || historySpanQuery.isError
+        ? t('detail:chart.recordedEmpty')
+        : '';
+    }
+    const parts = rows
+      .map((row) =>
+        t('detail:chart.recordedPart', {
+          exchange: row.exchange,
+          span: formatRecordedSpan(row.spanSec),
+        }),
+      )
+      .join(', ');
+    return t('detail:chart.recorded', { parts });
+  }, [isEquity, historySpanQuery, t]);
 
   const chartMarkers: CandleChartMarker[] = useMemo(() => {
     const barSec = intervalToSeconds(interval);
@@ -1087,6 +1177,12 @@ export function CoinDetailPage() {
           onShowCvdChange={isEquity ? undefined : setShowCvd}
           showLiqLevels={showLiqLevels}
           onShowLiqLevelsChange={isEquity ? undefined : setShowLiqLevels}
+          showBook={showBook}
+          onShowBookChange={isEquity ? undefined : setShowBook}
+          showFootprint={showFootprint}
+          onShowFootprintChange={isEquity ? undefined : setShowFootprint}
+          showCrowd={showCrowd}
+          onShowCrowdChange={isEquity ? undefined : setShowCrowd}
           onRefresh={refreshAll}
           isFetching={
             seriesFetching ||
@@ -1137,9 +1233,14 @@ export function CoinDetailPage() {
                 })}
               />
             ) : null}
-            {!isEquity && (showDelta || showCvd || showLiqLevels) ? (
+            {!isEquity && (showDelta || showCvd || showLiqLevels || showBook || showFootprint || showCrowd) ? (
               <Text variant="caption" color="secondary">
                 {t('detail:chart.tapeHint')}
+              </Text>
+            ) : null}
+            {!isEquity && recordedLine ? (
+              <Text variant="caption" color="secondary" data-testid="chart-recorded">
+                {recordedLine}
               </Text>
             ) : null}
             <CandleChartHost
@@ -1147,6 +1248,11 @@ export function CoinDetailPage() {
               overlays={overlays}
               lowerSeries={lowerSeries}
               priceLines={chartPriceLines}
+              bookHeat={chartBookHeat}
+              footprint={chartFootprint}
+              liqProfile={chartLiqProfile}
+              onVisibleSpan={isEquity ? undefined : onVisibleSpan}
+              rightPadding={!isEquity && (showFootprint || showLiqLevels) ? 16 : undefined}
               markers={chartMarkers}
               vertLines={chartVertLines}
               barDurationSec={barDurationSec}
@@ -1167,6 +1273,11 @@ export function CoinDetailPage() {
                   ? isPhone
                     ? 72
                     : 120
+                  : 0) +
+                (lowerSeries.some((s) => s.id === 'crowd-long' || s.id === 'top-long')
+                  ? isPhone
+                    ? 72
+                    : 100
                   : 0)
               }
             />

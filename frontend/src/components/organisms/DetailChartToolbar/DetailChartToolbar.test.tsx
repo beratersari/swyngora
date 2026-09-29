@@ -73,4 +73,27 @@ describe('DetailChartToolbar', () => {
     expect(onCvd.mock.calls[0]?.[0]).toBe(false);
     expect(onLevels.mock.calls[0]?.[0]).toBe(false);
   });
+
+  it('toggles book, footprint, and crowd versus top', async () => {
+    const user = userEvent.setup();
+    const onBook = vi.fn();
+    const onFoot = vi.fn();
+    const onCrowd = vi.fn();
+    renderWithTheme(
+      <DetailChartToolbar
+        intervals={['1h']}
+        interval="1h"
+        onIntervalChange={() => undefined}
+        onShowBookChange={onBook}
+        onShowFootprintChange={onFoot}
+        onShowCrowdChange={onCrowd}
+      />,
+    );
+    await user.click(screen.getByRole('switch', { name: /book|emir defteri/i }));
+    await user.click(screen.getByRole('switch', { name: /footprint|ayak izi/i }));
+    await user.click(screen.getByRole('switch', { name: /crowd vs top|kalabalık ve büyükler/i }));
+    expect(onBook.mock.calls[0]?.[0]).toBe(false);
+    expect(onFoot.mock.calls[0]?.[0]).toBe(false);
+    expect(onCrowd.mock.calls[0]?.[0]).toBe(false);
+  });
 });

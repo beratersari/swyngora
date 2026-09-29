@@ -100,6 +100,49 @@ func (m memBooks) ListSpotMarkets(context.Context) ([]domain.SpotMarket, error) 
 func (m memBooks) ListProductTags(context.Context) ([]string, error)            { return nil, nil }
 func (m memBooks) TagsByBase(context.Context) (map[string][]string, error)      { return nil, nil }
 
+func TestSnapshotJobs_LiquidUsesShallowBinance(t *testing.T) {
+	books := map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance:  memBooks{},
+		domain.ExchangeCoinbase: memBooks{},
+		domain.ExchangeBybit:    memBooks{},
+	}
+	svc := &Service{Books: books, Seeds: []string{"BTCUSDT"}}
+	svc.SetLiquid([]string{"BTCUSDT", "SOLUSDT"})
+	var binanceSol, bybitSol, binanceBTC snapJob
+	var sawBTC, sawSolB, sawSolY bool
+	for _, job := range svc.SnapshotJobs() {
+		switch {
+		case job.ex == domain.ExchangeBinance && job.symbol == "BTCUSDT":
+			binanceBTC = job
+			sawBTC = true
+		case job.ex == domain.ExchangeBinance && job.symbol == "SOLUSDT":
+			binanceSol = job
+			sawSolB = true
+		case job.ex == domain.ExchangeBybit && job.symbol == "SOLUSDT":
+			bybitSol = job
+			sawSolY = true
+		}
+	}
+	if !sawBTC || !sawSolB || !sawSolY {
+		t.Fatalf("missing jobs btc=%v solB=%v solY=%v", sawBTC, sawSolB, sawSolY)
+	}
+	if binanceBTC.depth != 0 || binanceBTC.minGap != 0 {
+		t.Fatalf("seed book %+v", binanceBTC)
+	}
+	if binanceSol.depth != bookFlashDepth || binanceSol.minGap != binanceLiquidGap {
+		t.Fatalf("binance liquid %+v", binanceSol)
+	}
+	if bybitSol.depth != bookFlashDepth || bybitSol.minGap != 0 {
+		t.Fatalf("bybit liquid %+v", bybitSol)
+	}
+	flashes := svc.Jobs()
+	for _, job := range flashes {
+		if job.symbol == "SOLUSDT" {
+			t.Fatalf("flash universe includes liquid name %+v", job)
+		}
+	}
+}
+
 func TestSaveAndCompare(t *testing.T) {
 	st := &memStore{}
 	t0 := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)

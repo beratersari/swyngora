@@ -2021,6 +2021,33 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/history-span:
+    get:
+      summary: How long this coin has actually been recorded
+      description: |
+        Oldest stored sample per venue for futures open interest, the spot
+        book, and flow-at-prices. A venue with no rows is omitted. The startup
+        archive backfills the seed pairs. Other liquid names fill in only while
+        this process is sampling. `spanSec` is from that oldest sample to now.
+        Informational only.
+      operationId: getMarketHistorySpan
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+      responses:
+        '200':
+          description: Recording span per stored series
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistorySpan'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/basis:
     get:
       summary: Futures vs spot basis (premium or discount)
@@ -9646,6 +9673,23 @@ components:
         venues:
           type: array
           items: { $ref: '#/components/schemas/MarketUnusualVenue' }
+        note: { type: string }
+    HistorySpanSeries:
+      type: object
+      properties:
+        kind: { type: string, enum: [futures_oi, book, flow] }
+        exchange: { type: string }
+        since: { type: string, format: date-time }
+        spanSec: { type: integer, description: Seconds from the oldest stored sample to asOf }
+    HistorySpan:
+      type: object
+      description: How long stored samples for one coin actually cover
+      properties:
+        symbol: { type: string }
+        asOf: { type: string, format: date-time }
+        series:
+          type: array
+          items: { $ref: '#/components/schemas/HistorySpanSeries' }
         note: { type: string }
     MarketLiquidationCascadeHit:
       type: object

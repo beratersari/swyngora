@@ -150,6 +150,10 @@ import type {
   SymbolMarketQuery,
   VolumeProfileReport,
   FlowAtPricesReport,
+  MarketLongShortRatio,
+  LongShortQuery,
+  HistorySpan,
+  HistorySpanQuery,
 } from './marketApi.types';
 import type { ForensicsRadarReview } from '@/libs/types/forensics.types';
 // delist types re-exported below
@@ -191,6 +195,8 @@ export type {
   MarketLiquidations,
   MarketLiquidationOverview,
   MarketLiquidationLevels,
+  MarketLongShortRatio,
+  HistorySpan,
   MarketLiquidationCascade,
   MarketLiquidationCascadeScan,
   MarketCvd,
@@ -517,6 +523,18 @@ export const marketApi = baseApi.injectEndpoints({
       ],
     }),
 
+    getMarketLongShortRatio: build.query<MarketLongShortRatio, LongShortQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/long-short-ratio',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+    getMarketHistorySpan: build.query<HistorySpan, HistorySpanQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/history-span',
+        params: compactParams({ ...arg }),
+      }),
+    }),
     getMarketCvd: build.query<MarketCvd, CvdQuery>({
       query: (arg) => ({
         url: '/api/v1/market/cvd',
@@ -912,6 +930,8 @@ export const {
   useGetMarketLiquidationHuntQuery,
   useGetMarketLiquidationMaxPainQuery,
   useGetMarketLiquidationHuntHeatmapQuery,
+  useGetMarketLongShortRatioQuery,
+  useGetMarketHistorySpanQuery,
   useGetMarketCvdQuery,
   useGetMarketUnusualQuery,
   useGetMarketVolumeShareQuery,

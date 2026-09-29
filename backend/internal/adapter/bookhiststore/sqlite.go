@@ -170,6 +170,28 @@ INSERT OR IGNORE INTO book_snapshots(
 	return n > 0, nil
 }
 
+// EarliestBook is the oldest stored ladder for one venue and symbol.
+func (s *SQLite) EarliestBook(ctx context.Context, exchange domain.Exchange, symbol string) (time.Time, bool, error) {
+	if s == nil || s.db == nil {
+		return time.Time{}, false, fmt.Errorf("book history store is nil")
+	}
+	symbol = domain.NormalizeSymbol(exchange, symbol)
+	if exchange == "" || symbol == "" {
+		return time.Time{}, false, fmt.Errorf("%w: incomplete book query", domain.ErrInvalidArgument)
+	}
+	var ms sql.NullInt64
+	err := s.db.QueryRowContext(ctx, `
+SELECT MIN(sampled_at_ms) FROM book_snapshots
+WHERE exchange = ? AND symbol = ?`, string(exchange), symbol).Scan(&ms)
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	if !ms.Valid || ms.Int64 <= 0 {
+		return time.Time{}, false, nil
+	}
+	return time.UnixMilli(ms.Int64).UTC(), true, nil
+}
+
 // NearestAt returns the sample at or before at, else the next one after.
 func (s *SQLite) NearestAt(ctx context.Context, exchange, symbol string, at time.Time) (*domain.BookHistorySnapshot, error) {
 	if s == nil || s.db == nil {

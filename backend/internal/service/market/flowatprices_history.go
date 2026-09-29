@@ -52,7 +52,71 @@ func (s *Service) FlowSampleSymbols() []string {
 		for sym := range s.flowSeen {
 			add(sym)
 		}
+		for _, sym := range s.flowLiquid {
+			add(sym)
+		}
 		s.watchMu.Unlock()
+	}
+	return out
+}
+
+// SetFlowLiquid sets the extra pairs sampled about once a minute.
+// Seed pairs and pairs someone opened stay on the faster pass.
+func (s *Service) SetFlowLiquid(symbols []string) {
+	if s == nil {
+		return
+	}
+	cp := append([]string{}, symbols...)
+	s.watchMu.Lock()
+	s.flowLiquid = cp
+	s.watchMu.Unlock()
+}
+
+// FlowSample is one pair on a recorder pass. Slow pairs are the liquid
+// names outside the seed list.
+type FlowSample struct {
+	Symbol string
+	Slow   bool
+}
+
+// FlowSamplePlan is the flow recorder pass. Seeds and opened pairs are fast.
+// The wider liquid list is slow so a 10-second tick does not fetch every name.
+func (s *Service) FlowSamplePlan() []FlowSample {
+	fast := map[string]struct{}{}
+	var out []FlowSample
+	addFast := func(sym string) {
+		sym = domain.NormalizeLiquidationSymbol(sym)
+		if sym == "" {
+			return
+		}
+		if _, ok := fast[sym]; ok {
+			return
+		}
+		fast[sym] = struct{}{}
+		out = append(out, FlowSample{Symbol: sym})
+	}
+	for _, sym := range domain.DefaultFuturesHistorySymbols {
+		addFast(sym)
+	}
+	var liquid []string
+	if s != nil {
+		s.watchMu.Lock()
+		for sym := range s.flowSeen {
+			addFast(sym)
+		}
+		liquid = append(liquid, s.flowLiquid...)
+		s.watchMu.Unlock()
+	}
+	for _, sym := range liquid {
+		sym = domain.NormalizeLiquidationSymbol(sym)
+		if sym == "" {
+			continue
+		}
+		if _, ok := fast[sym]; ok {
+			continue
+		}
+		fast[sym] = struct{}{}
+		out = append(out, FlowSample{Symbol: sym, Slow: true})
 	}
 	return out
 }
@@ -153,6 +217,7 @@ type FlowAtPricesHistoryWorker struct {
 	Logger   *slog.Logger
 	now      func() time.Time
 	sleep    func(context.Context, time.Duration) error
+	lastSlow time.Time
 }
 
 // Start runs until ctx is canceled.
@@ -203,15 +268,22 @@ func (w *FlowAtPricesHistoryWorker) RunOnce(ctx context.Context) {
 		w.now = time.Now
 	}
 	now := w.now().UTC()
-	for _, sym := range w.Svc.FlowSampleSymbols() {
+	doSlow := w.lastSlow.IsZero() || now.Sub(w.lastSlow) >= time.Minute
+	for _, item := range w.Svc.FlowSamplePlan() {
+		if item.Slow && !doSlow {
+			continue
+		}
 		for _, ex := range configuredFutures("all", func(v domain.Exchange) bool { return w.Svc.printPort(v) != nil }) {
 			if ctx.Err() != nil {
 				return
 			}
-			if err := w.Svc.SampleFlowAtPrices(ctx, ex, sym, now); err != nil {
-				w.Logger.Debug("flow at prices sample", "exchange", ex, "symbol", sym, "err", err)
+			if err := w.Svc.SampleFlowAtPrices(ctx, ex, item.Symbol, now); err != nil {
+				w.Logger.Debug("flow at prices sample", "exchange", ex, "symbol", item.Symbol, "err", err)
 			}
 		}
+	}
+	if doSlow {
+		w.lastSlow = now
 	}
 	if w.Retain > 0 {
 		if _, err := w.Svc.PurgeFlowAtPrices(ctx, now.Add(-w.Retain)); err != nil {

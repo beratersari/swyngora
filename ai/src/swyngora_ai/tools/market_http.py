@@ -1106,6 +1106,10 @@ class FuturesHistoryInput(BaseModel):
     end: str = Field(default="", description="RFC3339 or unix ms")
 
 
+class HistorySpanInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+
+
 class UnusualInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -2816,6 +2820,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if end:
             params["to"] = end
         return http.get("/api/v1/market/futures-history", params)
+
+    def get_history_span(symbol: str) -> str:
+        return http.get("/api/v1/market/history-span", {"symbol": symbol})
 
     def get_unusual_context(symbol: str, exchange: str = "all") -> str:
         return http.get(
@@ -5531,6 +5538,19 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "metric=open_interest|funding|long_short|liquidations."
             ),
             args_schema=FuturesHistoryInput,
+        ),
+        StructuredTool.from_function(
+            get_history_span,
+            name="get_history_span",
+            description=(
+                "How long this coin has actually been recorded. Returns the "
+                "oldest stored futures open interest, spot book, and "
+                "flow-at-prices sample per venue. A venue with no rows is "
+                "omitted. spanSec is from that sample to now. The startup "
+                "archive backfills the seed pairs; other names fill in only "
+                "while the process is sampling. Informational only."
+            ),
+            args_schema=HistorySpanInput,
         ),
         StructuredTool.from_function(
             get_unusual_context,

@@ -159,6 +159,28 @@ ORDER BY minute_ms, price_e8
 	return out, rows.Err()
 }
 
+// EarliestFlow is the oldest stored minute for one venue and symbol.
+func (s *SQLite) EarliestFlow(ctx context.Context, exchange domain.Exchange, symbol string) (time.Time, bool, error) {
+	if s == nil || s.db == nil {
+		return time.Time{}, false, nil
+	}
+	symbol = domain.NormalizeLiquidationSymbol(symbol)
+	if exchange == "" || symbol == "" {
+		return time.Time{}, false, fmt.Errorf("%w: incomplete flow query", domain.ErrInvalidArgument)
+	}
+	var ms sql.NullInt64
+	err := s.db.QueryRowContext(ctx, `
+SELECT MIN(minute_ms) FROM flow_price_cells
+WHERE exchange = ? AND symbol = ?`, string(exchange), symbol).Scan(&ms)
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	if !ms.Valid || ms.Int64 <= 0 {
+		return time.Time{}, false, nil
+	}
+	return time.UnixMilli(ms.Int64).UTC(), true, nil
+}
+
 // FlowCursor is the newest print time already stored.
 func (s *SQLite) FlowCursor(ctx context.Context, exchange domain.Exchange, symbol string) (time.Time, error) {
 	if s == nil || s.db == nil {

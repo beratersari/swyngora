@@ -17,6 +17,7 @@ type Worker struct {
 	Logger   *slog.Logger
 	now      func() time.Time
 	sleep    func(context.Context, time.Duration) error
+	lastSnap map[string]time.Time
 }
 
 // Start runs until ctx is canceled.
@@ -95,12 +96,24 @@ func (w *Worker) RunOnce(ctx context.Context) {
 	now := w.now().UTC()
 	inserted := 0
 	failed := 0
-	jobs := w.Hist.Jobs()
+	if w.lastSnap == nil {
+		w.lastSnap = map[string]time.Time{}
+	}
+	jobs := w.Hist.SnapshotJobs()
 	for _, job := range jobs {
 		if ctx.Err() != nil {
 			return
 		}
-		ok, err := w.Hist.SaveSymbol(ctx, job.ex, job.symbol, now)
+		key := string(job.ex) + "|" + job.symbol
+		if job.minGap > 0 {
+			if last, ok := w.lastSnap[key]; ok && now.Sub(last) < job.minGap {
+				continue
+			}
+		}
+		ok, err := w.Hist.SaveSymbolDepth(ctx, job.ex, job.symbol, now, job.depth)
+		if job.minGap > 0 {
+			w.lastSnap[key] = now
+		}
 		if err != nil {
 			failed++
 			w.Logger.Debug("order book history venue skip", "exchange", job.ex, "symbol", job.symbol, "err", err)

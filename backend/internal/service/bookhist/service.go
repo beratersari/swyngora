@@ -21,11 +21,29 @@ type Service struct {
 	Logger *slog.Logger
 	Seeds  []string
 
-	mu   sync.Mutex
-	seen map[string]time.Time
+	mu     sync.Mutex
+	seen   map[string]time.Time
+	liquid []string
 
 	watch domain.BookFlashWatch
 	moves domain.BookMoveWatch
+}
+
+// binanceLiquidGap is how often Binance books outside the seed list are snapshotted.
+// Flashes stay on seeds. Wide names use the top 100 levels.
+const binanceLiquidGap = 2 * time.Minute
+
+// SetLiquid adds USDT pairs whose spot books are snapshotted beside the seeds.
+// Flashes stay on seeds and recently opened pairs. Binance wide names are sampled
+// at the top 100 levels, and less often than Bybit and Coinbase.
+func (s *Service) SetLiquid(symbols []string) {
+	if s == nil {
+		return
+	}
+	cp := append([]string{}, symbols...)
+	s.mu.Lock()
+	s.liquid = cp
+	s.mu.Unlock()
 }
 
 // Note records a pair that users have asked about.
@@ -87,6 +105,61 @@ func (s *Service) Jobs() []bookJob {
 type bookJob struct {
 	ex     domain.Exchange
 	symbol string
+}
+
+// snapJob is one minute snapshot. depth 0 keeps the full ladder.
+// minGap slows Binance samples that are outside the seed list.
+type snapJob struct {
+	ex     domain.Exchange
+	symbol string
+	depth  int
+	minGap time.Duration
+}
+
+// SnapshotJobs is the minute-snapshot universe. Seeds and recently opened
+// pairs keep a full ladder. Extra liquid names use the top 100 levels.
+func (s *Service) SnapshotJobs() []snapJob {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	seen := map[string]struct{}{}
+	out := make([]snapJob, 0, 48)
+	add := func(ex domain.Exchange, symbol string, depth int, gap time.Duration) {
+		symbol = domain.CrossVenueSymbol(ex, symbol)
+		if symbol == "" || s.Books[ex] == nil {
+			return
+		}
+		key := string(ex) + "|" + symbol
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		out = append(out, snapJob{ex: ex, symbol: symbol, depth: depth, minGap: gap})
+	}
+	venues := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeCoinbase, domain.ExchangeBybit}
+	for _, seed := range s.Seeds {
+		for _, ex := range venues {
+			add(ex, seed, 0, 0)
+		}
+	}
+	for key := range s.seen {
+		ex, symbol, ok := splitJobKey(key)
+		if ok {
+			add(ex, symbol, 0, 0)
+		}
+	}
+	for _, sym := range s.liquid {
+		for _, ex := range venues {
+			gap := time.Duration(0)
+			if ex == domain.ExchangeBinance {
+				gap = binanceLiquidGap
+			}
+			add(ex, sym, bookFlashDepth, gap)
+		}
+	}
+	return out
 }
 
 func splitJobKey(key string) (domain.Exchange, string, bool) {
@@ -216,8 +289,48 @@ func (s *Service) Compare(ctx context.Context, exchange, symbol string, from, to
 	return &diff, nil
 }
 
-// SaveSymbol fetches one venue independently and upserts a sample.
+type bookEarliest interface {
+	EarliestBook(ctx context.Context, exchange domain.Exchange, symbol string) (time.Time, bool, error)
+}
+
+// RecordingSince is the oldest stored spot-book sample per venue.
+func (s *Service) RecordingSince(ctx context.Context, symbol string, now time.Time) ([]domain.RecordedSeries, error) {
+	if s == nil || s.Store == nil {
+		return nil, nil
+	}
+	ear, ok := s.Store.(bookEarliest)
+	if !ok {
+		return nil, nil
+	}
+	var out []domain.RecordedSeries
+	for _, ex := range []domain.Exchange{domain.ExchangeBinance, domain.ExchangeCoinbase, domain.ExchangeBybit} {
+		sym := domain.NormalizeSymbol(ex, symbol)
+		if sym == "" {
+			continue
+		}
+		since, found, err := ear.EarliestBook(ctx, ex, sym)
+		if err != nil {
+			return nil, err
+		}
+		if !found || since.IsZero() {
+			continue
+		}
+		out = append(out, domain.RecordedSeries{
+			Kind:     domain.RecordedBook,
+			Exchange: ex,
+			Since:    since.UTC(),
+		})
+	}
+	return out, nil
+}
+
+// SaveSymbol fetches one venue independently and upserts a full ladder.
 func (s *Service) SaveSymbol(ctx context.Context, ex domain.Exchange, symbol string, now time.Time) (bool, error) {
+	return s.SaveSymbolDepth(ctx, ex, symbol, now, 0)
+}
+
+// SaveSymbolDepth is SaveSymbol with a level cap. depth <= 0 uses the full ladder.
+func (s *Service) SaveSymbolDepth(ctx context.Context, ex domain.Exchange, symbol string, now time.Time, depth int) (bool, error) {
 	if s == nil || s.Store == nil {
 		return false, nil
 	}
@@ -229,7 +342,11 @@ func (s *Service) SaveSymbol(ctx context.Context, ex domain.Exchange, symbol str
 	if symbol == "" {
 		return false, nil
 	}
-	raw, err := p.GetOrderBook(ctx, domain.OrderBookQuery{Symbol: symbol, Limit: domain.MaxOrderBookRawLimit})
+	limit := domain.MaxOrderBookRawLimit
+	if depth > 0 && depth < limit {
+		limit = depth
+	}
+	raw, err := p.GetOrderBook(ctx, domain.OrderBookQuery{Symbol: symbol, Limit: limit})
 	if err != nil {
 		return false, err
 	}

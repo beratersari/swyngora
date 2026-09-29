@@ -95,6 +95,7 @@ BOOK_TOOLS: frozenset[str] = frozenset(
         "get_funding_arb_signal",
         "get_long_short_ratio",
         "get_futures_history",
+        "get_history_span",
         "get_unusual_context",
         "estimate_liquidation_hunt",
         "get_liquidation_heatmap",

@@ -68,6 +68,7 @@ type DataPort interface {
 	GetFundingArbSignal(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error)
+	GetHistorySpan(ctx context.Context, symbol string) (json.RawMessage, error)
 	GetUnusual(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLiquidationHunt(ctx context.Context, exchange, symbol string, weights domain.HuntScoreWeights) (json.RawMessage, error)
 	GetLiquidationHuntHeatmap(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error)
@@ -1112,6 +1113,21 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetFuturesHistory(ctx, metric, req.GetString("exchange", "all"), symbol, req.GetString("from", ""), req.GetString("to", ""), int(req.GetFloat("limit", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_history_span",
+		mcp.WithDescription("How long this coin has actually been recorded: oldest stored futures open interest, spot book, and flow-at-prices sample per venue. A venue with no rows is omitted. The startup archive backfills the seed pairs. Other liquid names fill in only while this process is sampling. spanSec is from that oldest sample to now. Informational only — not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetHistorySpan(ctx, symbol)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -609,6 +609,31 @@ func main() {
 	if nTaker > 0 {
 		logger.Info("bybit taker buckets restored", "bars", nTaker)
 	}
+	go func() {
+		refresh := func() {
+			syms, err := marketSvc.LiquidPerpSymbols(ctx, domain.LiquidRecorderLimit)
+			if len(syms) > 0 {
+				futuresHist.SetLiquid(syms)
+				bookHist.SetLiquid(syms)
+				marketSvc.SetFlowLiquid(syms)
+				logger.Info("liquid recorder universe", "symbols", len(syms))
+			}
+			if err != nil {
+				logger.Debug("liquid recorder refresh", "err", err, "symbols", len(syms))
+			}
+		}
+		refresh()
+		tick := time.NewTicker(2 * time.Minute)
+		defer tick.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-tick.C:
+				refresh()
+			}
+		}
+	}()
 	go liqSink.Start(ctx)
 	go bybitTrades.Start(ctx)
 	go (&futureshist.Worker{

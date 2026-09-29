@@ -104,7 +104,8 @@ describe('CandleChartHost', () => {
       />,
     );
     expect(addSeries).toHaveBeenCalledTimes(1);
-    expect(attachPrimitive).toHaveBeenCalledTimes(1);
+    // Desk overlay attaches on mount. The delist line attaches after it.
+    expect(attachPrimitive).toHaveBeenCalledTimes(2);
   });
 
   it('adds a delta histogram pane and dashed liquidation prices', () => {

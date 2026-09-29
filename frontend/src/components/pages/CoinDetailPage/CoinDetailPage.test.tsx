@@ -53,6 +53,17 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetMarketLiquidationsQuery: () => mockLiquidations(),
     useGetMarketLiquidationHuntHeatmapQuery: () => mockLiqHeatmap(),
     useGetMarketCvdQuery: () => mockCvd(),
+    useGetMarketFlowAtPricesQuery: () => ({ data: undefined, isError: false, isFetching: false, isLoading: false, isSuccess: false, refetch: vi.fn() }),
+    useGetMarketLongShortRatioQuery: () => ({ data: undefined, isError: false, isFetching: false, isLoading: false, isSuccess: false, refetch: vi.fn() }),
+    useGetMarketHistorySpanQuery: () => ({
+      data: { symbol: 'BTCUSDT', series: [{ kind: 'futures_oi', exchange: 'binance', spanSec: 3600 }] },
+      currentData: { symbol: 'BTCUSDT', series: [{ kind: 'futures_oi', exchange: 'binance', spanSec: 3600 }] },
+      isError: false,
+      isFetching: false,
+      isLoading: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    }),
     useGetMarketUnusualQuery: () => ({
       data: undefined,
       currentData: undefined,
@@ -279,6 +290,7 @@ describe('CoinDetailPage', () => {
     expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Holders' })).toBeInTheDocument();
     expect(screen.getByTestId('candle-chart')).toBeInTheDocument();
+    expect(screen.getByTestId('chart-recorded')).toHaveTextContent(/binance 1h/i);
     expect(screen.queryByTestId('order-book')).not.toBeInTheDocument();
   });
 

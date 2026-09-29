@@ -1199,6 +1199,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/history-span": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How long this coin has actually been recorded
+         * @description Oldest stored sample per venue for futures open interest, the spot
+         *     book, and flow-at-prices. A venue with no rows is omitted. The startup
+         *     archive backfills the seed pairs. Other liquid names fill in only while
+         *     this process is sampling. `spanSec` is from that oldest sample to now.
+         *     Informational only.
+         */
+        get: operations["getMarketHistorySpan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/basis": {
         parameters: {
             query?: never;
@@ -5632,6 +5656,23 @@ export interface components {
             /** Format: date-time */
             asOf?: string;
             venues?: components["schemas"]["MarketUnusualVenue"][];
+            note?: string;
+        };
+        HistorySpanSeries: {
+            /** @enum {string} */
+            kind?: "futures_oi" | "book" | "flow";
+            exchange?: string;
+            /** Format: date-time */
+            since?: string;
+            /** @description Seconds from the oldest stored sample to asOf */
+            spanSec?: number;
+        };
+        /** @description How long stored samples for one coin actually cover */
+        HistorySpan: {
+            symbol?: string;
+            /** Format: date-time */
+            asOf?: string;
+            series?: components["schemas"]["HistorySpanSeries"][];
             note?: string;
         };
         MarketLiquidationCascadeHit: {
@@ -11232,6 +11273,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketUnusual"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketHistorySpan: {
+        parameters: {
+            query: {
+                symbol: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recording span per stored series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistorySpan"];
                 };
             };
             400: components["responses"]["Error"];

@@ -22,8 +22,21 @@ type Service struct {
 	Logger     *slog.Logger
 	Seeds      []string
 
-	mu   sync.Mutex
-	seen map[string]time.Time
+	mu     sync.Mutex
+	seen   map[string]time.Time
+	liquid []string
+}
+
+// SetLiquid replaces the wider live-sample universe. Seeds stay in Symbols.
+// The startup archive still backfills Seeds only.
+func (s *Service) SetLiquid(symbols []string) {
+	if s == nil {
+		return
+	}
+	cp := append([]string{}, symbols...)
+	s.mu.Lock()
+	s.liquid = cp
+	s.mu.Unlock()
 }
 
 // NoteSymbol records a pair that users or streams have asked about.
@@ -51,10 +64,46 @@ func (s *Service) Symbols() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := append([]string{}, s.Seeds...)
+	out = append(out, s.liquid...)
 	for sym := range s.seen {
 		out = append(out, sym)
 	}
 	return domain.NormalizeFuturesSymbols(out)
+}
+
+type snapshotEarliest interface {
+	EarliestSnapshot(ctx context.Context, metric string, exchange domain.Exchange, symbol string) (time.Time, bool, error)
+}
+
+// RecordingSince is the oldest stored open-interest sample per futures venue.
+func (s *Service) RecordingSince(ctx context.Context, symbol string, now time.Time) ([]domain.RecordedSeries, error) {
+	if s == nil || s.Store == nil {
+		return nil, nil
+	}
+	ear, ok := s.Store.(snapshotEarliest)
+	if !ok {
+		return nil, nil
+	}
+	symbol = domain.NormalizeLiquidationSymbol(symbol)
+	if symbol == "" {
+		return nil, nil
+	}
+	var out []domain.RecordedSeries
+	for _, ex := range domain.FuturesVenues() {
+		since, found, err := ear.EarliestSnapshot(ctx, domain.FuturesMetricOpenInterest, ex, symbol)
+		if err != nil {
+			return nil, err
+		}
+		if !found || since.IsZero() {
+			continue
+		}
+		out = append(out, domain.RecordedSeries{
+			Kind:     domain.RecordedFuturesOI,
+			Exchange: ex,
+			Since:    since.UTC(),
+		})
+	}
+	return out, nil
 }
 
 // History returns stored snapshots or liquidation events.

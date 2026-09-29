@@ -77,6 +77,7 @@ type Service struct {
 	fearGreed      domain.FearGreedStore
 	flowHist       domain.FlowAtPricesStore
 	flowSeen       map[string]struct{}
+	flowLiquid     []string
 	fearGreedSF    singleflight.Group
 	fearGreedMu    sync.Mutex
 	fearGreedAt    time.Time

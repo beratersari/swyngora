@@ -2170,6 +2170,17 @@ func (b *Backend) GetFuturesHistory(ctx context.Context, metric, exchange, symbo
 	return mustJSON(futuresHistoryMap(metric, exchange, symbol, got))
 }
 
+func (b *Backend) GetHistorySpan(ctx context.Context, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.HistorySpan(ctx, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) GetUnusual(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

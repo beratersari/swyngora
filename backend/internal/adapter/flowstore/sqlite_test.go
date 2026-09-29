@@ -38,4 +38,8 @@ func TestSQLite_AddsAndListsFlowCells(t *testing.T) {
 	if err != nil || !cur.Equal(minute.Add(time.Second)) {
 		t.Fatalf("cursor %s %v", cur, err)
 	}
+	earliest, ok, err := s.EarliestFlow(ctx, domain.ExchangeBybit, "BTCUSDT")
+	if err != nil || !ok || !earliest.Equal(minute) {
+		t.Fatalf("earliest %s ok=%v err=%v", earliest, ok, err)
+	}
 }

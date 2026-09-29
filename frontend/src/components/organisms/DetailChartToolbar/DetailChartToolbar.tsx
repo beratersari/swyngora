@@ -26,6 +26,12 @@ export function DetailChartToolbar({
   onShowCvdChange,
   showLiqLevels = true,
   onShowLiqLevelsChange,
+  showBook = true,
+  onShowBookChange,
+  showFootprint = true,
+  onShowFootprintChange,
+  showCrowd = true,
+  onShowCrowdChange,
 }: DetailChartToolbarProps) {
   const { t } = useTranslation(['detail', 'common']);
 
@@ -133,6 +139,48 @@ export function DetailChartToolbar({
             checked={showLiqLevels}
             onChange={onShowLiqLevelsChange}
             aria-label={t('detail:chart.liqLevels')}
+          />
+        </InlineField>
+      ) : null}
+
+      {onShowBookChange ? (
+        <InlineField>
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.book')}
+          </Text>
+          <Switch
+            size="small"
+            checked={showBook}
+            onChange={onShowBookChange}
+            aria-label={t('detail:chart.book')}
+          />
+        </InlineField>
+      ) : null}
+
+      {onShowFootprintChange ? (
+        <InlineField>
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.footprint')}
+          </Text>
+          <Switch
+            size="small"
+            checked={showFootprint}
+            onChange={onShowFootprintChange}
+            aria-label={t('detail:chart.footprint')}
+          />
+        </InlineField>
+      ) : null}
+
+      {onShowCrowdChange ? (
+        <InlineField>
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.crowd')}
+          </Text>
+          <Switch
+            size="small"
+            checked={showCrowd}
+            onChange={onShowCrowdChange}
+            aria-label={t('detail:chart.crowd')}
           />
         </InlineField>
       ) : null}

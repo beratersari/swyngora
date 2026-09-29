@@ -31,6 +31,11 @@ server restart and can be queried later by users or the AI.
 - Startup pages public 1-hour history for the seed pairs only as far as that
   endpoint documents, and never past 90 days. A later start skips a series
   whose earliest row already reaches the back of **that** window.
+- The live sampler also keeps the top liquid USDT names, capped at 36 including
+  the seeds (`domain.LiquidRecorderLimit`). Spot quote volume picks the extra
+  names. Those extra names are not part of the startup backfill, so their
+  history starts when this process samples them. `GET /api/v1/market/history-span`
+  reports that span per venue. See `docs/features/chart-desk.md`.
 
 | Series | Endpoint | Public window this archive requests |
 |---|---|---|

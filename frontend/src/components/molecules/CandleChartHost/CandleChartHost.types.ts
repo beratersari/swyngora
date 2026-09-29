@@ -23,6 +23,27 @@ export type CandleChartLowerSeries = {
   title?: string;
 };
 
+/** One resting-size column drawn behind the candles. Time is unix seconds. */
+export type CandleChartHeatColumn = {
+  time: number;
+  bids: { price: number; notional: number }[];
+  asks: { price: number; notional: number }[];
+};
+
+/** Buy and sell size at one price for the visible window. */
+export type CandleChartFootprintLevel = {
+  price: number;
+  buy: number;
+  sell: number;
+};
+
+/** Estimated liquidation notional at one price. Wider bars are larger pockets. */
+export type CandleChartLiqBar = {
+  price: number;
+  notional: number;
+  side: 'long' | 'short';
+};
+
 /** Horizontal price on the candle scale (estimated liquidation levels). */
 export type CandleChartPriceLine = {
   id: string;
@@ -48,6 +69,14 @@ export type CandleChartHostProps = WithLoadingProps & {
   lowerSeries?: CandleChartLowerSeries[];
   /** Dashed prices on the candle scale, such as estimated liquidation levels. */
   priceLines?: CandleChartPriceLine[];
+  /** Resting bid and ask size drawn behind the candles. */
+  bookHeat?: CandleChartHeatColumn[];
+  /** Buy versus sell at each price, drawn on the right of the candle pane. */
+  footprint?: CandleChartFootprintLevel[];
+  /** Estimated liquidation pockets, drawn beside the footprint. */
+  liqProfile?: CandleChartLiqBar[];
+  /** Visible candle span in unix seconds, so the footprint window can follow the pan. */
+  onVisibleSpan?: (fromSec: number, toSec: number) => void;
   /** Optional event markers (e.g. pump scanner hits) */
   markers?: CandleChartMarker[];
   /** Full-height vertical event lines (delist announce / halt). */

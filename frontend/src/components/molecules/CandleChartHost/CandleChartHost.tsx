@@ -37,6 +37,7 @@ import {
   VertLinePrimitive,
   snapVertLinesToCandleTimes,
 } from './CandleChartHost.vertLines';
+import { DeskOverlayPrimitive } from './CandleChartHost.desk';
 import {
   candleDataSignature,
   chartPriceFormatFromCandles,
@@ -60,6 +61,10 @@ export function CandleChartHost({
   overlays = [],
   lowerSeries = [],
   priceLines = [],
+  bookHeat = [],
+  footprint = [],
+  liqProfile = [],
+  onVisibleSpan,
   markers = [],
   vertLines = [],
   barDurationSec,
@@ -86,6 +91,7 @@ export function CandleChartHost({
   const priceLineRefs = useRef<IPriceLine[]>([]);
   const lastPriceLineSigRef = useRef('');
   const vertPrimitivesRef = useRef<ISeriesPrimitive<Time>[]>([]);
+  const deskRef = useRef<DeskOverlayPrimitive | null>(null);
   const lastVertSigRef = useRef<string>('');
   const lastCandleSigRef = useRef<string>('');
   const lastOverlaySigRef = useRef<string>('');
@@ -100,9 +106,13 @@ export function CandleChartHost({
   const onNeedMoreHistoryRef = useRef(onNeedMoreHistory);
   const isLoadingMoreRef = useRef(isLoadingMore);
   const hasMoreHistoryRef = useRef(hasMoreHistory);
+  const onVisibleSpanRef = useRef(onVisibleSpan);
+  const dataRef = useRef(data);
   onNeedMoreHistoryRef.current = onNeedMoreHistory;
   isLoadingMoreRef.current = isLoadingMore;
   hasMoreHistoryRef.current = hasMoreHistory;
+  onVisibleSpanRef.current = onVisibleSpan;
+  dataRef.current = data;
 
   // Create chart once (layout phase so the data effect below can sync same frame).
   useLayoutEffect(() => {
@@ -168,10 +178,21 @@ export function CandleChartHost({
 
     chartRef.current = chart;
     seriesRef.current = series;
+    const desk = new DeskOverlayPrimitive();
+    series.attachPrimitive(desk);
+    deskRef.current = desk;
     // Markers plugin is created in a separate effect after data is available.
 
     const onVisibleRange = (range: LogicalRange | null) => {
       if (!range) return;
+      const bars = dataRef.current;
+      if (bars.length > 0 && onVisibleSpanRef.current) {
+        const i0 = Math.max(0, Math.min(bars.length - 1, Math.floor(range.from)));
+        const i1 = Math.max(0, Math.min(bars.length - 1, Math.ceil(range.to)));
+        const from = bars[Math.min(i0, i1)]?.time;
+        const to = bars[Math.max(i0, i1)]?.time;
+        if (from != null && to != null && to > from) onVisibleSpanRef.current(from, to);
+      }
       if (suppressHistoryLoadRef.current) return;
       if (!hasMoreHistoryRef.current) return;
       if (isLoadingMoreRef.current) return;
@@ -191,6 +212,12 @@ export function CandleChartHost({
         // chart.remove() also tears down primitives
       }
       markersPluginRef.current = null;
+      deskRef.current = null;
+      try {
+        series.detachPrimitive(desk);
+      } catch {
+        /* chart already removed */
+      }
       for (const p of vertPrimitivesRef.current) {
         try {
           seriesRef.current?.detachPrimitive(p);
@@ -225,6 +252,10 @@ export function CandleChartHost({
   useEffect(() => {
     chartRef.current?.applyOptions({ height });
   }, [height]);
+
+  useEffect(() => {
+    deskRef.current?.setModel({ bookHeat, footprint, liqProfile });
+  }, [bookHeat, footprint, liqProfile]);
 
   // New symbol / interval → re-fit on next data, clear length bookkeeping.
   // Must run in useLayoutEffect *before* the data-sync layout effect so the

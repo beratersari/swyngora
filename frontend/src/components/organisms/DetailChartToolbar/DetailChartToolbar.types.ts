@@ -22,4 +22,13 @@ export type DetailChartToolbarProps = {
   /** Estimated liquidation prices on the candle scale. */
   showLiqLevels?: boolean;
   onShowLiqLevelsChange?: (show: boolean) => void;
+  /** Resting bid and ask size behind the candles. */
+  showBook?: boolean;
+  onShowBookChange?: (show: boolean) => void;
+  /** Buy versus sell at each price for the visible window. */
+  showFootprint?: boolean;
+  onShowFootprintChange?: (show: boolean) => void;
+  /** Binance crowd long percent versus top-trader long percent. */
+  showCrowd?: boolean;
+  onShowCrowdChange?: (show: boolean) => void;
 };

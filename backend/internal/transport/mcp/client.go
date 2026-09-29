@@ -1398,6 +1398,13 @@ func (c *APIClient) GetFuturesHistory(ctx context.Context, metric, exchange, sym
 	return c.get(ctx, "/api/v1/market/futures-history", q)
 }
 
+// GetHistorySpan returns how long stored futures, book, and flow samples cover.
+func (c *APIClient) GetHistorySpan(ctx context.Context, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	return c.get(ctx, "/api/v1/market/history-span", q)
+}
+
 // GetUnusual returns whether stored funding, open interest, liquidations, CVD, and spread look unusual.
 func (c *APIClient) GetUnusual(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

@@ -122,6 +122,49 @@ func (f *fakeLS) GetLongShortSeries(context.Context, string, int) (*domain.LongS
 	return f.ser, f.err
 }
 
+func TestSymbols_IncludesLiquidWithoutDroppingSeeds(t *testing.T) {
+	svc := &Service{Seeds: []string{"BTCUSDT", "ETHUSDT"}}
+	svc.SetLiquid([]string{"ETHUSDT", "SOLUSDT", "XRPUSDT"})
+	svc.NoteSymbol("DOGEUSDT")
+	got := svc.Symbols()
+	want := []string{"BTCUSDT", "ETHUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT"}
+	if len(got) != len(want) {
+		t.Fatalf("%v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("%v", got)
+		}
+	}
+}
+
+type earlyMem struct {
+	*memStore
+	at time.Time
+}
+
+func (e earlyMem) EarliestSnapshot(context.Context, string, domain.Exchange, string) (time.Time, bool, error) {
+	if e.at.IsZero() {
+		return time.Time{}, false, nil
+	}
+	return e.at, true, nil
+}
+
+func TestRecordingSince_UsesOldestOpenInterest(t *testing.T) {
+	at := time.Date(2026, 9, 28, 8, 0, 0, 0, time.UTC)
+	svc := &Service{Store: earlyMem{memStore: &memStore{}, at: at}}
+	got, err := svc.RecordingSince(context.Background(), "BTCUSDT", at.Add(2*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != len(domain.FuturesVenues()) {
+		t.Fatalf("%+v", got)
+	}
+	if got[0].Kind != domain.RecordedFuturesOI || got[0].Since.IsZero() {
+		t.Fatalf("%+v", got[0])
+	}
+}
+
 func TestSaveSymbol_OneVenueFailsOtherSaved(t *testing.T) {
 	st := &memStore{}
 	now := time.Date(2026, 8, 11, 16, 15, 0, 0, time.UTC)
