@@ -225,7 +225,9 @@ func main() {
 		Funding: map[domain.Exchange]domain.FundingRatePort{
 			domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient, domain.ExchangeOKX: okxClient,
 		},
-		LS:     map[domain.Exchange]domain.LongShortRatioPort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
+		LS: map[domain.Exchange]domain.LongShortRatioPort{
+			domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient, domain.ExchangeOKX: okxClient,
+		},
 		Taker:  map[domain.Exchange]domain.TakerBucketPort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
 		Logger: logger,
 		Seeds:  histSeeds,
@@ -302,6 +304,7 @@ func main() {
 	}).WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,
+		domain.ExchangeOKX:     okxClient,
 	}).WithTakerFlow(map[domain.Exchange]domain.TakerFlowPort{
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,
@@ -611,20 +614,20 @@ func main() {
 	if nTaker > 0 {
 		logger.Info("bybit taker buckets restored", "bars", nTaker)
 	}
-	go func() {
-		refresh := func() {
-			syms, err := marketSvc.LiquidPerpSymbols(ctx, domain.LiquidRecorderLimit)
-			if len(syms) > 0 {
-				futuresHist.SetLiquid(syms)
-				bookHist.SetLiquid(syms)
-				marketSvc.SetFlowLiquid(syms)
-				logger.Info("liquid recorder universe", "symbols", len(syms))
-			}
-			if err != nil {
-				logger.Debug("liquid recorder refresh", "err", err, "symbols", len(syms))
-			}
+	refreshLiquid := func() {
+		syms, err := marketSvc.LiquidPerpSymbols(ctx, domain.LiquidRecorderLimit)
+		if len(syms) > 0 {
+			futuresHist.SetLiquid(syms)
+			bookHist.SetLiquid(syms)
+			marketSvc.SetFlowLiquid(syms)
+			logger.Info("liquid recorder universe", "symbols", len(syms))
 		}
-		refresh()
+		if err != nil {
+			logger.Debug("liquid recorder refresh", "err", err, "symbols", len(syms))
+		}
+	}
+	refreshLiquid()
+	go func() {
 		tick := time.NewTicker(2 * time.Minute)
 		defer tick.Stop()
 		for {
@@ -632,7 +635,7 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-tick.C:
-				refresh()
+				refreshLiquid()
 			}
 		}
 	}()
@@ -651,8 +654,10 @@ func main() {
 			domain.ExchangeBybit:   bybitClient,
 			domain.ExchangeOKX:     okxClient,
 		},
-		Lookback: cfg.FuturesHistoryRetention,
-		Logger:   logger,
+		Lookback:   cfg.FuturesHistoryRetention,
+		Logger:     logger,
+		MaxPasses:  24,
+		RetryPause: 20 * time.Second,
 	}).Start(ctx)
 	go (&bookhist.Worker{
 		Hist:     bookHist,

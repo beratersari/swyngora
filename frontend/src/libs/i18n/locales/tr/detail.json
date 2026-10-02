@@ -43,6 +43,8 @@
     "crowd": "Kalabalık ve büyükler",
     "crowdLine": "Kalabalık long %",
     "topLine": "Büyük trader long %",
+    "crowdLineVenue": "{{venue}} kalabalık long %",
+    "topLineVenue": "{{venue}} büyük long %",
     "oi": "Açık pozisyon",
     "oiLine": "{{exchange}} açık pozisyon",
     "funding": "Fonlama",
@@ -55,7 +57,7 @@
       "long": "Long",
       "short": "Short"
     },
-    "tapeHint": "Alış − satış, her mumdaki agresif vadeli akıştır. CVD 00:00 UTC’de ve geçerli 4 saatlik açılışta sıfırlanır. Defter gölgesi bekleyen büyüklüktür. Sağ kenar her fiyattaki alışa karşı satıştır, yanındaki çubuklar tahmini likidasyon cepleridir. Alt şerit Binance kalabalık long yüzdesi ile büyük traderları karşılaştırır. Açık pozisyon ve fonlama, Binance, Bybit ve OKX için ayrı kayıtlı çizgilerdir. Likidasyon çubuğu, o mumdaki short notional eksi long notionaldir. Yalnızca bilgi amaçlıdır.",
+    "tapeHint": "Alış − satış, her mumdaki agresif vadeli akıştır. CVD 00:00 UTC’de ve geçerli 4 saatlik açılışta sıfırlanır. Defter gölgesi bekleyen büyüklüktür. Sağ kenar her fiyattaki alışa karşı satıştır, yanındaki çubuklar tahmini likidasyon cepleridir. Alt şerit Binance ve OKX için kalabalık long yüzdesi ile büyük traderları karşılaştırır. Açık pozisyon ve fonlama, Binance, Bybit ve OKX için ayrı kayıtlı çizgilerdir. Likidasyon çubuğu, o mumdaki short notional eksi long notionaldir. Yalnızca bilgi amaçlıdır.",
     "pumpOn": "Açık",
     "pumpOff": "Kapalı",
     "pumpHint": "|getiri| ≥ eşik olduğunda işaret (yalnızca bilgilendirme)",

@@ -240,6 +240,33 @@ describe('TapePanel', () => {
     expect(screen.getAllByText(/Widening/i).length).toBeGreaterThan(0);
   });
 
+  it('shows OKX crowd and top size beside the Binance read', () => {
+    renderWithTheme(
+      <TapePanel
+        openInterest={{
+          longShort: {
+            venues: [
+              {
+                exchange: 'binance',
+                current: { longPct: '55.00', shortPct: '45.00', bias: 'long' },
+              },
+              {
+                exchange: 'okx',
+                current: { longPct: '52.00', shortPct: '48.00', bias: 'long' },
+                topPositions: { longPct: '71.00', shortPct: '29.00', bias: 'long' },
+                gap: { gapPct: '+19', lean: 'top_more_long' },
+              },
+            ],
+          },
+        }}
+        snapshot={{ combined: { longPct: '55.00', windows: [] } }}
+      />,
+    );
+    expect(screen.getByText(/okx 52.00%/i)).toBeInTheDocument();
+    expect(screen.getByText(/Top size long % 71.00%/i)).toBeInTheDocument();
+    expect(screen.getByText(/Crowd vs top \+19 pp/i)).toBeInTheDocument();
+  });
+
   it('shows top vs price divergence and when it started', () => {
     renderWithTheme(
       <TapePanel

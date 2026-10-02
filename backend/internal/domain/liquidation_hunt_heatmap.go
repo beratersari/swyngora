@@ -115,7 +115,7 @@ type HuntHeatmapGrid struct {
 	HasData       []bool      `json:"hasData,omitempty"`
 	// AccountBlend is stored when a column used that venue's account ratio,
 	// even when the column fell back to 50/50, and mixed when both happened.
-	// OKX has no stored account ratio, so its columns are even.
+	// OKX uses its stored account ratio. A column with no ratio is even.
 	AccountBlend string `json:"accountBlend,omitempty"`
 }
 
@@ -141,7 +141,7 @@ type HuntHeatmapReport struct {
 	Note          string               `json:"note,omitempty"`
 }
 
-const huntHeatmapNote = "Estimated liquidation intensity at each price and time from historical open interest, that venue's own price, the hunt leverage mix, blended account long/short, and observed liquidation prints in that column. Binance, Bybit, and OKX are modeled separately and never borrow each other's prices. OKX long/short is an even split when that venue has no stored account ratio. Combined sums a column only when all three venues have their own price and open interest. Not a live order book and not financial advice."
+const huntHeatmapNote = "Estimated liquidation intensity at each price and time from historical open interest, that venue's own price, the hunt leverage mix, blended account long/short, and observed liquidation prints in that column. Binance, Bybit, and OKX are modeled separately and never borrow each other's prices. Each venue uses its stored account ratio. A column with no stored ratio is an even split. Combined sums a column only when all three venues have their own price and open interest. Not a live order book and not financial advice."
 
 // HuntHeatmapColumns is the UTC-aligned time axis ending at or before to.
 func HuntHeatmapColumns(spec HuntHeatmapSpec, to time.Time) []time.Time {

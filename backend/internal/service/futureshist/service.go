@@ -28,7 +28,7 @@ type Service struct {
 }
 
 // SetLiquid replaces the wider live-sample universe. Seeds stay in Symbols.
-// The startup archive still backfills Seeds only.
+// The startup archive backfills this same list, seeds first, up to LiquidRecorderLimit.
 func (s *Service) SetLiquid(symbols []string) {
 	if s == nil {
 		return
@@ -54,6 +54,22 @@ func (s *Service) NoteSymbol(symbol string) {
 	}
 	s.seen[symbol] = time.Now().UTC()
 	s.mu.Unlock()
+}
+
+// ArchiveSymbols is the startup backfill universe: seeds first, then the
+// liquid list, capped at LiquidRecorderLimit.
+func (s *Service) ArchiveSymbols() []string {
+	if s == nil {
+		return append([]string{}, domain.DefaultFuturesHistorySymbols...)
+	}
+	s.mu.Lock()
+	seeds := append([]string{}, s.Seeds...)
+	liquid := append([]string{}, s.liquid...)
+	s.mu.Unlock()
+	if len(seeds) == 0 {
+		seeds = append([]string{}, domain.DefaultFuturesHistorySymbols...)
+	}
+	return domain.MergeLiquidSymbols(seeds, liquid, domain.LiquidRecorderLimit)
 }
 
 // Symbols is the worker universe: seeds + recently seen pairs.

@@ -1,8 +1,8 @@
 package domain
 
 // LiquidRecorderLimit is how many USDT perpetuals the background recorder
-// keeps sampling. The original seed pairs stay inside this cap and are the
-// only names the startup archive backfills. The rest fill in from live samples.
+// keeps sampling. The original seed pairs stay inside this cap. The startup
+// archive backfills this same list. Names outside it fill in from live samples.
 const LiquidRecorderLimit = 36
 
 // MergeLiquidSymbols keeps seeds first, then ranked names, until limit.

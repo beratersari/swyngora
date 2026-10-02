@@ -12,25 +12,32 @@ import (
 const archiveSlack = 48 * time.Hour
 
 // Archive pages public 1-hour open interest, funding, and long/short history
-// into the futures store on startup. Each series stops at the lookback that
-// endpoint documents (see domain.PublicFuturesHistoryLookback), and never
-// past FuturesHistoryMaxLookback. A later start skips a series that already
-// reaches the back of that window. Liquidation prints are filled only for
-// the public force-order window (about 7 days); older prints are the ones
+// into the futures store on startup. The symbol list is the liquid recorder
+// universe (seeds first, up to LiquidRecorderLimit). Each series stops at the
+// lookback that endpoint documents (see domain.PublicFuturesHistoryLookback),
+// and never past FuturesHistoryMaxLookback. A later start skips a series that
+// already reaches the back of that window. Liquidation prints are filled only
+// for the public force-order window (about 7 days); older prints are the ones
 // the websocket already stored.
+//
+// A Binance rate-limit pause stops the current pass. MaxPasses above 1 waits
+// RetryPause and continues, skipping series that are already covered.
 type Archive struct {
-	Hist     *Service
-	Liq      map[domain.Exchange]domain.LiquidationHistoryPort
-	Lookback time.Duration
-	Logger   *slog.Logger
-	now      func() time.Time
+	Hist       *Service
+	Liq        map[domain.Exchange]domain.LiquidationHistoryPort
+	Lookback   time.Duration
+	Logger     *slog.Logger
+	MaxPasses  int
+	RetryPause time.Duration
+	now        func() time.Time
 }
 
 type snapshotClock interface {
 	EarliestSnapshot(ctx context.Context, metric string, exchange domain.Exchange, symbol string) (time.Time, bool, error)
 }
 
-// Start runs one backfill and returns when it finishes or ctx is canceled.
+// Start runs the backfill. MaxPasses defaults to one. A rate-limited pass
+// waits RetryPause and tries again until a pass finishes or the cap is hit.
 func (a *Archive) Start(ctx context.Context) {
 	if a == nil || a.Hist == nil || a.Hist.Store == nil {
 		return
@@ -41,45 +48,72 @@ func (a *Archive) Start(ctx context.Context) {
 	if a.now == nil {
 		a.now = time.Now
 	}
+	passes := a.MaxPasses
+	if passes < 1 {
+		passes = 1
+	}
+	pause := a.RetryPause
+	if pause <= 0 {
+		pause = 20 * time.Second
+	}
+	for i := 0; i < passes; i++ {
+		if ctx.Err() != nil {
+			return
+		}
+		if !a.pass(ctx) {
+			return
+		}
+		if i+1 >= passes {
+			return
+		}
+		timer := time.NewTimer(pause)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+	}
+}
+
+// pass runs one backfill. It reports whether a venue rate limit stopped it.
+func (a *Archive) pass(ctx context.Context) bool {
 	now := a.now().UTC()
 	from := a.retentionFrom(now)
-	symbols := append([]string{}, a.Hist.Seeds...)
-	if len(symbols) == 0 {
-		symbols = append(symbols, domain.DefaultFuturesHistorySymbols...)
-	}
-	symbols = domain.NormalizeFuturesSymbols(symbols)
+	symbols := a.Hist.ArchiveSymbols()
 	var oiN, fundN, lsN, liqN int
 	for _, sym := range symbols {
 		if ctx.Err() != nil {
 			a.Logger.Info("futures archive stopped", "err", ctx.Err())
-			return
+			return false
 		}
 		for _, ex := range domain.FuturesVenues() {
 			if ctx.Err() != nil {
-				return
+				return false
 			}
 			n, stop := a.fillOI(ctx, ex, sym, now)
 			oiN += n
 			if stop {
 				a.finish(oiN, fundN, lsN, liqN, true)
-				return
+				return true
 			}
 			n, stop = a.fillFunding(ctx, ex, sym, now)
 			fundN += n
 			if stop {
 				a.finish(oiN, fundN, lsN, liqN, true)
-				return
+				return true
 			}
 			n, stop = a.fillLongShort(ctx, ex, sym, now)
 			lsN += n
 			if stop {
 				a.finish(oiN, fundN, lsN, liqN, true)
-				return
+				return true
 			}
 		}
 	}
 	liqN = a.fillLiquidations(ctx, symbols, from, now)
 	a.finish(oiN, fundN, lsN, liqN, false)
+	return false
 }
 
 func (a *Archive) finish(oiN, fundN, lsN, liqN int, limited bool) {

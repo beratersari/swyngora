@@ -260,6 +260,21 @@ func TestArchiveLiquidationFillUsesPublicWindow(t *testing.T) {
 	}
 }
 
+func TestArchiveBackfillsLiquidUniverse(t *testing.T) {
+	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
+	oi := &histOI{}
+	svc := &Service{
+		Store: &archiveStore{},
+		OI:    map[domain.Exchange]domain.OpenInterestPort{domain.ExchangeBinance: oi},
+		Seeds: []string{"BTCUSDT"},
+	}
+	svc.SetLiquid([]string{"ETHUSDT", "BTCUSDT"})
+	(&Archive{Hist: svc, Lookback: 24 * time.Hour, now: func() time.Time { return now }}).Start(context.Background())
+	if oi.calls != 2 {
+		t.Fatalf("liquid universe calls=%d", oi.calls)
+	}
+}
+
 func TestArchiveStopsWhenRateLimited(t *testing.T) {
 	now := time.Date(2026, 9, 28, 12, 0, 0, 0, time.UTC)
 	oi := &histOI{err: domain.ErrRateLimited}

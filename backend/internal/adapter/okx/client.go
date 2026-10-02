@@ -32,6 +32,8 @@ type Client struct {
 	oiSF         singleflight.Group
 	fundingCache *cache.TTL[*domain.FundingSeries]
 	fundingSF    singleflight.Group
+	lsCache      *cache.TTL[*domain.LongShortSeries]
+	lsSF         singleflight.Group
 	depthCache   *cache.TTL[*domain.RawOrderBook]
 	depthSF      singleflight.Group
 
@@ -68,6 +70,9 @@ func NewClient(opts Options) *Client {
 	}
 	if c.fundingCache == nil {
 		c.fundingCache = cache.New[*domain.FundingSeries](30 * time.Second)
+	}
+	if c.lsCache == nil {
+		c.lsCache = cache.New[*domain.LongShortSeries](30 * time.Second)
 	}
 	if c.depthCache == nil {
 		c.depthCache = cache.New[*domain.RawOrderBook](5 * time.Second)

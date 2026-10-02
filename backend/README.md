@@ -72,7 +72,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `POST` | `/api/v1/funding-arb/watches/{id}/resume` | Resume a paused follow |
 | `GET` | `/api/v1/funding-arb/signals` | Open/closed min-profit crossings (predicted vs settled when clocks have passed) |
 | `GET` | `/api/v1/funding-arb/signals/{id}` | One crossing plus predicted-vs-settled review |
-| `GET` | `/api/v1/market/long-short-ratio` | Account long/short ratio + recent 5m history; Binance `gap` is top long% minus crowd long%; `divergence` is top vs price (more long while price falls) |
+| `GET` | `/api/v1/market/long-short-ratio` | Account long/short ratio + recent 5m history on Binance, Bybit, and OKX. Binance and OKX `gap` is top long% minus crowd long%; `divergence` is top vs price |
 | `GET` | `/api/v1/market/futures-history` | Durable stored OI / funding / long-short / liquidation history |
 | `GET` | `/api/v1/market/unusual` | Whether funding, 24h open-interest change, completed-hour liquidations, completed-day CVD, and hourly spread are high or low versus that coin’s own stored samples. Venues stay separate. Print size stays unknown |
 | `GET` | `/api/v1/market/history-span` | How long futures open interest, the spot book, and flow-at-prices have actually been stored for one coin. Venues with no rows are omitted |
@@ -380,7 +380,7 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `ACCOUNT_PURGE_INTERVAL` | `1h` | How often expired closed accounts are purged |
 | `FUTURES_HISTORY_DB_PATH` | `data/futures.db` | SQLite archive for OI, funding, long/short, liquidations |
 | `FUTURES_HISTORY_INTERVAL` | `5m` | Snapshot worker cadence |
-| `FUTURES_HISTORY_RETENTION` | `2160h` | How long stored futures rows are kept. Startup pages each public series only as far as that endpoint documents (Binance open interest and long/short: 30 days; OKX hourly open interest: 1,440 points; OKX funding: three months; Bybit open interest back to listing, requested here for 90 days). Public liquidation history refills about 7 days |
+| `FUTURES_HISTORY_RETENTION` | `2160h` | How long stored futures rows are kept. Startup pages the liquid set (up to 36 names, seeds first) only as far as each endpoint documents (Binance open interest and long/short: 30 days; OKX hourly open interest and long/short: 1,440 points; OKX funding: three months; Bybit open interest back to listing, requested here for 90 days). A Binance pause retries the unfinished series. Public liquidation history refills about 7 days |
 | `FUTURES_HISTORY_SYMBOLS` | _(optional CSV)_ | Extra pairs always sampled (majors are built-in) |
 | `ORDERBOOK_HISTORY_DB_PATH` | `data/orderbook.db` | SQLite archive for spot book samples |
 | `ORDERBOOK_HISTORY_INTERVAL` | `1m` | Book snapshot worker cadence |

@@ -18,14 +18,15 @@ import type { CoinStructureTabProps } from './CoinStructureTab.types';
 export function CoinStructureTab({ symbol, exchange }: CoinStructureTabProps) {
   const { t } = useTranslation('detail');
   const arg = { symbol, exchange };
+  const futuresArg = { symbol, exchange: 'all' as const };
   const err = (e: unknown) => rtkErrorMessage(e, { resource: t('resource.tape') });
 
   const corr = useGetMarketCorrelationQuery(arg);
   const vol = useGetMarketVolatilityQuery(arg);
   const levels = useGetMarketLevelsQuery(arg);
-  const squeeze = useGetMarketSqueezeRiskQuery(arg);
-  const pos = useGetMarketPositioningQuery(arg);
-  const div = useGetMarketVenueDivergenceQuery(arg);
+  const squeeze = useGetMarketSqueezeRiskQuery(futuresArg);
+  const pos = useGetMarketPositioningQuery(futuresArg);
+  const div = useGetMarketVenueDivergenceQuery(futuresArg);
 
   const rows = [
     { key: 'corr', title: t('structure.correlation'), q: corr },

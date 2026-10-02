@@ -129,6 +129,13 @@ export function liquidationProfile(report: MarketLiquidationLevels | undefined):
   return out;
 }
 
+export type CrowdChartLabels = {
+  crowd: string;
+  top: string;
+  venueCrowd?: (venue: string) => string;
+  venueTop?: (venue: string) => string;
+};
+
 /** Crowd long percent and top-trader long percent, one point per stored print. */
 export function crowdTopLines(report: MarketLongShortRatio | undefined): {
   crowd: ChartLinePoint[];
@@ -149,35 +156,52 @@ export function crowdTopLines(report: MarketLongShortRatio | undefined): {
   return { crowd, top };
 }
 
+function crowdSources(report: MarketLongShortRatio | undefined): MarketLongShortRatio[] {
+  const venues = (report?.venues ?? []).filter((venue) => (venue.gapHistory?.length ?? 0) > 0);
+  if (venues.length > 0) {
+    return venues.map((venue) => ({ gapHistory: venue.gapHistory, exchange: venue.exchange }));
+  }
+  if ((report?.gapHistory?.length ?? 0) > 0) return [report ?? {}];
+  return [];
+}
+
 export function crowdTopSeries(
   report: MarketLongShortRatio | undefined,
-  labels: { crowd: string; top: string },
-  colors: { crowd: string; top: string },
+  labels: CrowdChartLabels,
+  colors: { crowd: string; top: string; crowdAlt?: string; topAlt?: string },
   pane: number,
 ): CandleChartLowerSeries[] {
-  const lines = crowdTopLines(report);
-  if (lines.crowd.length === 0 && lines.top.length === 0) return [];
+  const sources = crowdSources(report);
   const out: CandleChartLowerSeries[] = [];
-  if (lines.crowd.length > 0) {
-    out.push({
-      id: 'crowd-long',
-      pane,
-      kind: 'line',
-      title: labels.crowd,
-      color: colors.crowd,
-      data: lines.crowd,
-    });
-  }
-  if (lines.top.length > 0) {
-    out.push({
-      id: 'top-long',
-      pane,
-      kind: 'line',
-      title: labels.top,
-      color: colors.top,
-      data: lines.top,
-    });
-  }
+  sources.forEach((source, index) => {
+    const lines = crowdTopLines(source);
+    const venue = source.exchange ?? '';
+    const suffix = sources.length > 1 && venue ? `-${venue}` : '';
+    const crowdTitle = venue && labels.venueCrowd ? labels.venueCrowd(venue) : labels.crowd;
+    const topTitle = venue && labels.venueTop ? labels.venueTop(venue) : labels.top;
+    const crowdColor = index === 0 ? colors.crowd : (colors.crowdAlt ?? colors.crowd);
+    const topColor = index === 0 ? colors.top : (colors.topAlt ?? colors.top);
+    if (lines.crowd.length > 0) {
+      out.push({
+        id: `crowd-long${suffix}`,
+        pane,
+        kind: 'line',
+        title: crowdTitle,
+        color: crowdColor,
+        data: lines.crowd,
+      });
+    }
+    if (lines.top.length > 0) {
+      out.push({
+        id: `top-long${suffix}`,
+        pane,
+        kind: 'line',
+        title: topTitle,
+        color: topColor,
+        data: lines.top,
+      });
+    }
+  });
   return out;
 }
 

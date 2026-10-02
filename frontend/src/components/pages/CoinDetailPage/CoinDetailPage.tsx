@@ -475,7 +475,7 @@ export function CoinDetailPage() {
     },
   );
   const longShortQuery = useGetMarketLongShortRatioQuery(
-    { exchange: 'binance', symbol: perpSymbol, limit: 100 },
+    { exchange: 'all', symbol: perpSymbol, limit: 100 },
     {
       skip: skipTape || !showCrowd,
       pollingInterval: visible && showCrowd ? 60_000 : 0,
@@ -898,8 +898,18 @@ export function CoinDetailPage() {
       series.push(
         ...crowdTopSeries(
           rtkCurrent(longShortQuery),
-          { crowd: t('detail:chart.crowdLine'), top: t('detail:chart.topLine') },
-          { crowd: semanticColors.accent.default, top: semanticColors.status.warning },
+          {
+            crowd: t('detail:chart.crowdLine'),
+            top: t('detail:chart.topLine'),
+            venueCrowd: (venue) => t('detail:chart.crowdLineVenue', { venue }),
+            venueTop: (venue) => t('detail:chart.topLineVenue', { venue }),
+          },
+          {
+            crowd: semanticColors.accent.default,
+            top: semanticColors.status.warning,
+            crowdAlt: semanticColors.chart.up,
+            topAlt: semanticColors.text.link,
+          },
           pane,
         ),
       );
@@ -1404,7 +1414,7 @@ export function CoinDetailPage() {
                     ? 72
                     : 120
                   : 0) +
-                (lowerSeries.some((s) => s.id === 'crowd-long' || s.id === 'top-long')
+                (lowerSeries.some((s) => s.id.startsWith('crowd-long') || s.id.startsWith('top-long'))
                   ? isPhone
                     ? 72
                     : 100

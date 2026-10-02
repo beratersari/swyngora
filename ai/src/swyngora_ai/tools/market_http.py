@@ -5050,8 +5050,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "flipped. divergence is when top traders get more long while price "
                 "falls (or more short while price rises), with since/duration. "
                 "ratio is long/short (1 = even). bias is long if ratio≥1.05, "
-                "short if ≤0.95. 5-minute samples. Binance USD-M + Bybit linear. "
-                "exchange=all is per venue, not averaged."
+                "short if ≤0.95. 5-minute samples. Binance USD-M, Bybit linear, "
+                "and OKX USDT-swap. OKX top traders are the top 5% by position "
+                "value. exchange=all is per venue, not averaged."
             ),
             args_schema=LongShortInput,
         ),
@@ -5083,8 +5084,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "this process already stored. Bybit public open interest goes "
                 "back to listing and this archive keeps 90 days. OKX hourly "
                 "open interest is the latest 1,440 points. OKX prices are that "
-                "venue's USDT-swap candles. OKX long/short is an even split "
-                "when no account ratio is stored. A column with no stored "
+                "venue's USDT-swap candles. Each venue uses its stored account "
+                "ratio. A column with no stored ratio, including OKX before "
+                "the first sample, is an even split. A column with no stored "
                 "open interest uses that venue's public hourly history, "
                 "clamped to the documented lookback (OKX: the latest 1,440 "
                 "hours), and does not extend the archive. Combined sums a column "
@@ -5584,8 +5586,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "oldest stored futures open interest, spot book, and "
                 "flow-at-prices sample per venue. A venue with no rows is "
                 "omitted. spanSec is from that sample to now. The startup "
-                "archive backfills the seed pairs; other names fill in only "
-                "while the process is sampling. Informational only."
+                "archive backfills the liquid USDT perpetuals, up to 36 names "
+                "with the seed pairs first, only as far as each public endpoint "
+                "documents. Informational only."
             ),
             args_schema=HistorySpanInput,
         ),

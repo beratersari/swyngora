@@ -7,7 +7,7 @@ const (
 	RecordedBook      = "book"
 	RecordedFlow      = "flow"
 
-	HistorySpanNote = "Span is how long this process has stored samples for the coin. The startup archive backfills the seed pairs only. Other liquid names fill in from live sampling. A missing venue has no row. Informational only."
+	HistorySpanNote = "Span is how long this process has stored samples for the coin. The startup archive backfills the liquid USDT perpetuals, up to 36 names with the seed pairs first, and only as far as each public endpoint documents. A missing venue has no row. Informational only."
 )
 
 // RecordedSeries is the oldest stored sample for one kind and venue.

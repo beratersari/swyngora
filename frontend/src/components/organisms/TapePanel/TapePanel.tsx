@@ -679,6 +679,17 @@ export function TapePanel({
             {lsDiv.detail ? ` ${lsDiv.detail}` : ''}
           </Text>
         ) : null}
+        {openInterest?.longShort?.venues
+          ?.filter((v) => v.exchange && v.exchange !== lsVenue?.exchange)
+          .map((v) => (
+            <Text key={v.exchange} variant="caption" color="secondary">
+              {v.exchange} {v.current?.longPct ? `${v.current.longPct}%` : '—'}
+              {v.topPositions?.longPct
+                ? ` · ${t('tape.topPosLongPct')} ${v.topPositions.longPct}%`
+                : ''}
+              {v.gap?.gapPct ? ` · ${t('tape.crowdGap')} ${v.gap.gapPct} pp` : ''}
+            </Text>
+          ))}
         {lsSplit?.alignment === 'opposite' && lsSplit.headline ? (
           <Text variant="caption" color="secondary">
             {lsSplit.headline}

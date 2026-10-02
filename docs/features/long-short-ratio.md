@@ -3,8 +3,8 @@
 ## Goal
 
 Show the **current long/short account ratio** and **recent 5-minute history**
-for a coin on Binance USD-M and Bybit linear perpetual, so a user or the AI
-can ask “are more traders long or short BTC?” On Binance, also show
+for a coin on Binance USD-M, Bybit linear, and OKX USDT-swap, so a user or the AI
+can ask “are more traders long or short BTC?” On Binance and OKX, also show
 **top-trader account** and **top-trader position** ratios, a **single gap**
 between big traders and the crowd (top long% minus crowd long%), and whether
 that gap is **widening or shrinking**. Show when **top traders and price
@@ -16,16 +16,18 @@ books lean opposite.
 
 - `GET /api/v1/market/long-short-ratio?symbol=BTCUSDT`
   - `exchange=all` (default) returns **each venue separately** (not averaged)
-  - `exchange=binance` or `bybit` hoists `current` + `history` to the top level
+  - `exchange=binance`, `bybit`, or `okx` hoists `current` + `history` to the top level
   - `limit` 5m prints (default 24 ≈ 2 hours, max 100)
 - `GET /api/v1/market/open-interest` includes the same payload on `longShort`
 - `current` is the **share of accounts** that are long vs short, **not** position size
 - On Binance, `topAccounts` is the top 20% of traders by margin (account count)
-  and `topPositions` is the same traders by **position size**
+  and `topPositions` is the same traders by **position size**. On OKX both
+  layers are the top 5% of traders by position value
 - `gap` is one signed number: **top long% − crowd long%** in percentage points.
   Top 65% long vs crowd 55% long is `+10` (`lean=top_more_long`). Size
   (`top_positions`) is preferred over account count when both exist. Bybit has
-  no public top-trader feed, so no gap there
+  no public top-trader feed, so no gap there. OKX has the same gap once its
+  top-position ratio is present
 - `gapWindows` (1h / 4h / 24h) compare that gap to ~window ago:
   `widened` / `narrowed` / `flipped` / `stable`. `gapHistory` is 5m samples
   (newest first). `gapMoves` calls out larger jumps. 24h uses stored futures

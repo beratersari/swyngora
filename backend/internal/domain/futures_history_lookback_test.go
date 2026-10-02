@@ -43,7 +43,7 @@ func TestPublicFuturesHistoryLookbackFollowsVenueDocs(t *testing.T) {
 	if got := PublicFuturesHistoryLookback(ExchangeOKX, FuturesMetricOpenInterest, now); got != OKXOpenInterestHistoryEntries*time.Hour {
 		t.Fatalf("okx oi %v", got)
 	}
-	if got := PublicFuturesHistoryLookback(ExchangeOKX, FuturesMetricLongShort, now); got != 0 {
+	if got := PublicFuturesHistoryLookback(ExchangeOKX, FuturesMetricLongShort, now); got != OKXLongShortHistoryEntries*time.Hour {
 		t.Fatalf("okx long short %v", got)
 	}
 	// 28 Sep is 92 days after 28 Jun, so three months is longer than 90 days.

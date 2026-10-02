@@ -1146,10 +1146,13 @@ export interface paths {
         /**
          * Long/short account ratio and recent history
          * @description Share of **accounts** that are long vs short on **Binance USD-M**
-         *     (`globalLongShortAccountRatio`) and **Bybit linear**
-         *     (`/v5/market/account-ratio`). On Binance only, also returns
-         *     `topAccounts` (top 20% of traders by margin, account count) and
-         *     `topPositions` (same traders, position size). `gap` is one signed
+         *     (`globalLongShortAccountRatio`), **Bybit linear**
+         *     (`/v5/market/account-ratio`), and **OKX USDT-swap**
+         *     (`/api/v5/rubik/stat/contracts/long-short-account-ratio-contract`).
+         *     On Binance, also returns `topAccounts` (top 20% of traders by margin,
+         *     account count) and `topPositions` (same traders, position size).
+         *     On OKX, `topAccounts` and `topPositions` are the top 5% of traders
+         *     by position value. `gap` is one signed
          *     value: top long% minus crowd long% in percentage points
          *     (e.g. top 65% long vs crowd 55% → `+10`). `gapWindows` (1h/4h/24h)
          *     and `gapMoves` say if that spread widened, narrowed, or flipped.
@@ -1241,8 +1244,9 @@ export interface paths {
          * How long this coin has actually been recorded
          * @description Oldest stored sample per venue for futures open interest, the spot
          *     book, and flow-at-prices. A venue with no rows is omitted. The startup
-         *     archive backfills the seed pairs. Other liquid names fill in only while
-         *     this process is sampling. `spanSec` is from that oldest sample to now.
+         *     archive backfills the liquid USDT perpetuals, up to 36 names with the
+         *     seed pairs first, and only as far as each public endpoint documents.
+         *     `spanSec` is from that oldest sample to now.
          *     Informational only.
          */
         get: operations["getMarketHistorySpan"];
@@ -2413,7 +2417,8 @@ export interface paths {
          *     Binance, Bybit, and OKX are modeled separately. Each venue uses
          *     only its own price: Binance and Bybit use their candles, and OKX
          *     uses its USDT-swap candles. They never borrow another venue's price.
-         *     OKX long/short is an even split when no account ratio is stored.
+         *     Each venue uses its stored account ratio. A column with no stored
+         *     ratio, including OKX before the first sample, is an even split.
          *     A column with no stored open interest uses that venue's public
          *     hourly open-interest history, clamped to the documented lookback
          *     (OKX: the latest 1,440 hours). That fill does not extend the archive.
@@ -7822,7 +7827,7 @@ export interface components {
             gapMoves?: components["schemas"]["LongShortGapMove"][];
             divergence?: components["schemas"]["LongShortPriceDivergence"];
         };
-        /** @description Account long/short ratio plus Binance top-trader layers, crowd-vs-top gap, and recent 5m history */
+        /** @description Account long/short ratio on Binance, Bybit, and OKX, plus top-trader layers where that venue publishes them, crowd-vs-top gap, and recent 5m history */
         MarketLongShortRatio: {
             symbol?: string;
             exchange?: string;

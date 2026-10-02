@@ -43,6 +43,8 @@
     "crowd": "Crowd vs top",
     "crowdLine": "Crowd long %",
     "topLine": "Top trader long %",
+    "crowdLineVenue": "{{venue}} crowd long %",
+    "topLineVenue": "{{venue}} top long %",
     "oi": "Open interest",
     "oiLine": "{{exchange}} open interest",
     "funding": "Funding",
@@ -55,7 +57,7 @@
       "long": "Long",
       "short": "Short"
     },
-    "tapeHint": "Buy − sell is aggressive futures flow in each candle. CVD resets at 00:00 UTC and at the current 4-hour open. Book shading is resting size. The right edge is buy versus sell at each price, and the bars beside it are estimated liquidation pockets. The lower strip is Binance crowd long percent versus top traders. Open interest and funding are stored samples, one line for each of Binance, Bybit, and OKX. Liquidation bars are short notional minus long notional in that candle. Informational only.",
+    "tapeHint": "Buy − sell is aggressive futures flow in each candle. CVD resets at 00:00 UTC and at the current 4-hour open. Book shading is resting size. The right edge is buy versus sell at each price, and the bars beside it are estimated liquidation pockets. The lower strip is crowd long percent versus top traders for Binance and OKX. Open interest and funding are stored samples, one line for each of Binance, Bybit, and OKX. Liquidation bars are short notional minus long notional in that candle. Informational only.",
     "pumpOn": "On",
     "pumpOff": "Off",
     "pumpHint": "Markers when |return| ≥ threshold (informational only)",

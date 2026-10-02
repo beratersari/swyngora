@@ -37,6 +37,12 @@ const (
 	// the endpoint returns at most the latest 1,440 entries.
 	// The archive requests period 1H, so the cap is 1,440 hours.
 	OKXOpenInterestHistoryEntries = 1440
+
+	// OKXLongShortHistoryEntries is
+	// GET /api/v5/rubik/stat/contracts/long-short-account-ratio-contract
+	// and the top-trader account and position ratios. Each returns at most
+	// the latest 1,440 entries. The archive requests period 1H.
+	OKXLongShortHistoryEntries = 1440
 )
 
 // PublicFuturesHistoryLookback is how far startup may ask that venue for
@@ -67,7 +73,7 @@ func PublicFuturesHistoryLookback(ex Exchange, metric string, to time.Time) time
 		case ExchangeBinance:
 			return BinanceLongShortHistoryLookback
 		case ExchangeOKX:
-			return 0
+			return OKXLongShortHistoryEntries * time.Hour
 		default:
 			return FuturesHistoryMaxLookback
 		}

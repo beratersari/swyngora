@@ -21,6 +21,7 @@ No API key. Base `https://www.okx.com`, public WS
 | `symbol.go` | `BTCUSDT` ↔ `BTC-USDT-SWAP` |
 | `instruments.go` | `ctVal` cache (contract size in base) |
 | `openinterest.go` | current OI + 5m rubik history (`oiCcy` / `oiUsd`) |
+| `longshort.go` | account ratio plus top-trader account and position ratios (top 5% by position value) |
 | `funding.go` | predicted next rate + settled history |
 | `liqhub.go` | `liquidation-orders` SWAP websocket |
 | `liqhist.go` | REST `liquidation-orders?state=filled` backfill |

@@ -189,7 +189,7 @@ func (s *Service) WithFundingRate(ports map[domain.Exchange]domain.FundingRatePo
 	return s
 }
 
-// WithLongShortRatio attaches Binance USD-M / Bybit linear long/short ports.
+// WithLongShortRatio attaches Binance USD-M, Bybit linear, and OKX USDT-swap long/short ports.
 func (s *Service) WithLongShortRatio(ports map[domain.Exchange]domain.LongShortRatioPort) *Service {
 	if s == nil {
 		return s

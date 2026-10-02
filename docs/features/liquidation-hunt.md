@@ -150,9 +150,10 @@ Each column uses historical **open interest**, **that venue's own price**,
 the same **leverage mix** as the hunt (tilted by funding), and blended
 **account long/short**. Binance and Bybit prices are that venue's candles.
 OKX prices are OKX USDT-swap candles (`GET /api/v5/market/candles`), because
-OKX is not a spot book here. If Binance top-trader positions lean opposite
-the crowd, estimated size uses the top-trader print. OKX has no stored
-account ratio, so its long/short split stays even (`accountBlend=even`).
+OKX is not a spot book here. If Binance or OKX top-trader positions lean
+opposite the crowd, estimated size uses the top-trader print. A column with
+no stored account ratio stays an even split (`accountBlend=even`). OKX rows
+use the stored OKX ratio once the archive has sampled it.
 When stored open interest leaves a column empty, that column uses the
 venue's public hourly open-interest history, clamped to the documented
 lookback (OKX: the latest 1,440 hours). This does not extend the archive,

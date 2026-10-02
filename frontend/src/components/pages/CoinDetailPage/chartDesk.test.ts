@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   bookHeatColumns,
   crowdTopLines,
+  crowdTopSeries,
   footprintLevels,
   footprintWindow,
   formatRecordedSpan,
@@ -67,6 +68,39 @@ describe('chart desk mappers', () => {
     });
     expect(lines.crowd).toHaveLength(1);
     expect(lines.top[0]?.value).toBe(61);
+  });
+
+  it('plots Binance and OKX crowd versus top as separate lines', () => {
+    const series = crowdTopSeries(
+      {
+        venues: [
+          {
+            exchange: 'binance',
+            gapHistory: [{ time: '2026-09-29T12:00:00Z', crowdLongPct: '48', topLongPct: '61' }],
+          },
+          {
+            exchange: 'okx',
+            gapHistory: [{ time: '2026-09-29T12:00:00Z', crowdLongPct: '52', topLongPct: '70' }],
+          },
+        ],
+      },
+      {
+        crowd: 'Crowd',
+        top: 'Top',
+        venueCrowd: (venue) => `${venue} crowd`,
+        venueTop: (venue) => `${venue} top`,
+      },
+      { crowd: '#111', top: '#222', crowdAlt: '#333', topAlt: '#444' },
+      2,
+    );
+    expect(series.map((line) => line.id)).toEqual([
+      'crowd-long-binance',
+      'top-long-binance',
+      'crowd-long-okx',
+      'top-long-okx',
+    ]);
+    expect(series[2]?.data[0]?.value).toBe(52);
+    expect(series[3]?.title).toBe('okx top');
   });
 
   it('plots open interest per venue and drops empty values', () => {

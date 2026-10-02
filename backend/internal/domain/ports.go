@@ -101,7 +101,7 @@ type FundingRatePort interface {
 }
 
 // LongShortRatioPort loads the latest account long/short ratio plus recent history.
-// Implemented by Binance USD-M and Bybit linear adapters.
+// Implemented by Binance USD-M, Bybit linear, and OKX USDT-swap adapters.
 type LongShortRatioPort interface {
 	GetLongShortSeries(ctx context.Context, symbol string, limit int) (*LongShortSeries, error)
 }

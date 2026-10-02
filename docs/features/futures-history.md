@@ -20,22 +20,24 @@ server restart and can be queried later by users or the AI.
   - liquidations: `(exchange, symbol, side, time, price, quantity)`
 - Snapshot times are floored to 5 minutes for OI / long-short / predicted funding.
   Settled funding uses the venue settlement timestamp.
-- Long/short rows store the all-account print and, on Binance, **top-trader
-  position** (`sizeLongPct`) and top-trader account (`topAccLongPct`) shares
-  so later hunt / liquidation-level replays can use size when the crowd
-  leans the other way.
+- Long/short rows store the all-account print and, on Binance and OKX,
+  **top-trader position** (`sizeLongPct`) and top-trader account
+  (`topAccLongPct`) shares so later hunt / liquidation-level replays can use
+  size when the crowd leans the other way. Bybit publishes the account ratio
+  only.
 - Rows older than `FUTURES_HISTORY_RETENTION` (default 90 days) are purged.
   That retention is how long **stored** rows are kept, including samples the
   process recorded itself. It is not a promise that every public history
   endpoint can backfill 90 days.
-- Startup pages public 1-hour history for the seed pairs only as far as that
-  endpoint documents, and never past 90 days. A later start skips a series
-  whose earliest row already reaches the back of **that** window.
-- The live sampler also keeps the top liquid USDT names, capped at 36 including
-  the seeds (`domain.LiquidRecorderLimit`). Spot quote volume picks the extra
-  names. Those extra names are not part of the startup backfill, so their
-  history starts when this process samples them. `GET /api/v1/market/history-span`
-  reports that span per venue. See `docs/features/chart-desk.md`.
+- Startup pages public 1-hour history for the liquid recorder list, seeds
+  first and capped at 36, only as far as that endpoint documents, and never
+  past 90 days. The first liquid-name refresh runs before the archive starts.
+  A later start skips a series whose earliest row already reaches the back of
+  **that** window. A Binance rate-limit pause stops the current pass and
+  retries it, up to 24 passes, so a finished series is not requested again.
+- The live sampler keeps that same list (`domain.LiquidRecorderLimit`). Spot
+  quote volume picks the extra names. `GET /api/v1/market/history-span` reports
+  the stored span per venue. See `docs/features/chart-desk.md`.
 
 | Series | Endpoint | Public window this archive requests |
 |---|---|---|
@@ -47,7 +49,7 @@ server restart and can be queried later by users or the AI.
 | Bybit funding | `GET /v5/market/funding/history` | No day cap in the docs. This archive requests 90 days. |
 | OKX open interest | `GET /api/v5/rubik/stat/contracts/open-interest-history` with `period=1H` | Latest 1,440 entries, which is 1,440 hours at 1H. |
 | OKX funding | `GET /api/v5/public/funding-rate-history` | Up to three months, and not past 90 days. |
-| OKX long/short | — | Not requested. There is no OKX long/short history client in this archive. |
+| OKX long/short | `GET /api/v5/rubik/stat/contracts/long-short-account-ratio-contract`, plus the top-trader account and position ratios, `period=1H` | Latest 1,440 entries on each endpoint. Top traders are OKX's top 5% by position value. |
 
 - Liquidation prints are kept for the same retention. Public REST only
   refills about the last 7 days (Binance rejects a wider force-order
