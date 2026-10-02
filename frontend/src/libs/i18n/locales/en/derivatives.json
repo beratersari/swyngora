@@ -1,6 +1,6 @@
 {
   "title": "Derivatives",
-  "subtitle": "Mark, funding, open interest, and 24-hour liquidations for the liquid USDT perpetuals.",
+  "subtitle": "Mark, funding, open interest, crowd long, taker buy share, and 24-hour liquidations for the liquid USDT perpetuals.",
   "exchange": "Venues",
   "allVenues": "All venues",
   "limit": "Coins",
@@ -10,6 +10,8 @@
   "openInterest": "Open interest",
   "change1h": "OI 1h",
   "change24h": "OI 24h",
+  "longPct": "Crowd long",
+  "takerBuy": "Taker buy 1h",
   "liqLong": "Long liq 24h",
   "liqShort": "Short liq 24h",
   "venues": "Venues",

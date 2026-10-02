@@ -797,9 +797,9 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_derivatives_board",
-		mcp.WithDescription("One board for the liquid USDT perpetuals: mark price, predicted funding, open interest, 1h and 24h open-interest change, and 24h long and short liquidations. exchange=all reads Binance USD-M, Bybit linear, and OKX. A combined number is present only when every expected venue is fresh. definite is false when any coin is incomplete; missing and stale venues are named and are not counted as zero. limit default 20, max 36. Not financial advice."),
+		mcp.WithDescription("One sortable board for the liquid USDT perpetuals: mark price, predicted funding, open interest, 1h and 24h open-interest change, crowd long percent, 1h taker buy share, and 24h long and short liquidations. exchange=all reads Binance USD-M, Bybit linear, and OKX. A combined number is present only when every expected venue is fresh for that column. Crowd long is the account long share, weighted by open interest when that open interest is also fresh. Taker buy share sums the last hour of aggressive volume; an incomplete hour stays blank. definite is false when any coin is incomplete; missing and stale venues are named and are not counted as zero. limit default 36, max 36. Not financial advice."),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all)")),
-		mcp.WithNumber("limit", mcp.Description("How many liquid perps (default 20, max 36)")),
+		mcp.WithNumber("limit", mcp.Description("How many liquid perps (default 36, max 36)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.GetDerivativesBoard(ctx, req.GetString("exchange", "all"), req.GetInt("limit", 0))
 		if err != nil {

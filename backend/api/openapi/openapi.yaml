@@ -1375,15 +1375,19 @@ paths:
           $ref: '#/components/responses/Error'
   /api/v1/market/derivatives-board:
     get:
-      summary: Liquid perpetual board (price, funding, open interest, liquidations)
+      summary: Liquid perpetual board (price, funding, open interest, long/short, taker, liquidations)
       description: |
-        One table for the liquid USDT perpetuals (default 20, max 36, same
+        One table for the liquid USDT perpetuals (default 36, max 36, same
         universe as the futures recorder). Each row has the mark price, the
         predicted funding rate, open interest, the 1h and 24h open-interest
-        change, and 24h long and short liquidation notionals. `exchange=all`
-        (default) reads Binance USD-M, Bybit linear, and OKX USDT-swap.
-        A combined number is present only when every expected venue is fresh.
-        A missing or old venue is named on `coverage` and on that coin's
+        change, crowd long percent, the 1h taker buy share, and 24h long and
+        short liquidation notionals. `exchange=all` (default) reads Binance
+        USD-M, Bybit linear, and OKX USDT-swap. A combined number is present
+        only when every expected venue is fresh for that column. Crowd long is
+        the account long share, weighted by open interest when that open
+        interest is also fresh. Taker buy share sums the last hour of
+        aggressive buy and sell volume; an incomplete hour stays blank. A
+        missing or old venue is named on `coverage` and on that coin's
         `venues` row, and is not counted as zero. `definite` is false when
         any coin is incomplete. Informational only.
       operationId: getMarketDerivativesBoard
@@ -1395,8 +1399,8 @@ paths:
           schema: { type: string, default: all }
         - name: limit
           in: query
-          description: How many liquid perpetuals to include (default 20, min 5, max 36)
-          schema: { type: integer, default: 20, example: 20 }
+          description: How many liquid perpetuals to include (default 36, min 5, max 36)
+          schema: { type: integer, default: 36, example: 36 }
       responses:
         '200':
           description: Ranked perpetual board
@@ -11388,6 +11392,14 @@ components:
         liqLong: { type: string }
         liqShort: { type: string }
         liqDefinite: { type: boolean }
+        longPct:
+          type: string
+          description: Account long percent. Omitted unless every expected venue is fresh.
+        longDefinite: { type: boolean }
+        takerBuyPct:
+          type: string
+          description: Aggressive buy share over the last hour, in percent. Omitted unless every expected venue's hour is complete.
+        takerDefinite: { type: boolean }
         venues:
           type: array
           items: { $ref: '#/components/schemas/MarketDerivativesVenue' }
@@ -11406,6 +11418,10 @@ components:
         liqLong: { type: string }
         liqShort: { type: string }
         liqStatus: { type: string }
+        longPct: { type: string }
+        longStatus: { type: string, description: fresh | stale | missing }
+        takerBuyPct: { type: string }
+        takerStatus: { type: string, description: fresh | stale | missing }
     MarketOrderCountOverview:
       type: object
       description: Print-count ratio summed across liquid pairs

@@ -20,7 +20,7 @@ export function DerivativesPage() {
   const { t } = useTranslation(['derivatives', 'common']);
   const visible = useDocumentVisible();
   const [exchange, setExchange] = useState<DerivativesExchange>('all');
-  const [limit, setLimit] = useState<(typeof DERIVATIVES_LIMITS)[number]>(20);
+  const [limit, setLimit] = useState<(typeof DERIVATIVES_LIMITS)[number]>(36);
 
   const query = useGetMarketDerivativesBoardQuery(
     { exchange, limit },

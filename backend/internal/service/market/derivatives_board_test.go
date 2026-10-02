@@ -73,6 +73,69 @@ func TestGetDerivativesBoard_MissingOKXWithholdsCombined(t *testing.T) {
 	}
 }
 
+type boardLS struct {
+	series *domain.LongShortSeries
+}
+
+func (f boardLS) GetLongShortSeries(context.Context, string, int) (*domain.LongShortSeries, error) {
+	return f.series, nil
+}
+
+type boardTaker struct {
+	flow *domain.TakerVenueFlow
+}
+
+func (f boardTaker) GetTakerFlow(context.Context, string) (*domain.TakerVenueFlow, error) {
+	return f.flow, nil
+}
+
+func TestGetDerivativesBoard_AddsCrowdAndTaker(t *testing.T) {
+	now := time.Now().UTC()
+	ls := &domain.LongShortSeries{Current: domain.LongShortPoint{Time: now, LongShare: 0.55, ShortShare: 0.45, Ratio: 1.22}}
+	flow := &domain.TakerVenueFlow{Windows: []domain.TakerWindowFlow{
+		domain.SummarizeTakerWindow(60, 40, domain.TakerWindow1h, true),
+	}}
+	portsLS := map[domain.Exchange]domain.LongShortRatioPort{
+		domain.ExchangeBinance: boardLS{series: ls},
+		domain.ExchangeBybit:   boardLS{series: ls},
+		domain.ExchangeOKX:     boardLS{series: ls},
+	}
+	portsTaker := map[domain.Exchange]domain.TakerFlowPort{
+		domain.ExchangeBinance: boardTaker{flow: flow},
+		domain.ExchangeBybit:   boardTaker{flow: flow},
+		domain.ExchangeOKX:     boardTaker{flow: flow},
+	}
+	svc := boardService(now, false).WithLongShortRatio(portsLS).WithTakerFlow(portsTaker)
+	got, err := svc.GetDerivativesBoard(context.Background(), "all", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := got.Coins[0]
+	if !row.LongDefinite || row.LongPct != "55" || !row.TakerDefinite || row.TakerBuyPct != "60" {
+		t.Fatalf("crowd/taker %+v", row)
+	}
+}
+
+func TestGetDerivativesBoard_IncompleteTakerStaysBlank(t *testing.T) {
+	now := time.Now().UTC()
+	flow := &domain.TakerVenueFlow{Windows: []domain.TakerWindowFlow{
+		domain.SummarizeTakerWindow(60, 40, domain.TakerWindow1h, false),
+	}}
+	svc := boardService(now, false).WithTakerFlow(map[domain.Exchange]domain.TakerFlowPort{
+		domain.ExchangeBinance: boardTaker{flow: flow},
+		domain.ExchangeBybit:   boardTaker{flow: flow},
+		domain.ExchangeOKX:     boardTaker{flow: flow},
+	})
+	got, err := svc.GetDerivativesBoard(context.Background(), "binance", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := got.Coins[0]
+	if row.TakerDefinite || row.TakerBuyPct != "" {
+		t.Fatalf("incomplete taker leaked %+v", row.TakerBuyPct)
+	}
+}
+
 func TestGetDerivativesBoard_BadExchange(t *testing.T) {
 	svc := New(nil, nil)
 	if _, err := svc.GetDerivativesBoard(context.Background(), "coinbase", 5); !errors.Is(err, domain.ErrInvalidArgument) {

@@ -7,17 +7,23 @@ import (
 )
 
 const (
-	derivativesBoardDefault = 20
+	// The board opens on the same liquid list the recorder follows.
+	derivativesBoardDefault = LiquidRecorderLimit
 	derivativesBoardMin     = 5
 
 	// VenueDerivativesMaxAge is how old an open-interest or funding snapshot
 	// may be before that venue is old on the derivatives board.
 	VenueDerivativesMaxAge = 5 * time.Minute
 
+	// DerivativesRatioMaxAge is how old the latest long/short bar may be.
+	// The public print is a 5-minute bar, so one missed bar is still the
+	// current read and two missed bars are old.
+	DerivativesRatioMaxAge = 10 * time.Minute
+
 	DerivativesWeightOI    = "oi"
 	DerivativesWeightEqual = "equal"
 
-	derivativesBoardNote = "Liquid USDT perpetuals on Binance USD-M, Bybit linear, and OKX USDT-swap. Open interest, funding, and 24h liquidation totals are combined only when every expected venue is fresh. A missing or old venue is named and is not counted as zero. Price is the mark from the fresh venue with the most open interest. Informational only — not financial advice."
+	derivativesBoardNote = "Liquid USDT perpetuals on Binance USD-M, Bybit linear, and OKX USDT-swap. Open interest, funding, crowd long percent, 1h taker buy share, and 24h liquidation totals are combined only when every expected venue is fresh for that column. A missing or old venue is named and is not counted as zero. Crowd long is the account long share, weighted by open interest when that open interest is also fresh. Taker buy share sums the last hour of aggressive buy and sell volume; a window that is not complete stays blank. Price is the mark from the fresh venue with the most open interest. Informational only — not financial advice."
 )
 
 // DerivativesVenueInput is one venue's live perp readings for a coin.
@@ -33,6 +39,12 @@ type DerivativesVenueInput struct {
 	MarkPrice   float64
 	LiqLong     float64
 	LiqShort    float64
+	LongShare   float64
+	LongShortAt time.Time
+	LongShortOK bool
+	TakerBuy    float64
+	TakerSell   float64
+	TakerOK     bool
 }
 
 // DerivativesCoinInput is one symbol before the board decides what is definite.
@@ -55,6 +67,10 @@ type DerivativesVenueRow struct {
 	LiqLong        string
 	LiqShort       string
 	LiqStatus      string
+	LongPct        string
+	LongStatus     string
+	TakerBuyPct    string
+	TakerStatus    string
 }
 
 // DerivativesCoin is one row. Combined fields are empty when that column is
@@ -80,6 +96,10 @@ type DerivativesCoin struct {
 	LiqLong              string
 	LiqShort             string
 	LiqDefinite          bool
+	LongPct              string
+	LongDefinite         bool
+	TakerBuyPct          string
+	TakerDefinite        bool
 	Venues               []DerivativesVenueRow
 	Coverage             MarketCoverage
 }
@@ -163,7 +183,7 @@ func BuildDerivativesBoard(exchange string, coins []DerivativesCoinInput, now ti
 
 func derivativesRowsDefinite(rows []DerivativesCoin) bool {
 	for _, row := range rows {
-		if !row.OpenInterestDefinite || !row.FundingDefinite || !row.Change1hDefinite || !row.Change24hDefinite || !row.LiqDefinite {
+		if !row.OpenInterestDefinite || !row.FundingDefinite || !row.Change1hDefinite || !row.Change24hDefinite || !row.LiqDefinite || !row.LongDefinite || !row.TakerDefinite {
 			return false
 		}
 	}
@@ -174,6 +194,8 @@ func buildDerivativesCoin(symbol string, expected []Exchange, in DerivativesCoin
 	base, _ := SplitBaseQuote(ExchangeBinance, symbol)
 	oiSamples := make([]VenueSample, 0, len(expected))
 	fundSamples := make([]VenueSample, 0, len(expected))
+	lsSamples := make([]VenueSample, 0, len(expected))
+	takerSamples := make([]VenueSample, 0, len(expected))
 	byEx := map[Exchange]DerivativesVenueInput{}
 	for _, v := range in.Venues {
 		if v.Exchange == "" {
@@ -191,15 +213,25 @@ func buildDerivativesCoin(symbol string, expected []Exchange, in DerivativesCoin
 		if v.FundingOK {
 			fundSamples = append(fundSamples, VenueSample{Exchange: ex, OK: true, At: v.FundingAt})
 		}
+		if v.LongShortOK {
+			lsSamples = append(lsSamples, VenueSample{Exchange: ex, OK: true, At: v.LongShortAt})
+		}
+		if v.TakerOK {
+			takerSamples = append(takerSamples, VenueSample{Exchange: ex, OK: true})
+		}
 	}
 	oiCover := CoverVenues(expected, oiSamples, now, VenueDerivativesMaxAge)
 	fundCover := CoverVenues(expected, fundSamples, now, VenueDerivativesMaxAge)
+	lsCover := CoverVenues(expected, lsSamples, now, DerivativesRatioMaxAge)
+	takerCover := CoverVenues(expected, takerSamples, now, VenueDerivativesMaxAge)
 	liqCover := CoverageFromLiquidationFeed(in.LiqFeed, coverageExchange(expected), now)
 	row := DerivativesCoin{
 		Symbol:               symbol,
 		Base:                 base,
 		OpenInterestDefinite: oiCover.Complete,
 		FundingDefinite:      fundCover.Complete,
+		LongDefinite:         lsCover.Complete,
+		TakerDefinite:        takerCover.Complete,
 		LiqDefinite:          liqCover.Complete,
 		Coverage:             oiCover,
 		Venues:               make([]DerivativesVenueRow, 0, len(expected)),
@@ -231,11 +263,27 @@ func buildDerivativesCoin(symbol string, expected []Exchange, in DerivativesCoin
 		row.FundingPayer = FundingPayer(rate)
 		row.FundingWeight = weight
 	}
+	if lsCover.Complete {
+		if share, ok := derivativesLongShare(expected, byEx, oiCover.Complete); ok {
+			row.LongPct = formatFixed(share*100, 2)
+		} else {
+			row.LongDefinite = false
+		}
+	}
+	if takerCover.Complete {
+		if share, ok := derivativesTakerBuy(expected, byEx); ok {
+			row.TakerBuyPct = formatFixed(share*100, 2)
+		} else {
+			row.TakerDefinite = false
+		}
+	}
 	row.Price, row.PriceExchange = derivativesPrice(expected, byEx, fundCover)
 	var liqLong, liqShort float64
 	oiStatus := indexVenueReads(oiCover)
 	fundStatus := indexVenueReads(fundCover)
 	liqStatus := indexVenueReads(liqCover)
+	lsStatus := indexVenueReads(lsCover)
+	takerStatus := indexVenueReads(takerCover)
 	for _, ex := range expected {
 		v := byEx[ex]
 		venue := DerivativesVenueRow{
@@ -243,6 +291,8 @@ func buildDerivativesCoin(symbol string, expected []Exchange, in DerivativesCoin
 			OIStatus:      oiStatus[ex],
 			FundingStatus: fundStatus[ex],
 			LiqStatus:     liqStatus[ex],
+			LongStatus:    lsStatus[ex],
+			TakerStatus:   takerStatus[ex],
 		}
 		if v.OIOK && venue.OIStatus == VenueReadFresh {
 			venue.OIValue = formatQty(v.OIValue)
@@ -261,6 +311,15 @@ func buildDerivativesCoin(symbol string, expected []Exchange, in DerivativesCoin
 			venue.LiqShort = formatQty(v.LiqShort)
 			liqLong += v.LiqLong
 			liqShort += v.LiqShort
+		}
+		if v.LongShortOK && venue.LongStatus == VenueReadFresh {
+			venue.LongPct = formatFixed(v.LongShare*100, 2)
+		}
+		if v.TakerOK && venue.TakerStatus == VenueReadFresh {
+			tot := v.TakerBuy + v.TakerSell
+			if tot > 0 {
+				venue.TakerBuyPct = formatFixed(v.TakerBuy/tot*100, 2)
+			}
 		}
 		row.Venues = append(row.Venues, venue)
 	}
@@ -315,6 +374,47 @@ func derivativesOIChange(expected []Exchange, byEx map[Exchange]DerivativesVenue
 		return "", "", false
 	}
 	return FormatSignedQty(delta), FormatSignedPct(pct), true
+}
+
+func derivativesLongShare(expected []Exchange, byEx map[Exchange]DerivativesVenueInput, oiDefinite bool) (float64, bool) {
+	var weighted, weight, sum float64
+	n := 0
+	for _, ex := range expected {
+		v := byEx[ex]
+		if !v.LongShortOK {
+			return 0, false
+		}
+		sum += v.LongShare
+		n++
+		if oiDefinite && v.OIValue > 0 {
+			weighted += v.LongShare * v.OIValue
+			weight += v.OIValue
+		}
+	}
+	if n == 0 {
+		return 0, false
+	}
+	if weight > 0 {
+		return weighted / weight, true
+	}
+	return sum / float64(n), true
+}
+
+func derivativesTakerBuy(expected []Exchange, byEx map[Exchange]DerivativesVenueInput) (float64, bool) {
+	var buy, sell float64
+	for _, ex := range expected {
+		v := byEx[ex]
+		if !v.TakerOK {
+			return 0, false
+		}
+		buy += v.TakerBuy
+		sell += v.TakerSell
+	}
+	tot := buy + sell
+	if tot <= 0 {
+		return 0, false
+	}
+	return buy / tot, true
 }
 
 func derivativesFunding(expected []Exchange, byEx map[Exchange]DerivativesVenueInput, oiDefinite bool) (float64, string) {

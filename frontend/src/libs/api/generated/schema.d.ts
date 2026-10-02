@@ -840,14 +840,18 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Liquid perpetual board (price, funding, open interest, liquidations)
-         * @description One table for the liquid USDT perpetuals (default 20, max 36, same
+         * Liquid perpetual board (price, funding, open interest, long/short, taker, liquidations)
+         * @description One table for the liquid USDT perpetuals (default 36, max 36, same
          *     universe as the futures recorder). Each row has the mark price, the
          *     predicted funding rate, open interest, the 1h and 24h open-interest
-         *     change, and 24h long and short liquidation notionals. `exchange=all`
-         *     (default) reads Binance USD-M, Bybit linear, and OKX USDT-swap.
-         *     A combined number is present only when every expected venue is fresh.
-         *     A missing or old venue is named on `coverage` and on that coin's
+         *     change, crowd long percent, the 1h taker buy share, and 24h long and
+         *     short liquidation notionals. `exchange=all` (default) reads Binance
+         *     USD-M, Bybit linear, and OKX USDT-swap. A combined number is present
+         *     only when every expected venue is fresh for that column. Crowd long is
+         *     the account long share, weighted by open interest when that open
+         *     interest is also fresh. Taker buy share sums the last hour of
+         *     aggressive buy and sell volume; an incomplete hour stays blank. A
+         *     missing or old venue is named on `coverage` and on that coin's
          *     `venues` row, and is not counted as zero. `definite` is false when
          *     any coin is incomplete. Informational only.
          */
@@ -7411,6 +7415,12 @@ export interface components {
             liqLong?: string;
             liqShort?: string;
             liqDefinite?: boolean;
+            /** @description Account long percent. Omitted unless every expected venue is fresh. */
+            longPct?: string;
+            longDefinite?: boolean;
+            /** @description Aggressive buy share over the last hour, in percent. Omitted unless every expected venue's hour is complete. */
+            takerBuyPct?: string;
+            takerDefinite?: boolean;
             venues?: components["schemas"]["MarketDerivativesVenue"][];
             coverage?: components["schemas"]["MarketVenueCoverage"];
         };
@@ -7427,6 +7437,12 @@ export interface components {
             liqLong?: string;
             liqShort?: string;
             liqStatus?: string;
+            longPct?: string;
+            /** @description fresh | stale | missing */
+            longStatus?: string;
+            takerBuyPct?: string;
+            /** @description fresh | stale | missing */
+            takerStatus?: string;
         };
         /** @description Print-count ratio summed across liquid pairs */
         MarketOrderCountOverview: {
@@ -10903,7 +10919,7 @@ export interface operations {
             query?: {
                 /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
-                /** @description How many liquid perpetuals to include (default 20, min 5, max 36) */
+                /** @description How many liquid perpetuals to include (default 36, min 5, max 36) */
                 limit?: number;
             };
             header?: never;

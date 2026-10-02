@@ -611,8 +611,8 @@ class DerivativesBoardInput(BaseModel):
         description="binance|bybit|okx|all (default all)",
     )
     limit: int = Field(
-        default=20,
-        description="How many liquid perpetuals (default 20, max 36)",
+        default=36,
+        description="How many liquid perpetuals (default 36, max 36)",
     )
 
 
@@ -2292,7 +2292,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             params["rangePct"] = range_pct
         return http.get("/api/v1/market/perp-depth", params)
 
-    def get_derivatives_board(exchange: str = "all", limit: int = 20) -> str:
+    def get_derivatives_board(exchange: str = "all", limit: int = 36) -> str:
         params: dict[str, Any] = {"exchange": exchange}
         if limit:
             params["limit"] = limit
@@ -4893,13 +4893,16 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             get_derivatives_board,
             name="get_derivatives_board",
             description=(
-                "One board for the liquid USDT perpetuals: mark price, predicted "
-                "funding, open interest, 1h and 24h open-interest change, and "
-                "24h long and short liquidations. exchange=all reads Binance "
-                "USD-M, Bybit linear, and OKX. A combined number is present "
-                "only when every expected venue is fresh. definite is false "
-                "when any coin is incomplete; missing and old venues are named "
-                "and are not treated as zero. limit default 20, max 36."
+                "One sortable board for the liquid USDT perpetuals: mark price, "
+                "predicted funding, open interest, 1h and 24h open-interest "
+                "change, crowd long percent, 1h taker buy share, and 24h long "
+                "and short liquidations. exchange=all reads Binance USD-M, "
+                "Bybit linear, and OKX. A combined number is present only when "
+                "every expected venue is fresh for that column. Crowd long is "
+                "the account long share. Taker buy share sums the last hour of "
+                "aggressive volume; an incomplete hour stays blank. definite "
+                "is false when any coin is incomplete; missing and old venues "
+                "are named and are not treated as zero. limit default 36, max 36."
             ),
             args_schema=DerivativesBoardInput,
         ),

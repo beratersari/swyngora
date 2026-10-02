@@ -1014,6 +1014,8 @@ func derivativesBoardMap(got *domain.DerivativesBoard) map[string]any {
 				"fundingRate": v.FundingRate, "fundingRatePct": v.FundingRatePct, "fundingPayer": v.FundingPayer,
 				"fundingStatus": v.FundingStatus, "markPrice": v.MarkPrice,
 				"liqLong": v.LiqLong, "liqShort": v.LiqShort, "liqStatus": v.LiqStatus,
+				"longPct": v.LongPct, "longStatus": v.LongStatus,
+				"takerBuyPct": v.TakerBuyPct, "takerStatus": v.TakerStatus,
 			})
 		}
 		coins = append(coins, map[string]any{
@@ -1024,6 +1026,8 @@ func derivativesBoardMap(got *domain.DerivativesBoard) map[string]any {
 			"change1h": c.Change1h, "change1hPct": c.Change1hPct, "change1hDefinite": c.Change1hDefinite,
 			"change24h": c.Change24h, "change24hPct": c.Change24hPct, "change24hDefinite": c.Change24hDefinite,
 			"liqLong": c.LiqLong, "liqShort": c.LiqShort, "liqDefinite": c.LiqDefinite,
+			"longPct": c.LongPct, "longDefinite": c.LongDefinite,
+			"takerBuyPct": c.TakerBuyPct, "takerDefinite": c.TakerDefinite,
 			"venues": venues, "coverage": coverageMap(c.Coverage),
 		})
 	}

@@ -6,7 +6,7 @@ import (
 )
 
 func TestParseDerivativesBoardLimit(t *testing.T) {
-	if ParseDerivativesBoardLimit(0) != 20 || ParseDerivativesBoardLimit(2) != 5 || ParseDerivativesBoardLimit(99) != LiquidRecorderLimit {
+	if ParseDerivativesBoardLimit(0) != LiquidRecorderLimit || ParseDerivativesBoardLimit(2) != 5 || ParseDerivativesBoardLimit(99) != LiquidRecorderLimit {
 		t.Fatalf("limits 0=%d 2=%d 99=%d", ParseDerivativesBoardLimit(0), ParseDerivativesBoardLimit(2), ParseDerivativesBoardLimit(99))
 	}
 }
@@ -36,6 +36,12 @@ func TestBuildDerivativesBoard_CombinesFreshVenues(t *testing.T) {
 	if btc.LiqLong != "12000000" || btc.LiqShort != "6000000" {
 		t.Fatalf("liq %s %s", btc.LiqLong, btc.LiqShort)
 	}
+	if !btc.LongDefinite || btc.LongPct != "55" {
+		t.Fatalf("long %+v", btc.LongPct)
+	}
+	if !btc.TakerDefinite || btc.TakerBuyPct != "60" {
+		t.Fatalf("taker %+v", btc.TakerBuyPct)
+	}
 	if got.Summary == "" || got.Coverage.Explain() != "" {
 		t.Fatalf("summary %q explain %q", got.Summary, got.Coverage.Explain())
 	}
@@ -62,6 +68,52 @@ func TestBuildDerivativesBoard_MissingVenueWithholdsCombined(t *testing.T) {
 	}
 	if got.Summary == "" {
 		t.Fatal("expected a coverage sentence")
+	}
+}
+
+func TestBuildDerivativesBoard_LongShareWeightsByOpenInterest(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	coin := boardCoin("BTCUSDT", now, 8e9, 1e9, 1e9, 0, 0)
+	coin.Venues[0].LongShare = 0.80
+	coin.Venues[1].LongShare = 0.40
+	coin.Venues[2].LongShare = 0.40
+	got := BuildDerivativesBoard("all", []DerivativesCoinInput{coin}, now)
+	if got.Coins[0].LongPct != "72" {
+		t.Fatalf("weighted %s", got.Coins[0].LongPct)
+	}
+	coin.Venues[2].OIOK = false
+	got = BuildDerivativesBoard("all", []DerivativesCoinInput{coin}, now)
+	if !got.Coins[0].LongDefinite || got.Coins[0].LongPct != "53.33" {
+		t.Fatalf("equal %+v", got.Coins[0])
+	}
+}
+
+func TestBuildDerivativesBoard_TakerSumsNotional(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	coin := boardCoin("BTCUSDT", now, 8e9, 1e9, 1e9, 0, 0)
+	coin.Venues[0].TakerBuy, coin.Venues[0].TakerSell = 1000, 0
+	coin.Venues[1].TakerBuy, coin.Venues[1].TakerSell = 0, 10
+	coin.Venues[2].TakerBuy, coin.Venues[2].TakerSell = 0, 10
+	got := BuildDerivativesBoard("all", []DerivativesCoinInput{coin}, now)
+	if got.Coins[0].TakerBuyPct != "98.04" {
+		t.Fatalf("summed %s", got.Coins[0].TakerBuyPct)
+	}
+	coin.Venues[2].TakerOK = false
+	got = BuildDerivativesBoard("all", []DerivativesCoinInput{coin}, now)
+	row := got.Coins[0]
+	if row.TakerDefinite || row.TakerBuyPct != "" || row.Venues[0].TakerBuyPct != "100" || row.Venues[2].TakerStatus != VenueReadMissing {
+		t.Fatalf("withheld %+v venues %+v", row.TakerBuyPct, row.Venues)
+	}
+}
+
+func TestBuildDerivativesBoard_StaleLongShareIsBlank(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	coin := boardCoin("BTCUSDT", now, 8e9, 1e9, 1e9, 0, 0)
+	coin.Venues[2].LongShortAt = now.Add(-DerivativesRatioMaxAge - time.Minute)
+	got := BuildDerivativesBoard("all", []DerivativesCoinInput{coin}, now)
+	row := got.Coins[0]
+	if row.LongDefinite || row.LongPct != "" || row.Venues[0].LongPct != "55" || row.Venues[2].LongStatus != VenueReadStale {
+		t.Fatalf("stale %+v venues %+v", row.LongPct, row.Venues)
 	}
 }
 
@@ -115,5 +167,11 @@ func boardVenue(ex Exchange, now time.Time, oi, rate, mark, liqLong, liqShort fl
 		MarkPrice:   mark,
 		LiqLong:     liqLong,
 		LiqShort:    liqShort,
+		LongShare:   0.55,
+		LongShortAt: now,
+		LongShortOK: true,
+		TakerBuy:    60,
+		TakerSell:   40,
+		TakerOK:     true,
 	}
 }

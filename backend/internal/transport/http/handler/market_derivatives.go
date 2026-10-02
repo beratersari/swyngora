@@ -41,6 +41,10 @@ type derivativesVenueDTO struct {
 	LiqLong        string `json:"liqLong,omitempty"`
 	LiqShort       string `json:"liqShort,omitempty"`
 	LiqStatus      string `json:"liqStatus"`
+	LongPct        string `json:"longPct,omitempty"`
+	LongStatus     string `json:"longStatus"`
+	TakerBuyPct    string `json:"takerBuyPct,omitempty"`
+	TakerStatus    string `json:"takerStatus"`
 }
 
 type derivativesCoinDTO struct {
@@ -64,6 +68,10 @@ type derivativesCoinDTO struct {
 	LiqLong              string                `json:"liqLong,omitempty"`
 	LiqShort             string                `json:"liqShort,omitempty"`
 	LiqDefinite          bool                  `json:"liqDefinite"`
+	LongPct              string                `json:"longPct,omitempty"`
+	LongDefinite         bool                  `json:"longDefinite"`
+	TakerBuyPct          string                `json:"takerBuyPct,omitempty"`
+	TakerDefinite        bool                  `json:"takerDefinite"`
 	Venues               []derivativesVenueDTO `json:"venues"`
 	Coverage             marketCoverageDTO     `json:"coverage"`
 }
@@ -92,6 +100,8 @@ func derivativesBoardToDTO(got *domain.DerivativesBoard) derivativesBoardRespons
 				FundingRate: v.FundingRate, FundingRatePct: v.FundingRatePct, FundingPayer: v.FundingPayer,
 				FundingStatus: v.FundingStatus, MarkPrice: v.MarkPrice,
 				LiqLong: v.LiqLong, LiqShort: v.LiqShort, LiqStatus: v.LiqStatus,
+				LongPct: v.LongPct, LongStatus: v.LongStatus,
+				TakerBuyPct: v.TakerBuyPct, TakerStatus: v.TakerStatus,
 			})
 		}
 		coins = append(coins, derivativesCoinDTO{
@@ -102,6 +112,8 @@ func derivativesBoardToDTO(got *domain.DerivativesBoard) derivativesBoardRespons
 			Change1h: c.Change1h, Change1hPct: c.Change1hPct, Change1hDefinite: c.Change1hDefinite,
 			Change24h: c.Change24h, Change24hPct: c.Change24hPct, Change24hDefinite: c.Change24hDefinite,
 			LiqLong: c.LiqLong, LiqShort: c.LiqShort, LiqDefinite: c.LiqDefinite,
+			LongPct: c.LongPct, LongDefinite: c.LongDefinite,
+			TakerBuyPct: c.TakerBuyPct, TakerDefinite: c.TakerDefinite,
 			Venues: venues, Coverage: coverageToDTO(c.Coverage),
 		})
 	}

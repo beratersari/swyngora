@@ -548,6 +548,10 @@ export type DerivativesVenue = {
   liqLong?: string;
   liqShort?: string;
   liqStatus?: string;
+  longPct?: string;
+  longStatus?: string;
+  takerBuyPct?: string;
+  takerStatus?: string;
 };
 export type DerivativesCoin = {
   symbol?: string;
@@ -570,6 +574,10 @@ export type DerivativesCoin = {
   liqLong?: string;
   liqShort?: string;
   liqDefinite?: boolean;
+  longPct?: string;
+  longDefinite?: boolean;
+  takerBuyPct?: string;
+  takerDefinite?: boolean;
   venues?: DerivativesVenue[];
   coverage?: MarketVenueCoverage;
 };

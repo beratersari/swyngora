@@ -15,8 +15,9 @@ const (
 	derivativesBoardWorkers  = 4
 )
 
-// GetDerivativesBoard returns last mark, funding, open interest, and 24h
-// liquidations for the liquid USDT perpetuals.
+// GetDerivativesBoard returns mark, funding, open interest, crowd long
+// percent, 1h taker buy share, and 24h liquidations for the liquid USDT
+// perpetuals.
 func (s *Service) GetDerivativesBoard(ctx context.Context, exchange string, limit int) (*domain.DerivativesBoard, error) {
 	ex, err := domain.ParseOpenInterestExchange(exchange)
 	if err != nil {
@@ -90,25 +91,117 @@ func (s *Service) derivativesVenue(ctx context.Context, ex domain.Exchange, symb
 	if s == nil {
 		return out
 	}
-	if p := s.oiPort(ex); p != nil {
-		ser, err := p.GetOpenInterestSeries(ctx, symbol)
-		if err == nil && ser != nil && derivativesSeriesPresent(ser) {
-			out.OI = ser
-			out.OIValue = ser.Current.Value
-			out.OIAt = ser.Current.Time
-			out.OIOK = true
+	var (
+		oi        *domain.OpenInterestSeries
+		oiOK      bool
+		fundOK    bool
+		fundRate  float64
+		fundAt    time.Time
+		mark      float64
+		longShare float64
+		longAt    time.Time
+		longOK    bool
+		buy       float64
+		sell      float64
+		takerOK   bool
+		wg        sync.WaitGroup
+	)
+	wg.Add(4)
+	go func() {
+		defer wg.Done()
+		if p := s.oiPort(ex); p != nil {
+			ser, err := p.GetOpenInterestSeries(ctx, symbol)
+			if err == nil && ser != nil && derivativesSeriesPresent(ser) {
+				oi = ser
+				oiOK = true
+			}
 		}
+	}()
+	go func() {
+		defer wg.Done()
+		if p := s.fundingPort(ex); p != nil {
+			ser, err := p.GetFundingSeries(ctx, symbol, 1)
+			if err == nil && ser != nil && !ser.Current.Time.IsZero() {
+				fundOK = true
+				fundRate = ser.Current.Rate
+				fundAt = ser.Current.Time
+				mark = ser.Current.MarkPrice
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if p := s.longShortPort(ex); p != nil {
+			ser, err := p.GetLongShortSeries(ctx, symbol, 1)
+			if share, at, ok := derivativesCrowdLong(ser, err); ok {
+				longShare = share
+				longAt = at
+				longOK = true
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		if p := s.takerPort(ex); p != nil {
+			flow, err := p.GetTakerFlow(ctx, symbol)
+			if b, sNotional, ok := derivativesTakerHour(flow, err); ok {
+				buy = b
+				sell = sNotional
+				takerOK = true
+			}
+		}
+	}()
+	wg.Wait()
+	if oiOK {
+		out.OI = oi
+		out.OIValue = oi.Current.Value
+		out.OIAt = oi.Current.Time
+		out.OIOK = true
 	}
-	if p := s.fundingPort(ex); p != nil {
-		ser, err := p.GetFundingSeries(ctx, symbol, 1)
-		if err == nil && ser != nil && !ser.Current.Time.IsZero() {
-			out.FundingOK = true
-			out.FundingRate = ser.Current.Rate
-			out.FundingAt = ser.Current.Time
-			out.MarkPrice = ser.Current.MarkPrice
-		}
+	if fundOK {
+		out.FundingOK = true
+		out.FundingRate = fundRate
+		out.FundingAt = fundAt
+		out.MarkPrice = mark
+	}
+	if longOK {
+		out.LongShortOK = true
+		out.LongShare = longShare
+		out.LongShortAt = longAt
+	}
+	if takerOK {
+		out.TakerOK = true
+		out.TakerBuy = buy
+		out.TakerSell = sell
 	}
 	return out
+}
+
+func derivativesCrowdLong(ser *domain.LongShortSeries, err error) (float64, time.Time, bool) {
+	if err != nil || ser == nil || ser.Current.Time.IsZero() {
+		return 0, time.Time{}, false
+	}
+	share := ser.Current.LongShare
+	if share < 0 || share > 1 || share != share {
+		return 0, time.Time{}, false
+	}
+	return share, ser.Current.Time.UTC(), true
+}
+
+func derivativesTakerHour(flow *domain.TakerVenueFlow, err error) (float64, float64, bool) {
+	if err != nil || flow == nil {
+		return 0, 0, false
+	}
+	for _, w := range flow.Windows {
+		if w.Window != domain.TakerWindow1h || !w.Complete {
+			continue
+		}
+		if w.BuyNotional+w.SellNotional <= 0 {
+			return 0, 0, false
+		}
+		return w.BuyNotional, w.SellNotional, true
+	}
+	return 0, 0, false
 }
 
 func derivativesSeriesPresent(ser *domain.OpenInterestSeries) bool {

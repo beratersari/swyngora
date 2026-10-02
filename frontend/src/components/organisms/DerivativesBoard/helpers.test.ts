@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { coinChartPath, definiteText, fundingText, signedAmount } from './helpers';
+import { coinChartPath, definiteText, fundingText, percentText, signedAmount, sortBoardCoins } from './helpers';
 import type { DerivativesCoin } from '@/libs/api';
 
 describe('derivatives board helpers', () => {
@@ -22,5 +22,28 @@ describe('derivatives board helpers', () => {
     const coin = { fundingDefinite: false, fundingRatePct: '+0.01' } as DerivativesCoin;
     expect(fundingText(coin)).toBe('—');
     expect(fundingText({ ...coin, fundingDefinite: true })).toBe('+0.01%');
+  });
+
+  it('shows crowd long and taker buy share as percents', () => {
+    expect(percentText(false, '55')).toBe('—');
+    expect(percentText(true, '55')).toBe('55%');
+  });
+
+  it('sorts a column and keeps a blank cell at the bottom', () => {
+    const coins = [
+      { symbol: 'ETHUSDT', base: 'ETH', longPct: '40', longDefinite: true },
+      { symbol: 'BTCUSDT', base: 'BTC', longDefinite: false, longPct: '80' },
+      { symbol: 'SOLUSDT', base: 'SOL', longPct: '70', longDefinite: true },
+    ] as DerivativesCoin[];
+    expect(sortBoardCoins(coins, { key: 'longPct', dir: 'desc' }).map((coin) => coin.base)).toEqual([
+      'SOL',
+      'ETH',
+      'BTC',
+    ]);
+    expect(sortBoardCoins(coins, { key: 'base', dir: 'asc' }).map((coin) => coin.base)).toEqual([
+      'BTC',
+      'ETH',
+      'SOL',
+    ]);
   });
 });

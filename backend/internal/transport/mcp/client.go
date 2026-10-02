@@ -478,7 +478,7 @@ func (c *APIClient) GetPerpDepthOverview(ctx context.Context, exchange string, r
 	return c.get(ctx, "/api/v1/market/perp-depth/overview", q)
 }
 
-// GetDerivativesBoard returns the liquid perpetual price, funding, open interest, and liquidation board.
+// GetDerivativesBoard returns the liquid perpetual price, funding, open interest, crowd long, taker buy share, and liquidation board.
 func (c *APIClient) GetDerivativesBoard(ctx context.Context, exchange string, limit int) (json.RawMessage, error) {
 	q := url.Values{}
 	if exchange != "" {
