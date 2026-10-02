@@ -1,5 +1,6 @@
 import commonEn from './locales/en/common.json';
 import marketsEn from './locales/en/markets.json';
+import derivativesEn from './locales/en/derivatives.json';
 import detailEn from './locales/en/detail.json';
 import watchlistEn from './locales/en/watchlist.json';
 import pumpsEn from './locales/en/pumps.json';
@@ -24,6 +25,7 @@ import settingsEn from './locales/en/settings.json';
 import arbEn from './locales/en/arb.json';
 import commonTr from './locales/tr/common.json';
 import marketsTr from './locales/tr/markets.json';
+import derivativesTr from './locales/tr/derivatives.json';
 import detailTr from './locales/tr/detail.json';
 import watchlistTr from './locales/tr/watchlist.json';
 import pumpsTr from './locales/tr/pumps.json';
@@ -55,6 +57,7 @@ export const resources = {
   en: {
     common: commonEn,
     markets: marketsEn,
+    derivatives: derivativesEn,
     detail: detailEn,
     watchlist: watchlistEn,
     pumps: pumpsEn,
@@ -81,6 +84,7 @@ export const resources = {
   tr: {
     common: commonTr,
     markets: marketsTr,
+    derivatives: derivativesTr,
     detail: detailTr,
     watchlist: watchlistTr,
     pumps: pumpsTr,

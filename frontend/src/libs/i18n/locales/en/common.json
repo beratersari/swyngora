@@ -3,6 +3,7 @@
   "nav": {
     "main": "Main navigation",
     "markets": "Markets",
+    "derivatives": "Derivatives",
     "watchlist": "Watchlist",
     "liquidations": "Liquidations",
     "options": "Options",

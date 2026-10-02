@@ -990,6 +990,50 @@ func (b *Backend) GetPerpDepth(ctx context.Context, exchange, symbol string, ran
 	return mustJSON(perpDepthMap(got))
 }
 
+func (b *Backend) GetDerivativesBoard(ctx context.Context, exchange string, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetDerivativesBoard(ctx, exchange, limit)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(derivativesBoardMap(got))
+}
+
+func derivativesBoardMap(got *domain.DerivativesBoard) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	coins := make([]map[string]any, 0, len(got.Coins))
+	for _, c := range got.Coins {
+		venues := make([]map[string]any, 0, len(c.Venues))
+		for _, v := range c.Venues {
+			venues = append(venues, map[string]any{
+				"exchange": v.Exchange, "oiValue": v.OIValue, "oiStatus": v.OIStatus,
+				"fundingRate": v.FundingRate, "fundingRatePct": v.FundingRatePct, "fundingPayer": v.FundingPayer,
+				"fundingStatus": v.FundingStatus, "markPrice": v.MarkPrice,
+				"liqLong": v.LiqLong, "liqShort": v.LiqShort, "liqStatus": v.LiqStatus,
+			})
+		}
+		coins = append(coins, map[string]any{
+			"symbol": c.Symbol, "base": c.Base, "price": c.Price, "priceExchange": c.PriceExchange,
+			"fundingRate": c.FundingRate, "fundingRatePct": c.FundingRatePct, "fundingPayer": c.FundingPayer,
+			"fundingWeight": c.FundingWeight, "fundingDefinite": c.FundingDefinite,
+			"openInterest": c.OpenInterest, "openInterestDefinite": c.OpenInterestDefinite,
+			"change1h": c.Change1h, "change1hPct": c.Change1hPct, "change1hDefinite": c.Change1hDefinite,
+			"change24h": c.Change24h, "change24hPct": c.Change24hPct, "change24hDefinite": c.Change24hDefinite,
+			"liqLong": c.LiqLong, "liqShort": c.LiqShort, "liqDefinite": c.LiqDefinite,
+			"venues": venues, "coverage": coverageMap(c.Coverage),
+		})
+	}
+	return map[string]any{
+		"exchange": got.Exchange, "universe": got.Universe, "asOf": got.AsOf.UTC(),
+		"coins": coins, "coverage": coverageMap(got.Coverage), "definite": got.Definite,
+		"summary": got.Summary, "note": got.Note,
+	}
+}
+
 func (b *Backend) GetPerpDepthOverview(ctx context.Context, exchange string, rangePct float64, limit int) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

@@ -1,0 +1,20 @@
+{
+  "title": "Derivatives",
+  "subtitle": "Mark, funding, open interest, and 24-hour liquidations for the liquid USDT perpetuals.",
+  "exchange": "Venues",
+  "allVenues": "All venues",
+  "limit": "Coins",
+  "coin": "Coin",
+  "price": "Mark",
+  "funding": "Funding",
+  "openInterest": "Open interest",
+  "change1h": "OI 1h",
+  "change24h": "OI 24h",
+  "liqLong": "Long liq 24h",
+  "liqShort": "Short liq 24h",
+  "venues": "Venues",
+  "empty": "No perpetuals yet",
+  "withheld": "A dash means that column is not a combined total until every venue on the row is fresh.",
+  "loadFailed": "Could not load the derivatives board",
+  "resource": "derivatives board"
+}

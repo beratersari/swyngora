@@ -1373,6 +1373,41 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/derivatives-board:
+    get:
+      summary: Liquid perpetual board (price, funding, open interest, liquidations)
+      description: |
+        One table for the liquid USDT perpetuals (default 20, max 36, same
+        universe as the futures recorder). Each row has the mark price, the
+        predicted funding rate, open interest, the 1h and 24h open-interest
+        change, and 24h long and short liquidation notionals. `exchange=all`
+        (default) reads Binance USD-M, Bybit linear, and OKX USDT-swap.
+        A combined number is present only when every expected venue is fresh.
+        A missing or old venue is named on `coverage` and on that coin's
+        `venues` row, and is not counted as zero. `definite` is false when
+        any coin is incomplete. Informational only.
+      operationId: getMarketDerivativesBoard
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          description: binance | bybit | okx | all (default all)
+          schema: { type: string, default: all }
+        - name: limit
+          in: query
+          description: How many liquid perpetuals to include (default 20, min 5, max 36)
+          schema: { type: integer, default: 20, example: 20 }
+      responses:
+        '200':
+          description: Ranked perpetual board
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketDerivativesBoard'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/options:
     get:
       summary: BTC/ETH options overview (open interest, volume, PCR, IV, expiry)
@@ -11250,6 +11285,61 @@ components:
         stale:
           type: array
           items: { type: string }
+    MarketDerivativesBoard:
+      type: object
+      description: Liquid USDT perpetual board. Combined fields are omitted when that column is not definite.
+      properties:
+        exchange: { type: string }
+        universe: { type: integer }
+        asOf: { type: string, format: date-time }
+        coins:
+          type: array
+          items: { $ref: '#/components/schemas/MarketDerivativesCoin' }
+        coverage: { $ref: '#/components/schemas/MarketVenueCoverage' }
+        definite: { type: boolean }
+        summary: { type: string }
+        note: { type: string }
+    MarketDerivativesCoin:
+      type: object
+      properties:
+        symbol: { type: string }
+        base: { type: string }
+        price: { type: string }
+        priceExchange: { type: string }
+        fundingRate: { type: string }
+        fundingRatePct: { type: string }
+        fundingPayer: { type: string, description: long | short | none }
+        fundingWeight: { type: string, description: oi | equal }
+        fundingDefinite: { type: boolean }
+        openInterest: { type: string }
+        openInterestDefinite: { type: boolean }
+        change1h: { type: string }
+        change1hPct: { type: string }
+        change1hDefinite: { type: boolean }
+        change24h: { type: string }
+        change24hPct: { type: string }
+        change24hDefinite: { type: boolean }
+        liqLong: { type: string }
+        liqShort: { type: string }
+        liqDefinite: { type: boolean }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/MarketDerivativesVenue' }
+        coverage: { $ref: '#/components/schemas/MarketVenueCoverage' }
+    MarketDerivativesVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        oiValue: { type: string }
+        oiStatus: { type: string, description: fresh | stale | missing }
+        fundingRate: { type: string }
+        fundingRatePct: { type: string }
+        fundingPayer: { type: string }
+        fundingStatus: { type: string }
+        markPrice: { type: string }
+        liqLong: { type: string }
+        liqShort: { type: string }
+        liqStatus: { type: string }
     MarketOrderCountOverview:
       type: object
       description: Print-count ratio summed across liquid pairs

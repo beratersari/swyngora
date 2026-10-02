@@ -103,6 +103,8 @@ import type {
   OrderCountMarketWindow,
   OrderCountOverviewQuery,
   OrderCountQuery,
+  MarketDerivativesBoard,
+  DerivativesBoardQuery,
   ImpactScan,
   ImpactScanHit,
   ImpactScanQuery,
@@ -157,6 +159,8 @@ import type {
 } from './marketApi.types';
 import type { ForensicsRadarReview } from '@/libs/types/forensics.types';
 // delist types re-exported below
+
+export type { DerivativesCoin, DerivativesVenue } from './marketApi.types';
 
 export type {
   SpotMarket,
@@ -244,6 +248,8 @@ export type {
   OrderCountCoin,
   OrderCountMarketWindow,
   OrderCountOverviewQuery,
+  MarketDerivativesBoard,
+  DerivativesBoardQuery,
   ImpactScan,
   ImpactScanHit,
   ImpactScanQuery,
@@ -765,6 +771,12 @@ export const marketApi = baseApi.injectEndpoints({
         params: compactParams({ ...(arg ?? {}) }),
       }),
     }),
+    getMarketDerivativesBoard: build.query<MarketDerivativesBoard, DerivativesBoardQuery | void>({
+      query: (arg) => ({
+        url: '/api/v1/market/derivatives-board',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
     getMarketOrderCountOverview: build.query<MarketOrderCountOverview, OrderCountOverviewQuery | void>({
       query: (arg) => ({
         url: '/api/v1/market/order-count/overview',
@@ -970,6 +982,7 @@ export const {
   useScanBookGapsQuery,
   useGetWideSpreadQuery,
   useScanWideSpreadsQuery,
+  useGetMarketDerivativesBoardQuery,
   useGetMarketOrderCountOverviewQuery,
   useGetMarketOrderCountQuery,
   useGetMarketPressureQuery,

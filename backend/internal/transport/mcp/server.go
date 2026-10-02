@@ -52,6 +52,7 @@ type DataPort interface {
 	GetPerpDepth(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error)
 	CompareSpotPerpLiquidity(ctx context.Context, symbol string, rangePct float64) (json.RawMessage, error)
 	GetPerpDepthOverview(ctx context.Context, exchange string, rangePct float64, limit int) (json.RawMessage, error)
+	GetDerivativesBoard(ctx context.Context, exchange string, limit int) (json.RawMessage, error)
 	GetOptions(ctx context.Context, exchange, asset string) (json.RawMessage, error)
 	GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFundingArb(ctx context.Context, symbol string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
@@ -789,6 +790,18 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("limit", mcp.Description("How many liquid perps (default 20, max 40)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.GetPerpDepthOverview(ctx, req.GetString("exchange", "all"), req.GetFloat("rangePct", 0), req.GetInt("limit", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_derivatives_board",
+		mcp.WithDescription("One board for the liquid USDT perpetuals: mark price, predicted funding, open interest, 1h and 24h open-interest change, and 24h long and short liquidations. exchange=all reads Binance USD-M, Bybit linear, and OKX. A combined number is present only when every expected venue is fresh. definite is false when any coin is incomplete; missing and stale venues are named and are not counted as zero. limit default 20, max 36. Not financial advice."),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all)")),
+		mcp.WithNumber("limit", mcp.Description("How many liquid perps (default 20, max 36)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.GetDerivativesBoard(ctx, req.GetString("exchange", "all"), req.GetInt("limit", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

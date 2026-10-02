@@ -605,6 +605,17 @@ class PerpDepthInput(BaseModel):
     )
 
 
+class DerivativesBoardInput(BaseModel):
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|okx|all (default all)",
+    )
+    limit: int = Field(
+        default=20,
+        description="How many liquid perpetuals (default 20, max 36)",
+    )
+
+
 class PerpDepthOverviewInput(BaseModel):
     exchange: str = Field(
         default="all",
@@ -2280,6 +2291,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if range_pct:
             params["rangePct"] = range_pct
         return http.get("/api/v1/market/perp-depth", params)
+
+    def get_derivatives_board(exchange: str = "all", limit: int = 20) -> str:
+        params: dict[str, Any] = {"exchange": exchange}
+        if limit:
+            params["limit"] = limit
+        return http.get("/api/v1/market/derivatives-board", params)
 
     def get_perp_depth_overview(
         exchange: str = "all", range_pct: float = 1, limit: int = 20
@@ -4871,6 +4888,20 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "range_pct default 1. This is the futures book, not spot."
             ),
             args_schema=PerpDepthInput,
+        ),
+        StructuredTool.from_function(
+            get_derivatives_board,
+            name="get_derivatives_board",
+            description=(
+                "One board for the liquid USDT perpetuals: mark price, predicted "
+                "funding, open interest, 1h and 24h open-interest change, and "
+                "24h long and short liquidations. exchange=all reads Binance "
+                "USD-M, Bybit linear, and OKX. A combined number is present "
+                "only when every expected venue is fresh. definite is false "
+                "when any coin is incomplete; missing and old venues are named "
+                "and are not treated as zero. limit default 20, max 36."
+            ),
+            args_schema=DerivativesBoardInput,
         ),
         StructuredTool.from_function(
             get_perp_depth_overview,

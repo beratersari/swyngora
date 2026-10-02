@@ -6,6 +6,9 @@ import { AppRoutes } from './routes';
 vi.mock('@/components/pages/MarketsPage', () => ({
   MarketsPage: () => <div data-testid="markets-page">Markets</div>,
 }));
+vi.mock('@/components/pages/DerivativesPage', () => ({
+  DerivativesPage: () => <div data-testid="derivatives-page">Derivatives</div>,
+}));
 vi.mock('@/components/pages/CoinDetailPage', () => ({
   CoinDetailPage: () => <div data-testid="detail-page">Detail</div>,
 }));
@@ -74,6 +77,8 @@ describe('AppRoutes', () => {
   });
 
   it('renders watchlist, pumps, and ai pages', () => {
+    renderWithProviders(<AppRoutes />, { routerEntries: ['/derivatives'] });
+    expect(screen.getByTestId('derivatives-page')).toBeInTheDocument();
     renderWithProviders(<AppRoutes />, { routerEntries: ['/watchlist'] });
     expect(screen.getByTestId('watchlist-page')).toBeInTheDocument();
     renderWithProviders(<AppRoutes />, { routerEntries: ['/pumps'] });

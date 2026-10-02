@@ -376,6 +376,24 @@ class _Transport(httpx2.BaseTransport):
                     "valueArea": {"low": "64800", "high": "66100"},
                 },
             )
+        if request.url.path.endswith("/derivatives-board"):
+            return httpx2.Response(
+                200,
+                json={
+                    "exchange": "all",
+                    "universe": 1,
+                    "definite": False,
+                    "summary": "No market read. Missing: okx.",
+                    "coins": [
+                        {
+                            "symbol": "BTCUSDT",
+                            "base": "BTC",
+                            "openInterestDefinite": False,
+                            "fundingDefinite": False,
+                        }
+                    ],
+                },
+            )
         if request.url.path.endswith("/perp-depth/overview"):
             return httpx2.Response(
                 200,
@@ -663,6 +681,11 @@ def test_market_tools_hit_api(monkeypatch):
     )
     assert perp["symbol"] == "BTCUSDT"
     assert perp["combined"]["headline"]["below"]["notional"] == "40000000"
+
+    assert "get_derivatives_board" in by_name
+    board = json.loads(by_name["get_derivatives_board"].invoke({"limit": 20}))
+    assert board["coins"][0]["symbol"] == "BTCUSDT"
+    assert board["definite"] is False
 
     assert "get_perp_depth_overview" in by_name
     ov = json.loads(by_name["get_perp_depth_overview"].invoke({"limit": 20}))

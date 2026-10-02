@@ -832,6 +832,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/derivatives-board": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Liquid perpetual board (price, funding, open interest, liquidations)
+         * @description One table for the liquid USDT perpetuals (default 20, max 36, same
+         *     universe as the futures recorder). Each row has the mark price, the
+         *     predicted funding rate, open interest, the 1h and 24h open-interest
+         *     change, and 24h long and short liquidation notionals. `exchange=all`
+         *     (default) reads Binance USD-M, Bybit linear, and OKX USDT-swap.
+         *     A combined number is present only when every expected venue is fresh.
+         *     A missing or old venue is named on `coverage` and on that coin's
+         *     `venues` row, and is not counted as zero. `definite` is false when
+         *     any coin is incomplete. Informational only.
+         */
+        get: operations["getMarketDerivativesBoard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/options": {
         parameters: {
             query?: never;
@@ -7286,6 +7314,58 @@ export interface components {
             missing?: string[];
             stale?: string[];
         };
+        /** @description Liquid USDT perpetual board. Combined fields are omitted when that column is not definite. */
+        MarketDerivativesBoard: {
+            exchange?: string;
+            universe?: number;
+            /** Format: date-time */
+            asOf?: string;
+            coins?: components["schemas"]["MarketDerivativesCoin"][];
+            coverage?: components["schemas"]["MarketVenueCoverage"];
+            definite?: boolean;
+            summary?: string;
+            note?: string;
+        };
+        MarketDerivativesCoin: {
+            symbol?: string;
+            base?: string;
+            price?: string;
+            priceExchange?: string;
+            fundingRate?: string;
+            fundingRatePct?: string;
+            /** @description long | short | none */
+            fundingPayer?: string;
+            /** @description oi | equal */
+            fundingWeight?: string;
+            fundingDefinite?: boolean;
+            openInterest?: string;
+            openInterestDefinite?: boolean;
+            change1h?: string;
+            change1hPct?: string;
+            change1hDefinite?: boolean;
+            change24h?: string;
+            change24hPct?: string;
+            change24hDefinite?: boolean;
+            liqLong?: string;
+            liqShort?: string;
+            liqDefinite?: boolean;
+            venues?: components["schemas"]["MarketDerivativesVenue"][];
+            coverage?: components["schemas"]["MarketVenueCoverage"];
+        };
+        MarketDerivativesVenue: {
+            exchange?: string;
+            oiValue?: string;
+            /** @description fresh | stale | missing */
+            oiStatus?: string;
+            fundingRate?: string;
+            fundingRatePct?: string;
+            fundingPayer?: string;
+            fundingStatus?: string;
+            markPrice?: string;
+            liqLong?: string;
+            liqShort?: string;
+            liqStatus?: string;
+        };
         /** @description Print-count ratio summed across liquid pairs */
         MarketOrderCountOverview: {
             exchange?: string;
@@ -10750,6 +10830,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketPerpDepthOverview"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketDerivativesBoard: {
+        parameters: {
+            query?: {
+                /** @description binance | bybit | okx | all (default all) */
+                exchange?: string;
+                /** @description How many liquid perpetuals to include (default 20, min 5, max 36) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ranked perpetual board */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketDerivativesBoard"];
                 };
             };
             400: components["responses"]["Error"];

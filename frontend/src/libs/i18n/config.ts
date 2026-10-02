@@ -9,6 +9,7 @@ export const FALLBACK_LOCALE: AppLocale = 'en';
 export const I18N_NAMESPACES = [
   'common',
   'markets',
+  'derivatives',
   'detail',
   'watchlist',
   'pumps',

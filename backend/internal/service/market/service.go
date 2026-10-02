@@ -71,6 +71,7 @@ type Service struct {
 	rsiHeat        *cache.TTL[*domain.RSIHeatmap]
 	rsiHeatSF      singleflight.Group
 	perpOverview   *cache.TTL[*domain.PerpDepthOverview]
+	boardCache     *cache.TTL[*domain.DerivativesBoard]
 	perpHist       domain.PerpDepthHistoryStore
 	options        domain.OptionsChainPort
 	optionsHist    domain.OptionsHistoryStore

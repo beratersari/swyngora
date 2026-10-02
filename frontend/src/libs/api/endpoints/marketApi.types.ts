@@ -532,6 +532,57 @@ export type MarketVenueCoverage = {
   missing?: string[];
   stale?: string[];
 };
+export type DerivativesVenue = {
+  exchange?: string;
+  oiValue?: string;
+  oiStatus?: string;
+  fundingRate?: string;
+  fundingRatePct?: string;
+  fundingPayer?: string;
+  fundingStatus?: string;
+  markPrice?: string;
+  liqLong?: string;
+  liqShort?: string;
+  liqStatus?: string;
+};
+export type DerivativesCoin = {
+  symbol?: string;
+  base?: string;
+  price?: string;
+  priceExchange?: string;
+  fundingRate?: string;
+  fundingRatePct?: string;
+  fundingPayer?: string;
+  fundingWeight?: string;
+  fundingDefinite?: boolean;
+  openInterest?: string;
+  openInterestDefinite?: boolean;
+  change1h?: string;
+  change1hPct?: string;
+  change1hDefinite?: boolean;
+  change24h?: string;
+  change24hPct?: string;
+  change24hDefinite?: boolean;
+  liqLong?: string;
+  liqShort?: string;
+  liqDefinite?: boolean;
+  venues?: DerivativesVenue[];
+  coverage?: MarketVenueCoverage;
+};
+export type MarketDerivativesBoard = {
+  exchange?: string;
+  universe?: number;
+  asOf?: string;
+  coins?: DerivativesCoin[];
+  coverage?: MarketVenueCoverage;
+  definite?: boolean;
+  summary?: string;
+  note?: string;
+};
+export type DerivativesBoardQuery = {
+  exchange?: string;
+  limit?: number;
+};
 export type MarketOrderCountOverview = {
   exchange?: string;
   quote?: string;

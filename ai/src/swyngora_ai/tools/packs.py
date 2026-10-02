@@ -79,6 +79,7 @@ BOOK_TOOLS: frozenset[str] = frozenset(
         "compare_spot_perp_liquidity",
         "get_perp_depth",
         "get_perp_depth_overview",
+        "get_derivatives_board",
         "get_options_overview",
         "get_funding_rate",
         "get_funding_arb",
