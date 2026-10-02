@@ -12,9 +12,10 @@ On a crypto coin Overview chart:
 - The right edge is the footprint for the visible window: buy versus sell at each price. Panning the chart picks the nearest flow window (5 minutes through 7 days).
 - Bars just left of that footprint are the largest estimated long and short liquidation pockets. The dashed 10× / 25× / 50× / 100× lines stay.
 - A pane under CVD is Binance crowd long percent versus top-trader long percent.
+- The next pane is stored USDT open interest, one line each for Binance, Bybit, and OKX. The pane after that is stored funding percent, settled prints when that venue has them. The last pane is liquidation notional in each candle: short liquidations point up, long liquidations point down, and a candle with both shows the difference.
 - A line under the chart names how long futures open interest has been stored on each venue. A venue with no samples is left out. The ten seed pairs can show older history because startup backfill covers them. Other liquid names start when this process begins sampling them.
 
-The Book, Footprint, and Crowd vs top switches turn those layers off. Equities do not get them.
+The Book, Footprint, Crowd vs top, Open interest, Funding, and Liquidations switches turn those layers off. Equities do not get them. The three new panes read `GET /api/v1/market/futures-history` (newest 1,000 rows from the first loaded candle). A venue with no stored rows is left off that pane.
 
 ## Where the code lives
 
@@ -25,10 +26,10 @@ The Book, Footprint, and Crowd vs top switches turn those layers off. Equities d
 
 ## How to verify
 
-Open `/markets/binance/BTCUSDT`. The overview chart shows the book shading, the footprint, the liquidation bars, and the crowd strip when those series have data. The caption names the futures recording span once a sample exists.
+Open `/markets/binance/BTCUSDT`. The overview chart shows the book shading, the footprint, the liquidation bars, and the crowd strip when those series have data. Open interest, funding, and liquidation panes appear under the candles once stored rows exist. The caption names the futures recording span once a sample exists.
 
 `go test` for `domain`, `futureshist`, `bookhist`, `market`, and the history-span handler. Frontend: `chartDesk.test.ts` and `DetailChartToolbar.test.tsx`.
 
 ## Limits
 
-Book shading is the live 30-minute heatmap, not years of depth. Footprint uses the stored flow ladder while this process runs (about 7 days) and the live tape inside that. Liquidation pockets are the leverage model, not a map of forced closes. The wider recorder samples about 36 USDT perpetuals. Binance books outside the seed list use the top 100 levels and are snapshotted about every 2 minutes. Flashes stay on the seed pairs and coins someone opened. Bybit and Coinbase snapshot the wider list every minute. Startup still backfills public futures history for the seed pairs only.
+Open interest, funding, and liquidation panes use the newest 1,000 stored rows from the first loaded candle. A long chart can be empty on the left when more samples exist than that cap. Book shading is the live 30-minute heatmap, not years of depth. Footprint uses the stored flow ladder while this process runs (about 7 days) and the live tape inside that. Liquidation pockets are the leverage model, not a map of forced closes. The wider recorder samples about 36 USDT perpetuals. Binance books outside the seed list use the top 100 levels and are snapshotted about every 2 minutes. Flashes stay on the seed pairs and coins someone opened. Bybit and Coinbase snapshot the wider list every minute. Startup still backfills public futures history for the seed pairs only.

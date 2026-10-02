@@ -5,8 +5,11 @@ import {
   footprintLevels,
   footprintWindow,
   formatRecordedSpan,
+  fundingRateLines,
   futuresRecorded,
+  liquidationNotionalByCandle,
   liquidationProfile,
+  openInterestLines,
 } from './chartDesk';
 
 describe('chart desk mappers', () => {
@@ -64,6 +67,44 @@ describe('chart desk mappers', () => {
     });
     expect(lines.crowd).toHaveLength(1);
     expect(lines.top[0]?.value).toBe(61);
+  });
+
+  it('plots open interest per venue and drops empty values', () => {
+    const lines = openInterestLines([
+      { exchange: 'binance', sampledAt: '2026-09-29T12:00:00Z', value: '100' },
+      { exchange: 'bybit', sampledAt: '2026-09-29T12:05:00Z', value: '40' },
+      { exchange: 'okx', sampledAt: '2026-09-29T12:05:00Z', value: '' },
+    ]);
+    expect(lines.map((line) => line.exchange)).toEqual(['binance', 'bybit']);
+    expect(lines[0]?.data[0]?.value).toBe(100);
+  });
+
+  it('plots settled funding and ignores predicted prints when a settlement exists', () => {
+    const lines = fundingRateLines([
+      { exchange: 'binance', sampledAt: '2026-09-29T08:00:00Z', ratePct: '0.01', predicted: false },
+      { exchange: 'binance', sampledAt: '2026-09-29T12:00:00Z', ratePct: '0.05', predicted: true },
+      { exchange: 'okx', sampledAt: '2026-09-29T12:00:00Z', ratePct: '-0.02', predicted: true },
+    ]);
+    expect(lines[0]?.data).toEqual([{ time: Date.parse('2026-09-29T08:00:00Z') / 1000, value: 0.01 }]);
+    expect(lines[1]?.exchange).toBe('okx');
+    expect(lines[1]?.data[0]?.value).toBe(-0.02);
+  });
+
+  it('buckets liquidation notional onto candles, short positive and long negative', () => {
+    const candles = [{ time: 1_000 }, { time: 1_060 }];
+    const bars = liquidationNotionalByCandle(
+      candles,
+      [
+        { time: '1970-01-01T00:16:40Z', side: 'short', notional: '5' },
+        { time: '1970-01-01T00:16:50Z', side: 'long', notional: '2' },
+        { time: '1970-01-01T00:17:45Z', side: 'long', notional: '4' },
+      ],
+      60,
+    );
+    expect(bars).toEqual([
+      { time: 1_000, value: 3 },
+      { time: 1_060, value: -4 },
+    ]);
   });
 
   it('formats futures recording spans', () => {

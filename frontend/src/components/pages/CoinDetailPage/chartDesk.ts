@@ -12,7 +12,38 @@ import type {
   MarketLongShortRatio,
   OrderBookHeatmap,
 } from '@/libs/api';
+import { semanticColors } from '@/styles/tokens';
 import { parseTapeNumber, unixSeconds } from './chartTape';
+
+/** Pane order for Binance, Bybit, and OKX lines. */
+export const FUTURES_PANE_VENUES = ['binance', 'bybit', 'okx'] as const;
+
+/** Newest stored rows the chart panes request. Matches the OpenAPI limit. */
+export const FUTURES_PANE_LIMIT = 1000;
+
+/** Line color for one futures venue on a lower pane. */
+export function futuresPaneColor(exchange: string): string {
+  switch (exchange) {
+    case 'bybit':
+      return semanticColors.status.warning;
+    case 'okx':
+      return semanticColors.chart.rsi;
+    default:
+      return semanticColors.accent.default;
+  }
+}
+
+/** One stored futures-history row. The chart uses only the fields each pane needs. */
+export type FuturesPaneRow = {
+  exchange?: string;
+  sampledAt?: string;
+  time?: string;
+  value?: string;
+  ratePct?: string;
+  predicted?: boolean;
+  side?: string;
+  notional?: string;
+};
 
 const HEAT_COLUMNS = 90;
 const HEAT_LEVELS = 24;
@@ -157,6 +188,116 @@ export function futuresRecorded(span: HistorySpan | undefined): RecordedFutures[
   return (span?.series ?? [])
     .filter((row) => row.kind === 'futures_oi' && (row.spanSec ?? 0) > 0 && row.exchange)
     .map((row) => ({ exchange: String(row.exchange), spanSec: row.spanSec ?? 0 }));
+}
+
+function rowsByVenue(items: FuturesPaneRow[] | undefined): Map<string, FuturesPaneRow[]> {
+  const grouped = new Map<string, FuturesPaneRow[]>();
+  for (const row of items ?? []) {
+    const exchange = (row.exchange ?? '').toLowerCase();
+    if (!exchange) continue;
+    const list = grouped.get(exchange);
+    if (list) list.push(row);
+    else grouped.set(exchange, [row]);
+  }
+  return grouped;
+}
+
+function uniquePoints(points: ChartLinePoint[]): ChartLinePoint[] {
+  const byTime = new Map<number, number>();
+  for (const point of points) byTime.set(point.time, point.value);
+  return [...byTime.entries()]
+    .map(([time, value]) => ({ time, value }))
+    .sort((a, b) => a.time - b.time);
+}
+
+/** USDT open interest, one line per venue that has samples. */
+export function openInterestLines(
+  items: FuturesPaneRow[] | undefined,
+): { exchange: string; data: ChartLinePoint[] }[] {
+  const grouped = rowsByVenue(items);
+  const out: { exchange: string; data: ChartLinePoint[] }[] = [];
+  for (const exchange of FUTURES_PANE_VENUES) {
+    const data: ChartLinePoint[] = [];
+    for (const row of grouped.get(exchange) ?? []) {
+      const time = unixSeconds(row.sampledAt);
+      const value = parseTapeNumber(row.value);
+      if (time == null || value == null) continue;
+      data.push({ time, value });
+    }
+    const points = uniquePoints(data);
+    if (points.length > 0) out.push({ exchange, data: points });
+  }
+  return out;
+}
+
+/**
+ * Funding percent, one line per venue. Settled prints win when that venue
+ * has any. Predicted prints are used only when nothing has settled yet.
+ */
+export function fundingRateLines(
+  items: FuturesPaneRow[] | undefined,
+): { exchange: string; data: ChartLinePoint[] }[] {
+  const grouped = rowsByVenue(items);
+  const out: { exchange: string; data: ChartLinePoint[] }[] = [];
+  for (const exchange of FUTURES_PANE_VENUES) {
+    const rows = grouped.get(exchange) ?? [];
+    const settled = rows.filter((row) => row.predicted === false);
+    const source = settled.length > 0 ? settled : rows;
+    const data: ChartLinePoint[] = [];
+    for (const row of source) {
+      const time = unixSeconds(row.sampledAt);
+      const value = parseTapeNumber(row.ratePct);
+      if (time == null || value == null) continue;
+      data.push({ time, value });
+    }
+    const points = uniquePoints(data);
+    if (points.length > 0) out.push({ exchange, data: points });
+  }
+  return out;
+}
+
+/**
+ * Liquidation notional inside each candle. Positive is short liquidations.
+ * Negative is long liquidations. A candle with both sides shows the difference.
+ * Candles with no prints are omitted.
+ */
+export function liquidationNotionalByCandle(
+  candles: { time: number }[],
+  items: FuturesPaneRow[] | undefined,
+  barDurationSec: number,
+): ChartLinePoint[] {
+  if (barDurationSec <= 0) return [];
+  const events: { time: number; signed: number }[] = [];
+  for (const row of items ?? []) {
+    const time = unixSeconds(row.time ?? row.sampledAt);
+    const notional = parseTapeNumber(row.notional);
+    if (time == null || notional == null || notional === 0) continue;
+    const side = (row.side ?? '').toLowerCase();
+    const signed = side === 'long' ? -Math.abs(notional) : side === 'short' ? Math.abs(notional) : 0;
+    if (signed === 0) continue;
+    events.push({ time, signed });
+  }
+  events.sort((a, b) => a.time - b.time);
+  const bars = candles
+    .filter((candle) => Number.isFinite(candle.time))
+    .sort((a, b) => a.time - b.time);
+  const out: ChartLinePoint[] = [];
+  let i = 0;
+  for (const bar of bars) {
+    const end = bar.time + barDurationSec;
+    while (i < events.length && events[i]!.time < bar.time) i += 1;
+    let j = i;
+    let sum = 0;
+    let any = false;
+    while (j < events.length && events[j]!.time < end) {
+      sum += events[j]!.signed;
+      any = true;
+      j += 1;
+    }
+    if (any && sum !== 0) out.push({ time: bar.time, value: sum });
+    i = j;
+  }
+  return out;
 }
 
 /** Compact duration for the chart caption. */

@@ -35,6 +35,7 @@ export {
   useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketLongShortRatioQuery,
   useGetMarketHistorySpanQuery,
+  useGetMarketFuturesHistoryQuery,
   useGetMarketCvdQuery,
   useGetMarketUnusualQuery,
   useGetMarketVolumeShareQuery,

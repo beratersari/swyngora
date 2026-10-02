@@ -31,4 +31,13 @@ export type DetailChartToolbarProps = {
   /** Binance crowd long percent versus top-trader long percent. */
   showCrowd?: boolean;
   onShowCrowdChange?: (show: boolean) => void;
+  /** Stored USDT open interest for Binance, Bybit, and OKX. */
+  showOi?: boolean;
+  onShowOiChange?: (show: boolean) => void;
+  /** Stored funding percent for Binance, Bybit, and OKX. */
+  showFunding?: boolean;
+  onShowFundingChange?: (show: boolean) => void;
+  /** Short liquidation notional minus long liquidation notional in each candle. */
+  showLiqNotional?: boolean;
+  onShowLiqNotionalChange?: (show: boolean) => void;
 };

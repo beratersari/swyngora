@@ -1977,9 +1977,12 @@ paths:
       summary: Durable futures history
       description: |
         Stored open interest, funding, long/short, or liquidation rows for
-        Binance USD-M and Bybit linear. Written on a background interval and
-        (for liquidations) as events arrive. Duplicates are ignored. One venue
-        failing does not drop the other. Survives process restarts.
+        Binance USD-M, Bybit linear, and OKX USDT-swap. Written on a background
+        interval and (for liquidations) as events arrive. Duplicates are ignored.
+        One venue failing does not drop the other. Survives process restarts.
+        Items are newest first. Open interest rows carry contracts and value.
+        Funding rows carry rate, ratePct, and predicted. Liquidation rows carry
+        time, side, price, quantity, and notional.
       operationId: getMarketFuturesHistory
       tags: [Market]
       parameters:
@@ -2009,7 +2012,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/MarketFuturesHistory'
         '400':
           $ref: '#/components/responses/Error'
         '502':
@@ -9716,6 +9719,44 @@ components:
         exchange: { type: string }
         since: { type: string, format: date-time }
         spanSec: { type: integer, description: Seconds from the oldest stored sample to asOf }
+    MarketFuturesHistory:
+      type: object
+      description: Stored futures rows for one metric. Newest first. Item fields depend on the metric.
+      properties:
+        metric:
+          type: string
+          enum: [open_interest, funding, long_short, liquidations]
+        exchange: { type: string }
+        symbol: { type: string }
+        count: { type: integer }
+        note: { type: string }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/MarketFuturesHistoryItem' }
+    MarketFuturesHistoryItem:
+      type: object
+      description: One stored sample or liquidation print. Unused fields are omitted.
+      properties:
+        exchange: { type: string }
+        sampledAt: { type: string, format: date-time }
+        time: { type: string, format: date-time }
+        contracts: { type: string }
+        value: { type: string }
+        rate: { type: string }
+        ratePct: { type: string }
+        predicted: { type: boolean }
+        intervalHours: { type: integer }
+        longPct: { type: string }
+        shortPct: { type: string }
+        ratio: { type: string }
+        bias: { type: string }
+        sizeLongPct: { type: string }
+        topAccLongPct: { type: string }
+        blend: { type: string }
+        side: { type: string, enum: [long, short] }
+        price: { type: string }
+        quantity: { type: string }
+        notional: { type: string }
     HistorySpan:
       type: object
       description: How long stored samples for one coin actually cover

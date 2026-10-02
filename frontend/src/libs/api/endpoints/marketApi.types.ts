@@ -146,6 +146,10 @@ export type MarketLongShortRatio = components['schemas']['MarketLongShortRatio']
 export type LongShortQuery = NonNullable<operations['getMarketLongShortRatio']['parameters']['query']>;
 export type HistorySpan = components['schemas']['HistorySpan'];
 export type HistorySpanQuery = NonNullable<operations['getMarketHistorySpan']['parameters']['query']>;
+export type MarketFuturesHistory = components['schemas']['MarketFuturesHistory'];
+export type FuturesHistoryQuery = NonNullable<
+  operations['getMarketFuturesHistory']['parameters']['query']
+>;
 export type MarketVolumeShare = components['schemas']['MarketVolumeShare'];
 export type VolumeShareQuery = NonNullable<operations['getMarketVolumeShare']['parameters']['query']>;
 export type SpotPerpLiquidity = components['schemas']['SpotPerpLiquidity'];

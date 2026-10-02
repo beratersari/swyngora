@@ -11,8 +11,13 @@ import {
   footprintLevels,
   footprintWindow,
   formatRecordedSpan,
+  fundingRateLines,
+  FUTURES_PANE_LIMIT,
+  futuresPaneColor,
   futuresRecorded,
+  liquidationNotionalByCandle,
   liquidationProfile,
+  openInterestLines,
 } from './chartDesk';
 import type {
   CandleChartLowerSeries,
@@ -60,6 +65,7 @@ import {
   useGetMarketCvdQuery,
   useGetMarketLongShortRatioQuery,
   useGetMarketHistorySpanQuery,
+  useGetMarketFuturesHistoryQuery,
   useGetMarketFlowAtPricesQuery,
   useGetMarketUnusualQuery,
   useGetMarketLiquidationLevelsQuery,
@@ -215,6 +221,9 @@ export function CoinDetailPage() {
   const [showBook, setShowBook] = useState(true);
   const [showFootprint, setShowFootprint] = useState(true);
   const [showCrowd, setShowCrowd] = useState(true);
+  const [showOi, setShowOi] = useState(true);
+  const [showFunding, setShowFunding] = useState(true);
+  const [showLiqNotional, setShowLiqNotional] = useState(true);
   const [footWindow, setFootWindow] = useState<'5m' | '15m' | '1h' | '4h' | '1d' | '3d' | '7d'>('1h');
   /** Guards against applying history pages after exchange/symbol/interval change. */
   const historyRequestIdRef = useRef(0);
@@ -609,6 +618,38 @@ export function CoinDetailPage() {
     return out;
   }, [allCandles, convert, displayCurrency, exchange, symbol]);
 
+  const futuresFrom = chartData[0] ? new Date(chartData[0].time * 1000).toISOString() : undefined;
+  const futuresPaneBase = {
+    symbol: perpSymbol,
+    exchange: 'all',
+    limit: FUTURES_PANE_LIMIT,
+    from: futuresFrom,
+  };
+  const oiHistQuery = useGetMarketFuturesHistoryQuery(
+    { ...futuresPaneBase, metric: 'open_interest' },
+    {
+      skip: skipTape || !showOi,
+      pollingInterval: visible && showOi ? 60_000 : 0,
+      refetchOnFocus: true,
+    },
+  );
+  const fundingHistQuery = useGetMarketFuturesHistoryQuery(
+    { ...futuresPaneBase, metric: 'funding' },
+    {
+      skip: skipTape || !showFunding,
+      pollingInterval: visible && showFunding ? 60_000 : 0,
+      refetchOnFocus: true,
+    },
+  );
+  const liqHistQuery = useGetMarketFuturesHistoryQuery(
+    { ...futuresPaneBase, metric: 'liquidations' },
+    {
+      skip: skipTape || !showLiqNotional,
+      pollingInterval: visible && showLiqNotional ? 60_000 : 0,
+      refetchOnFocus: true,
+    },
+  );
+
   // Live pump window matches the polled candle head (API max 1000).
   const pumpsQuery = useGetPumpEventsQuery(
     {
@@ -853,6 +894,7 @@ export function CoinDetailPage() {
       }
     }
     if (showCrowd) {
+      const before = series.length;
       series.push(
         ...crowdTopSeries(
           rtkCurrent(longShortQuery),
@@ -861,9 +903,76 @@ export function CoinDetailPage() {
           pane,
         ),
       );
+      if (series.length > before) pane += 1;
+    }
+    if (showOi) {
+      const lines = openInterestLines(rtkCurrent(oiHistQuery)?.items);
+      if (lines.length > 0) {
+        for (const line of lines) {
+          series.push({
+            id: `oi-${line.exchange}`,
+            pane,
+            kind: 'line',
+            title: t('detail:chart.oiLine', { exchange: line.exchange }),
+            color: futuresPaneColor(line.exchange),
+            data: line.data,
+          });
+        }
+        pane += 1;
+      }
+    }
+    if (showFunding) {
+      const lines = fundingRateLines(rtkCurrent(fundingHistQuery)?.items);
+      if (lines.length > 0) {
+        for (const line of lines) {
+          series.push({
+            id: `funding-${line.exchange}`,
+            pane,
+            kind: 'line',
+            title: t('detail:chart.fundingLine', { exchange: line.exchange }),
+            color: futuresPaneColor(line.exchange),
+            data: line.data,
+          });
+        }
+        pane += 1;
+      }
+    }
+    if (showLiqNotional) {
+      const bars = liquidationNotionalByCandle(
+        chartData,
+        rtkCurrent(liqHistQuery)?.items,
+        barDurationSec,
+      );
+      if (bars.length > 0) {
+        series.push({
+          id: 'liq-notional',
+          pane,
+          kind: 'histogram',
+          title: t('detail:chart.liqNotional'),
+          color: semanticColors.chart.up,
+          downColor: semanticColors.chart.down,
+          data: bars,
+        });
+      }
     }
     return series;
-  }, [isEquity, barDurationSec, showDelta, showCvd, showCrowd, chartData, tapeCvd, longShortQuery, t]);
+  }, [
+    isEquity,
+    barDurationSec,
+    showDelta,
+    showCvd,
+    showCrowd,
+    showOi,
+    showFunding,
+    showLiqNotional,
+    chartData,
+    tapeCvd,
+    longShortQuery,
+    oiHistQuery,
+    fundingHistQuery,
+    liqHistQuery,
+    t,
+  ]);
 
   const chartPriceLines: CandleChartPriceLine[] = useMemo(() => {
     if (isEquity || !showLiqLevels) return [];
@@ -1001,6 +1110,9 @@ export function CoinDetailPage() {
     if (showSignalMarkers) {
       void scannerResultsQuery.refetch();
     }
+    if (showOi) void oiHistQuery.refetch();
+    if (showFunding) void fundingHistQuery.refetch();
+    if (showLiqNotional) void liqHistQuery.refetch();
   };
 
   if (!exchange) {
@@ -1183,12 +1295,21 @@ export function CoinDetailPage() {
           onShowFootprintChange={isEquity ? undefined : setShowFootprint}
           showCrowd={showCrowd}
           onShowCrowdChange={isEquity ? undefined : setShowCrowd}
+          showOi={showOi}
+          onShowOiChange={isEquity ? undefined : setShowOi}
+          showFunding={showFunding}
+          onShowFundingChange={isEquity ? undefined : setShowFunding}
+          showLiqNotional={showLiqNotional}
+          onShowLiqNotionalChange={isEquity ? undefined : setShowLiqNotional}
           onRefresh={refreshAll}
           isFetching={
             seriesFetching ||
             historyLoading ||
             (showPumpMarkers && pumpsQuery.isFetching) ||
-            (showSignalMarkers && scannerResultsQuery.isFetching)
+            (showSignalMarkers && scannerResultsQuery.isFetching) ||
+            (showOi && oiHistQuery.isFetching) ||
+            (showFunding && fundingHistQuery.isFetching) ||
+            (showLiqNotional && liqHistQuery.isFetching)
           }
         />
 
@@ -1233,7 +1354,16 @@ export function CoinDetailPage() {
                 })}
               />
             ) : null}
-            {!isEquity && (showDelta || showCvd || showLiqLevels || showBook || showFootprint || showCrowd) ? (
+            {!isEquity &&
+            (showDelta ||
+              showCvd ||
+              showLiqLevels ||
+              showBook ||
+              showFootprint ||
+              showCrowd ||
+              showOi ||
+              showFunding ||
+              showLiqNotional) ? (
               <Text variant="caption" color="secondary">
                 {t('detail:chart.tapeHint')}
               </Text>
@@ -1278,7 +1408,10 @@ export function CoinDetailPage() {
                   ? isPhone
                     ? 72
                     : 100
-                  : 0)
+                  : 0) +
+                (lowerSeries.some((s) => s.id.startsWith('oi-')) ? (isPhone ? 72 : 100) : 0) +
+                (lowerSeries.some((s) => s.id.startsWith('funding-')) ? (isPhone ? 72 : 100) : 0) +
+                (lowerSeries.some((s) => s.id === 'liq-notional') ? (isPhone ? 72 : 120) : 0)
               }
             />
           </>

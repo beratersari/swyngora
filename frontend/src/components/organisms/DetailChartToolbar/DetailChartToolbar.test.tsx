@@ -96,4 +96,27 @@ describe('DetailChartToolbar', () => {
     expect(onFoot.mock.calls[0]?.[0]).toBe(false);
     expect(onCrowd.mock.calls[0]?.[0]).toBe(false);
   });
+
+  it('toggles open interest, funding, and liquidation notional', async () => {
+    const user = userEvent.setup();
+    const onOi = vi.fn();
+    const onFunding = vi.fn();
+    const onLiq = vi.fn();
+    renderWithTheme(
+      <DetailChartToolbar
+        intervals={['1h']}
+        interval="1h"
+        onIntervalChange={() => undefined}
+        onShowOiChange={onOi}
+        onShowFundingChange={onFunding}
+        onShowLiqNotionalChange={onLiq}
+      />,
+    );
+    await user.click(screen.getByRole('switch', { name: /open interest|açık pozisyon/i }));
+    await user.click(screen.getByRole('switch', { name: /^funding$|^fonlama$/i }));
+    await user.click(screen.getByRole('switch', { name: /^liquidations$|^likidasyonlar$/i }));
+    expect(onOi.mock.calls[0]?.[0]).toBe(false);
+    expect(onFunding.mock.calls[0]?.[0]).toBe(false);
+    expect(onLiq.mock.calls[0]?.[0]).toBe(false);
+  });
 });

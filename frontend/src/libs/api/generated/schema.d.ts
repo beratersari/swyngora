@@ -1181,9 +1181,12 @@ export interface paths {
         /**
          * Durable futures history
          * @description Stored open interest, funding, long/short, or liquidation rows for
-         *     Binance USD-M and Bybit linear. Written on a background interval and
-         *     (for liquidations) as events arrive. Duplicates are ignored. One venue
-         *     failing does not drop the other. Survives process restarts.
+         *     Binance USD-M, Bybit linear, and OKX USDT-swap. Written on a background
+         *     interval and (for liquidations) as events arrive. Duplicates are ignored.
+         *     One venue failing does not drop the other. Survives process restarts.
+         *     Items are newest first. Open interest rows carry contracts and value.
+         *     Funding rows carry rate, ratePct, and predicted. Liquidation rows carry
+         *     time, side, price, quantity, and notional.
          */
         get: operations["getMarketFuturesHistory"];
         put?: never;
@@ -5694,6 +5697,42 @@ export interface components {
             since?: string;
             /** @description Seconds from the oldest stored sample to asOf */
             spanSec?: number;
+        };
+        /** @description Stored futures rows for one metric. Newest first. Item fields depend on the metric. */
+        MarketFuturesHistory: {
+            /** @enum {string} */
+            metric?: "open_interest" | "funding" | "long_short" | "liquidations";
+            exchange?: string;
+            symbol?: string;
+            count?: number;
+            note?: string;
+            items?: components["schemas"]["MarketFuturesHistoryItem"][];
+        };
+        /** @description One stored sample or liquidation print. Unused fields are omitted. */
+        MarketFuturesHistoryItem: {
+            exchange?: string;
+            /** Format: date-time */
+            sampledAt?: string;
+            /** Format: date-time */
+            time?: string;
+            contracts?: string;
+            value?: string;
+            rate?: string;
+            ratePct?: string;
+            predicted?: boolean;
+            intervalHours?: number;
+            longPct?: string;
+            shortPct?: string;
+            ratio?: string;
+            bias?: string;
+            sizeLongPct?: string;
+            topAccLongPct?: string;
+            blend?: string;
+            /** @enum {string} */
+            side?: "long" | "short";
+            price?: string;
+            quantity?: string;
+            notional?: string;
         };
         /** @description How long stored samples for one coin actually cover */
         HistorySpan: {
@@ -11354,7 +11393,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["MarketFuturesHistory"];
                 };
             };
             400: components["responses"]["Error"];

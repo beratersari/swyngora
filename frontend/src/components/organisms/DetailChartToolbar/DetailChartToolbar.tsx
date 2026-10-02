@@ -32,6 +32,12 @@ export function DetailChartToolbar({
   onShowFootprintChange,
   showCrowd = true,
   onShowCrowdChange,
+  showOi = true,
+  onShowOiChange,
+  showFunding = true,
+  onShowFundingChange,
+  showLiqNotional = true,
+  onShowLiqNotionalChange,
 }: DetailChartToolbarProps) {
   const { t } = useTranslation(['detail', 'common']);
 
@@ -181,6 +187,48 @@ export function DetailChartToolbar({
             checked={showCrowd}
             onChange={onShowCrowdChange}
             aria-label={t('detail:chart.crowd')}
+          />
+        </InlineField>
+      ) : null}
+
+      {onShowOiChange ? (
+        <InlineField>
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.oi')}
+          </Text>
+          <Switch
+            size="small"
+            checked={showOi}
+            onChange={onShowOiChange}
+            aria-label={t('detail:chart.oi')}
+          />
+        </InlineField>
+      ) : null}
+
+      {onShowFundingChange ? (
+        <InlineField>
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.funding')}
+          </Text>
+          <Switch
+            size="small"
+            checked={showFunding}
+            onChange={onShowFundingChange}
+            aria-label={t('detail:chart.funding')}
+          />
+        </InlineField>
+      ) : null}
+
+      {onShowLiqNotionalChange ? (
+        <InlineField>
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.liqNotional')}
+          </Text>
+          <Switch
+            size="small"
+            checked={showLiqNotional}
+            onChange={onShowLiqNotionalChange}
+            aria-label={t('detail:chart.liqNotional')}
           />
         </InlineField>
       ) : null}
