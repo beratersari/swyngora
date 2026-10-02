@@ -204,16 +204,16 @@ export function LiquidationsPage() {
           value={view}
           onChange={(next) =>
             patchParams({
-              view: next === 'overview' ? null : String(next),
+              view: next === 'heatmap' ? null : String(next),
             })
           }
           options={[
+            { value: 'heatmap', label: t('liquidations:tabs.heatmap') },
             { value: 'overview', label: t('liquidations:tabs.overview') },
             { value: 'chart', label: t('liquidations:tabs.chart') },
             { value: 'cascade', label: t('liquidations:tabs.cascade') },
             { value: 'max-pain', label: t('liquidations:tabs.maxPain') },
             { value: 'hunt', label: t('liquidations:tabs.hunt') },
-            { value: 'heatmap', label: t('liquidations:tabs.heatmap') },
           ]}
         />
         <Field>

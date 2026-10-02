@@ -112,35 +112,41 @@ func TestReviewHuntHeatmap_FalseSignalWhenPriceNeverReaches(t *testing.T) {
 	}
 }
 
-func TestReviewHuntHeatmap_CombinedUsesEitherVenuePath(t *testing.T) {
+func TestReviewHuntHeatmap_CombinedUsesAnyVenuePath(t *testing.T) {
 	spec, _ := ParseHuntHeatmapRange("24h")
 	to := time.Date(2026, 8, 29, 18, 0, 0, 0, time.UTC)
 	cols := HuntHeatmapColumns(spec, to)
 	mid := 100_000.0
-	var binP, bybP []HuntHeatmapPricePoint
+	var binP, bybP, okxP []HuntHeatmapPricePoint
 	var oi []FuturesSnapshot
 	for _, ts := range cols {
 		binP = append(binP, HuntHeatmapPricePoint{Time: ts, Price: mid, High: mid, Low: mid})
 		bybP = append(bybP, HuntHeatmapPricePoint{Time: ts, Price: mid, High: mid, Low: mid})
+		okxP = append(okxP, HuntHeatmapPricePoint{Time: ts, Price: mid, High: mid, Low: mid})
 		oi = append(oi, FuturesSnapshot{SampledAt: ts, Value: 6_000_000})
 	}
 	dist := HuntLiqDistance(10, HuntMaintenanceMargin)
 	up := mid * (1 + dist)
-	// Only Bybit later trades through the band.
+	// Only Bybit later trades through the band. OKX stays on its own price.
 	bybP = append(bybP, HuntHeatmapPricePoint{
 		Time: cols[0].Add(30 * time.Minute), Price: up, High: up, Low: up,
 	})
+	cover := reviewCoverLiqs(cols, to)
 	got := BuildHuntHeatmap(HuntHeatmapInput{
 		Symbol: "BTCUSDT", Spec: spec, To: to,
 		Venues: []HuntHeatmapVenueSeries{
-			{Exchange: ExchangeBinance, Prices: binP, OI: oi, Liquidations: reviewCoverLiqs(cols, to)},
-			{Exchange: ExchangeBybit, Prices: bybP, OI: oi, Liquidations: reviewCoverLiqs(cols, to)},
+			{Exchange: ExchangeBinance, Prices: binP, OI: oi, Liquidations: cover},
+			{Exchange: ExchangeBybit, Prices: bybP, OI: oi, Liquidations: cover},
+			{Exchange: ExchangeOKX, Prices: okxP, OI: oi, Liquidations: cover},
 		},
 	})
 	comb := horizonByID(got.Review.Combined.Horizons, "1h")
 	if comb.Hits == 0 {
-		t.Fatalf("combined should hit via bybit path %+v bin=%+v byb=%+v",
-			comb, horizonByID(got.Review.Binance.Horizons, "1h"), horizonByID(got.Review.Bybit.Horizons, "1h"))
+		t.Fatalf("combined should hit via bybit path %+v bin=%+v byb=%+v okx=%+v",
+			comb, horizonByID(got.Review.Binance.Horizons, "1h"), horizonByID(got.Review.Bybit.Horizons, "1h"), horizonByID(got.Review.OKX.Horizons, "1h"))
+	}
+	if got.Review.OKX.Exchange != "okx" {
+		t.Fatalf("okx review %+v", got.Review.OKX.Exchange)
 	}
 }
 

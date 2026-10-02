@@ -89,12 +89,18 @@ func TestBuildHuntHeatmap_IntensityAtLeverageBand(t *testing.T) {
 		t.Fatalf("expected short intensity at 10x band idx=%d up=%.0f shorts=%v", idx, up, lastCol(got.Binance.Shorts))
 	}
 	if got.Combined.MaxIntensity != 0 || got.Combined.ColumnsWithOI != 0 {
-		t.Fatalf("combined must stay empty without Bybit %+v", got.Combined)
+		t.Fatalf("combined must stay empty without Bybit and OKX %+v", got.Combined)
 	}
-	if got.Bybit.MaxIntensity != 0 {
-		t.Fatalf("bybit should be empty")
+	if got.Bybit.MaxIntensity != 0 || got.OKX.MaxIntensity != 0 {
+		t.Fatalf("other venues should be empty bybit=%v okx=%v", got.Bybit.MaxIntensity, got.OKX.MaxIntensity)
 	}
-	if len(got.MissingVenues) != 1 || got.MissingVenues[0] != "bybit" {
+	if got.Binance.AccountBlend != "even" {
+		t.Fatalf("binance blend %+v", got.Binance.AccountBlend)
+	}
+	if len(got.LeverageMix) != len(DefaultHuntLeverageMix) {
+		t.Fatalf("mix %+v", got.LeverageMix)
+	}
+	if len(got.MissingVenues) != 2 || got.MissingVenues[0] != "bybit" || got.MissingVenues[1] != "okx" {
 		t.Fatalf("missing %+v", got.MissingVenues)
 	}
 }
@@ -119,16 +125,24 @@ func TestBuildHuntHeatmap_ObservedLiquidationAndCombined(t *testing.T) {
 		Prices:   prices,
 		OI:       []FuturesSnapshot{{SampledAt: last, Value: 2_000_000}},
 	}
+	okx := HuntHeatmapVenueSeries{
+		Exchange: ExchangeOKX,
+		Prices:   []HuntHeatmapPricePoint{{Time: last, Price: 51_000}},
+		OI:       []FuturesSnapshot{{SampledAt: last, Value: 1_000_000}},
+	}
 	got := BuildHuntHeatmap(HuntHeatmapInput{
 		Symbol: "ETHUSDT", Spec: spec, To: to,
-		Venues: []HuntHeatmapVenueSeries{bin, byb},
+		Venues: []HuntHeatmapVenueSeries{bin, byb, okx},
 	})
 	idx := huntPriceBin(49_000, got.PriceMin, got.PriceMax, got.PriceStep, len(got.Prices))
 	if idx < 0 || got.Binance.Longs[len(got.Times)-1][idx] < 80_000 {
 		t.Fatalf("observed long not in binance cell idx=%d v=%v", idx, lastCol(got.Binance.Longs))
 	}
-	if got.Combined.MaxIntensity+1 < got.Binance.MaxIntensity || got.Combined.MaxIntensity+1 < got.Bybit.MaxIntensity {
-		t.Fatalf("combined max=%v bin=%v byb=%v", got.Combined.MaxIntensity, got.Binance.MaxIntensity, got.Bybit.MaxIntensity)
+	if got.OKX.MaxIntensity <= 0 || got.OKX.AccountBlend != "even" {
+		t.Fatalf("okx %+v", got.OKX.AccountBlend)
+	}
+	if got.Combined.MaxIntensity+1 < got.Binance.MaxIntensity || got.Combined.MaxIntensity+1 < got.Bybit.MaxIntensity || got.Combined.MaxIntensity+1 < got.OKX.MaxIntensity {
+		t.Fatalf("combined max=%v bin=%v byb=%v okx=%v", got.Combined.MaxIntensity, got.Binance.MaxIntensity, got.Bybit.MaxIntensity, got.OKX.MaxIntensity)
 	}
 	sumLast := 0.0
 	for j := range got.Combined.Totals[len(got.Times)-1] {
@@ -224,8 +238,57 @@ func TestBuildHuntHeatmap_MissingVenuePricesStayEmpty(t *testing.T) {
 	if got.Combined.ColumnsWithOI != 0 || got.Combined.MaxIntensity != 0 {
 		t.Fatalf("combined must not use Binance-only columns %+v", got.Combined)
 	}
-	if len(got.MissingVenues) != 1 || got.MissingVenues[0] != "bybit" {
+	if got.OKX.ColumnsWithOI != 0 {
+		t.Fatalf("okx should be empty %+v", got.OKX)
+	}
+	if len(got.MissingVenues) != 2 || got.MissingVenues[0] != "bybit" || got.MissingVenues[1] != "okx" {
 		t.Fatalf("missing %+v", got.MissingVenues)
+	}
+}
+
+func TestBuildHuntHeatmap_CombinedSkipsColumnMissingOKX(t *testing.T) {
+	spec, _ := ParseHuntHeatmapRange("12h")
+	to := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
+	cols := HuntHeatmapColumns(spec, to)
+	last := cols[len(cols)-1]
+	var binP, bybP, okxP []HuntHeatmapPricePoint
+	var binOI, bybOI, okxOI []FuturesSnapshot
+	for i, ts := range cols {
+		binP = append(binP, HuntHeatmapPricePoint{Time: ts, Price: 40_000})
+		bybP = append(bybP, HuntHeatmapPricePoint{Time: ts, Price: 40_000})
+		binOI = append(binOI, FuturesSnapshot{SampledAt: ts, Value: 2_000_000})
+		bybOI = append(bybOI, FuturesSnapshot{SampledAt: ts, Value: 2_000_000})
+		// Leave OKX silent for the last three columns so the last one is
+		// outside the 30-minute stale window.
+		if i < len(cols)-3 {
+			okxP = append(okxP, HuntHeatmapPricePoint{Time: ts, Price: 41_000})
+			okxOI = append(okxOI, FuturesSnapshot{SampledAt: ts, Value: 2_000_000})
+		}
+	}
+	got := BuildHuntHeatmap(HuntHeatmapInput{
+		Symbol: "BTCUSDT", Spec: spec, To: to,
+		Venues: []HuntHeatmapVenueSeries{
+			{Exchange: ExchangeBinance, Prices: binP, OI: binOI},
+			{Exchange: ExchangeBybit, Prices: bybP, OI: bybOI},
+			{Exchange: ExchangeOKX, Prices: okxP, OI: okxOI},
+		},
+	})
+	if got.OKX.ColumnsWithOI == 0 || got.OKX.ColumnsWithOI >= len(cols) {
+		t.Fatalf("okx should cover earlier columns only %+v", got.OKX.ColumnsWithOI)
+	}
+	lastIdx := len(got.Times) - 1
+	sumLast := 0.0
+	for _, v := range got.Combined.Totals[lastIdx] {
+		sumLast += v
+	}
+	if sumLast != 0 || got.Combined.HasData[lastIdx] {
+		t.Fatalf("last column must stay empty without OKX sum=%v has=%v", sumLast, got.Combined.HasData[lastIdx])
+	}
+	if !got.Combined.HasData[0] {
+		t.Fatal("an earlier column with all three venues should be summed")
+	}
+	if last != got.Times[lastIdx] {
+		t.Fatalf("last %v", got.Times[lastIdx])
 	}
 }
 

@@ -146,20 +146,28 @@ estimated liquidation notional** at that price in that column.
 | `30d` | 30 days | 6 hours |
 | `90d` | 90 days | 1 day |
 
-Each column uses historical **open interest**, **that venue's own price**
-(spot candles from that exchange only), the same **leverage mix** as the hunt
-(tilted by funding), and blended **account long/short**. If Binance top-trader
-positions lean opposite the crowd, estimated size uses the top-trader print.
-Observed liquidation
-prints in that column are added into the matching price bin.
+Each column uses historical **open interest**, **that venue's own price**,
+the same **leverage mix** as the hunt (tilted by funding), and blended
+**account long/short**. Binance and Bybit prices are that venue's candles.
+OKX prices are OKX USDT-swap candles (`GET /api/v5/market/candles`), because
+OKX is not a spot book here. If Binance top-trader positions lean opposite
+the crowd, estimated size uses the top-trader print. OKX has no stored
+account ratio, so its long/short split stays even (`accountBlend=even`).
+When stored open interest leaves a column empty, that column uses the
+venue's public hourly open-interest history, clamped to the documented
+lookback (OKX: the latest 1,440 hours). This does not extend the archive,
+and a column still stays empty when neither source has a sample.
+Observed liquidation prints in that column are added into the matching price bin.
 
-`binance` and `bybit` are modeled separately and **never borrow each other's
-prices**. If Bybit candles are missing, the Bybit grid stays empty and
-`missingVenues` includes `bybit`. `combined` sums a column **only when both
-venues had their own price and OI** — a missing venue is not filled from the
-other. Each grid has that venue's own `lastPrice` (combined omits it). `longs`
-are longs that would liquidate if price falls into that bin; `shorts` are
-shorts that would liquidate if price rises into that bin; `totals` = longs + shorts.
+`binance`, `bybit`, and `okx` are modeled separately and **never borrow
+another venue's price**. A venue with no price and open interest stays empty
+and is listed in `missingVenues`. `combined` sums a column **only when all
+three venues had their own price and OI**. A missing venue is not filled
+from the others. Each grid has that venue's own `lastPrice` (combined omits
+it). `leverageMix` is the assumed share of open interest at 5×, 10×, 25×,
+50×, 75×, 100×, and 125×. `longs` are longs that would liquidate if price
+falls into that bin; `shorts` are shorts that would liquidate if price rises
+into that bin; `totals` = longs + shorts.
 
 ### Did the hot zones work? (`review`)
 
@@ -179,8 +187,8 @@ against **later candles from the same venue**:
 - **Hit / false / hit rate** — scored only on **validated** signals.
 - **Liqs rose** — among validated hits, whether observed notional in the zone
   rose vs the prior window.
-- **Combined** uses the summed grid and counts a hit if **either** venue's own
-  price reached the zone.
+- **Combined** uses the summed grid and counts a hit if **any** of Binance,
+  Bybit, or OKX's own price reached the zone.
 
 `signals[]` lists each hot area (time, price band, side) with a 1h / 4h / 12h
 row: `hit` / `miss` / `pending` / `price_gap` / `liq_gap`, time-to-hit,
@@ -197,12 +205,15 @@ OKX hourly open interest is the latest 1,440 points, and Bybit open interest
 goes back to the symbol listing (this archive keeps 90 days). The 90-day map
 uses one column per day. Binance columns older than the public 30 days are
 only hours this process already recorded. `combined` still sums a column
-only when both venues have their own price and open interest. Observed
-prints in a column are whatever is already stored. Public force-order
+only when Binance, Bybit, and OKX all have their own price and open interest.
+Observed prints in a column are whatever is already stored. Public force-order
 history refills about 7 days, not the whole 90.
 
-On the product web app the same grid is the **Liquidation heatmap** on
-`/liquidations`: ranges 12h / 24h / 3d / 7d / 14d / 30d / 90d, venue
-Combined / Binance / Bybit, and All / Longs / Shorts, plus the 1h / 4h / 12h
-hit-rate table. Combined is the sum of venue cells. The coin chart still
-loads price from the exchange, which already pages back past 90 days.
+On the product web app the same grid is the opening view of `/liquidations`
+(the other desks stay on `?view=overview`, `chart`, `cascade`, `max-pain`,
+and `hunt`). The map fills the viewport. Ranges are 12h / 24h / 3d / 7d /
+14d / 30d / 90d. Venues are Combined / Binance / Bybit / OKX, plus All /
+Longs / Shorts. The page labels the leverage mix. OKX is named when its
+long/short split is the even fallback. The 1h / 4h / 12h hit-rate table
+stays under the map. The coin chart still loads price from the exchange,
+which already pages back past 90 days.

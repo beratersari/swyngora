@@ -113,29 +113,35 @@ type HuntHeatmapGrid struct {
 	ColumnsWithOI int         `json:"columnsWithOi"`
 	LastPrice     float64     `json:"lastPrice,omitempty"`
 	HasData       []bool      `json:"hasData,omitempty"`
+	// AccountBlend is stored when a column used that venue's account ratio,
+	// even when the column fell back to 50/50, and mixed when both happened.
+	// OKX has no stored account ratio, so its columns are even.
+	AccountBlend string `json:"accountBlend,omitempty"`
 }
 
 // HuntHeatmapReport is a CoinGlass-style price × time liquidation intensity map.
 type HuntHeatmapReport struct {
-	Symbol        string            `json:"symbol"`
-	Range         string            `json:"range"`
-	From          time.Time         `json:"from"`
-	To            time.Time         `json:"to"`
-	StepSec       int               `json:"stepSec"`
-	PriceMin      float64           `json:"priceMin"`
-	PriceMax      float64           `json:"priceMax"`
-	PriceStep     float64           `json:"priceStep"`
-	Prices        []float64         `json:"prices"`
-	Times         []time.Time       `json:"times"`
-	Binance       HuntHeatmapGrid   `json:"binance"`
-	Bybit         HuntHeatmapGrid   `json:"bybit"`
-	Combined      HuntHeatmapGrid   `json:"combined"`
-	Review        HuntHeatmapReview `json:"review"`
-	MissingVenues []string          `json:"missingVenues,omitempty"`
-	Note          string            `json:"note,omitempty"`
+	Symbol        string               `json:"symbol"`
+	Range         string               `json:"range"`
+	From          time.Time            `json:"from"`
+	To            time.Time            `json:"to"`
+	StepSec       int                  `json:"stepSec"`
+	PriceMin      float64              `json:"priceMin"`
+	PriceMax      float64              `json:"priceMax"`
+	PriceStep     float64              `json:"priceStep"`
+	Prices        []float64            `json:"prices"`
+	Times         []time.Time          `json:"times"`
+	Binance       HuntHeatmapGrid      `json:"binance"`
+	Bybit         HuntHeatmapGrid      `json:"bybit"`
+	OKX           HuntHeatmapGrid      `json:"okx"`
+	Combined      HuntHeatmapGrid      `json:"combined"`
+	Review        HuntHeatmapReview    `json:"review"`
+	LeverageMix   []HuntLeverageBucket `json:"leverageMix,omitempty"`
+	MissingVenues []string             `json:"missingVenues,omitempty"`
+	Note          string               `json:"note,omitempty"`
 }
 
-const huntHeatmapNote = "Estimated liquidation intensity at each price and time from historical open interest, that venue's own price, the hunt leverage mix, blended account long/short, and observed liquidation prints in that column. Binance and Bybit are modeled separately and never borrow each other's prices; combined is the sum. Not a live order book and not financial advice."
+const huntHeatmapNote = "Estimated liquidation intensity at each price and time from historical open interest, that venue's own price, the hunt leverage mix, blended account long/short, and observed liquidation prints in that column. Binance, Bybit, and OKX are modeled separately and never borrow each other's prices. OKX long/short is an even split when that venue has no stored account ratio. Combined sums a column only when all three venues have their own price and open interest. Not a live order book and not financial advice."
 
 // HuntHeatmapColumns is the UTC-aligned time axis ending at or before to.
 func HuntHeatmapColumns(spec HuntHeatmapSpec, to time.Time) []time.Time {
@@ -173,20 +179,23 @@ func BuildHuntHeatmap(in HuntHeatmapInput) HuntHeatmapReport {
 		from = times[0].Add(-spec.Step)
 	}
 	out := HuntHeatmapReport{
-		Symbol:  NormalizeLiquidationSymbol(in.Symbol),
-		Range:   string(spec.Range),
-		From:    from,
-		To:      to,
-		StepSec: int(spec.Step.Seconds()),
-		Times:   times,
-		Note:    huntHeatmapNote,
+		Symbol:      NormalizeLiquidationSymbol(in.Symbol),
+		Range:       string(spec.Range),
+		From:        from,
+		To:          to,
+		StepSec:     int(spec.Step.Seconds()),
+		Times:       times,
+		LeverageMix: huntLeverageMixCopy(),
+		Note:        huntHeatmapNote,
 	}
 	pMin, pMax := huntHeatmapPriceExtent(allHuntVenuePrices(in.Venues), times)
 	nBin := HuntHeatmapPriceBins
 	if pMax <= pMin || len(times) == 0 {
 		out.Binance = emptyHuntGrid("binance", times, nBin)
 		out.Bybit = emptyHuntGrid("bybit", times, nBin)
+		out.OKX = emptyHuntGrid("okx", times, nBin)
 		out.Combined = emptyHuntGrid("combined", times, nBin)
+		out.MissingVenues = missingHuntVenues(out.Binance, out.Bybit, out.OKX)
 		out.Review = emptyHuntHeatmapReview()
 		return out
 	}
@@ -211,16 +220,31 @@ func BuildHuntHeatmap(in HuntHeatmapInput) HuntHeatmapReport {
 	}
 	out.Binance = buildHuntVenueGrid("binance", byEx[ExchangeBinance], times, spec.Step, byEx[ExchangeBinance].Prices, pMin, pMax, step, nBin)
 	out.Bybit = buildHuntVenueGrid("bybit", byEx[ExchangeBybit], times, spec.Step, byEx[ExchangeBybit].Prices, pMin, pMax, step, nBin)
+	out.OKX = buildHuntVenueGrid("okx", byEx[ExchangeOKX], times, spec.Step, byEx[ExchangeOKX].Prices, pMin, pMax, step, nBin)
 	out.Binance.LastPrice = lastHuntSeriesPrice(byEx[ExchangeBinance].Prices)
 	out.Bybit.LastPrice = lastHuntSeriesPrice(byEx[ExchangeBybit].Prices)
-	out.Combined = sumHuntGrids("combined", out.Binance, out.Bybit)
-	if out.Binance.ColumnsWithOI == 0 {
-		out.MissingVenues = append(out.MissingVenues, "binance")
-	}
-	if out.Bybit.ColumnsWithOI == 0 {
-		out.MissingVenues = append(out.MissingVenues, "bybit")
-	}
+	out.OKX.LastPrice = lastHuntSeriesPrice(byEx[ExchangeOKX].Prices)
+	out.Combined = sumHuntGrids("combined", out.Binance, out.Bybit, out.OKX)
+	out.MissingVenues = missingHuntVenues(out.Binance, out.Bybit, out.OKX)
 	out.Review = ReviewHuntHeatmap(out, in.Venues, to)
+	return out
+}
+
+func huntLeverageMixCopy() []HuntLeverageBucket {
+	return append([]HuntLeverageBucket(nil), DefaultHuntLeverageMix...)
+}
+
+func missingHuntVenues(binance, bybit, okx HuntHeatmapGrid) []string {
+	var out []string
+	if binance.ColumnsWithOI == 0 {
+		out = append(out, "binance")
+	}
+	if bybit.ColumnsWithOI == 0 {
+		out = append(out, "bybit")
+	}
+	if okx.ColumnsWithOI == 0 {
+		out = append(out, "okx")
+	}
 	return out
 }
 
@@ -333,11 +357,9 @@ func buildHuntVenueGrid(ex string, ser HuntHeatmapVenueSeries, times []time.Time
 	if len(times) == 0 {
 		return g
 	}
-	stale := step * 2
-	if stale < 20*time.Minute {
-		stale = 20 * time.Minute
-	}
+	stale := huntMatchStale(step)
 	withOI := 0
+	storedBlend, evenBlend := 0, 0
 	for i, t := range times {
 		px := nearestHuntPrice(prices, t, stale)
 		oi := nearestHuntSnapshot(ser.OI, t, stale)
@@ -346,7 +368,12 @@ func buildHuntVenueGrid(ex string, ser HuntHeatmapVenueSeries, times []time.Time
 		}
 		g.HasData[i] = true
 		withOI++
-		estLong, estShort := nearestHuntBlendShares(ser.LongShort, t, stale*2)
+		estLong, estShort, stored := nearestHuntBlendShares(ser.LongShort, t, stale*2)
+		if stored {
+			storedBlend++
+		} else {
+			evenBlend++
+		}
 		fund := nearestHuntFunding(ser.Funding, t, 8*time.Hour)
 		longsCrowded := fund > 1e-12
 		shortsCrowded := fund < -1e-12
@@ -368,7 +395,21 @@ func buildHuntVenueGrid(ex string, ser HuntHeatmapVenueSeries, times []time.Time
 		g.Coverage = float64(withOI) / float64(len(times))
 	}
 	g.ColumnsWithOI = withOI
+	g.AccountBlend = huntAccountBlendLabel(storedBlend, evenBlend)
 	return g
+}
+
+func huntAccountBlendLabel(stored, even int) string {
+	switch {
+	case stored > 0 && even > 0:
+		return "mixed"
+	case stored > 0:
+		return "stored"
+	case even > 0:
+		return "even"
+	default:
+		return ""
+	}
 }
 
 func addBandsToColumn(col []float64, bands []HuntBand, pMin, pMax, pStep float64, nBin int) {
@@ -429,6 +470,48 @@ func huntPriceBin(px, pMin, pMax, pStep float64, nBin int) int {
 	return i
 }
 
+func huntMatchStale(step time.Duration) time.Duration {
+	stale := step * 2
+	if stale < 20*time.Minute {
+		stale = 20 * time.Minute
+	}
+	return stale
+}
+
+// HuntOICovers reports whether every heatmap column has an open-interest
+// sample inside the same stale window the grid uses to paint a cell.
+func HuntOICovers(rows []FuturesSnapshot, times []time.Time, step time.Duration) bool {
+	_, _, missing := HuntOIGap(rows, times, step)
+	return !missing
+}
+
+// HuntOIGap returns the earliest and latest column times that have no
+// open-interest sample, widened by the match window so a fetched print can
+// land on those columns. missing is false when every column is covered.
+func HuntOIGap(rows []FuturesSnapshot, times []time.Time, step time.Duration) (from, to time.Time, missing bool) {
+	if len(times) == 0 {
+		return time.Time{}, time.Time{}, false
+	}
+	stale := huntMatchStale(step)
+	var lo, hi time.Time
+	for _, t := range times {
+		if nearestHuntSnapshot(rows, t, stale) > 0 {
+			continue
+		}
+		if !missing || t.Before(lo) {
+			lo = t
+		}
+		if !missing || t.After(hi) {
+			hi = t
+		}
+		missing = true
+	}
+	if !missing {
+		return time.Time{}, time.Time{}, false
+	}
+	return lo.Add(-stale), hi.Add(stale), true
+}
+
 func nearestHuntPrice(pts []HuntHeatmapPricePoint, at time.Time, stale time.Duration) float64 {
 	var best float64
 	var bestDt time.Duration = -1
@@ -478,11 +561,11 @@ func nearestHuntSnapshot(rows []FuturesSnapshot, at time.Time, stale time.Durati
 }
 
 func nearestHuntSnapshotShare(rows []FuturesSnapshot, at time.Time, stale time.Duration) float64 {
-	estLong, _ := nearestHuntBlendShares(rows, at, stale)
+	estLong, _, _ := nearestHuntBlendShares(rows, at, stale)
 	return estLong
 }
 
-func nearestHuntBlendShares(rows []FuturesSnapshot, at time.Time, stale time.Duration) (estLong, estShort float64) {
+func nearestHuntBlendShares(rows []FuturesSnapshot, at time.Time, stale time.Duration) (estLong, estShort float64, stored bool) {
 	var best *FuturesSnapshot
 	var bestDt time.Duration = -1
 	for i := range rows {
@@ -503,9 +586,10 @@ func nearestHuntBlendShares(rows []FuturesSnapshot, at time.Time, stale time.Dur
 		}
 	}
 	if best == nil {
-		return 0.5, 0.5
+		return 0.5, 0.5, false
 	}
-	return HuntBlendFromSnapshot(best)
+	estLong, estShort = HuntBlendFromSnapshot(best)
+	return estLong, estShort, true
 }
 
 func nearestHuntFunding(rows []FuturesSnapshot, at time.Time, stale time.Duration) float64 {
@@ -527,35 +611,43 @@ func nearestHuntFunding(rows []FuturesSnapshot, at time.Time, stale time.Duratio
 	return best
 }
 
-func sumHuntGrids(ex string, a, b HuntHeatmapGrid) HuntHeatmapGrid {
-	nT := len(a.Totals)
-	if len(b.Totals) > nT {
-		nT = len(b.Totals)
-	}
+func sumHuntGrids(ex string, parts ...HuntHeatmapGrid) HuntHeatmapGrid {
+	nT := 0
 	nBin := HuntHeatmapPriceBins
-	if len(a.Totals) > 0 {
-		nBin = len(a.Totals[0])
-	} else if len(b.Totals) > 0 {
-		nBin = len(b.Totals[0])
+	for _, p := range parts {
+		if len(p.Totals) > nT {
+			nT = len(p.Totals)
+		}
+		if len(p.Totals) > 0 && len(p.Totals[0]) > 0 {
+			nBin = len(p.Totals[0])
+		}
 	}
 	g := emptyHuntGrid(ex, make([]time.Time, nT), nBin)
 	max := 0.0
+	covered := 0
 	for i := 0; i < nT; i++ {
-		aOK := i < len(a.HasData) && a.HasData[i]
-		bOK := i < len(b.HasData) && b.HasData[i]
-		// Combined only sums a column when both venues actually had data.
-		if !aOK || !bOK {
+		// Combined sums a column only when every venue had its own price and OI.
+		ok := len(parts) > 0
+		for _, p := range parts {
+			if i >= len(p.HasData) || !p.HasData[i] {
+				ok = false
+				break
+			}
+		}
+		g.HasData[i] = ok
+		if !ok {
 			continue
 		}
+		covered++
 		for j := 0; j < nBin; j++ {
 			var lv, sv float64
-			if i < len(a.Longs) && j < len(a.Longs[i]) {
-				lv += a.Longs[i][j]
-				sv += a.Shorts[i][j]
-			}
-			if i < len(b.Longs) && j < len(b.Longs[i]) {
-				lv += b.Longs[i][j]
-				sv += b.Shorts[i][j]
+			for _, p := range parts {
+				if i < len(p.Longs) && j < len(p.Longs[i]) {
+					lv += p.Longs[i][j]
+				}
+				if i < len(p.Shorts) && j < len(p.Shorts[i]) {
+					sv += p.Shorts[i][j]
+				}
 			}
 			g.Longs[i][j] = lv
 			g.Shorts[i][j] = sv
@@ -565,21 +657,33 @@ func sumHuntGrids(ex string, a, b HuntHeatmapGrid) HuntHeatmapGrid {
 			}
 		}
 	}
-	// Combined coverage: columns where *both* venues had their own price+OI.
-	// A missing venue is not treated as covered by the other.
 	if nT > 0 {
-		covered := 0
-		for i := 0; i < nT; i++ {
-			aOK := i < len(a.HasData) && a.HasData[i]
-			bOK := i < len(b.HasData) && b.HasData[i]
-			g.HasData[i] = aOK && bOK
-			if g.HasData[i] {
-				covered++
-			}
-		}
 		g.Coverage = float64(covered) / float64(nT)
 		g.ColumnsWithOI = covered
 	}
 	g.MaxIntensity = max
+	g.AccountBlend = combinedAccountBlend(parts)
 	return g
+}
+
+func combinedAccountBlend(parts []HuntHeatmapGrid) string {
+	stored, even := false, false
+	for _, p := range parts {
+		switch p.AccountBlend {
+		case "stored":
+			stored = true
+		case "even":
+			even = true
+		case "mixed":
+			stored, even = true, true
+		}
+	}
+	return huntAccountBlendLabel(boolCount(stored), boolCount(even))
+}
+
+func boolCount(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
 }

@@ -2410,10 +2410,16 @@ export interface paths {
          *     columns older than the public 30 days are only hours this process
          *     already recorded. Observed liquidation prints in a column are the
          *     ones already stored; public REST refills about 7 days, not the whole 90.
-         *     Binance and Bybit are modeled
-         *     separately and each venue uses only its own candles (never the
-         *     other exchange's price). `combined` sums a column only when both
-         *     Binance and Bybit have open interest there.
+         *     Binance, Bybit, and OKX are modeled separately. Each venue uses
+         *     only its own price: Binance and Bybit use their candles, and OKX
+         *     uses its USDT-swap candles. They never borrow another venue's price.
+         *     OKX long/short is an even split when no account ratio is stored.
+         *     A column with no stored open interest uses that venue's public
+         *     hourly open-interest history, clamped to the documented lookback
+         *     (OKX: the latest 1,440 hours). That fill does not extend the archive.
+         *     `combined` sums a column only when Binance, Bybit, and OKX all have
+         *     their own price and open interest there. `leverageMix` is the
+         *     assumed share of open interest at each leverage.
          *     `review` scores whether later price reached the hot zones within
          *     1h / 4h / 12h, time-to-hit, hit rate / false signals, and whether
          *     observed liquidations in that zone rose. Not a live book and not
@@ -6124,12 +6130,17 @@ export interface components {
             shorts?: number[][];
             totals?: number[][];
             maxIntensity?: number;
-            /** @description Fraction of time columns with this venue's own price and open interest. Combined requires both venues. */
+            /** @description Fraction of time columns with this venue's own price and open interest. Combined requires Binance */
             coverage?: number;
             columnsWithOi?: number;
             /** @description That venue's own last print. Combined is omitted. */
             lastPrice?: number;
-            /** @description Per time column, whether this venue (or both, for combined) had own price+OI */
+            /**
+             * @description stored uses the venue account ratio. even is a 50/50 split because no ratio is stored. mixed means some columns had a ratio and some did not.
+             * @enum {string}
+             */
+            accountBlend?: "stored" | "even" | "mixed";
+            /** @description Per time column, whether this venue had its own price and open interest. Combined is true only when all three venues did. */
             hasData?: boolean[];
         };
         /** @description Price × time estimated liquidation intensity */
@@ -6150,9 +6161,15 @@ export interface components {
             times?: string[];
             binance?: components["schemas"]["LiquidationHuntHeatmapGrid"];
             bybit?: components["schemas"]["LiquidationHuntHeatmapGrid"];
+            okx?: components["schemas"]["LiquidationHuntHeatmapGrid"];
             combined?: components["schemas"]["LiquidationHuntHeatmapGrid"];
             review?: components["schemas"]["LiquidationHuntHeatmapReview"];
-            /** @description Venues with no own price+OI in this window. Combined does not fill those cells from the other venue. */
+            /** @description Assumed share of open interest at each leverage. Weights sum to 1. Not a published book. */
+            leverageMix?: {
+                leverage?: number;
+                weight?: number;
+            }[];
+            /** @description Venues with no own price and open interest in this window. Combined does not fill those cells from another venue. */
             missingVenues?: string[];
             note?: string;
         };
@@ -6229,6 +6246,7 @@ export interface components {
             hotFrac?: number;
             binance?: components["schemas"]["LiquidationHuntHeatmapReviewVenue"];
             bybit?: components["schemas"]["LiquidationHuntHeatmapReviewVenue"];
+            okx?: components["schemas"]["LiquidationHuntHeatmapReviewVenue"];
             combined?: components["schemas"]["LiquidationHuntHeatmapReviewVenue"];
             note?: string;
         };
@@ -12651,7 +12669,7 @@ export interface operations {
                 symbol: string;
                 /** @description 12h | 24h | 3d | 7d | 14d | 30d | 90d */
                 range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d" | "90d";
-                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
+                /** @description binance | bybit | okx | all (default all = Binance, Bybit, OKX, and combined) */
                 exchange?: string;
             };
             header?: never;

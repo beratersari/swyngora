@@ -97,17 +97,19 @@ type HuntHeatmapReview struct {
 	HotFrac  float64                `json:"hotFrac"`
 	Binance  HuntHeatmapReviewVenue `json:"binance"`
 	Bybit    HuntHeatmapReviewVenue `json:"bybit"`
+	OKX      HuntHeatmapReviewVenue `json:"okx"`
 	Combined HuntHeatmapReviewVenue `json:"combined"`
 	Note     string                 `json:"note,omitempty"`
 }
 
-const huntHeatmapReviewNote = "Hot zones are contiguous bins at or above 60% of that column's peak, excluding the bin that already holds that venue's mark. Each signal lists the price area and whether later price hit it in 1h / 4h / 12h, how long that took, and how much later price and liquidation history was available. A signal is validated only when that venue's own later candles span the window and liquidation history covers the same-length windows before and after. Hit rate and liquidation-increase rate use only validated signals. Gaps are labeled (pending, price_gap, liq_gap) and are not filled from the other exchange. Combined uses the summed grid and counts a hit if either venue's own price reached the zone. Informational only — not financial advice."
+const huntHeatmapReviewNote = "Hot zones are contiguous bins at or above 60% of that column's peak, excluding the bin that already holds that venue's mark. Each signal lists the price area and whether later price hit it in 1h / 4h / 12h, how long that took, and how much later price and liquidation history was available. A signal is validated only when that venue's own later candles span the window and liquidation history covers the same-length windows before and after. Hit rate and liquidation-increase rate use only validated signals. Gaps are labeled (pending, price_gap, liq_gap) and are not filled from another venue. Combined uses the summed grid and counts a hit if any of Binance, Bybit, or OKX's own price reached the zone. Informational only — not financial advice."
 
 func emptyHuntHeatmapReview() HuntHeatmapReview {
 	return HuntHeatmapReview{
 		HotFrac:  HuntHeatmapHotFrac,
 		Binance:  emptyHuntReviewVenue("binance"),
 		Bybit:    emptyHuntReviewVenue("bybit"),
+		OKX:      emptyHuntReviewVenue("okx"),
 		Combined: emptyHuntReviewVenue("combined"),
 		Note:     huntHeatmapReviewNote,
 	}
@@ -136,13 +138,14 @@ func ReviewHuntHeatmap(rep HuntHeatmapReport, venues []HuntHeatmapVenueSeries, n
 	for _, v := range venues {
 		byEx[v.Exchange] = v
 	}
-	bin, byb := byEx[ExchangeBinance], byEx[ExchangeBybit]
+	bin, byb, okx := byEx[ExchangeBinance], byEx[ExchangeBybit], byEx[ExchangeOKX]
 	nBin := len(rep.Prices)
 	out.Binance = reviewHuntVenue("binance", rep.Binance, rep, now, [][]HuntHeatmapPricePoint{bin.Prices}, [][]LiquidationEvent{bin.Liquidations}, nBin)
 	out.Bybit = reviewHuntVenue("bybit", rep.Bybit, rep, now, [][]HuntHeatmapPricePoint{byb.Prices}, [][]LiquidationEvent{byb.Liquidations}, nBin)
+	out.OKX = reviewHuntVenue("okx", rep.OKX, rep, now, [][]HuntHeatmapPricePoint{okx.Prices}, [][]LiquidationEvent{okx.Liquidations}, nBin)
 	out.Combined = reviewHuntVenue("combined", rep.Combined, rep, now,
-		[][]HuntHeatmapPricePoint{bin.Prices, byb.Prices},
-		[][]LiquidationEvent{bin.Liquidations, byb.Liquidations},
+		[][]HuntHeatmapPricePoint{bin.Prices, byb.Prices, okx.Prices},
+		[][]LiquidationEvent{bin.Liquidations, byb.Liquidations, okx.Liquidations},
 		nBin,
 	)
 	return out

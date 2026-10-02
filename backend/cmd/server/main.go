@@ -316,6 +316,8 @@ func main() {
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,
 		domain.ExchangeOKX:     okxClient,
+	}).WithFuturesCandles(map[domain.Exchange]domain.FuturesCandlePort{
+		domain.ExchangeOKX: okxClient,
 	}).WithTakerBucketStore(futuresStore).WithBasis(map[domain.Exchange]domain.BasisPort{
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,

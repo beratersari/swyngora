@@ -8,8 +8,17 @@ export type LiqChartRange = '12h' | '24h';
 export type LiqHuntPanel = HuntPanel;
 
 export function parseLiqView(raw: string | null): LiqPageView {
-  if (raw === 'heatmap' || raw === 'chart' || raw === 'cascade' || raw === 'hunt' || raw === 'max-pain') return raw;
-  return 'overview';
+  if (
+    raw === 'overview' ||
+    raw === 'heatmap' ||
+    raw === 'chart' ||
+    raw === 'cascade' ||
+    raw === 'hunt' ||
+    raw === 'max-pain'
+  ) {
+    return raw;
+  }
+  return 'heatmap';
 }
 
 export function parseLiqHuntPanel(raw: string | null): LiqHuntPanel {

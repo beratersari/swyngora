@@ -203,10 +203,15 @@ vi.mock('@/libs/api', async (importOriginal) => {
 });
 
 describe('LiquidationsPage', () => {
-  it('renders overview cards and the coin map', async () => {
+  it('opens on the liquidation heatmap', async () => {
     renderWithProviders(<LiquidationsPage />, { routerEntries: ['/liquidations'] });
     expect(await screen.findByRole('heading', { name: /liquidations|likidasyonlar/i })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: /liquidation coin map|likidasyon coin/i })).toBeInTheDocument();
+    expect(screen.getByTestId('liquidation-heatmap')).toBeInTheDocument();
+  });
+
+  it('opens the overview tab from the URL', async () => {
+    renderWithProviders(<LiquidationsPage />, { routerEntries: ['/liquidations?view=overview'] });
+    expect(await screen.findByRole('group', { name: /liquidation coin map|likidasyon coin/i })).toBeInTheDocument();
     expect(screen.getAllByText(/total|toplam/i).length).toBeGreaterThan(0);
   });
 

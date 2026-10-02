@@ -1771,6 +1771,12 @@ func TestGetLiquidationHuntHeatmap_OK(t *testing.T) {
 	if len(body.Times) == 0 || len(body.Prices) == 0 {
 		t.Fatalf("missing axes times=%d prices=%d", len(body.Times), len(body.Prices))
 	}
+	if body.OKX.Exchange != "okx" || body.Review.OKX.Exchange != "okx" {
+		t.Fatalf("okx grid=%s review=%s", body.OKX.Exchange, body.Review.OKX.Exchange)
+	}
+	if len(body.LeverageMix) != len(domain.DefaultHuntLeverageMix) {
+		t.Fatalf("leverageMix=%d", len(body.LeverageMix))
+	}
 	if len(body.Review.Binance.Horizons) != 3 || body.Review.HotFrac <= 0 {
 		t.Fatalf("review %+v", body.Review)
 	}

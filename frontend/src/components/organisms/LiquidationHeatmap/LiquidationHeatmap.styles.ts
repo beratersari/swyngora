@@ -68,15 +68,16 @@ export const ScaleBar = styled.span<{ $tone: 'totals' | 'longs' | 'shorts' }>`
 export const MapFrame = styled.div`
   position: relative;
   width: 100%;
-  height: 360px;
-  min-height: 280px;
+  height: max(480px, calc(100dvh - 280px));
+  min-height: 480px;
   border: 1px solid ${({ theme }) => theme.semantic.border.default};
   border-radius: ${({ theme }) => theme.radii.md}px;
   background: #0b1220;
   overflow: hidden;
 
-  @media (min-width: 1100px) {
-    height: 440px;
+  @media (max-width: 720px) {
+    height: max(360px, calc(100dvh - 340px));
+    min-height: 360px;
   }
 `;
 

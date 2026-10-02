@@ -651,7 +651,7 @@ class LiquidationHeatmapInput(BaseModel):
     )
     exchange: str = Field(
         default="all",
-        description="binance|bybit|all (default all = both + combined)",
+        description="binance|bybit|okx|all (default all = three venues + combined)",
     )
 
 
@@ -5082,9 +5082,15 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "long/short are 30 days; older Binance columns are only rows "
                 "this process already stored. Bybit public open interest goes "
                 "back to listing and this archive keeps 90 days. OKX hourly "
-                "open interest is the latest 1,440 points. Combined sums a "
-                "column only when both venues have open interest. "
-                "Returns Binance, Bybit, and combined grids. Not financial advice."
+                "open interest is the latest 1,440 points. OKX prices are that "
+                "venue's USDT-swap candles. OKX long/short is an even split "
+                "when no account ratio is stored. A column with no stored "
+                "open interest uses that venue's public hourly history, "
+                "clamped to the documented lookback (OKX: the latest 1,440 "
+                "hours), and does not extend the archive. Combined sums a column "
+                "only when Binance, Bybit, and OKX all have open interest. "
+                "Returns Binance, Bybit, OKX, and combined grids plus the "
+                "leverage mix. Not financial advice."
             ),
             args_schema=LiquidationHeatmapInput,
         ),

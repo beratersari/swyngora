@@ -7,7 +7,9 @@ import { LIQ_HEATMAP_RANGES } from './LiquidationHeatmap.constants';
 import {
   buildLayout,
   drawHeatmap,
+  evenBlendVenueIds,
   formatHitRate,
+  formatLeverageMix,
   formatLiqNotional,
   formatLiqPrice,
   formatLiqTime,
@@ -124,6 +126,13 @@ export function LiquidationHeatmap({
 
   const coveragePct =
     grid && Number.isFinite(grid.coverage) ? Math.round((grid.coverage ?? 0) * 100) : null;
+  const mixLabel = formatLeverageMix(data?.leverageMix);
+  const missingLabel = (data?.missingVenues ?? [])
+    .map((id) => t(`liqHeatmap.venues.${id}`, { defaultValue: id }))
+    .join(', ');
+  const evenLabel = evenBlendVenueIds(data, venue)
+    .map((id) => t(`liqHeatmap.venues.${id}`))
+    .join(', ');
 
   return (
     <Panel data-testid="liquidation-heatmap">
@@ -136,6 +145,21 @@ export function LiquidationHeatmap({
       <Text variant="caption" color="secondary">
         {t('liqHeatmap.subtitle')}
       </Text>
+      {mixLabel ? (
+        <Text variant="caption" color="secondary" data-testid="liquidation-heatmap-mix">
+          {t('liqHeatmap.leverageMix', { mix: mixLabel })}
+        </Text>
+      ) : null}
+      {evenLabel ? (
+        <Text variant="caption" color="secondary" data-testid="liquidation-heatmap-even">
+          {t('liqHeatmap.evenBlend', { venues: evenLabel })}
+        </Text>
+      ) : null}
+      {missingLabel ? (
+        <Text variant="caption" color="secondary" data-testid="liquidation-heatmap-missing">
+          {t('liqHeatmap.missing', { venues: missingLabel })}
+        </Text>
+      ) : null}
       <ChipRow>
         <Text variant="caption" color="secondary">
           {t('liqHeatmap.range')}

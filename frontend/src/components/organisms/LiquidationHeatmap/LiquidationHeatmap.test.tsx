@@ -9,11 +9,36 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '@/test/render';
 import { LiquidationHeatmap } from './LiquidationHeatmap';
+import { evenBlendVenueIds, formatLeverageMix, pickGrid } from './LiquidationHeatmap.helpers';
 import type { LiquidationHeatmapData } from './LiquidationHeatmap.types';
 
 const data: LiquidationHeatmapData = {
   symbol: 'BTCUSDT',
   range: '24h',
+  leverageMix: [
+    { leverage: 5, weight: 0.15 },
+    { leverage: 10, weight: 0.25 },
+  ],
+  missingVenues: ['bybit'],
+  okx: {
+    exchange: 'okx',
+    accountBlend: 'even',
+    totals: [
+      [1, 0, 0],
+      [0, 2, 0],
+    ],
+    longs: [
+      [1, 0, 0],
+      [0, 0, 0],
+    ],
+    shorts: [
+      [0, 0, 0],
+      [0, 2, 0],
+    ],
+    maxIntensity: 2,
+    coverage: 1,
+    columnsWithOi: 2,
+  },
   prices: [110_000, 100_000, 90_000],
   times: ['2026-08-29T12:00:00Z', '2026-08-29T12:30:00Z'],
   combined: {
@@ -71,6 +96,16 @@ const data: LiquidationHeatmapData = {
   },
 };
 
+describe('liquidation heatmap helpers', () => {
+  it('keeps OKX off the combined grid and formats the leverage mix', () => {
+    expect(pickGrid(data, 'okx')?.exchange).toBe('okx');
+    expect(pickGrid(data, 'combined')?.exchange).toBe('combined');
+    expect(formatLeverageMix(data.leverageMix)).toBe('5× 15% · 10× 25%');
+    expect(evenBlendVenueIds(data, 'combined')).toEqual(['okx']);
+    expect(formatLeverageMix(undefined)).toBe('');
+  });
+});
+
 describe('LiquidationHeatmap', () => {
   it('renders range, venue, and side chips', async () => {
     const onRangeChange = vi.fn();
@@ -100,8 +135,14 @@ describe('LiquidationHeatmap', () => {
     expect(onRangeChange).toHaveBeenCalledWith('12h');
     await user.click(screen.getByRole('button', { name: '90d' }));
     expect(onRangeChange).toHaveBeenCalledWith('90d');
+    expect(screen.getByTestId('liquidation-heatmap-mix')).toHaveTextContent('5× 15%');
+    expect(screen.getByTestId('liquidation-heatmap-mix')).toHaveTextContent('10× 25%');
+    expect(screen.getByTestId('liquidation-heatmap-even')).toHaveTextContent('OKX');
+    expect(screen.getByTestId('liquidation-heatmap-missing')).toHaveTextContent('Bybit');
     await user.click(screen.getByRole('button', { name: 'Binance' }));
     expect(onVenueChange).toHaveBeenCalledWith('binance');
+    await user.click(screen.getByRole('button', { name: 'OKX' }));
+    expect(onVenueChange).toHaveBeenCalledWith('okx');
     await user.click(screen.getByRole('button', { name: 'Longs' }));
     expect(onSideChange).toHaveBeenCalledWith('longs');
   });

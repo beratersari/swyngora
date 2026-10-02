@@ -35,7 +35,29 @@ export function pickGrid(
   if (!data) return undefined;
   if (venue === 'binance') return data.binance;
   if (venue === 'bybit') return data.bybit;
+  if (venue === 'okx') return data.okx;
   return data.combined;
+}
+
+export function formatLeverageMix(
+  mix: { leverage?: number; weight?: number }[] | undefined,
+): string {
+  return (mix ?? [])
+    .filter((row) => (row.leverage ?? 0) > 0 && (row.weight ?? 0) > 0)
+    .map((row) => `${row.leverage}× ${Math.round((row.weight ?? 0) * 100)}%`)
+    .join(' · ');
+}
+
+export function evenBlendVenueIds(
+  data: LiquidationHeatmapData | undefined,
+  venue: LiqHeatVenue,
+): Array<'binance' | 'bybit' | 'okx'> {
+  const ids: Array<'binance' | 'bybit' | 'okx'> =
+    venue === 'combined' ? ['binance', 'bybit', 'okx'] : [venue];
+  return ids.filter((id) => {
+    const blend = data?.[id]?.accountBlend;
+    return blend === 'even' || blend === 'mixed';
+  });
 }
 
 export function pickReview(
@@ -46,6 +68,7 @@ export function pickReview(
   if (!review) return undefined;
   if (venue === 'binance') return review.binance;
   if (venue === 'bybit') return review.bybit;
+  if (venue === 'okx') return review.okx;
   return review.combined;
 }
 

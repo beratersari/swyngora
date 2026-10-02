@@ -54,6 +54,7 @@ type Service struct {
 	profile        domain.AssetProfilePort
 	oi             map[domain.Exchange]domain.OpenInterestPort
 	futVol         map[domain.Exchange]domain.FuturesVolumePort
+	futCandles     map[domain.Exchange]domain.FuturesCandlePort
 	funding        map[domain.Exchange]domain.FundingRatePort
 	futDepth       map[domain.Exchange]domain.FuturesDepthPort
 	prints         map[domain.Exchange]domain.RecentPrintPort
@@ -231,6 +232,28 @@ func (s *Service) WithTakerFlow(ports map[domain.Exchange]domain.TakerFlowPort) 
 	}
 	s.taker = cp
 	return s
+}
+
+// WithFuturesCandles attaches perpetual OHLC for venues that are not spot books.
+func (s *Service) WithFuturesCandles(ports map[domain.Exchange]domain.FuturesCandlePort) *Service {
+	if s == nil {
+		return s
+	}
+	cp := make(map[domain.Exchange]domain.FuturesCandlePort, len(ports))
+	for k, v := range ports {
+		if v != nil {
+			cp[k] = v
+		}
+	}
+	s.futCandles = cp
+	return s
+}
+
+func (s *Service) futuresCandle(ex domain.Exchange) domain.FuturesCandlePort {
+	if s == nil || s.futCandles == nil {
+		return nil
+	}
+	return s.futCandles[ex]
 }
 
 // WithBasis attaches Binance USD-M / Bybit linear basis ports.

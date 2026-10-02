@@ -2112,6 +2112,34 @@ func (h huntHeatFut) History(_ context.Context, q domain.FuturesHistoryQuery) (a
 	return []domain.FuturesSnapshot{}, nil
 }
 
+type huntCandles struct {
+	bars []domain.Candle
+}
+
+func (h huntCandles) GetFuturesCandles(context.Context, domain.CandleQuery) ([]domain.Candle, error) {
+	return h.bars, nil
+}
+
+type oiStub struct{}
+
+func (oiStub) GetOpenInterestSeries(context.Context, string) (*domain.OpenInterestSeries, error) {
+	return nil, domain.ErrNotFound
+}
+
+type huntOISeries struct {
+	points []domain.OpenInterestPoint
+}
+
+func (h huntOISeries) GetOpenInterestSeries(context.Context, string) (*domain.OpenInterestSeries, error) {
+	if len(h.points) == 0 {
+		return nil, domain.ErrNotFound
+	}
+	return &domain.OpenInterestSeries{
+		Current: h.points[len(h.points)-1],
+		History: h.points,
+	}, nil
+}
+
 func TestGetLiquidationHuntHeatmap_BinsAndVenues(t *testing.T) {
 	now := time.Now().UTC()
 	var candles []domain.Candle
@@ -2128,7 +2156,13 @@ func TestGetLiquidationHuntHeatmap_BinsAndVenues(t *testing.T) {
 	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
 		domain.ExchangeBinance: fm,
 		domain.ExchangeBybit:   fm,
-	}, &fakeSupply{})
+	}, &fakeSupply{}).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+		domain.ExchangeBinance: oiStub{},
+		domain.ExchangeBybit:   oiStub{},
+		domain.ExchangeOKX:     oiStub{},
+	}).WithFuturesCandles(map[domain.Exchange]domain.FuturesCandlePort{
+		domain.ExchangeOKX: huntCandles{bars: candles},
+	})
 	svc.SetFuturesHistory(huntHeatFut{oi: oi})
 	got, err := svc.GetLiquidationHuntHeatmap(context.Background(), "all", "BTCUSDT", "24h")
 	if err != nil {
@@ -2137,11 +2171,113 @@ func TestGetLiquidationHuntHeatmap_BinsAndVenues(t *testing.T) {
 	if got.Range != "24h" || len(got.Times) == 0 || len(got.Prices) != domain.HuntHeatmapPriceBins {
 		t.Fatalf("shape %+v", got)
 	}
-	if got.Binance.MaxIntensity <= 0 {
-		t.Fatalf("binance empty %+v", got.Binance)
+	if got.Binance.MaxIntensity <= 0 || got.OKX.MaxIntensity <= 0 {
+		t.Fatalf("binance=%v okx=%v", got.Binance.MaxIntensity, got.OKX.MaxIntensity)
+	}
+	if got.OKX.AccountBlend != "even" {
+		t.Fatalf("okx blend %s", got.OKX.AccountBlend)
+	}
+	if len(got.LeverageMix) != len(domain.DefaultHuntLeverageMix) {
+		t.Fatalf("mix %d", len(got.LeverageMix))
+	}
+	if len(got.MissingVenues) != 0 {
+		t.Fatalf("missing %+v", got.MissingVenues)
 	}
 	if got.Combined.MaxIntensity < got.Binance.MaxIntensity-1 {
 		t.Fatalf("combined %+v", got.Combined)
+	}
+}
+
+type huntOIHist struct {
+	hourly []domain.OpenInterestPoint
+	recent []domain.OpenInterestPoint
+}
+
+func (h huntOIHist) GetOpenInterestSeries(context.Context, string) (*domain.OpenInterestSeries, error) {
+	if len(h.recent) == 0 {
+		return nil, domain.ErrNotFound
+	}
+	return &domain.OpenInterestSeries{
+		Current: h.recent[len(h.recent)-1],
+		History: h.recent,
+	}, nil
+}
+
+func (h huntOIHist) ListOpenInterestHistory(_ context.Context, _ string, from, to time.Time) ([]domain.OpenInterestPoint, error) {
+	out := make([]domain.OpenInterestPoint, 0, len(h.hourly))
+	for _, pt := range h.hourly {
+		if pt.Time.Before(from) || pt.Time.After(to) {
+			continue
+		}
+		out = append(out, pt)
+	}
+	return out, nil
+}
+
+func TestGetLiquidationHuntHeatmap_FillsOpenInterestGapFromPublicHourly(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Minute)
+	var candles []domain.Candle
+	var hourly []domain.OpenInterestPoint
+	for i := 0; i < 100; i++ {
+		ts := now.Add(-time.Duration(100-i) * 15 * time.Minute)
+		candles = append(candles, domain.Candle{
+			CloseTime: ts, Close: "100000", High: "100100", Low: "99900",
+		})
+	}
+	for i := 0; i < 30; i++ {
+		hourly = append(hourly, domain.OpenInterestPoint{
+			Time: now.Add(-time.Duration(30-i) * time.Hour), Value: 2_000_000, Contracts: 20,
+		})
+	}
+	recent := []domain.OpenInterestPoint{{Time: now.Add(-10 * time.Minute), Value: 2_000_000, Contracts: 20}}
+	stored := []domain.FuturesSnapshot{
+		{Metric: domain.FuturesMetricOpenInterest, Exchange: domain.ExchangeOKX, SampledAt: now, Value: 2_000_000},
+	}
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+		domain.ExchangeOKX: huntOIHist{hourly: hourly, recent: recent},
+	}).WithFuturesCandles(map[domain.Exchange]domain.FuturesCandlePort{
+		domain.ExchangeOKX: huntCandles{bars: candles},
+	})
+	svc.SetFuturesHistory(huntHeatFut{oi: stored})
+	got, err := svc.GetLiquidationHuntHeatmap(context.Background(), "okx", "BTCUSDT", "24h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.OKX.ColumnsWithOI < 40 {
+		t.Fatalf("hourly history should cover the stored hole, cols=%d", got.OKX.ColumnsWithOI)
+	}
+}
+
+func TestGetLiquidationHuntHeatmap_FillsOpenInterestGapFromPublicSeries(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Minute)
+	var candles []domain.Candle
+	var publicOI []domain.OpenInterestPoint
+	for i := 0; i < 100; i++ {
+		ts := now.Add(-time.Duration(100-i) * 15 * time.Minute)
+		candles = append(candles, domain.Candle{
+			CloseTime: ts, Close: "100000", High: "100100", Low: "99900",
+		})
+		publicOI = append(publicOI, domain.OpenInterestPoint{Time: ts, Value: 2_000_000, Contracts: 20})
+	}
+	stored := []domain.FuturesSnapshot{
+		{Metric: domain.FuturesMetricOpenInterest, Exchange: domain.ExchangeOKX, SampledAt: now.Add(-15 * time.Minute), Value: 2_000_000},
+		{Metric: domain.FuturesMetricOpenInterest, Exchange: domain.ExchangeOKX, SampledAt: now, Value: 2_000_000},
+	}
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+		domain.ExchangeOKX: huntOISeries{points: publicOI},
+	}).WithFuturesCandles(map[domain.Exchange]domain.FuturesCandlePort{
+		domain.ExchangeOKX: huntCandles{bars: candles},
+	})
+	svc.SetFuturesHistory(huntHeatFut{oi: stored})
+	got, err := svc.GetLiquidationHuntHeatmap(context.Background(), "okx", "BTCUSDT", "24h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.OKX.ColumnsWithOI < 40 {
+		t.Fatalf("public series should cover the stored hole, cols=%d", got.OKX.ColumnsWithOI)
+	}
+	if got.OKX.AccountBlend != "even" {
+		t.Fatalf("blend %s", got.OKX.AccountBlend)
 	}
 }
 

@@ -968,26 +968,34 @@ type huntHeatmapGridDTO struct {
 	Coverage      float64     `json:"coverage"`
 	ColumnsWithOi int         `json:"columnsWithOi"`
 	LastPrice     float64     `json:"lastPrice,omitempty"`
+	AccountBlend  string      `json:"accountBlend,omitempty"`
 	HasData       []bool      `json:"hasData,omitempty"`
 }
 
+type huntLeverageBucketDTO struct {
+	Leverage float64 `json:"leverage"`
+	Weight   float64 `json:"weight"`
+}
+
 type huntHeatmapResponse struct {
-	Symbol        string               `json:"symbol"`
-	Range         string               `json:"range"`
-	From          time.Time            `json:"from"`
-	To            time.Time            `json:"to"`
-	StepSec       int                  `json:"stepSec"`
-	PriceMin      float64              `json:"priceMin"`
-	PriceMax      float64              `json:"priceMax"`
-	PriceStep     float64              `json:"priceStep"`
-	Prices        []float64            `json:"prices"`
-	Times         []time.Time          `json:"times"`
-	Binance       huntHeatmapGridDTO   `json:"binance"`
-	Bybit         huntHeatmapGridDTO   `json:"bybit"`
-	Combined      huntHeatmapGridDTO   `json:"combined"`
-	Review        huntHeatmapReviewDTO `json:"review"`
-	MissingVenues []string             `json:"missingVenues,omitempty"`
-	Note          string               `json:"note"`
+	Symbol        string                  `json:"symbol"`
+	Range         string                  `json:"range"`
+	From          time.Time               `json:"from"`
+	To            time.Time               `json:"to"`
+	StepSec       int                     `json:"stepSec"`
+	PriceMin      float64                 `json:"priceMin"`
+	PriceMax      float64                 `json:"priceMax"`
+	PriceStep     float64                 `json:"priceStep"`
+	Prices        []float64               `json:"prices"`
+	Times         []time.Time             `json:"times"`
+	Binance       huntHeatmapGridDTO      `json:"binance"`
+	Bybit         huntHeatmapGridDTO      `json:"bybit"`
+	OKX           huntHeatmapGridDTO      `json:"okx"`
+	Combined      huntHeatmapGridDTO      `json:"combined"`
+	Review        huntHeatmapReviewDTO    `json:"review"`
+	LeverageMix   []huntLeverageBucketDTO `json:"leverageMix,omitempty"`
+	MissingVenues []string                `json:"missingVenues,omitempty"`
+	Note          string                  `json:"note"`
 }
 
 type huntHeatmapReviewHorizonDTO struct {
@@ -1049,6 +1057,7 @@ type huntHeatmapReviewDTO struct {
 	HotFrac  float64                   `json:"hotFrac"`
 	Binance  huntHeatmapReviewVenueDTO `json:"binance"`
 	Bybit    huntHeatmapReviewVenueDTO `json:"bybit"`
+	OKX      huntHeatmapReviewVenueDTO `json:"okx"`
 	Combined huntHeatmapReviewVenueDTO `json:"combined"`
 	Note     string                    `json:"note"`
 }
@@ -1063,11 +1072,24 @@ func huntHeatmapToDTO(a *domain.HuntHeatmapReport) huntHeatmapResponse {
 		Prices: a.Prices, Times: a.Times,
 		Binance:       huntGridToDTO(a.Binance),
 		Bybit:         huntGridToDTO(a.Bybit),
+		OKX:           huntGridToDTO(a.OKX),
 		Combined:      huntGridToDTO(a.Combined),
 		Review:        huntReviewToDTO(a.Review),
+		LeverageMix:   huntLeverageMixToDTO(a.LeverageMix),
 		MissingVenues: a.MissingVenues,
 		Note:          a.Note,
 	}
+}
+
+func huntLeverageMixToDTO(mix []domain.HuntLeverageBucket) []huntLeverageBucketDTO {
+	if len(mix) == 0 {
+		return nil
+	}
+	out := make([]huntLeverageBucketDTO, len(mix))
+	for i, b := range mix {
+		out[i] = huntLeverageBucketDTO{Leverage: b.Leverage, Weight: b.Weight}
+	}
+	return out
 }
 
 func huntReviewToDTO(r domain.HuntHeatmapReview) huntHeatmapReviewDTO {
@@ -1075,6 +1097,7 @@ func huntReviewToDTO(r domain.HuntHeatmapReview) huntHeatmapReviewDTO {
 		HotFrac:  r.HotFrac,
 		Binance:  huntReviewVenueToDTO(r.Binance),
 		Bybit:    huntReviewVenueToDTO(r.Bybit),
+		OKX:      huntReviewVenueToDTO(r.OKX),
 		Combined: huntReviewVenueToDTO(r.Combined),
 		Note:     r.Note,
 	}
@@ -1118,6 +1141,6 @@ func huntGridToDTO(g domain.HuntHeatmapGrid) huntHeatmapGridDTO {
 	return huntHeatmapGridDTO{
 		Exchange: g.Exchange, Longs: g.Longs, Shorts: g.Shorts, Totals: g.Totals,
 		MaxIntensity: g.MaxIntensity, Coverage: g.Coverage, ColumnsWithOi: g.ColumnsWithOI,
-		LastPrice: g.LastPrice, HasData: g.HasData,
+		LastPrice: g.LastPrice, AccountBlend: g.AccountBlend, HasData: g.HasData,
 	}
 }

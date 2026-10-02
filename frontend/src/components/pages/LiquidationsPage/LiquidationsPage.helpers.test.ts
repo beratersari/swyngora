@@ -18,7 +18,8 @@ describe('LiquidationsPage helpers', () => {
     expect(parseLiqView('max-pain')).toBe('max-pain');
     expect(parseLiqHuntPanel('path')).toBe('path');
     expect(parseLiqHuntPanel(null)).toBe('compare');
-    expect(parseLiqView(null)).toBe('overview');
+    expect(parseLiqView(null)).toBe('heatmap');
+    expect(parseLiqView('overview')).toBe('overview');
     expect(parseLiqCascadeSymbol(null)).toBe('all');
     expect(parseLiqCascadeSymbol('eth')).toBe('ETHUSDT');
     expect(parseLiqChartSymbol('all')).toBe('all');

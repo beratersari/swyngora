@@ -86,6 +86,12 @@ type FuturesVolumePort interface {
 	ListFuturesVolumeBars(ctx context.Context, symbol string) ([]FuturesVolumeBar, error)
 }
 
+// FuturesCandlePort loads perpetual OHLC for a venue that is not a spot book.
+// OKX USDT-swap uses this so the liquidation heatmap can place bands on OKX's own price.
+type FuturesCandlePort interface {
+	GetFuturesCandles(ctx context.Context, q CandleQuery) ([]Candle, error)
+}
+
 // FundingRatePort loads the predicted next funding rate plus settled history.
 // Implemented by Binance USD-M and Bybit linear adapters.
 type FundingRatePort interface {

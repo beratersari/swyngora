@@ -329,7 +329,10 @@
   },
   "liqHeatmap": {
     "title": "Likidasyon ısı haritası",
-    "subtitle": "Tarihsel açık faiz, hunt kaldıraç karışımı ve gözlenen likidasyonlardan fiyat × zaman yoğunluğu. Binance ve Bybit ayrı; birleşik hücrelerin toplamıdır. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
+    "subtitle": "Fiyat ve zamana göre tahmini likidasyon yoğunluğu. Binance, Bybit ve OKX kendi fiyatını kullanır. Birleşik sütun yalnızca üçünün de açık pozisyonu varken dolar. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
+    "leverageMix": "Kaldıraç dağılımı: {{mix}}. Bu, açık pozisyonun nerede durabileceğine dair modeldir; yayımlanmış bir emir defteri değildir.",
+    "evenBlend": "{{venues}} long/short eşit bölünür; bu borsa için kayıtlı hesap oranı yok.",
+    "missing": "{{venues}} bu pencerede fiyat ve açık pozisyon taşımıyor. Birleşik harita o sütunları boş bırakır.",
     "range": "Aralık",
     "venue": "Borsa",
     "side": "Taraf",
@@ -373,7 +376,8 @@
     "venues": {
       "combined": "Birleşik",
       "binance": "Binance",
-      "bybit": "Bybit"
+      "bybit": "Bybit",
+      "okx": "OKX"
     },
     "sides": {
       "totals": "Tümü",
