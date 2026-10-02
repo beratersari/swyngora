@@ -1427,6 +1427,21 @@ func (c *APIClient) GetUnusual(ctx context.Context, exchange, symbol string) (js
 	return c.get(ctx, "/api/v1/market/unusual", q)
 }
 
+// ScanUnusual ranks liquid perpetuals whose stored readings stand out from their own history.
+func (c *APIClient) ScanUnusual(ctx context.Context, exchange, metric string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if metric != "" {
+		q.Set("metric", metric)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/unusual/scan", q)
+}
+
 // GetMarketLiquidity scores ±0.1 / ±0.5 / ±1% depth per venue and market-wide.
 func (c *APIClient) GetMarketLiquidity(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

@@ -85,6 +85,48 @@ func TestGetUnusualWiresStoredHistory(t *testing.T) {
 	}
 }
 
+func TestScanUnusualRanksStoredFunding(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	store, err := futuresstore.Open(filepath.Join(dir, "futures.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	now := time.Now().UTC()
+	last := now.Add(-8 * time.Hour).Truncate(time.Hour)
+	for i := 0; i < 25; i++ {
+		if _, err := store.InsertSnapshot(ctx, domain.FuturesSnapshot{
+			Metric: domain.FuturesMetricFunding, Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT",
+			SampledAt: last.Add(-time.Duration(24-i) * 8 * time.Hour), FundingRate: float64(i+1) / 100000,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	svc := New(nil, nil)
+	svc.SetFuturesHistory(&futureshist.Service{Store: store, TakerStore: store})
+	got, err := svc.ScanUnusual(ctx, "binance", "funding", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Metric != "funding" || got.Exchange != "binance" || got.Universe != 5 || got.Scanned != 5 {
+		t.Fatalf("%+v", got)
+	}
+	if len(got.Hits) != 1 || got.Hits[0].Symbol != "BTCUSDT" || got.Hits[0].Band != domain.UnusualBandExtremeHigh {
+		t.Fatalf("%+v", got.Hits)
+	}
+	if got.Quiet != 4 {
+		t.Fatalf("quiet %d", got.Quiet)
+	}
+}
+
+func TestScanUnusualRejectsPrintSize(t *testing.T) {
+	svc := New(nil, nil)
+	if _, err := svc.ScanUnusual(context.Background(), "all", "print_size", 5); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 func TestGetUnusualRejectsBadExchange(t *testing.T) {
 	svc := New(nil, nil)
 	if _, err := svc.GetUnusual(context.Background(), "coinbase", "BTCUSDT"); err == nil {

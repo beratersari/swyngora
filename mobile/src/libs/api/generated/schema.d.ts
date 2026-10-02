@@ -832,6 +832,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/derivatives-board": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Liquid perpetual board (price, funding, open interest, long/short, taker, liquidations)
+         * @description One table for the liquid USDT perpetuals (default 36, max 36, same
+         *     universe as the futures recorder). Each row has the mark price, the
+         *     predicted funding rate, open interest, the 1h and 24h open-interest
+         *     change, crowd long percent, the 1h taker buy share, and 24h long and
+         *     short liquidation notionals. `exchange=all` (default) reads Binance
+         *     USD-M, Bybit linear, and OKX USDT-swap. A combined number is present
+         *     only when every expected venue is fresh for that column. Crowd long is
+         *     the account long share, weighted by open interest when that open
+         *     interest is also fresh. Taker buy share sums the last hour of
+         *     aggressive buy and sell volume; an incomplete hour stays blank. A
+         *     missing or old venue is named on `coverage` and on that coin's
+         *     `venues` row, and is not counted as zero. `definite` is false when
+         *     any coin is incomplete. Informational only.
+         */
+        get: operations["getMarketDerivativesBoard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/options": {
         parameters: {
             query?: never;
@@ -1118,10 +1150,13 @@ export interface paths {
         /**
          * Long/short account ratio and recent history
          * @description Share of **accounts** that are long vs short on **Binance USD-M**
-         *     (`globalLongShortAccountRatio`) and **Bybit linear**
-         *     (`/v5/market/account-ratio`). On Binance only, also returns
-         *     `topAccounts` (top 20% of traders by margin, account count) and
-         *     `topPositions` (same traders, position size). `gap` is one signed
+         *     (`globalLongShortAccountRatio`), **Bybit linear**
+         *     (`/v5/market/account-ratio`), and **OKX USDT-swap**
+         *     (`/api/v5/rubik/stat/contracts/long-short-account-ratio-contract`).
+         *     On Binance, also returns `topAccounts` (top 20% of traders by margin,
+         *     account count) and `topPositions` (same traders, position size).
+         *     On OKX, `topAccounts` and `topPositions` are the top 5% of traders
+         *     by position value. `gap` is one signed
          *     value: top long% minus crowd long% in percentage points
          *     (e.g. top 65% long vs crowd 55% → `+10`). `gapWindows` (1h/4h/24h)
          *     and `gapMoves` say if that spread widened, narrowed, or flipped.
@@ -1153,9 +1188,12 @@ export interface paths {
         /**
          * Durable futures history
          * @description Stored open interest, funding, long/short, or liquidation rows for
-         *     Binance USD-M and Bybit linear. Written on a background interval and
-         *     (for liquidations) as events arrive. Duplicates are ignored. One venue
-         *     failing does not drop the other. Survives process restarts.
+         *     Binance USD-M, Bybit linear, and OKX USDT-swap. Written on a background
+         *     interval and (for liquidations) as events arrive. Duplicates are ignored.
+         *     One venue failing does not drop the other. Survives process restarts.
+         *     Items are newest first. Open interest rows carry contracts and value.
+         *     Funding rows carry rate, ratePct, and predicted. Liquidation rows carry
+         *     time, side, price, quantity, and notional.
          */
         get: operations["getMarketFuturesHistory"];
         put?: never;
@@ -1191,6 +1229,59 @@ export interface paths {
          *     Informational only — not financial advice.
          */
         get: operations["getMarketUnusual"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/unusual/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Which liquid coins are unusual versus their own stored history
+         * @description Scores the liquid USDT perpetuals, seeds first and capped at 36, with
+         *     the same per-venue rules as `/api/v1/market/unusual`. A row is kept
+         *     only when the band is high, low, extreme_high, or extreme_low.
+         *     Typical readings and readings with too few samples are left off.
+         *     Venues are not merged. Print size is not scanned. `distance` is how
+         *     far the percentile sits from 50, and the list is ranked by that.
+         *     `quiet` is how many scanned coins had no standout row. `skipped` is
+         *     how many coins the store could not read.
+         *     Informational only — not financial advice.
+         */
+        get: operations["scanMarketUnusual"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/history-span": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How long this coin has actually been recorded
+         * @description Oldest stored sample per venue for futures open interest, the spot
+         *     book, and flow-at-prices. A venue with no rows is omitted. The startup
+         *     archive backfills the liquid USDT perpetuals, up to 36 names with the
+         *     seed pairs first, and only as far as each public endpoint documents.
+         *     `spanSec` is from that oldest sample to now.
+         *     Informational only.
+         */
+        get: operations["getMarketHistorySpan"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2355,10 +2446,17 @@ export interface paths {
          *     columns older than the public 30 days are only hours this process
          *     already recorded. Observed liquidation prints in a column are the
          *     ones already stored; public REST refills about 7 days, not the whole 90.
-         *     Binance and Bybit are modeled
-         *     separately and each venue uses only its own candles (never the
-         *     other exchange's price). `combined` sums a column only when both
-         *     Binance and Bybit have open interest there.
+         *     Binance, Bybit, and OKX are modeled separately. Each venue uses
+         *     only its own price: Binance and Bybit use their candles, and OKX
+         *     uses its USDT-swap candles. They never borrow another venue's price.
+         *     Each venue uses its stored account ratio. A column with no stored
+         *     ratio, including OKX before the first sample, is an even split.
+         *     A column with no stored open interest uses that venue's public
+         *     hourly open-interest history, clamped to the documented lookback
+         *     (OKX: the latest 1,440 hours). That fill does not extend the archive.
+         *     `combined` sums a column only when Binance, Bybit, and OKX all have
+         *     their own price and open interest there. `leverageMix` is the
+         *     assumed share of open interest at each leverage.
          *     `review` scores whether later price reached the hot zones within
          *     1h / 4h / 12h, time-to-hit, hit rate / false signals, and whether
          *     observed liquidations in that zone rose. Not a live book and not
@@ -5634,6 +5732,100 @@ export interface components {
             venues?: components["schemas"]["MarketUnusualVenue"][];
             note?: string;
         };
+        /** @description One venue reading that is high or low versus that coin's own stored samples. */
+        MarketUnusualScanHit: {
+            symbol?: string;
+            base?: string;
+            /** @enum {string} */
+            exchange?: "binance" | "bybit" | "okx";
+            /** @enum {string} */
+            metric?: "funding" | "open_interest" | "liquidations" | "cvd" | "spread";
+            /** @enum {string} */
+            band?: "extreme_high" | "high" | "low" | "extreme_low";
+            percentile?: number;
+            /** @description Absolute distance of the percentile from 50. Larger means further from this coin's own typical. */
+            distance?: number;
+            current?: number;
+            median?: number;
+            samples?: number;
+            spanHours?: number;
+            /** @enum {string} */
+            unit?: "rate" | "pct_change" | "notional" | "signed_notional" | "spread_pct";
+            /** @enum {string} */
+            label?: "predicted" | "settled" | "24h_change" | "completed_hour" | "completed_day" | "latest_hour";
+            /** @description English sentence for the assistant. The product page uses its own copy. */
+            summary?: string;
+        };
+        /** @description Standout readings across the liquid perpetuals. Typical and unknown readings are omitted. */
+        MarketUnusualScan: {
+            exchange?: string;
+            metric?: string;
+            /** @description Coins the scan tried to score. */
+            universe?: number;
+            /** @description Coins that returned a per-venue report. */
+            scanned?: number;
+            /** @description Coins the store could not read. */
+            skipped?: number;
+            /** @description Scanned coins with no standout row. */
+            quiet?: number;
+            /** Format: date-time */
+            asOf?: string;
+            hits?: components["schemas"]["MarketUnusualScanHit"][];
+            note?: string;
+        };
+        HistorySpanSeries: {
+            /** @enum {string} */
+            kind?: "futures_oi" | "book" | "flow";
+            exchange?: string;
+            /** Format: date-time */
+            since?: string;
+            /** @description Seconds from the oldest stored sample to asOf */
+            spanSec?: number;
+        };
+        /** @description Stored futures rows for one metric. Newest first. Item fields depend on the metric. */
+        MarketFuturesHistory: {
+            /** @enum {string} */
+            metric?: "open_interest" | "funding" | "long_short" | "liquidations";
+            exchange?: string;
+            symbol?: string;
+            count?: number;
+            note?: string;
+            items?: components["schemas"]["MarketFuturesHistoryItem"][];
+        };
+        /** @description One stored sample or liquidation print. Unused fields are omitted. */
+        MarketFuturesHistoryItem: {
+            exchange?: string;
+            /** Format: date-time */
+            sampledAt?: string;
+            /** Format: date-time */
+            time?: string;
+            contracts?: string;
+            value?: string;
+            rate?: string;
+            ratePct?: string;
+            predicted?: boolean;
+            intervalHours?: number;
+            longPct?: string;
+            shortPct?: string;
+            ratio?: string;
+            bias?: string;
+            sizeLongPct?: string;
+            topAccLongPct?: string;
+            blend?: string;
+            /** @enum {string} */
+            side?: "long" | "short";
+            price?: string;
+            quantity?: string;
+            notional?: string;
+        };
+        /** @description How long stored samples for one coin actually cover */
+        HistorySpan: {
+            symbol?: string;
+            /** Format: date-time */
+            asOf?: string;
+            series?: components["schemas"]["HistorySpanSeries"][];
+            note?: string;
+        };
         MarketLiquidationCascadeHit: {
             symbol?: string;
             side?: string;
@@ -6016,12 +6208,17 @@ export interface components {
             shorts?: number[][];
             totals?: number[][];
             maxIntensity?: number;
-            /** @description Fraction of time columns with this venue's own price and open interest. Combined requires both venues. */
+            /** @description Fraction of time columns with this venue's own price and open interest. Combined requires Binance */
             coverage?: number;
             columnsWithOi?: number;
             /** @description That venue's own last print. Combined is omitted. */
             lastPrice?: number;
-            /** @description Per time column, whether this venue (or both, for combined) had own price+OI */
+            /**
+             * @description stored uses the venue account ratio. even is a 50/50 split because no ratio is stored. mixed means some columns had a ratio and some did not.
+             * @enum {string}
+             */
+            accountBlend?: "stored" | "even" | "mixed";
+            /** @description Per time column, whether this venue had its own price and open interest. Combined is true only when all three venues did. */
             hasData?: boolean[];
         };
         /** @description Price × time estimated liquidation intensity */
@@ -6042,9 +6239,15 @@ export interface components {
             times?: string[];
             binance?: components["schemas"]["LiquidationHuntHeatmapGrid"];
             bybit?: components["schemas"]["LiquidationHuntHeatmapGrid"];
+            okx?: components["schemas"]["LiquidationHuntHeatmapGrid"];
             combined?: components["schemas"]["LiquidationHuntHeatmapGrid"];
             review?: components["schemas"]["LiquidationHuntHeatmapReview"];
-            /** @description Venues with no own price+OI in this window. Combined does not fill those cells from the other venue. */
+            /** @description Assumed share of open interest at each leverage. Weights sum to 1. Not a published book. */
+            leverageMix?: {
+                leverage?: number;
+                weight?: number;
+            }[];
+            /** @description Venues with no own price and open interest in this window. Combined does not fill those cells from another venue. */
             missingVenues?: string[];
             note?: string;
         };
@@ -6121,6 +6324,7 @@ export interface components {
             hotFrac?: number;
             binance?: components["schemas"]["LiquidationHuntHeatmapReviewVenue"];
             bybit?: components["schemas"]["LiquidationHuntHeatmapReviewVenue"];
+            okx?: components["schemas"]["LiquidationHuntHeatmapReviewVenue"];
             combined?: components["schemas"]["LiquidationHuntHeatmapReviewVenue"];
             note?: string;
         };
@@ -7245,6 +7449,70 @@ export interface components {
             missing?: string[];
             stale?: string[];
         };
+        /** @description Liquid USDT perpetual board. Combined fields are omitted when that column is not definite. */
+        MarketDerivativesBoard: {
+            exchange?: string;
+            universe?: number;
+            /** Format: date-time */
+            asOf?: string;
+            coins?: components["schemas"]["MarketDerivativesCoin"][];
+            coverage?: components["schemas"]["MarketVenueCoverage"];
+            definite?: boolean;
+            summary?: string;
+            note?: string;
+        };
+        MarketDerivativesCoin: {
+            symbol?: string;
+            base?: string;
+            price?: string;
+            priceExchange?: string;
+            fundingRate?: string;
+            fundingRatePct?: string;
+            /** @description long | short | none */
+            fundingPayer?: string;
+            /** @description oi | equal */
+            fundingWeight?: string;
+            fundingDefinite?: boolean;
+            openInterest?: string;
+            openInterestDefinite?: boolean;
+            change1h?: string;
+            change1hPct?: string;
+            change1hDefinite?: boolean;
+            change24h?: string;
+            change24hPct?: string;
+            change24hDefinite?: boolean;
+            liqLong?: string;
+            liqShort?: string;
+            liqDefinite?: boolean;
+            /** @description Account long percent. Omitted unless every expected venue is fresh. */
+            longPct?: string;
+            longDefinite?: boolean;
+            /** @description Aggressive buy share over the last hour, in percent. Omitted unless every expected venue's hour is complete. */
+            takerBuyPct?: string;
+            takerDefinite?: boolean;
+            venues?: components["schemas"]["MarketDerivativesVenue"][];
+            coverage?: components["schemas"]["MarketVenueCoverage"];
+        };
+        MarketDerivativesVenue: {
+            exchange?: string;
+            oiValue?: string;
+            /** @description fresh | stale | missing */
+            oiStatus?: string;
+            fundingRate?: string;
+            fundingRatePct?: string;
+            fundingPayer?: string;
+            fundingStatus?: string;
+            markPrice?: string;
+            liqLong?: string;
+            liqShort?: string;
+            liqStatus?: string;
+            longPct?: string;
+            /** @description fresh | stale | missing */
+            longStatus?: string;
+            takerBuyPct?: string;
+            /** @description fresh | stale | missing */
+            takerStatus?: string;
+        };
         /** @description Print-count ratio summed across liquid pairs */
         MarketOrderCountOverview: {
             exchange?: string;
@@ -7644,7 +7912,7 @@ export interface components {
             gapMoves?: components["schemas"]["LongShortGapMove"][];
             divergence?: components["schemas"]["LongShortPriceDivergence"];
         };
-        /** @description Account long/short ratio plus Binance top-trader layers, crowd-vs-top gap, and recent 5m history */
+        /** @description Account long/short ratio on Binance, Bybit, and OKX, plus top-trader layers where that venue publishes them, crowd-vs-top gap, and recent 5m history */
         MarketLongShortRatio: {
             symbol?: string;
             exchange?: string;
@@ -10715,6 +10983,33 @@ export interface operations {
             502: components["responses"]["Error"];
         };
     };
+    getMarketDerivativesBoard: {
+        parameters: {
+            query?: {
+                /** @description binance | bybit | okx | all (default all) */
+                exchange?: string;
+                /** @description How many liquid perpetuals to include (default 36, min 5, max 36) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ranked perpetual board */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketDerivativesBoard"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
     getMarketOptions: {
         parameters: {
             query?: {
@@ -11206,7 +11501,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["MarketFuturesHistory"];
                 };
             };
             400: components["responses"]["Error"];
@@ -11232,6 +11527,56 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketUnusual"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    scanMarketUnusual: {
+        parameters: {
+            query?: {
+                exchange?: "binance" | "bybit" | "okx" | "all";
+                metric?: "all" | "funding" | "open_interest" | "liquidations" | "cvd" | "spread";
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Standout readings, farthest from typical first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketUnusualScan"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketHistorySpan: {
+        parameters: {
+            query: {
+                symbol: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recording span per stored series */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistorySpan"];
                 };
             };
             400: components["responses"]["Error"];
@@ -12440,7 +12785,7 @@ export interface operations {
                 symbol: string;
                 /** @description 12h | 24h | 3d | 7d | 14d | 30d | 90d */
                 range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d" | "90d";
-                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
+                /** @description binance | bybit | okx | all (default all = Binance, Bybit, OKX, and combined) */
                 exchange?: string;
             };
             header?: never;

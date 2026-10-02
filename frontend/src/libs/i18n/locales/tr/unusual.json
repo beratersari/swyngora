@@ -1,0 +1,41 @@
+{
+  "title": "Olağandışı",
+  "subtitle": "Fonlaması, açık faizi, likidasyonları, CVD'si veya spreadi kendi kayıtlı örneklerine göre yüksek ya da düşük olan likit USDT perpetual'lar.",
+  "exchange": "Borsalar",
+  "allVenues": "Tüm borsalar",
+  "metric": "Seri",
+  "allMetrics": "Tüm seriler",
+  "metrics": {
+    "funding": "Fonlama",
+    "open_interest": "Açık faiz",
+    "liquidations": "Likidasyonlar",
+    "cvd": "CVD",
+    "spread": "Spread"
+  },
+  "limit": "Coin",
+  "coin": "Coin",
+  "venue": "Borsa",
+  "band": "Kendi geçmişine göre",
+  "bands": {
+    "extreme_high": "Aşırı yüksek",
+    "high": "Yüksek",
+    "low": "Düşük",
+    "extreme_low": "Aşırı düşük"
+  },
+  "percentile": "Yüzdelik",
+  "value": "Şimdi",
+  "samples": "Kayıtlı örnek",
+  "sampleCount": "{{count}} örnek, {{span}}",
+  "span": {
+    "hour": "{{count}} saat",
+    "hours": "{{count}} saat",
+    "days": "{{count}} gün",
+    "underHour": "bir saatten kısa"
+  },
+  "counts": "{{scanned}} coin tarandı. {{standouts}} tanesi öne çıkıyor. {{quiet}} tanesi olağan ya da henüz yeterince örneği yok.",
+  "skipped": "{{count}} coin okunamadı.",
+  "empty": "Bu listedeki hiçbir okuma kendi olağan aralığının dışında değil.",
+  "note": "Her satır bir borsadır. Olağan okumalar listede yoktur. Kayıtlı örneği az olan coin de listede yoktur.",
+  "loadFailed": "Olağandışı tarama yüklenemedi",
+  "resource": "olağandışı tarama"
+}

@@ -2066,6 +2066,52 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/unusual/scan:
+    get:
+      summary: Which liquid coins are unusual versus their own stored history
+      description: |
+        Scores the liquid USDT perpetuals, seeds first and capped at 36, with
+        the same per-venue rules as `/api/v1/market/unusual`. A row is kept
+        only when the band is high, low, extreme_high, or extreme_low.
+        Typical readings and readings with too few samples are left off.
+        Venues are not merged. Print size is not scanned. `distance` is how
+        far the percentile sits from 50, and the list is ranked by that.
+        `quiet` is how many scanned coins had no standout row. `skipped` is
+        how many coins the store could not read.
+        Informational only — not financial advice.
+      operationId: scanMarketUnusual
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          schema:
+            type: string
+            default: all
+            enum: [binance, bybit, okx, all]
+        - name: metric
+          in: query
+          schema:
+            type: string
+            default: all
+            enum: [all, funding, open_interest, liquidations, cvd, spread]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 5
+            maximum: 36
+            default: 36
+      responses:
+        '200':
+          description: Standout readings, farthest from typical first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketUnusualScan'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/history-span:
     get:
       summary: How long this coin has actually been recorded
@@ -9726,6 +9772,49 @@ components:
         venues:
           type: array
           items: { $ref: '#/components/schemas/MarketUnusualVenue' }
+        note: { type: string }
+    MarketUnusualScanHit:
+      type: object
+      description: One venue reading that is high or low versus that coin's own stored samples.
+      properties:
+        symbol: { type: string }
+        base: { type: string }
+        exchange: { type: string, enum: [binance, bybit, okx] }
+        metric:
+          type: string
+          enum: [funding, open_interest, liquidations, cvd, spread]
+        band:
+          type: string
+          enum: [extreme_high, high, low, extreme_low]
+        percentile: { type: number }
+        distance:
+          type: number
+          description: Absolute distance of the percentile from 50. Larger means further from this coin's own typical.
+        current: { type: number }
+        median: { type: number }
+        samples: { type: integer }
+        spanHours: { type: number }
+        unit:
+          type: string
+          enum: [rate, pct_change, notional, signed_notional, spread_pct]
+        label:
+          type: string
+          enum: [predicted, settled, 24h_change, completed_hour, completed_day, latest_hour]
+        summary: { type: string, description: English sentence for the assistant. The product page uses its own copy. }
+    MarketUnusualScan:
+      type: object
+      description: Standout readings across the liquid perpetuals. Typical and unknown readings are omitted.
+      properties:
+        exchange: { type: string }
+        metric: { type: string }
+        universe: { type: integer, description: Coins the scan tried to score. }
+        scanned: { type: integer, description: Coins that returned a per-venue report. }
+        skipped: { type: integer, description: Coins the store could not read. }
+        quiet: { type: integer, description: Scanned coins with no standout row. }
+        asOf: { type: string, format: date-time }
+        hits:
+          type: array
+          items: { $ref: '#/components/schemas/MarketUnusualScanHit' }
         note: { type: string }
     HistorySpanSeries:
       type: object

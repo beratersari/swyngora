@@ -116,6 +116,50 @@ func TestGetUnusual_ScoresFunding(t *testing.T) {
 	}
 }
 
+func TestScanUnusual_ScoresFunding(t *testing.T) {
+	svc := market.New(stubMarket{}, stubSupply{})
+	svc.SetFuturesHistory(stubUnusualHist{})
+	h := NewMarketHandler(svc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/unusual/scan?exchange=binance&metric=funding&limit=5", nil)
+	rr := httptest.NewRecorder()
+	h.ScanUnusual(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body domain.UnusualScan
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Metric != "funding" || body.Universe != 5 || len(body.Hits) == 0 {
+		t.Fatalf("%+v", body)
+	}
+	for _, hit := range body.Hits {
+		if hit.Metric != domain.UnusualMetricFunding || hit.Band != domain.UnusualBandExtremeHigh || hit.Exchange != "binance" {
+			t.Fatalf("%+v", hit)
+		}
+	}
+}
+
+func TestScanUnusual_RejectsPrintSize(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/unusual/scan?metric=print_size", nil)
+	rr := httptest.NewRecorder()
+	h.ScanUnusual(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestScanUnusual_RejectsBadLimit(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/unusual/scan?limit=nope", nil)
+	rr := httptest.NewRecorder()
+	h.ScanUnusual(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func readingByMetric(t *testing.T, venue domain.UnusualVenue, metric string) domain.UnusualReading {
 	t.Helper()
 	for _, r := range venue.Readings {

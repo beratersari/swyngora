@@ -13,6 +13,7 @@ describe('App shell navigation', () => {
     const links = screen.getAllByRole('link');
     expect(links.some((a) => a.getAttribute('href') === '/markets')).toBe(true);
     expect(links.some((a) => a.getAttribute('href') === '/derivatives')).toBe(true);
+    expect(links.some((a) => a.getAttribute('href') === '/unusual')).toBe(true);
     expect(links.some((a) => a.getAttribute('href') === '/watchlist')).toBe(true);
     expect(links.some((a) => a.getAttribute('href') === '/liquidations')).toBe(true);
     expect(links.some((a) => a.getAttribute('href') === '/options')).toBe(true);

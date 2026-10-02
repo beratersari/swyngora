@@ -1,0 +1,41 @@
+{
+  "title": "Unusual",
+  "subtitle": "Liquid USDT perpetuals whose funding, open interest, liquidations, CVD, or spread is high or low versus that coin's own stored samples.",
+  "exchange": "Venues",
+  "allVenues": "All venues",
+  "metric": "Series",
+  "allMetrics": "All series",
+  "metrics": {
+    "funding": "Funding",
+    "open_interest": "Open interest",
+    "liquidations": "Liquidations",
+    "cvd": "CVD",
+    "spread": "Spread"
+  },
+  "limit": "Coins",
+  "coin": "Coin",
+  "venue": "Venue",
+  "band": "Versus its past",
+  "bands": {
+    "extreme_high": "Extremely high",
+    "high": "High",
+    "low": "Low",
+    "extreme_low": "Extremely low"
+  },
+  "percentile": "Percentile",
+  "value": "Now",
+  "samples": "Stored samples",
+  "sampleCount": "{{count}} over {{span}}",
+  "span": {
+    "hour": "{{count}} hour",
+    "hours": "{{count}} hours",
+    "days": "{{count}} days",
+    "underHour": "under an hour"
+  },
+  "counts": "{{scanned}} coins scored. {{standouts}} stand out. {{quiet}} are typical or still short of samples.",
+  "skipped": "{{count}} coins could not be read.",
+  "empty": "Nothing in this list is outside its own usual range.",
+  "note": "Each row is one venue. Typical readings are left off. A coin with too few stored samples stays off this list.",
+  "loadFailed": "Could not load the unusual scan",
+  "resource": "unusual scan"
+}

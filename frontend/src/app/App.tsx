@@ -23,6 +23,7 @@ import { useDeskPriceTape } from '@/libs/hooks';
 const NAV_ITEMS = [
   { to: '/markets', key: 'nav.markets' as const },
   { to: '/derivatives', key: 'nav.derivatives' as const },
+  { to: '/unusual', key: 'nav.unusual' as const },
   { to: '/heatmap', key: 'nav.heatmap' as const },
   { to: '/watchlist', key: 'nav.watchlist' as const },
   { to: '/liquidations', key: 'nav.liquidations' as const },

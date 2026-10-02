@@ -1237,6 +1237,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/unusual/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Which liquid coins are unusual versus their own stored history
+         * @description Scores the liquid USDT perpetuals, seeds first and capped at 36, with
+         *     the same per-venue rules as `/api/v1/market/unusual`. A row is kept
+         *     only when the band is high, low, extreme_high, or extreme_low.
+         *     Typical readings and readings with too few samples are left off.
+         *     Venues are not merged. Print size is not scanned. `distance` is how
+         *     far the percentile sits from 50, and the list is ranked by that.
+         *     `quiet` is how many scanned coins had no standout row. `skipped` is
+         *     how many coins the store could not read.
+         *     Informational only — not financial advice.
+         */
+        get: operations["scanMarketUnusual"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/history-span": {
         parameters: {
             query?: never;
@@ -5702,6 +5730,47 @@ export interface components {
             /** Format: date-time */
             asOf?: string;
             venues?: components["schemas"]["MarketUnusualVenue"][];
+            note?: string;
+        };
+        /** @description One venue reading that is high or low versus that coin's own stored samples. */
+        MarketUnusualScanHit: {
+            symbol?: string;
+            base?: string;
+            /** @enum {string} */
+            exchange?: "binance" | "bybit" | "okx";
+            /** @enum {string} */
+            metric?: "funding" | "open_interest" | "liquidations" | "cvd" | "spread";
+            /** @enum {string} */
+            band?: "extreme_high" | "high" | "low" | "extreme_low";
+            percentile?: number;
+            /** @description Absolute distance of the percentile from 50. Larger means further from this coin's own typical. */
+            distance?: number;
+            current?: number;
+            median?: number;
+            samples?: number;
+            spanHours?: number;
+            /** @enum {string} */
+            unit?: "rate" | "pct_change" | "notional" | "signed_notional" | "spread_pct";
+            /** @enum {string} */
+            label?: "predicted" | "settled" | "24h_change" | "completed_hour" | "completed_day" | "latest_hour";
+            /** @description English sentence for the assistant. The product page uses its own copy. */
+            summary?: string;
+        };
+        /** @description Standout readings across the liquid perpetuals. Typical and unknown readings are omitted. */
+        MarketUnusualScan: {
+            exchange?: string;
+            metric?: string;
+            /** @description Coins the scan tried to score. */
+            universe?: number;
+            /** @description Coins that returned a per-venue report. */
+            scanned?: number;
+            /** @description Coins the store could not read. */
+            skipped?: number;
+            /** @description Scanned coins with no standout row. */
+            quiet?: number;
+            /** Format: date-time */
+            asOf?: string;
+            hits?: components["schemas"]["MarketUnusualScanHit"][];
             note?: string;
         };
         HistorySpanSeries: {
@@ -11458,6 +11527,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketUnusual"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    scanMarketUnusual: {
+        parameters: {
+            query?: {
+                exchange?: "binance" | "bybit" | "okx" | "all";
+                metric?: "all" | "funding" | "open_interest" | "liquidations" | "cvd" | "spread";
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Standout readings, farthest from typical first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketUnusualScan"];
                 };
             };
             400: components["responses"]["Error"];

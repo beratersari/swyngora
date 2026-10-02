@@ -41,6 +41,7 @@ BOOK_FLOW_ANALYTICS = frozenset(
         "get_futures_history",
         "get_history_span",
         "get_unusual_context",
+        "scan_unusual",
         "estimate_liquidation_hunt",
         "get_liquidation_heatmap",
         "get_liquidation_overview",

@@ -1129,6 +1129,18 @@ class UnusualInput(BaseModel):
     )
 
 
+class UnusualScanInput(BaseModel):
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|okx|all (default all, venues stay separate)",
+    )
+    metric: str = Field(
+        default="all",
+        description="all|funding|open_interest|liquidations|cvd|spread",
+    )
+    limit: int = Field(default=36, ge=5, le=36, description="Liquid names to score")
+
+
 class LongShortInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -2845,6 +2857,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         return http.get(
             "/api/v1/market/unusual",
             {"symbol": symbol, "exchange": exchange},
+        )
+
+    def scan_unusual(exchange: str = "all", metric: str = "all", limit: int = 36) -> str:
+        return http.get(
+            "/api/v1/market/unusual/scan",
+            {"exchange": exchange, "metric": metric, "limit": limit},
         )
 
     def get_long_short_ratio(symbol: str, exchange: str = "all", limit: int = 24) -> str:
@@ -5609,6 +5627,20 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "samples stay unknown. Informational only, not advice."
             ),
             args_schema=UnusualInput,
+        ),
+        StructuredTool.from_function(
+            scan_unusual,
+            name="scan_unusual",
+            description=(
+                "Ranks the liquid USDT perpetuals, up to 36 with the seed "
+                "pairs first, whose funding, 24h open-interest change, last "
+                "completed liquidation hour, last completed CVD day, or "
+                "latest hour of average spread is high or low versus that "
+                "coin's own stored samples. Typical readings and readings "
+                "with too few samples are left off. Venues stay separate. "
+                "Print size is not scanned. Informational only, not advice."
+            ),
+            args_schema=UnusualScanInput,
         ),
         StructuredTool.from_function(
             get_market_liquidity,

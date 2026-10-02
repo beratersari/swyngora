@@ -71,6 +71,7 @@ type DataPort interface {
 	GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error)
 	GetHistorySpan(ctx context.Context, symbol string) (json.RawMessage, error)
 	GetUnusual(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
+	ScanUnusual(ctx context.Context, exchange, metric string, limit int) (json.RawMessage, error)
 	GetLiquidationHunt(ctx context.Context, exchange, symbol string, weights domain.HuntScoreWeights) (json.RawMessage, error)
 	GetLiquidationHuntHeatmap(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error)
 	GetLiquidationMaxPain(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -1157,6 +1158,19 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetUnusual(ctx, req.GetString("exchange", "all"), symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("scan_unusual",
+		mcp.WithDescription("Ranks the liquid USDT perpetuals, up to 36 with the seed pairs first, whose funding, latest 24h open-interest change, last completed liquidation hour, last completed CVD day, or latest hour of average spread is high or low versus that coin's own stored samples. Typical readings and readings with too few samples are left off. Venues stay separate and are not merged. Print size is not scanned. metric filters one series. Informational only — not financial advice."),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all)")),
+		mcp.WithString("metric", mcp.Description("all | funding | open_interest | liquidations | cvd | spread (default all)")),
+		mcp.WithNumber("limit", mcp.Description("How many liquid names to score, 5 to 36. Default 36.")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.ScanUnusual(ctx, req.GetString("exchange", "all"), req.GetString("metric", "all"), int(req.GetFloat("limit", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

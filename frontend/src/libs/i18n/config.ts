@@ -10,6 +10,7 @@ export const I18N_NAMESPACES = [
   'common',
   'markets',
   'derivatives',
+  'unusual',
   'detail',
   'watchlist',
   'pumps',

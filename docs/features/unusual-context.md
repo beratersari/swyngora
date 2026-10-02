@@ -37,6 +37,14 @@ Fewer samples than the minimum stay `unknown` with reason `few_samples`. No usab
 
 The coin Tape tab shows this card above the rest of the tape. Informational only — not financial advice.
 
+## Market scan
+
+`GET /api/v1/market/unusual/scan?exchange=binance|bybit|okx|all&metric=all|funding|open_interest|liquidations|cvd|spread&limit=36`
+
+The scan scores the same liquid USDT list as the derivatives board: the seed pairs first, then the highest-volume names, capped at 36. It uses the same per-venue rules as the coin read. A row is kept only when the band is high, low, extremely high, or extremely low. Typical readings and readings with too few samples are left off. `quiet` is how many scanned coins had no such row. `distance` is how far the percentile sits from 50, and the list is ranked by that. Venues stay separate. Print size is not a scan metric.
+
+The page is `/unusual`. A row opens that coin's Tape tab. An OKX row opens the Binance tape, because OKX is not a spot page. The response is cached for about 45 seconds. Informational only — not financial advice.
+
 The shorter “versus typical” reads stay as they are: spread widen on the order book, liquidation cascade bursts, volume surge, options moves, and print size versus the prior 15 minutes.
 
 ## Honesty limits
@@ -57,9 +65,10 @@ The shorter “versus typical” reads stay as they are: spread widen on the ord
 | Futures SQL | `backend/internal/adapter/futuresstore/unusual.go` |
 | Book SQL | `backend/internal/adapter/bookhiststore/unusual.go` |
 | Service | `backend/internal/service/market/unusual.go` |
-| HTTP | `GET /api/v1/market/unusual` |
-| MCP / AI | `get_unusual_context` |
+| HTTP | `GET /api/v1/market/unusual` and `GET /api/v1/market/unusual/scan` |
+| MCP / AI | `get_unusual_context`, `scan_unusual` |
 | Tape card | `frontend/src/components/organisms/UnusualContext/` |
+| Market page | `frontend/src/components/pages/UnusualPage` |
 
 ## How to test
 
@@ -69,7 +78,7 @@ cd backend && go test ./internal/adapter/futuresstore/ -count=1 -run Unusual
 cd backend && go test ./internal/adapter/bookhiststore/ -count=1 -run HourlySpread
 cd backend && go test ./internal/service/market/ -count=1 -run Unusual
 cd backend && go test ./internal/transport/http/handler/ -count=1 -run GetUnusual
-cd frontend && npx vitest run src/components/organisms/UnusualContext
+cd frontend && npx vitest run src/components/organisms/UnusualContext src/components/organisms/UnusualScanBoard src/components/pages/UnusualPage
 ```
 
 ## Known limitations
@@ -78,3 +87,5 @@ cd frontend && npx vitest run src/components/organisms/UnusualContext
 - A venue that has been recorded for only a few days stays unknown.
 - OKX spread stays unknown because this product does not keep an OKX spot book.
 - OKX CVD appears only when taker bars were stored for that venue.
+- The market scan does not invent a combined percentile. One coin can appear once per venue and series.
+- Coins outside the liquid 36 are not on `/unusual`. Open the coin tape for those.

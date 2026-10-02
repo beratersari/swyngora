@@ -24,7 +24,10 @@ func (s *Service) GetUnusual(ctx context.Context, exchange, symbol string) (*dom
 	if err != nil {
 		return nil, err
 	}
-	now := time.Now().UTC()
+	return s.unusualReport(ctx, ex, sym, time.Now().UTC())
+}
+
+func (s *Service) unusualReport(ctx context.Context, ex, sym string, now time.Time) (*domain.UnusualReport, error) {
 	venues := domain.FuturesVenues()
 	if ex != "all" {
 		venues = []domain.Exchange{domain.Exchange(ex)}

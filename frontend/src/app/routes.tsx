@@ -11,6 +11,7 @@ import { LiquidationsPage } from '@/components/pages/LiquidationsPage';
 import { OptionsPage } from '@/components/pages/OptionsPage';
 import { MarketsPage } from '@/components/pages/MarketsPage';
 import { DerivativesPage } from '@/components/pages/DerivativesPage';
+import { UnusualPage } from '@/components/pages/UnusualPage';
 import { PortfolioPage } from '@/components/pages/PortfolioPage';
 import { PumpsPage } from '@/components/pages/PumpsPage';
 import { SurgesPage } from '@/components/pages/SurgesPage';
@@ -30,6 +31,7 @@ export function AppRoutes() {
       <Route path="/" element={<Navigate to="/markets" replace />} />
       <Route path="/markets" element={<MarketsPage />} />
       <Route path="/derivatives" element={<DerivativesPage />} />
+      <Route path="/unusual" element={<UnusualPage />} />
       <Route path="/markets/:exchange/:symbol" element={<CoinDetailPage />} />
       <Route path="/watchlist" element={<WatchlistPage />} />
       <Route path="/liquidations" element={<LiquidationsPage />} />

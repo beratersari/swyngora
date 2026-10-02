@@ -2240,6 +2240,17 @@ func (b *Backend) GetUnusual(ctx context.Context, exchange, symbol string) (json
 	return mustJSON(got)
 }
 
+func (b *Backend) ScanUnusual(ctx context.Context, exchange, metric string, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.ScanUnusual(ctx, exchange, metric, limit)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func futuresHistoryMap(metric, exchange, symbol string, raw any) map[string]any {
 	metric, _ = domain.ParseFuturesMetric(metric)
 	exchange, _ = domain.ParseOpenInterestExchange(exchange)
