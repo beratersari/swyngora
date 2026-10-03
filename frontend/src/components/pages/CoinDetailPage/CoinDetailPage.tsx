@@ -15,9 +15,13 @@ import {
   FUTURES_PANE_LIMIT,
   futuresPaneColor,
   recordedParts,
+  liqHeatCells,
+  liqHeatNotes,
   liquidationNotionalByCandle,
   liquidationProfile,
   openInterestLines,
+  type LiqHeatSide,
+  type LiqHeatVenue,
 } from './chartDesk';
 import type {
   CandleChartLowerSeries,
@@ -32,6 +36,11 @@ import { HolderPanel } from '@/components/organisms/HolderPanel';
 import { PostDelistPanel } from '@/components/organisms/PostDelistPanel';
 import { TapePanel } from '@/components/organisms/TapePanel';
 import { UnusualContext, UNUSUAL_POLL_MS } from '@/components/organisms/UnusualContext';
+import {
+  DEFAULT_LIQ_HEATMAP_RANGE,
+  LIQ_HEATMAP_POLL_MS,
+} from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.constants';
+import type { LiqHeatRange } from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.types';
 import { PERP_LIQUIDITY_LIMIT } from '@/components/organisms/PerpLiquidityOverview';
 import { IndicatorPanel, emaColor } from '@/components/organisms/IndicatorPanel';
 import { BookGapsCard } from '@/components/organisms/BookGapsCard';
@@ -69,6 +78,7 @@ import {
   useGetMarketFlowAtPricesQuery,
   useGetMarketUnusualQuery,
   useGetMarketLiquidationLevelsQuery,
+  useGetMarketLiquidationHuntHeatmapQuery,
   useGetMarketVolumeShareQuery,
   useGetMarketPerpDepthOverviewQuery,
   useGetMarketParticipationQuery,
@@ -224,7 +234,11 @@ export function CoinDetailPage() {
   const [showOi, setShowOi] = useState(true);
   const [showFunding, setShowFunding] = useState(true);
   const [showLiqNotional, setShowLiqNotional] = useState(true);
-  const [footWindow, setFootWindow] = useState<'5m' | '15m' | '1h' | '4h' | '1d' | '3d' | '7d'>('1h');
+  const [showLiqMap, setShowLiqMap] = useState(true);
+  const [liqMapRange, setLiqMapRange] = useState<LiqHeatRange>(DEFAULT_LIQ_HEATMAP_RANGE);
+  const [liqMapVenue, setLiqMapVenue] = useState<LiqHeatVenue>('combined');
+  const [liqMapSide, setLiqMapSide] = useState<LiqHeatSide>('totals');
+  const [footWindow, setFootWindow] = useState<'5m' | '15m' | '1h' | '4h' | '1d' | '3d' | '7d' | '30d'>('1h');
   /** Guards against applying history pages after exchange/symbol/interval change. */
   const historyRequestIdRef = useRef(0);
 
@@ -485,6 +499,14 @@ export function CoinDetailPage() {
   const historySpanQuery = useGetMarketHistorySpanQuery(
     { symbol: perpSymbol },
     { skip: skipTape, refetchOnFocus: true },
+  );
+  const liqMapQuery = useGetMarketLiquidationHuntHeatmapQuery(
+    { symbol: perpSymbol, range: liqMapRange, exchange: 'all' },
+    {
+      skip: skipTape || !showLiqMap || urlState.tab !== 'overview',
+      pollingInterval: visible && showLiqMap && urlState.tab === 'overview' ? LIQ_HEATMAP_POLL_MS : 0,
+      refetchOnFocus: true,
+    },
   );
   const liqLevelsQuery = useGetMarketLiquidationLevelsQuery(
     { symbol: perpSymbol, exchange: 'all', range: '24h' },
@@ -1010,6 +1032,24 @@ export function CoinDetailPage() {
     () => (isEquity || !showLiqLevels ? [] : liquidationProfile(rtkCurrent(liqLevelsQuery))),
     [isEquity, showLiqLevels, liqLevelsQuery],
   );
+  const chartLiqHeat = useMemo(
+    () =>
+      isEquity || !showLiqMap
+        ? []
+        : liqHeatCells(rtkCurrent(liqMapQuery), liqMapVenue, liqMapSide),
+    [isEquity, showLiqMap, liqMapQuery, liqMapVenue, liqMapSide],
+  );
+  const liqMapNote = useMemo(
+    () => (isEquity || !showLiqMap ? null : liqHeatNotes(rtkCurrent(liqMapQuery), liqMapVenue)),
+    [isEquity, showLiqMap, liqMapQuery, liqMapVenue],
+  );
+  const liqMapNeedsPan = useMemo(() => {
+    const firstBar = chartData[0]?.time;
+    if (firstBar == null || chartLiqHeat.length === 0) return false;
+    let earliest = chartLiqHeat[0]?.time ?? firstBar;
+    for (const cell of chartLiqHeat) earliest = Math.min(earliest, cell.time);
+    return earliest + 60 < firstBar;
+  }, [chartData, chartLiqHeat]);
   const onVisibleSpan = useCallback((from: number, to: number) => {
     const next = footprintWindow(to - from);
     setFootWindow((prev) => (prev === next ? prev : next));
@@ -1312,6 +1352,14 @@ export function CoinDetailPage() {
           onShowFundingChange={isEquity ? undefined : setShowFunding}
           showLiqNotional={showLiqNotional}
           onShowLiqNotionalChange={isEquity ? undefined : setShowLiqNotional}
+          showLiqMap={showLiqMap}
+          onShowLiqMapChange={isEquity ? undefined : setShowLiqMap}
+          liqMapRange={liqMapRange}
+          onLiqMapRangeChange={isEquity ? undefined : setLiqMapRange}
+          liqMapVenue={liqMapVenue}
+          onLiqMapVenueChange={isEquity ? undefined : setLiqMapVenue}
+          liqMapSide={liqMapSide}
+          onLiqMapSideChange={isEquity ? undefined : setLiqMapSide}
           onRefresh={refreshAll}
           isFetching={
             seriesFetching ||
@@ -1320,7 +1368,8 @@ export function CoinDetailPage() {
             (showSignalMarkers && scannerResultsQuery.isFetching) ||
             (showOi && oiHistQuery.isFetching) ||
             (showFunding && fundingHistQuery.isFetching) ||
-            (showLiqNotional && liqHistQuery.isFetching)
+            (showLiqNotional && liqHistQuery.isFetching) ||
+            (showLiqMap && liqMapQuery.isFetching)
           }
         />
 
@@ -1374,7 +1423,8 @@ export function CoinDetailPage() {
               showCrowd ||
               showOi ||
               showFunding ||
-              showLiqNotional) ? (
+              showLiqNotional ||
+              showLiqMap) ? (
               <Text variant="caption" color="secondary">
                 {t('detail:chart.tapeHint')}
               </Text>
@@ -1382,6 +1432,41 @@ export function CoinDetailPage() {
             {!isEquity && recordedLine ? (
               <Text variant="caption" color="secondary" data-testid="chart-recorded">
                 {recordedLine}
+              </Text>
+            ) : null}
+            {!isEquity && showLiqMap && liqMapNote?.mix ? (
+              <Text variant="caption" color="secondary" data-testid="chart-liq-mix">
+                {t('detail:liqHeatmap.leverageMix', { mix: liqMapNote.mix })}
+              </Text>
+            ) : null}
+            {!isEquity && showLiqMap && liqMapNote && liqMapNote.evenVenues.length > 0 ? (
+              <Text variant="caption" color="secondary" data-testid="chart-liq-even">
+                {t('detail:liqHeatmap.evenBlend', {
+                  venues: liqMapNote.evenVenues
+                    .map((id) => t(`detail:liqHeatmap.venues.${id}`))
+                    .join(', '),
+                })}
+              </Text>
+            ) : null}
+            {!isEquity && showLiqMap && liqMapNote && liqMapNote.missingVenues.length > 0 ? (
+              <Text variant="caption" color="secondary" data-testid="chart-liq-missing">
+                {t('detail:liqHeatmap.missing', {
+                  venues: liqMapNote.missingVenues
+                    .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
+                    .join(', '),
+                })}
+              </Text>
+            ) : null}
+            {!isEquity && showLiqMap && liqMapNeedsPan ? (
+              <Text variant="caption" color="secondary" data-testid="chart-liq-pan">
+                {t('detail:chart.liqMapPan')}
+              </Text>
+            ) : null}
+            {!isEquity && showLiqMap && liqMapQuery.isError ? (
+              <Text variant="caption" color="secondary">
+                {rtkErrorMessage(liqMapQuery.error, {
+                  resource: t('detail:resource.liqHeatmap'),
+                })}
               </Text>
             ) : null}
             <CandleChartHost
@@ -1392,6 +1477,7 @@ export function CoinDetailPage() {
               bookHeat={chartBookHeat}
               footprint={chartFootprint}
               liqProfile={chartLiqProfile}
+              liqHeat={chartLiqHeat}
               onVisibleSpan={isEquity ? undefined : onVisibleSpan}
               rightPadding={!isEquity && (showFootprint || showLiqLevels) ? 16 : undefined}
               markers={chartMarkers}

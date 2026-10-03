@@ -2,12 +2,24 @@ import type {
   CandleChartFootprintLevel,
   CandleChartHeatColumn,
   CandleChartLiqBar,
+  CandleChartLiqCell,
   CandleChartLowerSeries,
 } from '@/components/molecules/CandleChartHost';
+import {
+  cellValue,
+  evenBlendVenueIds,
+  formatLeverageMix,
+  heatColor,
+  intensityFromNotional,
+  pickGrid,
+  pickMatrix,
+} from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.helpers';
+import type { LiqHeatSide, LiqHeatVenue } from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.types';
 import type { ChartLinePoint } from '@/libs/utils';
 import type {
   FlowAtPricesReport,
   HistorySpan,
+  LiquidationHuntHeatmap,
   MarketLiquidationLevels,
   MarketLongShortRatio,
   OrderBookHeatmap,
@@ -106,6 +118,87 @@ export function footprintLevels(report: FlowAtPricesReport | undefined): CandleC
     out.push({ price, buy, sell });
   }
   return out.sort((a, b) => a.price - b.price);
+}
+
+export type { LiqHeatSide, LiqHeatVenue };
+
+export type LiqHeatNotes = {
+  mix: string;
+  evenVenues: Array<'binance' | 'bybit' | 'okx'>;
+  missingVenues: string[];
+};
+
+function columnStepSec(times: string[] | undefined, stepSec: number | undefined): number {
+  if (stepSec != null && stepSec > 0) return stepSec;
+  const a = unixSeconds(times?.[0]);
+  const b = unixSeconds(times?.[1]);
+  if (a != null && b != null && b > a) return b - a;
+  return 60;
+}
+
+function priceHalfStep(prices: number[] | undefined, priceStep: number | undefined): number {
+  if (priceStep != null && priceStep > 0) return priceStep / 2;
+  const a = prices?.[0];
+  const b = prices?.[1];
+  if (a != null && b != null && a !== b) return Math.abs(a - b) / 2;
+  return 0;
+}
+
+/**
+ * Paint cells for the liquidation heatmap behind the candles.
+ * A combined column with hasData false is left empty. Zero cells are skipped
+ * so the chart background stays clear outside the hot zones.
+ */
+export function liqHeatCells(
+  data: LiquidationHuntHeatmap | undefined,
+  venue: LiqHeatVenue,
+  side: LiqHeatSide,
+): CandleChartLiqCell[] {
+  const prices = data?.prices ?? [];
+  const times = data?.times ?? [];
+  if (prices.length === 0 || times.length === 0) return [];
+  const grid = pickGrid(data, venue);
+  const matrix = pickMatrix(grid, side);
+  let peak = grid?.maxIntensity ?? 0;
+  if (!(peak > 0)) {
+    for (const col of matrix) {
+      for (const value of col ?? []) peak = Math.max(peak, value);
+    }
+  }
+  if (!(peak > 0)) return [];
+  const half = priceHalfStep(prices, data?.priceStep);
+  const stepSec = columnStepSec(times, data?.stepSec);
+  const out: CandleChartLiqCell[] = [];
+  for (let i = 0; i < times.length; i += 1) {
+    if (grid?.hasData?.[i] === false) continue;
+    const time = unixSeconds(times[i]);
+    if (time == null) continue;
+    for (let j = 0; j < prices.length; j += 1) {
+      const notional = cellValue(matrix, i, j);
+      const price = prices[j] ?? 0;
+      if (notional <= 0 || !Number.isFinite(price) || price <= 0) continue;
+      out.push({
+        time,
+        stepSec,
+        priceHi: price + half,
+        priceLo: Math.max(0, price - half),
+        color: heatColor(intensityFromNotional(notional, peak), side),
+      });
+    }
+  }
+  return out;
+}
+
+/** Leverage mix, even-split venues, and venues missing from this window. */
+export function liqHeatNotes(
+  data: LiquidationHuntHeatmap | undefined,
+  venue: LiqHeatVenue,
+): LiqHeatNotes {
+  return {
+    mix: formatLeverageMix(data?.leverageMix),
+    evenVenues: evenBlendVenueIds(data, venue),
+    missingVenues: (data?.missingVenues ?? []).filter((id) => id.length > 0),
+  };
 }
 
 /** Larger estimated pockets, kept next to the dashed liquidation lines. */

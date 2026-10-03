@@ -13,12 +13,14 @@ import type {
   CandleChartFootprintLevel,
   CandleChartHeatColumn,
   CandleChartLiqBar,
+  CandleChartLiqCell,
 } from './CandleChartHost.types';
 
 export type DeskOverlayModel = {
   bookHeat: CandleChartHeatColumn[];
   footprint: CandleChartFootprintLevel[];
   liqProfile: CandleChartLiqBar[];
+  liqHeat: CandleChartLiqCell[];
 };
 
 type MediaTarget = {
@@ -30,7 +32,40 @@ type MediaTarget = {
   ) => void;
 };
 
-const EMPTY: DeskOverlayModel = { bookHeat: [], footprint: [], liqProfile: [] };
+const EMPTY: DeskOverlayModel = { bookHeat: [], footprint: [], liqProfile: [], liqHeat: [] };
+
+const LIQ_HEAT_ALPHA = 0.72;
+
+type TimeScaleX = {
+  timeToCoordinate: (time: Time) => number | null;
+  getVisibleRange: () => { from: Time; to: Time } | null;
+};
+
+type SpanX = { from: number; xFrom: number; pxPerSec: number };
+
+/** Pixels per second across the candles currently on screen. */
+function visibleSpan(scale: TimeScaleX): SpanX | null {
+  const range = scale.getVisibleRange();
+  if (!range || typeof range.from !== 'number' || typeof range.to !== 'number' || range.to === range.from) {
+    return null;
+  }
+  const xFrom = scale.timeToCoordinate(range.from);
+  const xTo = scale.timeToCoordinate(range.to);
+  if (xFrom == null || xTo == null) return null;
+  return { from: range.from, xFrom, pxPerSec: (xTo - xFrom) / (range.to - range.from) };
+}
+
+/**
+ * Map a unix second onto the candle scale.
+ * Exact candle opens use the scale. Other times, including heatmap columns,
+ * use the visible span so a 30-minute column still sits on 1-hour candles.
+ */
+function timeToX(scale: TimeScaleX, sec: number, span: SpanX | null): number | null {
+  const exact = scale.timeToCoordinate(sec as Time);
+  if (exact != null) return exact;
+  if (!span) return null;
+  return span.xFrom + (sec - span.from) * span.pxPerSec;
+}
 
 function heatAlpha(notional: number, max: number): number {
   if (max <= 0 || notional <= 0) return 0;
@@ -48,8 +83,33 @@ class HeatRenderer implements IPrimitivePaneRenderer {
     const chart = this.chart();
     const series = this.series();
     const cols = this.model().bookHeat;
-    if (!chart || !series || cols.length === 0) return;
-    target.useMediaCoordinateSpace(({ context }) => {
+    const cells = this.model().liqHeat;
+    if (!chart || !series || (cols.length === 0 && cells.length === 0)) return;
+    target.useMediaCoordinateSpace(({ context, mediaSize }) => {
+      if (cells.length > 0) {
+        const span = visibleSpan(chart.timeScale());
+        const scale = chart.timeScale();
+        context.save();
+        context.globalAlpha = LIQ_HEAT_ALPHA;
+        for (const cell of cells) {
+          const x1 = timeToX(scale, cell.time, span);
+          const x2 = timeToX(scale, cell.time + cell.stepSec, span);
+          if (x1 == null || x2 == null) continue;
+          const left = Math.min(x1, x2);
+          const width = Math.max(1, Math.abs(x2 - x1));
+          if (left > mediaSize.width || left + width < 0) continue;
+          const yTop = series.priceToCoordinate(cell.priceHi);
+          const yBot = series.priceToCoordinate(cell.priceLo);
+          if (yTop == null || yBot == null) continue;
+          const top = Math.min(yTop, yBot);
+          const height = Math.max(1, Math.abs(yBot - yTop));
+          if (top > mediaSize.height || top + height < 0) continue;
+          context.fillStyle = cell.color;
+          context.fillRect(left, top, width, height);
+        }
+        context.restore();
+      }
+      if (cols.length === 0) return;
       let max = 0;
       for (const col of cols) {
         for (const lv of col.bids) max = Math.max(max, lv.notional);

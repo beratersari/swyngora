@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { heatColor } from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.helpers';
 import {
   bookHeatColumns,
   crowdTopLines,
@@ -6,6 +7,8 @@ import {
   footprintLevels,
   footprintWindow,
   formatRecordedSpan,
+  liqHeatCells,
+  liqHeatNotes,
   recordedParts,
   fundingRateLines,
   futuresRecorded,
@@ -48,6 +51,46 @@ describe('chart desk mappers', () => {
       },
     });
     expect(levels).toEqual([{ price: 100, buy: 8, sell: 2 }]);
+  });
+
+  it('paints heatmap cells and skips an empty combined column', () => {
+    const cells = liqHeatCells(
+      {
+        stepSec: 1800,
+        priceStep: 10,
+        prices: [110, 100],
+        times: ['2026-09-29T12:00:00Z', '2026-09-29T12:30:00Z'],
+        combined: {
+          totals: [
+            [0, 8],
+            [5, 5],
+          ],
+          maxIntensity: 8,
+          hasData: [true, false],
+        },
+      },
+      'combined',
+      'totals',
+    );
+    expect(cells).toHaveLength(1);
+    expect(cells[0]).toMatchObject({
+      time: Date.parse('2026-09-29T12:00:00Z') / 1000,
+      stepSec: 1800,
+      priceHi: 105,
+      priceLo: 95,
+    });
+    expect(cells[0]?.color).toBe(heatColor(1, 'totals'));
+    const notes = liqHeatNotes(
+      {
+        leverageMix: [{ leverage: 10, weight: 0.25 }],
+        missingVenues: ['okx'],
+        okx: { accountBlend: 'even' },
+      },
+      'combined',
+    );
+    expect(notes.mix).toBe('10× 25%');
+    expect(notes.missingVenues).toEqual(['okx']);
+    expect(notes.evenVenues).toEqual(['okx']);
   });
 
   it('keeps the largest liquidation pockets on each side', () => {

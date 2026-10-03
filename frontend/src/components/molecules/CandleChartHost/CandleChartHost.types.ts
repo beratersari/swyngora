@@ -44,6 +44,18 @@ export type CandleChartLiqBar = {
   side: 'long' | 'short';
 };
 
+/**
+ * One estimated-liquidation cell drawn behind the candles.
+ * Time is the column start in unix seconds. The band is the price bin.
+ */
+export type CandleChartLiqCell = {
+  time: number;
+  stepSec: number;
+  priceHi: number;
+  priceLo: number;
+  color: string;
+};
+
 /** Horizontal price on the candle scale (estimated liquidation levels). */
 export type CandleChartPriceLine = {
   id: string;
@@ -75,6 +87,8 @@ export type CandleChartHostProps = WithLoadingProps & {
   footprint?: CandleChartFootprintLevel[];
   /** Estimated liquidation pockets, drawn beside the footprint. */
   liqProfile?: CandleChartLiqBar[];
+  /** Price × time liquidation intensity drawn behind the candles. */
+  liqHeat?: CandleChartLiqCell[];
   /** Visible candle span in unix seconds, so the footprint window can follow the pan. */
   onVisibleSpan?: (fromSec: number, toSec: number) => void;
   /** Optional event markers (e.g. pump scanner hits) */

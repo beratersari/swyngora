@@ -4,6 +4,7 @@ export type {
   CandleChartHeatColumn,
   CandleChartHostProps,
   CandleChartLiqBar,
+  CandleChartLiqCell,
   CandleChartLowerSeries,
   CandleChartMarker,
   CandleChartOverlay,

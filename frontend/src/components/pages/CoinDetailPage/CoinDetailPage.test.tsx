@@ -90,8 +90,12 @@ vi.mock('./CoinStructureTab', () => ({
 }));
 
 vi.mock('@/components/molecules/CandleChartHost', () => ({
-  CandleChartHost: (props: { data: unknown[] }) => (
-    <div data-testid="candle-chart" data-count={String((props.data ?? []).length)} />
+  CandleChartHost: (props: { data: unknown[]; liqHeat?: unknown[] }) => (
+    <div
+      data-testid="candle-chart"
+      data-count={String((props.data ?? []).length)}
+      data-liq={String(props.liqHeat?.length ?? 0)}
+    />
   ),
 }));
 vi.mock('@/components/molecules/IndicatorChartHost', () => ({
@@ -251,6 +255,10 @@ describe('CoinDetailPage', () => {
         range: '24h',
         prices: [110_000, 100_000],
         times: ['2026-08-29T12:00:00Z', '2026-08-29T12:30:00Z'],
+        priceStep: 10_000,
+        stepSec: 1800,
+        leverageMix: [{ leverage: 10, weight: 0.25 }],
+        missingVenues: ['okx'],
         combined: {
           exchange: 'combined',
           totals: [
@@ -266,6 +274,10 @@ describe('CoinDetailPage', () => {
         range: '24h',
         prices: [110_000, 100_000],
         times: ['2026-08-29T12:00:00Z', '2026-08-29T12:30:00Z'],
+        priceStep: 10_000,
+        stepSec: 1800,
+        leverageMix: [{ leverage: 10, weight: 0.25 }],
+        missingVenues: ['okx'],
         combined: {
           exchange: 'combined',
           totals: [
@@ -289,7 +301,10 @@ describe('CoinDetailPage', () => {
     expect(await screen.findByText('BTC/USDT')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Holders' })).toBeInTheDocument();
-    expect(screen.getByTestId('candle-chart')).toBeInTheDocument();
+    expect(screen.getByTestId('candle-chart')).toHaveAttribute('data-liq', '4');
+    expect(screen.getByTestId('chart-liq-mix')).toHaveTextContent(/10× 25%/);
+    expect(screen.getByTestId('chart-liq-missing')).toHaveTextContent(/OKX/);
+    expect(screen.getByRole('switch', { name: /liq map/i })).toBeChecked();
     expect(screen.getByTestId('chart-recorded')).toHaveTextContent(/binance 1h/i);
     expect(screen.queryByTestId('order-book')).not.toBeInTheDocument();
   });

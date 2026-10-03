@@ -40,4 +40,13 @@ export type DetailChartToolbarProps = {
   /** Short liquidation notional minus long liquidation notional in each candle. */
   showLiqNotional?: boolean;
   onShowLiqNotionalChange?: (show: boolean) => void;
+  /** Price × time liquidation intensity behind the candles. */
+  showLiqMap?: boolean;
+  onShowLiqMapChange?: (show: boolean) => void;
+  liqMapRange?: '12h' | '24h' | '3d' | '7d' | '14d' | '30d' | '90d';
+  onLiqMapRangeChange?: (range: '12h' | '24h' | '3d' | '7d' | '14d' | '30d' | '90d') => void;
+  liqMapVenue?: 'combined' | 'binance' | 'bybit' | 'okx';
+  onLiqMapVenueChange?: (venue: 'combined' | 'binance' | 'bybit' | 'okx') => void;
+  liqMapSide?: 'totals' | 'longs' | 'shorts';
+  onLiqMapSideChange?: (side: 'totals' | 'longs' | 'shorts') => void;
 };

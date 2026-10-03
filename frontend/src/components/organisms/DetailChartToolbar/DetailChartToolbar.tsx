@@ -3,9 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
 import { IntervalRail } from '@/components/molecules/IntervalRail';
+import { LIQ_HEATMAP_RANGES } from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.constants';
 import { DETAIL_PUMP_THRESHOLD_OPTIONS } from '@/config/constants';
 import { Field, InlineField, ToolbarRow } from './DetailChartToolbar.styles';
 import type { DetailChartToolbarProps } from './DetailChartToolbar.types';
+
+const LIQ_MAP_VENUES = ['combined', 'binance', 'bybit', 'okx'] as const;
+const LIQ_MAP_SIDES = ['totals', 'longs', 'shorts'] as const;
 
 export function DetailChartToolbar({
   intervals,
@@ -38,6 +42,14 @@ export function DetailChartToolbar({
   onShowFundingChange,
   showLiqNotional = true,
   onShowLiqNotionalChange,
+  showLiqMap = true,
+  onShowLiqMapChange,
+  liqMapRange = '24h',
+  onLiqMapRangeChange,
+  liqMapVenue = 'combined',
+  onLiqMapVenueChange,
+  liqMapSide = 'totals',
+  onLiqMapSideChange,
 }: DetailChartToolbarProps) {
   const { t } = useTranslation(['detail', 'common']);
 
@@ -231,6 +243,77 @@ export function DetailChartToolbar({
             aria-label={t('detail:chart.liqNotional')}
           />
         </InlineField>
+      ) : null}
+
+      {onShowLiqMapChange ? (
+        <InlineField>
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.liqMap')}
+          </Text>
+          <Switch
+            size="small"
+            checked={showLiqMap}
+            onChange={onShowLiqMapChange}
+            aria-label={t('detail:chart.liqMap')}
+          />
+        </InlineField>
+      ) : null}
+
+      {onShowLiqMapChange && showLiqMap && onLiqMapRangeChange ? (
+        <Field $compact>
+          <Text variant="caption" color="secondary">
+            {t('detail:liqHeatmap.range')}
+          </Text>
+          <Select
+            size="small"
+            value={liqMapRange}
+            options={LIQ_HEATMAP_RANGES.map((range) => ({
+              value: range,
+              label: t(`detail:liqHeatmap.ranges.${range}`),
+            }))}
+            onChange={onLiqMapRangeChange}
+            style={{ minWidth: 88 }}
+            aria-label={t('detail:liqHeatmap.range')}
+          />
+        </Field>
+      ) : null}
+
+      {onShowLiqMapChange && showLiqMap && onLiqMapVenueChange ? (
+        <Field $compact>
+          <Text variant="caption" color="secondary">
+            {t('detail:liqHeatmap.venue')}
+          </Text>
+          <Select
+            size="small"
+            value={liqMapVenue}
+            options={LIQ_MAP_VENUES.map((venue) => ({
+              value: venue,
+              label: t(`detail:liqHeatmap.venues.${venue}`),
+            }))}
+            onChange={onLiqMapVenueChange}
+            style={{ minWidth: 110 }}
+            aria-label={t('detail:liqHeatmap.venue')}
+          />
+        </Field>
+      ) : null}
+
+      {onShowLiqMapChange && showLiqMap && onLiqMapSideChange ? (
+        <Field $compact>
+          <Text variant="caption" color="secondary">
+            {t('detail:liqHeatmap.side')}
+          </Text>
+          <Select
+            size="small"
+            value={liqMapSide}
+            options={LIQ_MAP_SIDES.map((side) => ({
+              value: side,
+              label: t(`detail:liqHeatmap.sides.${side}`),
+            }))}
+            onChange={onLiqMapSideChange}
+            style={{ minWidth: 96 }}
+            aria-label={t('detail:liqHeatmap.side')}
+          />
+        </Field>
       ) : null}
 
       {onRefresh ? (

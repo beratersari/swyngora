@@ -119,4 +119,28 @@ describe('DetailChartToolbar', () => {
     expect(onFunding.mock.calls[0]?.[0]).toBe(false);
     expect(onLiq.mock.calls[0]?.[0]).toBe(false);
   });
+
+  it('toggles the liquidation map and keeps the range control', async () => {
+    const user = userEvent.setup();
+    const onMap = vi.fn();
+    const onRange = vi.fn();
+    renderWithTheme(
+      <DetailChartToolbar
+        intervals={['1h']}
+        interval="1h"
+        onIntervalChange={() => undefined}
+        showLiqMap
+        onShowLiqMapChange={onMap}
+        liqMapRange="24h"
+        onLiqMapRangeChange={onRange}
+        liqMapVenue="combined"
+        onLiqMapVenueChange={() => undefined}
+        liqMapSide="totals"
+        onLiqMapSideChange={() => undefined}
+      />,
+    );
+    expect(screen.getByRole('combobox', { name: /range|aralık/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('switch', { name: /liq map|likidasyon haritası/i }));
+    expect(onMap.mock.calls[0]?.[0]).toBe(false);
+  });
 });

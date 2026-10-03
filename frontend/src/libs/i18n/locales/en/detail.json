@@ -50,6 +50,8 @@
     "funding": "Funding",
     "fundingLine": "{{exchange}} funding %",
     "liqNotional": "Liquidations",
+    "liqMap": "Liq map",
+    "liqMapPan": "Pan left to load candles for the earlier part of this range.",
     "recorded": "Recorded: {{parts}}.",
     "recordedPart": "{{kind}} {{exchange}} {{span}}",
     "recordedEmpty": "History for this coin starts when a sample is stored.",
@@ -63,7 +65,7 @@
       "long": "Long",
       "short": "Short"
     },
-    "tapeHint": "Buy − sell is aggressive futures flow in each candle. CVD resets at 00:00 UTC and at the current 4-hour open. Book shading is resting size. The right edge is buy versus sell at each price, and the bars beside it are estimated liquidation pockets. The lower strip is crowd long percent versus top traders for Binance and OKX. Open interest and funding are stored samples, one line for each of Binance, Bybit, and OKX. Liquidation bars are short notional minus long notional in that candle. Informational only.",
+    "tapeHint": "Buy − sell is aggressive futures flow in each candle. CVD resets at 00:00 UTC and at the current 4-hour open. Book shading is resting size. Color behind the candles is estimated liquidation intensity for the selected range. A combined cell is colored only when Binance, Bybit, and OKX each have their own price and open interest. The right edge is buy versus sell at each price, and the bars beside it are estimated liquidation pockets. The lower strip is crowd long percent versus top traders for Binance and OKX. Open interest and funding are stored samples, one line for each of Binance, Bybit, and OKX. Liquidation bars are short notional minus long notional in that candle. The leverage mix is a model. Informational only.",
     "pumpOn": "On",
     "pumpOff": "Off",
     "pumpHint": "Markers when |return| ≥ threshold (informational only)",

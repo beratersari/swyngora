@@ -216,5 +216,12 @@ and `hunt`). The map fills the viewport. Ranges are 12h / 24h / 3d / 7d /
 14d / 30d / 90d. Venues are Combined / Binance / Bybit / OKX, plus All /
 Longs / Shorts. The page labels the leverage mix. OKX is named when its
 long/short split is the even fallback. The 1h / 4h / 12h hit-rate table
-stays under the map. The coin chart still loads price from the exchange,
-which already pages back past 90 days.
+stays under the map.
+
+The coin Overview chart paints that same grid behind the candles
+(`/markets/:exchange/:symbol`). Range, venue, and side match this page.
+Combined color is drawn only when Binance, Bybit, and OKX each have their
+own price and open interest. The chart caption names the leverage mix, an
+even split, and a missing venue. Columns older than the loaded candles stay
+off the left until the chart is panned. The coin chart still loads price
+from the exchange, which already pages back past 90 days.
