@@ -1432,7 +1432,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_taker_flow",
-		mcp.WithDescription("Aggressive futures buy vs sell volume (who is hitting the book) on Binance USD-M, Bybit linear, and OKX USDT-swap for 5m, 1h, and 4h, plus a combined view and a short read with price/OI/funding. OKX uses the newest 500 public trades, so longer windows can be incomplete. This is taker flow, not the account long/short ratio. Not financial advice."),
+		mcp.WithDescription("Aggressive futures buy vs sell volume (who is hitting the book) on Binance USD-M, Bybit linear, and OKX USDT-swap for 5m, 1h, and 4h, plus a combined view and a short read with price/OI/funding. Each venue sums measured prints (price × size). Longer windows stay incomplete until this process has recorded them. This is taker flow, not the account long/short ratio. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

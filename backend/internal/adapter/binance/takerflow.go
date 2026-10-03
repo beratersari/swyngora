@@ -11,121 +11,189 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-// GetTakerFlow loads Binance USD-M taker buy/sell volume (5m bars).
+// SetTakerWatch subscribes a symbol on the USD-M trade hub.
+func (c *Client) SetTakerWatch(fn func(string)) {
+	if c != nil {
+		c.takerWatch = fn
+	}
+}
+
+// TakerBook is the rolling 1-minute measured tape (restore and the trade hub).
+func (c *Client) TakerBook() *domain.TakerBook {
+	if c == nil {
+		return nil
+	}
+	return c.taker
+}
+
+// PrintTape is the recent individual fills behind that minute book.
+func (c *Client) PrintTape() *domain.PrintTape {
+	if c == nil {
+		return nil
+	}
+	return c.tape
+}
+
+// GetTakerFlow returns measured Binance USD-M taker buy/sell (websocket plus one REST seed).
 func (c *Client) GetTakerFlow(ctx context.Context, symbol string) (*domain.TakerVenueFlow, error) {
 	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
 	if err != nil {
 		return nil, err
 	}
-	if c == nil {
-		return nil, fmt.Errorf("%w: binance client", domain.ErrUpstream)
+	if c == nil || c.taker == nil {
+		return nil, fmt.Errorf("%w: binance taker book", domain.ErrUpstream)
 	}
-	if cached, ok := c.takerCache.Get(symbol); ok && cached != nil {
-		return cached, nil
-	}
-	v, err, _ := c.takerSF.Do(symbol, func() (any, error) {
-		if cached, ok := c.takerCache.Get(symbol); ok && cached != nil {
-			return cached, nil
-		}
-		got, err := c.fetchTakerFlow(ctx, symbol)
-		if err != nil {
-			return nil, err
-		}
-		c.takerCache.Set(symbol, got)
-		return got, nil
-	})
-	if err != nil {
+	if err := c.ensureMeasuredTape(ctx, symbol); err != nil && len(c.taker.Buckets(domain.ExchangeBinance, symbol)) == 0 {
 		return nil, err
 	}
-	got, _ := v.(*domain.TakerVenueFlow)
-	return got, nil
+	out := c.taker.Snapshot(domain.ExchangeBinance, symbol)
+	return &out, nil
 }
 
-// GetTakerBuckets returns Binance USD-M 5m taker buy/sell bars for CVD.
+// GetTakerBuckets returns measured 1-minute buy/sell bars.
 func (c *Client) GetTakerBuckets(ctx context.Context, symbol string) ([]domain.TakerBucket, error) {
 	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
 	if err != nil {
 		return nil, err
 	}
-	return c.fetchTakerBuckets(ctx, symbol)
-}
-
-func (c *Client) fetchTakerFlow(ctx context.Context, symbol string) (*domain.TakerVenueFlow, error) {
-	buckets, oldest, px, err := c.fetchTakerBucketsWithMeta(ctx, symbol)
-	if err != nil {
+	if c == nil || c.taker == nil {
+		return nil, fmt.Errorf("%w: binance taker book", domain.ErrUpstream)
+	}
+	if err := c.ensureMeasuredTape(ctx, symbol); err != nil && len(c.taker.Buckets(domain.ExchangeBinance, symbol)) == 0 {
 		return nil, err
 	}
-	out := domain.BuildTakerVenueFlowBucket(domain.ExchangeBinance, symbol, buckets, time.Now().UTC(), oldest, 5*time.Minute)
-	out.Price = px
-	return &out, nil
+	return c.taker.Buckets(domain.ExchangeBinance, symbol), nil
 }
 
-func (c *Client) fetchTakerBuckets(ctx context.Context, symbol string) ([]domain.TakerBucket, error) {
-	buckets, _, _, err := c.fetchTakerBucketsWithMeta(ctx, symbol)
-	return buckets, err
+// ensureMeasuredTape subscribes the symbol and, when the book is still empty,
+// folds the newest aggTrades in once. A restored or live book is left alone
+// so those minutes are not added twice.
+func (c *Client) ensureMeasuredTape(ctx context.Context, symbol string) error {
+	if c == nil {
+		return fmt.Errorf("%w: binance client", domain.ErrUpstream)
+	}
+	if c.takerWatch != nil {
+		c.takerWatch(symbol)
+	}
+	if c.bookHas(symbol) {
+		return nil
+	}
+	c.seedMu.Lock()
+	if c.seeded == nil {
+		c.seeded = map[string]struct{}{}
+	}
+	if _, ok := c.seeded[symbol]; ok {
+		c.seedMu.Unlock()
+		return nil
+	}
+	c.seeded[symbol] = struct{}{}
+	c.seedMu.Unlock()
+
+	if _, _, err := c.pullAggPage(ctx, symbol); err != nil {
+		c.seedMu.Lock()
+		delete(c.seeded, symbol)
+		c.seedMu.Unlock()
+		return err
+	}
+	return nil
 }
 
-func (c *Client) fetchTakerBucketsWithMeta(ctx context.Context, symbol string) ([]domain.TakerBucket, time.Time, float64, error) {
+// PullAggTrades walks USD-M aggTrades forward from the last id we stored.
+// It does nothing when a print arrived in the last few seconds, so a live
+// websocket does not also burn REST weight. pages caps how far one call chases.
+func (c *Client) PullAggTrades(ctx context.Context, symbol string, pages int) error {
+	symbol = domain.NormalizeLiquidationSymbol(symbol)
+	if c == nil || symbol == "" || pages <= 0 {
+		return nil
+	}
+	if c.aggFresh(symbol) {
+		return nil
+	}
+	for i := 0; i < pages; i++ {
+		n, full, err := c.pullAggPage(ctx, symbol)
+		if err != nil || n == 0 || !full {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Client) aggFresh(symbol string) bool {
+	if c == nil || c.tape == nil {
+		return false
+	}
+	ps := c.tape.Prints(domain.ExchangeBinance, symbol)
+	if len(ps) == 0 {
+		return false
+	}
+	return time.Since(ps[len(ps)-1].Time) < 3*time.Second
+}
+
+// pullAggPage fetches one aggTrades page. full is true when the page hit the 1000-row cap.
+func (c *Client) pullAggPage(ctx context.Context, symbol string) (int, bool, error) {
+	if c == nil {
+		return 0, false, fmt.Errorf("%w: binance client", domain.ErrUpstream)
+	}
 	q := url.Values{}
 	q.Set("symbol", symbol)
-	q.Set("period", "5m")
-	q.Set("limit", "500") // 500*5m ≈ 41h
-	body, err := c.getFutures(ctx, "/futures/data/takerlongshortRatio", q)
+	q.Set("limit", "1000")
+	c.seedMu.Lock()
+	if c.lastAgg == nil {
+		c.lastAgg = map[string]int64{}
+	}
+	if id := c.lastAgg[symbol]; id > 0 {
+		q.Set("fromId", strconv.FormatInt(id+1, 10))
+	}
+	c.seedMu.Unlock()
+	body, err := c.getFutures(ctx, "/fapi/v1/aggTrades", q)
 	if err != nil {
-		return nil, time.Time{}, 0, err
+		return 0, false, err
 	}
 	var rows []struct {
-		BuyVol    string `json:"buyVol"`
-		SellVol   string `json:"sellVol"`
-		Timestamp int64  `json:"timestamp"`
+		ID    int64  `json:"a"`
+		Price string `json:"p"`
+		Qty   string `json:"q"`
+		Time  int64  `json:"T"`
+		Maker bool   `json:"m"`
 	}
 	if err := json.Unmarshal(body, &rows); err != nil {
-		return nil, time.Time{}, 0, fmt.Errorf("%w: taker flow decode: %v", domain.ErrUpstream, err)
+		return 0, false, fmt.Errorf("%w: aggTrades decode: %v", domain.ErrUpstream, err)
 	}
-	px := c.futuresMarkPrice(ctx, symbol)
-	buckets := make([]domain.TakerBucket, 0, len(rows))
-	var oldest time.Time
-	for _, r := range rows {
-		buy, e1 := strconv.ParseFloat(r.BuyVol, 64)
-		sell, e2 := strconv.ParseFloat(r.SellVol, 64)
-		if e1 != nil || e2 != nil || r.Timestamp <= 0 {
+	var maxID int64
+	n := 0
+	for _, row := range rows {
+		px, e1 := strconv.ParseFloat(row.Price, 64)
+		qty, e2 := strconv.ParseFloat(row.Qty, 64)
+		if e1 != nil || e2 != nil || px <= 0 || qty <= 0 || row.Time <= 0 {
 			continue
 		}
-		if px > 0 {
-			buy *= px
-			sell *= px
+		side := domain.TakerSideBuy
+		if row.Maker {
+			side = domain.TakerSideSell
 		}
-		at := time.UnixMilli(r.Timestamp).UTC()
-		buckets = append(buckets, domain.TakerBucket{
-			Exchange: domain.ExchangeBinance, Symbol: symbol, Start: at,
-			BuyNotional: buy, SellNotional: sell,
+		domain.RecordMeasuredPrint(c.taker, c.tape, domain.TakerPrint{
+			Exchange: domain.ExchangeBinance, Symbol: symbol, Side: side,
+			Price: px, Quantity: qty, Notional: px * qty,
+			Time: time.UnixMilli(row.Time).UTC(),
 		})
-		if oldest.IsZero() || at.Before(oldest) {
-			oldest = at
+		if row.ID > maxID {
+			maxID = row.ID
 		}
+		n++
 	}
-	if len(buckets) == 0 {
-		return nil, time.Time{}, px, fmt.Errorf("%w: taker buy/sell volume", domain.ErrNotFound)
+	if maxID > 0 {
+		c.seedMu.Lock()
+		if maxID > c.lastAgg[symbol] {
+			c.lastAgg[symbol] = maxID
+		}
+		c.seedMu.Unlock()
 	}
-	return buckets, oldest, px, nil
+	return n, n >= 1000, nil
 }
 
-func (c *Client) futuresMarkPrice(ctx context.Context, symbol string) float64 {
-	q := url.Values{}
-	q.Set("symbol", symbol)
-	body, err := c.getFutures(ctx, "/fapi/v1/premiumIndex", q)
-	if err != nil {
-		return 0
+func (c *Client) bookHas(symbol string) bool {
+	if c == nil || c.taker == nil {
+		return false
 	}
-	var raw struct {
-		MarkPrice string `json:"markPrice"`
-	}
-	if json.Unmarshal(body, &raw) != nil {
-		return 0
-	}
-	px, err := strconv.ParseFloat(raw.MarkPrice, 64)
-	if err != nil || px <= 0 {
-		return 0
-	}
-	return px
+	return len(c.taker.Buckets(domain.ExchangeBinance, symbol)) > 0
 }

@@ -93,6 +93,40 @@ func TestTakerBuckets_UpsertListPurge(t *testing.T) {
 	}
 }
 
+func TestMigrateV6_DropsEstimatedBinanceTape(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "futures.db")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t0 := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
+	if _, err := s.UpsertTakerBuckets(context.Background(), []domain.TakerBucket{
+		{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Start: t0, BuyNotional: 9, SellNotional: 1},
+		{Exchange: domain.ExchangeBybit, Symbol: "BTCUSDT", Start: t0, BuyNotional: 4, SellNotional: 2},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.db.Exec(`PRAGMA user_version = 5`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	bn, err := s2.ListTakerBuckets(context.Background(), "binance", "BTCUSDT", t0.Add(-time.Minute), t0.Add(time.Minute))
+	if err != nil || len(bn) != 0 {
+		t.Fatalf("binance rows %+v %v", bn, err)
+	}
+	by, err := s2.ListTakerBuckets(context.Background(), "bybit", "BTCUSDT", t0.Add(-time.Minute), t0.Add(time.Minute))
+	if err != nil || len(by) != 1 || by[0].BuyNotional != 4 {
+		t.Fatalf("bybit rows %+v %v", by, err)
+	}
+}
+
 func TestInsertLiquidation_NoDuplicatesAndPurge(t *testing.T) {
 	s, err := Open(filepath.Join(t.TempDir(), "futures.db"))
 	if err != nil {

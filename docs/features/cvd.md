@@ -15,7 +15,7 @@ Useful when:
 
 `GET /api/v1/market/cvd?symbol=BTCUSDT`
 
-- `exchange=all` (default): **Binance** and **Bybit** separately plus `combined`
+- `exchange=all` (default): **Binance**, **Bybit**, and **OKX** separately plus `combined`
 - 5-minute points: `buyNotional`, `sellNotional`, `delta`, running `cvd`,
   `price`, `priceChangePct`, `vsPrice`, and `divergence`
 - **Divergence:** `price_up_cvd_down` or `price_down_cvd_up` on a point,
@@ -53,9 +53,12 @@ Useful when:
 - A divergence **run** is only consecutive 5m bars of the same kind. If
   it stops and the same split appears later, that is a new episode.
 
-Binance uses the public 5m taker series (~24h+ immediately). Bybit uses
-live trades; 24h `complete` after this process has been collecting. Bars
-are also stored in `data/futures.db` (`taker_buckets`).
+Futures CVD on Binance, Bybit, and OKX is the sum of measured prints
+(price × size). Minutes are stored in `data/futures.db` (`taker_buckets`)
+while the server is recording, and a 24h window is `complete` only after
+that tape covers it. Older Binance rows that were base volume × the mark
+were dropped once (schema version 6) so they are not added on top of the
+measured minutes.
 
 Informational only — not financial advice.
 
@@ -64,7 +67,7 @@ Informational only — not financial advice.
 | Layer | Path |
 |---|---|
 | Domain | `backend/internal/domain/cvd.go` |
-| Adapters | `adapter/binance/takerflow.go`, `adapter/bybit/takerflow.go`, `adapter/futuresstore` |
+| Adapters | `adapter/binance/tradehub.go`, `adapter/bybit/tradehub.go`, `adapter/okx/tradehub.go`, `adapter/futuresstore` |
 | Service | `backend/internal/service/market/cvd.go` |
 | HTTP | `GET /api/v1/market/cvd` |
 | MCP / AI | `get_cvd` |

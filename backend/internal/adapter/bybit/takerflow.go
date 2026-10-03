@@ -27,6 +27,14 @@ func (c *Client) TakerBook() *domain.TakerBook {
 	return c.taker
 }
 
+// PrintTape is the recent individual fills behind that minute book.
+func (c *Client) PrintTape() *domain.PrintTape {
+	if c == nil {
+		return nil
+	}
+	return c.tape
+}
+
 // GetTakerFlow returns collected Bybit linear taker buy/sell (plus a REST seed).
 func (c *Client) GetTakerFlow(ctx context.Context, symbol string) (*domain.TakerVenueFlow, error) {
 	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
@@ -77,15 +85,50 @@ func (c *Client) GetSpotTakerBuckets(ctx context.Context, symbol string) ([]doma
 	return book.Buckets(domain.ExchangeBybit, symbol), nil
 }
 
-func (c *Client) seedRecentTrades(ctx context.Context, symbol string) error {
+// PullRecentTrades merges the newest linear trades into the tape.
+// Duplicate prints are ignored, so a quiet websocket cannot leave a hole
+// that the public trade list already filled.
+func (c *Client) PullRecentTrades(ctx context.Context, symbol string, _ int) error {
+	symbol = domain.NormalizeLiquidationSymbol(symbol)
+	if c == nil || symbol == "" {
+		return nil
+	}
 	prints, err := c.fetchRecentTrades(ctx, symbol, "linear")
 	if err != nil {
 		return err
 	}
 	for _, p := range prints {
-		if p.Notional > 0 {
-			c.taker.Record(p)
-		}
+		domain.RecordMeasuredPrint(c.taker, c.tape, p)
+	}
+	return nil
+}
+
+func (c *Client) seedRecentTrades(ctx context.Context, symbol string) error {
+	if c == nil || c.taker == nil {
+		return fmt.Errorf("%w: bybit taker book", domain.ErrUpstream)
+	}
+	if len(c.taker.Buckets(domain.ExchangeBybit, symbol)) > 0 {
+		return nil
+	}
+	c.seedMu.Lock()
+	if c.seeded == nil {
+		c.seeded = map[string]struct{}{}
+	}
+	if _, ok := c.seeded[symbol]; ok {
+		c.seedMu.Unlock()
+		return nil
+	}
+	c.seeded[symbol] = struct{}{}
+	c.seedMu.Unlock()
+	prints, err := c.fetchRecentTrades(ctx, symbol, "linear")
+	if err != nil {
+		c.seedMu.Lock()
+		delete(c.seeded, symbol)
+		c.seedMu.Unlock()
+		return err
+	}
+	for _, p := range prints {
+		domain.RecordMeasuredPrint(c.taker, c.tape, p)
 	}
 	return nil
 }

@@ -78,6 +78,12 @@ type Client struct {
 	printSF       singleflight.Group
 	futDepthCache *cache.TTL[*domain.RawOrderBook]
 	futDepthSF    singleflight.Group
+	taker         *domain.TakerBook
+	tape          *domain.PrintTape
+	takerWatch    func(string)
+	seedMu        sync.Mutex
+	seeded        map[string]struct{}
+	lastAgg       map[string]int64
 }
 
 // Options configures the Binance client.
@@ -173,6 +179,10 @@ func NewClient(opts Options) *Client {
 	if c.futDepthCache == nil {
 		c.futDepthCache = cache.New[*domain.RawOrderBook](3 * time.Second)
 	}
+	c.taker = domain.NewTakerBook()
+	c.tape = domain.NewPrintTape()
+	c.seeded = map[string]struct{}{}
+	c.lastAgg = map[string]int64{}
 	return c
 }
 

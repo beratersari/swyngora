@@ -11,39 +11,112 @@ import (
 
 const swapTradeLimit = 500
 
+// SetTakerWatch subscribes a symbol on the swap trade hub.
+func (c *Client) SetTakerWatch(fn func(string)) {
+	if c != nil {
+		c.takerWatch = fn
+	}
+}
+
+// TakerBook is the rolling 1-minute measured tape.
+func (c *Client) TakerBook() *domain.TakerBook {
+	if c == nil {
+		return nil
+	}
+	return c.taker
+}
+
+// PrintTape is the recent individual fills behind that minute book.
+func (c *Client) PrintTape() *domain.PrintTape {
+	if c == nil {
+		return nil
+	}
+	return c.tape
+}
+
 // GetRecentPrints returns the newest OKX USDT-swap aggressive fills.
-// Size is contracts; notional is contracts × ctVal × price.
+// The live tape wins once it has prints. Size is contracts × ctVal.
 func (c *Client) GetRecentPrints(ctx context.Context, symbol string) ([]domain.TakerPrint, error) {
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return nil, err
+	}
+	if c == nil {
+		return nil, fmt.Errorf("%w: okx client", domain.ErrUpstream)
+	}
+	if err := c.ensureMeasuredTape(ctx, symbol); err != nil && len(c.tape.Prints(domain.ExchangeOKX, symbol)) == 0 {
+		return nil, err
+	}
+	if c.tape != nil {
+		if got := c.tape.Prints(domain.ExchangeOKX, symbol); len(got) > 0 {
+			return got, nil
+		}
+	}
 	return c.recentPrints(ctx, symbol)
 }
 
-// GetTakerFlow aggregates those prints into 5m / 1h / 4h windows.
-// The public trade list is only the newest 500 fills, so longer windows
-// stay incomplete until that list covers them.
+// GetTakerFlow aggregates measured prints into 5m / 1h / 4h windows.
 func (c *Client) GetTakerFlow(ctx context.Context, symbol string) (*domain.TakerVenueFlow, error) {
-	prints, err := c.recentPrints(ctx, symbol)
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
 	if err != nil {
 		return nil, err
 	}
-	book := domain.NewTakerBook()
-	for _, p := range prints {
-		book.Record(p)
+	if c == nil || c.taker == nil {
+		return nil, fmt.Errorf("%w: okx taker book", domain.ErrUpstream)
 	}
-	out := book.Snapshot(domain.ExchangeOKX, symbol)
+	if err := c.ensureMeasuredTape(ctx, symbol); err != nil && len(c.taker.Buckets(domain.ExchangeOKX, symbol)) == 0 {
+		return nil, err
+	}
+	out := c.taker.Snapshot(domain.ExchangeOKX, symbol)
 	return &out, nil
 }
 
-// GetTakerBuckets returns 1-minute buy/sell bars from the same recent prints.
+// GetTakerBuckets returns measured 1-minute buy/sell bars.
 func (c *Client) GetTakerBuckets(ctx context.Context, symbol string) ([]domain.TakerBucket, error) {
-	prints, err := c.recentPrints(ctx, symbol)
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
 	if err != nil {
 		return nil, err
 	}
-	book := domain.NewTakerBook()
-	for _, p := range prints {
-		book.Record(p)
+	if c == nil || c.taker == nil {
+		return nil, fmt.Errorf("%w: okx taker book", domain.ErrUpstream)
 	}
-	return book.Buckets(domain.ExchangeOKX, symbol), nil
+	if err := c.ensureMeasuredTape(ctx, symbol); err != nil && len(c.taker.Buckets(domain.ExchangeOKX, symbol)) == 0 {
+		return nil, err
+	}
+	return c.taker.Buckets(domain.ExchangeOKX, symbol), nil
+}
+
+func (c *Client) ensureMeasuredTape(ctx context.Context, symbol string) error {
+	if c == nil {
+		return fmt.Errorf("%w: okx client", domain.ErrUpstream)
+	}
+	if c.takerWatch != nil {
+		c.takerWatch(symbol)
+	}
+	if c.taker != nil && len(c.taker.Buckets(domain.ExchangeOKX, symbol)) > 0 {
+		return nil
+	}
+	c.seedMu.Lock()
+	if c.seeded == nil {
+		c.seeded = map[string]struct{}{}
+	}
+	if _, ok := c.seeded[symbol]; ok {
+		c.seedMu.Unlock()
+		return nil
+	}
+	c.seeded[symbol] = struct{}{}
+	c.seedMu.Unlock()
+	prints, err := c.recentPrints(ctx, symbol)
+	if err != nil {
+		c.seedMu.Lock()
+		delete(c.seeded, symbol)
+		c.seedMu.Unlock()
+		return err
+	}
+	for _, p := range prints {
+		domain.RecordMeasuredPrint(c.taker, c.tape, p)
+	}
+	return nil
 }
 
 func (c *Client) recentPrints(ctx context.Context, symbol string) ([]domain.TakerPrint, error) {

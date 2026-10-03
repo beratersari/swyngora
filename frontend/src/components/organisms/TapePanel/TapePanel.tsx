@@ -548,6 +548,9 @@ export function TapePanel({
             />
           </StatsGrid>
         )}
+        <Text variant="caption" color="secondary">
+          {t('tape.cvdMeasured')}
+        </Text>
         {cvdRow?.anchors?.map((a) =>
           a.summary ? (
             <Text key={a.anchor} variant="caption" color="secondary">

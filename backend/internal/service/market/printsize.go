@@ -10,7 +10,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const printSizeDisclaimer = "Average aggressive futures print size (USDT notional per taker fill). Compare the last 5m / 15m to the same length just before: a jump from 20K to 180K is a few large market orders, not many small ones. Binance pages aggTrades; Bybit uses the newest ~1000 public trades (minutes of tape when busy). Informational only — not financial advice."
+const printSizeDisclaimer = "Average aggressive futures print size (USDT notional per taker fill). Compare the last 5m / 15m to the same length just before: a jump from 20K to 180K is a few large market orders, not many small ones. Binance, Bybit, and OKX use the live trade stream when it covers the window, otherwise the newest public trades. Informational only — not financial advice."
 
 // GetPrintSize returns average buy vs sell trade size and how it just changed.
 func (s *Service) GetPrintSize(ctx context.Context, exchange, symbol string) (*domain.PrintSizeReport, error) {

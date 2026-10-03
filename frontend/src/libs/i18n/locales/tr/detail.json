@@ -268,6 +268,7 @@
     "botCountsNote": "Bu üç sayı yalnızca yukarıdaki tekrarlayan kliplerdir, tüm piyasa emirleri değil.",
     "botNone": "60sn içinde yok",
     "cvd": "CVD",
+    "cvdMeasured": "Vadeli CVD, Binance, Bybit ve OKX üzerindeki her agresif işlemi fiyat × miktar olarak toplar. Sunucu kaydettikçe çizgi dolar.",
     "cvdLast": "Son CVD",
     "cvdSummary": "Okuma",
     "cvdDay": "Gün başından",

@@ -11,7 +11,8 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-// GetRecentPrints loads the newest Binance USD-M aggTrades (taker side).
+// GetRecentPrints loads the newest Binance USD-M aggressive fills.
+// The live tape wins once it has prints; otherwise this is REST aggTrades.
 func (c *Client) GetRecentPrints(ctx context.Context, symbol string) ([]domain.TakerPrint, error) {
 	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
 	if err != nil {
@@ -19,6 +20,12 @@ func (c *Client) GetRecentPrints(ctx context.Context, symbol string) ([]domain.T
 	}
 	if c == nil {
 		return nil, fmt.Errorf("%w: binance client", domain.ErrUpstream)
+	}
+	_ = c.ensureMeasuredTape(ctx, symbol)
+	if c.tape != nil {
+		if got := c.tape.Prints(domain.ExchangeBinance, symbol); len(got) > 0 {
+			return got, nil
+		}
 	}
 	if c.printCache != nil {
 		if hit, ok := c.printCache.Get(symbol); ok {
@@ -109,6 +116,9 @@ func (c *Client) ListPrints(ctx context.Context, symbol string, from, to time.Ti
 		return c.GetRecentPrints(ctx, symbol)
 	}
 	from, to = from.UTC(), to.UTC()
+	if c.tape != nil && c.tape.Covers(domain.ExchangeBinance, symbol, from) {
+		return domain.FilterPrintsInRange(c.tape.Prints(domain.ExchangeBinance, symbol), from, to), nil
+	}
 	key := "range:" + symbol
 	if c.printCache != nil {
 		if hit, ok := c.printCache.Get(key); ok {

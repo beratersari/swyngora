@@ -48,7 +48,10 @@ type Client struct {
 	lsCache       *cache.TTL[*domain.LongShortSeries]
 	lsSF          singleflight.Group
 	taker         *domain.TakerBook
+	tape          *domain.PrintTape
 	takerWatch    func(string)
+	seedMu        sync.Mutex
+	seeded        map[string]struct{}
 	basisCache    *cache.TTL[*domain.BasisQuote]
 	basisSF       singleflight.Group
 	linMeta       *cache.TTL[[]linContractMeta]
@@ -110,6 +113,8 @@ func NewClient(opts Options) *Client {
 		c.lsCache = cache.New[*domain.LongShortSeries](30 * time.Second)
 	}
 	c.taker = domain.NewTakerBook()
+	c.tape = domain.NewPrintTape()
+	c.seeded = map[string]struct{}{}
 	if c.basisCache == nil {
 		c.basisCache = cache.New[*domain.BasisQuote](15 * time.Second)
 	}

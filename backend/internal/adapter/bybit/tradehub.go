@@ -19,6 +19,8 @@ type TradeHub struct {
 	wsBase string
 	dial   wsDialer
 	book   *domain.TakerBook
+	tape   *domain.PrintTape
+	pull   func(ctx context.Context, symbol string, pages int) error
 	now    func() time.Time
 
 	mu     sync.Mutex
@@ -33,6 +35,9 @@ type TradeHubOptions struct {
 	WSURL string
 	Dial  wsDialer
 	Book  *domain.TakerBook
+	Tape  *domain.PrintTape
+	// Pull merges the newest public trades when the socket is only trickling.
+	Pull func(ctx context.Context, symbol string, pages int) error
 }
 
 // NewTradeHub constructs a Bybit linear public-trade listener.
@@ -53,11 +58,11 @@ func NewTradeHub(opts TradeHubOptions) *TradeHub {
 		book = domain.NewTakerBook()
 	}
 	return &TradeHub{
-		wsBase: ws, dial: dial, book: book, now: time.Now,
+		wsBase: ws, dial: dial, book: book, tape: opts.Tape, pull: opts.Pull, now: time.Now,
 		want: map[string]struct{}{
 			"BTCUSDT": {}, "ETHUSDT": {}, "SOLUSDT": {}, "XRPUSDT": {}, "BNBUSDT": {}, "DOGEUSDT": {},
 		},
-		subCh: make(chan string, 64),
+		subCh: make(chan string, 256),
 	}
 }
 
@@ -90,6 +95,35 @@ func (h *TradeHub) Start(ctx context.Context) {
 	}
 	ctx, h.stop = context.WithCancel(ctx)
 	go h.loop(ctx)
+	go h.poll(ctx)
+}
+
+func (h *TradeHub) poll(ctx context.Context) {
+	if h == nil || h.pull == nil {
+		return
+	}
+	tick := time.NewTicker(10 * time.Second)
+	defer tick.Stop()
+	alt := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			_ = h.pull(ctx, "BTCUSDT", 1)
+			_ = h.pull(ctx, "ETHUSDT", 1)
+			syms := h.wanted()
+			if len(syms) == 0 {
+				continue
+			}
+			alt++
+			sym := syms[alt%len(syms)]
+			if sym == "BTCUSDT" || sym == "ETHUSDT" {
+				continue
+			}
+			_ = h.pull(ctx, sym, 1)
+		}
+	}
 }
 
 // Close stops the hub.
@@ -139,6 +173,7 @@ func (h *TradeHub) session(ctx context.Context) error {
 				return
 			case <-ping.C:
 				_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"op":"ping"}`))
+				_ = h.subscribe(conn, h.wanted())
 			case sym := <-h.subCh:
 				_ = h.subscribe(conn, []string{sym})
 			}
@@ -172,15 +207,26 @@ func (h *TradeHub) wanted() []string {
 }
 
 func (h *TradeHub) subscribe(conn *websocket.Conn, symbols []string) error {
-	if len(symbols) == 0 {
+	if len(symbols) == 0 || conn == nil {
 		return nil
 	}
-	args := make([]string, 0, len(symbols))
-	for _, s := range symbols {
-		args = append(args, "publicTrade."+s)
+	// Bybit accepts at most 10 topics in one subscribe message.
+	const batch = 10
+	for i := 0; i < len(symbols); i += batch {
+		j := i + batch
+		if j > len(symbols) {
+			j = len(symbols)
+		}
+		args := make([]string, 0, j-i)
+		for _, s := range symbols[i:j] {
+			args = append(args, "publicTrade."+s)
+		}
+		payload, _ := json.Marshal(map[string]any{"op": "subscribe", "args": args})
+		if err := conn.WriteMessage(websocket.TextMessage, payload); err != nil {
+			return err
+		}
 	}
-	payload, _ := json.Marshal(map[string]any{"op": "subscribe", "args": args})
-	return conn.WriteMessage(websocket.TextMessage, payload)
+	return nil
 }
 
 func (h *TradeHub) handle(msg []byte) {
@@ -200,8 +246,8 @@ func (h *TradeHub) handle(msg []byte) {
 	for _, row := range raw.Data {
 		ts := strconv.FormatInt(row.Time, 10)
 		p := parseBybitTaker(domain.ExchangeBybit, row.Sym, row.Side, row.Price, row.Size, ts)
-		if p.Notional > 0 && h.book != nil {
-			h.book.Record(p)
+		if p.Notional > 0 {
+			domain.RecordMeasuredPrint(h.book, h.tape, p)
 		}
 	}
 }

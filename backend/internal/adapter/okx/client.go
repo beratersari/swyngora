@@ -37,9 +37,14 @@ type Client struct {
 	depthCache   *cache.TTL[*domain.RawOrderBook]
 	depthSF      singleflight.Group
 
-	instMu   sync.RWMutex
-	ctVal    map[string]float64
-	instOnce sync.Once
+	instMu     sync.RWMutex
+	ctVal      map[string]float64
+	instOnce   sync.Once
+	taker      *domain.TakerBook
+	tape       *domain.PrintTape
+	takerWatch func(string)
+	seedMu     sync.Mutex
+	seeded     map[string]struct{}
 }
 
 // Options configures the OKX client.
@@ -77,6 +82,9 @@ func NewClient(opts Options) *Client {
 	if c.depthCache == nil {
 		c.depthCache = cache.New[*domain.RawOrderBook](5 * time.Second)
 	}
+	c.taker = domain.NewTakerBook()
+	c.tape = domain.NewPrintTape()
+	c.seeded = map[string]struct{}{}
 	return c
 }
 

@@ -10,7 +10,7 @@ ratio (who already holds positions).
 
 `GET /api/v1/market/taker-flow?symbol=BTCUSDT`
 
-- `exchange=all` (default): **Binance**, **Bybit**, and **OKX** separately plus `combined`. OKX is the newest 500 public swap trades, so 1h and 4h stay incomplete until that list covers the window.
+- `exchange=all` (default): **Binance**, **Bybit**, and **OKX** separately plus `combined`. Each venue sums measured prints (price × size). 1h and 4h stay incomplete until this process has recorded that window.
 - Windows: **5m**, **1h**, **4h**.
 - Each window: `buyNotional`, `sellNotional`, `delta` (buy − sell), `deltaPct`,
   `dominant` (`buy` / `sell` / `balanced`).
@@ -21,8 +21,9 @@ ratio (who already holds positions).
 
 | Venue | Source |
 |---|---|
-| Binance USD-M | Public `takerlongshortRatio` 5m bars (4h available immediately) |
-| Bybit linear | Recent REST trades + `publicTrade` websocket (4h `complete` after this process has been collecting) |
+| Binance USD-M | `<symbol>@aggTrade` websocket. When that socket is quiet, `aggTrades` is paged forward from the last aggregate id (price × size, not base volume × the current mark). |
+| Bybit linear | `publicTrade` websocket, in batches of 10. The newest public trades are merged in as well so a thin socket does not leave a hole. |
+| OKX USDT-swap | Public `trades` websocket. Contract size × price. One REST seed of the newest 500 trades when the minute book is still empty. |
 
 Volumes are **USDT notional**. Average size per fill (few large vs many small)
 is `GET /api/v1/market/print-size` — see [`print-size.md`](print-size.md).
@@ -36,7 +37,7 @@ Web: coin detail **Flow** tab.
 | Layer | Path |
 |---|---|
 | Domain | `backend/internal/domain/taker_flow.go`, `taker_book.go` |
-| Adapters | `adapter/binance/takerflow.go`, `adapter/bybit/takerflow.go`, `tradehub.go` |
+| Adapters | `adapter/binance/takerflow.go`, `tradehub.go`; `adapter/bybit/takerflow.go`, `tradehub.go`; `adapter/okx/trades.go`, `tradehub.go` |
 | Service | `backend/internal/service/market/takerflow.go` |
 | HTTP | `GET /api/v1/market/taker-flow` |
 | MCP / AI | `get_taker_flow` |

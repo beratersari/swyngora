@@ -26,7 +26,7 @@ average price, first and last trade time, and total size.
 Optional: `exchange=binance|bybit|all` (default `all`),
 `minNotional` (default 100000), `limit` (default 30).
 
-Tape is the newest ~1000 prints per coin (minutes, not 24h).
+Tape is the live print stream when it already covers the lookback, otherwise the newest public trades (minutes, not 24h).
 Informational only — not financial advice.
 
 ## Where the code lives

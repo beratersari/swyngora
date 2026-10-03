@@ -7,6 +7,14 @@ import (
 	"time"
 )
 
+// SwapContractValue is the base-asset size of one USDT-swap contract.
+func (c *Client) SwapContractValue(instID string) float64 {
+	if c == nil {
+		return 0
+	}
+	return c.contractValue(context.Background(), instID)
+}
+
 func (c *Client) contractValue(ctx context.Context, instID string) float64 {
 	if c == nil || instID == "" {
 		return 0

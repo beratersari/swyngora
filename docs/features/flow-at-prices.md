@@ -28,8 +28,9 @@ prints hit that row, or what the **delta** was.
 - **POC:** the row with the most aggressive volume (ties go to the row
   closer to last)
 - `truncated` / `complete`: the ladder may not cover the whole window.
-  The live tape is about the last hour on Binance and the newest ~1000
-  Bybit trades. Closed minutes are stored while the server runs (about
+  The live tape is the Binance, Bybit, and OKX trade stream once it
+  reaches the start of the window; until then the newest public trades
+  are used. Closed minutes are stored while the server runs (about
   30 days, `FLOW_AT_PRICES_RETENTION`) for the liquid recorder list
   plus pairs someone has opened. A 4h / 1d / 3d / 7d / 30d lookback, and
   Bybit further back than those 1000 trades, reads that stored buy,

@@ -27,9 +27,9 @@ One coin:
 
 | Venue | Source |
 |---|---|
-| Binance USD-M | Paged `aggTrades` |
-| Bybit linear | Newest ~1000 public trades |
-| OKX USDT-swap | Newest public trades |
+| Binance USD-M | Live `aggTrade` tape when it covers the window, otherwise paged `aggTrades` |
+| Bybit linear | Live `publicTrade` tape when it covers the window, otherwise the newest public trades |
+| OKX USDT-swap | Live public `trades` tape when it covers the window, otherwise the newest public trades |
 
 Informational only — not financial advice.
 

@@ -19,6 +19,15 @@ func (c *Client) GetRecentPrints(ctx context.Context, symbol string) ([]domain.T
 	if c == nil {
 		return nil, fmt.Errorf("%w: bybit client", domain.ErrUpstream)
 	}
+	if c.takerWatch != nil {
+		c.takerWatch(symbol)
+	}
+	_ = c.seedRecentTrades(ctx, symbol)
+	if c.tape != nil {
+		if got := c.tape.Prints(domain.ExchangeBybit, symbol); len(got) > 0 {
+			return got, nil
+		}
+	}
 	if c.printCache != nil {
 		if hit, ok := c.printCache.Get(symbol); ok {
 			return append([]domain.TakerPrint(nil), hit...), nil

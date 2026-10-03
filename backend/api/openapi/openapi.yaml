@@ -2647,10 +2647,11 @@ paths:
       summary: Futures taker buy vs sell volume
       description: |
         Aggressive (taker) buy and sell volume on Binance USD-M, Bybit linear, and OKX USDT-swap
-        linear for the last **5 minutes, 1 hour, and 4 hours**. Returns buy
-        notional, sell notional, delta, and a short read with price / OI /
-        funding. This is who is hitting the book now — not the account
-        long/short ratio. `exchange=all` adds a combined view.
+        for the last **5 minutes, 1 hour, and 4 hours**. Each venue sums measured prints
+        (price × size) from the public trade stream. Returns buy notional, sell notional,
+        delta, and a short read with price / OI / funding. 1h and 4h stay incomplete until
+        this process has recorded that long. This is who is hitting the book now — not the
+        account long/short ratio. `exchange=all` adds a combined view.
       operationId: getMarketTakerFlow
       tags: [Market]
       parameters:

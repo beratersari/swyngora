@@ -182,6 +182,18 @@ CREATE TABLE IF NOT EXISTS liquidation_coverage (
 		if err := sqliteutil.SetUserVersion(s.db, 5); err != nil {
 			return err
 		}
+		v = 5
+	}
+	// v6 drops Binance taker minutes that were base volume × the mark at
+	// request time. Those rows are not prints and would double-count once
+	// the measured tape writes real 1-minute bars on the same timestamps.
+	if v < 6 {
+		if _, err := s.db.Exec(`DELETE FROM taker_buckets WHERE exchange = ?`, string(domain.ExchangeBinance)); err != nil {
+			return fmt.Errorf("drop estimated binance taker tape: %w", err)
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 6); err != nil {
+			return err
+		}
 	}
 	return nil
 }

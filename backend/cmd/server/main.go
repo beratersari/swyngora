@@ -228,7 +228,9 @@ func main() {
 		LS: map[domain.Exchange]domain.LongShortRatioPort{
 			domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient, domain.ExchangeOKX: okxClient,
 		},
-		Taker:  map[domain.Exchange]domain.TakerBucketPort{domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient},
+		Taker: map[domain.Exchange]domain.TakerBucketPort{
+			domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient, domain.ExchangeOKX: okxClient,
+		},
 		Logger: logger,
 		Seeds:  histSeeds,
 	}
@@ -379,9 +381,27 @@ func main() {
 	bybitTrades := bybit.NewTradeHub(bybit.TradeHubOptions{
 		WSURL: cfg.BybitLinearWSURL,
 		Book:  bybitClient.TakerBook(),
+		Tape:  bybitClient.PrintTape(),
+		Pull:  bybitClient.PullRecentTrades,
 	})
 	bybitClient.SetTakerWatch(bybitTrades.Watch)
 	defer bybitTrades.Close()
+	binanceTrades := binance.NewTradeHub(binance.TradeHubOptions{
+		WSURL: cfg.BinanceFuturesWSURL,
+		Book:  binanceClient.TakerBook(),
+		Tape:  binanceClient.PrintTape(),
+		Pull:  binanceClient.PullAggTrades,
+	})
+	binanceClient.SetTakerWatch(binanceTrades.Watch)
+	defer binanceTrades.Close()
+	okxTrades := okx.NewTradeHub(okx.TradeHubOptions{
+		WSURL:         cfg.OKXWSURL,
+		Book:          okxClient.TakerBook(),
+		Tape:          okxClient.PrintTape(),
+		ContractValue: okxClient.SwapContractValue,
+	})
+	okxClient.SetTakerWatch(okxTrades.Watch)
+	defer okxTrades.Close()
 	marketSvc.SetOnFuturesSymbol(futuresHist.NoteSymbol)
 	marketSvc.SetFuturesHistory(futuresHist)
 	logger.Info("futures history store ready", "driver", "sqlite", "path", futuresStore.Path())
@@ -603,16 +623,24 @@ func main() {
 	}
 	nTaker := 0
 	fromTaker := time.Now().UTC().Add(-4 * time.Hour)
-	for _, sym := range histSeeds {
-		recs, err := futuresStore.ListTakerBuckets(ctx, string(domain.ExchangeBybit), sym, fromTaker, time.Now().UTC())
-		if err != nil || len(recs) == 0 {
-			continue
+	restoreTape := func(ex domain.Exchange, book *domain.TakerBook) {
+		if book == nil {
+			return
 		}
-		bybitClient.TakerBook().LoadBuckets(recs)
-		nTaker += len(recs)
+		for _, sym := range histSeeds {
+			recs, err := futuresStore.ListTakerBuckets(ctx, string(ex), sym, fromTaker, time.Now().UTC())
+			if err != nil || len(recs) == 0 {
+				continue
+			}
+			book.LoadBuckets(recs)
+			nTaker += len(recs)
+		}
 	}
+	restoreTape(domain.ExchangeBinance, binanceClient.TakerBook())
+	restoreTape(domain.ExchangeBybit, bybitClient.TakerBook())
+	restoreTape(domain.ExchangeOKX, okxClient.TakerBook())
 	if nTaker > 0 {
-		logger.Info("bybit taker buckets restored", "bars", nTaker)
+		logger.Info("taker tape restored", "bars", nTaker)
 	}
 	refreshLiquid := func() {
 		syms, err := marketSvc.LiquidPerpSymbols(ctx, domain.LiquidRecorderLimit)
@@ -620,6 +648,11 @@ func main() {
 			futuresHist.SetLiquid(syms)
 			bookHist.SetLiquid(syms)
 			marketSvc.SetFlowLiquid(syms)
+			for _, sym := range syms {
+				binanceTrades.Watch(sym)
+				bybitTrades.Watch(sym)
+				okxTrades.Watch(sym)
+			}
 			logger.Info("liquid recorder universe", "symbols", len(syms))
 		}
 		if err != nil {
@@ -641,6 +674,8 @@ func main() {
 	}()
 	go liqSink.Start(ctx)
 	go bybitTrades.Start(ctx)
+	go binanceTrades.Start(ctx)
+	go okxTrades.Start(ctx)
 	go (&futureshist.Worker{
 		Hist:     futuresHist,
 		Interval: cfg.FuturesHistoryInterval,
