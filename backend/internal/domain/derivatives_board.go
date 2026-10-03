@@ -7,8 +7,10 @@ import (
 )
 
 const (
-	// The board opens on the same liquid list the recorder follows.
-	derivativesBoardDefault = LiquidRecorderLimit
+	// The recorder follows LiquidRecorderLimit names. The board opens on a
+	// shorter page so the first load does not ask every venue for all of them.
+	// Callers can request the full recorded set.
+	derivativesBoardDefault = 36
 	derivativesBoardMin     = 5
 
 	// VenueDerivativesMaxAge is how old an open-interest or funding snapshot
@@ -102,6 +104,8 @@ type DerivativesCoin struct {
 	TakerDefinite        bool
 	Venues               []DerivativesVenueRow
 	Coverage             MarketCoverage
+	// Recorded is how far back each stored series for this coin actually goes.
+	Recorded []RecordedSeries
 }
 
 // DerivativesBoard is the liquid-perp desk.

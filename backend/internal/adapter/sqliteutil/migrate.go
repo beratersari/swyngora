@@ -19,6 +19,23 @@ func IsBenignSchemaErr(err error) bool {
 		strings.Contains(msg, "already exists")
 }
 
+// InArgs builds the "?,?,?" list and args for a SQL IN clause.
+func InArgs(values []string) (string, []any) {
+	if len(values) == 0 {
+		return "", nil
+	}
+	var b strings.Builder
+	args := make([]any, len(values))
+	for i, v := range values {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteByte('?')
+		args[i] = v
+	}
+	return b.String(), args
+}
+
 // ExecAllowExists runs stmt and ignores only "already exists" / duplicate-column errors.
 func ExecAllowExists(db *sql.DB, stmt string) error {
 	if db == nil {

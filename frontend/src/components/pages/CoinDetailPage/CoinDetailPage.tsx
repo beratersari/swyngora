@@ -14,7 +14,7 @@ import {
   fundingRateLines,
   FUTURES_PANE_LIMIT,
   futuresPaneColor,
-  futuresRecorded,
+  recordedParts,
   liquidationNotionalByCandle,
   liquidationProfile,
   openInterestLines,
@@ -1016,7 +1016,7 @@ export function CoinDetailPage() {
   }, []);
   const recordedLine = useMemo(() => {
     if (isEquity) return '';
-    const rows = futuresRecorded(rtkCurrent(historySpanQuery));
+    const rows = recordedParts(rtkCurrent(historySpanQuery));
     if (rows.length === 0) {
       return historySpanQuery.isSuccess || historySpanQuery.isError
         ? t('detail:chart.recordedEmpty')
@@ -1025,6 +1025,7 @@ export function CoinDetailPage() {
     const parts = rows
       .map((row) =>
         t('detail:chart.recordedPart', {
+          kind: t(`detail:chart.recordedKind.${row.kind}`),
           exchange: row.exchange,
           span: formatRecordedSpan(row.spanSec),
         }),

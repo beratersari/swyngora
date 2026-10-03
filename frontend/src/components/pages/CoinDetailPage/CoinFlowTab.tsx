@@ -29,7 +29,7 @@ import { perpStats, reportSummary, spotPerpFacts, spotPerpVenueLines, surgeStats
 import { WhaleFollowList } from './WhaleFollowList';
 import type { CoinFlowTabProps } from './CoinFlowTab.types';
 
-const FLOW_WINDOWS = ['5m', '15m', '1h', '4h', '1d', '3d', '7d'] as const;
+const FLOW_WINDOWS = ['5m', '15m', '1h', '4h', '1d', '3d', '7d', '30d'] as const;
 
 /** Per-coin prints, book, and volume — RTK lives here (page layer), not in organisms. */
 export function CoinFlowTab({ symbol, exchange }: CoinFlowTabProps) {

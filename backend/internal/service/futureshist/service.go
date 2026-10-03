@@ -119,7 +119,92 @@ func (s *Service) RecordingSince(ctx context.Context, symbol string, now time.Ti
 			Since:    since.UTC(),
 		})
 	}
+	if liq, ok := s.Store.(interface {
+		EarliestLiquidation(context.Context, domain.Exchange, string) (time.Time, bool, error)
+	}); ok {
+		for _, ex := range domain.FuturesVenues() {
+			since, found, err := liq.EarliestLiquidation(ctx, ex, symbol)
+			if err != nil {
+				return nil, err
+			}
+			if !found || since.IsZero() {
+				continue
+			}
+			out = append(out, domain.RecordedSeries{
+				Kind:     domain.RecordedLiquidations,
+				Exchange: ex,
+				Since:    since.UTC(),
+			})
+		}
+	}
 	return out, nil
+}
+
+type snapshotSpanBatch interface {
+	EarliestSnapshotSpans(context.Context, string, []string) ([]domain.StoredSince, error)
+}
+
+type liquidationSpanBatch interface {
+	EarliestLiquidationSpans(context.Context, []string) ([]domain.StoredSince, error)
+}
+
+// RecordingSpans is the oldest open-interest sample and liquidation print
+// for each symbol. Stores without a batch query fall back to one symbol at a time.
+func (s *Service) RecordingSpans(ctx context.Context, symbols []string, now time.Time) (map[string][]domain.RecordedSeries, error) {
+	symbols = domain.SpanQuerySymbols(symbols)
+	out := map[string][]domain.RecordedSeries{}
+	if s == nil || s.Store == nil || len(symbols) == 0 {
+		return out, nil
+	}
+	if snaps, ok := s.Store.(snapshotSpanBatch); ok {
+		rows, err := snaps.EarliestSnapshotSpans(ctx, domain.FuturesMetricOpenInterest, symbols)
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			logical := domain.NormalizeLiquidationSymbol(row.Symbol)
+			if logical == "" || row.Since.IsZero() {
+				continue
+			}
+			out[logical] = append(out[logical], domain.RecordedSeries{
+				Kind: domain.RecordedFuturesOI, Exchange: row.Exchange, Since: row.Since.UTC(),
+			})
+		}
+	}
+	if liqs, ok := s.Store.(liquidationSpanBatch); ok {
+		rows, err := liqs.EarliestLiquidationSpans(ctx, symbols)
+		if err != nil {
+			return nil, err
+		}
+		for _, row := range rows {
+			logical := domain.NormalizeLiquidationSymbol(row.Symbol)
+			if logical == "" || row.Since.IsZero() {
+				continue
+			}
+			out[logical] = append(out[logical], domain.RecordedSeries{
+				Kind: domain.RecordedLiquidations, Exchange: row.Exchange, Since: row.Since.UTC(),
+			})
+		}
+	}
+	if len(out) > 0 || s.Store != nil && hasSpanBatch(s.Store) {
+		return out, nil
+	}
+	for _, sym := range symbols {
+		rows, err := s.RecordingSince(ctx, sym, now)
+		if err != nil {
+			return nil, err
+		}
+		if len(rows) > 0 {
+			out[sym] = rows
+		}
+	}
+	return out, nil
+}
+
+func hasSpanBatch(store domain.FuturesHistoryStore) bool {
+	_, snap := store.(snapshotSpanBatch)
+	_, liq := store.(liquidationSpanBatch)
+	return snap || liq
 }
 
 // History returns stored snapshots or liquidation events.

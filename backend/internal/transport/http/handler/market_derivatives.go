@@ -74,6 +74,14 @@ type derivativesCoinDTO struct {
 	TakerDefinite        bool                  `json:"takerDefinite"`
 	Venues               []derivativesVenueDTO `json:"venues"`
 	Coverage             marketCoverageDTO     `json:"coverage"`
+	Recorded             []recordedSeriesDTO   `json:"recorded,omitempty"`
+}
+
+type recordedSeriesDTO struct {
+	Kind     string    `json:"kind"`
+	Exchange string    `json:"exchange"`
+	Since    time.Time `json:"since"`
+	SpanSec  int       `json:"spanSec"`
 }
 
 type derivativesBoardResponse struct {
@@ -85,6 +93,19 @@ type derivativesBoardResponse struct {
 	Definite bool                 `json:"definite"`
 	Summary  string               `json:"summary"`
 	Note     string               `json:"note"`
+}
+
+func recordedToDTO(rows []domain.RecordedSeries) []recordedSeriesDTO {
+	if len(rows) == 0 {
+		return nil
+	}
+	out := make([]recordedSeriesDTO, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, recordedSeriesDTO{
+			Kind: row.Kind, Exchange: string(row.Exchange), Since: row.Since.UTC(), SpanSec: row.SpanSec,
+		})
+	}
+	return out
 }
 
 func derivativesBoardToDTO(got *domain.DerivativesBoard) derivativesBoardResponse {
@@ -115,6 +136,7 @@ func derivativesBoardToDTO(got *domain.DerivativesBoard) derivativesBoardRespons
 			LongPct: c.LongPct, LongDefinite: c.LongDefinite,
 			TakerBuyPct: c.TakerBuyPct, TakerDefinite: c.TakerDefinite,
 			Venues: venues, Coverage: coverageToDTO(c.Coverage),
+			Recorded: recordedToDTO(c.Recorded),
 		})
 	}
 	return derivativesBoardResponse{

@@ -23,3 +23,20 @@ func TestBuildHistorySpan_DropsEmptyAndSetsSpan(t *testing.T) {
 		t.Fatal("missing note")
 	}
 }
+
+func TestAttachRecordedSpans_SetsSpanOnTheBoard(t *testing.T) {
+	now := time.Date(2026, 10, 3, 12, 0, 0, 0, time.UTC)
+	board := &DerivativesBoard{
+		AsOf:  now,
+		Coins: []DerivativesCoin{{Symbol: "BTCUSDT"}, {Symbol: "ETHUSDT"}},
+	}
+	AttachRecordedSpans(board, map[string][]RecordedSeries{
+		"BTCUSDT": {{Kind: RecordedLiquidations, Exchange: ExchangeBybit, Since: now.Add(-48 * time.Hour)}},
+	})
+	if len(board.Coins[0].Recorded) != 1 || board.Coins[0].Recorded[0].SpanSec != 48*3600 {
+		t.Fatalf("%+v", board.Coins[0].Recorded)
+	}
+	if len(board.Coins[1].Recorded) != 0 {
+		t.Fatalf("eth %+v", board.Coins[1].Recorded)
+	}
+}

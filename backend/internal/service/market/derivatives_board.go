@@ -54,7 +54,15 @@ func (s *Service) GetDerivativesBoard(ctx context.Context, exchange string, limi
 		}(i, sym)
 	}
 	wg.Wait()
-	out := domain.BuildDerivativesBoard(ex, coins, time.Now().UTC())
+	now := time.Now().UTC()
+	out := domain.BuildDerivativesBoard(ex, coins, now)
+	if out != nil {
+		if spans, err := s.recordingBySymbol(ctx, symbols, now); err != nil {
+			return nil, err
+		} else {
+			domain.AttachRecordedSpans(out, spans)
+		}
+	}
 	if c := s.derivativesBoardCache(); c != nil && out != nil {
 		cp := *out
 		c.Set(key, &cp)

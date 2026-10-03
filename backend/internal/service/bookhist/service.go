@@ -324,6 +324,58 @@ func (s *Service) RecordingSince(ctx context.Context, symbol string, now time.Ti
 	return out, nil
 }
 
+type bookSpanBatch interface {
+	EarliestBookSpans(context.Context, []string) ([]domain.StoredSince, error)
+}
+
+// RecordingSpans is the oldest spot-book sample for each logical USDT symbol.
+func (s *Service) RecordingSpans(ctx context.Context, symbols []string, now time.Time) (map[string][]domain.RecordedSeries, error) {
+	symbols = domain.SpanQuerySymbols(symbols)
+	out := map[string][]domain.RecordedSeries{}
+	if s == nil || s.Store == nil || len(symbols) == 0 {
+		return out, nil
+	}
+	batch, ok := s.Store.(bookSpanBatch)
+	if !ok {
+		for _, sym := range symbols {
+			rows, err := s.RecordingSince(ctx, sym, now)
+			if err != nil {
+				return nil, err
+			}
+			if len(rows) > 0 {
+				out[sym] = rows
+			}
+		}
+		return out, nil
+	}
+	stored := make([]string, 0, len(symbols)*3)
+	back := map[string]string{}
+	for _, logical := range symbols {
+		for _, ex := range []domain.Exchange{domain.ExchangeBinance, domain.ExchangeCoinbase, domain.ExchangeBybit} {
+			form := domain.CrossVenueSymbol(ex, logical)
+			if form == "" {
+				continue
+			}
+			stored = append(stored, form)
+			back[string(ex)+"|"+form] = logical
+		}
+	}
+	rows, err := batch.EarliestBookSpans(ctx, stored)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		logical := back[string(row.Exchange)+"|"+row.Symbol]
+		if logical == "" || row.Since.IsZero() {
+			continue
+		}
+		out[logical] = append(out[logical], domain.RecordedSeries{
+			Kind: domain.RecordedBook, Exchange: row.Exchange, Since: row.Since.UTC(),
+		})
+	}
+	return out, nil
+}
+
 // SaveSymbol fetches one venue independently and upserts a full ladder.
 func (s *Service) SaveSymbol(ctx context.Context, ex domain.Exchange, symbol string, now time.Time) (bool, error) {
 	return s.SaveSymbolDepth(ctx, ex, symbol, now, 0)

@@ -13,8 +13,8 @@ import (
 const (
 	DefaultBookHistoryLimit = 60
 	MaxBookHistoryLimit     = 500
-	// BookHistoryHeatmapLimit covers 7 days of 1-minute ladders.
-	BookHistoryHeatmapLimit  = 11000
+	// BookHistoryHeatmapLimit covers 30 days of 1-minute ladders.
+	BookHistoryHeatmapLimit  = 44000
 	DefaultBookHistoryLevels = 25
 	DefaultBookHistoryBucket = time.Minute
 	DefaultBookHistorySlack  = 3 * time.Minute
@@ -148,7 +148,7 @@ func ParseBookHistoryLimit(n int) int {
 	return n
 }
 
-// ClampBookLadderLimit allows a heatmap scan to load a week of minute ladders.
+// ClampBookLadderLimit allows a heatmap scan to load 30 days of minute ladders.
 func ClampBookLadderLimit(n int) int {
 	if n <= 0 {
 		return DefaultBookHistoryLimit

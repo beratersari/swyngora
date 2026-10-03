@@ -50,9 +50,15 @@
     "funding": "Funding",
     "fundingLine": "{{exchange}} funding %",
     "liqNotional": "Liquidations",
-    "recorded": "Recorded futures history: {{parts}}.",
-    "recordedPart": "{{exchange}} {{span}}",
-    "recordedEmpty": "Futures history for this coin starts when a sample is stored.",
+    "recorded": "Recorded: {{parts}}.",
+    "recordedPart": "{{kind}} {{exchange}} {{span}}",
+    "recordedEmpty": "History for this coin starts when a sample is stored.",
+    "recordedKind": {
+      "futures_oi": "futures",
+      "book": "book",
+      "flow": "flow",
+      "liquidations": "liquidations"
+    },
     "liqSide": {
       "long": "Long",
       "short": "Short"

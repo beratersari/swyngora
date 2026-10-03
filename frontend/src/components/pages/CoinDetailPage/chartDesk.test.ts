@@ -6,6 +6,7 @@ import {
   footprintLevels,
   footprintWindow,
   formatRecordedSpan,
+  recordedParts,
   fundingRateLines,
   futuresRecorded,
   liquidationNotionalByCandle,
@@ -18,7 +19,8 @@ describe('chart desk mappers', () => {
     expect(footprintWindow(4 * 60)).toBe('5m');
     expect(footprintWindow(50 * 60)).toBe('1h');
     expect(footprintWindow(5 * 3600)).toBe('1d');
-    expect(footprintWindow(10 * 86400)).toBe('7d');
+    expect(footprintWindow(10 * 86400)).toBe('30d');
+    expect(footprintWindow(5 * 86400)).toBe('7d');
   });
 
   it('keeps the largest book levels and thins columns', () => {
@@ -153,5 +155,17 @@ describe('chart desk mappers', () => {
         ],
       }),
     ).toEqual([{ exchange: 'binance', spanSec: 3600 }]);
+    expect(
+      recordedParts({
+        series: [
+          { kind: 'flow', exchange: 'bybit', spanSec: 120 },
+          { kind: 'futures_oi', exchange: 'binance', spanSec: 3600 },
+          { kind: 'liquidations', exchange: 'okx', spanSec: 0 },
+        ],
+      }),
+    ).toEqual([
+      { kind: 'futures_oi', exchange: 'binance', spanSec: 3600 },
+      { kind: 'flow', exchange: 'bybit', spanSec: 120 },
+    ]);
   });
 });

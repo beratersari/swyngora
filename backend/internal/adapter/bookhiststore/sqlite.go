@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -190,6 +191,63 @@ WHERE exchange = ? AND symbol = ?`, string(exchange), symbol).Scan(&ms)
 		return time.Time{}, false, nil
 	}
 	return time.UnixMilli(ms.Int64).UTC(), true, nil
+}
+
+// EarliestBookSpans is the oldest ladder for each stored symbol and venue.
+// symbols are the forms already stored (Coinbase uses BTC-USD).
+func (s *SQLite) EarliestBookSpans(ctx context.Context, symbols []string) ([]domain.StoredSince, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("book history store is nil")
+	}
+	symbols = uniqueStoredSymbols(symbols)
+	if len(symbols) == 0 {
+		return nil, nil
+	}
+	in, args := sqliteutil.InArgs(symbols)
+	rows, err := s.db.QueryContext(ctx, `
+SELECT symbol, exchange, MIN(sampled_at_ms) FROM book_snapshots
+WHERE symbol IN (`+in+`) GROUP BY symbol, exchange`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.StoredSince
+	for rows.Next() {
+		var sym, ex string
+		var ms sql.NullInt64
+		if err := rows.Scan(&sym, &ex, &ms); err != nil {
+			return nil, err
+		}
+		if !ms.Valid || ms.Int64 <= 0 || sym == "" || ex == "" {
+			continue
+		}
+		out = append(out, domain.StoredSince{
+			Exchange: domain.Exchange(ex),
+			Symbol:   sym,
+			Since:    time.UnixMilli(ms.Int64).UTC(),
+		})
+	}
+	return out, rows.Err()
+}
+
+func uniqueStoredSymbols(symbols []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(symbols))
+	for _, raw := range symbols {
+		s := strings.TrimSpace(raw)
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+		if len(out) >= domain.LiquidRecorderLimit*3 {
+			break
+		}
+	}
+	return out
 }
 
 // NearestAt returns the sample at or before at, else the next one after.

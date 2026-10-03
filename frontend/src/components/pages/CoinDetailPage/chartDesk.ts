@@ -51,14 +51,15 @@ const FOOTPRINT_ROWS = 48;
 const LIQ_ROWS = 12;
 
 /** Map a visible candle span onto a flow-at-prices window. */
-export function footprintWindow(spanSec: number): '5m' | '15m' | '1h' | '4h' | '1d' | '3d' | '7d' {
+export function footprintWindow(spanSec: number): '5m' | '15m' | '1h' | '4h' | '1d' | '3d' | '7d' | '30d' {
   if (!Number.isFinite(spanSec) || spanSec <= 5 * 60) return '5m';
   if (spanSec <= 15 * 60) return '15m';
   if (spanSec <= 60 * 60) return '1h';
   if (spanSec <= 4 * 60 * 60) return '4h';
   if (spanSec <= 24 * 60 * 60) return '1d';
   if (spanSec <= 3 * 24 * 60 * 60) return '3d';
-  return '7d';
+  if (spanSec <= 7 * 24 * 60 * 60) return '7d';
+  return '30d';
 }
 
 function topBy<T>(rows: T[], n: number, score: (row: T) => number): T[] {
@@ -207,11 +208,28 @@ export function crowdTopSeries(
 
 export type RecordedFutures = { exchange: string; spanSec: number };
 
+const RECORDED_KINDS = ['futures_oi', 'book', 'flow', 'liquidations'] as const;
+
+export type RecordedPart = { kind: string; exchange: string; spanSec: number };
+
+/** Stored series that have a span, in a stable kind order. */
+export function recordedParts(span: HistorySpan | undefined): RecordedPart[] {
+  const rows = span?.series ?? [];
+  const out: RecordedPart[] = [];
+  for (const kind of RECORDED_KINDS) {
+    for (const row of rows) {
+      if (row.kind !== kind || (row.spanSec ?? 0) <= 0 || !row.exchange) continue;
+      out.push({ kind, exchange: String(row.exchange), spanSec: row.spanSec ?? 0 });
+    }
+  }
+  return out;
+}
+
 /** Futures open-interest rows that have a stored span. */
 export function futuresRecorded(span: HistorySpan | undefined): RecordedFutures[] {
-  return (span?.series ?? [])
-    .filter((row) => row.kind === 'futures_oi' && (row.spanSec ?? 0) > 0 && row.exchange)
-    .map((row) => ({ exchange: String(row.exchange), spanSec: row.spanSec ?? 0 }));
+  return recordedParts(span)
+    .filter((row) => row.kind === 'futures_oi')
+    .map((row) => ({ exchange: row.exchange, spanSec: row.spanSec }));
 }
 
 function rowsByVenue(items: FuturesPaneRow[] | undefined): Map<string, FuturesPaneRow[]> {

@@ -507,7 +507,7 @@ export interface paths {
          *     use stored 1-minute ladders, with brief walls and other size moves
          *     painted on the minute they happened. A multi-day window groups those
          *     minutes so the map stays readable. History only exists while the desk
-         *     has been running (about 7 days). Informational only.
+         *     has been running (about 30 days). Informational only.
          */
         get: operations["getSpotOrderBookHeatmap"];
         put?: never;
@@ -841,8 +841,9 @@ export interface paths {
         };
         /**
          * Liquid perpetual board (price, funding, open interest, long/short, taker, liquidations)
-         * @description One table for the liquid USDT perpetuals (default 36, max 36, same
-         *     universe as the futures recorder). Each row has the mark price, the
+         * @description One table for the liquid USDT perpetuals (default 36, max 100). The
+         *     recorder keeps 100 names; this page opens on 36 so the first load stays
+         *     small, and `limit=100` asks for the full recorded set. Each row has the mark price, the
          *     predicted funding rate, open interest, the 1h and 24h open-interest
          *     change, crowd long percent, the 1h taker buy share, and 24h long and
          *     short liquidation notionals. `exchange=all` (default) reads Binance
@@ -853,7 +854,9 @@ export interface paths {
          *     aggressive buy and sell volume; an incomplete hour stays blank. A
          *     missing or old venue is named on `coverage` and on that coin's
          *     `venues` row, and is not counted as zero. `definite` is false when
-         *     any coin is incomplete. Informational only.
+         *     any coin is incomplete. `recorded` says how far back open interest, the
+         *     spot book, flow-at-prices, and stored liquidation prints actually go
+         *     for that coin. Informational only.
          */
         get: operations["getMarketDerivativesBoard"];
         put?: never;
@@ -1221,7 +1224,7 @@ export interface paths {
          *     quiet hours counted as zero between the first and last stored print.
          *     CVD uses the last completed UTC day of aggressive buy minus sell.
          *     Spread uses the latest hour's average top-of-book percent from the
-         *     spot book (about 7 days are kept). Print size stays unknown: only the
+         *     spot book (about 30 days are kept). Print size stays unknown: only the
          *     previous 15 minutes of trades are kept. Fewer than 20 past daily
          *     samples, or 24 past hourly samples, stays unknown. The span is the
          *     stored sample span. exchange=all returns Binance, Bybit, and OKX
@@ -1246,7 +1249,7 @@ export interface paths {
         };
         /**
          * Which liquid coins are unusual versus their own stored history
-         * @description Scores the liquid USDT perpetuals, seeds first and capped at 36, with
+         * @description Scores the liquid USDT perpetuals, seeds first and capped at 100, with
          *     the same per-venue rules as `/api/v1/market/unusual`. A row is kept
          *     only when the band is high, low, extreme_high, or extreme_low.
          *     Typical readings and readings with too few samples are left off.
@@ -1275,11 +1278,14 @@ export interface paths {
         /**
          * How long this coin has actually been recorded
          * @description Oldest stored sample per venue for futures open interest, the spot
-         *     book, and flow-at-prices. A venue with no rows is omitted. The startup
-         *     archive backfills the liquid USDT perpetuals, up to 36 names with the
-         *     seed pairs first, and only as far as each public endpoint documents.
-         *     `spanSec` is from that oldest sample to now.
-         *     Informational only.
+         *     book, flow-at-prices, and liquidation prints this process recorded.
+         *     A venue with no rows is omitted. The startup archive backfills the
+         *     liquid USDT perpetuals, up to 100 names with the seed pairs first,
+         *     and only as far as each public endpoint documents. Spot books and
+         *     flow-at-prices are kept about 30 days. Recorded liquidation prints
+         *     are kept with the futures archive (about 90 days). Public liquidation
+         *     refill is still about 7 days. `spanSec` is from that oldest sample
+         *     to now. Informational only.
          */
         get: operations["getMarketHistorySpan"];
         put?: never;
@@ -2266,11 +2272,11 @@ export interface paths {
          *     USD-M aggTrades, Bybit recent trades), not candle volume smeared
          *     across high–low (that is `/volume-profile`). `exchange=all`
          *     (default) returns Binance and Bybit separately plus `combined`.
-         *     Use `window` (`5m` / `15m` / `1h` / `4h` / `1d` / `3d` / `7d`,
-         *     default `15m`) or `startTime` + `endTime` (max 7d). The live
+         *     Use `window` (`5m` / `15m` / `1h` / `4h` / `1d` / `3d` / `7d` / `30d`,
+         *     default `15m`) or `startTime` + `endTime` (max 30d). The live
          *     tape is about the last hour on Binance and the newest ~1000
          *     Bybit trades. Closed minutes are stored while this process runs
-         *     (about 7 days), so a longer lookback and Bybit further back use
+         *     (about 30 days), so a longer lookback and Bybit further back use
          *     that buy/sell and print-count ladder. Optional `tickSize` sets
          *     the row width; `minPrice` / `maxPrice` clip the ladder to a band.
          *     `truncated` is true when stored rows do not cover the whole window.
@@ -5775,7 +5781,7 @@ export interface components {
         };
         HistorySpanSeries: {
             /** @enum {string} */
-            kind?: "futures_oi" | "book" | "flow";
+            kind?: "futures_oi" | "book" | "flow" | "liquidations";
             exchange?: string;
             /** Format: date-time */
             since?: string;
@@ -7492,6 +7498,8 @@ export interface components {
             takerDefinite?: boolean;
             venues?: components["schemas"]["MarketDerivativesVenue"][];
             coverage?: components["schemas"]["MarketVenueCoverage"];
+            /** @description Oldest stored sample per series and venue. Omitted when nothing is stored yet. */
+            recorded?: components["schemas"]["HistorySpanSeries"][];
         };
         MarketDerivativesVenue: {
             exchange?: string;
@@ -10988,7 +10996,7 @@ export interface operations {
             query?: {
                 /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
-                /** @description How many liquid perpetuals to include (default 36, min 5, max 36) */
+                /** @description How many liquid perpetuals to include (default 36, min 5, max 100) */
                 limit?: number;
             };
             header?: never;
@@ -12612,9 +12620,9 @@ export interface operations {
                 symbol: string;
                 /** @description binance | bybit | all (default all = both + combined) */
                 exchange?: string;
-                /** @description 5m | 15m | 1h | 4h | 1d | 3d | 7d (default 15m). Ignored when startTime/endTime are set. */
+                /** @description 5m | 15m | 1h | 4h | 1d | 3d | 7d | 30d (default 15m). Ignored when startTime/endTime are set. */
                 window?: string;
-                /** @description Range start (RFC3339 or unix ms). Max span 7d. Stored minutes cover the lookback; the live tape alone does not. */
+                /** @description Range start (RFC3339 or unix ms). Max span 30d. Stored minutes cover the lookback; the live tape alone does not. */
                 startTime?: string;
                 /** @description Range end (RFC3339 or unix ms) */
                 endTime?: string;

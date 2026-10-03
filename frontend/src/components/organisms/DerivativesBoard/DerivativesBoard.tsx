@@ -9,7 +9,10 @@ import type { BoardSort, BoardSortKey } from './DerivativesBoard.types';
 import {
   coinChartPath,
   definiteText,
+  formatRecordedSpan,
   fundingText,
+  recordedSummary,
+  recordedTitle,
   isBoardSortKey,
   percentText,
   plainAmount,
@@ -71,6 +74,19 @@ export function DerivativesBoard({ exchange, coins, loading }: DerivativesBoardP
       ...sortable('base'),
       render: (_value, row) => (
         <Link to={coinChartPath(exchange, row.symbol ?? '')}>{row.base || row.symbol}</Link>
+      ),
+    },
+    {
+      title: t('derivatives:recorded'),
+      dataIndex: 'recorded',
+      render: (_value, row) => (
+        <Text variant="caption" color="secondary" title={recordedTitle(row.recorded, formatRecordedSpan)}>
+          {recordedSummary(
+            row.recorded,
+            (kind) => t(`detail:chart.recordedKind.${kind}`, { defaultValue: kind }),
+            formatRecordedSpan,
+          )}
+        </Text>
       ),
     },
     {

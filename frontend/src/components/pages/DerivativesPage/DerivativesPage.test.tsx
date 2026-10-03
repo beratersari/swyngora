@@ -69,6 +69,7 @@ describe('DerivativesPage', () => {
     );
     const link = screen.getByRole('link', { name: 'BTC' });
     expect(link).toHaveAttribute('href', '/markets/binance/BTCUSDT');
+    expect(screen.getByRole('columnheader', { name: 'Recorded' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Crowd long' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Taker buy 1h' })).toBeInTheDocument();
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);

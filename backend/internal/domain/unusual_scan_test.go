@@ -122,7 +122,7 @@ func TestParseUnusualScanMetricAndLimit(t *testing.T) {
 	if _, err := ParseUnusualScanMetric("basis"); err == nil {
 		t.Fatal("basis")
 	}
-	if ParseUnusualScanLimit(0) != LiquidRecorderLimit || ParseUnusualScanLimit(2) != 5 || ParseUnusualScanLimit(99) != LiquidRecorderLimit {
-		t.Fatalf("limits %d %d %d", ParseUnusualScanLimit(0), ParseUnusualScanLimit(2), ParseUnusualScanLimit(99))
+	if ParseUnusualScanLimit(0) != LiquidRecorderLimit || ParseUnusualScanLimit(2) != 5 || ParseUnusualScanLimit(250) != LiquidRecorderLimit {
+		t.Fatalf("limits %d %d %d", ParseUnusualScanLimit(0), ParseUnusualScanLimit(2), ParseUnusualScanLimit(250))
 	}
 }

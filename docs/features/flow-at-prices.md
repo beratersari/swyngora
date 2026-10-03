@@ -14,8 +14,8 @@ prints hit that row, or what the **delta** was.
 - Works for BTC and other linear USDT pairs the venues list
 - `exchange=all` (default): **Binance** USD-M and **Bybit** linear
   separately plus `combined`
-- Time range: `window=5m|15m|1h|4h|1d|3d|7d` (default `15m`) **or**
-  `startTime` + `endTime` (RFC3339 or unix ms). Max **7 days**
+- Time range: `window=5m|15m|1h|4h|1d|3d|7d|30d` (default `15m`) **or**
+  `startTime` + `endTime` (RFC3339 or unix ms). Max **30 days**
 - Optional `tickSize` (price row width, e.g. `10`). Omit to pick a row
   size that keeps the ladder readable (widened if it would exceed 200
   rows)
@@ -30,8 +30,8 @@ prints hit that row, or what the **delta** was.
 - `truncated` / `complete`: the ladder may not cover the whole window.
   The live tape is about the last hour on Binance and the newest ~1000
   Bybit trades. Closed minutes are stored while the server runs (about
-  7 days, `FLOW_AT_PRICES_RETENTION`) for the default futures symbols
-  plus pairs someone has opened. A 4h / 1d / 3d / 7d lookback, and
+  30 days, `FLOW_AT_PRICES_RETENTION`) for the liquid recorder list
+  plus pairs someone has opened. A 4h / 1d / 3d / 7d / 30d lookback, and
   Bybit further back than those 1000 trades, reads that stored buy,
   sell, delta, and print count. Minutes before the process started are
   missing. Stored rows are about 0.05% of price wide and roll up to a

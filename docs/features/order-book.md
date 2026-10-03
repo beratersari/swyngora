@@ -91,7 +91,7 @@ and Bybit linear). This file is the **spot** book.
     opening a coin already has history (does not wait on a websocket). Opening
     the desk then keeps 1s samples on the watched pair. `window` is lookback
     seconds (60–604800, default 600). Up to 30 minutes uses the live 1s tape.
-    Longer windows use stored 1-minute ladders (about 7 days). Brief walls
+    Longer windows use stored 1-minute ladders (about 30 days). Brief walls
     and other size moves between those minutes are drawn on that bucket.
     A multi-day window groups minutes so the map stays readable. Coin detail
     renders a Bookmap-style

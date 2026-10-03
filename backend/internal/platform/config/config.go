@@ -346,7 +346,7 @@ func Load() Config {
 
 		OrderBookHistoryDBPath:    getenv("ORDERBOOK_HISTORY_DB_PATH", "data/orderbook.db"),
 		OrderBookHistoryInterval:  positiveDurationEnv("ORDERBOOK_HISTORY_INTERVAL", time.Minute),
-		OrderBookHistoryRetention: positiveDurationEnv("ORDERBOOK_HISTORY_RETENTION", 7*24*time.Hour),
+		OrderBookHistoryRetention: positiveDurationEnv("ORDERBOOK_HISTORY_RETENTION", 30*24*time.Hour),
 		OrderBookHistorySymbols:   parseCSVList(os.Getenv("ORDERBOOK_HISTORY_SYMBOLS")),
 
 		PerpDepthHistoryDBPath:    getenv("PERP_DEPTH_HISTORY_DB_PATH", "data/perpdepth.db"),
@@ -357,7 +357,7 @@ func Load() Config {
 
 		FlowAtPricesDBPath:        getenv("FLOW_AT_PRICES_DB_PATH", "data/flowprices.db"),
 		FlowAtPricesInterval:      positiveDurationEnv("FLOW_AT_PRICES_INTERVAL", 10*time.Second),
-		FlowAtPricesRetention:     positiveDurationEnv("FLOW_AT_PRICES_RETENTION", 7*24*time.Hour),
+		FlowAtPricesRetention:     positiveDurationEnv("FLOW_AT_PRICES_RETENTION", 30*24*time.Hour),
 		PerpDepthHistoryRetention: positiveDurationEnv("PERP_DEPTH_HISTORY_RETENTION", 2*24*time.Hour),
 
 		APIAuthToken: strings.TrimSpace(os.Getenv("API_AUTH_TOKEN")),

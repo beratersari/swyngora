@@ -12,7 +12,7 @@ const (
 
 	// UnusualScanNote is the English note on the scan payload. The product
 	// page builds its own sentence from localized copy.
-	UnusualScanNote = "Liquid USDT perpetuals, seeds first, capped at 36. Each row is one venue's reading that is high or low versus that coin's own stored samples. Typical readings and readings with too few samples are left off. Venues are not merged. Print size is not scanned. Informational only — not financial advice."
+	UnusualScanNote = "Liquid USDT perpetuals, seeds first, capped at 100. Each row is one venue's reading that is high or low versus that coin's own stored samples. Typical readings and readings with too few samples are left off. Venues are not merged. Print size is not scanned. Informational only — not financial advice."
 )
 
 // UnusualScanHit is one standout reading. Distance is how far the percentile sits from 50.

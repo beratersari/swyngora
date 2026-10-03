@@ -14,7 +14,7 @@ const (
 	// MaxHeatmapWindow is the live 1s tape. Longer lookbacks use stored books.
 	MaxHeatmapWindow = 30 * time.Minute
 	// MaxHeatmapHistoryWindow matches the default order-book history retention.
-	MaxHeatmapHistoryWindow = 7 * 24 * time.Hour
+	MaxHeatmapHistoryWindow = 30 * 24 * time.Hour
 	// HeatmapHistoryMaxColumns caps a stored lookback so a multi-day map stays drawable.
 	HeatmapHistoryMaxColumns = 240
 	// HeatmapMinInterval collapses faster polls into one live column.
@@ -84,7 +84,7 @@ func NewHeatmapTape() *HeatmapTape {
 }
 
 // ClampHeatmapWindowSeconds bounds the requested lookback (seconds).
-// Up to 30 minutes stays on the live tape. Longer requests use stored history, capped at 7 days.
+// Up to 30 minutes stays on the live tape. Longer requests use stored history, capped at 30 days.
 func ClampHeatmapWindowSeconds(n int) int {
 	if n <= 0 {
 		return int(DefaultHeatmapWindow / time.Second)

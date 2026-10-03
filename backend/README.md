@@ -48,14 +48,14 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/orderbook/spread` | One coin's current spread versus its own typical |
 | `GET` | `/api/v1/market/orderbook/liquidity` | 0–100 liquidity score from ±0.1/0.5/1% depth; per venue + market-wide |
 | `GET` | `/api/v1/market/orderbook/spot-perp` | Spot vs perp resting size at the same ±0.1/0.5/1% of mid; which book is thinner and which side (bid or ask) is thinner |
-| `GET` | `/api/v1/market/orderbook/heatmap` | Resting bid/ask size over time. Up to 30 minutes is the live tape; longer `window` values (up to 7 days) use stored ladders plus brief walls and size moves |
+| `GET` | `/api/v1/market/orderbook/heatmap` | Resting bid/ask size over time. Up to 30 minutes is the live tape; longer `window` values (up to 30 days) use stored ladders plus brief walls and size moves |
 | `GET` | `/api/v1/market/liquidations` | Rolling 5m/1h/4h/24h futures long/short liquidations (Binance USD-M + Bybit linear); reconnect holes filled from that venue's history when available |
 | `GET` | `/api/v1/market/liquidations/overview` | Market-wide 1h/4h/12h/24h totals + coins ranked for a treemap |
 | `GET` | `/api/v1/market/holders` | Crypto holder count, concentration, and top wallets (CMC → Coin Metrics → GeckoTerminal → Ethplorer → Routescan → Tronscan; CryptoID fallback for UTXO coins like PIVX). Known addresses include a public `label` |
 | `GET` | `/api/v1/market/open-interest` | Current futures OI + 1h/4h/24h opened or closed USDT amount and percent, per venue and combined; includes funding |
 | `GET` | `/api/v1/market/perp-depth` | Perpetual bid notional within N% below mid vs ask notional above; Binance USD-M + Bybit linear + OKX USDT-swap + combined |
 | `GET` | `/api/v1/market/perp-depth/overview` | Total perp bid vs ask across the liquid coins we track, plus which coins make up the biggest share of that book; `bands` show 0.1% vs 1% of mid and who fills each distance; 15m/1h/4h windows include whether total bid+ask got thicker or thinner; `moves` are the largest 6h jumps and drops with BTC around each, the coins that caused them, and whether Binance, Bybit, and OKX moved together |
-| `GET` | `/api/v1/market/derivatives-board` | Liquid USDT perpetuals in one table (default 36): mark, funding, open interest, 1h/24h open-interest change, crowd long percent, 1h taker buy share, and 24h long/short liquidations. A combined cell stays empty until Binance, Bybit, and OKX are all fresh for that column |
+| `GET` | `/api/v1/market/derivatives-board` | Liquid USDT perpetuals in one table (default 36, max 100): mark, funding, open interest, 1h/24h open-interest change, crowd long percent, 1h taker buy share, 24h long/short liquidations, and how far back each stored series goes. A combined cell stays empty until Binance, Bybit, and OKX are all fresh for that column |
 | `GET` | `/api/v1/market/options` | BTC/ETH Deribit options: listed OI, 24h volume, put/call, DVOL + ATM IV, 30-day realized vol and `volCompare` (DVOL minus realized); term structure, call/put skew, expiry mix, expected move, max pain, dealer gamma + flip; `history` over hours/days including DVOL vs realized / volGap, net GEX, and flip vs spot; `strikeOi` is call/put open-interest change at each strike over 1h/4h/24h/7d; `moves` when OI/PCR/IV jumps vs typical or gamma / flip-side changes; `vsMarket` when IV or put/call disagrees with spot/futures |
 | `GET` | `/api/v1/market/print-size` | Average USDT per aggressive buy/sell fill (5m/15m vs the prior window; few large vs many small) |
 | `GET` | `/api/v1/market/print-size/overview` | Same average summed across the liquid USDT pairs, plus how many coins got larger or smaller |
@@ -75,7 +75,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/long-short-ratio` | Account long/short ratio + recent 5m history on Binance, Bybit, and OKX. Binance and OKX `gap` is top long% minus crowd long%; `divergence` is top vs price |
 | `GET` | `/api/v1/market/futures-history` | Durable stored OI / funding / long-short / liquidation history |
 | `GET` | `/api/v1/market/unusual` | Whether funding, 24h open-interest change, completed-hour liquidations, completed-day CVD, and hourly spread are high or low versus that coin’s own stored samples. Venues stay separate. Print size stays unknown |
-| `GET` | `/api/v1/market/unusual/scan` | Liquid USDT perpetuals (up to 36) whose same readings are high or low versus their own stored samples. Typical and unknown rows are left off |
+| `GET` | `/api/v1/market/unusual/scan` | Liquid USDT perpetuals (up to 100) whose same readings are high or low versus their own stored samples. Typical and unknown rows are left off |
 | `GET` | `/api/v1/market/history-span` | How long futures open interest, the spot book, and flow-at-prices have actually been stored for one coin. Venues with no rows are omitted |
 | `GET` | `/api/v1/market/liquidation-max-pain` | Largest estimated liquidation pockets above (shorts) and below (longs) last price — not the hunt target |
 | `GET` | `/api/v1/market/liquidation-hunt` | Hypothetical per-venue hunt: spot size to reach liq zones + desk result + up/down ease scores (requested percents stay as given; missing factors add 0; `scoreCompare` has separate up/down factor effects and the largest custom-weight mover per side) + cascade paths |
@@ -381,11 +381,11 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `ACCOUNT_PURGE_INTERVAL` | `1h` | How often expired closed accounts are purged |
 | `FUTURES_HISTORY_DB_PATH` | `data/futures.db` | SQLite archive for OI, funding, long/short, liquidations |
 | `FUTURES_HISTORY_INTERVAL` | `5m` | Snapshot worker cadence |
-| `FUTURES_HISTORY_RETENTION` | `2160h` | How long stored futures rows are kept. Startup pages the liquid set (up to 36 names, seeds first) only as far as each endpoint documents (Binance open interest and long/short: 30 days; OKX hourly open interest and long/short: 1,440 points; OKX funding: three months; Bybit open interest back to listing, requested here for 90 days). A Binance pause retries the unfinished series. Public liquidation history refills about 7 days |
+| `FUTURES_HISTORY_RETENTION` | `2160h` | How long stored futures rows and recorded liquidation prints are kept. Startup pages the liquid set (up to 100 names, seeds first) only as far as each endpoint documents (Binance open interest and long/short: 30 days; OKX hourly open interest and long/short: 1,440 points; OKX funding: three months; Bybit open interest back to listing, requested here for 90 days). A Binance pause retries the unfinished series. Public liquidation history still refills about 7 days; older prints are the ones this process already recorded |
 | `FUTURES_HISTORY_SYMBOLS` | _(optional CSV)_ | Extra pairs always sampled (majors are built-in) |
 | `ORDERBOOK_HISTORY_DB_PATH` | `data/orderbook.db` | SQLite archive for spot book samples |
 | `ORDERBOOK_HISTORY_INTERVAL` | `1m` | Book snapshot worker cadence |
-| `ORDERBOOK_HISTORY_RETENTION` | `168h` | How long stored books are kept |
+| `ORDERBOOK_HISTORY_RETENTION` | `720h` | How long stored books are kept (30 days) |
 | `ORDERBOOK_HISTORY_SYMBOLS` | _(optional CSV)_ | Extra pairs always sampled (majors are built-in) |
 | `PERP_DEPTH_HISTORY_DB_PATH` | `data/perpdepth.db` | SQLite archive for market-wide perp bid/ask samples |
 | `PERP_DEPTH_HISTORY_INTERVAL` | `1m` | Liquid-perp book snapshot cadence |
@@ -395,7 +395,7 @@ See [`docs/features/telegram-bot.md`](../docs/features/telegram-bot.md).
 | `FEAR_GREED_HISTORY_RETENTION` | `2160h` | How long those samples are kept (90 days) |
 | `FLOW_AT_PRICES_DB_PATH` | `data/flowprices.db` | SQLite archive of buy/sell size at each price |
 | `FLOW_AT_PRICES_INTERVAL` | `10s` | How often closed minutes are stored |
-| `FLOW_AT_PRICES_RETENTION` | `168h` | How long those minute rows are kept (7 days) |
+| `FLOW_AT_PRICES_RETENTION` | `720h` | How long those minute rows are kept (30 days) |
 | `SCANNER_CHECK_INTERVAL` | `60s` | How often scanner rules are evaluated |
 
 No API keys are required for the public endpoints used here. Respect upstream rate limits.

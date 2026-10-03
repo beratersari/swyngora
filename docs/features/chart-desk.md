@@ -9,11 +9,11 @@ Show the book, the tape, and estimated liquidation pockets on the same candle a 
 On a crypto coin Overview chart:
 
 - Resting bid and ask size from the last 30 minutes of the order-book heatmap sits behind the candles. Green is bids, red is asks. Stronger color is more size.
-- The right edge is the footprint for the visible window: buy versus sell at each price. Panning the chart picks the nearest flow window (5 minutes through 7 days).
+- The right edge is the footprint for the visible window: buy versus sell at each price. Panning the chart picks the nearest flow window (5 minutes through 30 days).
 - Bars just left of that footprint are the largest estimated long and short liquidation pockets. The dashed 10× / 25× / 50× / 100× lines stay.
 - A pane under CVD is crowd long percent versus top-trader long percent for each venue that publishes both (Binance and OKX).
 - The next pane is stored USDT open interest, one line each for Binance, Bybit, and OKX. The pane after that is stored funding percent, settled prints when that venue has them. The last pane is liquidation notional in each candle: short liquidations point up, long liquidations point down, and a candle with both shows the difference.
-- A line under the chart names how long futures open interest has been stored on each venue. A venue with no samples is left out. Startup backfill covers the liquid set, up to 36 names, as far as each venue publishes.
+- A line under the chart names how long futures open interest, the spot book, flow-at-prices, and recorded liquidation prints have been stored on each venue. A venue with no samples is left out. Startup backfill covers the liquid set, up to 100 names, as far as each venue publishes.
 
 The Book, Footprint, Crowd vs top, Open interest, Funding, and Liquidations switches turn those layers off. Equities do not get them. The three new panes read `GET /api/v1/market/futures-history` (newest 1,000 rows from the first loaded candle). A venue with no stored rows is left off that pane.
 
@@ -21,7 +21,7 @@ The Book, Footprint, Crowd vs top, Open interest, Funding, and Liquidations swit
 
 - Chart drawing: `frontend/src/components/molecules/CandleChartHost/CandleChartHost.desk.ts`
 - Mappers: `frontend/src/components/pages/CoinDetailPage/chartDesk.ts`
-- Recorder universe: `backend/internal/domain/liquid_recorder.go` (36 names, seeds first)
+- Recorder universe: `backend/internal/domain/liquid_recorder.go` (100 names, seeds first)
 - Recording span: `GET /api/v1/market/history-span`, MCP `get_history_span`
 
 ## How to verify
@@ -32,4 +32,4 @@ Open `/markets/binance/BTCUSDT`. The overview chart shows the book shading, the 
 
 ## Limits
 
-Open interest, funding, and liquidation panes use the newest 1,000 stored rows from the first loaded candle. A long chart can be empty on the left when more samples exist than that cap. Book shading is the live 30-minute heatmap, not years of depth. Footprint uses the stored flow ladder while this process runs (about 7 days) and the live tape inside that. Liquidation pockets are the leverage model, not a map of forced closes. The wider recorder samples about 36 USDT perpetuals. Binance books outside the seed list use the top 100 levels and are snapshotted about every 2 minutes. Flashes stay on the seed pairs and coins someone opened. Bybit and Coinbase snapshot the wider list every minute. Startup backfills public futures history for that same liquid list.
+Open interest, funding, and liquidation panes use the newest 1,000 stored rows from the first loaded candle. A long chart can be empty on the left when more samples exist than that cap. Book shading is the live 30-minute heatmap, not years of depth. Footprint uses the stored flow ladder while this process runs (about 30 days) and the live tape inside that. Liquidation pockets are the leverage model, not a map of forced closes. The wider recorder samples about 100 USDT perpetuals. Binance books outside the seed list use the top 100 levels and are snapshotted about every 2 minutes. Flashes stay on the seed pairs and coins someone opened. Bybit and Coinbase snapshot the wider list every minute. Bybit's liquidation socket follows that same 100-name list. Startup backfills public futures history for that same liquid list. Recorded liquidation prints stay with the futures archive (about 90 days). Public refill is still about 7 days.

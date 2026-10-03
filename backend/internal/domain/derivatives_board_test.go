@@ -6,8 +6,8 @@ import (
 )
 
 func TestParseDerivativesBoardLimit(t *testing.T) {
-	if ParseDerivativesBoardLimit(0) != LiquidRecorderLimit || ParseDerivativesBoardLimit(2) != 5 || ParseDerivativesBoardLimit(99) != LiquidRecorderLimit {
-		t.Fatalf("limits 0=%d 2=%d 99=%d", ParseDerivativesBoardLimit(0), ParseDerivativesBoardLimit(2), ParseDerivativesBoardLimit(99))
+	if ParseDerivativesBoardLimit(0) != derivativesBoardDefault || ParseDerivativesBoardLimit(2) != 5 || ParseDerivativesBoardLimit(99) != 99 || ParseDerivativesBoardLimit(500) != LiquidRecorderLimit {
+		t.Fatalf("limits 0=%d 2=%d 99=%d 500=%d", ParseDerivativesBoardLimit(0), ParseDerivativesBoardLimit(2), ParseDerivativesBoardLimit(99), ParseDerivativesBoardLimit(500))
 	}
 }
 

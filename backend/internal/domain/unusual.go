@@ -53,9 +53,9 @@ const (
 	UnusualOIWindow     = 24 * time.Hour
 	UnusualOISlack      = 2 * time.Hour
 	// UnusualSpreadLookback is the query window for stored spot-book spread.
-	// ORDERBOOK_HISTORY_RETENTION defaults to 7 days. A shorter store reports
+	// ORDERBOOK_HISTORY_RETENTION defaults to 30 days. A shorter store reports
 	// the span it actually has.
-	UnusualSpreadLookback = 7 * 24 * time.Hour
+	UnusualSpreadLookback = 30 * 24 * time.Hour
 
 	// UnusualNote is the English note on the API payload. The product UI
 	// builds its own sentence from localized copy.

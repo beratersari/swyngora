@@ -3,7 +3,9 @@ package domain
 // LiquidRecorderLimit is how many USDT perpetuals the background recorder
 // keeps sampling. The original seed pairs stay inside this cap. The startup
 // archive backfills this same list. Names outside it fill in from live samples.
-const LiquidRecorderLimit = 36
+// Binance books outside the seed list stay on the top 100 levels and a slower
+// cadence so the wider set does not trip the shared REST pause.
+const LiquidRecorderLimit = 100
 
 // MergeLiquidSymbols keeps seeds first, then ranked names, until limit.
 // Duplicate and blank symbols are dropped. Seeds win when the cap is tight.

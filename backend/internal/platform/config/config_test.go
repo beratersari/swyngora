@@ -90,6 +90,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.FuturesHistoryRetention != 90*24*time.Hour {
 		t.Fatalf("futures retention=%v", cfg.FuturesHistoryRetention)
 	}
+	if cfg.OrderBookHistoryRetention != 30*24*time.Hour || cfg.FlowAtPricesRetention != 30*24*time.Hour {
+		t.Fatalf("book %v flow %v", cfg.OrderBookHistoryRetention, cfg.FlowAtPricesRetention)
+	}
 	if cfg.OptionsCacheTTL != 30*time.Second || cfg.DeribitBaseURL != "https://www.deribit.com" {
 		t.Fatalf("options ttl=%v deribit=%s", cfg.OptionsCacheTTL, cfg.DeribitBaseURL)
 	}

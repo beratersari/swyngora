@@ -247,7 +247,7 @@ func (w *FlowAtPricesHistoryWorker) Start(ctx context.Context) {
 		w.Interval = 10 * time.Second
 	}
 	if w.Retain <= 0 {
-		w.Retain = 7 * 24 * time.Hour
+		w.Retain = 30 * 24 * time.Hour
 	}
 	w.RunOnce(ctx)
 	for {

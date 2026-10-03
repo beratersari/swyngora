@@ -50,9 +50,15 @@
     "funding": "Fonlama",
     "fundingLine": "{{exchange}} fonlama %",
     "liqNotional": "Likidasyonlar",
-    "recorded": "Kayıtlı vadeli geçmiş: {{parts}}.",
-    "recordedPart": "{{exchange}} {{span}}",
-    "recordedEmpty": "Bu coin için vadeli geçmiş, bir örnek kaydedilince başlar.",
+    "recorded": "Kayıt: {{parts}}.",
+    "recordedPart": "{{kind}} {{exchange}} {{span}}",
+    "recordedEmpty": "Bu coin için kayıt, bir örnek saklanınca başlar.",
+    "recordedKind": {
+      "futures_oi": "vadeli",
+      "book": "defter",
+      "flow": "akış",
+      "liquidations": "likidasyon"
+    },
     "liqSide": {
       "long": "Long",
       "short": "Short"

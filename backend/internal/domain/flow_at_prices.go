@@ -16,12 +16,13 @@ const (
 	FlowAtPricesWindow1d  = "1d"
 	FlowAtPricesWindow3d  = "3d"
 	FlowAtPricesWindow7d  = "7d"
+	FlowAtPricesWindow30d = "30d"
 
 	DefaultFlowAtPricesWindow = FlowAtPricesWindow15m
 	// MaxFlowAtPricesRange is how far a custom range may look back. Longer
 	// windows come from the stored minute ladder, which only grows while
 	// the process is running.
-	MaxFlowAtPricesRange   = 7 * 24 * time.Hour
+	MaxFlowAtPricesRange   = 30 * 24 * time.Hour
 	MaxFlowAtPricesBins    = 200
 	MinFlowAtPricesBins    = 8
 	TargetFlowAtPricesBins = 64
@@ -39,6 +40,7 @@ var FlowAtPricesWindows = []struct {
 	{FlowAtPricesWindow1d, 24 * time.Hour},
 	{FlowAtPricesWindow3d, 3 * 24 * time.Hour},
 	{FlowAtPricesWindow7d, 7 * 24 * time.Hour},
+	{FlowAtPricesWindow30d, 30 * 24 * time.Hour},
 }
 
 // FlowAtPricesLevel is aggressive buy vs sell at one price row.
@@ -115,7 +117,7 @@ type FlowAtPricesReport struct {
 	Note     string
 }
 
-// ParseFlowAtPricesWindow accepts 5m / 15m / 1h / 4h / 1d / 3d / 7d (empty = 15m).
+// ParseFlowAtPricesWindow accepts 5m / 15m / 1h / 4h / 1d / 3d / 7d / 30d (empty = 15m).
 func ParseFlowAtPricesWindow(raw string) (string, time.Duration, error) {
 	s := strings.ToLower(strings.TrimSpace(raw))
 	if s == "" {
@@ -126,11 +128,11 @@ func ParseFlowAtPricesWindow(raw string) (string, time.Duration, error) {
 			return w.ID, w.Dur, nil
 		}
 	}
-	return "", 0, fmt.Errorf("%w: window must be 5m, 15m, 1h, 4h, 1d, 3d, or 7d", ErrInvalidArgument)
+	return "", 0, fmt.Errorf("%w: window must be 5m, 15m, 1h, 4h, 1d, 3d, 7d, or 30d", ErrInvalidArgument)
 }
 
 // ResolveFlowAtPricesRange picks [from, to] from an explicit range or a named window.
-// start/end win when either is set. Max span is 7 days (stored minute ladder).
+// start/end win when either is set. Max span is 30 days (stored minute ladder).
 func ResolveFlowAtPricesRange(window string, start, end *time.Time, now time.Time) (from, to time.Time, windowID string, err error) {
 	now = now.UTC()
 	if now.IsZero() {
@@ -151,7 +153,7 @@ func ResolveFlowAtPricesRange(window string, start, end *time.Time, now time.Tim
 			return time.Time{}, time.Time{}, "", fmt.Errorf("%w: endTime must be after startTime", ErrInvalidArgument)
 		}
 		if to.Sub(from) > MaxFlowAtPricesRange {
-			return time.Time{}, time.Time{}, "", fmt.Errorf("%w: range must be <= 7d", ErrInvalidArgument)
+			return time.Time{}, time.Time{}, "", fmt.Errorf("%w: range must be <= 30d", ErrInvalidArgument)
 		}
 		return from, to, "custom", nil
 	}

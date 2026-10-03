@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/sqliteutil"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 
 	_ "modernc.org/sqlite"
@@ -179,6 +180,42 @@ WHERE exchange = ? AND symbol = ?`, string(exchange), symbol).Scan(&ms)
 		return time.Time{}, false, nil
 	}
 	return time.UnixMilli(ms.Int64).UTC(), true, nil
+}
+
+// EarliestFlowSpans is the oldest stored minute for each symbol and venue.
+func (s *SQLite) EarliestFlowSpans(ctx context.Context, symbols []string) ([]domain.StoredSince, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	symbols = domain.SpanQuerySymbols(symbols)
+	if len(symbols) == 0 {
+		return nil, nil
+	}
+	in, args := sqliteutil.InArgs(symbols)
+	rows, err := s.db.QueryContext(ctx, `
+SELECT symbol, exchange, MIN(minute_ms) FROM flow_price_cells
+WHERE symbol IN (`+in+`) GROUP BY symbol, exchange`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.StoredSince
+	for rows.Next() {
+		var sym, ex string
+		var ms sql.NullInt64
+		if err := rows.Scan(&sym, &ex, &ms); err != nil {
+			return nil, err
+		}
+		if !ms.Valid || ms.Int64 <= 0 || sym == "" || ex == "" {
+			continue
+		}
+		out = append(out, domain.StoredSince{
+			Exchange: domain.Exchange(ex),
+			Symbol:   sym,
+			Since:    time.UnixMilli(ms.Int64).UTC(),
+		})
+	}
+	return out, rows.Err()
 }
 
 // FlowCursor is the newest print time already stored.

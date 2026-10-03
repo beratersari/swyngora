@@ -28,7 +28,7 @@ stores:
 - **size moves** that are not walls and did not survive on the ladder (`moves`)
 
 Duplicates for the same venue + pair + minute are ignored. Rows older than
-`ORDERBOOK_HISTORY_RETENTION` (default 7 days) are purged.
+`ORDERBOOK_HISTORY_RETENTION` (default 30 days) are purged.
 
 `GET /api/v1/market/orderbook/history?symbol=BTCUSDT&at=2026-08-16T12:00:00Z`
 

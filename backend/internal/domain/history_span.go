@@ -3,12 +3,20 @@ package domain
 import "time"
 
 const (
-	RecordedFuturesOI = "futures_oi"
-	RecordedBook      = "book"
-	RecordedFlow      = "flow"
+	RecordedFuturesOI    = "futures_oi"
+	RecordedBook         = "book"
+	RecordedFlow         = "flow"
+	RecordedLiquidations = "liquidations"
 
-	HistorySpanNote = "Span is how long this process has stored samples for the coin. The startup archive backfills the liquid USDT perpetuals, up to 36 names with the seed pairs first, and only as far as each public endpoint documents. A missing venue has no row. Informational only."
+	HistorySpanNote = "Span is how long this process has stored samples for the coin. The startup archive backfills the liquid USDT perpetuals, up to 100 names with the seed pairs first, and only as far as each public endpoint documents. Spot books and flow-at-prices are kept about 30 days while this process runs. Liquidation prints this process recorded are kept with the futures archive (about 90 days); public refill is still about 7 days. A missing venue has no row. Informational only."
 )
+
+// StoredSince is the oldest row for one stored symbol on one venue.
+type StoredSince struct {
+	Exchange Exchange
+	Symbol   string
+	Since    time.Time
+}
 
 // RecordedSeries is the oldest stored sample for one kind and venue.
 type RecordedSeries struct {
@@ -55,5 +63,42 @@ func BuildHistorySpan(symbol string, now time.Time, series []RecordedSeries) His
 		AsOf:   now,
 		Series: out,
 		Note:   HistorySpanNote,
+	}
+}
+
+// SpanQuerySymbols normalizes a recorder symbol list and drops blanks.
+func SpanQuerySymbols(symbols []string) []string {
+	out := make([]string, 0, len(symbols))
+	seen := map[string]struct{}{}
+	for _, raw := range symbols {
+		s := NormalizeLiquidationSymbol(raw)
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+		if len(out) >= LiquidRecorderLimit {
+			break
+		}
+	}
+	return out
+}
+
+// AttachRecordedSpans copies each coin's stored span onto the board.
+// Span seconds are measured to the board clock. Coins with no rows stay empty.
+func AttachRecordedSpans(board *DerivativesBoard, bySymbol map[string][]RecordedSeries) {
+	if board == nil || len(bySymbol) == 0 {
+		return
+	}
+	now := board.AsOf
+	for i := range board.Coins {
+		span := BuildHistorySpan(board.Coins[i].Symbol, now, bySymbol[board.Coins[i].Symbol])
+		if len(span.Series) == 0 {
+			continue
+		}
+		board.Coins[i].Recorded = span.Series
 	}
 }

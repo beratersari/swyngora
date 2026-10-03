@@ -636,7 +636,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_orderbook_heatmap",
-		mcp.WithDescription("Resting bid/ask size over time (order heatmap / bookmap-style tape). Not executed volume. Windows up to 30 minutes are the live 1s tape. Longer windows (up to 7 days) use stored 1-minute ladders, including brief walls and other size moves between those minutes. window is lookback seconds (60–604800, default 600). Spot only."),
+		mcp.WithDescription("Resting bid/ask size over time (order heatmap / bookmap-style tape). Not executed volume. Windows up to 30 minutes are the live 1s tape. Longer windows (up to 30 days) use stored 1-minute ladders, including brief walls and other size moves between those minutes. window is lookback seconds (60–2592000, default 600). Spot only."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
 		mcp.WithString("exchange", mcp.Description("binance (default) | coinbase | bybit")),
 		mcp.WithString("group", mcp.Description("Price bucket size e.g. 0.1; omit for a suggested default")),
@@ -798,9 +798,9 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_derivatives_board",
-		mcp.WithDescription("One sortable board for the liquid USDT perpetuals: mark price, predicted funding, open interest, 1h and 24h open-interest change, crowd long percent, 1h taker buy share, and 24h long and short liquidations. exchange=all reads Binance USD-M, Bybit linear, and OKX. A combined number is present only when every expected venue is fresh for that column. Crowd long is the account long share, weighted by open interest when that open interest is also fresh. Taker buy share sums the last hour of aggressive volume; an incomplete hour stays blank. definite is false when any coin is incomplete; missing and stale venues are named and are not counted as zero. limit default 36, max 36. Not financial advice."),
+		mcp.WithDescription("One sortable board for the liquid USDT perpetuals: mark price, predicted funding, open interest, 1h and 24h open-interest change, crowd long percent, 1h taker buy share, and 24h long and short liquidations. exchange=all reads Binance USD-M, Bybit linear, and OKX. A combined number is present only when every expected venue is fresh for that column. Crowd long is the account long share, weighted by open interest when that open interest is also fresh. Taker buy share sums the last hour of aggressive volume; an incomplete hour stays blank. definite is false when any coin is incomplete; missing and stale venues are named and are not counted as zero. recorded says how far back open interest, the spot book, flow-at-prices, and stored liquidation prints go for that coin. limit default 36, max 100 (the recorder keeps 100). Not financial advice."),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all)")),
-		mcp.WithNumber("limit", mcp.Description("How many liquid perps (default 36, max 36)")),
+		mcp.WithNumber("limit", mcp.Description("How many liquid perps (default 36, max 100)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.GetDerivativesBoard(ctx, req.GetString("exchange", "all"), req.GetInt("limit", 0))
 		if err != nil {
@@ -1134,7 +1134,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_history_span",
-		mcp.WithDescription("How long this coin has actually been recorded: oldest stored futures open interest, spot book, and flow-at-prices sample per venue. A venue with no rows is omitted. The startup archive backfills the liquid USDT perpetuals, up to 36 names with the seed pairs first, and only as far as each public endpoint documents. spanSec is from that oldest sample to now. Informational only — not financial advice."),
+		mcp.WithDescription("How long this coin has actually been recorded: oldest stored futures open interest, spot book, flow-at-prices, and liquidation print per venue. A venue with no rows is omitted. The startup archive backfills the liquid USDT perpetuals, up to 100 names with the seed pairs first, and only as far as each public endpoint documents. Spot books and flow-at-prices are kept about 30 days. Recorded liquidation prints are kept with the futures archive (about 90 days); public refill is still about 7 days. spanSec is from that oldest sample to now. Informational only — not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")
@@ -1165,7 +1165,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("scan_unusual",
-		mcp.WithDescription("Ranks the liquid USDT perpetuals, up to 36 with the seed pairs first, whose funding, latest 24h open-interest change, last completed liquidation hour, last completed CVD day, or latest hour of average spread is high or low versus that coin's own stored samples. Typical readings and readings with too few samples are left off. Venues stay separate and are not merged. Print size is not scanned. metric filters one series. Informational only — not financial advice."),
+		mcp.WithDescription("Ranks the liquid USDT perpetuals, up to 100 with the seed pairs first, whose funding, latest 24h open-interest change, last completed liquidation hour, last completed CVD day, or latest hour of average spread is high or low versus that coin's own stored samples. Typical readings and readings with too few samples are left off. Venues stay separate and are not merged. Print size is not scanned. metric filters one series. Informational only — not financial advice."),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all)")),
 		mcp.WithString("metric", mcp.Description("all | funding | open_interest | liquidations | cvd | spread (default all)")),
 		mcp.WithNumber("limit", mcp.Description("How many liquid names to score, 5 to 36. Default 36.")),
@@ -1805,7 +1805,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_flow_at_prices",
-		mcp.WithDescription("What printed at each price: market buy vs sell USDT, print count, and delta (buy − sell) on that row. Use when the user asks how much bought/sold at a level (e.g. 65520 while BTC traded 65400–65600), not candle totals. Built from aggressive futures prints, not candle smear. window 5m/15m/1h/4h/1d/3d/7d (default 15m) or startTime/endTime (max 7d). The live tape is about 1h on Binance and the newest ~1000 Bybit trades. Closed minutes stored while this process runs (about 7 days) fill longer lookbacks and Bybit further back. Optional minPrice/maxPrice clips the ladder; tickSize sets row width. truncated when stored rows do not cover the whole window. Not financial advice."),
+		mcp.WithDescription("What printed at each price: market buy vs sell USDT, print count, and delta (buy − sell) on that row. Use when the user asks how much bought/sold at a level (e.g. 65520 while BTC traded 65400–65600), not candle totals. Built from aggressive futures prints, not candle smear. window 5m/15m/1h/4h/1d/3d/7d/30d (default 15m) or startTime/endTime (max 30d). The live tape is about 1h on Binance and the newest ~1000 Bybit trades. Closed minutes stored while this process runs (about 30 days) fill longer lookbacks and Bybit further back. Optional minPrice/maxPrice clips the ladder; tickSize sets row width. truncated when stored rows do not cover the whole window. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + combined)")),
 		mcp.WithString("window", mcp.Description("5m | 15m | 1h (default 15m). Ignored when startTime/endTime are set.")),

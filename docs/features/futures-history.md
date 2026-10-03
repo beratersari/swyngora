@@ -30,7 +30,7 @@ server restart and can be queried later by users or the AI.
   process recorded itself. It is not a promise that every public history
   endpoint can backfill 90 days.
 - Startup pages public 1-hour history for the liquid recorder list, seeds
-  first and capped at 36, only as far as that endpoint documents, and never
+  first and capped at 100, only as far as that endpoint documents, and never
   past 90 days. The first liquid-name refresh runs before the archive starts.
   A later start skips a series whose earliest row already reaches the back of
   **that** window. A Binance rate-limit pause stops the current pass and

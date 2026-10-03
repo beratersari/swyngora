@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { coinChartPath, definiteText, fundingText, percentText, signedAmount, sortBoardCoins } from './helpers';
+import {
+  coinChartPath,
+  definiteText,
+  formatRecordedSpan,
+  fundingText,
+  percentText,
+  recordedSummary,
+  signedAmount,
+  sortBoardCoins,
+} from './helpers';
 import type { DerivativesCoin } from '@/libs/api';
 
 describe('derivatives board helpers', () => {
@@ -22,6 +31,21 @@ describe('derivatives board helpers', () => {
     const coin = { fundingDefinite: false, fundingRatePct: '+0.01' } as DerivativesCoin;
     expect(fundingText(coin)).toBe('—');
     expect(fundingText({ ...coin, fundingDefinite: true })).toBe('+0.01%');
+  });
+
+  it('shows the longest stored span for each series', () => {
+    expect(
+      recordedSummary(
+        [
+          { kind: 'futures_oi', exchange: 'binance', spanSec: 3600 },
+          { kind: 'futures_oi', exchange: 'bybit', spanSec: 7200 },
+          { kind: 'book', exchange: 'binance', spanSec: 86400 },
+        ],
+        (kind) => kind,
+        formatRecordedSpan,
+      ),
+    ).toBe('futures_oi 2h · book 24h');
+    expect(recordedSummary([], (kind) => kind, formatRecordedSpan)).toBe('—');
   });
 
   it('shows crowd long and taker buy share as percents', () => {

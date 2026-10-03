@@ -122,6 +122,32 @@ func TestInsertLiquidation_NoDuplicatesAndPurge(t *testing.T) {
 	}
 }
 
+func TestEarliestLiquidationSpans_KeepsPrintsOlderThanPublicRefill(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "futures.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	old := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	recent := old.Add(20 * 24 * time.Hour)
+	for _, ev := range []domain.LiquidationEvent{
+		{Exchange: domain.ExchangeBybit, Symbol: "ETHUSDT", Side: domain.LiquidationSideShort, Price: 3000, Quantity: 1, Notional: 3000, Time: old},
+		{Exchange: domain.ExchangeBybit, Symbol: "ETHUSDT", Side: domain.LiquidationSideLong, Price: 3100, Quantity: 2, Notional: 6200, Time: recent},
+	} {
+		if _, err := s.InsertLiquidation(context.Background(), ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := s.EarliestLiquidationSpans(context.Background(), []string{"ETHUSDT"})
+	if err != nil || len(got) != 1 || !got[0].Since.Equal(old) || got[0].Exchange != domain.ExchangeBybit {
+		t.Fatalf("%+v %v", got, err)
+	}
+	one, ok, err := s.EarliestLiquidation(context.Background(), domain.ExchangeBybit, "ETHUSDT")
+	if err != nil || !ok || !one.Equal(old) {
+		t.Fatalf("one %v %v %v", one, ok, err)
+	}
+}
+
 func TestListLiquidationsSince_PagesAllVenues(t *testing.T) {
 	s, err := Open(filepath.Join(t.TempDir(), "futures.db"))
 	if err != nil {

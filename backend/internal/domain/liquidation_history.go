@@ -9,7 +9,9 @@ const minLiquidationGapFill = time.Second
 
 // LiquidationHistoryMaxLookback is the longest public force-order window
 // the startup archive requests. Binance rejects a wider start and end.
-// Prints older than this are only the ones already stored from the websocket.
+// Prints this process records itself are kept with futures history
+// (FUTURES_HISTORY_RETENTION, default 90 days). Rows older than this public
+// window are the ones already stored from the websocket.
 const LiquidationHistoryMaxLookback = 7 * 24 * time.Hour
 
 // LiquidationHistoryQuery asks one venue for prints in [From, To].

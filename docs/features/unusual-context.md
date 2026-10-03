@@ -18,7 +18,7 @@ Each block has six readings, in this order:
 | Open interest | Latest non-overlapping 24h percent change | Earlier 24h changes from hourly stored open interest | 20 |
 | Liquidations | Last completed clock hour of notional | Earlier completed hours. Quiet hours inside the first-to-last stored print count as zero | 24 |
 | CVD | Last completed UTC day of aggressive buy minus sell | Earlier stored days. A missing day is left out | 20 |
-| Spread | Latest hour’s average top-of-book spread percent | Earlier hours from the spot book, kept about 7 days | 24 |
+| Spread | Latest hour’s average top-of-book spread percent | Earlier hours from the spot book, kept about 30 days | 24 |
 | Print size | Always unknown | Only the previous 15 minutes exist | — |
 
 The current point is not part of the past sample. The percentile is the midrank of the current value in that past, rounded to the nearest integer.
@@ -39,9 +39,9 @@ The coin Tape tab shows this card above the rest of the tape. Informational only
 
 ## Market scan
 
-`GET /api/v1/market/unusual/scan?exchange=binance|bybit|okx|all&metric=all|funding|open_interest|liquidations|cvd|spread&limit=36`
+`GET /api/v1/market/unusual/scan?exchange=binance|bybit|okx|all&metric=all|funding|open_interest|liquidations|cvd|spread&limit=100`
 
-The scan scores the same liquid USDT list as the derivatives board: the seed pairs first, then the highest-volume names, capped at 36. It uses the same per-venue rules as the coin read. A row is kept only when the band is high, low, extremely high, or extremely low. Typical readings and readings with too few samples are left off. `quiet` is how many scanned coins had no such row. `distance` is how far the percentile sits from 50, and the list is ranked by that. Venues stay separate. Print size is not a scan metric.
+The scan scores the liquid USDT list the recorder keeps: the seed pairs first, then the highest-volume names, capped at 100. The page opens on 36. It uses the same per-venue rules as the coin read. A row is kept only when the band is high, low, extremely high, or extremely low. Typical readings and readings with too few samples are left off. `quiet` is how many scanned coins had no such row. `distance` is how far the percentile sits from 50, and the list is ranked by that. Venues stay separate. Print size is not a scan metric.
 
 The page is `/unusual`. A row opens that coin's Tape tab. An OKX row opens the Binance tape, because OKX is not a spot page. The response is cached for about 45 seconds. Informational only — not financial advice.
 
@@ -88,4 +88,4 @@ cd frontend && npx vitest run src/components/organisms/UnusualContext src/compon
 - OKX spread stays unknown because this product does not keep an OKX spot book.
 - OKX CVD appears only when taker bars were stored for that venue.
 - The market scan does not invent a combined percentile. One coin can appear once per venue and series.
-- Coins outside the liquid 36 are not on `/unusual`. Open the coin tape for those.
+- Coins outside the liquid 100 are not on `/unusual`. Open the coin tape for those.

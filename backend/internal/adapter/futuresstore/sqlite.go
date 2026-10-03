@@ -285,6 +285,77 @@ WHERE metric = ? AND exchange = ? AND symbol = ? AND predicted = 0`,
 	return time.UnixMilli(ms.Int64).UTC(), true, nil
 }
 
+// EarliestSnapshotSpans is the oldest settled sample for each symbol and venue.
+func (s *SQLite) EarliestSnapshotSpans(ctx context.Context, metric string, symbols []string) ([]domain.StoredSince, error) {
+	return s.earliestSpans(ctx, `
+SELECT symbol, exchange, MIN(sampled_at_ms) FROM futures_snapshots
+WHERE metric = ? AND predicted = 0 AND symbol IN (`, metric, symbols)
+}
+
+// EarliestLiquidation is the oldest stored print for one venue and symbol.
+func (s *SQLite) EarliestLiquidation(ctx context.Context, exchange domain.Exchange, symbol string) (time.Time, bool, error) {
+	rows, err := s.EarliestLiquidationSpans(ctx, []string{symbol})
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	for _, row := range rows {
+		if row.Exchange == exchange {
+			return row.Since, true, nil
+		}
+	}
+	return time.Time{}, false, nil
+}
+
+// EarliestLiquidationSpans is the oldest stored print for each symbol and venue.
+func (s *SQLite) EarliestLiquidationSpans(ctx context.Context, symbols []string) ([]domain.StoredSince, error) {
+	return s.earliestSpans(ctx, `
+SELECT symbol, exchange, MIN(time_ms) FROM futures_liquidations
+WHERE symbol IN (`, "", symbols)
+}
+
+func (s *SQLite) earliestSpans(ctx context.Context, prefix, metric string, symbols []string) ([]domain.StoredSince, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("futures store is nil")
+	}
+	symbols = domain.SpanQuerySymbols(symbols)
+	if metric == "" && strings.Contains(prefix, "metric") {
+		return nil, fmt.Errorf("%w: metric is required", domain.ErrInvalidArgument)
+	}
+	if len(symbols) == 0 {
+		return nil, nil
+	}
+	in, args := sqliteutil.InArgs(symbols)
+	queryArgs := make([]any, 0, len(args)+1)
+	if metric != "" {
+		queryArgs = append(queryArgs, metric)
+	}
+	queryArgs = append(queryArgs, args...)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows, err := s.db.QueryContext(ctx, prefix+in+`) GROUP BY symbol, exchange`, queryArgs...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.StoredSince
+	for rows.Next() {
+		var sym, ex string
+		var ms sql.NullInt64
+		if err := rows.Scan(&sym, &ex, &ms); err != nil {
+			return nil, err
+		}
+		if !ms.Valid || ms.Int64 <= 0 || sym == "" || ex == "" {
+			continue
+		}
+		out = append(out, domain.StoredSince{
+			Exchange: domain.Exchange(ex),
+			Symbol:   sym,
+			Since:    time.UnixMilli(ms.Int64).UTC(),
+		})
+	}
+	return out, rows.Err()
+}
+
 // ListSnapshots returns samples newest first.
 func (s *SQLite) ListSnapshots(ctx context.Context, q domain.FuturesHistoryQuery) ([]domain.FuturesSnapshot, error) {
 	if s == nil || s.db == nil {

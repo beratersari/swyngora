@@ -20,7 +20,7 @@ const (
 	defaultLinearWSURL = "wss://stream.bybit.com/v5/public/linear"
 	liqReadIdle        = 90 * time.Second
 	liqSubscribeBatch  = 10
-	liqTopSymbols      = 40
+	liqTopSymbols      = domain.LiquidRecorderLimit
 	liqRefreshEvery    = 5 * time.Minute
 )
 

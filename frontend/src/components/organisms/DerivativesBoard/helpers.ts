@@ -37,6 +37,51 @@ export function fundingText(coin: DerivativesCoin): string {
   return `${coin.fundingRatePct}%`;
 }
 
+export type RecordedSpan = {
+  kind?: string;
+  exchange?: string;
+  spanSec?: number;
+};
+
+const RECORDED_KINDS = ['futures_oi', 'book', 'flow', 'liquidations'] as const;
+
+/** Longest stored span for each series, so the board cell stays one line. */
+export function recordedSummary(
+  rows: readonly RecordedSpan[] | undefined,
+  label: (kind: string) => string,
+  span: (sec: number) => string,
+): string {
+  if (!rows || rows.length === 0) return DASH;
+  const parts: string[] = [];
+  for (const kind of RECORDED_KINDS) {
+    let longest = 0;
+    for (const row of rows) {
+      if (row.kind !== kind) continue;
+      const sec = row.spanSec ?? 0;
+      if (sec > longest) longest = sec;
+    }
+    if (longest > 0) parts.push(`${label(kind)} ${span(longest)}`);
+  }
+  return parts.length > 0 ? parts.join(' · ') : DASH;
+}
+
+/** Per-venue spans for the cell title. */
+export function recordedTitle(rows: readonly RecordedSpan[] | undefined, span: (sec: number) => string): string {
+  return (rows ?? [])
+    .filter((row) => row.kind && row.exchange && (row.spanSec ?? 0) > 0)
+    .map((row) => `${row.kind} ${row.exchange} ${span(row.spanSec ?? 0)}`)
+    .join(', ');
+}
+
+export function formatRecordedSpan(sec: number): string {
+  if (!Number.isFinite(sec) || sec <= 0) return '0m';
+  if (sec < 3600) return `${Math.max(1, Math.round(sec / 60))}m`;
+  if (sec < 48 * 3600) return `${Math.round(sec / 3600)}h`;
+  const days = Math.floor(sec / 86400);
+  const hours = Math.round((sec % 86400) / 3600);
+  return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+}
+
 export function percentText(definite: boolean | undefined, value: string | undefined): string {
   return definiteText(definite, value, (raw) => `${raw}%`);
 }
