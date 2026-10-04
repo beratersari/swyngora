@@ -25,7 +25,15 @@ const (
 	DerivativesWeightOI    = "oi"
 	DerivativesWeightEqual = "equal"
 
-	derivativesBoardNote = "Liquid USDT perpetuals on Binance USD-M, Bybit linear, and OKX USDT-swap. Open interest, funding, crowd long percent, 1h taker buy share, and 24h liquidation totals are combined only when every expected venue is fresh for that column. A missing or old venue is named and is not counted as zero. Crowd long is the account long share, weighted by open interest when that open interest is also fresh. Taker buy share sums the last hour of aggressive buy and sell volume; a window that is not complete stays blank. Price is the mark from the fresh venue with the most open interest. Informational only — not financial advice."
+	// VenueReadUnsupported is a venue that does not publish this column.
+	// It is named and left out. It is not a zero and it is not a fresh reading.
+	VenueReadUnsupported = "unsupported"
+
+	// DerivativesLiqHeatMinCoverage is how long a venue must have been watched
+	// before its 5-minute liquidation burst can be compared with its own typical rate.
+	DerivativesLiqHeatMinCoverage = 6 * time.Hour
+
+	derivativesBoardNote = "Liquid USDT perpetuals on Binance USD-M, Bybit linear, and OKX USDT-swap. Open interest, funding, crowd long percent, 1h taker buy share, and 24h liquidation totals are combined only when every expected venue is fresh for that column. A missing or old venue is named and is not counted as zero. Crowd long is the account long share, weighted by open interest when that open interest is also fresh. Taker buy share sums the last hour of aggressive buy and sell volume; a window that is not complete stays blank. Price is the mark from the fresh venue with the most open interest. Crowd-versus-top is top-trader long percent minus account long percent, in percentage points. Bybit does not publish a top-trader ratio, so that column names Bybit as unsupported and uses the venues that do. Day CVD is aggressive buy minus sell since 00:00 UTC, blank until each venue's tape reaches that open. Print size is the 15-minute average fill versus the 15 minutes before it, from the in-memory tape only. Liquidation heat is the 5-minute burst versus that venue's own typical rate, blank until the venue has been watched for 6 hours. Bid share is resting bid notional within 1% of mid. These extra columns do not change whether the rest of the row is definite. Informational only — not financial advice."
 )
 
 // DerivativesVenueInput is one venue's live perp readings for a coin.
@@ -47,6 +55,26 @@ type DerivativesVenueInput struct {
 	TakerBuy    float64
 	TakerSell   float64
 	TakerOK     bool
+	// TopLongShare is the top-trader long share (0–1) on venues that publish one.
+	TopLongShare       float64
+	TopLongOK          bool
+	TopUnsupported     bool
+	CVDDay             float64
+	CVDAt              time.Time
+	CVDDayOK           bool
+	PrintNotional      float64
+	PrintCount         int
+	PrintPriorNotional float64
+	PrintPriorCount    int
+	PrintAt            time.Time
+	PrintOK            bool
+	LiqGrade           string
+	LiqRatio           float64
+	LiqHeatOK          bool
+	BidNotional        float64
+	AskNotional        float64
+	BookAt             time.Time
+	BookOK             bool
 }
 
 // DerivativesCoinInput is one symbol before the board decides what is definite.
@@ -73,6 +101,16 @@ type DerivativesVenueRow struct {
 	LongStatus     string
 	TakerBuyPct    string
 	TakerStatus    string
+	GapPct         string
+	GapStatus      string
+	CVDDay         string
+	CVDStatus      string
+	PrintChangePct string
+	PrintStatus    string
+	LiqGrade       string
+	LiqHeatStatus  string
+	BidPct         string
+	BookStatus     string
 }
 
 // DerivativesCoin is one row. Combined fields are empty when that column is
@@ -102,8 +140,24 @@ type DerivativesCoin struct {
 	LongDefinite         bool
 	TakerBuyPct          string
 	TakerDefinite        bool
-	Venues               []DerivativesVenueRow
-	Coverage             MarketCoverage
+	// GapPct is top-trader long percent minus crowd long percent.
+	// GapScope lists the venues inside that average.
+	GapPct          string
+	GapDefinite     bool
+	GapScope        string
+	CVDDay          string
+	CVDDayDefinite  bool
+	PrintChangePct  string
+	PrintRead       string
+	PrintDefinite   bool
+	LiqHeat         string
+	LiqHeatRatio    string
+	LiqHeatVenue    string
+	LiqHeatDefinite bool
+	BidPct          string
+	BidDefinite     bool
+	Venues          []DerivativesVenueRow
+	Coverage        MarketCoverage
 	// Recorded is how far back each stored series for this coin actually goes.
 	Recorded []RecordedSeries
 }
@@ -339,6 +393,7 @@ func buildDerivativesCoin(symbol string, expected []Exchange, in DerivativesCoin
 			}
 		}
 	}
+	applyBoardScan(&row, expected, byEx, liqCover, now)
 	return row, freshOI
 }
 

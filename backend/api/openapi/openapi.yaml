@@ -11682,6 +11682,36 @@ components:
           type: string
           description: Aggressive buy share over the last hour, in percent. Omitted unless every expected venue's hour is complete.
         takerDefinite: { type: boolean }
+        gapPct:
+          type: string
+          description: Top-trader long percent minus crowd long percent. Omitted unless every venue that publishes a top-trader ratio is fresh.
+        gapDefinite: { type: boolean }
+        gapScope:
+          type: string
+          description: Comma-separated venues inside gapPct. Bybit is left out because it does not publish a top-trader ratio.
+        cvdDay:
+          type: string
+          description: Aggressive buy minus sell since 00:00 UTC. Omitted unless every expected venue's tape reaches that open and is fresh.
+        cvdDayDefinite: { type: boolean }
+        printChangePct:
+          type: string
+          description: Signed percent change of the 15-minute average print size versus the prior 15 minutes.
+        printRead:
+          type: string
+          description: jumped | faded | larger | smaller | stable
+        printDefinite: { type: boolean }
+        liqHeat:
+          type: string
+          description: Hottest 5-minute liquidation grade versus each venue's own typical rate (quiet | elevated | cascade | extreme).
+        liqHeatRatio: { type: string }
+        liqHeatVenue:
+          type: string
+          description: Venue with the hottest grade when the venues do not agree.
+        liqHeatDefinite: { type: boolean }
+        bidPct:
+          type: string
+          description: Resting bid share within 1% of mid. Omitted unless every expected book is fresh.
+        bidDefinite: { type: boolean }
         venues:
           type: array
           items: { $ref: '#/components/schemas/MarketDerivativesVenue' }
@@ -11708,6 +11738,16 @@ components:
         longStatus: { type: string, description: fresh | stale | missing }
         takerBuyPct: { type: string }
         takerStatus: { type: string, description: fresh | stale | missing }
+        gapPct: { type: string }
+        gapStatus: { type: string, description: fresh | stale | missing | unsupported }
+        cvdDay: { type: string }
+        cvdStatus: { type: string, description: fresh | stale | missing }
+        printChangePct: { type: string }
+        printStatus: { type: string, description: fresh | stale | missing }
+        liqGrade: { type: string }
+        liqHeatStatus: { type: string, description: fresh | stale | missing }
+        bidPct: { type: string }
+        bookStatus: { type: string, description: fresh | stale | missing }
     MarketOrderCountOverview:
       type: object
       description: Print-count ratio summed across liquid pairs

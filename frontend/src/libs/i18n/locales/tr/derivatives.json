@@ -1,6 +1,6 @@
 {
   "title": "Türevler",
-  "subtitle": "Likit USDT perpetual’lerde mark fiyat, fonlama, açık pozisyon, kalabalık long, alıcı payı ve 24 saatlik likidasyon.",
+  "subtitle": "Likit USDT perpetual’lerde mark fiyat, fonlama, açık pozisyon, kalabalık ile üst trader, gün CVD’si, işlem boyu, likidasyon yoğunluğu, alış payı ve 24 saatlik likidasyon.",
   "exchange": "Borsalar",
   "allVenues": "Tüm borsalar",
   "limit": "Coin",
@@ -13,6 +13,27 @@
   "change24h": "AP 24s",
   "longPct": "Kalabalık long",
   "takerBuy": "Alıcı 1s",
+  "gap": "Üst − kalabalık",
+  "gapScope": "Üst trader long yüzdesi eksi kalabalık: {{venues}}.",
+  "cvdDay": "CVD gün",
+  "printSize": "İşlem boyu 15dk",
+  "printRead": {
+    "jumped": "sıçradı",
+    "faded": "söndü",
+    "larger": "büyüdü",
+    "smaller": "küçüldü",
+    "few_large": "az ve büyük",
+    "many_small": "çok ve küçük",
+    "stable": "dengede"
+  },
+  "liqHeat": "Lik. yoğunluk",
+  "heat": {
+    "quiet": "Sakin",
+    "elevated": "Yüksek",
+    "cascade": "Kaskad",
+    "extreme": "Aşırı"
+  },
+  "bid": "Alış %1",
   "liqLong": "Long lik. 24s",
   "liqShort": "Short lik. 24s",
   "venues": "Borsalar",

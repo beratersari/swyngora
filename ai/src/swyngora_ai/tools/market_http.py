@@ -612,7 +612,7 @@ class DerivativesBoardInput(BaseModel):
     )
     limit: int = Field(
         default=36,
-        description="How many liquid perpetuals (default 36, max 36)",
+        description="How many liquid perpetuals (default 36, max 100)",
     )
 
 
@@ -4969,14 +4969,22 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "One sortable board for the liquid USDT perpetuals: mark price, "
                 "predicted funding, open interest, 1h and 24h open-interest "
-                "change, crowd long percent, 1h taker buy share, and 24h long "
-                "and short liquidations. exchange=all reads Binance USD-M, "
-                "Bybit linear, and OKX. A combined number is present only when "
-                "every expected venue is fresh for that column. Crowd long is "
-                "the account long share. Taker buy share sums the last hour of "
-                "aggressive volume; an incomplete hour stays blank. definite "
-                "is false when any coin is incomplete; missing and old venues "
-                "are named and are not treated as zero. limit default 36, max 36."
+                "change, crowd long percent, top-minus-crowd gap, day CVD, "
+                "15m print-size change, 5m liquidation heat, 1% bid share, "
+                "1h taker buy share, and 24h long and short liquidations. "
+                "exchange=all reads Binance USD-M, Bybit linear, and OKX. A "
+                "combined number is present only when every expected venue is "
+                "fresh for that column. gapPct is top-trader long percent minus "
+                "crowd long percent; Bybit does not publish a top-trader ratio, "
+                "so gapScope names who is in the average. cvdDay is buy minus "
+                "sell since 00:00 UTC. printChangePct compares the last 15 "
+                "minutes of average fill size with the 15 minutes before. "
+                "liqHeat is the hottest 5-minute liquidation grade versus that "
+                "coin's own typical rate and stays blank until the venue has "
+                "been watched for 6 hours. bidPct is resting bid share within "
+                "1% of mid. definite is false when any coin is incomplete on "
+                "the original columns; missing and old venues are named and "
+                "are not treated as zero. limit default 36, max 100."
             ),
             args_schema=DerivativesBoardInput,
         ),

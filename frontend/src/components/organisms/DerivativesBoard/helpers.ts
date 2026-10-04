@@ -132,6 +132,16 @@ function sortNumber(coin: DerivativesCoin, key: BoardSortKey): number | null {
       return coin.longDefinite ? finite(coin.longPct) : null;
     case 'takerBuyPct':
       return coin.takerDefinite ? finite(coin.takerBuyPct) : null;
+    case 'gapPct':
+      return coin.gapDefinite ? finite(coin.gapPct) : null;
+    case 'cvdDay':
+      return coin.cvdDayDefinite ? finite(coin.cvdDay) : null;
+    case 'printChange':
+      return coin.printDefinite ? finite(coin.printChangePct) : null;
+    case 'liqHeat':
+      return coin.liqHeatDefinite ? finite(coin.liqHeatRatio) : null;
+    case 'bidPct':
+      return coin.bidDefinite ? finite(coin.bidPct) : null;
     default:
       return null;
   }

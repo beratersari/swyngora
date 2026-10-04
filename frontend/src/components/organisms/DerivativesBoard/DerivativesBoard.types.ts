@@ -17,6 +17,11 @@ export const BOARD_SORT_KEYS = [
   'liqShort',
   'longPct',
   'takerBuyPct',
+  'gapPct',
+  'cvdDay',
+  'printChange',
+  'liqHeat',
+  'bidPct',
 ] as const;
 
 export type BoardSortKey = (typeof BOARD_SORT_KEYS)[number];

@@ -32,11 +32,77 @@ const NUMERIC_KEYS: BoardSortKey[] = [
   'liqShort',
   'longPct',
   'takerBuyPct',
+  'gapPct',
+  'cvdDay',
+  'printChange',
+  'liqHeat',
+  'bidPct',
 ];
 
 export function DerivativesBoard({ exchange, coins, loading }: DerivativesBoardProps) {
   const { t } = useTranslation(['derivatives', 'common']);
   const navigate = useNavigate();
+  const venueName = (id: string): string => {
+    switch (id) {
+      case 'binance':
+        return t('common:exchanges.binance');
+      case 'bybit':
+        return t('common:exchanges.bybit');
+      case 'okx':
+        return t('common:exchanges.okx');
+      default:
+        return id;
+    }
+  };
+  const gapTitle = (row: DerivativesCoin): string | undefined => {
+    if (!row.gapDefinite || !row.gapScope) return undefined;
+    const names = row.gapScope.split(',').filter(Boolean).map(venueName);
+    return t('derivatives:gapScope', { venues: names.join(', ') });
+  };
+  const printWord = (read: string): string => {
+    switch (read) {
+      case 'jumped':
+        return t('derivatives:printRead.jumped');
+      case 'faded':
+        return t('derivatives:printRead.faded');
+      case 'larger':
+        return t('derivatives:printRead.larger');
+      case 'smaller':
+        return t('derivatives:printRead.smaller');
+      case 'few_large':
+        return t('derivatives:printRead.few_large');
+      case 'many_small':
+        return t('derivatives:printRead.many_small');
+      default:
+        return '';
+    }
+  };
+  const printLabel = (row: DerivativesCoin): string => {
+    if (!row.printDefinite || !row.printChangePct) return '—';
+    const pct = `${row.printChangePct}%`;
+    const word = row.printRead ? printWord(row.printRead) : '';
+    return word ? `${pct} ${word}` : pct;
+  };
+  const heatWord = (grade: string): string => {
+    switch (grade) {
+      case 'quiet':
+        return t('derivatives:heat.quiet');
+      case 'elevated':
+        return t('derivatives:heat.elevated');
+      case 'cascade':
+        return t('derivatives:heat.cascade');
+      case 'extreme':
+        return t('derivatives:heat.extreme');
+      default:
+        return grade;
+    }
+  };
+  const heatLabel = (row: DerivativesCoin): string => {
+    if (!row.liqHeatDefinite || !row.liqHeat) return '—';
+    const grade = heatWord(row.liqHeat);
+    if (!row.liqHeatVenue) return grade;
+    return `${grade} · ${venueName(row.liqHeatVenue)}`;
+  };
   const [sort, setSort] = useState<BoardSort | null>(null);
   const rows = sort ? sortBoardCoins(coins, sort) : coins;
   const venueLine = (venues: DerivativesVenue[] | undefined): string => {
@@ -132,6 +198,40 @@ export function DerivativesBoard({ exchange, coins, loading }: DerivativesBoardP
       render: (_value, row) => percentText(row.takerDefinite, row.takerBuyPct),
     },
     {
+      title: t('derivatives:gap'),
+      dataIndex: 'gapPct',
+      ...sortable('gapPct'),
+      render: (_value, row) => (
+        <Text variant="caption" title={gapTitle(row)}>
+          {definiteText(row.gapDefinite, row.gapPct, (value) => value)}
+        </Text>
+      ),
+    },
+    {
+      title: t('derivatives:cvdDay'),
+      dataIndex: 'cvdDay',
+      ...sortable('cvdDay'),
+      render: (_value, row) => definiteText(row.cvdDayDefinite, row.cvdDay, signedAmount),
+    },
+    {
+      title: t('derivatives:printSize'),
+      dataIndex: 'printChangePct',
+      ...sortable('printChange'),
+      render: (_value, row) => printLabel(row),
+    },
+    {
+      title: t('derivatives:liqHeat'),
+      dataIndex: 'liqHeat',
+      ...sortable('liqHeat'),
+      render: (_value, row) => heatLabel(row),
+    },
+    {
+      title: t('derivatives:bid'),
+      dataIndex: 'bidPct',
+      ...sortable('bidPct'),
+      render: (_value, row) => percentText(row.bidDefinite, row.bidPct),
+    },
+    {
       title: t('derivatives:liqLong'),
       dataIndex: 'liqLong',
       ...sortable('liqLong'),
@@ -170,7 +270,7 @@ export function DerivativesBoard({ exchange, coins, loading }: DerivativesBoardP
       dataSource={rows}
       loading={loading}
       pagination={false}
-      scroll={{ x: 1280 }}
+      scroll={{ x: 1880 }}
       locale={{ emptyText: t('derivatives:empty') }}
       onChange={onChange}
       onRow={(row) => ({

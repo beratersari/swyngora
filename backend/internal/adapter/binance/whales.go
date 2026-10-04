@@ -106,6 +106,23 @@ func (c *Client) ListSpotPrints(ctx context.Context, symbol string, from, to tim
 	return domain.FilterPrintsInRange(out, from, to), nil
 }
 
+// MemoryPrints returns fills already on the in-memory tape.
+// The boolean is false when that tape does not reach from, so the caller
+// does not walk REST history.
+func (c *Client) MemoryPrints(symbol string, from, to time.Time) ([]domain.TakerPrint, bool) {
+	if c == nil || c.tape == nil {
+		return nil, false
+	}
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return nil, false
+	}
+	if from.IsZero() || !c.tape.Covers(domain.ExchangeBinance, symbol, from) {
+		return nil, false
+	}
+	return domain.FilterPrintsInRange(c.tape.Prints(domain.ExchangeBinance, symbol), from, to), true
+}
+
 // ListPrints pages USD-M aggTrades in [from, to] (inclusive).
 func (c *Client) ListPrints(ctx context.Context, symbol string, from, to time.Time) ([]domain.TakerPrint, error) {
 	symbol, err := domain.ValidateOpenInterestSymbol(symbol)

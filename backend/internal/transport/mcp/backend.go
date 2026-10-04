@@ -1016,6 +1016,11 @@ func derivativesBoardMap(got *domain.DerivativesBoard) map[string]any {
 				"liqLong": v.LiqLong, "liqShort": v.LiqShort, "liqStatus": v.LiqStatus,
 				"longPct": v.LongPct, "longStatus": v.LongStatus,
 				"takerBuyPct": v.TakerBuyPct, "takerStatus": v.TakerStatus,
+				"gapPct": v.GapPct, "gapStatus": v.GapStatus,
+				"cvdDay": v.CVDDay, "cvdStatus": v.CVDStatus,
+				"printChangePct": v.PrintChangePct, "printStatus": v.PrintStatus,
+				"liqGrade": v.LiqGrade, "liqHeatStatus": v.LiqHeatStatus,
+				"bidPct": v.BidPct, "bookStatus": v.BookStatus,
 			})
 		}
 		coins = append(coins, map[string]any{
@@ -1028,6 +1033,11 @@ func derivativesBoardMap(got *domain.DerivativesBoard) map[string]any {
 			"liqLong": c.LiqLong, "liqShort": c.LiqShort, "liqDefinite": c.LiqDefinite,
 			"longPct": c.LongPct, "longDefinite": c.LongDefinite,
 			"takerBuyPct": c.TakerBuyPct, "takerDefinite": c.TakerDefinite,
+			"gapPct": c.GapPct, "gapDefinite": c.GapDefinite, "gapScope": c.GapScope,
+			"cvdDay": c.CVDDay, "cvdDayDefinite": c.CVDDayDefinite,
+			"printChangePct": c.PrintChangePct, "printRead": c.PrintRead, "printDefinite": c.PrintDefinite,
+			"liqHeat": c.LiqHeat, "liqHeatRatio": c.LiqHeatRatio, "liqHeatVenue": c.LiqHeatVenue, "liqHeatDefinite": c.LiqHeatDefinite,
+			"bidPct": c.BidPct, "bidDefinite": c.BidDefinite,
 			"venues": venues, "coverage": coverageMap(c.Coverage),
 		})
 	}

@@ -70,4 +70,17 @@ describe('derivatives board helpers', () => {
       'SOL',
     ]);
   });
+
+  it('sorts day CVD and keeps a blank tape at the bottom', () => {
+    const coins = [
+      { symbol: 'ETHUSDT', base: 'ETH', cvdDay: '-20', cvdDayDefinite: true },
+      { symbol: 'BTCUSDT', base: 'BTC', cvdDay: '80', cvdDayDefinite: false },
+      { symbol: 'SOLUSDT', base: 'SOL', cvdDay: '40', cvdDayDefinite: true },
+    ] as DerivativesCoin[];
+    expect(sortBoardCoins(coins, { key: 'cvdDay', dir: 'desc' }).map((coin) => coin.base)).toEqual([
+      'SOL',
+      'ETH',
+      'BTC',
+    ]);
+  });
 });

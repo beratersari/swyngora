@@ -1,6 +1,6 @@
 {
   "title": "Derivatives",
-  "subtitle": "Mark, funding, open interest, crowd long, taker buy share, and 24-hour liquidations for the liquid USDT perpetuals.",
+  "subtitle": "Mark, funding, open interest, crowd versus top, day CVD, print size, liquidation heat, bid share, and 24-hour liquidations for the liquid USDT perpetuals.",
   "exchange": "Venues",
   "allVenues": "All venues",
   "limit": "Coins",
@@ -13,6 +13,27 @@
   "change24h": "OI 24h",
   "longPct": "Crowd long",
   "takerBuy": "Taker buy 1h",
+  "gap": "Top − crowd",
+  "gapScope": "Top-trader long percent minus the crowd on {{venues}}.",
+  "cvdDay": "CVD day",
+  "printSize": "Print size 15m",
+  "printRead": {
+    "jumped": "jumped",
+    "faded": "faded",
+    "larger": "larger",
+    "smaller": "smaller",
+    "few_large": "few large",
+    "many_small": "many small",
+    "stable": "steady"
+  },
+  "liqHeat": "Liq heat",
+  "heat": {
+    "quiet": "Quiet",
+    "elevated": "Elevated",
+    "cascade": "Cascade",
+    "extreme": "Extreme"
+  },
+  "bid": "Bid 1%",
   "liqLong": "Long liq 24h",
   "liqShort": "Short liq 24h",
   "venues": "Venues",

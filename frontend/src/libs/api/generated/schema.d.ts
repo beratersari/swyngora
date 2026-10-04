@@ -7660,6 +7660,28 @@ export interface components {
             /** @description Aggressive buy share over the last hour, in percent. Omitted unless every expected venue's hour is complete. */
             takerBuyPct?: string;
             takerDefinite?: boolean;
+            /** @description Top-trader long percent minus crowd long percent. Omitted unless every venue that publishes a top-trader ratio is fresh. */
+            gapPct?: string;
+            gapDefinite?: boolean;
+            /** @description Comma-separated venues inside gapPct. Bybit is left out because it does not publish a top-trader ratio. */
+            gapScope?: string;
+            /** @description Aggressive buy minus sell since 00:00 UTC. Omitted unless every expected venue's tape reaches that open and is fresh. */
+            cvdDay?: string;
+            cvdDayDefinite?: boolean;
+            /** @description Signed percent change of the 15-minute average print size versus the prior 15 minutes. */
+            printChangePct?: string;
+            /** @description jumped | faded | larger | smaller | stable */
+            printRead?: string;
+            printDefinite?: boolean;
+            /** @description Hottest 5-minute liquidation grade versus each venue's own typical rate (quiet | elevated | cascade | extreme). */
+            liqHeat?: string;
+            liqHeatRatio?: string;
+            /** @description Venue with the hottest grade when the venues do not agree. */
+            liqHeatVenue?: string;
+            liqHeatDefinite?: boolean;
+            /** @description Resting bid share within 1% of mid. Omitted unless every expected book is fresh. */
+            bidPct?: string;
+            bidDefinite?: boolean;
             venues?: components["schemas"]["MarketDerivativesVenue"][];
             coverage?: components["schemas"]["MarketVenueCoverage"];
             /** @description Oldest stored sample per series and venue. Omitted when nothing is stored yet. */
@@ -7684,6 +7706,21 @@ export interface components {
             takerBuyPct?: string;
             /** @description fresh | stale | missing */
             takerStatus?: string;
+            gapPct?: string;
+            /** @description fresh | stale | missing | unsupported */
+            gapStatus?: string;
+            cvdDay?: string;
+            /** @description fresh | stale | missing */
+            cvdStatus?: string;
+            printChangePct?: string;
+            /** @description fresh | stale | missing */
+            printStatus?: string;
+            liqGrade?: string;
+            /** @description fresh | stale | missing */
+            liqHeatStatus?: string;
+            bidPct?: string;
+            /** @description fresh | stale | missing */
+            bookStatus?: string;
         };
         /** @description Print-count ratio summed across liquid pairs */
         MarketOrderCountOverview: {

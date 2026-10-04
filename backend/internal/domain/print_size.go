@@ -40,6 +40,13 @@ var PrintSizeWindows = []struct {
 // PrintSizeLookback is how far back ListPrints should load (current 15m + prior 15m).
 func PrintSizeLookback() time.Duration { return printSizeLookback }
 
+// MemoryPrintPort returns prints already in memory. The boolean is false when
+// the tape does not reach from. Callers must not treat that as an empty tape
+// and must not fall back to a REST history walk.
+type MemoryPrintPort interface {
+	MemoryPrints(symbol string, from, to time.Time) ([]TakerPrint, bool)
+}
+
 // PrintSizeMaxPages caps REST pagination when walking aggTrades.
 func PrintSizeMaxPages() int { return printSizeMaxPages }
 

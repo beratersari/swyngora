@@ -136,6 +136,115 @@ func TestGetDerivativesBoard_IncompleteTakerStaysBlank(t *testing.T) {
 	}
 }
 
+type boardTape struct {
+	flow    *domain.TakerVenueFlow
+	buckets []domain.TakerBucket
+}
+
+func (f boardTape) GetTakerFlow(context.Context, string) (*domain.TakerVenueFlow, error) {
+	return f.flow, nil
+}
+
+func (f boardTape) GetTakerBuckets(context.Context, string) ([]domain.TakerBucket, error) {
+	return f.buckets, nil
+}
+
+type boardDepth struct{}
+
+func (boardDepth) GetFuturesDepth(_ context.Context, symbol string) (*domain.RawOrderBook, error) {
+	return &domain.RawOrderBook{
+		Symbol:    symbol,
+		FetchedAt: time.Now().UTC(),
+		Bids: []domain.PriceLevel{
+			{Price: 100, Quantity: 10},
+			{Price: 99, Quantity: 400},
+		},
+		Asks: []domain.PriceLevel{
+			{Price: 100.2, Quantity: 8},
+			{Price: 101.3, Quantity: 200},
+		},
+	}, nil
+}
+
+type boardMemPrints struct {
+	now time.Time
+}
+
+func (boardMemPrints) GetRecentPrints(context.Context, string) ([]domain.TakerPrint, error) {
+	return nil, nil
+}
+
+func (f boardMemPrints) MemoryPrints(symbol string, from, to time.Time) ([]domain.TakerPrint, bool) {
+	return []domain.TakerPrint{
+		{Exchange: domain.ExchangeBinance, Symbol: symbol, Side: domain.TakerSideBuy, Notional: 100, Price: 1, Quantity: 100, Time: f.now.Add(-20 * time.Minute)},
+		{Exchange: domain.ExchangeBinance, Symbol: symbol, Side: domain.TakerSideBuy, Notional: 200, Price: 1, Quantity: 200, Time: f.now.Add(-30 * time.Second)},
+	}, true
+}
+
+func TestGetDerivativesBoard_ScanColumnsFromFeeds(t *testing.T) {
+	now := time.Now().UTC()
+	day := now.Truncate(24 * time.Hour)
+	crowd := domain.LongShortSeries{Current: domain.LongShortPoint{Time: now, LongShare: 0.55, ShortShare: 0.45, Ratio: 1.22}}
+	binanceLS := crowd
+	binanceLS.TopPositions = &domain.LongShortSeries{Current: domain.LongShortPoint{Time: now, LongShare: 0.70, ShortShare: 0.30, Ratio: 2.3}}
+	okxLS := crowd
+	okxLS.TopPositions = &domain.LongShortSeries{Current: domain.LongShortPoint{Time: now, LongShare: 0.50, ShortShare: 0.50, Ratio: 1}}
+	buckets := []domain.TakerBucket{
+		{Start: day, BuyNotional: 30, SellNotional: 10},
+		{Start: now.Add(-time.Minute), BuyNotional: 5, SellNotional: 1},
+	}
+	tape := boardTape{buckets: buckets}
+	prints := boardMemPrints{now: now}
+	depth := map[domain.Exchange]domain.FuturesDepthPort{
+		domain.ExchangeBinance: boardDepth{},
+		domain.ExchangeBybit:   boardDepth{},
+		domain.ExchangeOKX:     boardDepth{},
+	}
+	svc := boardService(now, false).
+		WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{
+			domain.ExchangeBinance: boardLS{series: &binanceLS},
+			domain.ExchangeBybit:   boardLS{series: &crowd},
+			domain.ExchangeOKX:     boardLS{series: &okxLS},
+		}).
+		WithTakerFlow(map[domain.Exchange]domain.TakerFlowPort{
+			domain.ExchangeBinance: tape,
+			domain.ExchangeBybit:   tape,
+			domain.ExchangeOKX:     tape,
+		}).
+		WithRecentPrints(map[domain.Exchange]domain.RecentPrintPort{
+			domain.ExchangeBinance: prints,
+			domain.ExchangeBybit:   prints,
+			domain.ExchangeOKX:     prints,
+		}).
+		WithFuturesDepth(depth)
+	got, err := svc.GetDerivativesBoard(context.Background(), "all", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := got.Coins[0]
+	if !row.GapDefinite || row.GapScope != "binance,okx" || row.GapPct != "+5" {
+		t.Fatalf("gap %s %s", row.GapPct, row.GapScope)
+	}
+	var bybitGap string
+	for _, v := range row.Venues {
+		if v.Exchange == "bybit" {
+			bybitGap = v.GapStatus
+		}
+	}
+	if bybitGap != domain.VenueReadUnsupported {
+		t.Fatalf("bybit %s", bybitGap)
+	}
+	if !row.CVDDayDefinite || row.CVDDay != "+72" {
+		t.Fatalf("cvd %s definite %v", row.CVDDay, row.CVDDayDefinite)
+	}
+	if !row.PrintDefinite || row.PrintChangePct != "+100" {
+		t.Fatalf("print %s", row.PrintChangePct)
+	}
+	if !row.BidDefinite || row.BidPct == "" {
+		t.Fatalf("bid %+v", row.BidPct)
+	}
+}
+
 func TestGetDerivativesBoard_BadExchange(t *testing.T) {
 	svc := New(nil, nil)
 	if _, err := svc.GetDerivativesBoard(context.Background(), "coinbase", 5); !errors.Is(err, domain.ErrInvalidArgument) {

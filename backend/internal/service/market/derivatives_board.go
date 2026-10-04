@@ -15,9 +15,9 @@ const (
 	derivativesBoardWorkers  = 4
 )
 
-// GetDerivativesBoard returns mark, funding, open interest, crowd long
-// percent, 1h taker buy share, and 24h liquidations for the liquid USDT
-// perpetuals.
+// GetDerivativesBoard returns the liquid USDT perpetual desk: mark, funding,
+// open interest, crowd long, top-versus-crowd, day CVD, print size, liquidation
+// heat, 1% bid share, taker buy share, and 24h liquidations.
 func (s *Service) GetDerivativesBoard(ctx context.Context, exchange string, limit int) (*domain.DerivativesBoard, error) {
 	ex, err := domain.ParseOpenInterestExchange(exchange)
 	if err != nil {
@@ -89,9 +89,115 @@ func (s *Service) derivativesCoin(ctx context.Context, exchange, symbol string, 
 	}
 	in := domain.DerivativesCoinInput{Symbol: symbol, Venues: venues}
 	if s != nil && s.liq != nil {
-		in.LiqFeed = s.liq.Snapshot(exchange, symbol).Feed
+		now := time.Now().UTC()
+		snap := s.liq.Snapshot(exchange, symbol)
+		in.LiqFeed = snap.Feed
+		cover := map[domain.Exchange]int64{}
+		for _, h := range snap.Feed.Venues {
+			cover[domain.Exchange(h.Exchange)] = h.CoverageSeconds
+		}
+		events := s.liq.EventsSince(exchange, symbol, now.Add(-domain.DerivativesLiqHeatMinCoverage))
+		minCover := int64(domain.DerivativesLiqHeatMinCoverage / time.Second)
+		for i := range in.Venues {
+			ex := in.Venues[i].Exchange
+			if cover[ex] < minCover {
+				continue
+			}
+			detected := domain.DetectCascadeVenue(ex, symbol, events, now)
+			for _, w := range detected.Windows {
+				if w.Window != domain.CascadeWindow5m || !w.Complete {
+					continue
+				}
+				in.Venues[i].LiqHeatOK = true
+				in.Venues[i].LiqGrade = w.Grade
+				in.Venues[i].LiqRatio = w.MaxRatio
+			}
+		}
 	}
 	return in
+}
+
+func (s *Service) derivativesDayCVD(ctx context.Context, ex domain.Exchange, symbol string) (float64, time.Time, bool) {
+	if s == nil {
+		return 0, time.Time{}, false
+	}
+	now := time.Now().UTC()
+	from := now.Truncate(24 * time.Hour)
+	var live []domain.TakerBucket
+	if p := s.bucketPort(ex); p != nil {
+		got, err := p.GetTakerBuckets(ctx, symbol)
+		if err == nil {
+			live = got
+		}
+	}
+	var stored []domain.TakerBucket
+	if s.takerStore != nil {
+		stored, _ = s.takerStore.ListTakerBuckets(ctx, string(ex), symbol, from, now)
+	}
+	merged := domain.MergeTakerBuckets(stored, live)
+	if len(merged) == 0 {
+		return 0, time.Time{}, false
+	}
+	started := now
+	for _, b := range merged {
+		if !b.Start.IsZero() && b.Start.Before(started) {
+			started = b.Start
+		}
+	}
+	return domain.DayCVDDelta(merged, now, started)
+}
+
+func (s *Service) derivativesPrintChange(ex domain.Exchange, symbol string) (float64, int, float64, int, time.Time, bool) {
+	if s == nil {
+		return 0, 0, 0, 0, time.Time{}, false
+	}
+	p := s.printPort(ex)
+	mem, ok := p.(domain.MemoryPrintPort)
+	if !ok {
+		return 0, 0, 0, 0, time.Time{}, false
+	}
+	now := time.Now().UTC()
+	from := now.Add(-domain.PrintSizeLookback())
+	prints, covered := mem.MemoryPrints(symbol, from, now)
+	if !covered {
+		return 0, 0, 0, 0, time.Time{}, false
+	}
+	built := domain.BuildPrintSizeVenue(ex, symbol, prints, now)
+	for _, w := range built.Windows {
+		if w.Window != domain.PrintSizeWindow15m || !w.Complete {
+			continue
+		}
+		count := w.Buy.Count + w.Sell.Count
+		prior := w.Buy.PriorCount + w.Sell.PriorCount
+		if count <= 0 || prior <= 0 {
+			return 0, 0, 0, 0, time.Time{}, false
+		}
+		return w.Buy.Notional + w.Sell.Notional, count, w.Buy.PriorNotional + w.Sell.PriorNotional, prior, built.Newest, true
+	}
+	return 0, 0, 0, 0, time.Time{}, false
+}
+
+func (s *Service) derivativesBidShare(ctx context.Context, ex domain.Exchange, symbol string) (float64, float64, time.Time, bool) {
+	if s == nil {
+		return 0, 0, time.Time{}, false
+	}
+	p := s.futuresDepthPort(ex)
+	if p == nil {
+		return 0, 0, time.Time{}, false
+	}
+	book, err := p.GetFuturesDepth(ctx, symbol)
+	if err != nil || book == nil {
+		return 0, 0, time.Time{}, false
+	}
+	ven := domain.BuildPerpDepthVenue(ex, symbol, book, domain.DefaultPerpDepthRangePct)
+	if ven.Error != "" || !ven.Headline.Complete || ven.Headline.Below.Notional+ven.Headline.Above.Notional <= 0 {
+		return 0, 0, time.Time{}, false
+	}
+	at := book.FetchedAt
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	return ven.Headline.Below.Notional, ven.Headline.Above.Notional, at, true
 }
 
 func (s *Service) derivativesVenue(ctx context.Context, ex domain.Exchange, symbol string) domain.DerivativesVenueInput {
@@ -100,21 +206,37 @@ func (s *Service) derivativesVenue(ctx context.Context, ex domain.Exchange, symb
 		return out
 	}
 	var (
-		oi        *domain.OpenInterestSeries
-		oiOK      bool
-		fundOK    bool
-		fundRate  float64
-		fundAt    time.Time
-		mark      float64
-		longShare float64
-		longAt    time.Time
-		longOK    bool
-		buy       float64
-		sell      float64
-		takerOK   bool
-		wg        sync.WaitGroup
+		oi             *domain.OpenInterestSeries
+		oiOK           bool
+		fundOK         bool
+		fundRate       float64
+		fundAt         time.Time
+		mark           float64
+		longShare      float64
+		longAt         time.Time
+		longOK         bool
+		topShare       float64
+		topOK          bool
+		topUnsupported bool
+		buy            float64
+		sell           float64
+		takerOK        bool
+		cvdDay         float64
+		cvdAt          time.Time
+		cvdOK          bool
+		printNotional  float64
+		printCount     int
+		printPrior     float64
+		printPriorN    int
+		printAt        time.Time
+		printOK        bool
+		bidNotional    float64
+		askNotional    float64
+		bookAt         time.Time
+		bookOK         bool
+		wg             sync.WaitGroup
 	)
-	wg.Add(4)
+	wg.Add(5)
 	go func() {
 		defer wg.Done()
 		if p := s.oiPort(ex); p != nil {
@@ -141,10 +263,14 @@ func (s *Service) derivativesVenue(ctx context.Context, ex domain.Exchange, symb
 		defer wg.Done()
 		if p := s.longShortPort(ex); p != nil {
 			ser, err := p.GetLongShortSeries(ctx, symbol, 1)
-			if share, at, ok := derivativesCrowdLong(ser, err); ok {
+			share, at, ok, top, hasTop, unsupported := derivativesLongShortRead(ser, err)
+			if ok {
 				longShare = share
 				longAt = at
 				longOK = true
+				topShare = top
+				topOK = hasTop
+				topUnsupported = unsupported
 			}
 		}
 	}()
@@ -158,6 +284,12 @@ func (s *Service) derivativesVenue(ctx context.Context, ex domain.Exchange, symb
 				takerOK = true
 			}
 		}
+		cvdDay, cvdAt, cvdOK = s.derivativesDayCVD(ctx, ex, symbol)
+		printNotional, printCount, printPrior, printPriorN, printAt, printOK = s.derivativesPrintChange(ex, symbol)
+	}()
+	go func() {
+		defer wg.Done()
+		bidNotional, askNotional, bookAt, bookOK = s.derivativesBidShare(ctx, ex, symbol)
 	}()
 	wg.Wait()
 	if oiOK {
@@ -182,18 +314,53 @@ func (s *Service) derivativesVenue(ctx context.Context, ex domain.Exchange, symb
 		out.TakerBuy = buy
 		out.TakerSell = sell
 	}
+	if topOK {
+		out.TopLongOK = true
+		out.TopLongShare = topShare
+	} else if topUnsupported {
+		out.TopUnsupported = true
+	}
+	if cvdOK {
+		out.CVDDayOK = true
+		out.CVDDay = cvdDay
+		out.CVDAt = cvdAt
+	}
+	if printOK {
+		out.PrintOK = true
+		out.PrintNotional = printNotional
+		out.PrintCount = printCount
+		out.PrintPriorNotional = printPrior
+		out.PrintPriorCount = printPriorN
+		out.PrintAt = printAt
+	}
+	if bookOK {
+		out.BookOK = true
+		out.BidNotional = bidNotional
+		out.AskNotional = askNotional
+		out.BookAt = bookAt
+	}
 	return out
 }
 
-func derivativesCrowdLong(ser *domain.LongShortSeries, err error) (float64, time.Time, bool) {
+func derivativesLongShortRead(ser *domain.LongShortSeries, err error) (crowd float64, at time.Time, crowdOK bool, top float64, topOK, unsupported bool) {
 	if err != nil || ser == nil || ser.Current.Time.IsZero() {
-		return 0, time.Time{}, false
+		return 0, time.Time{}, false, 0, false, false
 	}
 	share := ser.Current.LongShare
 	if share < 0 || share > 1 || share != share {
-		return 0, time.Time{}, false
+		return 0, time.Time{}, false, 0, false, false
 	}
-	return share, ser.Current.Time.UTC(), true
+	topSer := ser.TopPositions
+	if topSer == nil {
+		topSer = ser.TopAccounts
+	}
+	if topSer != nil && !topSer.Current.Time.IsZero() {
+		ts := topSer.Current.LongShare
+		if ts >= 0 && ts <= 1 && ts == ts {
+			return share, ser.Current.Time.UTC(), true, ts, true, false
+		}
+	}
+	return share, ser.Current.Time.UTC(), true, 0, false, true
 }
 
 func derivativesTakerHour(flow *domain.TakerVenueFlow, err error) (float64, float64, bool) {

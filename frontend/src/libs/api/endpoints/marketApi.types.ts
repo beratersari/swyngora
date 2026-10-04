@@ -565,6 +565,16 @@ export type DerivativesVenue = {
   longStatus?: string;
   takerBuyPct?: string;
   takerStatus?: string;
+  gapPct?: string;
+  gapStatus?: string;
+  cvdDay?: string;
+  cvdStatus?: string;
+  printChangePct?: string;
+  printStatus?: string;
+  liqGrade?: string;
+  liqHeatStatus?: string;
+  bidPct?: string;
+  bookStatus?: string;
 };
 export type DerivativesCoin = {
   symbol?: string;
@@ -591,8 +601,23 @@ export type DerivativesCoin = {
   longDefinite?: boolean;
   takerBuyPct?: string;
   takerDefinite?: boolean;
+  gapPct?: string;
+  gapDefinite?: boolean;
+  gapScope?: string;
+  cvdDay?: string;
+  cvdDayDefinite?: boolean;
+  printChangePct?: string;
+  printRead?: string;
+  printDefinite?: boolean;
+  liqHeat?: string;
+  liqHeatRatio?: string;
+  liqHeatVenue?: string;
+  liqHeatDefinite?: boolean;
+  bidPct?: string;
+  bidDefinite?: boolean;
   venues?: DerivativesVenue[];
   coverage?: MarketVenueCoverage;
+  recorded?: { kind?: string; exchange?: string; since?: string; spanSec?: number }[];
 };
 export type MarketDerivativesBoard = {
   exchange?: string;

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
@@ -32,6 +33,22 @@ func (c *Client) PrintTape() *domain.PrintTape {
 		return nil
 	}
 	return c.tape
+}
+
+// MemoryPrints returns fills already on the in-memory tape.
+// The boolean is false when that tape does not reach from.
+func (c *Client) MemoryPrints(symbol string, from, to time.Time) ([]domain.TakerPrint, bool) {
+	if c == nil || c.tape == nil {
+		return nil, false
+	}
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return nil, false
+	}
+	if from.IsZero() || !c.tape.Covers(domain.ExchangeOKX, symbol, from) {
+		return nil, false
+	}
+	return domain.FilterPrintsInRange(c.tape.Prints(domain.ExchangeOKX, symbol), from, to), true
 }
 
 // GetRecentPrints returns the newest OKX USDT-swap aggressive fills.

@@ -45,6 +45,16 @@ type derivativesVenueDTO struct {
 	LongStatus     string `json:"longStatus"`
 	TakerBuyPct    string `json:"takerBuyPct,omitempty"`
 	TakerStatus    string `json:"takerStatus"`
+	GapPct         string `json:"gapPct,omitempty"`
+	GapStatus      string `json:"gapStatus,omitempty"`
+	CVDDay         string `json:"cvdDay,omitempty"`
+	CVDStatus      string `json:"cvdStatus,omitempty"`
+	PrintChangePct string `json:"printChangePct,omitempty"`
+	PrintStatus    string `json:"printStatus,omitempty"`
+	LiqGrade       string `json:"liqGrade,omitempty"`
+	LiqHeatStatus  string `json:"liqHeatStatus,omitempty"`
+	BidPct         string `json:"bidPct,omitempty"`
+	BookStatus     string `json:"bookStatus,omitempty"`
 }
 
 type derivativesCoinDTO struct {
@@ -72,6 +82,20 @@ type derivativesCoinDTO struct {
 	LongDefinite         bool                  `json:"longDefinite"`
 	TakerBuyPct          string                `json:"takerBuyPct,omitempty"`
 	TakerDefinite        bool                  `json:"takerDefinite"`
+	GapPct               string                `json:"gapPct,omitempty"`
+	GapDefinite          bool                  `json:"gapDefinite"`
+	GapScope             string                `json:"gapScope,omitempty"`
+	CVDDay               string                `json:"cvdDay,omitempty"`
+	CVDDayDefinite       bool                  `json:"cvdDayDefinite"`
+	PrintChangePct       string                `json:"printChangePct,omitempty"`
+	PrintRead            string                `json:"printRead,omitempty"`
+	PrintDefinite        bool                  `json:"printDefinite"`
+	LiqHeat              string                `json:"liqHeat,omitempty"`
+	LiqHeatRatio         string                `json:"liqHeatRatio,omitempty"`
+	LiqHeatVenue         string                `json:"liqHeatVenue,omitempty"`
+	LiqHeatDefinite      bool                  `json:"liqHeatDefinite"`
+	BidPct               string                `json:"bidPct,omitempty"`
+	BidDefinite          bool                  `json:"bidDefinite"`
 	Venues               []derivativesVenueDTO `json:"venues"`
 	Coverage             marketCoverageDTO     `json:"coverage"`
 	Recorded             []recordedSeriesDTO   `json:"recorded,omitempty"`
@@ -123,6 +147,11 @@ func derivativesBoardToDTO(got *domain.DerivativesBoard) derivativesBoardRespons
 				LiqLong: v.LiqLong, LiqShort: v.LiqShort, LiqStatus: v.LiqStatus,
 				LongPct: v.LongPct, LongStatus: v.LongStatus,
 				TakerBuyPct: v.TakerBuyPct, TakerStatus: v.TakerStatus,
+				GapPct: v.GapPct, GapStatus: v.GapStatus,
+				CVDDay: v.CVDDay, CVDStatus: v.CVDStatus,
+				PrintChangePct: v.PrintChangePct, PrintStatus: v.PrintStatus,
+				LiqGrade: v.LiqGrade, LiqHeatStatus: v.LiqHeatStatus,
+				BidPct: v.BidPct, BookStatus: v.BookStatus,
 			})
 		}
 		coins = append(coins, derivativesCoinDTO{
@@ -135,6 +164,11 @@ func derivativesBoardToDTO(got *domain.DerivativesBoard) derivativesBoardRespons
 			LiqLong: c.LiqLong, LiqShort: c.LiqShort, LiqDefinite: c.LiqDefinite,
 			LongPct: c.LongPct, LongDefinite: c.LongDefinite,
 			TakerBuyPct: c.TakerBuyPct, TakerDefinite: c.TakerDefinite,
+			GapPct: c.GapPct, GapDefinite: c.GapDefinite, GapScope: c.GapScope,
+			CVDDay: c.CVDDay, CVDDayDefinite: c.CVDDayDefinite,
+			PrintChangePct: c.PrintChangePct, PrintRead: c.PrintRead, PrintDefinite: c.PrintDefinite,
+			LiqHeat: c.LiqHeat, LiqHeatRatio: c.LiqHeatRatio, LiqHeatVenue: c.LiqHeatVenue, LiqHeatDefinite: c.LiqHeatDefinite,
+			BidPct: c.BidPct, BidDefinite: c.BidDefinite,
 			Venues: venues, Coverage: coverageToDTO(c.Coverage),
 			Recorded: recordedToDTO(c.Recorded),
 		})

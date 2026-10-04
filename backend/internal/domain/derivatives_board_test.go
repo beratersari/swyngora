@@ -117,6 +117,110 @@ func TestBuildDerivativesBoard_StaleLongShareIsBlank(t *testing.T) {
 	}
 }
 
+func TestBuildDerivativesBoard_ScanColumns(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	coin := boardCoin("BTCUSDT", now, 8e9, 1e9, 1e9, 0, 0)
+	coin.Venues[0].TopLongShare = 0.65
+	coin.Venues[0].TopLongOK = true
+	coin.Venues[1].TopUnsupported = true
+	coin.Venues[2].TopLongShare = 0.50
+	coin.Venues[2].TopLongOK = true
+	for i := range coin.Venues {
+		coin.Venues[i].CVDDayOK = true
+		coin.Venues[i].CVDAt = now
+		coin.Venues[i].PrintOK = true
+		coin.Venues[i].PrintAt = now
+		coin.Venues[i].PrintCount = 10
+		coin.Venues[i].PrintPriorCount = 10
+		coin.Venues[i].BookOK = true
+		coin.Venues[i].BookAt = now
+		coin.Venues[i].LiqHeatOK = true
+		coin.Venues[i].LiqGrade = CascadeGradeQuiet
+	}
+	coin.Venues[0].CVDDay = 100
+	coin.Venues[1].CVDDay = -40
+	coin.Venues[2].CVDDay = 10
+	coin.Venues[0].PrintNotional = 200
+	coin.Venues[0].PrintPriorNotional = 100
+	coin.Venues[1].PrintNotional = 200
+	coin.Venues[1].PrintPriorNotional = 100
+	coin.Venues[2].PrintNotional = 200
+	coin.Venues[2].PrintPriorNotional = 100
+	coin.Venues[0].BidNotional = 60
+	coin.Venues[0].AskNotional = 40
+	coin.Venues[1].BidNotional = 60
+	coin.Venues[1].AskNotional = 40
+	coin.Venues[2].BidNotional = 60
+	coin.Venues[2].AskNotional = 40
+	coin.Venues[0].LiqGrade = CascadeGradeCascade
+	coin.Venues[0].LiqRatio = 4.5
+	coin.Venues[2].LiqGrade = CascadeGradeElevated
+	coin.Venues[2].LiqRatio = 2
+
+	got := BuildDerivativesBoard("all", []DerivativesCoinInput{coin}, now)
+	row := got.Coins[0]
+	if !row.GapDefinite || row.GapPct != "+8.33" || row.GapScope != "binance,okx" {
+		t.Fatalf("gap %+v", row.GapPct)
+	}
+	if row.Venues[1].GapStatus != VenueReadUnsupported || row.Venues[1].GapPct != "" {
+		t.Fatalf("bybit gap %+v", row.Venues[1])
+	}
+	if !row.CVDDayDefinite || row.CVDDay != "+70" {
+		t.Fatalf("cvd %s", row.CVDDay)
+	}
+	if !row.PrintDefinite || row.PrintChangePct != "+100" || row.PrintRead != PrintSizeReadLarger {
+		t.Fatalf("print %s %s", row.PrintChangePct, row.PrintRead)
+	}
+	if !row.LiqHeatDefinite || row.LiqHeat != CascadeGradeCascade || row.LiqHeatVenue != "binance" || row.LiqHeatRatio != "4.5" {
+		t.Fatalf("heat %s %s %s", row.LiqHeat, row.LiqHeatVenue, row.LiqHeatRatio)
+	}
+	if !row.BidDefinite || row.BidPct != "60" {
+		t.Fatalf("bid %s", row.BidPct)
+	}
+	if !got.Definite {
+		t.Fatal("scan columns must not clear the original board definite flag")
+	}
+}
+
+func TestBuildDerivativesBoard_ScanColumnWithholdsIncompleteVenue(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	coin := boardCoin("BTCUSDT", now, 8e9, 1e9, 1e9, 0, 0)
+	coin.Venues[0].TopLongOK = true
+	coin.Venues[0].TopLongShare = 0.70
+	coin.Venues[1].TopLongOK = true
+	coin.Venues[1].TopLongShare = 0.70
+	coin.Venues[0].CVDDayOK = true
+	coin.Venues[0].CVDAt = now
+	coin.Venues[0].CVDDay = 10
+	coin.Venues[1].CVDDayOK = true
+	coin.Venues[1].CVDAt = now
+	coin.Venues[1].CVDDay = 10
+	got := BuildDerivativesBoard("all", []DerivativesCoinInput{coin}, now)
+	row := got.Coins[0]
+	if row.GapDefinite || row.GapPct != "" || row.CVDDayDefinite || row.CVDDay != "" {
+		t.Fatalf("leaked gap %q cvd %q", row.GapPct, row.CVDDay)
+	}
+	if row.Venues[0].GapPct != "+15" || row.Venues[2].GapStatus != VenueReadMissing {
+		t.Fatalf("venues %+v", row.Venues)
+	}
+}
+
+func TestDayCVDDelta_NeedsTheDayOpen(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	day := now.Truncate(24 * time.Hour)
+	buckets := []TakerBucket{
+		{Start: day, BuyNotional: 30, SellNotional: 10},
+		{Start: now.Add(-time.Minute), BuyNotional: 5, SellNotional: 1},
+	}
+	delta, newest, ok := DayCVDDelta(buckets, now, day)
+	if !ok || delta != 24 || !newest.Equal(now.Add(-time.Minute)) {
+		t.Fatalf("delta %v newest %v ok %v", delta, newest, ok)
+	}
+	if _, _, late := DayCVDDelta(buckets, now, now.Add(-time.Hour)); late {
+		t.Fatal("tape that starts after the day open is not a day CVD")
+	}
+}
+
 func TestBuildDerivativesBoard_IncompleteWindowIsNotZero(t *testing.T) {
 	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
 	coin := boardCoin("BTCUSDT", now, 8e9, 1e9, 1e9, 0, 0)

@@ -72,6 +72,11 @@ describe('DerivativesPage', () => {
     expect(screen.getByRole('columnheader', { name: 'Recorded' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Crowd long' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Taker buy 1h' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Top − crowd' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'CVD day' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Print size 15m' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Liq heat' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Bid 1%' })).toBeInTheDocument();
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
     expect(screen.queryByText('8.00B')).not.toBeInTheDocument();
     expect(screen.queryByText('55%')).not.toBeInTheDocument();

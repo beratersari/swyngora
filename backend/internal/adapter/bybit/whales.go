@@ -55,6 +55,22 @@ func (c *Client) GetRecentPrints(ctx context.Context, symbol string) ([]domain.T
 	return append([]domain.TakerPrint(nil), got...), nil
 }
 
+// MemoryPrints returns fills already on the in-memory tape.
+// The boolean is false when that tape does not reach from.
+func (c *Client) MemoryPrints(symbol string, from, to time.Time) ([]domain.TakerPrint, bool) {
+	if c == nil || c.tape == nil {
+		return nil, false
+	}
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return nil, false
+	}
+	if from.IsZero() || !c.tape.Covers(domain.ExchangeBybit, symbol, from) {
+		return nil, false
+	}
+	return domain.FilterPrintsInRange(c.tape.Prints(domain.ExchangeBybit, symbol), from, to), true
+}
+
 // ListPrints returns recent linear trades filtered to [from, to] (Bybit has no historical page).
 func (c *Client) ListPrints(ctx context.Context, symbol string, from, to time.Time) ([]domain.TakerPrint, error) {
 	got, err := c.GetRecentPrints(ctx, symbol)
