@@ -43,6 +43,70 @@ const (
 	MaxCVDPoints       = 320
 )
 
+// CVDSpan is one CVD lookback. Longer ranges use coarser bars so the line
+// still fits a few hundred points. The minutes underneath stay in the store.
+type CVDSpan struct {
+	ID             string
+	Lookback       time.Duration
+	Bar            time.Duration
+	MaxPoints      int
+	CandleInterval string
+	CandleLimit    int
+}
+
+// DefaultCVDSpan is the 24-hour, 5-minute series.
+func DefaultCVDSpan() CVDSpan {
+	return CVDSpan{
+		ID: "24h", Lookback: DefaultCVDLookback, Bar: CVDBar, MaxPoints: MaxCVDPoints,
+		CandleInterval: "5m", CandleLimit: 320,
+	}
+}
+
+// ParseCVDRange accepts 24h (default), 7d, 30d, and 90d.
+// 7d is 30-minute bars, 30d is 2-hour bars, 90d is 4-hour bars.
+func ParseCVDRange(raw string) (CVDSpan, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "24h":
+		return DefaultCVDSpan(), nil
+	case "7d":
+		return CVDSpan{
+			ID: "7d", Lookback: 7 * 24 * time.Hour, Bar: 30 * time.Minute, MaxPoints: 400,
+			CandleInterval: "30m", CandleLimit: 360,
+		}, nil
+	case "30d":
+		return CVDSpan{
+			ID: "30d", Lookback: 30 * 24 * time.Hour, Bar: 2 * time.Hour, MaxPoints: 400,
+			CandleInterval: "2h", CandleLimit: 380,
+		}, nil
+	case "90d":
+		return CVDSpan{
+			ID: "90d", Lookback: 90 * 24 * time.Hour, Bar: 4 * time.Hour, MaxPoints: 600,
+			CandleInterval: "4h", CandleLimit: 560,
+		}, nil
+	default:
+		return CVDSpan{}, fmt.Errorf("%w: cvd range must be 24h, 7d, 30d, or 90d", ErrInvalidArgument)
+	}
+}
+
+// BarLabel is the candle-interval name for this span.
+func (s CVDSpan) BarLabel() string {
+	switch s.Bar {
+	case 5 * time.Minute:
+		return "5m"
+	case 30 * time.Minute:
+		return "30m"
+	case 2 * time.Hour:
+		return "2h"
+	case 4 * time.Hour:
+		return "4h"
+	default:
+		if s.Bar <= 0 {
+			return "5m"
+		}
+		return s.Bar.String()
+	}
+}
+
 // CVDWindows are the CVD vs price lookbacks.
 var CVDWindows = []struct {
 	ID  string
@@ -78,18 +142,18 @@ type CVDShare struct {
 
 // CVDDivergence is price vs CVD disagreement (price up / CVD down or the reverse).
 type CVDDivergence struct {
-	Kind             string // price_up_cvd_down | price_down_cvd_up | ""
-	VsPrice          string
-	Title            string
-	Summary          string
-	Bars             int // opposite bars in the whole series
-	LastAt           time.Time
-	Since            time.Time // start of the current (or latest) run
-	Duration         string    // e.g. "35m", "2h"
-	DurationSeconds  int
-	PriceMovePct     float64 // price change over that run
-	CVDMove          float64 // CVD change over that run
-	CVDMovePct       float64 // CVD move vs buy+sell in the run
+	Kind            string // price_up_cvd_down | price_down_cvd_up | ""
+	VsPrice         string
+	Title           string
+	Summary         string
+	Bars            int // opposite bars in the whole series
+	LastAt          time.Time
+	Since           time.Time // start of the current (or latest) run
+	Duration        string    // e.g. "35m", "2h"
+	DurationSeconds int
+	PriceMovePct    float64 // price change over that run
+	CVDMove         float64 // CVD change over that run
+	CVDMovePct      float64 // CVD move vs buy+sell in the run
 }
 
 // CVDVenueSplit is when one venue's CVD rises while the other falls.
@@ -152,36 +216,41 @@ type CVDSpotFutures struct {
 
 // CVDVenueSeries is one venue's CVD path plus window reads.
 type CVDVenueSeries struct {
-	Exchange       Exchange
-	Symbol         string
-	Market         string // spot | futures
-	Points         []CVDPoint
-	Windows        []CVDWindowStat
-	Anchors        []CVDAnchor
-	LastCVD        float64
-	LastPrice      float64
-	Contributions  []CVDShare
-	OverlapFrom    *time.Time
-	OverlapTo      *time.Time
-	Divergence     CVDDivergence
-	VenueSplit     *CVDVenueSplit
-	Summary        string
-	Error          string
-	Complete       bool
+	Exchange      Exchange
+	Symbol        string
+	Market        string // spot | futures
+	Range         string
+	Bar           time.Duration
+	MaxPoints     int
+	Points        []CVDPoint
+	Windows       []CVDWindowStat
+	Anchors       []CVDAnchor
+	LastCVD       float64
+	LastPrice     float64
+	Contributions []CVDShare
+	OverlapFrom   *time.Time
+	OverlapTo     *time.Time
+	Divergence    CVDDivergence
+	VenueSplit    *CVDVenueSplit
+	Summary       string
+	Error         string
+	Complete      bool
 }
 
 // CVDReport is the API result.
 type CVDReport struct {
-	Symbol        string
-	Exchange      string
-	AsOf          time.Time
-	Venues        []CVDVenueSeries // futures
-	Combined      *CVDVenueSeries  // futures combined
-	SpotVenues    []CVDVenueSeries
-	SpotCombined  *CVDVenueSeries
-	SpotFutures   *CVDSpotFutures
-	Summary       string
-	Note          string
+	Symbol       string
+	Exchange     string
+	Range        string
+	Bar          string
+	AsOf         time.Time
+	Venues       []CVDVenueSeries // futures
+	Combined     *CVDVenueSeries  // futures combined
+	SpotVenues   []CVDVenueSeries
+	SpotCombined *CVDVenueSeries
+	SpotFutures  *CVDSpotFutures
+	Summary      string
+	Note         string
 }
 
 // TakerBucketPort loads raw buy/sell bars for CVD.
@@ -261,13 +330,29 @@ func MergeTakerBuckets(stored, live []TakerBucket) []TakerBucket {
 	return out
 }
 
-// BuildCVDSeries accumulates buy−sell and joins price.
+// BuildCVDSeries accumulates buy−sell and joins price over the default 24h span.
 func BuildCVDSeries(ex Exchange, symbol string, buckets []TakerBucket, prices []CVDPrice, now time.Time, started time.Time) CVDVenueSeries {
+	return BuildCVDSeriesSpan(ex, symbol, buckets, prices, now, started, DefaultCVDSpan())
+}
+
+// BuildCVDSeriesSpan accumulates buy−sell over one lookback.
+// Bars coarser than the stored minutes are summed. Points before the lookback are dropped.
+func BuildCVDSeriesSpan(ex Exchange, symbol string, buckets []TakerBucket, prices []CVDPrice, now time.Time, started time.Time, span CVDSpan) CVDVenueSeries {
+	if span.Bar <= 0 || span.Lookback <= 0 {
+		span = DefaultCVDSpan()
+	}
+	if span.MaxPoints <= 0 {
+		span.MaxPoints = MaxCVDPoints
+	}
 	symbol = NormalizeLiquidationSymbol(symbol)
 	now = now.UTC()
-	cut := now.Add(-DefaultCVDLookback)
-	bars := ResampleTakerBuckets(buckets, CVDBar)
-	out := CVDVenueSeries{Exchange: ex, Symbol: symbol, Market: CVDMarketFutures, Points: []CVDPoint{}, Windows: []CVDWindowStat{}}
+	cut := now.Add(-span.Lookback)
+	bars := ResampleTakerBuckets(buckets, span.Bar)
+	out := CVDVenueSeries{
+		Exchange: ex, Symbol: symbol, Market: CVDMarketFutures,
+		Range: span.ID, Bar: span.Bar, MaxPoints: span.MaxPoints,
+		Points: []CVDPoint{}, Windows: []CVDWindowStat{},
+	}
 	var cvd float64
 	for _, b := range bars {
 		if b.Start.Before(cut) {
@@ -277,12 +362,12 @@ func BuildCVDSeries(ex Exchange, symbol string, buckets []TakerBucket, prices []
 		cvd += delta
 		pt := CVDPoint{
 			Time: b.Start, BuyNotional: b.BuyNotional, SellNotional: b.SellNotional,
-			Delta: delta, CVD: cvd, Price: priceAt(prices, b.Start),
+			Delta: delta, CVD: cvd, Price: priceAtBar(prices, b.Start, span.Bar),
 		}
 		out.Points = append(out.Points, pt)
 	}
-	if len(out.Points) > MaxCVDPoints {
-		out.Points = out.Points[len(out.Points)-MaxCVDPoints:]
+	if len(out.Points) > span.MaxPoints {
+		out.Points = out.Points[len(out.Points)-span.MaxPoints:]
 	}
 	annotateCVDPoints(out.Points)
 	if n := len(out.Points); n > 0 {
@@ -293,7 +378,7 @@ func BuildCVDSeries(ex Exchange, symbol string, buckets []TakerBucket, prices []
 		out.Windows = append(out.Windows, summarizeCVDWindow(out.Points, w.ID, now.Add(-w.Dur), now, started))
 	}
 	out.Anchors = attachCVDAnchors(out.Points, now, started)
-	out.Complete = cvdCoverageComplete(started, cut)
+	out.Complete = cvdCoverageCompleteBar(started, cut, span.Bar)
 	out.Divergence = summarizeCVDDivergence(out.Points, out.Windows)
 	out.Summary = ExplainCVDVenue(out)
 	return out
@@ -330,11 +415,16 @@ func CombineCVDVenues(symbol string, venues []CVDVenueSeries, prices []CVDPrice,
 		out.Market = usable[0].Market
 	}
 
+	bar := cvdSeriesBar(usable[0])
+	capN := cvdSeriesCap(usable[0])
+	out.Range = usable[0].Range
+	out.Bar = bar
+	out.MaxPoints = capN
 	from, to, ok := overlapCVDRange(usable)
 	if !ok {
 		out.Windows = emptyCVDWindows(now, time.Time{})
 		out.Anchors = attachCVDAnchors(nil, now, time.Time{})
-		out.Summary = "Combined CVD needs overlapping 5-minute bars on both venues. Bybit history is still filling in — not shown as complete."
+		out.Summary = "Combined CVD needs overlapping bars on both venues. Bybit history is still filling in — not shown as complete."
 		return out
 	}
 	out.OverlapFrom = &from
@@ -344,14 +434,14 @@ func CombineCVDVenues(symbol string, venues []CVDVenueSeries, prices []CVDPrice,
 	for i, v := range usable {
 		m := make(map[int64]CVDPoint, len(v.Points))
 		for _, p := range v.Points {
-			m[TruncateToBucket(p.Time, CVDBar).UnixMilli()] = p
+			m[TruncateToBucket(p.Time, bar).UnixMilli()] = p
 		}
 		indexes[i] = m
 	}
 
 	venueCvd := make([]float64, len(usable))
 	var cvd float64
-	for at := from; !at.After(to); at = at.Add(CVDBar) {
+	for at := from; !at.After(to); at = at.Add(bar) {
 		ms := at.UnixMilli()
 		pt := CVDPoint{Time: at}
 		shares := make([]CVDShare, 0, len(usable))
@@ -367,7 +457,7 @@ func CombineCVDVenues(symbol string, venues []CVDVenueSeries, prices []CVDPrice,
 		}
 		cvd += pt.Delta
 		pt.CVD = cvd
-		pt.Price = priceAt(prices, pt.Time)
+		pt.Price = priceAtBar(prices, pt.Time, bar)
 		for i := range shares {
 			if cvd != 0 {
 				shares[i].SharePct = shares[i].CVD / cvd * 100
@@ -376,8 +466,8 @@ func CombineCVDVenues(symbol string, venues []CVDVenueSeries, prices []CVDPrice,
 		pt.Shares = shares
 		out.Points = append(out.Points, pt)
 	}
-	if len(out.Points) > MaxCVDPoints {
-		out.Points = out.Points[len(out.Points)-MaxCVDPoints:]
+	if len(out.Points) > capN {
+		out.Points = out.Points[len(out.Points)-capN:]
 	}
 	annotateCVDPoints(out.Points)
 	if n := len(out.Points); n > 0 {
@@ -793,13 +883,28 @@ func emptyCVDWindows(now, started time.Time) []CVDWindowStat {
 	return out
 }
 
+func cvdSeriesBar(v CVDVenueSeries) time.Duration {
+	if v.Bar > 0 {
+		return v.Bar
+	}
+	return CVDBar
+}
+
+func cvdSeriesCap(v CVDVenueSeries) int {
+	if v.MaxPoints > 0 {
+		return v.MaxPoints
+	}
+	return MaxCVDPoints
+}
+
 func overlapCVDRange(venues []CVDVenueSeries) (from, to time.Time, ok bool) {
 	for i, v := range venues {
 		if len(v.Points) == 0 {
 			return time.Time{}, time.Time{}, false
 		}
-		f := TruncateToBucket(v.Points[0].Time, CVDBar)
-		t := TruncateToBucket(v.Points[len(v.Points)-1].Time, CVDBar)
+		step := cvdSeriesBar(v)
+		f := TruncateToBucket(v.Points[0].Time, step)
+		t := TruncateToBucket(v.Points[len(v.Points)-1].Time, step)
 		if i == 0 {
 			from, to = f, t
 			continue
@@ -818,11 +923,18 @@ func overlapCVDRange(venues []CVDVenueSeries) (from, to time.Time, ok bool) {
 }
 
 func cvdCoverageComplete(started, from time.Time) bool {
+	return cvdCoverageCompleteBar(started, from, CVDBar)
+}
+
+func cvdCoverageCompleteBar(started, from time.Time, bar time.Duration) bool {
 	if started.IsZero() || from.IsZero() {
 		return false
 	}
-	// One 5m bucket of slack so a bar that opens just after the cut still counts.
-	return !started.After(from.Add(CVDBar))
+	if bar <= 0 {
+		bar = CVDBar
+	}
+	// One bar of slack so a bucket that opens just after the cut still counts.
+	return !started.After(from.Add(bar))
 }
 
 func currentCVDDivergenceRun(points []CVDPoint) (kind string, start, end int) {
@@ -1074,12 +1186,19 @@ func overlapIncompleteNote(from, now time.Time) string {
 }
 
 func priceAt(prices []CVDPrice, t time.Time) float64 {
+	return priceAtBar(prices, t, CVDBar)
+}
+
+func priceAtBar(prices []CVDPrice, t time.Time, bar time.Duration) float64 {
 	if len(prices) == 0 || t.IsZero() {
 		return 0
 	}
+	if bar <= 0 {
+		bar = CVDBar
+	}
 	var best CVDPrice
 	found := false
-	end := t.Add(CVDBar)
+	end := t.Add(bar)
 	for _, p := range prices {
 		// Bar at t owns [t, t+5m). The next candle's open must not leak in
 		// or every point would share the following close and hide divergence.

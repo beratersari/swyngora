@@ -1797,7 +1797,7 @@ func TestGetCVD_PerVenueAndCombined(t *testing.T) {
 		domain.ExchangeBinance: &fakeTaker{buckets: bn, flow: &domain.TakerVenueFlow{}},
 		domain.ExchangeBybit:   &fakeTaker{buckets: by, flow: &domain.TakerVenueFlow{}},
 	})
-	got, err := svc.GetCVD(context.Background(), "all", "BTCUSDT")
+	got, err := svc.GetCVD(context.Background(), "all", "BTCUSDT", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1823,8 +1823,52 @@ func TestGetCVD_PerVenueAndCombined(t *testing.T) {
 
 func TestGetCVD_BadSymbol(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{})
-	_, err := svc.GetCVD(context.Background(), "all", "  ")
+	_, err := svc.GetCVD(context.Background(), "all", "  ", "")
 	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestGetCVD_LongerRangeKeepsOlderBars(t *testing.T) {
+	now := time.Now().UTC()
+	old := now.Add(-72 * time.Hour).Truncate(30 * time.Minute)
+	recent := now.Add(-10 * time.Minute).Truncate(5 * time.Minute)
+	buckets := []domain.TakerBucket{
+		{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Start: old, BuyNotional: 80, SellNotional: 10},
+		{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Start: recent, BuyNotional: 5, SellNotional: 1},
+	}
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithTakerFlow(map[domain.Exchange]domain.TakerFlowPort{
+		domain.ExchangeBinance: &fakeTaker{buckets: buckets, flow: &domain.TakerVenueFlow{}},
+	})
+	week, err := svc.GetCVD(context.Background(), "binance", "BTCUSDT", "7d")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if week.Range != "7d" || week.Bar != "30m" || len(week.Venues) != 1 {
+		t.Fatalf("%+v", week)
+	}
+	var sawOld bool
+	for _, p := range week.Venues[0].Points {
+		if p.Time.Equal(old) {
+			sawOld = true
+		}
+	}
+	if !sawOld {
+		t.Fatalf("7d dropped the 3-day bar: %+v", week.Venues[0].Points)
+	}
+	if week.Venues[0].Complete {
+		t.Fatal("a single 3-day-old bar must not complete a 7d range")
+	}
+	day, err := svc.GetCVD(context.Background(), "binance", "BTCUSDT", "24h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range day.Venues[0].Points {
+		if !p.Time.After(now.Add(-24 * time.Hour)) {
+			t.Fatalf("24h kept %s", p.Time)
+		}
+	}
+	if _, err := svc.GetCVD(context.Background(), "binance", "BTCUSDT", "1y"); !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("%v", err)
 	}
 }

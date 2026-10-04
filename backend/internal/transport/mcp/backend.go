@@ -1775,11 +1775,11 @@ func marketPressureMap(got *domain.MarketPressureReport) map[string]any {
 	}
 }
 
-func (b *Backend) GetCVD(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
+func (b *Backend) GetCVD(ctx context.Context, exchange, symbol, rangeID string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
 	}
-	got, err := b.Market.GetCVD(ctx, exchange, symbol)
+	got, err := b.Market.GetCVD(ctx, exchange, symbol, rangeID)
 	if err != nil {
 		return nil, err
 	}

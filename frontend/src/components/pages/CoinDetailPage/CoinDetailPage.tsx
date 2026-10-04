@@ -32,7 +32,7 @@ import type {
   CandleChartOverlay,
   CandleChartPriceLine,
 } from '@/components/molecules/CandleChartHost/CandleChartHost.types';
-import { DetailChartToolbar } from '@/components/organisms/DetailChartToolbar';
+import { DetailChartToolbar, type CvdChartRange } from '@/components/organisms/DetailChartToolbar';
 import { DetailHeader } from '@/components/organisms/DetailHeader';
 import { DetailStats } from '@/components/organisms/DetailStats';
 import { HolderPanel } from '@/components/organisms/HolderPanel';
@@ -184,6 +184,7 @@ import {
   deltaByCandle,
   futuresCvdSeries,
   liquidationChartLevels,
+  runningCvdByCandle,
 } from './chartTape';
 import { CoinFlowTab } from './CoinFlowTab';
 import { PastOrderBook } from './PastOrderBook';
@@ -231,6 +232,7 @@ export function CoinDetailPage() {
   const [showSignalMarkers, setShowSignalMarkers] = useState(true);
   const [showDelta, setShowDelta] = useState(true);
   const [showCvd, setShowCvd] = useState(true);
+  const [cvdRange, setCvdRange] = useState<CvdChartRange>('24h');
   const [showLiqLevels, setShowLiqLevels] = useState(true);
   const [showBook, setShowBook] = useState(true);
   const [showFootprint, setShowFootprint] = useState(true);
@@ -472,6 +474,14 @@ export function CoinDetailPage() {
     pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
     refetchOnFocus: true,
   });
+  const cvdChartQuery = useGetMarketCvdQuery(
+    { exchange: 'all', symbol: perpSymbol, range: cvdRange },
+    {
+      skip: skipTape || cvdRange === '24h' || (!showCvd && !showDelta),
+      pollingInterval: visible && cvdRange !== '24h' ? 60_000 : 0,
+      refetchOnFocus: true,
+    },
+  );
   const unusualQuery = useGetMarketUnusualQuery(tapeQueryArg, {
     skip: skipTape,
     pollingInterval: visible ? UNUSUAL_POLL_MS : 0,
@@ -876,7 +886,8 @@ export function CoinDetailPage() {
   }, [showEma, emaPeriods, overlayPoints, chartData, mergedCandles.length, t]);
 
   const barDurationSec = candleIntervalSeconds(interval);
-  const tapeCvd = useMemo(() => futuresCvdSeries(rtkCurrent(cvdQuery)), [cvdQuery]);
+  const chartCvdReport = cvdRange === '24h' ? rtkCurrent(cvdQuery) : rtkCurrent(cvdChartQuery);
+  const tapeCvd = useMemo(() => futuresCvdSeries(chartCvdReport), [chartCvdReport]);
   const lowerSeries: CandleChartLowerSeries[] = useMemo(() => {
     if (isEquity || barDurationSec <= 0) return [];
     const series: CandleChartLowerSeries[] = [];
@@ -892,6 +903,20 @@ export function CoinDetailPage() {
           color: semanticColors.chart.up,
           downColor: semanticColors.chart.down,
           data: delta,
+        });
+        pane += 1;
+      }
+    }
+    if (showCvd && cvdRange !== '24h') {
+      const running = runningCvdByCandle(chartData, tapeCvd.points, barDurationSec);
+      if (running.length > 0) {
+        series.push({
+          id: 'cvd-range',
+          pane,
+          kind: 'line',
+          title: t('detail:chart.cvdRunning', { range: cvdRange }),
+          color: semanticColors.text.link,
+          data: running,
         });
         pane += 1;
       }
@@ -1021,6 +1046,7 @@ export function CoinDetailPage() {
     barDurationSec,
     showDelta,
     showCvd,
+    cvdRange,
     showCrowd,
     showOi,
     showFunding,
@@ -1387,6 +1413,8 @@ export function CoinDetailPage() {
           onShowDeltaChange={isEquity ? undefined : setShowDelta}
           showCvd={showCvd}
           onShowCvdChange={isEquity ? undefined : setShowCvd}
+          cvdRange={cvdRange}
+          onCvdRangeChange={isEquity ? undefined : setCvdRange}
           showLiqLevels={showLiqLevels}
           onShowLiqLevelsChange={isEquity ? undefined : setShowLiqLevels}
           showBook={showBook}
@@ -1421,7 +1449,8 @@ export function CoinDetailPage() {
             (showFunding && fundingHistQuery.isFetching) ||
             (showLiqNotional && liqHistQuery.isFetching) ||
             (showLiqMap && liqMapQuery.isFetching) ||
-            (showOpenLevels && openLevelsQuery.isFetching)
+            (showOpenLevels && openLevelsQuery.isFetching) ||
+            (cvdRange !== '24h' && (showCvd || showDelta) && cvdChartQuery.isFetching)
           }
         />
 
@@ -1480,6 +1509,14 @@ export function CoinDetailPage() {
               showOpenLevels) ? (
               <Text variant="caption" color="secondary">
                 {t('detail:chart.tapeHint')}
+              </Text>
+            ) : null}
+            {!isEquity &&
+            cvdRange !== '24h' &&
+            tapeCvd.points.length > 0 &&
+            !tapeCvd.complete ? (
+              <Text variant="caption" color="secondary" data-testid="chart-cvd-partial">
+                {t('detail:chart.cvdPartial', { range: cvdRange })}
               </Text>
             ) : null}
             {!isEquity && recordedLine ? (
@@ -1567,6 +1604,7 @@ export function CoinDetailPage() {
               height={
                 (isPhone ? PHONE_CHART_HEIGHT : DESK_CHART_HEIGHT) +
                 (lowerSeries.some((s) => s.id === 'delta') ? (isPhone ? 72 : 120) : 0) +
+                (lowerSeries.some((s) => s.id === 'cvd-range') ? (isPhone ? 72 : 120) : 0) +
                 (lowerSeries.some((s) => s.id === 'cvd-day' || s.id === 'cvd-4h')
                   ? isPhone
                     ? 72

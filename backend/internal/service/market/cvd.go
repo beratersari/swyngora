@@ -9,7 +9,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const cvdDisclaimer = "CVD is the running sum of aggressive market-buy notional minus market-sell notional. Futures CVD sums measured prints (price × size) on Binance USD-M, Bybit linear, and OKX USDT-swap. Stored minutes extend the line while this process is recording. Spot CVD is who hit the spot book (Binance from 5m klines, Bybit from live spot trades). It is not account long/short. Windows show 15m / 1h / 4h / 24h change. Anchors reset that sum at 00:00 UTC (day) and at the current 4-hour open (00/04/08/12/16/20 UTC). Combined futures/spot each use the overlapping time range. spotFutures flags when spot buying and futures selling (or the reverse). Divergence runs do not merge across a quiet gap. Informational only — not financial advice."
+const cvdDisclaimer = "CVD is the running sum of aggressive market-buy notional minus market-sell notional. Futures CVD sums measured prints (price × size) on Binance USD-M, Bybit linear, and OKX USDT-swap. Stored minutes extend the line while this process is recording. range 24h uses 5-minute bars. 7d uses 30-minute bars, 30d uses 2-hour bars, and 90d uses 4-hour bars, folded from those minutes. A range is complete only when the stored tape reaches its start. Spot CVD is who hit the spot book (Binance from 5m klines, Bybit from live spot trades). It is not account long/short. Windows show 15m / 1h / 4h / 24h change on the returned bars. Anchors reset that sum at 00:00 UTC (day) and at the current 4-hour open (00/04/08/12/16/20 UTC). Combined futures/spot each use the overlapping time range. spotFutures flags when spot buying and futures selling (or the reverse). Divergence runs do not merge across a quiet gap. Informational only — not financial advice."
 
 // WithTakerBucketStore attaches durable taker bars for CVD.
 func (s *Service) WithTakerBucketStore(store domain.TakerBucketStore) *Service {
@@ -20,8 +20,13 @@ func (s *Service) WithTakerBucketStore(store domain.TakerBucketStore) *Service {
 }
 
 // GetCVD returns cumulative taker buy−sell versus price for Binance, Bybit, and combined.
-func (s *Service) GetCVD(ctx context.Context, exchange, symbol string) (*domain.CVDReport, error) {
+// rangeID is 24h (default), 7d, 30d, or 90d. Empty is 24h.
+func (s *Service) GetCVD(ctx context.Context, exchange, symbol, rangeID string) (*domain.CVDReport, error) {
 	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return nil, err
+	}
+	span, err := domain.ParseCVDRange(rangeID)
 	if err != nil {
 		return nil, err
 	}
@@ -42,11 +47,13 @@ func (s *Service) GetCVD(ctx context.Context, exchange, symbol string) (*domain.
 		spotWant = nil
 	}
 	now := time.Now().UTC()
-	prices := s.cvdPrices(ctx, symbol)
+	prices := s.cvdPrices(ctx, symbol, span)
 
 	out := &domain.CVDReport{
 		Symbol:   symbol,
 		Exchange: ex,
+		Range:    span.ID,
+		Bar:      span.BarLabel(),
 		AsOf:     now,
 		Venues:   make([]domain.CVDVenueSeries, 0, len(want)),
 		Note:     cvdDisclaimer,
@@ -57,7 +64,7 @@ func (s *Service) GetCVD(ctx context.Context, exchange, symbol string) (*domain.
 		wg.Add(1)
 		go func(v domain.Exchange) {
 			defer wg.Done()
-			ven := s.cvdOne(ctx, v, symbol, prices, now)
+			ven := s.cvdOne(ctx, v, symbol, prices, now, span)
 			mu.Lock()
 			out.Venues = append(out.Venues, ven)
 			mu.Unlock()
@@ -76,7 +83,7 @@ func (s *Service) GetCVD(ctx context.Context, exchange, symbol string) (*domain.
 		wg.Add(1)
 		go func(v domain.Exchange) {
 			defer wg.Done()
-			ven := s.cvdSpotOne(ctx, v, symbol, prices, now)
+			ven := s.cvdSpotOne(ctx, v, symbol, prices, now, span)
 			mu.Lock()
 			out.SpotVenues = append(out.SpotVenues, ven)
 			mu.Unlock()
@@ -114,7 +121,7 @@ func (s *Service) GetCVD(ctx context.Context, exchange, symbol string) (*domain.
 	return out, nil
 }
 
-func (s *Service) cvdOne(ctx context.Context, ex domain.Exchange, symbol string, prices []domain.CVDPrice, now time.Time) domain.CVDVenueSeries {
+func (s *Service) cvdOne(ctx context.Context, ex domain.Exchange, symbol string, prices []domain.CVDPrice, now time.Time, span domain.CVDSpan) domain.CVDVenueSeries {
 	out := domain.CVDVenueSeries{Exchange: ex, Symbol: symbol, Points: []domain.CVDPoint{}, Windows: []domain.CVDWindowStat{}}
 	p := s.bucketPort(ex)
 	if p == nil {
@@ -128,7 +135,7 @@ func (s *Service) cvdOne(ctx context.Context, ex domain.Exchange, symbol string,
 		out.Summary = err.Error()
 		return out
 	}
-	from := now.Add(-domain.DefaultCVDLookback)
+	from := now.Add(-span.Lookback)
 	var stored []domain.TakerBucket
 	if s.takerStore != nil {
 		stored, _ = s.takerStore.ListTakerBuckets(ctx, string(ex), symbol, from, now)
@@ -143,10 +150,10 @@ func (s *Service) cvdOne(ctx context.Context, ex domain.Exchange, symbol string,
 			started = b.Start
 		}
 	}
-	return domain.BuildCVDSeries(ex, symbol, merged, prices, now, started)
+	return domain.BuildCVDSeriesSpan(ex, symbol, merged, prices, now, started, span)
 }
 
-func (s *Service) cvdSpotOne(ctx context.Context, ex domain.Exchange, symbol string, prices []domain.CVDPrice, now time.Time) domain.CVDVenueSeries {
+func (s *Service) cvdSpotOne(ctx context.Context, ex domain.Exchange, symbol string, prices []domain.CVDPrice, now time.Time, span domain.CVDSpan) domain.CVDVenueSeries {
 	out := domain.CVDVenueSeries{
 		Exchange: ex, Symbol: symbol, Market: domain.CVDMarketSpot,
 		Points: []domain.CVDPoint{}, Windows: []domain.CVDWindowStat{},
@@ -172,7 +179,7 @@ func (s *Service) cvdSpotOne(ctx context.Context, ex domain.Exchange, symbol str
 		return out
 	}
 	storeEx := domain.SpotStoreExchange(ex)
-	from := now.Add(-domain.DefaultCVDLookback)
+	from := now.Add(-span.Lookback)
 	var stored []domain.TakerBucket
 	if s.takerStore != nil {
 		stored, _ = s.takerStore.ListTakerBuckets(ctx, storeEx, symbol, from, now)
@@ -192,7 +199,7 @@ func (s *Service) cvdSpotOne(ctx context.Context, ex domain.Exchange, symbol str
 			started = b.Start
 		}
 	}
-	ser := domain.BuildCVDSeries(ex, symbol, merged, prices, now, started)
+	ser := domain.BuildCVDSeriesSpan(ex, symbol, merged, prices, now, started, span)
 	ser.Market = domain.CVDMarketSpot
 	return ser
 }
@@ -209,10 +216,18 @@ func (s *Service) spotBucketPort(ex domain.Exchange) domain.SpotTakerBucketPort 
 	return sp
 }
 
-func (s *Service) cvdPrices(ctx context.Context, symbol string) []domain.CVDPrice {
-	c, err := s.GetCandles(ctx, string(domain.ExchangeBinance), symbol, "5m", 320, nil, nil)
+func (s *Service) cvdPrices(ctx context.Context, symbol string, span domain.CVDSpan) []domain.CVDPrice {
+	interval := span.CandleInterval
+	limit := span.CandleLimit
+	if interval == "" {
+		interval = "5m"
+	}
+	if limit <= 0 {
+		limit = 320
+	}
+	c, err := s.GetCandles(ctx, string(domain.ExchangeBinance), symbol, interval, limit, nil, nil)
 	if err != nil || len(c) == 0 {
-		c, err = s.GetCandles(ctx, string(domain.ExchangeBybit), symbol, "5m", 320, nil, nil)
+		c, err = s.GetCandles(ctx, string(domain.ExchangeBybit), symbol, interval, limit, nil, nil)
 		if err != nil {
 			return nil
 		}

@@ -846,6 +846,10 @@ export type MarketCvdVenue = {
 export type MarketCvd = {
   symbol?: string;
   exchange?: string;
+  /** 24h | 7d | 30d | 90d */
+  range?: string;
+  /** 5m | 30m | 2h | 4h */
+  bar?: string;
   summary?: string;
   note?: string;
   venues?: MarketCvdVenue[];

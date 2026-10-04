@@ -1788,6 +1788,9 @@ export interface paths {
          *     UTC). Each anchor's `cvd` is buy minus sell since that time, with
          *     price change and the same confirms / opposite / absorption label.
          *     `complete` is false when stored bars start after the anchor.
+         *     `range` is `24h` (5-minute bars, default), `7d` (30-minute),
+         *     `30d` (2-hour), or `90d` (4-hour). Longer ranges fold stored
+         *     minutes and are complete only when that tape reaches the start.
          *     `exchange=all`
          *     (default) returns Binance and Bybit separately plus a combined
          *     series. Combined uses the overlapping **time range** (a missing
@@ -7076,13 +7079,19 @@ export interface components {
             anchors?: components["schemas"]["MarketCvdAnchor"][];
         };
         /**
-         * @description Futures CVD for Binance and Bybit, plus combined. `points` are 5-minute
-         *     bars. Anchors reset the sum at 00:00 UTC (`day`) and the current 4-hour
-         *     open (`4h`). The coin chart rebases those points onto candle times.
+         * @description Futures CVD for Binance, Bybit, and OKX, plus combined. `range` `24h`
+         *     uses 5-minute bars. `7d` uses 30-minute bars, `30d` uses 2-hour bars,
+         *     and `90d` uses 4-hour bars, folded from stored minutes. Anchors reset
+         *     the sum at 00:00 UTC (`day`) and the current 4-hour open (`4h`).
+         *     The coin chart rebases those points onto candle times.
          */
         MarketCvdReport: {
             symbol?: string;
             exchange?: string;
+            /** @enum {string} */
+            range?: "24h" | "7d" | "30d" | "90d";
+            /** @description Bar size of points */
+            bar?: string;
             /** Format: date-time */
             asOf?: string;
             summary?: string;
@@ -12182,6 +12191,8 @@ export interface operations {
                 symbol: string;
                 /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
+                /** @description 24h (5m bars) | 7d (30m) | 30d (2h) | 90d (4h). Default 24h. */
+                range?: "24h" | "7d" | "30d" | "90d";
             };
             header?: never;
             path?: never;

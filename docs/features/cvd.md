@@ -13,10 +13,11 @@ Useful when:
 
 ## Behavior
 
-`GET /api/v1/market/cvd?symbol=BTCUSDT`
+`GET /api/v1/market/cvd?symbol=BTCUSDT&range=7d`
 
 - `exchange=all` (default): **Binance**, **Bybit**, and **OKX** separately plus `combined`
-- 5-minute points: `buyNotional`, `sellNotional`, `delta`, running `cvd`,
+- `range`: `24h` (default, 5-minute bars), `7d` (30-minute bars), `30d` (2-hour bars), `90d` (4-hour bars). Longer ranges fold the stored minutes. The series is `complete` only when those minutes reach the start of the range
+- Points: `buyNotional`, `sellNotional`, `delta`, running `cvd`,
   `price`, `priceChangePct`, `vsPrice`, and `divergence`
 - **Divergence:** `price_up_cvd_down` or `price_down_cvd_up` on a point,
   on each 15m / 1h / 4h / 24h window, and on the series `divergence`
@@ -55,10 +56,13 @@ Useful when:
 
 Futures CVD on Binance, Bybit, and OKX is the sum of measured prints
 (price × size). Minutes are stored in `data/futures.db` (`taker_buckets`)
-while the server is recording, and a 24h window is `complete` only after
-that tape covers it. Older Binance rows that were base volume × the mark
-were dropped once (schema version 6) so they are not added on top of the
-measured minutes.
+while the server is recording. A 24h series is `complete` only after
+that tape covers it. A 7d, 30d, or 90d series uses the same minutes and
+is `complete` only when the oldest stored minute reaches the start of
+that range. The coin chart keeps the day and 4-hour anchors, and on a
+longer range also draws the running sum across the whole range. Older
+Binance rows that were base volume × the mark were dropped once (schema
+version 6) so they are not added on top of the measured minutes.
 
 Informational only — not financial advice.
 
@@ -77,4 +81,5 @@ Informational only — not financial advice.
 ```bash
 cd backend && go test ./internal/domain/ ./internal/service/market/ ./internal/adapter/futuresstore/ -run CVD
 curl "http://localhost:8080/api/v1/market/cvd?symbol=BTCUSDT"
+curl "http://localhost:8080/api/v1/market/cvd?symbol=BTCUSDT&range=7d"
 ```

@@ -507,7 +507,7 @@ export interface paths {
          *     use stored 1-minute ladders, with brief walls and other size moves
          *     painted on the minute they happened. A multi-day window groups those
          *     minutes so the map stays readable. History only exists while the desk
-         *     has been running (about 7 days). Informational only.
+         *     has been running (about 30 days). Informational only.
          */
         get: operations["getSpotOrderBookHeatmap"];
         put?: never;
@@ -841,8 +841,9 @@ export interface paths {
         };
         /**
          * Liquid perpetual board (price, funding, open interest, long/short, taker, liquidations)
-         * @description One table for the liquid USDT perpetuals (default 36, max 36, same
-         *     universe as the futures recorder). Each row has the mark price, the
+         * @description One table for the liquid USDT perpetuals (default 36, max 100). The
+         *     recorder keeps 100 names; this page opens on 36 so the first load stays
+         *     small, and `limit=100` asks for the full recorded set. Each row has the mark price, the
          *     predicted funding rate, open interest, the 1h and 24h open-interest
          *     change, crowd long percent, the 1h taker buy share, and 24h long and
          *     short liquidation notionals. `exchange=all` (default) reads Binance
@@ -853,7 +854,9 @@ export interface paths {
          *     aggressive buy and sell volume; an incomplete hour stays blank. A
          *     missing or old venue is named on `coverage` and on that coin's
          *     `venues` row, and is not counted as zero. `definite` is false when
-         *     any coin is incomplete. Informational only.
+         *     any coin is incomplete. `recorded` says how far back open interest, the
+         *     spot book, flow-at-prices, and stored liquidation prints actually go
+         *     for that coin. Informational only.
          */
         get: operations["getMarketDerivativesBoard"];
         put?: never;
@@ -1221,7 +1224,7 @@ export interface paths {
          *     quiet hours counted as zero between the first and last stored print.
          *     CVD uses the last completed UTC day of aggressive buy minus sell.
          *     Spread uses the latest hour's average top-of-book percent from the
-         *     spot book (about 7 days are kept). Print size stays unknown: only the
+         *     spot book (about 30 days are kept). Print size stays unknown: only the
          *     previous 15 minutes of trades are kept. Fewer than 20 past daily
          *     samples, or 24 past hourly samples, stays unknown. The span is the
          *     stored sample span. exchange=all returns Binance, Bybit, and OKX
@@ -1246,7 +1249,7 @@ export interface paths {
         };
         /**
          * Which liquid coins are unusual versus their own stored history
-         * @description Scores the liquid USDT perpetuals, seeds first and capped at 36, with
+         * @description Scores the liquid USDT perpetuals, seeds first and capped at 100, with
          *     the same per-venue rules as `/api/v1/market/unusual`. A row is kept
          *     only when the band is high, low, extreme_high, or extreme_low.
          *     Typical readings and readings with too few samples are left off.
@@ -1275,11 +1278,14 @@ export interface paths {
         /**
          * How long this coin has actually been recorded
          * @description Oldest stored sample per venue for futures open interest, the spot
-         *     book, and flow-at-prices. A venue with no rows is omitted. The startup
-         *     archive backfills the liquid USDT perpetuals, up to 36 names with the
-         *     seed pairs first, and only as far as each public endpoint documents.
-         *     `spanSec` is from that oldest sample to now.
-         *     Informational only.
+         *     book, flow-at-prices, and liquidation prints this process recorded.
+         *     A venue with no rows is omitted. The startup archive backfills the
+         *     liquid USDT perpetuals, up to 100 names with the seed pairs first,
+         *     and only as far as each public endpoint documents. Spot books and
+         *     flow-at-prices are kept about 30 days. Recorded liquidation prints
+         *     are kept with the futures archive (about 90 days). Public liquidation
+         *     refill is still about 7 days. `spanSec` is from that oldest sample
+         *     to now. Informational only.
          */
         get: operations["getMarketHistorySpan"];
         put?: never;
@@ -1687,10 +1693,11 @@ export interface paths {
         /**
          * Futures taker buy vs sell volume
          * @description Aggressive (taker) buy and sell volume on Binance USD-M, Bybit linear, and OKX USDT-swap
-         *     linear for the last **5 minutes, 1 hour, and 4 hours**. Returns buy
-         *     notional, sell notional, delta, and a short read with price / OI /
-         *     funding. This is who is hitting the book now — not the account
-         *     long/short ratio. `exchange=all` adds a combined view.
+         *     for the last **5 minutes, 1 hour, and 4 hours**. Each venue sums measured prints
+         *     (price × size) from the public trade stream. Returns buy notional, sell notional,
+         *     delta, and a short read with price / OI / funding. 1h and 4h stay incomplete until
+         *     this process has recorded that long. This is who is hitting the book now — not the
+         *     account long/short ratio. `exchange=all` adds a combined view.
          */
         get: operations["getMarketTakerFlow"];
         put?: never;
@@ -1781,6 +1788,9 @@ export interface paths {
          *     UTC). Each anchor's `cvd` is buy minus sell since that time, with
          *     price change and the same confirms / opposite / absorption label.
          *     `complete` is false when stored bars start after the anchor.
+         *     `range` is `24h` (5-minute bars, default), `7d` (30-minute),
+         *     `30d` (2-hour), or `90d` (4-hour). Longer ranges fold stored
+         *     minutes and are complete only when that tape reaches the start.
          *     `exchange=all`
          *     (default) returns Binance and Bybit separately plus a combined
          *     series. Combined uses the overlapping **time range** (a missing
@@ -2266,11 +2276,11 @@ export interface paths {
          *     USD-M aggTrades, Bybit recent trades), not candle volume smeared
          *     across high–low (that is `/volume-profile`). `exchange=all`
          *     (default) returns Binance and Bybit separately plus `combined`.
-         *     Use `window` (`5m` / `15m` / `1h` / `4h` / `1d` / `3d` / `7d`,
-         *     default `15m`) or `startTime` + `endTime` (max 7d). The live
+         *     Use `window` (`5m` / `15m` / `1h` / `4h` / `1d` / `3d` / `7d` / `30d`,
+         *     default `15m`) or `startTime` + `endTime` (max 30d). The live
          *     tape is about the last hour on Binance and the newest ~1000
          *     Bybit trades. Closed minutes are stored while this process runs
-         *     (about 7 days), so a longer lookback and Bybit further back use
+         *     (about 30 days), so a longer lookback and Bybit further back use
          *     that buy/sell and print-count ladder. Optional `tickSize` sets
          *     the row width; `minPrice` / `maxPrice` clip the ladder to a band.
          *     `truncated` is true when stored rows do not cover the whole window.
@@ -2463,6 +2473,52 @@ export interface paths {
          *     financial advice.
          */
         get: operations["getMarketLiquidationHuntHeatmap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/liquidation-open-levels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Open liquidation levels that stay until price trades through them
+         * @description Estimated liquidation bands placed from hourly open interest, each
+         *     venue's own candles, and the labeled hunt leverage mix (5x through
+         *     125x, 0.40% maintenance). A band stays at the price where that slice
+         *     of open interest was placed until a later candle trades through it.
+         *
+         *     The first column places the whole open interest then on the books,
+         *     because earlier entries are unknown. Later columns only add an
+         *     increase in estimated open interest. A level that price has already
+         *     traded through is not put back. When estimated open interest on a
+         *     side falls, the oldest open slices on that side are closed; that is
+         *     an inventory change, not a liquidation. A long level is hit when a
+         *     later candle low reaches it. A short level is hit when a later
+         *     candle high reaches it. The candle that placed a level cannot hit it.
+         *
+         *     `range` is 12h, 24h, 3d, 7d, 14d, 30d, or 90d. Binance, Bybit, and
+         *     OKX each use only their own price and open interest. `combined`
+         *     sums a column only when all three have both, and `combined.definite`
+         *     is false (empty segments and cumulative) when any venue has none
+         *     in this window. `missingVenues` names those venues.
+         *
+         *     `segments` are clustered and capped for drawing. `cumulative`,
+         *     `openLong`, `openShort`, and `delta` stay uncapped. `hitLots` and
+         *     `closedLots` count the raw slices, not the capped drawing.
+         *     `leverageMix` is the assumed share of open interest at each leverage.
+         *     Binance public open interest is 30 days, so older columns exist only
+         *     when this archive already stored them. Not exchange liquidation-engine
+         *     output and not financial advice.
+         */
+        get: operations["getMarketLiquidationOpenLevels"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5775,7 +5831,7 @@ export interface components {
         };
         HistorySpanSeries: {
             /** @enum {string} */
-            kind?: "futures_oi" | "book" | "flow";
+            kind?: "futures_oi" | "book" | "flow" | "liquidations";
             exchange?: string;
             /** Format: date-time */
             since?: string;
@@ -6248,6 +6304,71 @@ export interface components {
                 weight?: number;
             }[];
             /** @description Venues with no own price and open interest in this window. Combined does not fill those cells from another venue. */
+            missingVenues?: string[];
+            note?: string;
+        };
+        /** @description One estimated band. closedAt is omitted while status is open. */
+        LiquidationOpenLevelSegment: {
+            exchange?: string;
+            /** @enum {string} */
+            side?: "long" | "short";
+            /** @description Display bucket 10 */
+            leverage?: number;
+            price?: number;
+            notional?: number;
+            /** Format: date-time */
+            openedAt?: string;
+            /** Format: date-time */
+            closedAt?: string;
+            /** @enum {string} */
+            status?: "open" | "hit" | "closed";
+        };
+        /** @description Uncapped open long and short notional. Delta is long minus short. */
+        LiquidationOpenLevelPoint: {
+            /** Format: date-time */
+            time?: string;
+            longNotional?: number;
+            shortNotional?: number;
+            delta?: number;
+        };
+        LiquidationOpenLevelBook: {
+            exchange?: string;
+            segments?: components["schemas"]["LiquidationOpenLevelSegment"][];
+            cumulative?: components["schemas"]["LiquidationOpenLevelPoint"][];
+            openLong?: number;
+            openShort?: number;
+            delta?: number;
+            /** @description Fraction of time columns with this venue's own price and open interest. */
+            coverage?: number;
+            columnsWithOi?: number;
+            /** @description Raw slices price traded through. Not the capped segment count. */
+            hitLots?: number;
+            /** @description Raw slices closed because estimated open interest fell. Not a liquidation. */
+            closedLots?: number;
+            /** @enum {string} */
+            accountBlend?: "stored" | "even" | "mixed";
+            /** @description False for combined when any venue has no price and open interest, or the venues never overlap. */
+            definite: boolean;
+        };
+        /** @description Estimated liquidation levels that stay until price trades through them */
+        LiquidationOpenLevels: {
+            symbol?: string;
+            /** @enum {string} */
+            range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d" | "90d";
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            stepSec?: number;
+            /** @description Assumed share of open interest at each leverage. Weights sum to 1. */
+            leverageMix?: {
+                leverage?: number;
+                weight?: number;
+            }[];
+            binance?: components["schemas"]["LiquidationOpenLevelBook"];
+            bybit?: components["schemas"]["LiquidationOpenLevelBook"];
+            okx?: components["schemas"]["LiquidationOpenLevelBook"];
+            combined?: components["schemas"]["LiquidationOpenLevelBook"];
             missingVenues?: string[];
             note?: string;
         };
@@ -6958,13 +7079,19 @@ export interface components {
             anchors?: components["schemas"]["MarketCvdAnchor"][];
         };
         /**
-         * @description Futures CVD for Binance and Bybit, plus combined. `points` are 5-minute
-         *     bars. Anchors reset the sum at 00:00 UTC (`day`) and the current 4-hour
-         *     open (`4h`). The coin chart rebases those points onto candle times.
+         * @description Futures CVD for Binance, Bybit, and OKX, plus combined. `range` `24h`
+         *     uses 5-minute bars. `7d` uses 30-minute bars, `30d` uses 2-hour bars,
+         *     and `90d` uses 4-hour bars, folded from stored minutes. Anchors reset
+         *     the sum at 00:00 UTC (`day`) and the current 4-hour open (`4h`).
+         *     The coin chart rebases those points onto candle times.
          */
         MarketCvdReport: {
             symbol?: string;
             exchange?: string;
+            /** @enum {string} */
+            range?: "24h" | "7d" | "30d" | "90d";
+            /** @description Bar size of points */
+            bar?: string;
             /** Format: date-time */
             asOf?: string;
             summary?: string;
@@ -7492,6 +7619,8 @@ export interface components {
             takerDefinite?: boolean;
             venues?: components["schemas"]["MarketDerivativesVenue"][];
             coverage?: components["schemas"]["MarketVenueCoverage"];
+            /** @description Oldest stored sample per series and venue. Omitted when nothing is stored yet. */
+            recorded?: components["schemas"]["HistorySpanSeries"][];
         };
         MarketDerivativesVenue: {
             exchange?: string;
@@ -10988,7 +11117,7 @@ export interface operations {
             query?: {
                 /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
-                /** @description How many liquid perpetuals to include (default 36, min 5, max 36) */
+                /** @description How many liquid perpetuals to include (default 36, min 5, max 100) */
                 limit?: number;
             };
             header?: never;
@@ -12062,6 +12191,8 @@ export interface operations {
                 symbol: string;
                 /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
+                /** @description 24h (5m bars) | 7d (30m) | 30d (2h) | 90d (4h). Default 24h. */
+                range?: "24h" | "7d" | "30d" | "90d";
             };
             header?: never;
             path?: never;
@@ -12612,9 +12743,9 @@ export interface operations {
                 symbol: string;
                 /** @description binance | bybit | all (default all = both + combined) */
                 exchange?: string;
-                /** @description 5m | 15m | 1h | 4h | 1d | 3d | 7d (default 15m). Ignored when startTime/endTime are set. */
+                /** @description 5m | 15m | 1h | 4h | 1d | 3d | 7d | 30d (default 15m). Ignored when startTime/endTime are set. */
                 window?: string;
-                /** @description Range start (RFC3339 or unix ms). Max span 7d. Stored minutes cover the lookback; the live tape alone does not. */
+                /** @description Range start (RFC3339 or unix ms). Max span 30d. Stored minutes cover the lookback; the live tape alone does not. */
                 startTime?: string;
                 /** @description Range end (RFC3339 or unix ms) */
                 endTime?: string;
@@ -12801,6 +12932,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LiquidationHuntHeatmap"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketLiquidationOpenLevels: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description 12h | 24h | 3d | 7d | 14d | 30d | 90d */
+                range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d" | "90d";
+                /** @description binance | bybit | okx | all (default all = Binance, Bybit, OKX, and combined) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Open, hit, and closed liquidation levels plus the cumulative line */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiquidationOpenLevels"];
                 };
             };
             400: components["responses"]["Error"];

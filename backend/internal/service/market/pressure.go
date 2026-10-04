@@ -46,7 +46,7 @@ func (s *Service) GetMarketPressure(ctx context.Context, exchange, symbol string
 	}()
 	go func() {
 		defer wg.Done()
-		cvd, err := s.GetCVD(ctx, takerExchangeForPressure(ex), symbol)
+		cvd, err := s.GetCVD(ctx, takerExchangeForPressure(ex), symbol, "")
 		if err != nil || cvd == nil {
 			return
 		}

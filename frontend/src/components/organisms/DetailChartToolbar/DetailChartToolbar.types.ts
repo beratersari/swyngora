@@ -1,3 +1,5 @@
+export type CvdChartRange = '24h' | '7d' | '30d' | '90d';
+
 export type DetailChartToolbarProps = {
   intervals: string[];
   interval: string;
@@ -19,6 +21,9 @@ export type DetailChartToolbarProps = {
   /** Anchored CVD lines under the candles. */
   showCvd?: boolean;
   onShowCvdChange?: (show: boolean) => void;
+  /** How far the CVD line and buy−sell histogram look back. */
+  cvdRange?: CvdChartRange;
+  onCvdRangeChange?: (range: CvdChartRange) => void;
   /** Estimated liquidation prices on the candle scale. */
   showLiqLevels?: boolean;
   onShowLiqLevelsChange?: (show: boolean) => void;

@@ -35,6 +35,15 @@
     "signalMarkers": "Salınım işaretleri",
     "delta": "Alış − satış",
     "cvd": "CVD",
+    "cvdRange": "CVD aralığı",
+    "cvdRanges": {
+      "24h": "24s",
+      "7d": "7g",
+      "30d": "30g",
+      "90d": "90g"
+    },
+    "cvdRunning": "CVD {{range}}",
+    "cvdPartial": "Kayıtlı dakikalar bu {{range}} aralığının tamamını henüz kaplamıyor. Çizgi, kayıt başladığında başlar.",
     "cvdDay": "CVD 00:00 UTC’den beri",
     "cvd4h": "CVD 4s açılışından beri",
     "liqLevels": "Likidasyon seviyeleri",
@@ -67,7 +76,7 @@
       "long": "Long",
       "short": "Short"
     },
-    "tapeHint": "Alış − satış, her mumdaki agresif vadeli akıştır. CVD 00:00 UTC’de ve geçerli 4 saatlik açılışta sıfırlanır. Defter gölgesi bekleyen büyüklüktür. Mumların arkasındaki renk, seçilen aralıktaki tahmini likidasyon yoğunluğudur. Birleşik hücre, yalnızca Binance, Bybit ve OKX’in her birinin kendi fiyatı ve açık pozisyonu varken boyanır. Açık seviyeler, fiyat içlerinden geçene kadar durur. Sağ kenar her fiyattaki alışa karşı satıştır, yanındaki çubuklar tahmini likidasyon cepleridir. Alt şerit Binance ve OKX için kalabalık long yüzdesi ile büyük traderları karşılaştırır. Açık pozisyon ve fonlama, Binance, Bybit ve OKX için ayrı kayıtlı çizgilerdir. Likidasyon çubuğu, o mumdaki short notional eksi long notionaldir. Kaldıraç karışımı bir modeldir. Yalnızca bilgi amaçlıdır.",
+    "tapeHint": "Alış − satış, her mumdaki agresif vadeli akıştır. CVD aralığı 24s 5 dakikalık barlardır. 7g, 30g ve 90g kayıtlı dakikaları 30 dakika, 2 saat ve 4 saatlik barlara katlar ve biriken toplamı çizer. CVD ayrıca 00:00 UTC’de ve geçerli 4 saatlik açılışta sıfırlanır. Defter gölgesi bekleyen büyüklüktür. Mumların arkasındaki renk, seçilen aralıktaki tahmini likidasyon yoğunluğudur. Birleşik hücre, yalnızca Binance, Bybit ve OKX’in her birinin kendi fiyatı ve açık pozisyonu varken boyanır. Açık seviyeler, fiyat içlerinden geçene kadar durur. Sağ kenar her fiyattaki alışa karşı satıştır, yanındaki çubuklar tahmini likidasyon cepleridir. Alt şerit Binance ve OKX için kalabalık long yüzdesi ile büyük traderları karşılaştırır. Açık pozisyon ve fonlama, Binance, Bybit ve OKX için ayrı kayıtlı çizgilerdir. Likidasyon çubuğu, o mumdaki short notional eksi long notionaldir. Kaldıraç karışımı bir modeldir. Yalnızca bilgi amaçlıdır.",
     "pumpOn": "Açık",
     "pumpOff": "Kapalı",
     "pumpHint": "|getiri| ≥ eşik olduğunda işaret (yalnızca bilgilendirme)",

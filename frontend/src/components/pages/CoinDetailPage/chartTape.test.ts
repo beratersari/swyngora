@@ -6,6 +6,7 @@ import {
   futuresCvdSeries,
   liquidationChartLevels,
   parseTapeNumber,
+  runningCvdByCandle,
   utc4hOpenSec,
   utcDayOpenSec,
 } from './chartTape';
@@ -37,6 +38,24 @@ describe('chartTape', () => {
     expect(bars).toEqual([
       { time: hour, value: 6 },
       { time: hour + 3600, value: 7 },
+    ]);
+  });
+
+  it('carries the running CVD sum onto later candles', () => {
+    const hour = Math.floor(Date.parse('2026-09-28T10:00:00Z') / 1000);
+    const line = runningCvdByCandle(
+      [{ time: hour }, { time: hour + 3600 }, { time: hour + 7200 }],
+      [
+        { time: hour, delta: 10, cvd: 10 },
+        { time: hour + 1800, delta: -4, cvd: 6 },
+        { time: hour + 7200, delta: 3, cvd: 9 },
+      ],
+      3600,
+    );
+    expect(line).toEqual([
+      { time: hour, value: 6 },
+      { time: hour + 3600, value: 6 },
+      { time: hour + 7200, value: 9 },
     ]);
   });
 

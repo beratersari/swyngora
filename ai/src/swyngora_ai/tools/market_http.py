@@ -698,6 +698,18 @@ class TakerFlowInput(BaseModel):
     )
 
 
+class CvdInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|okx|all (default all = venues + combined)",
+    )
+    range: str = Field(
+        default="24h",
+        description="24h | 7d | 30d | 90d. 24h is 5-minute bars. 7d is 30-minute, 30d is 2-hour, 90d is 4-hour, from stored minutes.",
+    )
+
+
 class RSIHeatmapInput(BaseModel):
     exchange: str = Field(
         default="binance",
@@ -2435,11 +2447,11 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"symbol": symbol, "exchange": exchange},
         )
 
-    def get_cvd(symbol: str, exchange: str = "all") -> str:
-        return http.get(
-            "/api/v1/market/cvd",
-            {"symbol": symbol, "exchange": exchange},
-        )
+    def get_cvd(symbol: str, exchange: str = "all", range: str = "24h") -> str:
+        params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
+        if range:
+            params["range"] = range
+        return http.get("/api/v1/market/cvd", params)
 
     def get_absorption(symbol: str, exchange: str = "all") -> str:
         return http.get(
@@ -5314,11 +5326,13 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "market-sell notional over time, with price. Futures and spot "
                 "are separate; spotFutures flags when spot buying and futures "
                 "selling (or the reverse). Windows show 15m / 1h / 4h / 24h "
-                "change. Anchors reset the sum at 00:00 UTC (day) and at the "
-                "current 4-hour open. Price vs CVD divergence is the current consecutive "
+                "change on the returned bars. Anchors reset the sum at 00:00 UTC (day) and at the "
+                "current 4-hour open. range is 24h (5-minute bars), 7d (30-minute), "
+                "30d (2-hour), or 90d (4-hour) from stored minutes. "
+                "Price vs CVD divergence is the current consecutive "
                 "run only. Combined shows Binance vs Bybit when they disagree."
             ),
-            args_schema=TakerFlowInput,
+            args_schema=CvdInput,
         ),
         StructuredTool.from_function(
             get_volume_surge,

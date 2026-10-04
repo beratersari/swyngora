@@ -8,6 +8,7 @@ import { DETAIL_PUMP_THRESHOLD_OPTIONS } from '@/config/constants';
 import { Field, InlineField, ToolbarRow } from './DetailChartToolbar.styles';
 import type { DetailChartToolbarProps } from './DetailChartToolbar.types';
 
+const CVD_RANGES = ['24h', '7d', '30d', '90d'] as const;
 const LIQ_MAP_VENUES = ['combined', 'binance', 'bybit', 'okx'] as const;
 const LIQ_MAP_SIDES = ['totals', 'longs', 'shorts'] as const;
 
@@ -28,6 +29,8 @@ export function DetailChartToolbar({
   onShowDeltaChange,
   showCvd = true,
   onShowCvdChange,
+  cvdRange = '24h',
+  onCvdRangeChange,
   showLiqLevels = true,
   onShowLiqLevelsChange,
   showBook = true,
@@ -147,6 +150,25 @@ export function DetailChartToolbar({
             aria-label={t('detail:chart.cvd')}
           />
         </InlineField>
+      ) : null}
+
+      {onCvdRangeChange ? (
+        <Field $compact>
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.cvdRange')}
+          </Text>
+          <Select
+            size="small"
+            value={cvdRange}
+            options={CVD_RANGES.map((range) => ({
+              value: range,
+              label: t(`detail:chart.cvdRanges.${range}`),
+            }))}
+            onChange={onCvdRangeChange}
+            style={{ minWidth: 88 }}
+            aria-label={t('detail:chart.cvdRange')}
+          />
+        </Field>
       ) : null}
 
       {onShowLiqLevelsChange ? (

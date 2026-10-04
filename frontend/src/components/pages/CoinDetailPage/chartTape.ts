@@ -3,6 +3,8 @@ import type { MarketCvd, MarketLiquidationLevels } from '@/libs/api';
 export type TapeDeltaPoint = {
   time: number;
   delta: number;
+  /** Running sum from the start of the returned range. */
+  cvd?: number | null;
 };
 
 export type ChartBarPoint = {
@@ -54,6 +56,9 @@ export function futuresCvdSeries(report: MarketCvd | undefined): {
   points: TapeDeltaPoint[];
   dayFrom: number | null;
   blockFrom: number | null;
+  complete: boolean;
+  range: string;
+  bar: string;
 } {
   const venue =
     report?.combined?.points && report.combined.points.length > 0
@@ -64,7 +69,7 @@ export function futuresCvdSeries(report: MarketCvd | undefined): {
     const time = unixSeconds(p.time);
     const delta = parseTapeNumber(p.delta);
     if (time == null || delta == null) continue;
-    points.push({ time, delta });
+    points.push({ time, delta, cvd: parseTapeNumber(p.cvd) });
   }
   points.sort((a, b) => a.time - b.time);
   const last = points.length > 0 ? points[points.length - 1]!.time : null;
@@ -74,6 +79,9 @@ export function futuresCvdSeries(report: MarketCvd | undefined): {
     points,
     dayFrom: dayAnchor ?? (last != null ? utcDayOpenSec(last) : null),
     blockFrom: blockAnchor ?? (last != null ? utc4hOpenSec(last) : null),
+    complete: venue?.complete === true,
+    range: report?.range ?? '24h',
+    bar: report?.bar ?? '5m',
   };
 }
 
@@ -108,6 +116,40 @@ export function deltaByCandle(
     }
     if (any) out.push({ time: bar.time, value: sum });
     i = j;
+  }
+  return out;
+}
+
+/**
+ * Running CVD from the start of the returned range, sampled on candle opens.
+ * A candle keeps the last sum so the line stays continuous between coarser bars.
+ */
+export function runningCvdByCandle(
+  candles: { time: number }[],
+  points: TapeDeltaPoint[],
+  barDurationSec: number,
+): ChartBarPoint[] {
+  if (barDurationSec <= 0) return [];
+  const pts = points
+    .filter((p) => Number.isFinite(p.time) && p.cvd != null && Number.isFinite(p.cvd))
+    .sort((a, b) => a.time - b.time);
+  if (pts.length === 0) return [];
+  const bars = candles
+    .filter((c) => Number.isFinite(c.time))
+    .sort((a, b) => a.time - b.time);
+  const out: ChartBarPoint[] = [];
+  let i = 0;
+  let last: number | null = null;
+  const first = pts[0]!.time;
+  for (const bar of bars) {
+    const end = bar.time + barDurationSec;
+    while (i < pts.length && pts[i]!.time < end) {
+      last = pts[i]!.cvd ?? last;
+      i += 1;
+    }
+    if (last != null && bar.time + barDurationSec > first) {
+      out.push({ time: bar.time, value: last });
+    }
   }
   return out;
 }

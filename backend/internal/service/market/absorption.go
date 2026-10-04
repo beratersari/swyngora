@@ -27,7 +27,7 @@ func (s *Service) GetAbsorption(ctx context.Context, exchange, symbol string) (*
 	}
 	want := configuredFutures(ex, func(v domain.Exchange) bool { return s.takerPort(v) != nil })
 	now := time.Now().UTC()
-	prices := s.cvdPrices(ctx, symbol)
+	prices := s.cvdPrices(ctx, symbol, domain.DefaultCVDSpan())
 
 	out := &domain.AbsorptionReport{
 		Symbol:   symbol,

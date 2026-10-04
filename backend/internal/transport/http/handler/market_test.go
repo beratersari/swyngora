@@ -579,8 +579,18 @@ func TestGetCVD_OK(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body.Symbol != "BTCUSDT" {
+	if body.Symbol != "BTCUSDT" || body.Range != "24h" || body.Bar != "5m" {
 		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetCVD_BadRange(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/cvd?symbol=BTCUSDT&range=1y", nil)
+	rr := httptest.NewRecorder()
+	h.GetCVD(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
 	}
 }
 

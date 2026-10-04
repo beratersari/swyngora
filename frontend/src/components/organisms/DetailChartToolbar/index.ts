@@ -1,2 +1,2 @@
 export { DetailChartToolbar } from './DetailChartToolbar';
-export type { DetailChartToolbarProps } from './DetailChartToolbar.types';
+export type { CvdChartRange, DetailChartToolbarProps } from './DetailChartToolbar.types';

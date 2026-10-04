@@ -51,6 +51,24 @@ describe('DetailChartToolbar', () => {
     expect(screen.getByRole('switch')).toBeInTheDocument();
   });
 
+  it('changes the CVD range', async () => {
+    const user = userEvent.setup();
+    const onRange = vi.fn();
+    renderWithTheme(
+      <DetailChartToolbar
+        intervals={['1h']}
+        interval="1h"
+        onIntervalChange={() => undefined}
+        onShowCvdChange={() => undefined}
+        cvdRange="24h"
+        onCvdRangeChange={onRange}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: /cvd range|cvd aralığı/i }));
+    await user.click(await screen.findByTitle(/^7d$|^7g$/i));
+    expect(onRange.mock.calls[0]?.[0]).toBe('7d');
+  });
+
   it('toggles delta, CVD, and liquidation levels', async () => {
     const user = userEvent.setup();
     const onDelta = vi.fn();

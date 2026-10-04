@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -483,5 +484,71 @@ func TestBuildCVDSeries_AnchorsResetAtDayAnd4hOpen(t *testing.T) {
 	}
 	if roll.CVDChange == h4.CVD {
 		t.Fatalf("rolling 4h should include the 07:00 bar, anchored 4h should not: roll %v anchor %v", roll.CVDChange, h4.CVD)
+	}
+}
+
+func TestParseCVDRange(t *testing.T) {
+	def, err := ParseCVDRange("")
+	if err != nil || def.ID != "24h" || def.Bar != CVDBar || def.Lookback != DefaultCVDLookback {
+		t.Fatalf("%+v %v", def, err)
+	}
+	week, err := ParseCVDRange("7d")
+	if err != nil || week.Bar != 30*time.Minute || week.Lookback != 7*24*time.Hour || week.BarLabel() != "30m" {
+		t.Fatalf("%+v %v", week, err)
+	}
+	month, err := ParseCVDRange("30d")
+	if err != nil || month.Bar != 2*time.Hour || month.BarLabel() != "2h" {
+		t.Fatalf("%+v %v", month, err)
+	}
+	quarter, err := ParseCVDRange("90d")
+	if err != nil || quarter.Bar != 4*time.Hour || quarter.Lookback != 90*24*time.Hour || quarter.BarLabel() != "4h" {
+		t.Fatalf("%+v %v", quarter, err)
+	}
+	if _, err := ParseCVDRange("1y"); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestBuildCVDSeriesSpan_KeepsDaysBeyond24h(t *testing.T) {
+	now := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
+	old := now.Add(-3 * 24 * time.Hour).Truncate(30 * time.Minute)
+	recent := now.Add(-20 * time.Minute).Truncate(30 * time.Minute)
+	span, err := ParseCVDRange("7d")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := BuildCVDSeriesSpan(ExchangeBinance, "BTCUSDT", []TakerBucket{
+		{Start: old, BuyNotional: 10, SellNotional: 1},
+		{Start: old.Add(time.Minute), BuyNotional: 5, SellNotional: 0},
+		{Start: recent, BuyNotional: 2, SellNotional: 8},
+	}, nil, now, old, span)
+	if got.Range != "7d" || got.Bar != 30*time.Minute {
+		t.Fatalf("span %+v", got)
+	}
+	if len(got.Points) != 2 {
+		t.Fatalf("points %d %+v", len(got.Points), got.Points)
+	}
+	if !got.Points[0].Time.Equal(old) || got.Points[0].Delta != 14 {
+		t.Fatalf("old bar %+v", got.Points[0])
+	}
+	if got.Points[1].Delta != -6 {
+		t.Fatalf("recent %+v", got.Points[1])
+	}
+	if got.Complete {
+		t.Fatal("three days of bars must not mark a 7d range complete")
+	}
+	short := BuildCVDSeries(ExchangeBinance, "BTCUSDT", []TakerBucket{
+		{Start: old, BuyNotional: 10, SellNotional: 1},
+		{Start: recent, BuyNotional: 2, SellNotional: 8},
+	}, nil, now, old)
+	for _, p := range short.Points {
+		if !p.Time.After(now.Add(-DefaultCVDLookback)) && !p.Time.Equal(now.Add(-DefaultCVDLookback)) {
+			if p.Time.Before(now.Add(-DefaultCVDLookback)) {
+				t.Fatalf("24h series kept %s", p.Time)
+			}
+		}
+	}
+	if len(short.Points) != 1 || short.Points[0].Time.Before(now.Add(-DefaultCVDLookback)) {
+		t.Fatalf("24h points %+v", short.Points)
 	}
 }

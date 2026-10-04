@@ -10,7 +10,7 @@ import (
 // GetCVD handles GET /api/v1/market/cvd.
 func (h *MarketHandler) GetCVD(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	got, err := h.svc.GetCVD(r.Context(), q.Get("exchange"), q.Get("symbol"))
+	got, err := h.svc.GetCVD(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("range"))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -79,16 +79,16 @@ type cvdAnchorDTO struct {
 }
 
 type cvdWindowDTO struct {
-	Window         string        `json:"window"`
-	CVDChange      string        `json:"cvdChange"`
-	CVDChangePct   string        `json:"cvdChangePct"`
-	PriceChangePct string        `json:"priceChangePct"`
-	BuyNotional    string        `json:"buyNotional"`
-	SellNotional   string        `json:"sellNotional"`
-	VsPrice        string        `json:"vsPrice"`
-	Divergence     string        `json:"divergence,omitempty"`
-	Title          string        `json:"title"`
-	Summary        string        `json:"summary"`
+	Window         string            `json:"window"`
+	CVDChange      string            `json:"cvdChange"`
+	CVDChangePct   string            `json:"cvdChangePct"`
+	PriceChangePct string            `json:"priceChangePct"`
+	BuyNotional    string            `json:"buyNotional"`
+	SellNotional   string            `json:"sellNotional"`
+	VsPrice        string            `json:"vsPrice"`
+	Divergence     string            `json:"divergence,omitempty"`
+	Title          string            `json:"title"`
+	Summary        string            `json:"summary"`
 	Complete       bool              `json:"complete"`
 	Contributions  []cvdShareDTO     `json:"contributions,omitempty"`
 	VenueSplit     *cvdVenueSplitDTO `json:"venueSplit,omitempty"`
@@ -107,35 +107,37 @@ type cvdSpotFuturesDTO struct {
 }
 
 type cvdVenueDTO struct {
-	Exchange      string             `json:"exchange"`
-	Symbol        string             `json:"symbol"`
-	Market        string             `json:"market,omitempty"`
-	Points        []cvdPointDTO      `json:"points"`
-	Windows       []cvdWindowDTO     `json:"windows"`
-	Anchors       []cvdAnchorDTO     `json:"anchors,omitempty"`
-	LastCVD       string             `json:"lastCvd"`
-	LastPrice     string             `json:"lastPrice"`
-	Contributions []cvdShareDTO      `json:"contributions,omitempty"`
-	OverlapFrom   *time.Time         `json:"overlapFrom,omitempty"`
-	OverlapTo     *time.Time         `json:"overlapTo,omitempty"`
-	Divergence    cvdDivergenceDTO   `json:"divergence"`
-	VenueSplit    *cvdVenueSplitDTO  `json:"venueSplit,omitempty"`
-	Summary       string             `json:"summary"`
-	Error         string             `json:"error,omitempty"`
-	Complete      bool               `json:"complete"`
+	Exchange      string            `json:"exchange"`
+	Symbol        string            `json:"symbol"`
+	Market        string            `json:"market,omitempty"`
+	Points        []cvdPointDTO     `json:"points"`
+	Windows       []cvdWindowDTO    `json:"windows"`
+	Anchors       []cvdAnchorDTO    `json:"anchors,omitempty"`
+	LastCVD       string            `json:"lastCvd"`
+	LastPrice     string            `json:"lastPrice"`
+	Contributions []cvdShareDTO     `json:"contributions,omitempty"`
+	OverlapFrom   *time.Time        `json:"overlapFrom,omitempty"`
+	OverlapTo     *time.Time        `json:"overlapTo,omitempty"`
+	Divergence    cvdDivergenceDTO  `json:"divergence"`
+	VenueSplit    *cvdVenueSplitDTO `json:"venueSplit,omitempty"`
+	Summary       string            `json:"summary"`
+	Error         string            `json:"error,omitempty"`
+	Complete      bool              `json:"complete"`
 }
 
 type cvdResponse struct {
-	Symbol       string              `json:"symbol"`
-	Exchange     string              `json:"exchange"`
-	AsOf         time.Time           `json:"asOf"`
-	Venues       []cvdVenueDTO       `json:"venues"`
-	Combined     *cvdVenueDTO        `json:"combined,omitempty"`
-	SpotVenues   []cvdVenueDTO       `json:"spotVenues,omitempty"`
-	SpotCombined *cvdVenueDTO        `json:"spotCombined,omitempty"`
-	SpotFutures  *cvdSpotFuturesDTO  `json:"spotFutures,omitempty"`
-	Summary      string              `json:"summary"`
-	Note         string              `json:"note"`
+	Symbol       string             `json:"symbol"`
+	Exchange     string             `json:"exchange"`
+	Range        string             `json:"range,omitempty"`
+	Bar          string             `json:"bar,omitempty"`
+	AsOf         time.Time          `json:"asOf"`
+	Venues       []cvdVenueDTO      `json:"venues"`
+	Combined     *cvdVenueDTO       `json:"combined,omitempty"`
+	SpotVenues   []cvdVenueDTO      `json:"spotVenues,omitempty"`
+	SpotCombined *cvdVenueDTO       `json:"spotCombined,omitempty"`
+	SpotFutures  *cvdSpotFuturesDTO `json:"spotFutures,omitempty"`
+	Summary      string             `json:"summary"`
+	Note         string             `json:"note"`
 }
 
 func cvdToDTO(a *domain.CVDReport) cvdResponse {
@@ -147,7 +149,7 @@ func cvdToDTO(a *domain.CVDReport) cvdResponse {
 		venues = append(venues, cvdVenueToDTO(v))
 	}
 	out := cvdResponse{
-		Symbol: a.Symbol, Exchange: a.Exchange, AsOf: a.AsOf.UTC(),
+		Symbol: a.Symbol, Exchange: a.Exchange, Range: a.Range, Bar: a.Bar, AsOf: a.AsOf.UTC(),
 		Venues: venues, Summary: a.Summary, Note: a.Note,
 	}
 	if a.Combined != nil {
@@ -244,18 +246,18 @@ func cvdSpotFuturesToDTO(in *domain.CVDSpotFutures) *cvdSpotFuturesDTO {
 	}
 	out := &cvdSpotFuturesDTO{
 		Alignment: in.Alignment, Spot: in.Spot, Futures: in.Futures,
-		SpotChange: domain.FormatSignedQty(in.SpotChange),
+		SpotChange:    domain.FormatSignedQty(in.SpotChange),
 		FuturesChange: domain.FormatSignedQty(in.FuturesChange),
-		Window: in.Window, Title: in.Title, Summary: in.Summary,
+		Window:        in.Window, Title: in.Title, Summary: in.Summary,
 	}
 	if len(in.Windows) > 0 {
 		out.Windows = make([]cvdSpotFuturesDTO, 0, len(in.Windows))
 		for _, w := range in.Windows {
 			out.Windows = append(out.Windows, cvdSpotFuturesDTO{
 				Alignment: w.Alignment, Spot: w.Spot, Futures: w.Futures,
-				SpotChange: domain.FormatSignedQty(w.SpotChange),
+				SpotChange:    domain.FormatSignedQty(w.SpotChange),
 				FuturesChange: domain.FormatSignedQty(w.FuturesChange),
-				Window: w.Window, Title: w.Title, Summary: w.Summary,
+				Window:        w.Window, Title: w.Title, Summary: w.Summary,
 			})
 		}
 	}
