@@ -55,6 +55,33 @@ func FlowHistoryTick(price float64) float64 {
 	return m * pow
 }
 
+// PrintsFromFlowCells turns stored minute rows into counted fills.
+// Each side is one row whose Count is the stored print count and whose
+// Notional is that side's total. A side with no count is left out.
+func PrintsFromFlowCells(cells []FlowAtPricesCell) []TakerPrint {
+	out := make([]TakerPrint, 0, len(cells))
+	for _, c := range cells {
+		if c.Minute.IsZero() {
+			continue
+		}
+		at := c.Minute.UTC()
+		symbol := NormalizeLiquidationSymbol(c.Symbol)
+		if c.BuyN > 0 && c.Buy > 0 {
+			out = append(out, TakerPrint{
+				Exchange: c.Exchange, Symbol: symbol, Side: TakerSideBuy,
+				Price: c.Price, Notional: c.Buy, Time: at, Count: c.BuyN,
+			})
+		}
+		if c.SellN > 0 && c.Sell > 0 {
+			out = append(out, TakerPrint{
+				Exchange: c.Exchange, Symbol: symbol, Side: TakerSideSell,
+				Price: c.Price, Notional: c.Sell, Time: at, Count: c.SellN,
+			})
+		}
+	}
+	return out
+}
+
 // AccumulateFlowPrints groups prints newer than after into closed-minute rows.
 // newest is the latest print time that was stored.
 func AccumulateFlowPrints(prints []TakerPrint, after time.Time) (cells []FlowAtPricesCell, newest time.Time) {

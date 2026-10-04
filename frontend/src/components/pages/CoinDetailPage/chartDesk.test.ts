@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { heatColor } from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.helpers';
 import {
   bookHeatColumns,
+  chartBookWindow,
   crowdTopLines,
   crowdTopSeries,
   footprintLevels,
@@ -21,6 +22,13 @@ import {
 } from './chartDesk';
 
 describe('chart desk mappers', () => {
+  it('picks a book window from the visible span', () => {
+    expect(chartBookWindow(4 * 60)).toBe(5 * 60);
+    expect(chartBookWindow(20 * 60)).toBe(30 * 60);
+    expect(chartBookWindow(2 * 3600)).toBe(4 * 3600);
+    expect(chartBookWindow(10 * 86400)).toBe(30 * 86400);
+  });
+
   it('picks a flow window from the visible span', () => {
     expect(footprintWindow(4 * 60)).toBe('5m');
     expect(footprintWindow(50 * 60)).toBe('1h');

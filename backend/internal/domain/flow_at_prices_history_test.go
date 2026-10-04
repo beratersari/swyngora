@@ -5,49 +5,35 @@ import (
 	"time"
 )
 
-func TestAccumulateFlowPrints_SkipsAlreadyStored(t *testing.T) {
-	minute := time.Date(2026, 9, 25, 12, 4, 0, 0, time.UTC)
-	prints := []TakerPrint{
-		{Exchange: ExchangeBybit, Symbol: "BTCUSDT", Side: TakerSideSell, Price: 65010, Notional: 3, Time: minute.Add(-time.Minute)},
-		{Exchange: ExchangeBybit, Symbol: "BTCUSDT", Side: TakerSideBuy, Price: 65010, Notional: 5, Time: minute.Add(10 * time.Second)},
-		{Exchange: ExchangeBybit, Symbol: "BTCUSDT", Side: TakerSideSell, Price: 65040, Notional: 2, Time: minute.Add(20 * time.Second)},
+func TestPrintsFromFlowCells_KeepsCounts(t *testing.T) {
+	at := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
+	got := PrintsFromFlowCells([]FlowAtPricesCell{
+		{Exchange: ExchangeBinance, Symbol: "btcusdt", Minute: at, Price: 100, Buy: 80, BuyN: 4, Sell: 10, SellN: 1},
+		{Exchange: ExchangeBinance, Symbol: "BTCUSDT", Minute: at, Price: 101, Buy: 5, BuyN: 0},
+	})
+	if len(got) != 2 {
+		t.Fatalf("prints %d", len(got))
 	}
-	cells, newest := AccumulateFlowPrints(prints, minute)
-	if len(cells) != 2 || newest.Before(minute) {
-		t.Fatalf("cells=%d newest=%s", len(cells), newest)
+	if got[0].Count != 4 || got[0].Notional != 80 || got[0].Side != TakerSideBuy || got[0].Symbol != "BTCUSDT" {
+		t.Fatalf("buy %+v", got[0])
 	}
-	var buy, sell float64
-	var buyN, sellN int
-	for _, c := range cells {
-		buy += c.Buy
-		sell += c.Sell
-		buyN += c.BuyN
-		sellN += c.SellN
+	if got[1].Count != 1 || got[1].Side != TakerSideSell {
+		t.Fatalf("sell %+v", got[1])
 	}
-	if buy != 5 || sell != 2 || buyN != 1 || sellN != 1 {
-		t.Fatalf("buy=%v sell=%v n=%d/%d", buy, sell, buyN, sellN)
+	venue := BuildPrintSizeVenue(ExchangeBinance, "BTCUSDT", got, at.Add(time.Minute))
+	var avg float64
+	for _, w := range venue.Windows {
+		if w.Window == PrintSizeWindow5m {
+			avg = w.Buy.Avg
+		}
 	}
-}
-
-func TestBuildFlowAtPricesFromCells_RollsHoursOntoRows(t *testing.T) {
-	start := time.Date(2026, 9, 25, 8, 0, 0, 0, time.UTC)
-	var cells []FlowAtPricesCell
-	for i := 0; i < 4; i++ {
-		cells = append(cells, FlowAtPricesCell{
-			Exchange: ExchangeBybit, Symbol: "BTCUSDT",
-			Minute: start.Add(time.Duration(i) * time.Hour),
-			Price:  65000, Buy: 10, Sell: 1, BuyN: 3, SellN: 1,
-		})
+	if avg != 20 {
+		t.Fatalf("avg %v", avg)
 	}
-	got := BuildFlowAtPricesFromCells(ExchangeBybit, "BTCUSDT", cells, 100, 65100, 0, 0, start, start.Add(4*time.Hour))
-	if got.Error != "" || len(got.Levels) != 1 {
-		t.Fatalf("%+v", got)
-	}
-	lv := got.Levels[0]
-	if lv.BuyVolume != 40 || lv.SellVolume != 4 || lv.Trades != 16 || lv.Delta != 36 {
-		t.Fatalf("level %+v", lv)
-	}
-	if !got.Complete {
-		t.Fatalf("coverage %+v", got)
+	counts := BuildOrderCount(ExchangeBinance, "BTCUSDT", got, at.Add(time.Minute))
+	for _, w := range counts.Windows {
+		if w.Window == OrderCount1m && w.BuyCount != 4 {
+			t.Fatalf("count %+v", w)
+		}
 	}
 }

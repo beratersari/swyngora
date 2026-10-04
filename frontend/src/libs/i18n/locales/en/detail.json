@@ -63,6 +63,7 @@
     "openLevels": "Open levels",
     "openLevelDelta": "Open long − short",
     "liqMapPan": "Pan left to load candles for the earlier part of this range.",
+    "bookStored": "Book shading follows the candles on screen. A view longer than 30 minutes uses the stored minute ladders, up to about 30 days.",
     "recorded": "Recorded: {{parts}}.",
     "recordedPart": "{{kind}} {{exchange}} {{span}}",
     "recordedEmpty": "History for this coin starts when a sample is stored.",
@@ -76,7 +77,7 @@
       "long": "Long",
       "short": "Short"
     },
-    "tapeHint": "Buy − sell is aggressive futures flow in each candle. CVD range 24h is 5-minute bars. 7d, 30d, and 90d fold stored minutes into 30-minute, 2-hour, and 4-hour bars and draw the running sum. CVD also resets at 00:00 UTC and at the current 4-hour open. Book shading is resting size. Color behind the candles is estimated liquidation intensity for the selected range. A combined cell is colored only when Binance, Bybit, and OKX each have their own price and open interest. Open levels stay until price trades through them. The right edge is buy versus sell at each price, and the bars beside it are estimated liquidation pockets. The lower strip is crowd long percent versus top traders for Binance and OKX. Open interest and funding are stored samples, one line for each of Binance, Bybit, and OKX. Liquidation bars are short notional minus long notional in that candle. The leverage mix is a model. Informational only.",
+    "tapeHint": "Buy − sell is aggressive futures flow in each candle. CVD range 24h is 5-minute bars. 7d, 30d, and 90d fold stored minutes into 30-minute, 2-hour, and 4-hour bars and draw the running sum. CVD also resets at 00:00 UTC and at the current 4-hour open. Book shading is resting size for the candles on screen. A view longer than 30 minutes uses stored minute ladders. Color behind the candles is estimated liquidation intensity for the selected range. A combined cell is colored only when Binance, Bybit, and OKX each have their own price and open interest. Open levels stay until price trades through them. The right edge is buy versus sell at each price, and the bars beside it are estimated liquidation pockets. The lower strip is crowd long percent versus top traders for Binance and OKX. Open interest and funding are stored samples, one line for each of Binance, Bybit, and OKX. Liquidation bars are short notional minus long notional in that candle. The leverage mix is a model. Informational only.",
     "pumpOn": "On",
     "pumpOff": "Off",
     "pumpHint": "Markers when |return| ≥ threshold (informational only)",

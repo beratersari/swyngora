@@ -45,7 +45,7 @@ func (t *PrintTape) Record(p TakerPrint) bool {
 		return false
 	}
 	now := t.now().UTC()
-	if p.Time.Before(now.Add(-takerRetain)) {
+	if p.Time.Before(now.Add(-TakerMemoryRetain)) {
 		return false
 	}
 	key := printKey(p)
@@ -62,7 +62,7 @@ func (t *PrintTape) Record(p TakerPrint) bool {
 	}
 	seen[key] = p.Time.UTC().UnixMilli()
 	if len(seen) > printDedupKeep {
-		cut := now.Add(-takerRetain).UnixMilli()
+		cut := now.Add(-TakerMemoryRetain).UnixMilli()
 		for k, ms := range seen {
 			if ms < cut {
 				delete(seen, k)

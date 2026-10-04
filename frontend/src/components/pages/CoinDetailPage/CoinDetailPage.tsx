@@ -7,6 +7,8 @@ import { CandleChartHost } from '@/components/molecules/CandleChartHost';
 import { snapMarkersToCandleTimes } from '@/components/molecules/CandleChartHost/CandleChartHost.markers';
 import {
   bookHeatColumns,
+  CHART_BOOK_LIVE_MAX,
+  chartBookWindow,
   crowdTopSeries,
   footprintLevels,
   footprintWindow,
@@ -248,6 +250,7 @@ export function CoinDetailPage() {
   const [liqMapSide, setLiqMapSide] = useState<LiqHeatSide>('totals');
   const [liqMapSource, setLiqMapSource] = useState<LiqHeatSource>('prints');
   const [footWindow, setFootWindow] = useState<'5m' | '15m' | '1h' | '4h' | '1d' | '3d' | '7d' | '30d'>('1h');
+  const [bookWindow, setBookWindow] = useState(CHART_BOOK_LIVE_MAX);
   /** Guards against applying history pages after exchange/symbol/interval change. */
   const historyRequestIdRef = useRef(0);
 
@@ -490,10 +493,15 @@ export function CoinDetailPage() {
     refetchOnFocus: true,
   });
   const chartBookQuery = useGetSpotOrderBookHeatmapQuery(
-    { exchange: exchangeArg, symbol, window: 1800 },
+    { exchange: exchangeArg, symbol, window: bookWindow },
     {
       skip: skipTape || !showBook,
-      pollingInterval: visible && showBook ? ORDER_HEATMAP_POLL_MS : 0,
+      pollingInterval:
+        visible && showBook
+          ? bookWindow > CHART_BOOK_LIVE_MAX
+            ? ORDER_HEATMAP_HISTORY_POLL_MS
+            : ORDER_HEATMAP_POLL_MS
+          : 0,
       refetchOnFocus: true,
     },
   );
@@ -1138,8 +1146,11 @@ export function CoinDetailPage() {
     return earliest + 60 < firstBar;
   }, [chartData, chartLiqHeat]);
   const onVisibleSpan = useCallback((from: number, to: number) => {
-    const next = footprintWindow(to - from);
+    const span = to - from;
+    const next = footprintWindow(span);
     setFootWindow((prev) => (prev === next ? prev : next));
+    const nextBook = chartBookWindow(span);
+    setBookWindow((prev) => (prev === nextBook ? prev : nextBook));
   }, []);
   const recordedLine = useMemo(() => {
     if (isEquity) return '';
@@ -1531,6 +1542,11 @@ export function CoinDetailPage() {
             !tapeCvd.complete ? (
               <Text variant="caption" color="secondary" data-testid="chart-cvd-partial">
                 {t('detail:chart.cvdPartial', { range: cvdRange })}
+              </Text>
+            ) : null}
+            {!isEquity && showBook && bookWindow > CHART_BOOK_LIVE_MAX ? (
+              <Text variant="caption" color="secondary" data-testid="chart-book-stored">
+                {t('detail:chart.bookStored')}
               </Text>
             ) : null}
             {!isEquity && recordedLine ? (

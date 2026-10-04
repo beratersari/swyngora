@@ -92,11 +92,9 @@ func (s *Service) absorptionOne(ctx context.Context, ex domain.Exchange, symbol 
 		out.Summary = out.Error
 		return out
 	}
-	live, err := p.GetTakerBuckets(ctx, symbol)
-	if err != nil {
-		out.Error = err.Error()
-		out.Summary = err.Error()
-		return out
+	live, liveErr := p.GetTakerBuckets(ctx, symbol)
+	if liveErr != nil {
+		live = nil
 	}
 	from := now.Add(-domain.DefaultCVDLookback)
 	var stored []domain.TakerBucket
@@ -107,6 +105,11 @@ func (s *Service) absorptionOne(ctx context.Context, ex domain.Exchange, symbol 
 		}
 	}
 	merged := domain.MergeTakerBuckets(stored, live)
+	if len(merged) == 0 && liveErr != nil {
+		out.Error = liveErr.Error()
+		out.Summary = out.Error
+		return out
+	}
 	started := now
 	for _, b := range merged {
 		if !b.Start.IsZero() && b.Start.Before(started) {

@@ -65,6 +65,30 @@ const HEAT_LEVELS = 24;
 const FOOTPRINT_ROWS = 48;
 const LIQ_ROWS = 12;
 
+const MINUTE = 60;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
+/** Live order-book tape. A longer chart view uses stored minute ladders. */
+export const CHART_BOOK_LIVE_MAX = 30 * MINUTE;
+
+/**
+ * Heatmap lookback, in seconds, for the candles on screen.
+ * Above 30 minutes the API reads stored ladders, capped at 30 days.
+ */
+export function chartBookWindow(spanSec: number): number {
+  if (!Number.isFinite(spanSec) || spanSec <= 5 * MINUTE) return 5 * MINUTE;
+  if (spanSec <= 10 * MINUTE) return 10 * MINUTE;
+  if (spanSec <= 15 * MINUTE) return 15 * MINUTE;
+  if (spanSec <= CHART_BOOK_LIVE_MAX) return CHART_BOOK_LIVE_MAX;
+  if (spanSec <= HOUR) return HOUR;
+  if (spanSec <= 4 * HOUR) return 4 * HOUR;
+  if (spanSec <= DAY) return DAY;
+  if (spanSec <= 3 * DAY) return 3 * DAY;
+  if (spanSec <= 7 * DAY) return 7 * DAY;
+  return 30 * DAY;
+}
+
 /** Map a visible candle span onto a flow-at-prices window. */
 export function footprintWindow(spanSec: number): '5m' | '15m' | '1h' | '4h' | '1d' | '3d' | '7d' | '30d' {
   if (!Number.isFinite(spanSec) || spanSec <= 5 * 60) return '5m';

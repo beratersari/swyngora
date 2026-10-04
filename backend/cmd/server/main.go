@@ -621,33 +621,25 @@ func main() {
 	if nLiq > 0 {
 		logger.Info("futures liquidations restored", "events", nLiq)
 	}
-	nTaker := 0
-	fromTaker := time.Now().UTC().Add(-4 * time.Hour)
-	restoreTape := func(ex domain.Exchange, book *domain.TakerBook) {
-		if book == nil {
-			return
-		}
-		for _, sym := range histSeeds {
-			recs, err := futuresStore.ListTakerBuckets(ctx, string(ex), sym, fromTaker, time.Now().UTC())
-			if err != nil || len(recs) == 0 {
-				continue
-			}
-			book.LoadBuckets(recs)
-			nTaker += len(recs)
+	takerBooks := map[domain.Exchange]*domain.TakerBook{
+		domain.ExchangeBinance: binanceClient.TakerBook(),
+		domain.ExchangeBybit:   bybitClient.TakerBook(),
+		domain.ExchangeOKX:     okxClient.TakerBook(),
+	}
+	restoreTaker := func(symbols []string) {
+		n := futureshist.RestoreTakerMemory(ctx, futuresStore, takerBooks, symbols, time.Now().UTC())
+		if n > 0 {
+			logger.Info("taker tape restored", "bars", n, "symbols", len(symbols))
 		}
 	}
-	restoreTape(domain.ExchangeBinance, binanceClient.TakerBook())
-	restoreTape(domain.ExchangeBybit, bybitClient.TakerBook())
-	restoreTape(domain.ExchangeOKX, okxClient.TakerBook())
-	if nTaker > 0 {
-		logger.Info("taker tape restored", "bars", nTaker)
-	}
+	restoreTaker(histSeeds)
 	refreshLiquid := func() {
 		syms, err := marketSvc.LiquidPerpSymbols(ctx, domain.LiquidRecorderLimit)
 		if len(syms) > 0 {
 			futuresHist.SetLiquid(syms)
 			bookHist.SetLiquid(syms)
 			marketSvc.SetFlowLiquid(syms)
+			restoreTaker(syms)
 			for _, sym := range syms {
 				binanceTrades.Watch(sym)
 				bybitTrades.Watch(sym)

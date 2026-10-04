@@ -906,7 +906,8 @@ paths:
         use stored 1-minute ladders, with brief walls and other size moves
         painted on the minute they happened. A multi-day window groups those
         minutes so the map stays readable. History only exists while the desk
-        has been running (about 30 days). Informational only.
+        has been running (about 30 days). The coin chart asks for the window
+        that matches the candles on screen. Informational only.
       operationId: getSpotOrderBookHeatmap
       tags: [Market]
       parameters:
@@ -923,8 +924,8 @@ paths:
           schema: { type: string, example: "0.1" }
         - name: window
           in: query
-          description: Lookback in seconds (60–604800, default 600). Above 1800 uses stored book history.
-          schema: { type: integer, default: 600, minimum: 60, maximum: 604800, example: 600 }
+          description: Lookback in seconds (60–2592000, default 600). Above 1800 uses stored book history.
+          schema: { type: integer, default: 600, minimum: 60, maximum: 2592000, example: 600 }
       responses:
         '200':
           description: Heatmap tape

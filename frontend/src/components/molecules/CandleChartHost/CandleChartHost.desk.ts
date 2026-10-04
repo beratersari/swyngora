@@ -126,11 +126,12 @@ class HeatRenderer implements IPrimitivePaneRenderer {
       if (max <= 0) return;
       context.save();
       const scale = chart.timeScale();
+      const span = visibleSpan(scale);
       for (let i = 0; i < cols.length; i += 1) {
         const col = cols[i]!;
-        const x1 = scale.timeToCoordinate(col.time as Time);
+        const x1 = timeToX(scale, col.time, span);
         const next = cols[i + 1];
-        const x2 = next ? scale.timeToCoordinate(next.time as Time) : null;
+        const x2 = next ? timeToX(scale, next.time, span) : null;
         if (x1 == null) continue;
         const width = x2 != null && x2 > x1 ? Math.max(1, x2 - x1) : 6;
         const paint = (levels: { price: number; notional: number }[], color: string) => {

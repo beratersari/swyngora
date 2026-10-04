@@ -9,7 +9,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const orderCountDisclaimer = "Market order count ratio is (buy prints − sell prints) / (buy prints + sell prints), from −1 to +1. It counts aggressive futures fills, not their USDT size. Windows are 1m, 5m, and 15m. Binance pages aggTrades; Bybit and OKX use the newest public trades. Informational only — not financial advice."
+const orderCountDisclaimer = "Market order count ratio is (buy prints − sell prints) / (buy prints + sell prints), from −1 to +1. It counts aggressive futures fills, not their USDT size. Windows are 1m, 5m, and 15m. The live tape is used when it covers the window. When that tape is empty, stored flow-at-prices minutes supply the counts. Otherwise Binance pages aggTrades and Bybit and OKX use the newest public trades. Informational only — not financial advice."
 
 // GetOrderCount returns how many aggressive buys versus sells printed.
 func (s *Service) GetOrderCount(ctx context.Context, exchange, symbol string) (*domain.OrderCountReport, error) {
@@ -186,7 +186,7 @@ func (s *Service) orderCountOne(ctx context.Context, ex domain.Exchange, symbol 
 	if s.printPort(ex) == nil {
 		return domain.OrderCountVenue{Exchange: ex, Symbol: symbol, Error: "order count not configured", Summary: "order count not configured"}
 	}
-	prints, err := s.fetchPrintRangeResult(ctx, ex, symbol, from, to)
+	prints, err := s.tapePrints(ctx, ex, symbol, from, to)
 	if err != nil {
 		return domain.OrderCountVenue{Exchange: ex, Symbol: symbol, Error: err.Error(), Summary: err.Error()}
 	}

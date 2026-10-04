@@ -6,22 +6,27 @@ import (
 )
 
 const takerBucket = time.Minute
-const takerRetain = 4 * time.Hour
+
+// TakerMemoryRetain is how long the live 1-minute book keeps bars.
+// Startup reloads this span from SQLite for the liquid names.
+const TakerMemoryRetain = 4 * time.Hour
 
 // TakerBook keeps rolling 1-minute buy/sell notional (USDT) per venue+symbol.
 type TakerBook struct {
-	mu      sync.Mutex
-	byKey   map[string]map[int64]TakerBucket // symbol|ex → bucketMs → bucket
-	started map[string]time.Time
-	now     func() time.Time
+	mu       sync.Mutex
+	byKey    map[string]map[int64]TakerBucket // symbol|ex → bucketMs → bucket
+	started  map[string]time.Time
+	restored map[string]struct{}
+	now      func() time.Time
 }
 
 // NewTakerBook constructs an empty store.
 func NewTakerBook() *TakerBook {
 	return &TakerBook{
-		byKey:   map[string]map[int64]TakerBucket{},
-		started: map[string]time.Time{},
-		now:     time.Now,
+		byKey:    map[string]map[int64]TakerBucket{},
+		started:  map[string]time.Time{},
+		restored: map[string]struct{}{},
+		now:      time.Now,
 	}
 }
 
@@ -41,7 +46,7 @@ func (b *TakerBook) Record(p TakerPrint) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	now := b.now().UTC()
-	cut := now.Add(-takerRetain)
+	cut := now.Add(-TakerMemoryRetain)
 	k := takerKey(p.Exchange, p.Symbol)
 	if _, ok := b.started[k]; !ok {
 		b.started[k] = p.Time.UTC()
@@ -70,6 +75,34 @@ func (b *TakerBook) Record(p TakerPrint) {
 	}
 }
 
+// Restored reports whether startup already asked SQLite for this pair.
+func (b *TakerBook) Restored(ex Exchange, symbol string) bool {
+	if b == nil {
+		return false
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	_, ok := b.restored[takerKey(ex, symbol)]
+	return ok
+}
+
+// MarkRestored records that SQLite was checked, including when it had no rows.
+func (b *TakerBook) MarkRestored(ex Exchange, symbol string) {
+	if b == nil {
+		return
+	}
+	symbol = NormalizeLiquidationSymbol(symbol)
+	if symbol == "" {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.restored == nil {
+		b.restored = map[string]struct{}{}
+	}
+	b.restored[takerKey(ex, symbol)] = struct{}{}
+}
+
 // LoadBuckets restores persisted minutes (startup).
 func (b *TakerBook) LoadBuckets(buckets []TakerBucket) {
 	if b == nil {
@@ -77,6 +110,9 @@ func (b *TakerBook) LoadBuckets(buckets []TakerBucket) {
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	if b.restored == nil {
+		b.restored = map[string]struct{}{}
+	}
 	for _, rec := range buckets {
 		rec.Symbol = NormalizeLiquidationSymbol(rec.Symbol)
 		if rec.Symbol == "" || rec.Start.IsZero() {
@@ -99,6 +135,7 @@ func (b *TakerBook) LoadBuckets(buckets []TakerBucket) {
 		if t0, ok := b.started[k]; !ok || rec.Start.Before(t0) {
 			b.started[k] = rec.Start.UTC()
 		}
+		b.restored[k] = struct{}{}
 	}
 }
 

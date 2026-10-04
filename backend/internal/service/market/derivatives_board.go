@@ -147,18 +147,13 @@ func (s *Service) derivativesDayCVD(ctx context.Context, ex domain.Exchange, sym
 	return domain.DayCVDDelta(merged, now, started)
 }
 
-func (s *Service) derivativesPrintChange(ex domain.Exchange, symbol string) (float64, int, float64, int, time.Time, bool) {
+func (s *Service) derivativesPrintChange(ctx context.Context, ex domain.Exchange, symbol string) (float64, int, float64, int, time.Time, bool) {
 	if s == nil {
-		return 0, 0, 0, 0, time.Time{}, false
-	}
-	p := s.printPort(ex)
-	mem, ok := p.(domain.MemoryPrintPort)
-	if !ok {
 		return 0, 0, 0, 0, time.Time{}, false
 	}
 	now := time.Now().UTC()
 	from := now.Add(-domain.PrintSizeLookback())
-	prints, covered := mem.MemoryPrints(symbol, from, now)
+	prints, covered := s.countedPrints(ctx, ex, symbol, from, now)
 	if !covered {
 		return 0, 0, 0, 0, time.Time{}, false
 	}
@@ -285,7 +280,7 @@ func (s *Service) derivativesVenue(ctx context.Context, ex domain.Exchange, symb
 			}
 		}
 		cvdDay, cvdAt, cvdOK = s.derivativesDayCVD(ctx, ex, symbol)
-		printNotional, printCount, printPrior, printPriorN, printAt, printOK = s.derivativesPrintChange(ex, symbol)
+		printNotional, printCount, printPrior, printPriorN, printAt, printOK = s.derivativesPrintChange(ctx, ex, symbol)
 	}()
 	go func() {
 		defer wg.Done()

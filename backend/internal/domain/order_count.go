@@ -142,10 +142,14 @@ func summarizeOrderCount(prints []TakerPrint, window string, from, oldest time.T
 		if p.Time.Before(from) {
 			continue
 		}
+		n := p.Count
+		if n <= 0 {
+			n = 1
+		}
 		if p.Side == TakerSideBuy {
-			buy++
+			buy += n
 		} else {
-			sell++
+			sell += n
 		}
 	}
 	complete := !oldest.IsZero() && !oldest.After(from.Add(time.Minute))

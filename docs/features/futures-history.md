@@ -38,6 +38,12 @@ server restart and can be queried later by users or the AI.
 - The live sampler keeps that same list (`domain.LiquidRecorderLimit`). Spot
   quote volume picks the extra names. `GET /api/v1/market/history-span` reports
   the stored span per venue. See `docs/features/chart-desk.md`.
+- Startup reloads the last 4 hours of stored taker minutes into the live book
+  for that same liquid list (seeds first, then the rest as the list is known).
+  A pair is read once, including when SQLite has no rows. CVD and absorption
+  already read the stored minutes for their own lookback on each request.
+  Print size and order count use the live tape when it covers the window, and
+  stored flow-at-prices minutes (notional and fill count) when it does not.
 
 | Series | Endpoint | Public window this archive requests |
 |---|---|---|

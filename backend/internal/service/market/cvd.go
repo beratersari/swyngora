@@ -129,11 +129,9 @@ func (s *Service) cvdOne(ctx context.Context, ex domain.Exchange, symbol string,
 		out.Summary = out.Error
 		return out
 	}
-	live, err := p.GetTakerBuckets(ctx, symbol)
-	if err != nil {
-		out.Error = err.Error()
-		out.Summary = err.Error()
-		return out
+	live, liveErr := p.GetTakerBuckets(ctx, symbol)
+	if liveErr != nil {
+		live = nil
 	}
 	from := now.Add(-span.Lookback)
 	var stored []domain.TakerBucket
@@ -144,6 +142,11 @@ func (s *Service) cvdOne(ctx context.Context, ex domain.Exchange, symbol string,
 		}
 	}
 	merged := domain.MergeTakerBuckets(stored, live)
+	if len(merged) == 0 && liveErr != nil {
+		out.Error = liveErr.Error()
+		out.Summary = out.Error
+		return out
+	}
 	started := now
 	for _, b := range merged {
 		if !b.Start.IsZero() && b.Start.Before(started) {

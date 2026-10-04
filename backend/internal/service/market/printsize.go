@@ -10,7 +10,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const printSizeDisclaimer = "Average aggressive futures print size (USDT notional per taker fill). Compare the last 5m / 15m to the same length just before: a jump from 20K to 180K is a few large market orders, not many small ones. Binance, Bybit, and OKX use the live trade stream when it covers the window, otherwise the newest public trades. Informational only — not financial advice."
+const printSizeDisclaimer = "Average aggressive futures print size (USDT notional per taker fill). Compare the last 5m / 15m to the same length just before: a jump from 20K to 180K is a few large market orders, not many small ones. Binance, Bybit, and OKX use the live trade stream when it covers the window. When that tape is empty, stored flow-at-prices minutes supply the notional and the fill count. Otherwise the newest public trades are used. Informational only — not financial advice."
 
 // GetPrintSize returns average buy vs sell trade size and how it just changed.
 func (s *Service) GetPrintSize(ctx context.Context, exchange, symbol string) (*domain.PrintSizeReport, error) {
@@ -151,13 +151,49 @@ func (s *Service) printSizeOne(ctx context.Context, ex domain.Exchange, symbol s
 		out.Summary = out.Error
 		return out
 	}
-	prints, err := s.fetchPrintRangeResult(ctx, ex, symbol, from, to)
+	prints, err := s.tapePrints(ctx, ex, symbol, from, to)
 	if err != nil {
 		out.Error = err.Error()
 		out.Summary = out.Error
 		return out
 	}
 	return domain.BuildPrintSizeVenue(ex, symbol, prints, to)
+}
+
+// countedPrints is the live tape when it covers [from, to], otherwise stored
+// flow minutes. ok is false when neither source has fills, so the caller can
+// leave the read unknown instead of walking public trade history.
+func (s *Service) countedPrints(ctx context.Context, ex domain.Exchange, symbol string, from, to time.Time) ([]domain.TakerPrint, bool) {
+	p := s.printPort(ex)
+	if p == nil {
+		return nil, false
+	}
+	if mem, ok := p.(domain.MemoryPrintPort); ok {
+		if prints, covered := mem.MemoryPrints(symbol, from, to); covered {
+			return prints, true
+		}
+	}
+	if s == nil || s.flowHist == nil {
+		return nil, false
+	}
+	cells, err := s.flowHist.ListFlowCells(ctx, ex, symbol, from, to)
+	if err != nil || len(cells) == 0 {
+		return nil, false
+	}
+	prints := domain.PrintsFromFlowCells(cells)
+	if len(prints) == 0 {
+		return nil, false
+	}
+	return prints, true
+}
+
+// tapePrints prefers the live tape, then stored flow minutes, then the
+// venue's public trade history.
+func (s *Service) tapePrints(ctx context.Context, ex domain.Exchange, symbol string, from, to time.Time) ([]domain.TakerPrint, error) {
+	if prints, ok := s.countedPrints(ctx, ex, symbol, from, to); ok {
+		return prints, nil
+	}
+	return s.fetchPrintRangeResult(ctx, ex, symbol, from, to)
 }
 
 func (s *Service) fetchPrintRange(ctx context.Context, ex domain.Exchange, symbol string, from, to time.Time) []domain.TakerPrint {

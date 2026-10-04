@@ -37,6 +37,10 @@ type TakerPrint struct {
 	Quantity float64
 	Notional float64
 	Time     time.Time
+	// Count is how many fills this row stands for. Zero means one fill.
+	// Stored flow minutes set it so print size and order count do not
+	// expand one minute into thousands of identical prints.
+	Count int
 }
 
 // TakerBucket is buy/sell notional in one time bucket (usually 1m).

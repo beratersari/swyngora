@@ -173,13 +173,17 @@ func tallyPrints(prints []TakerPrint, from, to time.Time) (buy, sell printTally)
 		if p.Time.Before(from) || !p.Time.Before(to) {
 			continue
 		}
+		n := p.Count
+		if n <= 0 {
+			n = 1
+		}
 		switch p.Side {
 		case TakerSideBuy:
 			buy.notional += p.Notional
-			buy.count++
+			buy.count += n
 		case TakerSideSell:
 			sell.notional += p.Notional
-			sell.count++
+			sell.count += n
 		}
 	}
 	return buy, sell

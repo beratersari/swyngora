@@ -642,7 +642,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT or BTC-USD")),
 		mcp.WithString("exchange", mcp.Description("binance (default) | coinbase | bybit")),
 		mcp.WithString("group", mcp.Description("Price bucket size e.g. 0.1; omit for a suggested default")),
-		mcp.WithNumber("window", mcp.Description("Lookback seconds 60–604800 (default 600). Above 1800 uses stored book history.")),
+		mcp.WithNumber("window", mcp.Description("Lookback seconds 60–2592000 (default 600). Above 1800 uses stored book history, about 30 days.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")
 		if err != nil {
