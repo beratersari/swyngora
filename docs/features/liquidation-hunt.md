@@ -111,10 +111,10 @@ Observed-only clusters are shown but **not** used as fuel. Missing book or missi
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/liquidation_hunt.go`, `liquidation_hunt_score.go`, `liquidation_hunt_cascade.go`, `liquidation_hunt_heatmap.go`, `liquidation_hunt_heatmap_review.go`, `liquidation_open_levels.go`, `orderbook_reach.go` |
-| Service | `backend/internal/service/market/hunt.go`, `hunt_heatmap.go`, `open_levels.go` |
-| HTTP | `GET /api/v1/market/liquidation-hunt`, `GET /api/v1/market/liquidation-hunt/heatmap`, `GET /api/v1/market/liquidation-open-levels` |
-| MCP / AI | `estimate_liquidation_hunt`, `get_liquidation_heatmap`, `get_liquidation_open_levels` |
+| Domain | `backend/internal/domain/liquidation_hunt.go`, `liquidation_hunt_score.go`, `liquidation_hunt_cascade.go`, `liquidation_hunt_heatmap.go`, `liquidation_print_heatmap.go`, `liquidation_hunt_heatmap_review.go`, `liquidation_open_levels.go`, `orderbook_reach.go` |
+| Service | `backend/internal/service/market/hunt.go`, `hunt_heatmap.go`, `print_heatmap.go`, `open_levels.go` |
+| HTTP | `GET /api/v1/market/liquidation-hunt`, `GET /api/v1/market/liquidation-hunt/heatmap`, `GET /api/v1/market/liquidation-prints/heatmap`, `GET /api/v1/market/liquidation-open-levels` |
+| MCP / AI | `estimate_liquidation_hunt`, `get_liquidation_heatmap`, `get_liquidation_print_heatmap`, `get_liquidation_open_levels` |
 | Web | `/liquidations?view=hunt` — `frontend/src/components/organisms/LiquidationHunt` (Compare + Cascade path); `/liquidations?view=heatmap` — `LiquidationHeatmap`; `/liquidations?view=open` — `OpenLiquidationLevels` |
 
 ## How to verify
@@ -123,6 +123,7 @@ Observed-only clusters are shown but **not** used as fuel. Missing book or missi
 cd backend && go test ./internal/domain/ ./internal/service/market/ ./internal/transport/http/handler/ -count=1
 curl "http://localhost:8080/api/v1/market/liquidation-hunt?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/liquidation-hunt/heatmap?symbol=BTCUSDT&range=24h"
+curl "http://localhost:8080/api/v1/market/liquidation-prints/heatmap?symbol=BTCUSDT&range=24h"
 curl "http://localhost:8080/api/v1/market/liquidation-open-levels?symbol=BTCUSDT&range=24h"
 ```
 
@@ -211,27 +212,57 @@ only when Binance, Bybit, and OKX all have their own price and open interest.
 Observed prints in a column are whatever is already stored. Public force-order
 history refills about 7 days, not the whole 90.
 
-On the product web app the same grid is the opening view of `/liquidations`
-(the other desks stay on `?view=overview`, `chart`, `cascade`, `max-pain`,
-and `hunt`). The map fills the viewport. Ranges are 12h / 24h / 3d / 7d /
-14d / 30d / 90d. Venues are Combined / Binance / Bybit / OKX, plus All /
-Longs / Shorts. The page labels the leverage mix. OKX is named when its
-long/short split is the even fallback. The 1h / 4h / 12h hit-rate table
-stays under the map.
+On the product web app `/liquidations` opens on measured prints (below).
+Model on that page is this grid. The other desks stay on `?view=overview`,
+`chart`, `cascade`, `max-pain`, and `hunt`. The map fills the viewport.
+Ranges are 12h / 24h / 3d / 7d / 14d / 30d / 90d. Venues are Combined /
+Binance / Bybit / OKX, plus All / Longs / Shorts. On Model, the page labels
+the leverage mix, names OKX when its long/short split is the even fallback,
+and keeps the 1h / 4h / 12h hit-rate table under the map.
 
-The coin Overview chart paints that same grid behind the candles
-(`/markets/:exchange/:symbol`). Range, venue, and side match this page.
-Combined color is drawn only when Binance, Bybit, and OKX each have their
-own price and open interest. The chart caption names the leverage mix, an
-even split, and a missing venue. Columns older than the loaded candles stay
-off the left until the chart is panned. The coin chart still loads price
-from the exchange, which already pages back past 90 days.
+The coin Overview chart paints the selected grid behind the candles
+(`/markets/:exchange/:symbol`). It opens on prints. Source, range, venue,
+and side match this page. On Model, combined color is drawn only when
+Binance, Bybit, and OKX each have their own price and open interest, and
+the caption names the leverage mix, an even split, and a missing venue.
+Columns older than the loaded candles stay off the left until the chart is
+panned. The coin chart still loads price from the exchange, which already
+pages back past 90 days.
+
+## Measured prints
+
+`GET /api/v1/market/liquidation-prints/heatmap?symbol=BTCUSDT&range=24h`
+
+Same axes and ranges as the model map. Each cell is stored force-order
+notional. `kind` is `prints`. Longs are positions closed by a sell.
+Shorts are positions closed by a buy.
+
+A column is recorded when a print landed there, or when that venue was
+watched and the column is outside a known feed gap. A quiet recorded
+column is a real zero. A print after the last column's closed edge and
+before now stays on that last column. A column before the watch, or inside a gap with no
+print, stays empty. Binance, Bybit, and OKX never borrow each other's
+prints. `combined` sums a column only when all three were recorded.
+`columnsWithOi` and `coverage` count recorded columns. `leverageMix` is
+empty and `review` has no horizons. A venue with no recorded column is
+named in `missingVenues`.
+
+Public REST refill is about 7 days. Older cells are prints this process
+already stored. The archive aggregates in SQL, then adds in-memory prints
+newer than the latest stored row for that venue. Binance prints arrive on
+`wss://fstream.binance.com/market/ws/!forceOrder@arr`. Coin-margined events
+on that merged stream are left out.
+
+MCP: `get_liquidation_print_heatmap`.
+
+`/liquidations` and the coin Overview chart open on Prints. Model is one
+switch away and uses the section above. Equities omit the control.
 
 ## Open levels
 
 `GET /api/v1/market/liquidation-open-levels?symbol=BTCUSDT&range=24h`
 
-The heatmap places the whole open-interest book again at each column's
+The model map places the whole open-interest book again at each column's
 price. Open levels do not. A band stays at the price where that slice was
 placed until a later candle trades through it.
 

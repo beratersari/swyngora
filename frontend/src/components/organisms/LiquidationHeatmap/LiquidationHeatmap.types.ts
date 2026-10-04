@@ -15,6 +15,7 @@ export type {
 export type LiqHeatRange = '12h' | '24h' | '3d' | '7d' | '14d' | '30d' | '90d';
 export type LiqHeatVenue = 'combined' | 'binance' | 'bybit' | 'okx';
 export type LiqHeatSide = 'totals' | 'longs' | 'shorts';
+export type LiqHeatSource = 'prints' | 'model';
 
 export type LiquidationHeatmapData = LiquidationHuntHeatmap;
 export type LiquidationHeatmapGrid = LiquidationHuntHeatmapGrid;
@@ -50,6 +51,9 @@ export type LiquidationHeatmapProps = {
   onVenueChange: (venue: LiqHeatVenue) => void;
   side: LiqHeatSide;
   onSideChange: (side: LiqHeatSide) => void;
+  /** Measured prints or the labeled leverage model. Chips render only when the callback is set. */
+  source?: LiqHeatSource;
+  onSourceChange?: (source: LiqHeatSource) => void;
   lastPrice?: number;
   isLoading?: boolean;
   isFetching?: boolean;

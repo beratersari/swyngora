@@ -10,6 +10,7 @@ import {
   LiquidationHeatmap,
   type LiqHeatRange,
   type LiqHeatSide,
+  type LiqHeatSource,
   type LiqHeatVenue,
 } from '@/components/organisms/LiquidationHeatmap';
 import { OpenLiquidationLevels } from '@/components/organisms/OpenLiquidationLevels';
@@ -45,6 +46,7 @@ import {
   useGetMarketLiquidationHuntQuery,
   useGetMarketLiquidationMaxPainQuery,
   useGetMarketLiquidationHuntHeatmapQuery,
+  useGetMarketLiquidationPrintHeatmapQuery,
   useGetMarketLiquidationOpenLevelsQuery,
   useGetMarketLiquidationLevelsQuery,
   useGetMarketLiquidationOverviewQuery,
@@ -90,6 +92,7 @@ export function LiquidationsPage() {
   const [liqHeatRange, setLiqHeatRange] = useState<LiqHeatRange>(DEFAULT_LIQ_HEATMAP_RANGE);
   const [liqHeatVenue, setLiqHeatVenue] = useState<LiqHeatVenue>('combined');
   const [liqHeatSide, setLiqHeatSide] = useState<LiqHeatSide>('totals');
+  const [liqHeatSource, setLiqHeatSource] = useState<LiqHeatSource>('prints');
 
   const patchParams = (next: Record<string, string | null>) => {
     setSearchParams(
@@ -155,14 +158,19 @@ export function LiquidationsPage() {
       refetchOnFocus: true,
     },
   );
-  const heatQuery = useGetMarketLiquidationHuntHeatmapQuery(
-    { symbol, range: liqHeatRange, exchange: exchange === 'all' ? 'all' : exchange },
-    {
-      skip: view !== 'heatmap' || !symbol,
-      pollingInterval: visible && view === 'heatmap' ? LIQ_HEATMAP_POLL_MS : 0,
-      refetchOnFocus: true,
-    },
-  );
+  const heatArgs = { symbol, range: liqHeatRange, exchange: exchange === 'all' ? 'all' : exchange };
+  const heatOn = view === 'heatmap' && Boolean(symbol);
+  const heatModelQuery = useGetMarketLiquidationHuntHeatmapQuery(heatArgs, {
+    skip: !heatOn || liqHeatSource !== 'model',
+    pollingInterval: visible && heatOn && liqHeatSource === 'model' ? LIQ_HEATMAP_POLL_MS : 0,
+    refetchOnFocus: true,
+  });
+  const heatPrintQuery = useGetMarketLiquidationPrintHeatmapQuery(heatArgs, {
+    skip: !heatOn || liqHeatSource !== 'prints',
+    pollingInterval: visible && heatOn && liqHeatSource === 'prints' ? LIQ_HEATMAP_POLL_MS : 0,
+    refetchOnFocus: true,
+  });
+  const heatQuery = liqHeatSource === 'prints' ? heatPrintQuery : heatModelQuery;
   const heatTickerExchange = liqHeatVenue === 'bybit' ? 'bybit' : liqHeatVenue === 'binance' ? 'binance' : null;
   const tickerQuery = useGetTicker24hQuery(
     { symbol, exchange: heatTickerExchange ?? 'binance' },
@@ -490,6 +498,8 @@ export function LiquidationsPage() {
               onVenueChange={setLiqHeatVenue}
               side={liqHeatSide}
               onSideChange={setLiqHeatSide}
+              source={liqHeatSource}
+              onSourceChange={setLiqHeatSource}
               lastPrice={
                 liqHeatVenue === 'combined'
                   ? undefined

@@ -41,16 +41,19 @@ import type {
   LiqHeatHover,
   LiqHeatRange,
   LiqHeatSide,
+  LiqHeatSource,
   LiqHeatVenue,
   LiquidationHeatmapProps,
 } from './LiquidationHeatmap.types';
 
 const VENUES: LiqHeatVenue[] = ['combined', 'binance', 'bybit', 'okx'];
 const SIDES: LiqHeatSide[] = ['totals', 'longs', 'shorts'];
+const SOURCES: LiqHeatSource[] = ['prints', 'model'];
 
 /**
- * CoinGlass-style price × time liquidation intensity. Time left→right,
- * highest price at the top. Color is estimated notional in that cell.
+ * Price × time liquidation map. Time left→right, highest price at the top.
+ * Prints color stored force-order notional. The model colors the labeled
+ * open-interest estimate. The source prop wins when it is set.
  */
 export function LiquidationHeatmap({
   data,
@@ -60,6 +63,8 @@ export function LiquidationHeatmap({
   onVenueChange,
   side,
   onSideChange,
+  source,
+  onSourceChange,
   lastPrice,
   isLoading,
   isFetching,
@@ -124,6 +129,7 @@ export function LiquidationHeatmap({
     [data, venue],
   );
 
+  const prints = source != null ? source === 'prints' : data?.kind === 'prints';
   const coveragePct =
     grid && Number.isFinite(grid.coverage) ? Math.round((grid.coverage ?? 0) * 100) : null;
   const mixLabel = formatLeverageMix(data?.leverageMix);
@@ -143,7 +149,7 @@ export function LiquidationHeatmap({
         {isFetching && !isLoading ? <Spin size="small" /> : null}
       </TitleRow>
       <Text variant="caption" color="secondary">
-        {t('liqHeatmap.subtitle')}
+        {t(prints ? 'liqHeatmap.subtitlePrints' : 'liqHeatmap.subtitle')}
       </Text>
       {mixLabel ? (
         <Text variant="caption" color="secondary" data-testid="liquidation-heatmap-mix">
@@ -157,10 +163,27 @@ export function LiquidationHeatmap({
       ) : null}
       {missingLabel ? (
         <Text variant="caption" color="secondary" data-testid="liquidation-heatmap-missing">
-          {t('liqHeatmap.missing', { venues: missingLabel })}
+          {t(prints ? 'liqHeatmap.missingPrints' : 'liqHeatmap.missing', { venues: missingLabel })}
         </Text>
       ) : null}
       <ChipRow>
+        {onSourceChange ? (
+          <>
+            <Text variant="caption" color="secondary">
+              {t('liqHeatmap.source')}
+            </Text>
+            {SOURCES.map((id) => (
+              <Chip
+                key={id}
+                type="button"
+                $active={id === (source ?? (prints ? 'prints' : 'model'))}
+                onClick={() => onSourceChange(id)}
+              >
+                {t(`liqHeatmap.sources.${id}`)}
+              </Chip>
+            ))}
+          </>
+        ) : null}
         <Text variant="caption" color="secondary">
           {t('liqHeatmap.range')}
         </Text>
@@ -192,7 +215,7 @@ export function LiquidationHeatmap({
         ))}
         {coveragePct !== null ? (
           <Text variant="caption" color="secondary" data-testid="liquidation-heatmap-coverage">
-            {t('liqHeatmap.coverage', { pct: coveragePct })}
+            {t(prints ? 'liqHeatmap.coveragePrints' : 'liqHeatmap.coverage', { pct: coveragePct })}
           </Text>
         ) : null}
         <ScaleLegend>
@@ -248,7 +271,7 @@ export function LiquidationHeatmap({
         </MapFrame>
       )}
 
-      {reviewRows.length > 0 ? (
+      {!prints && reviewRows.length > 0 ? (
         <>
           <Text variant="h4" color="primary">
             {t('liqHeatmap.review.title')}

@@ -1281,17 +1281,20 @@ func TestGetBasis_PerVenueAndAgreement(t *testing.T) {
 	byb := &fakeBasis{q: &domain.BasisQuote{
 		Exchange: domain.ExchangeBybit, FuturesLast: 100.12, FuturesMark: 100.10, SpotIndex: 100,
 	}}
+	okx := &fakeBasis{q: &domain.BasisQuote{
+		Exchange: domain.ExchangeOKX, FuturesLast: 100.13, FuturesMark: 100.11, SpotIndex: 100,
+	}}
 	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
 		domain.ExchangeBinance: &fakeMarket{},
 		domain.ExchangeBybit:   &fakeMarket{},
 	}, &fakeSupply{}).WithBasis(map[domain.Exchange]domain.BasisPort{
-		domain.ExchangeBinance: bin, domain.ExchangeBybit: byb,
+		domain.ExchangeBinance: bin, domain.ExchangeBybit: byb, domain.ExchangeOKX: okx,
 	})
 	got, err := svc.GetBasis(context.Background(), "all", "BTCUSDT")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Venues) != 2 || got.Agreement == nil || got.Agreement.Alignment != domain.AlignSame {
+	if len(got.Venues) != 3 || got.Agreement == nil || got.Agreement.Alignment != domain.AlignSame {
 		t.Fatalf("%+v", got)
 	}
 	if got.Venues[0].Summary == "" {
@@ -2212,7 +2215,7 @@ func TestGetLiquidationHuntHeatmap_BinsAndVenues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Range != "24h" || len(got.Times) == 0 || len(got.Prices) != domain.HuntHeatmapPriceBins {
+	if got.Range != "24h" || got.Kind != domain.HuntHeatmapKindModel || len(got.Times) == 0 || len(got.Prices) != domain.HuntHeatmapPriceBins {
 		t.Fatalf("shape %+v", got)
 	}
 	if got.Binance.MaxIntensity <= 0 || got.OKX.MaxIntensity <= 0 {

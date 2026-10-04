@@ -1776,7 +1776,7 @@ func TestGetLiquidationHuntHeatmap_OK(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body.Symbol != "BTCUSDT" || body.Range != "24h" || body.Note == "" {
+	if body.Symbol != "BTCUSDT" || body.Range != "24h" || body.Kind != "model" || body.Note == "" {
 		t.Fatalf("%+v", body)
 	}
 	if len(body.Times) == 0 || len(body.Prices) == 0 {
@@ -1821,6 +1821,36 @@ func TestGetLiquidationOpenLevels_BadRange(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-open-levels?symbol=BTCUSDT&range=9h", nil)
 	rr := httptest.NewRecorder()
 	h.GetLiquidationOpenLevels(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGetLiquidationPrintHeatmap_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-prints/heatmap?symbol=BTCUSDT&range=24h", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationPrintHeatmap(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body huntHeatmapResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Kind != "prints" || len(body.LeverageMix) != 0 {
+		t.Fatalf("%+v", body)
+	}
+	if len(body.Review.Binance.Horizons) != 0 || len(body.Review.OKX.Horizons) != 0 {
+		t.Fatalf("review %+v", body.Review)
+	}
+}
+
+func TestGetLiquidationPrintHeatmap_BadRange(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-prints/heatmap?symbol=BTCUSDT&range=9h", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationPrintHeatmap(rr, req)
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
 	}

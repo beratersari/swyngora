@@ -692,7 +692,7 @@ export interface paths {
          * Rolling futures liquidation totals
          * @description Long/short liquidation notional, count, and the biggest hit for the last
          *     **5 minutes, 1 hour, 4 hours, and 24 hours**. Fed by Binance USD-M
-         *     (`!forceOrder@arr`) and Bybit linear perpetual (`allLiquidation.{symbol}`)
+         *     (`wss://fstream.binance.com/market/ws/!forceOrder@arr`; coin-margined events on that merged stream are left out) and Bybit linear perpetual (`allLiquidation.{symbol}`)
          *     websocket streams. After a reconnect, each venue tries its own history
          *     for the hole; overlapping live+history prints are counted once. Venues
          *     stay separate. `coverageSeconds` / `complete` count live-socket time plus
@@ -1308,7 +1308,8 @@ export interface paths {
          * @description How far the perpetual is from spot/index on Binance USD-M, Bybit linear, and OKX USDT-swap
          *     linear. Returns the dollar gap, percent gap, premium/discount, whether
          *     the gap is expanding or shrinking (5m/1h/4h), a short read with funding
-         *     and open interest, and whether both venues agree. `curve` compares
+         *     and open interest, and whether Binance, Bybit, and OKX agree. A missing
+         *     or unusable quote leaves the comparison unknown. `curve` compares
          *     listed dated futures: near vs far expiry, contango (far richer / up)
          *     or backwardation (near richer / down). `curve.history` is that same
          *     near/far spread over the last hours and days from mark klines;
@@ -2481,6 +2482,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/liquidation-prints/heatmap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Measured liquidation prints by price and time
+         * @description Stored force-order notional at each price and time. Longs are positions
+         *     closed by a sell liquidation. Shorts are positions closed by a buy.
+         *     This is not the open-interest leverage model (`kind` is `prints`).
+         *
+         *     `range` is 12h, 24h, 3d, 7d, 14d, 30d, or 90d. Cells are aggregated
+         *     from the futures archive. Public REST refill is about 7 days; older
+         *     cells are only prints this process already stored.
+         *     A column is recorded when a print landed there, or when that venue
+         *     was watched and the column is outside a known feed gap. A quiet
+         *     recorded column is a real zero. A column before the watch, or inside
+         *     a gap with no print, stays empty (`hasData` false).
+         *     Binance, Bybit, and OKX never borrow each other's prints.
+         *     `combined` sums a column only when all three were recorded.
+         *     `columnsWithOi` and `coverage` count recorded columns, not open interest.
+         *     `leverageMix` is empty. `review` has no horizons.
+         *     Not financial advice.
+         */
+        get: operations["getMarketLiquidationPrintHeatmap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/liquidation-open-levels": {
         parameters: {
             query?: never;
@@ -2578,9 +2614,10 @@ export interface paths {
          *
          *     Compares the last **1 minute**, **5 minutes**, and **15 minutes** to
          *     the median of prior blocks over ~6 hours. `grade` is quiet / elevated
-         *     / cascade / extreme. Binance and Bybit are scored **separately**.
-         *     `both.agree` is true only when the **same side** is cascading on both
-         *     venues. `episodes` lists each wave in the last 24h (start, duration,
+         *     / cascade / extreme. Binance, Bybit, and OKX are scored **separately**.
+         *     `both.agree` is true only when the **same side** is cascade or hotter
+         *     on all three venues. A quiet or opposite venue keeps it off.
+         *     `episodes` lists each wave in the last 24h (start, duration,
          *     long/short notional, price move). Overlapping same-side waves on two
          *     or more venues are one `combined` episode with `startedBy`,
          *     `venueStarts[].lagSec` (seconds after the first print),
@@ -2609,9 +2646,9 @@ export interface paths {
         /**
          * Market liquidation cascade scan
          * @description Scores **market-wide** cascade risk (pooled liquidations) and ranks
-         *     coins that are currently elevated or cascading. Binance and Bybit stay
-         *     separate; a hit's `both` flag means the same side is cascading on both
-         *     venues. Informational only.
+         *     coins that are currently elevated or cascading. Binance, Bybit, and OKX
+         *     stay separate; a hit's `both` flag means the same side is cascade or
+         *     hotter on all three. Informational only.
          */
         get: operations["scanMarketLiquidationCascades"];
         put?: never;
@@ -5549,9 +5586,9 @@ export interface components {
             startedAt?: string;
             summary?: string;
         };
-        /** @description Same-side burst on Binance and Bybit together */
+        /** @description Same-side burst on Binance, Bybit, and OKX together */
         MarketLiquidationCascadeBoth: {
-            /** @description True only when the same side is cascade+ on both venues */
+            /** @description True only when the same side is cascade or hotter on Binance */
             agree?: boolean;
             /** @enum {string} */
             side?: "long" | "short" | "both" | "none";
@@ -6264,24 +6301,30 @@ export interface components {
             shorts?: number[][];
             totals?: number[][];
             maxIntensity?: number;
-            /** @description Fraction of time columns with this venue's own price and open interest. Combined requires Binance */
+            /** @description Fraction of time columns included. On the model map that is columns with this venue's own price and open interest. On the print map that is recorded columns. Combined requires Binance */
             coverage?: number;
+            /** @description Included columns. On the print map these are recorded columns */
             columnsWithOi?: number;
             /** @description That venue's own last print. Combined is omitted. */
             lastPrice?: number;
             /**
-             * @description stored uses the venue account ratio. even is a 50/50 split because no ratio is stored. mixed means some columns had a ratio and some did not.
+             * @description stored uses the venue account ratio. even is a 50/50 split because no ratio is stored. mixed means some columns had a ratio and some did not. Empty on a print map.
              * @enum {string}
              */
             accountBlend?: "stored" | "even" | "mixed";
-            /** @description Per time column, whether this venue had its own price and open interest. Combined is true only when all three venues did. */
+            /** @description Per time column. On the model map, whether this venue had its own price and open interest. On the print map, whether a print landed or the column was watched outside a known gap. Combined is true only when all three venues were included. */
             hasData?: boolean[];
         };
-        /** @description Price × time estimated liquidation intensity */
+        /** @description Price × time liquidation grid. kind=model is the open-interest estimate. kind=prints is stored force-order notional. */
         LiquidationHuntHeatmap: {
             symbol?: string;
             /** @enum {string} */
             range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d" | "90d";
+            /**
+             * @description model is the open-interest leverage estimate. prints is stored force-order notional only.
+             * @enum {string}
+             */
+            kind?: "model" | "prints";
             /** Format: date-time */
             from?: string;
             /** Format: date-time */
@@ -6303,7 +6346,7 @@ export interface components {
                 leverage?: number;
                 weight?: number;
             }[];
-            /** @description Venues with no own price and open interest in this window. Combined does not fill those cells from another venue. */
+            /** @description Venues with no included columns. On the model map that is no own price and open interest. On the print map that is no recorded column. Combined does not fill those cells from another venue. */
             missingVenues?: string[];
             note?: string;
         };
@@ -12938,6 +12981,34 @@ export interface operations {
             502: components["responses"]["Error"];
         };
     };
+    getMarketLiquidationPrintHeatmap: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description 12h | 24h | 3d | 7d | 14d | 30d | 90d */
+                range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d" | "90d";
+                /** @description binance | bybit | okx | all (default all = Binance, Bybit, OKX, and combined) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Price × time print grids */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiquidationHuntHeatmap"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
     getMarketLiquidationOpenLevels: {
         parameters: {
             query: {
@@ -13008,7 +13079,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Per-venue cascade scores plus both-venues flag */
+            /** @description Per-venue cascade scores plus the three-venue both flag */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -191,6 +191,14 @@ vi.mock('@/libs/api', async (importOriginal) => {
       isError: false,
       refetch: vi.fn(),
     }),
+    useGetMarketLiquidationPrintHeatmapQuery: () => ({
+      data: undefined,
+      currentData: undefined,
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    }),
     useGetMarketLiquidationOpenLevelsQuery: () => ({
       data: {
         symbol: 'BTCUSDT',

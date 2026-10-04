@@ -3,6 +3,7 @@ package binance
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -16,7 +17,10 @@ import (
 
 const (
 	defaultFuturesWSURL = "wss://fstream.binance.com"
-	liqReadIdle         = 90 * time.Second
+	// Liquidation orders are a /market stream. An unrouted /ws connection
+	// accepts the socket and then pushes no force orders.
+	liquidationStreamSuffix = "/market/ws/!forceOrder@arr"
+	liqReadIdle             = 90 * time.Second
 )
 
 // LiquidationSink receives parsed USD-M force-order events.
@@ -26,7 +30,8 @@ type LiquidationSink interface {
 	NoteSeen(domain.Exchange)
 }
 
-// LiquidationHub listens to Binance USD-M !forceOrder@arr.
+// LiquidationHub listens to Binance USD-M !forceOrder@arr on /market.
+// The merged stream also carries coin-margined events (st=2); those are dropped.
 type LiquidationHub struct {
 	wsBase string
 	dial   wsDialer
@@ -78,6 +83,7 @@ func (h *LiquidationHub) Start(ctx context.Context) {
 			return
 		}
 		if err != nil {
+			slog.Warn("binance liquidation stream", "err", err)
 			select {
 			case <-runCtx.Done():
 				return
@@ -108,8 +114,16 @@ func (h *LiquidationHub) Close() {
 	}
 }
 
+func liquidationStreamURL(wsBase string) string {
+	base := strings.TrimRight(strings.TrimSpace(wsBase), "/")
+	if base == "" {
+		base = defaultFuturesWSURL
+	}
+	return base + liquidationStreamSuffix
+}
+
 func (h *LiquidationHub) listen(ctx context.Context) error {
-	u := h.wsBase + "/ws/!forceOrder@arr"
+	u := liquidationStreamURL(h.wsBase)
 	conn, _, err := h.dial(ctx, u, nil)
 	if err != nil {
 		return err
@@ -148,6 +162,8 @@ type forceOrderMsg struct {
 	} `json:"o"`
 	Stream string          `json:"stream"`
 	Data   json.RawMessage `json:"data"`
+	// St is 1 for USD-M and 2 for coin-margined on the merged stream.
+	St int `json:"st"`
 }
 
 // ParseForceOrder maps a Binance USD-M forceOrder payload to a domain event.
@@ -165,6 +181,9 @@ func ParseForceOrder(raw []byte) (domain.LiquidationEvent, bool) {
 		}
 	}
 	if wrap.Event != "" && wrap.Event != "forceOrder" {
+		return domain.LiquidationEvent{}, false
+	}
+	if wrap.St == 2 {
 		return domain.LiquidationEvent{}, false
 	}
 	if wrap.O.Symbol == "" || wrap.O.Side == "" {

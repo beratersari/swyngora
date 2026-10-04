@@ -75,7 +75,7 @@ type CascadeVenue struct {
 	Summary   string
 }
 
-// CascadeBoth is true when Binance and Bybit fire the same-side burst together.
+// CascadeBoth is true when Binance, Bybit, and OKX fire the same-side burst together.
 type CascadeBoth struct {
 	Agree   bool
 	Side    string
@@ -202,28 +202,66 @@ func DetectCascadeVenue(ex Exchange, symbol string, events []LiquidationEvent, n
 	return out
 }
 
-// DetectCascadeBoth flags the same-side burst on Binance and Bybit.
+// DetectCascadeBoth flags the same-side burst on every futures venue.
+// A venue missing from the slice counts as quiet. An empty slice returns nil.
 func DetectCascadeBoth(venues []CascadeVenue) *CascadeBoth {
-	var bn, bb *CascadeVenue
-	for i := range venues {
-		switch venues[i].Exchange {
-		case ExchangeBinance:
-			bn = &venues[i]
-		case ExchangeBybit:
-			bb = &venues[i]
-		}
-	}
-	if bn == nil || bb == nil {
+	if len(venues) == 0 {
 		return nil
 	}
-	side, ok := cascadeSharedSide(bn.Side, bb.Side)
-	grade := cascadeWeakerGrade(bn.Grade, bb.Grade)
-	agree := ok && cascadeGradeRank(grade) >= cascadeGradeRank(CascadeGradeCascade)
-	hottest := bn.Hottest
-	if cascadeWindowRank(bb.Hottest) < cascadeWindowRank(hottest) {
-		hottest = bb.Hottest
+	byEx := make(map[Exchange]*CascadeVenue, len(venues))
+	for i := range venues {
+		byEx[venues[i].Exchange] = &venues[i]
 	}
-	score := math.Min(bn.Score, bb.Score)
+	want := FuturesVenues()
+	picked := make([]*CascadeVenue, 0, len(want))
+	names := make([]string, 0, len(want))
+	for _, ex := range want {
+		names = append(names, cascadeVenueTitle(string(ex)))
+		if v := byEx[ex]; v != nil {
+			picked = append(picked, v)
+			continue
+		}
+		picked = append(picked, &CascadeVenue{Exchange: ex, Side: CascadeSideNone, Grade: CascadeGradeQuiet})
+	}
+	joined := joinAnd(names)
+	side := CascadeSideNone
+	shared := len(picked) > 0
+	for i, v := range picked {
+		if i == 0 {
+			side = v.Side
+			shared = side != CascadeSideNone && side != ""
+			continue
+		}
+		next, ok := cascadeSharedSide(side, v.Side)
+		if !ok {
+			shared = false
+			side = CascadeSideNone
+			break
+		}
+		side = next
+	}
+	grade := CascadeGradeQuiet
+	if len(picked) > 0 {
+		grade = picked[0].Grade
+	}
+	hottest := ""
+	score := 0.0
+	if len(picked) > 0 {
+		score = picked[0].Score
+	}
+	for _, v := range picked {
+		grade = cascadeWeakerGrade(grade, v.Grade)
+		if v.Score < score {
+			score = v.Score
+		}
+		if v.Hottest == "" {
+			continue
+		}
+		if hottest == "" || cascadeWindowRank(v.Hottest) < cascadeWindowRank(hottest) {
+			hottest = v.Hottest
+		}
+	}
+	agree := shared && cascadeGradeRank(grade) >= cascadeGradeRank(CascadeGradeCascade)
 	out := &CascadeBoth{
 		Agree:   agree,
 		Side:    side,
@@ -232,15 +270,74 @@ func DetectCascadeBoth(venues []CascadeVenue) *CascadeBoth {
 		Hottest: hottest,
 	}
 	if agree {
-		out.Summary = fmt.Sprintf("Same %s cascade on Binance and Bybit (%s, score %.0f).", side, grade, score)
-	} else if ok && cascadeGradeRank(grade) >= cascadeGradeRank(CascadeGradeElevated) {
-		out.Summary = fmt.Sprintf("Both venues elevated on the %s side, not yet a confirmed cascade.", side)
-	} else if bn.Side != CascadeSideNone && bb.Side != CascadeSideNone && bn.Side != bb.Side && bn.Side != CascadeSideBoth && bb.Side != CascadeSideBoth {
+		out.Summary = fmt.Sprintf("Same %s cascade on %s (%s, score %.0f).", side, joined, grade, score)
+		return out
+	}
+	if shared && cascadeGradeRank(grade) >= cascadeGradeRank(CascadeGradeElevated) {
+		out.Summary = fmt.Sprintf("%s are elevated on the %s side, not yet a confirmed cascade.", joined, side)
+		return out
+	}
+	var hot []*CascadeVenue
+	var cold []string
+	hotSides := map[string]bool{}
+	for _, v := range picked {
+		hotEnough := cascadeGradeRank(v.Grade) >= cascadeGradeRank(CascadeGradeElevated) && v.Side != CascadeSideNone && v.Side != ""
+		if !hotEnough {
+			cold = append(cold, cascadeVenueTitle(string(v.Exchange)))
+			continue
+		}
+		hot = append(hot, v)
+		if v.Side != CascadeSideBoth {
+			hotSides[v.Side] = true
+		}
+	}
+	if len(hotSides) >= 2 {
 		out.Side = CascadeSideNone
 		out.Summary = "Venues are bursting on opposite sides."
-	} else {
-		out.Summary = "No shared cascade across Binance and Bybit."
+		return out
 	}
+	if len(hot) > 0 && len(cold) > 0 {
+		hotSide := hot[0].Side
+		okSide := hotSide != CascadeSideNone && hotSide != ""
+		weaker := hot[0].Grade
+		for _, v := range hot[1:] {
+			next, ok := cascadeSharedSide(hotSide, v.Side)
+			if !ok {
+				okSide = false
+				break
+			}
+			hotSide = next
+			weaker = cascadeWeakerGrade(weaker, v.Grade)
+		}
+		if okSide {
+			out.Side = hotSide
+			coldJoined := joinAnd(cold)
+			verb := "is"
+			if len(cold) != 1 {
+				verb = "are"
+			}
+			if len(hot) == 1 {
+				title := cascadeVenueTitle(string(hot[0].Exchange))
+				if cascadeGradeRank(hot[0].Grade) >= cascadeGradeRank(CascadeGradeCascade) {
+					out.Summary = fmt.Sprintf("%s has a %s cascade. %s %s not in that cascade.", title, hotSide, coldJoined, verb)
+				} else {
+					out.Summary = fmt.Sprintf("%s is elevated on the %s side. %s %s not in that cascade.", title, hotSide, coldJoined, verb)
+				}
+				return out
+			}
+			hotNames := make([]string, len(hot))
+			for i, v := range hot {
+				hotNames[i] = cascadeVenueTitle(string(v.Exchange))
+			}
+			if cascadeGradeRank(weaker) >= cascadeGradeRank(CascadeGradeCascade) {
+				out.Summary = fmt.Sprintf("%s share a %s cascade. %s %s not in that cascade.", joinAnd(hotNames), hotSide, coldJoined, verb)
+			} else {
+				out.Summary = fmt.Sprintf("%s are elevated on the %s side. %s %s not in that cascade.", joinAnd(hotNames), hotSide, coldJoined, verb)
+			}
+			return out
+		}
+	}
+	out.Summary = fmt.Sprintf("No shared cascade across %s.", joined)
 	return out
 }
 
@@ -341,7 +438,7 @@ func BuildCascadeScan(exchange string, events []LiquidationEvent, now time.Time)
 	return out
 }
 
-const cascadeNote = "A cascade is a short burst of long or short liquidations far above that stream's own typical rate (1m / 5m / 15m vs the prior 6 hours). Episodes list each wave in the last 24h: start, duration, long/short notional, and price move. Combined waves name which venue printed first, how many seconds later the others followed, and how much of the wave each venue produced. Binance, Bybit, and OKX are scored separately; a combined episode is the same-side wave on more than one venue at once. Informational only."
+const cascadeNote = "A cascade is a short burst of long or short liquidations far above that stream's own typical rate (1m / 5m / 15m vs the prior 6 hours). Episodes list each wave in the last 24h: start, duration, long/short notional, and price move. Combined waves name which venue printed first, how many seconds later the others followed, and how much of the wave each venue produced. Binance, Bybit, and OKX are scored separately; a combined episode is the same-side wave on more than one venue at once. The both flag agrees only when the same side is cascade or hotter on Binance, Bybit, and OKX together. A quiet or opposite venue keeps it off. Informational only."
 
 type cascadeBucket struct {
 	start time.Time
@@ -658,7 +755,7 @@ func explainCascadeScan(s CascadeScan) string {
 		return "No coins are in a liquidation cascade right now."
 	}
 	if both > 0 {
-		return fmt.Sprintf("%d coin(s) cascading; %d on both Binance and Bybit.", n, both)
+		return fmt.Sprintf("%d coin(s) cascading; %d on Binance, Bybit, and OKX together.", n, both)
 	}
 	return fmt.Sprintf("%d coin(s) in a liquidation cascade.", n)
 }

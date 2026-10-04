@@ -30,3 +30,33 @@ func TestParseForceOrder_IgnoreNoise(t *testing.T) {
 		t.Fatal("ping")
 	}
 }
+
+func TestParseForceOrder_SkipsCoinMargined(t *testing.T) {
+	raw := []byte(`{"e":"forceOrder","E":1,"st":2,"ps":"BTCUSD","o":{"s":"BTCUSD_PERP","S":"SELL","p":"64000","ap":"64000","q":"1","z":"1","T":1}}`)
+	if _, ok := ParseForceOrder(raw); ok {
+		t.Fatal("coin-margined print")
+	}
+	wrapped := []byte(`{"stream":"!forceOrder@arr","data":{"e":"forceOrder","E":1,"st":2,"o":{"s":"BTCUSD_PERP","S":"SELL","p":"64000","ap":"64000","q":"1","z":"1","T":1}}}`)
+	if _, ok := ParseForceOrder(wrapped); ok {
+		t.Fatal("wrapped coin-margined print")
+	}
+}
+
+func TestParseForceOrder_KeepsUSDMarginedMark(t *testing.T) {
+	raw := []byte(`{"e":"forceOrder","E":1,"st":1,"ps":"BTCUSDT","o":{"s":"BTCUSDT","S":"SELL","p":"64000","ap":"64000","q":"1","z":"1","T":1}}`)
+	ev, ok := ParseForceOrder(raw)
+	if !ok || ev.Symbol != "BTCUSDT" || ev.Exchange != domain.ExchangeBinance || ev.Side != domain.LiquidationSideLong {
+		t.Fatalf("%+v ok=%v", ev, ok)
+	}
+}
+
+func TestLiquidationStreamURL_UsesMarketPath(t *testing.T) {
+	got := liquidationStreamURL("wss://fstream.binance.com/")
+	want := "wss://fstream.binance.com/market/ws/!forceOrder@arr"
+	if got != want {
+		t.Fatalf("url %s", got)
+	}
+	if liquidationStreamURL("") != defaultFuturesWSURL+liquidationStreamSuffix {
+		t.Fatal("empty base")
+	}
+}

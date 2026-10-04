@@ -43,7 +43,7 @@ import {
   DEFAULT_LIQ_HEATMAP_RANGE,
   LIQ_HEATMAP_POLL_MS,
 } from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.constants';
-import type { LiqHeatRange } from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.types';
+import type { LiqHeatRange, LiqHeatSource } from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.types';
 import { PERP_LIQUIDITY_LIMIT } from '@/components/organisms/PerpLiquidityOverview';
 import { IndicatorPanel, emaColor } from '@/components/organisms/IndicatorPanel';
 import { BookGapsCard } from '@/components/organisms/BookGapsCard';
@@ -82,6 +82,7 @@ import {
   useGetMarketUnusualQuery,
   useGetMarketLiquidationLevelsQuery,
   useGetMarketLiquidationHuntHeatmapQuery,
+  useGetMarketLiquidationPrintHeatmapQuery,
   useGetMarketLiquidationOpenLevelsQuery,
   useGetMarketVolumeShareQuery,
   useGetMarketPerpDepthOverviewQuery,
@@ -245,6 +246,7 @@ export function CoinDetailPage() {
   const [liqMapRange, setLiqMapRange] = useState<LiqHeatRange>(DEFAULT_LIQ_HEATMAP_RANGE);
   const [liqMapVenue, setLiqMapVenue] = useState<LiqHeatVenue>('combined');
   const [liqMapSide, setLiqMapSide] = useState<LiqHeatSide>('totals');
+  const [liqMapSource, setLiqMapSource] = useState<LiqHeatSource>('prints');
   const [footWindow, setFootWindow] = useState<'5m' | '15m' | '1h' | '4h' | '1d' | '3d' | '7d' | '30d'>('1h');
   /** Guards against applying history pages after exchange/symbol/interval change. */
   const historyRequestIdRef = useRef(0);
@@ -515,14 +517,24 @@ export function CoinDetailPage() {
     { symbol: perpSymbol },
     { skip: skipTape, refetchOnFocus: true },
   );
-  const liqMapQuery = useGetMarketLiquidationHuntHeatmapQuery(
+  const liqMapActive = showLiqMap && urlState.tab === 'overview';
+  const liqMapModelQuery = useGetMarketLiquidationHuntHeatmapQuery(
     { symbol: perpSymbol, range: liqMapRange, exchange: 'all' },
     {
-      skip: skipTape || !showLiqMap || urlState.tab !== 'overview',
-      pollingInterval: visible && showLiqMap && urlState.tab === 'overview' ? LIQ_HEATMAP_POLL_MS : 0,
+      skip: skipTape || !liqMapActive || liqMapSource !== 'model',
+      pollingInterval: visible && liqMapActive && liqMapSource === 'model' ? LIQ_HEATMAP_POLL_MS : 0,
       refetchOnFocus: true,
     },
   );
+  const liqMapPrintQuery = useGetMarketLiquidationPrintHeatmapQuery(
+    { symbol: perpSymbol, range: liqMapRange, exchange: 'all' },
+    {
+      skip: skipTape || !liqMapActive || liqMapSource !== 'prints',
+      pollingInterval: visible && liqMapActive && liqMapSource === 'prints' ? LIQ_HEATMAP_POLL_MS : 0,
+      refetchOnFocus: true,
+    },
+  );
+  const liqMapQuery = liqMapSource === 'prints' ? liqMapPrintQuery : liqMapModelQuery;
   const openLevelsQuery = useGetMarketLiquidationOpenLevelsQuery(
     { symbol: perpSymbol, range: liqMapRange, exchange: 'all' },
     {
@@ -1439,6 +1451,8 @@ export function CoinDetailPage() {
           onLiqMapVenueChange={isEquity ? undefined : setLiqMapVenue}
           liqMapSide={liqMapSide}
           onLiqMapSideChange={isEquity ? undefined : setLiqMapSide}
+          liqMapSource={liqMapSource}
+          onLiqMapSourceChange={isEquity ? undefined : setLiqMapSource}
           onRefresh={refreshAll}
           isFetching={
             seriesFetching ||
@@ -1524,6 +1538,11 @@ export function CoinDetailPage() {
                 {recordedLine}
               </Text>
             ) : null}
+            {!isEquity && showLiqMap && liqMapSource === 'prints' ? (
+              <Text variant="caption" color="secondary" data-testid="chart-liq-prints">
+                {t('detail:liqHeatmap.subtitlePrints')}
+              </Text>
+            ) : null}
             {!isEquity && chartMix ? (
               <Text variant="caption" color="secondary" data-testid="chart-liq-mix">
                 {t('detail:liqHeatmap.leverageMix', { mix: chartMix })}
@@ -1540,11 +1559,16 @@ export function CoinDetailPage() {
             ) : null}
             {!isEquity && chartMissing.length > 0 ? (
               <Text variant="caption" color="secondary" data-testid="chart-liq-missing">
-                {t('detail:liqHeatmap.missing', {
-                  venues: chartMissing
-                    .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
-                    .join(', '),
-                })}
+                {t(
+                  showLiqMap && liqMapSource === 'prints'
+                    ? 'detail:liqHeatmap.missingPrints'
+                    : 'detail:liqHeatmap.missing',
+                  {
+                    venues: chartMissing
+                      .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
+                      .join(', '),
+                  },
+                )}
               </Text>
             ) : null}
             {!isEquity && showOpenLevels ? (

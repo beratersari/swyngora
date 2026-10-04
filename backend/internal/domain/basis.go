@@ -142,7 +142,7 @@ type BasisCurve struct {
 	Moves     []BasisCurveMove
 }
 
-// BasisAgreement is whether Binance and Bybit tell the same story.
+// BasisAgreement is whether Binance, Bybit, and OKX tell the same story.
 type BasisAgreement struct {
 	Alignment string // same | opposite | mixed
 	Title     string
@@ -348,12 +348,7 @@ func pickBasisTrend(ws []BasisWindowChange) string {
 
 // ExplainBasis writes a short read with funding and OI when present.
 func ExplainBasis(v BasisVenueReport, q BasisQuote) string {
-	ex := string(v.Exchange)
-	if ex == string(ExchangeBinance) {
-		ex = "Binance"
-	} else if ex == string(ExchangeBybit) {
-		ex = "Bybit"
-	}
+	ex := basisVenueTitle(v.Exchange)
 	lv := v.Last
 	if lv.Spot <= 0 {
 		return ex + ": no spot/index price to compare."
@@ -420,52 +415,96 @@ func basisMeaning(kind, trend string, q BasisQuote) string {
 	}
 }
 
-// CompareBasisVenues says whether Binance and Bybit agree.
-func CompareBasisVenues(venues []BasisVenueReport) *BasisAgreement {
-	var bin, byb *BasisVenueReport
-	for i := range venues {
-		v := &venues[i]
-		switch v.Exchange {
-		case ExchangeBinance:
-			bin = v
-		case ExchangeBybit:
-			byb = v
+func basisVenueTitle(ex Exchange) string {
+	switch ex {
+	case ExchangeBinance:
+		return "Binance"
+	case ExchangeBybit:
+		return "Bybit"
+	case ExchangeOKX:
+		return "OKX"
+	default:
+		if ex == "" {
+			return ""
 		}
+		return string(ex)
 	}
-	if bin == nil || byb == nil {
+}
+
+func basisQuoteUsable(v *BasisVenueReport) bool {
+	return v != nil && v.Error == "" && v.Last.Spot > 0 && v.Last.Futures > 0
+}
+
+// CompareBasisVenues says whether Binance, Bybit, and OKX agree.
+// A missing or unusable quote leaves the comparison unknown.
+func CompareBasisVenues(venues []BasisVenueReport) *BasisAgreement {
+	byEx := make(map[Exchange]*BasisVenueReport, len(venues))
+	for i := range venues {
+		byEx[venues[i].Exchange] = &venues[i]
+	}
+	got := make([]*BasisVenueReport, 0, 3)
+	missing := make([]string, 0, 3)
+	for _, ex := range FuturesVenues() {
+		v := byEx[ex]
+		if !basisQuoteUsable(v) {
+			missing = append(missing, basisVenueTitle(ex))
+			continue
+		}
+		got = append(got, v)
+	}
+	if len(missing) > 0 {
+		verb := "is"
+		if len(missing) != 1 {
+			verb = "are"
+		}
 		return &BasisAgreement{
 			Alignment: AlignUnknown,
-			Title:     "Need both venues to compare",
-			Summary:   "One of Binance or Bybit is missing, so we cannot say if they agree.",
+			Title:     "Need Binance, Bybit, and OKX to compare",
+			Summary:   fmt.Sprintf("%s %s missing, so the venues are not compared.", joinAnd(missing), verb),
 		}
 	}
-	bk, yk := bin.Last.Kind, byb.Last.Kind
+	kinds := map[string]int{}
+	minPct, maxPct := got[0].Last.DeltaPct, got[0].Last.DeltaPct
+	for _, v := range got {
+		kinds[v.Last.Kind]++
+		if v.Last.DeltaPct < minPct {
+			minPct = v.Last.DeltaPct
+		}
+		if v.Last.DeltaPct > maxPct {
+			maxPct = v.Last.DeltaPct
+		}
+	}
+	flat := kinds[BasisKindFlat] > 0
+	premium := kinds[BasisKindPremium] > 0
+	discount := kinds[BasisKindDiscount] > 0
 	align := AlignSame
 	switch {
-	case bk == BasisKindFlat || yk == BasisKindFlat:
-		if bk != yk {
-			align = AlignMixed
-		}
-	case bk != yk:
+	case flat && (premium || discount):
+		align = AlignMixed
+	case premium && discount:
 		align = AlignOpposite
 	}
-	spread := math.Abs(bin.Last.DeltaPct - byb.Last.DeltaPct)
-	veryDiff := spread >= 0.05 && align == AlignSame
-	title := "Binance and Bybit show the same kind of gap"
-	summary := fmt.Sprintf("Both are a %s (Binance %s%%, Bybit %s%%).",
-		bk, FormatSignedPct(bin.Last.DeltaPct), FormatSignedPct(byb.Last.DeltaPct))
+	spread := math.Abs(maxPct - minPct)
+	veryDiff := !flat && align == AlignSame && spread >= 0.05
+	parts := make([]string, len(got))
+	kindParts := make([]string, len(got))
+	for i, v := range got {
+		title := basisVenueTitle(v.Exchange)
+		parts[i] = fmt.Sprintf("%s %s%%", title, FormatSignedPct(v.Last.DeltaPct))
+		kindParts[i] = fmt.Sprintf("%s is a %s (%s%%)", title, v.Last.Kind, FormatSignedPct(v.Last.DeltaPct))
+	}
+	kind := got[0].Last.Kind
+	title := "Binance, Bybit, and OKX show the same kind of gap"
+	summary := fmt.Sprintf("All three are a %s (%s).", kind, joinAnd(parts))
 	if align == AlignOpposite {
-		title = "Binance and Bybit disagree on premium vs discount"
-		summary = fmt.Sprintf("Binance is a %s (%s%%), Bybit is a %s (%s%%). Combined 'the market is rich/cheap' would hide that split.",
-			bk, FormatSignedPct(bin.Last.DeltaPct), yk, FormatSignedPct(byb.Last.DeltaPct))
+		title = "The venues disagree on premium vs discount"
+		summary = fmt.Sprintf("%s. Combined 'the market is rich/cheap' would hide that split.", joinAnd(kindParts))
 	} else if align == AlignMixed {
-		title = "One venue is flat, the other is not"
-		summary = fmt.Sprintf("Binance %s (%s%%), Bybit %s (%s%%).",
-			bk, FormatSignedPct(bin.Last.DeltaPct), yk, FormatSignedPct(byb.Last.DeltaPct))
+		title = "One venue is flat and another is not"
+		summary = joinAnd(kindParts) + "."
 	} else if veryDiff {
 		title = "Same side, but the size is very different"
-		summary = fmt.Sprintf("Both are a %s, but Binance is %s%% and Bybit is %s%% (gap %s pp). That is a real split in how rich/cheap each book is.",
-			bk, FormatSignedPct(bin.Last.DeltaPct), FormatSignedPct(byb.Last.DeltaPct), FormatSignedPct(spread))
+		summary = fmt.Sprintf("All three are a %s, but the size differs (%s, gap %s pp).", kind, joinAnd(parts), FormatSignedPct(spread))
 		align = AlignMixed
 	}
 	return &BasisAgreement{Alignment: align, Title: title, Summary: summary}

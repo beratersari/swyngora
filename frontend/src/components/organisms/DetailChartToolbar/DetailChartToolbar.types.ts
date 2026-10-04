@@ -1,4 +1,7 @@
+import type { LiqHeatSource } from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.types';
+
 export type CvdChartRange = '24h' | '7d' | '30d' | '90d';
+export type { LiqHeatSource };
 
 export type DetailChartToolbarProps = {
   intervals: string[];
@@ -57,4 +60,7 @@ export type DetailChartToolbarProps = {
   onLiqMapVenueChange?: (venue: 'combined' | 'binance' | 'bybit' | 'okx') => void;
   liqMapSide?: 'totals' | 'longs' | 'shorts';
   onLiqMapSideChange?: (side: 'totals' | 'longs' | 'shorts') => void;
+  /** Measured prints or the labeled leverage model. Shown only while the map is on. */
+  liqMapSource?: LiqHeatSource;
+  onLiqMapSourceChange?: (source: LiqHeatSource) => void;
 };

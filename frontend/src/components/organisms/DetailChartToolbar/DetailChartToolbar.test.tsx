@@ -184,7 +184,33 @@ describe('DetailChartToolbar', () => {
     expect(screen.getByRole('combobox', { name: /range|aralık/i })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: /venue|borsa/i })).toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: /^side$|^taraf$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: /liquidation source|likidasyon kaynağı/i })).not.toBeInTheDocument();
     await user.click(screen.getByRole('switch', { name: /open levels|açık seviyeler/i }));
     expect(onOpen.mock.calls[0]?.[0]).toBe(false);
+  });
+
+  it('switches the liquidation map from the model to measured prints', async () => {
+    const user = userEvent.setup();
+    const onSource = vi.fn();
+    renderWithTheme(
+      <DetailChartToolbar
+        intervals={['1h']}
+        interval="1h"
+        onIntervalChange={() => undefined}
+        showLiqMap
+        onShowLiqMapChange={() => undefined}
+        liqMapRange="24h"
+        onLiqMapRangeChange={() => undefined}
+        liqMapVenue="combined"
+        onLiqMapVenueChange={() => undefined}
+        liqMapSide="totals"
+        onLiqMapSideChange={() => undefined}
+        liqMapSource="model"
+        onLiqMapSourceChange={onSource}
+      />,
+    );
+    await user.click(screen.getByRole('combobox', { name: /liquidation source|likidasyon kaynağı/i }));
+    await user.click(await screen.findByTitle('Prints'));
+    expect(onSource.mock.calls[0]?.[0]).toBe('prints');
   });
 });

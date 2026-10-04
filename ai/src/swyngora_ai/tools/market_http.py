@@ -546,14 +546,14 @@ class LiquidationCascadeInput(BaseModel):
     )
     exchange: str = Field(
         default="all",
-        description="binance|bybit|all (default all)",
+        description="binance|bybit|okx|all (default all)",
     )
 
 
 class LiquidationCascadeScanInput(BaseModel):
     exchange: str = Field(
         default="all",
-        description="binance|bybit|all (default all)",
+        description="binance|bybit|okx|all (default all)",
     )
 
 
@@ -647,6 +647,21 @@ class LiquidationHeatmapInput(BaseModel):
             "12h | 24h | 3d | 7d | 14d | 30d | 90d (default 24h). "
             "90d is one column per day. Binance public open interest "
             "and long/short history are 30 days."
+        ),
+    )
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|okx|all (default all = three venues + combined)",
+    )
+
+
+class LiquidationPrintHeatmapInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    range: str = Field(
+        default="24h",
+        description=(
+            "12h | 24h | 3d | 7d | 14d | 30d | 90d (default 24h). "
+            "Stored force-order prints only. Public refill is about 7 days."
         ),
     )
     exchange: str = Field(
@@ -1065,7 +1080,7 @@ class BasisInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
         default="all",
-        description="binance|bybit|all (default all = both + agreement)",
+        description="binance|bybit|okx|all (default all = three venues; a missing quote is unknown)",
     )
 
 
@@ -2356,6 +2371,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
     def get_liquidation_heatmap(symbol: str, range: str = "24h", exchange: str = "all") -> str:
         return http.get(
             "/api/v1/market/liquidation-hunt/heatmap",
+            {"symbol": symbol, "range": range, "exchange": exchange},
+        )
+
+    def get_liquidation_print_heatmap(symbol: str, range: str = "24h", exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/liquidation-prints/heatmap",
             {"symbol": symbol, "range": range, "exchange": exchange},
         )
 
@@ -4855,7 +4876,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "(how much of the wave each venue produced). Binance, "
                 "Bybit, and OKX are scored separately; a combined episode is "
                 "the same-side wave on more than one venue at once. "
-                "symbol=all is market-wide."
+                "both.agree is true only when the same side is cascade or "
+                "hotter on Binance, Bybit, and OKX. A quiet or opposite venue "
+                "keeps it off. symbol=all is market-wide."
             ),
             args_schema=LiquidationCascadeInput,
         ),
@@ -4865,8 +4888,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "Market-wide liquidation cascade scan: pooled market risk plus "
                 "coins currently bursting (elevated / cascade / extreme). "
-                "A hit's both flag means the same side is cascading on Binance "
-                "and Bybit."
+                "A hit's both flag means the same side is cascade or hotter on "
+                "Binance, Bybit, and OKX."
             ),
             args_schema=LiquidationCascadeScanInput,
         ),
@@ -5149,6 +5172,25 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "leverage mix. Not financial advice."
             ),
             args_schema=LiquidationHeatmapInput,
+        ),
+        StructuredTool.from_function(
+            get_liquidation_print_heatmap,
+            name="get_liquidation_print_heatmap",
+            description=(
+                "Measured liquidation prints by price and time. Each cell is "
+                "stored force-order notional, not an open-interest leverage "
+                "estimate. Longs are positions closed by a sell. Shorts are "
+                "positions closed by a buy. range=12h|24h|3d|7d|14d|30d|90d. "
+                "Public REST refill is about 7 days; older cells are only "
+                "prints this process already stored. A column is recorded "
+                "when a print landed, or when that venue was watched and the "
+                "column is outside a known feed gap. A quiet recorded column "
+                "is a real zero. A column before the watch, or inside a gap "
+                "with no print, stays empty. Binance, Bybit, and OKX never "
+                "borrow each other's prints. Combined sums a column only when "
+                "all three were recorded. Not financial advice."
+            ),
+            args_schema=LiquidationPrintHeatmapInput,
         ),
         StructuredTool.from_function(
             get_liquidation_open_levels,
@@ -5561,7 +5603,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "OI context. curve compares listed dated futures (near vs far, "
                 "contango / backwardation). curve.history / windows / moves "
                 "show when that spread flipped or got steeper (1h/4h/24h/7d). "
-                "Binance and Bybit separately plus whether they agree."
+                "Binance, Bybit, and OKX. Agreement needs all three usable "
+                "quotes. A missing quote leaves it unknown."
             ),
             args_schema=BasisInput,
         ),

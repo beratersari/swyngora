@@ -142,6 +142,8 @@ func PickHuntHeatmapGrid(rep HuntHeatmapReport, exchange string) HuntHeatmapGrid
 		return rep.Binance
 	case string(ExchangeBybit):
 		return rep.Bybit
+	case string(ExchangeOKX):
+		return rep.OKX
 	default:
 		return rep.Combined
 	}

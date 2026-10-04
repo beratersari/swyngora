@@ -87,30 +87,68 @@ func TestBuildBasisVenue_PremiumExpanding(t *testing.T) {
 func TestCompareBasisVenues_Opposite(t *testing.T) {
 	a := BuildBasisVenue(BasisQuote{Exchange: ExchangeBinance, FuturesLast: 101, SpotIndex: 100})
 	b := BuildBasisVenue(BasisQuote{Exchange: ExchangeBybit, FuturesLast: 99, SpotIndex: 100})
-	got := CompareBasisVenues([]BasisVenueReport{a, b})
+	c := BuildBasisVenue(BasisQuote{Exchange: ExchangeOKX, FuturesLast: 101.2, SpotIndex: 100})
+	got := CompareBasisVenues([]BasisVenueReport{a, b, c})
 	if got.Alignment != AlignOpposite {
 		t.Fatalf("%+v", got)
+	}
+	if got.Title != "The venues disagree on premium vs discount" {
+		t.Fatalf("title %s", got.Title)
 	}
 }
 
 func TestCompareBasisVenues_Same(t *testing.T) {
 	a := BuildBasisVenue(BasisQuote{Exchange: ExchangeBinance, FuturesLast: 100.2, SpotIndex: 100})
 	b := BuildBasisVenue(BasisQuote{Exchange: ExchangeBybit, FuturesLast: 100.18, SpotIndex: 100})
-	got := CompareBasisVenues([]BasisVenueReport{a, b})
+	c := BuildBasisVenue(BasisQuote{Exchange: ExchangeOKX, FuturesLast: 100.19, SpotIndex: 100})
+	got := CompareBasisVenues([]BasisVenueReport{a, b, c})
 	if got.Alignment != AlignSame {
 		t.Fatalf("%+v", got)
+	}
+	if got.Title != "Binance, Bybit, and OKX show the same kind of gap" {
+		t.Fatalf("title %s", got.Title)
 	}
 }
 
 func TestCompareBasisVenues_VeryDifferent(t *testing.T) {
 	a := BuildBasisVenue(BasisQuote{Exchange: ExchangeBinance, FuturesLast: 100.20, SpotIndex: 100})
 	b := BuildBasisVenue(BasisQuote{Exchange: ExchangeBybit, FuturesLast: 100.02, SpotIndex: 100})
-	got := CompareBasisVenues([]BasisVenueReport{a, b})
+	c := BuildBasisVenue(BasisQuote{Exchange: ExchangeOKX, FuturesLast: 100.10, SpotIndex: 100})
+	got := CompareBasisVenues([]BasisVenueReport{a, b, c})
 	if got.Alignment != AlignMixed {
 		t.Fatalf("%+v", got)
 	}
 	if !strings.Contains(strings.ToLower(got.Title), "different") {
 		t.Fatalf("title %s", got.Title)
+	}
+}
+
+func TestCompareBasisVenues_MissingOKX(t *testing.T) {
+	a := BuildBasisVenue(BasisQuote{Exchange: ExchangeBinance, FuturesLast: 100.2, SpotIndex: 100})
+	b := BuildBasisVenue(BasisQuote{Exchange: ExchangeBybit, FuturesLast: 100.18, SpotIndex: 100})
+	got := CompareBasisVenues([]BasisVenueReport{a, b})
+	if got.Alignment != AlignUnknown {
+		t.Fatalf("%+v", got)
+	}
+	if got.Title != "Need Binance, Bybit, and OKX to compare" {
+		t.Fatalf("title %s", got.Title)
+	}
+	if !strings.Contains(got.Summary, "OKX is missing") {
+		t.Fatalf("summary %s", got.Summary)
+	}
+	bad := BuildBasisVenue(BasisQuote{Exchange: ExchangeOKX, FuturesLast: 100.2, SpotIndex: 100})
+	bad.Error = "down"
+	got = CompareBasisVenues([]BasisVenueReport{a, b, bad})
+	if got.Alignment != AlignUnknown || !strings.Contains(got.Summary, "OKX is missing") {
+		t.Fatalf("unusable %+v", got)
+	}
+}
+
+func TestExplainBasis_NamesOKX(t *testing.T) {
+	q := BasisQuote{Exchange: ExchangeOKX, FuturesLast: 101, SpotIndex: 100}
+	got := ExplainBasis(BuildBasisVenue(q), q)
+	if !strings.Contains(got, "OKX") {
+		t.Fatalf("summary %s", got)
 	}
 }
 

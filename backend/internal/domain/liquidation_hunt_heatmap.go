@@ -138,7 +138,9 @@ type HuntHeatmapReport struct {
 	Review        HuntHeatmapReview    `json:"review"`
 	LeverageMix   []HuntLeverageBucket `json:"leverageMix,omitempty"`
 	MissingVenues []string             `json:"missingVenues,omitempty"`
-	Note          string               `json:"note,omitempty"`
+	// Kind is model (open-interest estimate) or prints (stored force orders only).
+	Kind string `json:"kind,omitempty"`
+	Note string `json:"note,omitempty"`
 }
 
 const huntHeatmapNote = "Estimated liquidation intensity at each price and time from historical open interest, that venue's own price, the hunt leverage mix, blended account long/short, and observed liquidation prints in that column. Binance, Bybit, and OKX are modeled separately and never borrow each other's prices. Each venue uses its stored account ratio. A column with no stored ratio is an even split. Combined sums a column only when all three venues have their own price and open interest. Not a live order book and not financial advice."
@@ -181,6 +183,7 @@ func BuildHuntHeatmap(in HuntHeatmapInput) HuntHeatmapReport {
 	out := HuntHeatmapReport{
 		Symbol:      NormalizeLiquidationSymbol(in.Symbol),
 		Range:       string(spec.Range),
+		Kind:        HuntHeatmapKindModel,
 		From:        from,
 		To:          to,
 		StepSec:     int(spec.Step.Seconds()),

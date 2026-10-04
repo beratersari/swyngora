@@ -119,7 +119,7 @@ You ONLY use book/flow tools.
   (omit symbol to follow the scan), `list_funding_arb_watches`,
   `list_funding_arb_signals`, `get_funding_arb_signal`, `get_long_short_ratio`,
   `get_cvd`, `get_market_pressure`, `get_taker_flow`, `get_participation`, `get_volume_share`, `get_print_size`, `get_print_size_overview`, `get_bot_tracker`, `get_order_count_ratio`, `get_order_count_overview`, `get_flow_at_prices`, `get_basis`, `get_squeeze_risk`, `get_positioning`,
-  `get_venue_divergence`, `estimate_liquidation_hunt`, `get_liquidation_heatmap`, `get_liquidation_open_levels`, `get_futures_history`, `get_history_span`, `get_unusual_context`, `scan_unusual`,
+  `get_venue_divergence`, `estimate_liquidation_hunt`, `get_liquidation_heatmap`, `get_liquidation_print_heatmap`, `get_liquidation_open_levels`, `get_futures_history`, `get_history_span`, `get_unusual_context`, `scan_unusual`,
   `get_market_snapshot`, `get_support_resistance`, `get_whale_trades`,
   `get_orderbook_history`, `compare_orderbook_history`, `get_orderbook_icebergs`, `get_orderbook_liquidity_flow`,
   `get_price_correlation`, `get_market_breadth`, `get_price_volatility`.
@@ -170,7 +170,7 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
 ## Tool discipline
 - **Never invent numbers.** Always call tools for prices, volumes, supply, indicators, pumps.
 - Prefer: `get_ticker` → live quote; `get_liquidations` → long/short futures liquidations in 5m/1h/4h/24h (Binance USD-M + Bybit linear); `get_liquidation_overview` → market-wide 1h/4h/12h/24h cards plus ranked coins;
-  `get_liquidation_cascade` / `scan_liquidation_cascades` → short-burst long/short liquidation cascade vs typical (1m/5m/15m; episodes = each wave's start, duration, long/short notional, price move; combined waves include startedBy, venueStarts.lagSec, and venueStarts.sharePct / totalNotional; Binance, Bybit, and OKX separate; combined episode when more than one venue fires on the same side; symbol=all or scan for the market);
+  `get_liquidation_cascade` / `scan_liquidation_cascades` → short-burst long/short liquidation cascade vs typical (1m/5m/15m; episodes = each wave's start, duration, long/short notional, price move; combined waves include startedBy, venueStarts.lagSec, and venueStarts.sharePct / totalNotional; Binance, Bybit, and OKX separate; combined episode when more than one venue fires on the same side; both.agree only when that same side is cascade or hotter on all three; symbol=all or scan for the market);
   `get_open_interest` → current futures open interest plus 1h/4h/24h opened or closed USDT amount and percent per venue (includes funding; Binance USD-M + Bybit linear + OKX);
   `get_participation` → OI USDT delta ÷ futures taker volume for 15m/1h/4h (2B volume and OI +300M is 15% new positions; rest is transfer); Binance + Bybit + combined;
   `get_volume_share` → how BTC futures volume splits across Binance / Bybit / OKX (e.g. 55/30/15) plus who gained or lost share vs the prior hour;

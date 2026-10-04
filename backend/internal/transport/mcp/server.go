@@ -74,6 +74,7 @@ type DataPort interface {
 	ScanUnusual(ctx context.Context, exchange, metric string, limit int) (json.RawMessage, error)
 	GetLiquidationHunt(ctx context.Context, exchange, symbol string, weights domain.HuntScoreWeights) (json.RawMessage, error)
 	GetLiquidationHuntHeatmap(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error)
+	GetLiquidationPrintHeatmap(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error)
 	GetLiquidationOpenLevels(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error)
 	GetLiquidationMaxPain(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetSqueezeRisk(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -698,7 +699,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_liquidation_cascade",
-		mcp.WithDescription("Detect a liquidation cascade: a short burst of long or short liquidations far above that stream's own typical rate (1m / 5m / 15m vs the prior 6 hours). episodes lists each wave in the last 24h (when it started, how long, long/short notional, price move). Combined waves include startedBy, venueStarts.lagSec (seconds after the first venue print), venueStarts.totalNotional and sharePct (how much of the wave that venue produced), and largestBy; orderUnknown when two venues share the same first-print second. Binance, Bybit, and OKX are scored separately; a combined episode is the same-side wave on more than one venue at once. both.agree is the current snapshot. symbol=all is market-wide (pooled coins). Prefer this for 'when did the BTC liquidation cascade start', 'which exchange started first', 'where did most of the wave come from', or 'how much was liquidated during the wave'."),
+		mcp.WithDescription("Detect a liquidation cascade: a short burst of long or short liquidations far above that stream's own typical rate (1m / 5m / 15m vs the prior 6 hours). episodes lists each wave in the last 24h (when it started, how long, long/short notional, price move). Combined waves include startedBy, venueStarts.lagSec (seconds after the first venue print), venueStarts.totalNotional and sharePct (how much of the wave that venue produced), and largestBy; orderUnknown when two venues share the same first-print second. Binance, Bybit, and OKX are scored separately; a combined episode is the same-side wave on more than one venue at once. both.agree is true only when the same side is cascade or hotter on Binance, Bybit, and OKX together. A quiet or opposite venue keeps it off. symbol=all is market-wide (pooled coins). Prefer this for 'when did the BTC liquidation cascade start', 'which exchange started first', 'where did most of the wave come from', or 'how much was liquidated during the wave'."),
 		mcp.WithString("symbol", mcp.Description("Pair e.g. BTCUSDT, or all for the market (default all)")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -710,7 +711,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("scan_liquidation_cascades",
-		mcp.WithDescription("Market-wide liquidation cascade scan: pooled market risk plus coins currently bursting (elevated / cascade / extreme). Binance and Bybit stay separate; a hit's both flag means the same side is cascading on both venues. Prefer this for 'which coins are in a liquidation cascade'."),
+		mcp.WithDescription("Market-wide liquidation cascade scan: pooled market risk plus coins currently bursting (elevated / cascade / extreme). Binance, Bybit, and OKX stay separate; a hit's both flag means the same side is cascade or hotter on all three. Prefer this for 'which coins are in a liquidation cascade'."),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.ScanLiquidationCascades(ctx, req.GetString("exchange", "all"))
@@ -1241,6 +1242,23 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetLiquidationHuntHeatmap(ctx, req.GetString("exchange", "all"), symbol, req.GetString("range", "24h"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_liquidation_print_heatmap",
+		mcp.WithDescription("Measured liquidation prints by price and time. Each cell is stored force-order notional, not an open-interest leverage estimate. Longs are positions closed by a sell. Shorts are positions closed by a buy. range=12h|24h|3d|7d|14d|30d|90d. Public REST refill is about 7 days; older cells are only prints this process already stored. A column is recorded when a print landed there, or when that venue was watched and the column is outside a known feed gap. A quiet recorded column is a real zero. A column before the watch, or inside a gap with no print, stays empty. Binance, Bybit, and OKX never borrow each other's prints. Combined sums a column only when all three were recorded. columnsWithOi and coverage count recorded columns. leverageMix is empty and review has no horizons. kind is prints. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("range", mcp.Description("12h | 24h | 3d | 7d | 14d | 30d | 90d (default 24h)")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all = three venues + combined)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetLiquidationPrintHeatmap(ctx, req.GetString("exchange", "all"), symbol, req.GetString("range", "24h"))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -1846,9 +1864,9 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_basis",
-		mcp.WithDescription("How far the perpetual futures price is from spot/index on Binance and Bybit: premium or discount, dollar and percent gap, whether the gap is expanding or shrinking, plus a short read with funding and open interest. curve compares listed dated futures: near vs far expiry, contango (far richer / up) or backwardation (near richer / down). curve.history / windows / moves show when that near-far spread flipped or got steeper over 1h/4h/24h/7d. Says if both venues agree. Not financial advice."),
+		mcp.WithDescription("How far the perpetual futures price is from spot/index on Binance, Bybit, and OKX: premium or discount, dollar and percent gap, whether the gap is expanding or shrinking, plus a short read with funding and open interest. curve compares listed dated futures: near vs far expiry, contango (far richer / up) or backwardation (near richer / down). curve.history / windows / moves show when that near-far spread flipped or got steeper over 1h/4h/24h/7d. Agreement needs a usable quote from all three. A missing or unusable quote leaves the comparison unknown. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
-		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = both + agreement)")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all = three venues + agreement)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")
 		if err != nil {

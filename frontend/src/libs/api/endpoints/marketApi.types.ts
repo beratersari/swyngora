@@ -75,6 +75,9 @@ export type LiquidationHuntHeatmapReviewSignalHorizon =
 export type LiquidationHuntHeatmapQuery = NonNullable<
   operations['getMarketLiquidationHuntHeatmap']['parameters']['query']
 >;
+export type LiquidationPrintHeatmapQuery = NonNullable<
+  operations['getMarketLiquidationPrintHeatmap']['parameters']['query']
+>;
 export type LiquidationOpenLevels = components['schemas']['LiquidationOpenLevels'];
 export type LiquidationOpenLevelBook = components['schemas']['LiquidationOpenLevelBook'];
 export type LiquidationOpenLevelSegment = components['schemas']['LiquidationOpenLevelSegment'];

@@ -19,8 +19,11 @@ or the far expiry is richer (contango), and whether that curve is up or down.
 - `kind`: `premium` | `discount` | `flat` (flat inside ±0.01%)
 - `windows` 5m / 1h / 4h: past basis %, change in percentage points, `expanding` /
   `shrinking` / `stable` / `flipped`
-- `agreement` (when `exchange=all`): `same` | `opposite` | `mixed`
-  (`mixed` also when both sides match but the percent gaps differ by ≥ 0.05 pp)
+- `agreement` (when `exchange=all`): `same` | `opposite` | `mixed` | `unknown`.
+  Agreement needs a usable quote from Binance, Bybit, and OKX. A missing or
+  unusable quote leaves the comparison `unknown`. `mixed` covers one flat
+  venue beside a premium or discount, and the same kind of gap when the
+  percent gaps differ by ≥ 0.05 pp.
 - `curve` (per venue): listed contracts sorted by days to expiry (perp first).
   `near` / `far` are the shortest and longest dated when two dated contracts
   exist; otherwise perp vs the one dated book. `shape` is `contango` (far
@@ -36,8 +39,8 @@ or the far expiry is richer (contango), and whether that curve is up or down.
   those windows/moves.
 
 Sources: Binance `premiumIndex` + mark/index 5m klines (`indexPriceKlines` uses
-`pair`); Bybit linear ticker + mark/index 5m klines. Venue spot last is attached
-when the spot pair exists.
+`pair`); Bybit linear ticker + mark/index 5m klines; OKX USDT-swap last and
+mark versus the USDT index. Venue spot last is attached when the spot pair exists.
 
 To turn the Binance vs Bybit funding gap (plus this basis) into a sized long/short
 read, see [`funding-arb.md`](funding-arb.md).
@@ -47,7 +50,7 @@ read, see [`funding-arb.md`](funding-arb.md).
 | Layer | Path |
 |---|---|
 | Domain | `backend/internal/domain/basis.go`, `basis_curve_history.go` |
-| Adapters | `adapter/binance/basis.go`, `adapter/bybit/basis.go` |
+| Adapters | `adapter/binance/basis.go`, `adapter/bybit/basis.go`, `adapter/okx/basis.go` |
 | Service | `backend/internal/service/market/basis.go` |
 | HTTP | `GET /api/v1/market/basis` |
 | MCP / AI | `get_basis` |

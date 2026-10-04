@@ -725,6 +725,17 @@ func (h *MarketHandler) GetLiquidationHuntHeatmap(w http.ResponseWriter, r *http
 	writeJSON(w, http.StatusOK, huntHeatmapToDTO(got))
 }
 
+// GetLiquidationPrintHeatmap handles GET /api/v1/market/liquidation-prints/heatmap.
+func (h *MarketHandler) GetLiquidationPrintHeatmap(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	got, err := h.svc.GetLiquidationPrintHeatmap(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("range"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, huntHeatmapToDTO(got))
+}
+
 // GetLiquidationLevels handles GET /api/v1/market/liquidation-levels.
 func (h *MarketHandler) GetLiquidationLevels(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
@@ -995,6 +1006,7 @@ type huntHeatmapResponse struct {
 	Review        huntHeatmapReviewDTO    `json:"review"`
 	LeverageMix   []huntLeverageBucketDTO `json:"leverageMix,omitempty"`
 	MissingVenues []string                `json:"missingVenues,omitempty"`
+	Kind          string                  `json:"kind,omitempty"`
 	Note          string                  `json:"note"`
 }
 
@@ -1077,6 +1089,7 @@ func huntHeatmapToDTO(a *domain.HuntHeatmapReport) huntHeatmapResponse {
 		Review:        huntReviewToDTO(a.Review),
 		LeverageMix:   huntLeverageMixToDTO(a.LeverageMix),
 		MissingVenues: a.MissingVenues,
+		Kind:          a.Kind,
 		Note:          a.Note,
 	}
 }

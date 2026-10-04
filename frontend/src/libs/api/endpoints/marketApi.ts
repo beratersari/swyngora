@@ -133,6 +133,7 @@ import type {
   BookHistoryQuery,
   LiquidationHuntHeatmap,
   LiquidationHuntHeatmapQuery,
+  LiquidationPrintHeatmapQuery,
   LiquidationOpenLevels,
   LiquidationOpenLevelsQuery,
   LiquidationHunt,
@@ -289,6 +290,7 @@ export type {
   OrderBookHeatmapQuery,
   LiquidationHuntHeatmap,
   LiquidationHuntHeatmapQuery,
+  LiquidationPrintHeatmapQuery,
   LiquidationOpenLevels,
   LiquidationOpenLevelBook,
   LiquidationOpenLevelsQuery,
@@ -539,6 +541,20 @@ export const marketApi = baseApi.injectEndpoints({
       keepUnusedDataFor: 60,
       providesTags: (_r, _e, arg) => [
         { type: 'LiqHeatmap' as const, id: liqHeatmapTagId(arg) },
+      ],
+    }),
+
+    getMarketLiquidationPrintHeatmap: build.query<
+      LiquidationHuntHeatmap,
+      LiquidationPrintHeatmapQuery
+    >({
+      query: (arg) => ({
+        url: '/api/v1/market/liquidation-prints/heatmap',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+      keepUnusedDataFor: 60,
+      providesTags: (_r, _e, arg) => [
+        { type: 'LiqPrintHeatmap' as const, id: liqHeatmapTagId(arg) },
       ],
     }),
 
@@ -982,6 +998,7 @@ export const {
   useGetMarketLiquidationHuntQuery,
   useGetMarketLiquidationMaxPainQuery,
   useGetMarketLiquidationHuntHeatmapQuery,
+  useGetMarketLiquidationPrintHeatmapQuery,
   useGetMarketLiquidationOpenLevelsQuery,
   useGetMarketLongShortRatioQuery,
   useGetMarketHistorySpanQuery,

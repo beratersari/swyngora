@@ -752,6 +752,19 @@ func (c *APIClient) GetLiquidationHuntHeatmap(ctx context.Context, exchange, sym
 	return c.get(ctx, "/api/v1/market/liquidation-hunt/heatmap", q)
 }
 
+// GetLiquidationPrintHeatmap returns stored force-order notional by price and time.
+func (c *APIClient) GetLiquidationPrintHeatmap(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if rawRange != "" {
+		q.Set("range", rawRange)
+	}
+	return c.get(ctx, "/api/v1/market/liquidation-prints/heatmap", q)
+}
+
 // GetLiquidationOpenLevels returns levels that stay until price trades through them.
 func (c *APIClient) GetLiquidationOpenLevels(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error) {
 	q := url.Values{}

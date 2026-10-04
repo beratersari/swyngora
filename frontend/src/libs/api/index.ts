@@ -33,6 +33,7 @@ export {
   useGetMarketLiquidationHuntQuery,
   useGetMarketLiquidationMaxPainQuery,
   useGetMarketLiquidationHuntHeatmapQuery,
+  useGetMarketLiquidationPrintHeatmapQuery,
   useGetMarketLiquidationOpenLevelsQuery,
   useGetMarketLongShortRatioQuery,
   useGetMarketHistorySpanQuery,

@@ -77,6 +77,7 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetOpenInterestQuery: () => empty,
     useGetMarketLiquidationsQuery: () => empty,
     useGetMarketLiquidationHuntHeatmapQuery: () => empty,
+    useGetMarketLiquidationPrintHeatmapQuery: () => empty,
     useGetMarketLiquidationOpenLevelsQuery: () => empty,
     useGetMarketCvdQuery: () => empty,
     useGetMarketFlowAtPricesQuery: () => empty,

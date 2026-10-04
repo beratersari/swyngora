@@ -7,6 +7,7 @@ export {
 export type {
   LiqHeatRange,
   LiqHeatSide,
+  LiqHeatSource,
   LiqHeatVenue,
   LiquidationHeatmapData,
   LiquidationHeatmapProps,

@@ -9,7 +9,7 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
 ## Behavior
 
 - The coin price chart draws the strongest estimated **10× / 25× / 50× / 100×** long level at or below last and short level at or above last as dashed prices. Longs use the down color, shorts the up color. The full price × time map opens `/liquidations`.
-- The liquidation heatmap ranges are **12h, 24h, 3d, 7d, 14d, 30d, and 90d**. On startup the futures archive pages public **1-hour** open interest, funding, and long/short for the seed pairs (BTC, ETH, SOL, XRP, BNB, DOGE, ADA, AVAX, LINK, SUI) into `data/futures.db`, each series only as far as that endpoint documents (Binance open interest and long/short: 30 days; OKX hourly open interest: 1,440 points; Bybit open interest back to listing, kept here for 90 days). See [`futures-history.md`](futures-history.md). 90-day columns are one day wide. A Binance column older than the public 30 days is only hours this process already recorded. Combined sums a column only when Binance, Bybit, and OKX all have their own price and open interest there. OKX prices are that venue's USDT-swap candles. The heatmap is the opening view of `/liquidations`. Observed liquidation prints are kept for the futures retention. Public REST refills about 7 days; the 24-hour reconnect fill is unchanged. Longer columns are the leverage model on archived open interest, plus whatever prints are already stored. Binance calls stay behind the shared REST gate.
+- The liquidation heatmap ranges are **12h, 24h, 3d, 7d, 14d, 30d, and 90d**. On startup the futures archive pages public **1-hour** open interest, funding, and long/short for the seed pairs (BTC, ETH, SOL, XRP, BNB, DOGE, ADA, AVAX, LINK, SUI) into `data/futures.db`, each series only as far as that endpoint documents (Binance open interest and long/short: 30 days; OKX hourly open interest: 1,440 points; Bybit open interest back to listing, kept here for 90 days). See [`futures-history.md`](futures-history.md). 90-day columns are one day wide. A Binance column older than the public 30 days is only hours this process already recorded. Combined sums a column only when Binance, Bybit, and OKX all have their own price and open interest there. OKX prices are that venue's USDT-swap candles. The opening view of `/liquidations` is the measured print map. Model on that page is the leverage estimate. Observed liquidation prints are kept for the futures retention. Public REST refills about 7 days; the 24-hour reconnect fill is unchanged. Longer model columns are the leverage model on archived open interest, plus whatever prints are already stored. Binance calls stay behind the shared REST gate.
 - `GET /api/v1/market/liquidations?symbol=BTCUSDT`
   - `exchange=all` (default) sums **Binance USD-M**, **Bybit linear perpetual**, and **OKX USDT-swap**
   - `exchange=binance`, `bybit`, or `okx` for one venue
@@ -28,7 +28,7 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
     venue** (Binance, Bybit, OKX). A venue that never started or is down is
     listed in `feed.missing` and is **not** replaced by another exchange.
 - Streams (background, always on):
-  - Binance: `wss://fstream.binance.com/ws/!forceOrder@arr` (all USD-M symbols). At most the **largest** liquidation per symbol per ~1s.
+  - Binance: `wss://fstream.binance.com/market/ws/!forceOrder@arr` (USD-M symbols). At most the **largest** liquidation per symbol per ~1s. Coin-margined events on that merged stream (`st` 2) are left out.
   - Bybit: `wss://stream.bybit.com/v5/public/linear` topic `allLiquidation.{symbol}`. Seed majors + top linear USDT by 24h turnover; querying a symbol also subscribes it.
   - OKX: `wss://ws.okx.com:8443/ws/v5/public` channel `liquidation-orders` `instType=SWAP` (all USDT-swap). Contract size (`ctVal`) converts `sz` to base quantity.
 - `feed` on coin, overview, and chart responses:
@@ -89,7 +89,7 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
 - Cascade detector: `GET /api/v1/market/liquidation-cascade`
   - Compares the last **1m / 5m / 15m** long and short notional to that stream's own typical (median of prior blocks over ~6 hours).
   - `grade` is `quiet` / `elevated` (≥2×) / `cascade` (≥4× + enough hits) / `extreme` (≥8×).
-  - Binance and Bybit are scored **separately**. `both.agree` is true only when the **same side** is `cascade` or hotter on both venues.
+  - Binance, Bybit, and OKX are scored **separately**. `both.agree` is true only when the **same side** is `cascade` or hotter on all three. A quiet venue keeps it off.
   - `symbol=all` pools every tracked coin (market-wide risk). `GET /liquidation-cascade/scan` adds ranked bursting coins.
   - `episodes` lists each wave in the last 24h: when it started, how long it lasted, long vs short notional, and the price move. A still-running wave has `open=true`. Overlapping same-side waves on two or more venues become one `combined` episode. Combined rows name `startedBy` (first print), `venueStarts[].lagSec` (how many seconds later the others followed), and `venueStarts[].totalNotional` / `sharePct` (how much of the wave that venue produced). `largestBy` is the venue with the most notional. If two venues share the same first-print second, `orderUnknown` is true and the summary says they started together.
 

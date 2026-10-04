@@ -20,7 +20,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_liquidation_overview` | Market-wide 1h/4h/12h/24h long/short totals + coins ranked for a treemap + `feed` |
 | `get_liquidation_levels` | CoinGlass-style 10x/25x/50x/100x price bars + walk-from-last cumulative; live bars scaled by later-print confidence and by realized/predicted amount after enough hits (`sizeScale`); `review` scores later same-venue liquidations; `symbol=all` time bars |
 | `get_liquidation_cascade` | Short-burst long/short cascade vs typical (1m/5m/15m); `episodes` = start, duration, long/short notional, price; combined waves include `startedBy`, follow lag, and per-venue `sharePct` / notional |
-| `scan_liquidation_cascades` | Market cascade plus coins currently bursting; `both` when the same side fires on both venues |
+| `scan_liquidation_cascades` | Market cascade plus coins currently bursting; `both` when the same side is cascade or hotter on Binance, Bybit, and OKX |
 | `get_open_interest` | Current futures OI plus 5m/1h/4h/24h opened or closed USDT amount and percent, per venue and combined; includes `funding` |
 | `compare_spot_perp_liquidity` | Spot vs perp resting size at ±0.1/0.5/1% of mid; which book is thinner and which side (bid or ask) is thinner on each. Spot is Binance+Coinbase+Bybit; perp is Binance USD-M+Bybit linear+OKX. Binance and Bybit rows compare that venue's own books |
 | `get_perp_depth` | Perpetual bid-below vs ask-above notional (default ±1%); Binance USD-M + Bybit linear + OKX USDT-swap + combined |
@@ -47,7 +47,8 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `scan_unusual` | Same readings across the liquid USDT list (up to 100). Keeps only high and low bands. Typical and unknown rows are left off. Venues stay separate |
 | `get_liquidation_max_pain` | Largest estimated liquidation pockets above (shorts) and below (longs) last price — not the hunt target |
 | `estimate_liquidation_hunt` | Hypothetical per-venue hunt: spot size to reach liq zones + desk result + up/down ease scores (optional custom weight* mix summing to 100; percents stay as given — missing factors add 0 and are not redistributed; scoreCompare has separate upFactors/downFactors, usedVenues/missingVenues on combined rows, and upLargestChange/downLargestChange) and cascade paths (running fuel pool, hop strength, stall) |
-| `get_liquidation_heatmap` | Price × time liquidation intensity (12h/24h/3d/7d/14d/30d/90d; Binance, Bybit, OKX, combined only when all three have open interest; own-venue prices; a stored open-interest hole uses public hourly history within the documented lookback; leverage mix; 1h/4h/12h hit review) |
+| `get_liquidation_heatmap` | Labeled leverage model: price × time liquidation intensity (12h/24h/3d/7d/14d/30d/90d; Binance, Bybit, OKX, combined only when all three have open interest; own-venue prices; a stored open-interest hole uses public hourly history within the documented lookback; leverage mix; 1h/4h/12h hit review) |
+| `get_liquidation_print_heatmap` | Measured liquidation prints by price and time (12h–90d). A quiet recorded column is a real zero. Combined sums a column only when Binance, Bybit, and OKX were all recorded. Empty leverage mix and no review horizons |
 | `get_liquidation_open_levels` | Estimated levels that stay until a later candle trades through them (12h–90d). The first column places open interest already on the books. Later columns add only an increase. A hit is not put back. An open-interest drop closes the oldest slices and is not a liquidation. Combined is withheld when any venue has no price and open interest |
 | `get_squeeze_risk` | Long/short squeeze risk scores (0–100) per venue + OI-weighted combined |
 | `get_positioning` | Price+OI regime: long/short buildup, unwinding, covering + market combined |
@@ -80,7 +81,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_volume_surge` | Current 5m/15m/1h volume vs that coin's typical (median); buy/sell split |
 | `scan_volume_surges` | Rank coins whose volume is much higher than typical |
 | `get_rsi_heatmap` | Ranked Wilder RSI scatter for top listed pairs (stables omitted) |
-| `get_basis` | Perp vs spot/index premium or discount, trend, funding/OI read, venue agreement; `curve` is near vs far dated futures (contango / backwardation) plus `history` / `windows` / `moves` when that spread flipped or got steeper |
+| `get_basis` | Perp vs spot/index premium or discount on Binance, Bybit, and OKX; a missing or unusable quote leaves agreement unknown. `curve` is near vs far dated futures (contango / backwardation) plus `history` / `windows` / `moves` when that spread flipped or got steeper |
 | `get_price_correlation` | How similarly a coin moves with BTC and ETH (1h / 4h / 24h) |
 | `get_market_breadth` | How many followed coins are up vs down (1h / 4h / 24h), plus BTC/ETH vs the pack |
 | `get_fear_greed` | 0–100 fear and greed from our own tape (breadth, BTC move, volatility, funding, long/short, liquidations, perp book, taker flow), which input moved the score the most, and stored 1h/4h/24h/7d history. Not the Binance or CoinGlass index |

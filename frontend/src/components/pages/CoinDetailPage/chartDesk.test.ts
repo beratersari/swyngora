@@ -96,6 +96,34 @@ describe('chart desk mappers', () => {
     expect(notes.evenVenues).toEqual(['okx']);
   });
 
+  it('paints a measured print and skips a quiet recorded column', () => {
+    const cells = liqHeatCells(
+      {
+        kind: 'prints',
+        stepSec: 1800,
+        priceStep: 10,
+        prices: [110, 100],
+        times: ['2026-09-29T12:00:00Z', '2026-09-29T12:30:00Z'],
+        combined: {
+          totals: [
+            [4, 0],
+            [0, 0],
+          ],
+          maxIntensity: 4,
+          hasData: [true, true],
+        },
+      },
+      'combined',
+      'totals',
+    );
+    expect(cells).toHaveLength(1);
+    expect(cells[0]).toMatchObject({
+      time: Date.parse('2026-09-29T12:00:00Z') / 1000,
+      priceHi: 115,
+      priceLo: 105,
+    });
+  });
+
   it('draws open bands until they are hit and keeps the uncapped delta', () => {
     const report = {
       leverageMix: [{ leverage: 10, weight: 0.25 }],

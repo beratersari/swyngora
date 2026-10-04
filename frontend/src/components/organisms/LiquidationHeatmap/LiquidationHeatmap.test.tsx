@@ -160,5 +160,31 @@ describe('LiquidationHeatmap', () => {
       />,
     );
     expect(screen.getByText(/No liquidation map/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Prints' })).not.toBeInTheDocument();
+  });
+
+  it('shows measured prints and hides the model review', async () => {
+    const onSourceChange = vi.fn();
+    const user = userEvent.setup();
+    renderWithProviders(
+      <LiquidationHeatmap
+        data={{ ...data, kind: 'prints', leverageMix: [] }}
+        range="24h"
+        onRangeChange={() => undefined}
+        venue="combined"
+        onVenueChange={() => undefined}
+        side="totals"
+        onSideChange={() => undefined}
+        source="prints"
+        onSourceChange={onSourceChange}
+      />,
+    );
+    expect(screen.getByText(/Stored liquidation prints/i)).toBeInTheDocument();
+    expect(screen.getByTestId('liquidation-heatmap-missing')).toHaveTextContent(/was not recorded/i);
+    expect(screen.getByTestId('liquidation-heatmap-coverage')).toHaveTextContent(/were recorded/i);
+    expect(screen.queryByTestId('liquidation-heatmap-review')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('liquidation-heatmap-mix')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Model' }));
+    expect(onSourceChange).toHaveBeenCalledWith('model');
   });
 });

@@ -11,6 +11,7 @@ import type { DetailChartToolbarProps } from './DetailChartToolbar.types';
 const CVD_RANGES = ['24h', '7d', '30d', '90d'] as const;
 const LIQ_MAP_VENUES = ['combined', 'binance', 'bybit', 'okx'] as const;
 const LIQ_MAP_SIDES = ['totals', 'longs', 'shorts'] as const;
+const LIQ_MAP_SOURCES = ['prints', 'model'] as const;
 
 export function DetailChartToolbar({
   intervals,
@@ -55,6 +56,8 @@ export function DetailChartToolbar({
   onLiqMapVenueChange,
   liqMapSide = 'totals',
   onLiqMapSideChange,
+  liqMapSource = 'prints',
+  onLiqMapSourceChange,
 }: DetailChartToolbarProps) {
   const { t } = useTranslation(['detail', 'common']);
 
@@ -350,6 +353,25 @@ export function DetailChartToolbar({
             onChange={onLiqMapSideChange}
             style={{ minWidth: 96 }}
             aria-label={t('detail:liqHeatmap.side')}
+          />
+        </Field>
+      ) : null}
+
+      {onShowLiqMapChange && showLiqMap && onLiqMapSourceChange ? (
+        <Field $compact>
+          <Text variant="caption" color="secondary">
+            {t('detail:liqHeatmap.source')}
+          </Text>
+          <Select
+            size="small"
+            value={liqMapSource}
+            options={LIQ_MAP_SOURCES.map((id) => ({
+              value: id,
+              label: t(`detail:liqHeatmap.sources.${id}`),
+            }))}
+            onChange={onLiqMapSourceChange}
+            style={{ minWidth: 96 }}
+            aria-label={t('detail:liqHeatmap.sourceLabel')}
           />
         </Field>
       ) : null}

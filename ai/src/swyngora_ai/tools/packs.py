@@ -101,6 +101,7 @@ BOOK_TOOLS: frozenset[str] = frozenset(
         "scan_unusual",
         "estimate_liquidation_hunt",
         "get_liquidation_heatmap",
+        "get_liquidation_print_heatmap",
         "get_liquidation_open_levels",
         "get_squeeze_risk",
         "get_positioning",

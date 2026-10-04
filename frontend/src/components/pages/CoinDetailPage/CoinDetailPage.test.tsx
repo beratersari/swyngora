@@ -52,6 +52,7 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetOpenInterestQuery: () => mockOpenInterest(),
     useGetMarketLiquidationsQuery: () => mockLiquidations(),
     useGetMarketLiquidationHuntHeatmapQuery: () => mockLiqHeatmap(),
+    useGetMarketLiquidationPrintHeatmapQuery: () => mockLiqHeatmap(),
     useGetMarketLiquidationOpenLevelsQuery: () => ({
       data: undefined,
       currentData: undefined,
