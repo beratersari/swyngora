@@ -655,6 +655,21 @@ class LiquidationHeatmapInput(BaseModel):
     )
 
 
+class LiquidationOpenLevelsInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    range: str = Field(
+        default="24h",
+        description=(
+            "12h | 24h | 3d | 7d | 14d | 30d | 90d (default 24h). "
+            "Levels stay until a later candle trades through them."
+        ),
+    )
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|okx|all (default all = three venues + combined)",
+    )
+
+
 class SqueezeRiskInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -2329,6 +2344,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
     def get_liquidation_heatmap(symbol: str, range: str = "24h", exchange: str = "all") -> str:
         return http.get(
             "/api/v1/market/liquidation-hunt/heatmap",
+            {"symbol": symbol, "range": range, "exchange": exchange},
+        )
+
+    def get_liquidation_open_levels(symbol: str, range: str = "24h", exchange: str = "all") -> str:
+        return http.get(
+            "/api/v1/market/liquidation-open-levels",
             {"symbol": symbol, "range": range, "exchange": exchange},
         )
 
@@ -5116,6 +5137,26 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "leverage mix. Not financial advice."
             ),
             args_schema=LiquidationHeatmapInput,
+        ),
+        StructuredTool.from_function(
+            get_liquidation_open_levels,
+            name="get_liquidation_open_levels",
+            description=(
+                "Estimated liquidation levels that stay at the price where "
+                "that slice of open interest was placed, until a later candle "
+                "trades through them. range=12h|24h|3d|7d|14d|30d|90d. The "
+                "first column places the open interest already on the books. "
+                "Later columns only add an increase. A traded-through level "
+                "is not put back. An open-interest drop closes the oldest "
+                "slices and is not a liquidation. Longs are hit by a later "
+                "low; shorts by a later high. Binance, Bybit, and OKX each "
+                "use only their own price and open interest. Combined is "
+                "withheld (definite=false) when any venue has none. The "
+                "leverage mix is the labeled hunt model with 0.40% "
+                "maintenance. Not exchange liquidation-engine output. Not "
+                "financial advice."
+            ),
+            args_schema=LiquidationOpenLevelsInput,
         ),
         StructuredTool.from_function(
             get_squeeze_risk,

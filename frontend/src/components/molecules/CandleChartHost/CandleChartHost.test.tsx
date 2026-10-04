@@ -10,6 +10,7 @@ const subscribeVisibleLogicalRangeChange = vi.fn();
 const unsubscribeVisibleLogicalRangeChange = vi.fn();
 const getVisibleLogicalRange = vi.fn(() => null);
 const setVisibleLogicalRange = vi.fn();
+let timeToIndexImpl: ((time: number, findNearest?: boolean) => number | null) | null = null;
 const createPriceLine = vi.fn(() => ({ remove: vi.fn() }));
 const removePriceLine = vi.fn();
 const setStretchFactor = vi.fn();
@@ -35,6 +36,7 @@ vi.mock('lightweight-charts', () => ({
       unsubscribeVisibleLogicalRangeChange,
       getVisibleLogicalRange,
       setVisibleLogicalRange,
+      ...(timeToIndexImpl ? { timeToIndex: timeToIndexImpl } : {}),
     }),
     priceScale: () => ({ applyOptions: vi.fn() }),
     panes: () => [{ setStretchFactor }, { setStretchFactor }],
@@ -67,6 +69,7 @@ function seriesStub(extra?: Record<string, unknown>) {
 describe('CandleChartHost', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    timeToIndexImpl = null;
     addSeries.mockImplementation(() => seriesStub());
   });
 
@@ -145,5 +148,33 @@ describe('CandleChartHost', () => {
       expect.objectContaining({ price: 90, title: '100× Long', lineStyle: 2 }),
     );
     expect(setStretchFactor).toHaveBeenCalled();
+  });
+
+  it('pins the latest candle by time-scale index when other series insert times', () => {
+    timeToIndexImpl = () => 900;
+    renderWithTheme(
+      <CandleChartHost
+        data={[
+          { time: 100, open: 1, high: 2, low: 0.5, close: 1.5 },
+          { time: 200, open: 1.5, high: 2.2, low: 1.4, close: 2 },
+        ]}
+        lowerSeries={[
+          {
+            id: 'open-liq-delta',
+            pane: 1,
+            kind: 'line',
+            color: '#3861FB',
+            title: 'Open long − short',
+            data: [
+              { time: 150, value: 10 },
+              { time: 200, value: 25 },
+            ],
+          },
+        ]}
+      />,
+    );
+    // Index 900 is the last candle after earlier samples were inserted.
+    // 80 visible bars and the default 6-slot right pad: from 821, to 907.
+    expect(setVisibleLogicalRange).toHaveBeenCalledWith({ from: 821, to: 907 });
   });
 });

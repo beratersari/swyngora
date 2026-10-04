@@ -2,7 +2,7 @@
 
 Public OKX v5 adapter for **USDT-margined SWAP** futures: open interest,
 funding, live liquidations, liquidation history backfill, 5m quote-volume
-candles for venue mix, and SWAP OHLC for the liquidation heatmap.
+candles for venue mix, and SWAP OHLC for the liquidation heatmap and open liquidation levels.
 
 ## Purpose
 
@@ -26,7 +26,7 @@ No API key. Base `https://www.okx.com`, public WS
 | `liqhub.go` | `liquidation-orders` SWAP websocket |
 | `liqhist.go` | REST `liquidation-orders?state=filled` backfill |
 | `futures_volume.go` | 5m SWAP candles (`volCcyQuote`) for volume share |
-| `candles.go` | SWAP OHLC (`/api/v5/market/candles`) for the liquidation heatmap. Daily bars use `1Dutc` |
+| `candles.go` | SWAP OHLC (`/api/v5/market/candles`) for the liquidation heatmap and open liquidation levels. Daily bars use `1Dutc` |
 | `futures_depth.go` | SWAP book (`/api/v5/market/books`); contract size × `ctVal` is base quantity |
 | `trades.go` | Newest SWAP trades (`/api/v5/market/trades`) as taker prints |
 | `basis.go` | SWAP last and mark versus the USDT index |

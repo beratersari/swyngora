@@ -51,6 +51,8 @@
     "fundingLine": "{{exchange}} funding %",
     "liqNotional": "Liquidations",
     "liqMap": "Liq map",
+    "openLevels": "Open levels",
+    "openLevelDelta": "Open long − short",
     "liqMapPan": "Pan left to load candles for the earlier part of this range.",
     "recorded": "Recorded: {{parts}}.",
     "recordedPart": "{{kind}} {{exchange}} {{span}}",
@@ -65,11 +67,15 @@
       "long": "Long",
       "short": "Short"
     },
-    "tapeHint": "Buy − sell is aggressive futures flow in each candle. CVD resets at 00:00 UTC and at the current 4-hour open. Book shading is resting size. Color behind the candles is estimated liquidation intensity for the selected range. A combined cell is colored only when Binance, Bybit, and OKX each have their own price and open interest. The right edge is buy versus sell at each price, and the bars beside it are estimated liquidation pockets. The lower strip is crowd long percent versus top traders for Binance and OKX. Open interest and funding are stored samples, one line for each of Binance, Bybit, and OKX. Liquidation bars are short notional minus long notional in that candle. The leverage mix is a model. Informational only.",
+    "tapeHint": "Buy − sell is aggressive futures flow in each candle. CVD resets at 00:00 UTC and at the current 4-hour open. Book shading is resting size. Color behind the candles is estimated liquidation intensity for the selected range. A combined cell is colored only when Binance, Bybit, and OKX each have their own price and open interest. Open levels stay until price trades through them. The right edge is buy versus sell at each price, and the bars beside it are estimated liquidation pockets. The lower strip is crowd long percent versus top traders for Binance and OKX. Open interest and funding are stored samples, one line for each of Binance, Bybit, and OKX. Liquidation bars are short notional minus long notional in that candle. The leverage mix is a model. Informational only.",
     "pumpOn": "On",
     "pumpOff": "Off",
     "pumpHint": "Markers when |return| ≥ threshold (informational only)",
     "postDelistBanner": "Bars after {{date}} are {{source}} — {{exchange}} has no trades. Informational only, not financial advice."
+  },
+  "openLevels": {
+    "caption": "Levels stay until a later candle trades through them. The line underneath is open long size minus open short size. The first sample places open interest already on the books. A level that closes because open interest fell was not liquidated. A traded-through level is not put back.",
+    "withheld": "Combined open levels are withheld until Binance, Bybit, and OKX each have price and open interest in this window."
   },
   "postDelist": {
     "title": "After delist",
@@ -154,6 +160,7 @@
     "orderBook": "order book",
     "tape": "futures tape",
     "liqHeatmap": "liquidation heatmap",
+    "openLevels": "open liquidation levels",
     "postDelist": "post-delist price"
   },
   "tape": {

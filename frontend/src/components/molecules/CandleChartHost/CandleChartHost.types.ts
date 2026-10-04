@@ -56,6 +56,19 @@ export type CandleChartLiqCell = {
   color: string;
 };
 
+/**
+ * One estimated liquidation band on the candle pane.
+ * Time is unix seconds. Open bands run to the right edge of the visible range.
+ */
+export type CandleChartOpenLevel = {
+  side: 'long' | 'short';
+  price: number;
+  notional: number;
+  openedAt: number;
+  closedAt?: number;
+  status: 'open' | 'hit' | 'closed';
+};
+
 /** Horizontal price on the candle scale (estimated liquidation levels). */
 export type CandleChartPriceLine = {
   id: string;
@@ -89,6 +102,11 @@ export type CandleChartHostProps = WithLoadingProps & {
   liqProfile?: CandleChartLiqBar[];
   /** Price × time liquidation intensity drawn behind the candles. */
   liqHeat?: CandleChartLiqCell[];
+  /**
+   * Estimated liquidation bands that stay from openedAt until price trades
+   * through them. Closed inventory changes are omitted by the caller.
+   */
+  openLevels?: CandleChartOpenLevel[];
   /** Visible candle span in unix seconds, so the footprint window can follow the pan. */
   onVisibleSpan?: (fromSec: number, toSec: number) => void;
   /** Optional event markers (e.g. pump scanner hits) */

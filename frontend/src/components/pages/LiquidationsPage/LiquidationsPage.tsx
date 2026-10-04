@@ -12,6 +12,7 @@ import {
   type LiqHeatSide,
   type LiqHeatVenue,
 } from '@/components/organisms/LiquidationHeatmap';
+import { OpenLiquidationLevels } from '@/components/organisms/OpenLiquidationLevels';
 import {
   LIQ_CHART_RANGES,
   LIQ_LEVELS_POLL_MS,
@@ -44,6 +45,7 @@ import {
   useGetMarketLiquidationHuntQuery,
   useGetMarketLiquidationMaxPainQuery,
   useGetMarketLiquidationHuntHeatmapQuery,
+  useGetMarketLiquidationOpenLevelsQuery,
   useGetMarketLiquidationLevelsQuery,
   useGetMarketLiquidationOverviewQuery,
   useGetTicker24hQuery,
@@ -145,6 +147,14 @@ export function LiquidationsPage() {
       refetchOnFocus: true,
     },
   );
+  const openQuery = useGetMarketLiquidationOpenLevelsQuery(
+    { symbol, range: liqHeatRange, exchange: exchange === 'all' ? 'all' : exchange },
+    {
+      skip: view !== 'open' || !symbol,
+      pollingInterval: visible && view === 'open' ? LIQ_HEATMAP_POLL_MS : 0,
+      refetchOnFocus: true,
+    },
+  );
   const heatQuery = useGetMarketLiquidationHuntHeatmapQuery(
     { symbol, range: liqHeatRange, exchange: exchange === 'all' ? 'all' : exchange },
     {
@@ -209,6 +219,7 @@ export function LiquidationsPage() {
           }
           options={[
             { value: 'heatmap', label: t('liquidations:tabs.heatmap') },
+            { value: 'open', label: t('liquidations:tabs.open') },
             { value: 'overview', label: t('liquidations:tabs.overview') },
             { value: 'chart', label: t('liquidations:tabs.chart') },
             { value: 'cascade', label: t('liquidations:tabs.cascade') },
@@ -235,7 +246,7 @@ export function LiquidationsPage() {
             }
           />
         </Field>
-        {view === 'hunt' || view === 'heatmap' || view === 'max-pain' ? (
+        {view === 'hunt' || view === 'heatmap' || view === 'max-pain' || view === 'open' ? (
           <Field>
             <Text variant="caption" color="secondary" id="liq-symbol-label">
               {t(
@@ -243,7 +254,9 @@ export function LiquidationsPage() {
                   ? 'liquidations:hunt.symbol'
                   : view === 'max-pain'
                     ? 'liquidations:maxPain.symbol'
-                    : 'liquidations:heatmap.symbol',
+                    : view === 'open'
+                      ? 'liquidations:open.symbol'
+                      : 'liquidations:heatmap.symbol',
               )}
             </Text>
             <Select
@@ -443,6 +456,29 @@ export function LiquidationsPage() {
             {t('liquidations:hunt.pick')}
           </Text>
         )
+      ) : view === 'open' ? (
+        <HeatmapStack>
+          {symbol ? (
+            <OpenLiquidationLevels
+              data={rtkCurrent(openQuery)}
+              venue={exchange === 'all' ? 'combined' : exchange}
+              range={liqHeatRange}
+              onRangeChange={setLiqHeatRange}
+              isLoading={rtkCurrentPending(openQuery)}
+              errorMessage={
+                openQuery.isError
+                  ? rtkErrorMessage(openQuery.error, {
+                      resource: t('liquidations:tabs.open'),
+                    })
+                  : null
+              }
+            />
+          ) : (
+            <Text variant="bodySm" color="secondary">
+              {t('liquidations:open.pick')}
+            </Text>
+          )}
+        </HeatmapStack>
       ) : (
         <HeatmapStack>
           {symbol ? (

@@ -42,6 +42,7 @@ import {
   candleDataSignature,
   chartPriceFormatFromCandles,
   initialVisibleLogicalRange,
+  logicalRangeCovering,
   overlaysSignature,
   toCandlestickData,
   toHistogramData,
@@ -65,6 +66,7 @@ export function CandleChartHost({
   footprint = [],
   liqProfile = [],
   liqHeat = [],
+  openLevels = [],
   onVisibleSpan,
   markers = [],
   vertLines = [],
@@ -98,7 +100,87 @@ export function CandleChartHost({
   const lastOverlaySigRef = useRef<string>('');
   const lastMarkersSigRef = useRef<string>('');
   const hasFittedRef = useRef(false);
+  /** True after a drag or wheel. Later panes must not pull the view back. */
+  const userPannedRef = useRef(false);
+  const pointerDownRef = useRef(false);
+  const anchorEndRef = useRef(anchorEndIndex);
+  const rightPaddingRef = useRef(rightPadding);
+  anchorEndRef.current = anchorEndIndex;
+  rightPaddingRef.current = rightPadding;
   const suppressHistoryLoadRef = useRef(true);
+  const pinLatestRef = useRef<(attempt?: number) => void>(() => {});
+  pinLatestRef.current = (attempt = 0) => {
+    const unlockHistory = () => {
+      if (!suppressHistoryLoadRef.current) return;
+      requestAnimationFrame(() => {
+        suppressHistoryLoadRef.current = false;
+      });
+    };
+    const chart = chartRef.current;
+    if (!chart || userPannedRef.current) {
+      unlockHistory();
+      return;
+    }
+    const bars = dataRef.current;
+    if (bars.length === 0) return;
+    const anchorEnd = anchorEndRef.current ?? bars.length;
+    const anchorCount = Math.min(bars.length, Math.max(0, anchorEnd));
+    const anchorBar = bars[(anchorCount || bars.length) - 1];
+    const endBar = bars[bars.length - 1];
+    if (!anchorBar || !endBar) return;
+    const scale = chart.timeScale();
+    const pad = rightPaddingRef.current;
+    const applyRange = (range: { from: number; to: number }) => {
+      suppressHistoryLoadRef.current = true;
+      scale.setVisibleLogicalRange(range);
+      hasFittedRef.current = true;
+      requestAnimationFrame(() => {
+        suppressHistoryLoadRef.current = false;
+      });
+    };
+    // Tests and older stubs have no time-scale index. Fall back to candle order.
+    if (typeof scale.timeToIndex !== 'function') {
+      if (hasFittedRef.current) {
+        unlockHistory();
+        return;
+      }
+      const range = initialVisibleLogicalRange(
+        bars.length,
+        INITIAL_VISIBLE_BARS,
+        pad,
+        anchorEnd,
+      );
+      if (range) applyRange(range);
+      else unlockHistory();
+      return;
+    }
+    const anchorIndex = scale.timeToIndex(anchorBar.time as Time, false);
+    const endIndex = scale.timeToIndex(endBar.time as Time, false);
+    if (anchorIndex == null || endIndex == null) {
+      if (attempt < 3) {
+        requestAnimationFrame(() => pinLatestRef.current(attempt + 1));
+        return;
+      }
+      unlockHistory();
+      return;
+    }
+    const range = logicalRangeCovering(anchorIndex, endIndex, INITIAL_VISIBLE_BARS, pad);
+    if (!range) {
+      unlockHistory();
+      return;
+    }
+    const current = scale.getVisibleLogicalRange();
+    if (
+      current &&
+      Math.abs(current.from - range.from) < 0.25 &&
+      Math.abs(current.to - range.to) < 0.25
+    ) {
+      hasFittedRef.current = true;
+      unlockHistory();
+      return;
+    }
+    applyRange(range);
+  };
   const lastPriceFormatKeyRef = useRef<string>('');
   const prevLenRef = useRef(0);
   const prevFirstTimeRef = useRef<number | null>(null);
@@ -184,15 +266,35 @@ export function CandleChartHost({
     deskRef.current = desk;
     // Markers plugin is created in a separate effect after data is available.
 
+    const onPointerDown = () => {
+      pointerDownRef.current = true;
+    };
+    const onPointerUp = () => {
+      pointerDownRef.current = false;
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (pointerDownRef.current && event.buttons !== 0) userPannedRef.current = true;
+    };
+    const onWheel = () => {
+      userPannedRef.current = true;
+    };
+    el.addEventListener('pointerdown', onPointerDown);
+    el.addEventListener('pointerup', onPointerUp);
+    el.addEventListener('pointercancel', onPointerUp);
+    el.addEventListener('pointermove', onPointerMove);
+    el.addEventListener('wheel', onWheel, { passive: true });
+
     const onVisibleRange = (range: LogicalRange | null) => {
       if (!range) return;
-      const bars = dataRef.current;
-      if (bars.length > 0 && onVisibleSpanRef.current) {
-        const i0 = Math.max(0, Math.min(bars.length - 1, Math.floor(range.from)));
-        const i1 = Math.max(0, Math.min(bars.length - 1, Math.ceil(range.to)));
-        const from = bars[Math.min(i0, i1)]?.time;
-        const to = bars[Math.max(i0, i1)]?.time;
-        if (from != null && to != null && to > from) onVisibleSpanRef.current(from, to);
+      const visible = chart.timeScale().getVisibleRange?.();
+      if (
+        visible &&
+        typeof visible.from === 'number' &&
+        typeof visible.to === 'number' &&
+        visible.to > visible.from &&
+        onVisibleSpanRef.current
+      ) {
+        onVisibleSpanRef.current(visible.from, visible.to);
       }
       if (suppressHistoryLoadRef.current) return;
       if (!hasMoreHistoryRef.current) return;
@@ -206,6 +308,11 @@ export function CandleChartHost({
     chart.timeScale().subscribeVisibleLogicalRangeChange(onVisibleRange);
 
     return () => {
+      el.removeEventListener('pointerdown', onPointerDown);
+      el.removeEventListener('pointerup', onPointerUp);
+      el.removeEventListener('pointercancel', onPointerUp);
+      el.removeEventListener('pointermove', onPointerMove);
+      el.removeEventListener('wheel', onWheel);
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(onVisibleRange);
       try {
         markersPluginRef.current?.detach();
@@ -242,6 +349,7 @@ export function CandleChartHost({
       lastOverlaySigRef.current = '';
       lastMarkersSigRef.current = '';
       hasFittedRef.current = false;
+      userPannedRef.current = false;
       suppressHistoryLoadRef.current = true;
       lastPriceFormatKeyRef.current = '';
       prevLenRef.current = 0;
@@ -255,8 +363,8 @@ export function CandleChartHost({
   }, [height]);
 
   useEffect(() => {
-    deskRef.current?.setModel({ bookHeat, footprint, liqProfile, liqHeat });
-  }, [bookHeat, footprint, liqProfile, liqHeat]);
+    deskRef.current?.setModel({ bookHeat, footprint, liqProfile, liqHeat, openLevels });
+  }, [bookHeat, footprint, liqProfile, liqHeat, openLevels]);
 
   // New symbol / interval → re-fit on next data, clear length bookkeeping.
   // Must run in useLayoutEffect *before* the data-sync layout effect so the
@@ -265,6 +373,7 @@ export function CandleChartHost({
     if (seriesKeyRef.current === seriesKey) return;
     seriesKeyRef.current = seriesKey;
     hasFittedRef.current = false;
+    userPannedRef.current = false;
     suppressHistoryLoadRef.current = true;
     prevLenRef.current = 0;
     prevFirstTimeRef.current = null;
@@ -288,6 +397,7 @@ export function CandleChartHost({
     if (seriesKeyRef.current !== seriesKey) {
       seriesKeyRef.current = seriesKey;
       hasFittedRef.current = false;
+      userPannedRef.current = false;
       suppressHistoryLoadRef.current = true;
       prevLenRef.current = 0;
       prevFirstTimeRef.current = null;
@@ -342,26 +452,13 @@ export function CandleChartHost({
       // setData can invalidate series primitives — force markers re-bind next effect.
       lastMarkersSigRef.current = '';
 
-      if (historyPrepended && logicalRange) {
+      // A pan that the user started keeps its place when older candles arrive.
+      // Otherwise the pin below puts the latest candle back on the right.
+      if (historyPrepended && logicalRange && userPannedRef.current) {
         const added = nextLen - prevLen;
         chart.timeScale().setVisibleLogicalRange({
           from: logicalRange.from + added,
           to: logicalRange.to + added,
-        });
-      } else if (data.length > 0 && !hasFittedRef.current) {
-        const range = initialVisibleLogicalRange(
-          data.length,
-          INITIAL_VISIBLE_BARS,
-          rightPadding,
-          anchorEndIndex ?? data.length,
-        );
-        if (range) {
-          chart.timeScale().setVisibleLogicalRange(range);
-        }
-        hasFittedRef.current = true;
-        suppressHistoryLoadRef.current = true;
-        requestAnimationFrame(() => {
-          suppressHistoryLoadRef.current = false;
         });
       }
     }
@@ -404,6 +501,10 @@ export function CandleChartHost({
         lastOverlaySigRef.current = overlaySig;
       }
     }
+
+    // EMA and other overlays insert times the candle count does not know about.
+    // Pin after that data is on the scale, or the latest candles sit off to the right.
+    if (data.length > 0) pinLatestRef.current();
   }, [data, overlays, seriesKey]);
 
   useLayoutEffect(() => {
@@ -474,6 +575,9 @@ export function CandleChartHost({
     for (let i = 1; i < panes.length; i += 1) {
       panes[i]?.setStretchFactor(1);
     }
+    // Lower panes add their own timestamps. Re-pin so those points stay in view
+    // until the user scrolls.
+    pinLatestRef.current();
   }, [lowerSeries, seriesKey]);
 
   useLayoutEffect(() => {

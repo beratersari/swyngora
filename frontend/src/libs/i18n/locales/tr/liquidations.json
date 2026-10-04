@@ -6,6 +6,7 @@
     "chart": "Grafik",
     "cascade": "Çığ",
     "heatmap": "Isı haritası",
+    "open": "Açık seviyeler",
     "hunt": "Av",
     "maxPain": "Max pain"
   },
@@ -35,6 +36,31 @@
   "heatmap": {
     "symbol": "Sembol",
     "pick": "Likidasyon ısı haritası için bir coin seçin."
+  },
+  "open": {
+    "symbol": "Sembol",
+    "pick": "Açık likidasyon seviyeleri için bir coin seçin.",
+    "subtitle": "Bu bantlar, o açık pozisyon diliminin yerleştirildiği fiyatta durur; sonraki bir mum içlerinden geçene kadar. İlk örnek, o anda defterde olan açık pozisyonu yerleştirir. Sonraki örnekler yalnızca artışı ekler. Fiyatın içinden geçtiği seviye geri konmaz. Açık pozisyon düştüğü için kapanan bir seviye likide olmamıştır. Bu, etiketli kaldıraç modelidir; borsa likidasyon motoru değildir.",
+    "mix": "Kaldıraç karışımı: {{mix}}",
+    "missing": "Bu pencerede fiyat ve açık pozisyon yok: {{venues}}.",
+    "withheld": "Birleşik seviyeler, Binance, Bybit ve OKX’in her birinin fiyatı ve açık pozisyonu olana kadar gösterilmez.",
+    "loading": "Açık seviyeler yükleniyor…",
+    "empty": "Bu pencerede açık seviye yok.",
+    "long": "Açık long",
+    "short": "Açık short",
+    "delta": "Long − short",
+    "hits": "İçinden geçildi",
+    "closed": "Açık pozisyonla kapandı",
+    "side": "Taraf",
+    "leverage": "Kaldıraç",
+    "price": "Fiyat",
+    "notional": "Notional",
+    "opened": "Açılış",
+    "exchange": "Borsa",
+    "sides": {
+      "long": "Long",
+      "short": "Short"
+    }
   },
   "maxPain": {
     "symbol": "Sembol",

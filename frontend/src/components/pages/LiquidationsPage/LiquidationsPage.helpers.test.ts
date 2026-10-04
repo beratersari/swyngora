@@ -12,6 +12,7 @@ import {
 describe('LiquidationsPage helpers', () => {
   it('parses view, window, venue, and symbol', () => {
     expect(parseLiqView('heatmap')).toBe('heatmap');
+    expect(parseLiqView('open')).toBe('open');
     expect(parseLiqView('chart')).toBe('chart');
     expect(parseLiqView('cascade')).toBe('cascade');
     expect(parseLiqView('hunt')).toBe('hunt');

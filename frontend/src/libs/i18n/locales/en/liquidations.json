@@ -6,6 +6,7 @@
     "chart": "Chart",
     "cascade": "Cascade",
     "heatmap": "Heatmap",
+    "open": "Open levels",
     "hunt": "Hunt",
     "maxPain": "Max pain"
   },
@@ -35,6 +36,31 @@
   "heatmap": {
     "symbol": "Symbol",
     "pick": "Choose a coin to load the liquidation heatmap."
+  },
+  "open": {
+    "symbol": "Symbol",
+    "pick": "Choose a coin to load open liquidation levels.",
+    "subtitle": "These bands stay at the price where that slice of open interest was placed, until a later candle trades through them. The first sample places open interest already on the books. Later samples only add an increase. A traded-through level is not put back. A level that closes because open interest fell was not liquidated. This is the labeled leverage model, not an exchange liquidation engine.",
+    "mix": "Leverage mix: {{mix}}",
+    "missing": "No price and open interest in this window: {{venues}}.",
+    "withheld": "Combined levels are withheld until Binance, Bybit, and OKX each have price and open interest.",
+    "loading": "Loading open levels…",
+    "empty": "No open levels in this window.",
+    "long": "Open long",
+    "short": "Open short",
+    "delta": "Long − short",
+    "hits": "Traded through",
+    "closed": "Closed with open interest",
+    "side": "Side",
+    "leverage": "Leverage",
+    "price": "Price",
+    "notional": "Notional",
+    "opened": "Opened",
+    "exchange": "Venue",
+    "sides": {
+      "long": "Long",
+      "short": "Short"
+    }
   },
   "maxPain": {
     "symbol": "Symbol",

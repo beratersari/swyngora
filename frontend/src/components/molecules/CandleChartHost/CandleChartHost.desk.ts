@@ -14,6 +14,7 @@ import type {
   CandleChartHeatColumn,
   CandleChartLiqBar,
   CandleChartLiqCell,
+  CandleChartOpenLevel,
 } from './CandleChartHost.types';
 
 export type DeskOverlayModel = {
@@ -21,6 +22,7 @@ export type DeskOverlayModel = {
   footprint: CandleChartFootprintLevel[];
   liqProfile: CandleChartLiqBar[];
   liqHeat: CandleChartLiqCell[];
+  openLevels: CandleChartOpenLevel[];
 };
 
 type MediaTarget = {
@@ -32,7 +34,13 @@ type MediaTarget = {
   ) => void;
 };
 
-const EMPTY: DeskOverlayModel = { bookHeat: [], footprint: [], liqProfile: [], liqHeat: [] };
+const EMPTY: DeskOverlayModel = {
+  bookHeat: [],
+  footprint: [],
+  liqProfile: [],
+  liqHeat: [],
+  openLevels: [],
+};
 
 const LIQ_HEAT_ALPHA = 0.72;
 
@@ -196,6 +204,67 @@ class ProfileRenderer implements IPrimitivePaneRenderer {
   }
 }
 
+class LevelRenderer implements IPrimitivePaneRenderer {
+  constructor(
+    private readonly chart: () => IChartApi | null,
+    private readonly series: () => ISeriesApi<SeriesType> | null,
+    private readonly model: () => DeskOverlayModel,
+  ) {}
+
+  draw(target: MediaTarget): void {
+    const chart = this.chart();
+    const series = this.series();
+    const levels = this.model().openLevels.filter((level) => level.status !== 'closed');
+    if (!chart || !series || levels.length === 0) return;
+    target.useMediaCoordinateSpace(({ context, mediaSize }) => {
+      const scale = chart.timeScale();
+      const span = visibleSpan(scale);
+      const range = scale.getVisibleRange();
+      const visibleEnd =
+        range && typeof range.to === 'number' ? timeToX(scale, range.to, span) : null;
+      let max = 0;
+      for (const level of levels) max = Math.max(max, level.notional);
+      if (max <= 0) return;
+      for (const level of levels) {
+        const y = series.priceToCoordinate(level.price);
+        const x1 = timeToX(scale, level.openedAt, span);
+        if (y == null || x1 == null) continue;
+        if (y < 0 || y > mediaSize.height) continue;
+        const closedAt = level.status === 'hit' ? level.closedAt : undefined;
+        const x2 =
+          closedAt != null ? timeToX(scale, closedAt, span) : (visibleEnd ?? mediaSize.width);
+        if (x2 == null) continue;
+        const left = Math.min(x1, x2);
+        const right = Math.max(x1, x2);
+        if (right < 0 || left > mediaSize.width) continue;
+        context.save();
+        context.strokeStyle = level.side === 'long' ? semanticColors.chart.down : semanticColors.chart.up;
+        context.globalAlpha = level.status === 'hit' ? 0.45 : 0.9;
+        context.lineWidth = 1.25 + 2.25 * Math.min(1, level.notional / max);
+        context.setLineDash(level.status === 'hit' ? [4, 3] : []);
+        context.beginPath();
+        context.moveTo(x1, y);
+        context.lineTo(x2, y);
+        context.stroke();
+        context.restore();
+      }
+    });
+  }
+}
+
+class LevelView implements IPrimitivePaneView {
+  private readonly _renderer: LevelRenderer;
+  constructor(renderer: LevelRenderer) {
+    this._renderer = renderer;
+  }
+  zOrder(): 'top' {
+    return 'top';
+  }
+  renderer(): IPrimitivePaneRenderer {
+    return this._renderer;
+  }
+}
+
 class HeatView implements IPrimitivePaneView {
   private readonly _renderer: HeatRenderer;
   constructor(renderer: HeatRenderer) {
@@ -236,6 +305,7 @@ export class DeskOverlayPrimitive implements ISeriesPrimitive<Time> {
     const model = () => this._model;
     this._views = [
       new HeatView(new HeatRenderer(chart, series, model)),
+      new LevelView(new LevelRenderer(chart, series, model)),
       new ProfileView(new ProfileRenderer(series, model)),
     ];
   }

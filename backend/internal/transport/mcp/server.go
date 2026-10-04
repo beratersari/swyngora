@@ -74,6 +74,7 @@ type DataPort interface {
 	ScanUnusual(ctx context.Context, exchange, metric string, limit int) (json.RawMessage, error)
 	GetLiquidationHunt(ctx context.Context, exchange, symbol string, weights domain.HuntScoreWeights) (json.RawMessage, error)
 	GetLiquidationHuntHeatmap(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error)
+	GetLiquidationOpenLevels(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error)
 	GetLiquidationMaxPain(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetSqueezeRisk(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetPositioning(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -1240,6 +1241,23 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetLiquidationHuntHeatmap(ctx, req.GetString("exchange", "all"), symbol, req.GetString("range", "24h"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_liquidation_open_levels",
+		mcp.WithDescription("Estimated liquidation levels that stay at the price where that slice of open interest was placed, until a later candle trades through them. range=12h|24h|3d|7d|14d|30d|90d. The first column places the whole open interest then on the books. Later columns only add an increase. A traded-through level is not put back. When estimated open interest on a side falls, the oldest open slices close; that is not a liquidation. Longs are hit by a later candle low; shorts by a later candle high. The birth candle cannot hit its own level. Binance, Bybit, and OKX each use only their own price and open interest. Combined sums a column only when all three have both, and combined is withheld (definite=false, empty segments) when any venue has none. Segments are capped for drawing; cumulative, openLong, openShort, and delta stay uncapped. The leverage mix is the labeled hunt model with 0.40% maintenance. Binance public open interest is 30 days. Not exchange liquidation-engine output. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("range", mcp.Description("12h | 24h | 3d | 7d | 14d | 30d | 90d (default 24h)")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all = three venues + combined)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetLiquidationOpenLevels(ctx, req.GetString("exchange", "all"), symbol, req.GetString("range", "24h"))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -111,11 +111,11 @@ Observed-only clusters are shown but **not** used as fuel. Missing book or missi
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/liquidation_hunt.go`, `liquidation_hunt_score.go`, `liquidation_hunt_cascade.go`, `liquidation_hunt_heatmap.go`, `liquidation_hunt_heatmap_review.go`, `orderbook_reach.go` |
-| Service | `backend/internal/service/market/hunt.go`, `hunt_heatmap.go` |
-| HTTP | `GET /api/v1/market/liquidation-hunt`, `GET /api/v1/market/liquidation-hunt/heatmap` |
-| MCP / AI | `estimate_liquidation_hunt`, `get_liquidation_heatmap` |
-| Web | `/liquidations?view=hunt` — `frontend/src/components/organisms/LiquidationHunt` (Compare + Cascade path); `/liquidations?view=heatmap` — `LiquidationHeatmap` |
+| Domain | `backend/internal/domain/liquidation_hunt.go`, `liquidation_hunt_score.go`, `liquidation_hunt_cascade.go`, `liquidation_hunt_heatmap.go`, `liquidation_hunt_heatmap_review.go`, `liquidation_open_levels.go`, `orderbook_reach.go` |
+| Service | `backend/internal/service/market/hunt.go`, `hunt_heatmap.go`, `open_levels.go` |
+| HTTP | `GET /api/v1/market/liquidation-hunt`, `GET /api/v1/market/liquidation-hunt/heatmap`, `GET /api/v1/market/liquidation-open-levels` |
+| MCP / AI | `estimate_liquidation_hunt`, `get_liquidation_heatmap`, `get_liquidation_open_levels` |
+| Web | `/liquidations?view=hunt` — `frontend/src/components/organisms/LiquidationHunt` (Compare + Cascade path); `/liquidations?view=heatmap` — `LiquidationHeatmap`; `/liquidations?view=open` — `OpenLiquidationLevels` |
 
 ## How to verify
 
@@ -123,6 +123,7 @@ Observed-only clusters are shown but **not** used as fuel. Missing book or missi
 cd backend && go test ./internal/domain/ ./internal/service/market/ ./internal/transport/http/handler/ -count=1
 curl "http://localhost:8080/api/v1/market/liquidation-hunt?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/liquidation-hunt/heatmap?symbol=BTCUSDT&range=24h"
+curl "http://localhost:8080/api/v1/market/liquidation-open-levels?symbol=BTCUSDT&range=24h"
 ```
 
 Read `venues[].upHunt` / `downHunt` and `venues[].upCascade` / `downCascade`.
@@ -225,3 +226,47 @@ own price and open interest. The chart caption names the leverage mix, an
 even split, and a missing venue. Columns older than the loaded candles stay
 off the left until the chart is panned. The coin chart still loads price
 from the exchange, which already pages back past 90 days.
+
+## Open levels
+
+`GET /api/v1/market/liquidation-open-levels?symbol=BTCUSDT&range=24h`
+
+The heatmap places the whole open-interest book again at each column's
+price. Open levels do not. A band stays at the price where that slice was
+placed until a later candle trades through it.
+
+- The first column places the open interest then on the books, because
+  earlier entries are unknown.
+- A later column adds lots only when estimated open interest on that side
+  increased. Unchanged open interest does not put a traded-through level back.
+- A long is hit when a later candle's low reaches it. A short is hit when a
+  later candle's high reaches it. The candle that placed the level cannot
+  hit it.
+- When estimated open interest on a side falls, the oldest open slices on
+  that side close. That is an inventory change, not a liquidation.
+- Binance, Bybit, and OKX each use only their own price and open interest.
+  `combined` sums a column only when all three have both. If any venue has
+  none in the window, `combined.definite` is false and its segments and
+  cumulative line are empty. `missingVenues` names that venue.
+- `segments` are clustered and capped for drawing. `cumulative`, `openLong`,
+  `openShort`, and `delta` stay uncapped. `hitLots` and `closedLots` count
+  the raw slices.
+- `leverageMix` is the labeled hunt model (5× through 125×, 0.40%
+  maintenance). Binance public open interest is 30 days.
+
+Ranges match the heatmap: 12h, 24h, 3d, 7d, 14d, 30d, 90d.
+
+MCP / AI: `get_liquidation_open_levels`.
+
+On the coin Overview chart the open bands sit on the candles (solid while
+open, dashed after price trades through). Bands closed because open interest
+fell are not drawn. A line under the candles is still-open long size minus
+still-open short size. The Open levels switch is separate from the dashed
+snapshot lines and from the heatmap. Range and venue are shared with the
+map. The side filter stays on the map. The caption names the mix. When the
+combined book is withheld, the chart says so.
+
+`/liquidations?view=open` lists the open bands, the still-open long and short
+size, and how many slices were traded through or closed because open interest
+fell. The page exchange `all` reads the combined book. One venue reads that
+venue's book.

@@ -128,6 +128,7 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 	mux.HandleFunc("GET /api/v1/market/unusual/scan", mh.ScanUnusual)
 	mux.HandleFunc("GET /api/v1/market/history-span", mh.GetHistorySpan)
 	mux.HandleFunc("GET /api/v1/market/liquidation-hunt/heatmap", mh.GetLiquidationHuntHeatmap)
+	mux.HandleFunc("GET /api/v1/market/liquidation-open-levels", mh.GetLiquidationOpenLevels)
 	mux.HandleFunc("GET /api/v1/market/liquidation-hunt", mh.GetLiquidationHunt)
 	mux.HandleFunc("GET /api/v1/market/liquidation-max-pain", mh.GetLiquidationMaxPain)
 	mux.HandleFunc("GET /api/v1/market/liquidation-levels", mh.GetLiquidationLevels)

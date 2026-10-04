@@ -220,6 +220,30 @@ export function initialVisibleLogicalRange(
   };
 }
 
+/**
+ * Same window as `initialVisibleLogicalRange`, in time-scale index space.
+ * `anchorLogical` is the last bar the view should keep (the last trade).
+ * `endLogical` is the last candle, which can sit to the right of that anchor
+ * when post-delist bars are carried. Other series insert their own times, so
+ * these indexes are not the candle array indexes.
+ */
+export function logicalRangeCovering(
+  anchorLogical: number,
+  endLogical: number,
+  visibleBars: number,
+  rightPadding: number,
+): { from: number; to: number } | null {
+  if (!Number.isFinite(anchorLogical) || !Number.isFinite(endLogical)) return null;
+  const anchor = Math.max(0, anchorLogical);
+  const end = Math.max(anchor, endLogical);
+  const visible = Math.max(1, visibleBars);
+  const pad = Math.max(0, rightPadding);
+  return {
+    from: Math.max(0, anchor - visible + 1),
+    to: end + 1 + pad,
+  };
+}
+
 export function candleDataSignature(data: ChartCandle[]): string {
   return seriesFingerprint(
     data.length,

@@ -6,6 +6,7 @@ export type {
   CandleChartLiqBar,
   CandleChartLiqCell,
   CandleChartLowerSeries,
+  CandleChartOpenLevel,
   CandleChartMarker,
   CandleChartOverlay,
   CandleChartPriceLine,

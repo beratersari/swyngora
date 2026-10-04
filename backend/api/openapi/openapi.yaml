@@ -3919,6 +3919,63 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/liquidation-open-levels:
+    get:
+      summary: Open liquidation levels that stay until price trades through them
+      description: |
+        Estimated liquidation bands placed from hourly open interest, each
+        venue's own candles, and the labeled hunt leverage mix (5x through
+        125x, 0.40% maintenance). A band stays at the price where that slice
+        of open interest was placed until a later candle trades through it.
+
+        The first column places the whole open interest then on the books,
+        because earlier entries are unknown. Later columns only add an
+        increase in estimated open interest. A level that price has already
+        traded through is not put back. When estimated open interest on a
+        side falls, the oldest open slices on that side are closed; that is
+        an inventory change, not a liquidation. A long level is hit when a
+        later candle low reaches it. A short level is hit when a later
+        candle high reaches it. The candle that placed a level cannot hit it.
+
+        `range` is 12h, 24h, 3d, 7d, 14d, 30d, or 90d. Binance, Bybit, and
+        OKX each use only their own price and open interest. `combined`
+        sums a column only when all three have both, and `combined.definite`
+        is false (empty segments and cumulative) when any venue has none
+        in this window. `missingVenues` names those venues.
+
+        `segments` are clustered and capped for drawing. `cumulative`,
+        `openLong`, `openShort`, and `delta` stay uncapped. `hitLots` and
+        `closedLots` count the raw slices, not the capped drawing.
+        `leverageMix` is the assumed share of open interest at each leverage.
+        Binance public open interest is 30 days, so older columns exist only
+        when this archive already stored them. Not exchange liquidation-engine
+        output and not financial advice.
+      operationId: getMarketLiquidationOpenLevels
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: range
+          in: query
+          description: 12h | 24h | 3d | 7d | 14d | 30d | 90d
+          schema: { type: string, default: 24h, enum: [12h, 24h, 3d, 7d, 14d, 30d, 90d] }
+        - name: exchange
+          in: query
+          description: binance | bybit | okx | all (default all = Binance, Bybit, OKX, and combined)
+          schema: { type: string, default: all }
+      responses:
+        '200':
+          description: Open, hit, and closed liquidation levels plus the cumulative line
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiquidationOpenLevels'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/liquidation-levels:
     get:
       summary: Liquidation level bar chart
@@ -10347,6 +10404,75 @@ components:
           type: array
           items: { type: string }
           description: Venues with no own price and open interest in this window. Combined does not fill those cells from another venue.
+        note: { type: string }
+    LiquidationOpenLevelSegment:
+      type: object
+      description: One estimated band. closedAt is omitted while status is open.
+      properties:
+        exchange: { type: string }
+        side: { type: string, enum: [long, short] }
+        leverage: { type: integer, description: Display bucket 10, 25, 50, or 100 }
+        price: { type: number }
+        notional: { type: number }
+        openedAt: { type: string, format: date-time }
+        closedAt: { type: string, format: date-time }
+        status: { type: string, enum: [open, hit, closed] }
+    LiquidationOpenLevelPoint:
+      type: object
+      description: Uncapped open long and short notional. Delta is long minus short.
+      properties:
+        time: { type: string, format: date-time }
+        longNotional: { type: number }
+        shortNotional: { type: number }
+        delta: { type: number }
+    LiquidationOpenLevelBook:
+      type: object
+      properties:
+        exchange: { type: string }
+        segments:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationOpenLevelSegment' }
+        cumulative:
+          type: array
+          items: { $ref: '#/components/schemas/LiquidationOpenLevelPoint' }
+        openLong: { type: number }
+        openShort: { type: number }
+        delta: { type: number }
+        coverage: { type: number, description: Fraction of time columns with this venue's own price and open interest. }
+        columnsWithOi: { type: integer }
+        hitLots: { type: integer, description: Raw slices price traded through. Not the capped segment count. }
+        closedLots: { type: integer, description: Raw slices closed because estimated open interest fell. Not a liquidation. }
+        accountBlend:
+          type: string
+          enum: [stored, even, mixed]
+        definite:
+          type: boolean
+          description: False for combined when any venue has no price and open interest, or the venues never overlap.
+      required: [definite]
+    LiquidationOpenLevels:
+      type: object
+      description: Estimated liquidation levels that stay until price trades through them
+      properties:
+        symbol: { type: string }
+        range: { type: string, enum: [12h, 24h, 3d, 7d, 14d, 30d, 90d] }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        stepSec: { type: integer }
+        leverageMix:
+          type: array
+          description: Assumed share of open interest at each leverage. Weights sum to 1.
+          items:
+            type: object
+            properties:
+              leverage: { type: number }
+              weight: { type: number }
+        binance: { $ref: '#/components/schemas/LiquidationOpenLevelBook' }
+        bybit: { $ref: '#/components/schemas/LiquidationOpenLevelBook' }
+        okx: { $ref: '#/components/schemas/LiquidationOpenLevelBook' }
+        combined: { $ref: '#/components/schemas/LiquidationOpenLevelBook' }
+        missingVenues:
+          type: array
+          items: { type: string }
         note: { type: string }
     LiquidationHuntHeatmapReviewHorizon:
       type: object

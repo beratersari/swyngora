@@ -143,4 +143,30 @@ describe('DetailChartToolbar', () => {
     await user.click(screen.getByRole('switch', { name: /liq map|likidasyon haritası/i }));
     expect(onMap.mock.calls[0]?.[0]).toBe(false);
   });
+
+  it('keeps range and venue when only open levels are on', async () => {
+    const user = userEvent.setup();
+    const onOpen = vi.fn();
+    renderWithTheme(
+      <DetailChartToolbar
+        intervals={['1h']}
+        interval="1h"
+        onIntervalChange={() => undefined}
+        showLiqMap={false}
+        showOpenLevels
+        onShowOpenLevelsChange={onOpen}
+        liqMapRange="24h"
+        onLiqMapRangeChange={() => undefined}
+        liqMapVenue="combined"
+        onLiqMapVenueChange={() => undefined}
+        liqMapSide="totals"
+        onLiqMapSideChange={() => undefined}
+      />,
+    );
+    expect(screen.getByRole('combobox', { name: /range|aralık/i })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /venue|borsa/i })).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: /^side$|^taraf$/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('switch', { name: /open levels|açık seviyeler/i }));
+    expect(onOpen.mock.calls[0]?.[0]).toBe(false);
+  });
 });

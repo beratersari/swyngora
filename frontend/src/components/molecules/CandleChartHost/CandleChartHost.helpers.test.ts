@@ -4,6 +4,7 @@ import {
   chartPriceFormatFromCandles,
   decimalsForMagnitude,
   initialVisibleLogicalRange,
+  logicalRangeCovering,
   overlaysSignature,
   toCandlestickData,
   toLineData,
@@ -27,6 +28,16 @@ describe('CandleChartHost helpers', () => {
     expect(initialVisibleLogicalRange(0, 80, 6)).toBeNull();
     // 80 real bars + 20 carried: first view stays on the last trade, tail is pannable.
     expect(initialVisibleLogicalRange(100, 80, 6, 80)).toEqual({ from: 0, to: 106 });
+  });
+
+  it('covers the same window when the time scale index is not the candle index', () => {
+    // 300 candles, last index 299, matches initialVisibleLogicalRange(300, 80, 6).
+    expect(logicalRangeCovering(299, 299, 80, 6)).toEqual({ from: 220, to: 306 });
+    expect(logicalRangeCovering(39, 39, 80, 6)).toEqual({ from: 0, to: 46 });
+    // Anchor is the 80th candle (index 79); the carried tail still reaches the right edge.
+    expect(logicalRangeCovering(79, 99, 80, 6)).toEqual({ from: 0, to: 106 });
+    // Open-interest samples inserted before the last candle push that candle to index 900.
+    expect(logicalRangeCovering(900, 900, 80, 16)).toEqual({ from: 821, to: 917 });
   });
 
   it('maps candles to chart series points', () => {

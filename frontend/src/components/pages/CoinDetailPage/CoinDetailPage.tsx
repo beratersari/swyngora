@@ -17,6 +17,9 @@ import {
   recordedParts,
   liqHeatCells,
   liqHeatNotes,
+  openLevelDelta,
+  openLevelNotes,
+  openLevelSegments,
   liquidationNotionalByCandle,
   liquidationProfile,
   openInterestLines,
@@ -79,6 +82,7 @@ import {
   useGetMarketUnusualQuery,
   useGetMarketLiquidationLevelsQuery,
   useGetMarketLiquidationHuntHeatmapQuery,
+  useGetMarketLiquidationOpenLevelsQuery,
   useGetMarketVolumeShareQuery,
   useGetMarketPerpDepthOverviewQuery,
   useGetMarketParticipationQuery,
@@ -235,6 +239,7 @@ export function CoinDetailPage() {
   const [showFunding, setShowFunding] = useState(true);
   const [showLiqNotional, setShowLiqNotional] = useState(true);
   const [showLiqMap, setShowLiqMap] = useState(true);
+  const [showOpenLevels, setShowOpenLevels] = useState(true);
   const [liqMapRange, setLiqMapRange] = useState<LiqHeatRange>(DEFAULT_LIQ_HEATMAP_RANGE);
   const [liqMapVenue, setLiqMapVenue] = useState<LiqHeatVenue>('combined');
   const [liqMapSide, setLiqMapSide] = useState<LiqHeatSide>('totals');
@@ -505,6 +510,15 @@ export function CoinDetailPage() {
     {
       skip: skipTape || !showLiqMap || urlState.tab !== 'overview',
       pollingInterval: visible && showLiqMap && urlState.tab === 'overview' ? LIQ_HEATMAP_POLL_MS : 0,
+      refetchOnFocus: true,
+    },
+  );
+  const openLevelsQuery = useGetMarketLiquidationOpenLevelsQuery(
+    { symbol: perpSymbol, range: liqMapRange, exchange: 'all' },
+    {
+      skip: skipTape || !showOpenLevels || urlState.tab !== 'overview',
+      pollingInterval:
+        visible && showOpenLevels && urlState.tab === 'overview' ? LIQ_HEATMAP_POLL_MS : 0,
       refetchOnFocus: true,
     },
   );
@@ -985,6 +999,20 @@ export function CoinDetailPage() {
           downColor: semanticColors.chart.down,
           data: bars,
         });
+        pane += 1;
+      }
+    }
+    if (showOpenLevels) {
+      const delta = openLevelDelta(rtkCurrent(openLevelsQuery), liqMapVenue);
+      if (delta.length > 0) {
+        series.push({
+          id: 'open-liq-delta',
+          pane,
+          kind: 'line',
+          title: t('detail:chart.openLevelDelta'),
+          color: semanticColors.accent.default,
+          data: delta,
+        });
       }
     }
     return series;
@@ -997,12 +1025,15 @@ export function CoinDetailPage() {
     showOi,
     showFunding,
     showLiqNotional,
+    showOpenLevels,
+    liqMapVenue,
     chartData,
     tapeCvd,
     longShortQuery,
     oiHistQuery,
     fundingHistQuery,
     liqHistQuery,
+    openLevelsQuery,
     t,
   ]);
 
@@ -1039,10 +1070,28 @@ export function CoinDetailPage() {
         : liqHeatCells(rtkCurrent(liqMapQuery), liqMapVenue, liqMapSide),
     [isEquity, showLiqMap, liqMapQuery, liqMapVenue, liqMapSide],
   );
+  const chartOpenLevels = useMemo(
+    () =>
+      isEquity || !showOpenLevels
+        ? []
+        : openLevelSegments(rtkCurrent(openLevelsQuery), liqMapVenue),
+    [isEquity, showOpenLevels, openLevelsQuery, liqMapVenue],
+  );
   const liqMapNote = useMemo(
     () => (isEquity || !showLiqMap ? null : liqHeatNotes(rtkCurrent(liqMapQuery), liqMapVenue)),
     [isEquity, showLiqMap, liqMapQuery, liqMapVenue],
   );
+  const openLevelNote = useMemo(
+    () => (isEquity || !showOpenLevels ? null : openLevelNotes(rtkCurrent(openLevelsQuery), liqMapVenue)),
+    [isEquity, showOpenLevels, openLevelsQuery, liqMapVenue],
+  );
+  const chartMix = showLiqMap && liqMapNote?.mix ? liqMapNote.mix : openLevelNote?.mix ?? '';
+  const chartMissing =
+    showLiqMap && liqMapNote && liqMapNote.missingVenues.length > 0
+      ? liqMapNote.missingVenues
+      : !showLiqMap && openLevelNote && openLevelNote.missingVenues.length > 0
+        ? openLevelNote.missingVenues
+        : [];
   const liqMapNeedsPan = useMemo(() => {
     const firstBar = chartData[0]?.time;
     if (firstBar == null || chartLiqHeat.length === 0) return false;
@@ -1354,6 +1403,8 @@ export function CoinDetailPage() {
           onShowLiqNotionalChange={isEquity ? undefined : setShowLiqNotional}
           showLiqMap={showLiqMap}
           onShowLiqMapChange={isEquity ? undefined : setShowLiqMap}
+          showOpenLevels={showOpenLevels}
+          onShowOpenLevelsChange={isEquity ? undefined : setShowOpenLevels}
           liqMapRange={liqMapRange}
           onLiqMapRangeChange={isEquity ? undefined : setLiqMapRange}
           liqMapVenue={liqMapVenue}
@@ -1369,7 +1420,8 @@ export function CoinDetailPage() {
             (showOi && oiHistQuery.isFetching) ||
             (showFunding && fundingHistQuery.isFetching) ||
             (showLiqNotional && liqHistQuery.isFetching) ||
-            (showLiqMap && liqMapQuery.isFetching)
+            (showLiqMap && liqMapQuery.isFetching) ||
+            (showOpenLevels && openLevelsQuery.isFetching)
           }
         />
 
@@ -1424,7 +1476,8 @@ export function CoinDetailPage() {
               showOi ||
               showFunding ||
               showLiqNotional ||
-              showLiqMap) ? (
+              showLiqMap ||
+              showOpenLevels) ? (
               <Text variant="caption" color="secondary">
                 {t('detail:chart.tapeHint')}
               </Text>
@@ -1434,9 +1487,9 @@ export function CoinDetailPage() {
                 {recordedLine}
               </Text>
             ) : null}
-            {!isEquity && showLiqMap && liqMapNote?.mix ? (
+            {!isEquity && chartMix ? (
               <Text variant="caption" color="secondary" data-testid="chart-liq-mix">
-                {t('detail:liqHeatmap.leverageMix', { mix: liqMapNote.mix })}
+                {t('detail:liqHeatmap.leverageMix', { mix: chartMix })}
               </Text>
             ) : null}
             {!isEquity && showLiqMap && liqMapNote && liqMapNote.evenVenues.length > 0 ? (
@@ -1448,12 +1501,29 @@ export function CoinDetailPage() {
                 })}
               </Text>
             ) : null}
-            {!isEquity && showLiqMap && liqMapNote && liqMapNote.missingVenues.length > 0 ? (
+            {!isEquity && chartMissing.length > 0 ? (
               <Text variant="caption" color="secondary" data-testid="chart-liq-missing">
                 {t('detail:liqHeatmap.missing', {
-                  venues: liqMapNote.missingVenues
+                  venues: chartMissing
                     .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
                     .join(', '),
+                })}
+              </Text>
+            ) : null}
+            {!isEquity && showOpenLevels ? (
+              <Text variant="caption" color="secondary" data-testid="chart-open-caption">
+                {t('detail:openLevels.caption')}
+              </Text>
+            ) : null}
+            {!isEquity && showOpenLevels && openLevelNote?.withheld ? (
+              <Text variant="caption" color="secondary" data-testid="chart-open-withheld">
+                {t('detail:openLevels.withheld')}
+              </Text>
+            ) : null}
+            {!isEquity && showOpenLevels && openLevelsQuery.isError ? (
+              <Text variant="caption" color="secondary">
+                {rtkErrorMessage(openLevelsQuery.error, {
+                  resource: t('detail:resource.openLevels'),
                 })}
               </Text>
             ) : null}
@@ -1478,6 +1548,7 @@ export function CoinDetailPage() {
               footprint={chartFootprint}
               liqProfile={chartLiqProfile}
               liqHeat={chartLiqHeat}
+              openLevels={chartOpenLevels}
               onVisibleSpan={isEquity ? undefined : onVisibleSpan}
               rightPadding={!isEquity && (showFootprint || showLiqLevels) ? 16 : undefined}
               markers={chartMarkers}
@@ -1508,7 +1579,8 @@ export function CoinDetailPage() {
                   : 0) +
                 (lowerSeries.some((s) => s.id.startsWith('oi-')) ? (isPhone ? 72 : 100) : 0) +
                 (lowerSeries.some((s) => s.id.startsWith('funding-')) ? (isPhone ? 72 : 100) : 0) +
-                (lowerSeries.some((s) => s.id === 'liq-notional') ? (isPhone ? 72 : 120) : 0)
+                (lowerSeries.some((s) => s.id === 'liq-notional') ? (isPhone ? 72 : 120) : 0) +
+                (lowerSeries.some((s) => s.id === 'open-liq-delta') ? (isPhone ? 72 : 100) : 0)
               }
             />
           </>

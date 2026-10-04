@@ -191,6 +191,82 @@ vi.mock('@/libs/api', async (importOriginal) => {
       isError: false,
       refetch: vi.fn(),
     }),
+    useGetMarketLiquidationOpenLevelsQuery: () => ({
+      data: {
+        symbol: 'BTCUSDT',
+        range: '24h',
+        leverageMix: [{ leverage: 10, weight: 0.25 }],
+        binance: {
+          exchange: 'binance',
+          definite: true,
+          openLong: 500000,
+          openShort: 250000,
+          delta: 250000,
+          hitLots: 2,
+          closedLots: 1,
+          segments: [
+            {
+              exchange: 'binance',
+              side: 'long',
+              leverage: 25,
+              price: 90000,
+              notional: 400000,
+              openedAt: '2026-09-29T12:00:00Z',
+              status: 'open',
+            },
+          ],
+        },
+        combined: {
+          exchange: 'combined',
+          definite: true,
+          openLong: 500000,
+          openShort: 250000,
+          delta: 250000,
+          hitLots: 2,
+          closedLots: 1,
+          segments: [
+            {
+              exchange: 'binance',
+              side: 'long',
+              leverage: 25,
+              price: 90000,
+              notional: 400000,
+              openedAt: '2026-09-29T12:00:00Z',
+              status: 'open',
+            },
+          ],
+        },
+      },
+      currentData: {
+        symbol: 'BTCUSDT',
+        range: '24h',
+        leverageMix: [{ leverage: 10, weight: 0.25 }],
+        combined: {
+          exchange: 'combined',
+          definite: true,
+          openLong: 500000,
+          openShort: 250000,
+          delta: 250000,
+          hitLots: 2,
+          closedLots: 1,
+          segments: [
+            {
+              exchange: 'binance',
+              side: 'long',
+              leverage: 25,
+              price: 90000,
+              notional: 400000,
+              openedAt: '2026-09-29T12:00:00Z',
+              status: 'open',
+            },
+          ],
+        },
+      },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      refetch: vi.fn(),
+    }),
     useGetTicker24hQuery: () => ({
       data: { lastPrice: '64000' },
       currentData: { lastPrice: '64000' },
@@ -228,6 +304,14 @@ describe('LiquidationsPage', () => {
   it('opens the heatmap tab from the URL', async () => {
     renderWithProviders(<LiquidationsPage />, { routerEntries: ['/liquidations?view=heatmap'] });
     expect(await screen.findByTestId('liquidation-heatmap')).toBeInTheDocument();
+  });
+
+  it('opens the open-levels view from the URL', async () => {
+    renderWithProviders(<LiquidationsPage />, { routerEntries: ['/liquidations?view=open'] });
+    expect(await screen.findByTestId('open-liquidation-levels')).toBeInTheDocument();
+    expect(screen.getByTestId('open-level-row')).toHaveTextContent(/25×/);
+    expect(screen.getByTestId('open-level-mix')).toHaveTextContent(/10× 25%/);
+    expect(screen.queryByTestId('liquidation-heatmap')).not.toBeInTheDocument();
   });
 
   it('opens the max pain tab from the URL', async () => {

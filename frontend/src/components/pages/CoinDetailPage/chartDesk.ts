@@ -4,7 +4,9 @@ import type {
   CandleChartLiqBar,
   CandleChartLiqCell,
   CandleChartLowerSeries,
+  CandleChartOpenLevel,
 } from '@/components/molecules/CandleChartHost';
+import { pickOpenLevelBook } from '@/components/organisms/OpenLiquidationLevels/OpenLiquidationLevels.helpers';
 import {
   cellValue,
   evenBlendVenueIds,
@@ -20,6 +22,7 @@ import type {
   FlowAtPricesReport,
   HistorySpan,
   LiquidationHuntHeatmap,
+  LiquidationOpenLevels,
   MarketLiquidationLevels,
   MarketLongShortRatio,
   OrderBookHeatmap,
@@ -187,6 +190,83 @@ export function liqHeatCells(
     }
   }
   return out;
+}
+
+export type OpenLevelNotes = {
+  mix: string;
+  missingVenues: string[];
+  /** True only when the selected book came back and is not a definite combined read. */
+  withheld: boolean;
+};
+
+/**
+ * Bands drawn on the candles. Closed inventory changes stay off the canvas.
+ * A withheld combined book draws nothing.
+ */
+export function openLevelSegments(
+  data: LiquidationOpenLevels | undefined,
+  venue: LiqHeatVenue,
+): CandleChartOpenLevel[] {
+  const book = pickOpenLevelBook(data, venue);
+  if (!book || book.definite === false) return [];
+  const out: CandleChartOpenLevel[] = [];
+  for (const segment of book.segments ?? []) {
+    if (segment.status !== 'open' && segment.status !== 'hit') continue;
+    if (segment.side !== 'long' && segment.side !== 'short') continue;
+    const openedAt = unixSeconds(segment.openedAt);
+    if (
+      segment.price == null ||
+      segment.notional == null ||
+      openedAt == null ||
+      !Number.isFinite(segment.price) ||
+      segment.price <= 0 ||
+      !Number.isFinite(segment.notional) ||
+      segment.notional <= 0
+    ) {
+      continue;
+    }
+    // Year 1 is an unset close. Keep it off the band so the line is not drawn backward.
+    const closedAt = unixSeconds(segment.closedAt);
+    out.push({
+      side: segment.side,
+      price: segment.price,
+      notional: segment.notional,
+      openedAt,
+      ...(closedAt != null && closedAt >= openedAt ? { closedAt } : {}),
+      status: segment.status,
+    });
+  }
+  return out;
+}
+
+/** Uncapped open long size minus open short size. Empty when the book is withheld. */
+export function openLevelDelta(
+  data: LiquidationOpenLevels | undefined,
+  venue: LiqHeatVenue,
+): ChartLinePoint[] {
+  const book = pickOpenLevelBook(data, venue);
+  if (!book || book.definite === false) return [];
+  const out: ChartLinePoint[] = [];
+  for (const point of book.cumulative ?? []) {
+    const time = unixSeconds(point.time);
+    if (time == null || point.delta == null || !Number.isFinite(point.delta)) continue;
+    out.push({ time, value: point.delta });
+  }
+  out.sort((a, b) => a.time - b.time);
+  return out;
+}
+
+/** Mix, missing venues, and whether this venue's book was withheld. */
+export function openLevelNotes(
+  data: LiquidationOpenLevels | undefined,
+  venue: LiqHeatVenue,
+): OpenLevelNotes {
+  const book = pickOpenLevelBook(data, venue);
+  return {
+    mix: formatLeverageMix(data?.leverageMix),
+    missingVenues: (data?.missingVenues ?? []).filter((id) => id.length > 0),
+    withheld: book != null && book.definite === false,
+  };
 }
 
 /** Leverage mix, even-split venues, and venues missing from this window. */

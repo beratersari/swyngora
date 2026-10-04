@@ -9,6 +9,9 @@ import {
   formatRecordedSpan,
   liqHeatCells,
   liqHeatNotes,
+  openLevelDelta,
+  openLevelNotes,
+  openLevelSegments,
   recordedParts,
   fundingRateLines,
   futuresRecorded,
@@ -91,6 +94,66 @@ describe('chart desk mappers', () => {
     expect(notes.mix).toBe('10× 25%');
     expect(notes.missingVenues).toEqual(['okx']);
     expect(notes.evenVenues).toEqual(['okx']);
+  });
+
+  it('draws open bands until they are hit and keeps the uncapped delta', () => {
+    const report = {
+      leverageMix: [{ leverage: 10, weight: 0.25 }],
+      missingVenues: [] as string[],
+      binance: {
+        exchange: 'binance',
+        definite: true,
+        segments: [
+          {
+            side: 'long' as const,
+            price: 90_000,
+            notional: 400_000,
+            openedAt: '2026-09-29T12:00:00Z',
+            closedAt: '0001-01-01T00:00:00Z',
+            status: 'open' as const,
+          },
+          {
+            side: 'short' as const,
+            price: 110_000,
+            notional: 100_000,
+            openedAt: '2026-09-29T12:00:00Z',
+            closedAt: '2026-09-29T13:00:00Z',
+            status: 'hit' as const,
+          },
+          {
+            side: 'long' as const,
+            price: 80_000,
+            notional: 50_000,
+            openedAt: '2026-09-29T12:00:00Z',
+            closedAt: '2026-09-29T14:00:00Z',
+            status: 'closed' as const,
+          },
+        ],
+        cumulative: [
+          { time: '2026-09-29T12:00:00Z', delta: 100 },
+          { time: '2026-09-29T13:00:00Z', delta: -40 },
+        ],
+      },
+      combined: {
+        exchange: 'combined',
+        definite: false,
+        segments: [],
+        cumulative: [],
+      },
+    };
+    expect(openLevelSegments(report, 'binance').map((level) => level.status)).toEqual(['open', 'hit']);
+    expect(openLevelSegments(report, 'binance')[0]?.closedAt).toBeUndefined();
+    expect(openLevelSegments(report, 'binance')[1]?.closedAt).toBe(
+      Date.parse('2026-09-29T13:00:00Z') / 1000,
+    );
+    expect(openLevelDelta(report, 'binance').map((point) => point.value)).toEqual([100, -40]);
+    expect(openLevelSegments(report, 'combined')).toEqual([]);
+    expect(openLevelDelta(report, 'combined')).toEqual([]);
+    expect(openLevelNotes(report, 'combined')).toMatchObject({
+      mix: '10× 25%',
+      withheld: true,
+    });
+    expect(openLevelNotes(undefined, 'combined').withheld).toBe(false);
   });
 
   it('keeps the largest liquidation pockets on each side', () => {

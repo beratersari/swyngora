@@ -44,6 +44,8 @@ export function DetailChartToolbar({
   onShowLiqNotionalChange,
   showLiqMap = true,
   onShowLiqMapChange,
+  showOpenLevels = true,
+  onShowOpenLevelsChange,
   liqMapRange = '24h',
   onLiqMapRangeChange,
   liqMapVenue = 'combined',
@@ -259,7 +261,21 @@ export function DetailChartToolbar({
         </InlineField>
       ) : null}
 
-      {onShowLiqMapChange && showLiqMap && onLiqMapRangeChange ? (
+      {onShowOpenLevelsChange ? (
+        <InlineField>
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.openLevels')}
+          </Text>
+          <Switch
+            size="small"
+            checked={showOpenLevels}
+            onChange={onShowOpenLevelsChange}
+            aria-label={t('detail:chart.openLevels')}
+          />
+        </InlineField>
+      ) : null}
+
+      {(showLiqMap || showOpenLevels) && onLiqMapRangeChange ? (
         <Field $compact>
           <Text variant="caption" color="secondary">
             {t('detail:liqHeatmap.range')}
@@ -278,7 +294,7 @@ export function DetailChartToolbar({
         </Field>
       ) : null}
 
-      {onShowLiqMapChange && showLiqMap && onLiqMapVenueChange ? (
+      {(showLiqMap || showOpenLevels) && onLiqMapVenueChange ? (
         <Field $compact>
           <Text variant="caption" color="secondary">
             {t('detail:liqHeatmap.venue')}

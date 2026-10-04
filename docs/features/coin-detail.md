@@ -39,6 +39,7 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 | Tape: usual or unusual versus stored history | `GET` | `/api/v1/market/unusual` | [`unusual-context.md`](unusual-context.md) |
 | Estimated 10×–100× liquidation prices on that chart | `GET` | `/api/v1/market/liquidation-levels` | [`liquidations.md`](liquidations.md) |
 | Liquidation heatmap behind those candles (12h–90d) | `GET` | `/api/v1/market/liquidation-hunt/heatmap` | [`liquidation-hunt.md`](liquidation-hunt.md) |
+| Open liquidation levels on that chart, until price trades through them | `GET` | `/api/v1/market/liquidation-open-levels` | [`liquidation-hunt.md`](liquidation-hunt.md) |
 | After-delist movement | `GET` | `/api/v1/market/post-delist` | [`delist-schedule.md`](delist-schedule.md) |
 | RSI/EMA series | `GET` | `/api/v1/market/indicators` | DET-B §5 |
 | Spot order book | `GET` | `/api/v1/market/orderbook` | [`order-book.md`](order-book.md) |

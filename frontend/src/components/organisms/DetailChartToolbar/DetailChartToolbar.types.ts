@@ -43,6 +43,9 @@ export type DetailChartToolbarProps = {
   /** Price × time liquidation intensity behind the candles. */
   showLiqMap?: boolean;
   onShowLiqMapChange?: (show: boolean) => void;
+  /** Bands that stay until a later candle trades through them. */
+  showOpenLevels?: boolean;
+  onShowOpenLevelsChange?: (show: boolean) => void;
   liqMapRange?: '12h' | '24h' | '3d' | '7d' | '14d' | '30d' | '90d';
   onLiqMapRangeChange?: (range: '12h' | '24h' | '3d' | '7d' | '14d' | '30d' | '90d') => void;
   liqMapVenue?: 'combined' | 'binance' | 'bybit' | 'okx';

@@ -2,7 +2,7 @@ import type { HuntPanel } from '@/components/organisms/LiquidationHunt/Liquidati
 import { isCardWindow, type LiqCardWindowId } from '@/components/organisms/LiquidationWindowCards';
 import { DEFAULT_LIQ_SYMBOL, DEFAULT_LIQ_WINDOW } from './LiquidationsPage.constants';
 
-export type LiqPageView = 'overview' | 'heatmap' | 'chart' | 'cascade' | 'hunt' | 'max-pain';
+export type LiqPageView = 'overview' | 'heatmap' | 'open' | 'chart' | 'cascade' | 'hunt' | 'max-pain';
 export type LiqPageExchange = 'all' | 'binance' | 'bybit' | 'okx';
 export type LiqChartRange = '12h' | '24h';
 export type LiqHuntPanel = HuntPanel;
@@ -11,6 +11,7 @@ export function parseLiqView(raw: string | null): LiqPageView {
   if (
     raw === 'overview' ||
     raw === 'heatmap' ||
+    raw === 'open' ||
     raw === 'chart' ||
     raw === 'cascade' ||
     raw === 'hunt' ||

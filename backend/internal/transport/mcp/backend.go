@@ -1290,6 +1290,17 @@ func (b *Backend) GetLiquidationHuntHeatmap(ctx context.Context, exchange, symbo
 	return mustJSON(got)
 }
 
+func (b *Backend) GetLiquidationOpenLevels(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetLiquidationOpenLevels(ctx, exchange, symbol, rawRange)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) GetSqueezeRisk(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

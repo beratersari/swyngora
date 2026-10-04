@@ -1693,10 +1693,11 @@ export interface paths {
         /**
          * Futures taker buy vs sell volume
          * @description Aggressive (taker) buy and sell volume on Binance USD-M, Bybit linear, and OKX USDT-swap
-         *     linear for the last **5 minutes, 1 hour, and 4 hours**. Returns buy
-         *     notional, sell notional, delta, and a short read with price / OI /
-         *     funding. This is who is hitting the book now — not the account
-         *     long/short ratio. `exchange=all` adds a combined view.
+         *     for the last **5 minutes, 1 hour, and 4 hours**. Each venue sums measured prints
+         *     (price × size) from the public trade stream. Returns buy notional, sell notional,
+         *     delta, and a short read with price / OI / funding. 1h and 4h stay incomplete until
+         *     this process has recorded that long. This is who is hitting the book now — not the
+         *     account long/short ratio. `exchange=all` adds a combined view.
          */
         get: operations["getMarketTakerFlow"];
         put?: never;
@@ -2469,6 +2470,52 @@ export interface paths {
          *     financial advice.
          */
         get: operations["getMarketLiquidationHuntHeatmap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/liquidation-open-levels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Open liquidation levels that stay until price trades through them
+         * @description Estimated liquidation bands placed from hourly open interest, each
+         *     venue's own candles, and the labeled hunt leverage mix (5x through
+         *     125x, 0.40% maintenance). A band stays at the price where that slice
+         *     of open interest was placed until a later candle trades through it.
+         *
+         *     The first column places the whole open interest then on the books,
+         *     because earlier entries are unknown. Later columns only add an
+         *     increase in estimated open interest. A level that price has already
+         *     traded through is not put back. When estimated open interest on a
+         *     side falls, the oldest open slices on that side are closed; that is
+         *     an inventory change, not a liquidation. A long level is hit when a
+         *     later candle low reaches it. A short level is hit when a later
+         *     candle high reaches it. The candle that placed a level cannot hit it.
+         *
+         *     `range` is 12h, 24h, 3d, 7d, 14d, 30d, or 90d. Binance, Bybit, and
+         *     OKX each use only their own price and open interest. `combined`
+         *     sums a column only when all three have both, and `combined.definite`
+         *     is false (empty segments and cumulative) when any venue has none
+         *     in this window. `missingVenues` names those venues.
+         *
+         *     `segments` are clustered and capped for drawing. `cumulative`,
+         *     `openLong`, `openShort`, and `delta` stay uncapped. `hitLots` and
+         *     `closedLots` count the raw slices, not the capped drawing.
+         *     `leverageMix` is the assumed share of open interest at each leverage.
+         *     Binance public open interest is 30 days, so older columns exist only
+         *     when this archive already stored them. Not exchange liquidation-engine
+         *     output and not financial advice.
+         */
+        get: operations["getMarketLiquidationOpenLevels"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6254,6 +6301,71 @@ export interface components {
                 weight?: number;
             }[];
             /** @description Venues with no own price and open interest in this window. Combined does not fill those cells from another venue. */
+            missingVenues?: string[];
+            note?: string;
+        };
+        /** @description One estimated band. closedAt is omitted while status is open. */
+        LiquidationOpenLevelSegment: {
+            exchange?: string;
+            /** @enum {string} */
+            side?: "long" | "short";
+            /** @description Display bucket 10 */
+            leverage?: number;
+            price?: number;
+            notional?: number;
+            /** Format: date-time */
+            openedAt?: string;
+            /** Format: date-time */
+            closedAt?: string;
+            /** @enum {string} */
+            status?: "open" | "hit" | "closed";
+        };
+        /** @description Uncapped open long and short notional. Delta is long minus short. */
+        LiquidationOpenLevelPoint: {
+            /** Format: date-time */
+            time?: string;
+            longNotional?: number;
+            shortNotional?: number;
+            delta?: number;
+        };
+        LiquidationOpenLevelBook: {
+            exchange?: string;
+            segments?: components["schemas"]["LiquidationOpenLevelSegment"][];
+            cumulative?: components["schemas"]["LiquidationOpenLevelPoint"][];
+            openLong?: number;
+            openShort?: number;
+            delta?: number;
+            /** @description Fraction of time columns with this venue's own price and open interest. */
+            coverage?: number;
+            columnsWithOi?: number;
+            /** @description Raw slices price traded through. Not the capped segment count. */
+            hitLots?: number;
+            /** @description Raw slices closed because estimated open interest fell. Not a liquidation. */
+            closedLots?: number;
+            /** @enum {string} */
+            accountBlend?: "stored" | "even" | "mixed";
+            /** @description False for combined when any venue has no price and open interest, or the venues never overlap. */
+            definite: boolean;
+        };
+        /** @description Estimated liquidation levels that stay until price trades through them */
+        LiquidationOpenLevels: {
+            symbol?: string;
+            /** @enum {string} */
+            range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d" | "90d";
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            stepSec?: number;
+            /** @description Assumed share of open interest at each leverage. Weights sum to 1. */
+            leverageMix?: {
+                leverage?: number;
+                weight?: number;
+            }[];
+            binance?: components["schemas"]["LiquidationOpenLevelBook"];
+            bybit?: components["schemas"]["LiquidationOpenLevelBook"];
+            okx?: components["schemas"]["LiquidationOpenLevelBook"];
+            combined?: components["schemas"]["LiquidationOpenLevelBook"];
             missingVenues?: string[];
             note?: string;
         };
@@ -12809,6 +12921,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LiquidationHuntHeatmap"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketLiquidationOpenLevels: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description 12h | 24h | 3d | 7d | 14d | 30d | 90d */
+                range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d" | "90d";
+                /** @description binance | bybit | okx | all (default all = Binance, Bybit, OKX, and combined) */
+                exchange?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Open, hit, and closed liquidation levels plus the cumulative line */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiquidationOpenLevels"];
                 };
             };
             400: components["responses"]["Error"];

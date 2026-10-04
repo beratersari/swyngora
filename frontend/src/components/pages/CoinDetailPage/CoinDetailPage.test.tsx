@@ -52,6 +52,14 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetOpenInterestQuery: () => mockOpenInterest(),
     useGetMarketLiquidationsQuery: () => mockLiquidations(),
     useGetMarketLiquidationHuntHeatmapQuery: () => mockLiqHeatmap(),
+    useGetMarketLiquidationOpenLevelsQuery: () => ({
+      data: undefined,
+      currentData: undefined,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    }),
     useGetMarketCvdQuery: () => mockCvd(),
     useGetMarketFlowAtPricesQuery: () => ({ data: undefined, isError: false, isFetching: false, isLoading: false, isSuccess: false, refetch: vi.fn() }),
     useGetMarketLongShortRatioQuery: () => ({ data: undefined, isError: false, isFetching: false, isLoading: false, isSuccess: false, refetch: vi.fn() }),
@@ -305,6 +313,8 @@ describe('CoinDetailPage', () => {
     expect(screen.getByTestId('chart-liq-mix')).toHaveTextContent(/10× 25%/);
     expect(screen.getByTestId('chart-liq-missing')).toHaveTextContent(/OKX/);
     expect(screen.getByRole('switch', { name: /liq map/i })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /open levels/i })).toBeChecked();
+    expect(screen.queryByTestId('chart-open-withheld')).not.toBeInTheDocument();
     expect(screen.getByTestId('chart-recorded')).toHaveTextContent(/binance 1h/i);
     expect(screen.queryByTestId('order-book')).not.toBeInTheDocument();
   });

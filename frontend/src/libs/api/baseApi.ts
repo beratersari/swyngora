@@ -26,6 +26,7 @@ export const baseApi = createApi({
     'OrderBook',
     'OrderHeatmap',
     'LiqHeatmap',
+    'LiqOpenLevels',
     'Supply',
     'Holders',
     'Interval',
