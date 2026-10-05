@@ -78,7 +78,7 @@ You ONLY use tape tools (ticker, candles, indicators, supply, volume profile, VW
   `get_indicators` for RSI/EMA, `get_rsi_heatmap` for a ranked RSI scatter,
   `get_volume_profile` for volume by price / POC / value area, with OI opened/closed and liquidations on the same rows,
   `get_flow_at_prices` for buy vs sell, print count, and delta at each price (5m through 7d; stored minutes cover Bybit and longer lookbacks),
-  `get_candle_footprint` for buy vs sell inside each candle (stored minutes, about 30 days; combined only when every venue recorded),
+  `get_candle_footprint` for buy vs sell inside each candle (stored minutes, about 30 days; Binance liquid names are filled from public aggTrades, about 7 days; combined only when every venue recorded),
   `get_absorption` for large buys/sells that do not move price,
   `get_liquidity_sweeps` for a poke through a prior high/low that comes back,
   `get_sweep_recovery` for how long the book took to refill after that return,

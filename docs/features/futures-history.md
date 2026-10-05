@@ -38,6 +38,12 @@ server restart and can be queried later by users or the AI.
 - The live sampler keeps that same list (`domain.LiquidRecorderLimit`). Spot
   quote volume picks the extra names. `GET /api/v1/market/history-span` reports
   the stored span per venue. See `docs/features/chart-desk.md`.
+- A separate walk reads Binance USD-M aggregate trades for that same list
+  and writes taker minutes plus flow-at-prices cells. The walk goes back
+  about 7 days, one hour at a time, and leaves the most recent 15 minutes
+  to the live sampler. A rate-limit pause retries the unfinished hour.
+  Bybit and OKX are not walked. Empty hours advance the scan without
+  writing a zero minute.
 - Startup reloads the last 4 hours of stored taker minutes into the live book
   for that same liquid list (seeds first, then the rest as the list is known).
   A pair is read once, including when SQLite has no rows. CVD and absorption

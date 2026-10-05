@@ -1282,11 +1282,14 @@ export interface paths {
          *     book, flow-at-prices, and liquidation prints this process recorded.
          *     A venue with no rows is omitted. The startup archive backfills the
          *     liquid USDT perpetuals, up to 100 names with the seed pairs first,
-         *     and only as far as each public endpoint documents. Spot books and
-         *     flow-at-prices are kept about 30 days. Recorded liquidation prints
-         *     are kept with the futures archive (about 90 days). Public liquidation
-         *     refill is still about 7 days. `spanSec` is from that oldest sample
-         *     to now. Informational only.
+         *     and only as far as each public endpoint documents. Binance USD-M
+         *     aggTrades are walked into taker minutes and flow-at-prices for that
+         *     same list, about 7 days, one hour at a time. Bybit and OKX flow stay
+         *     on the minutes this process recorded. Spot books and flow-at-prices
+         *     are kept about 30 days. Recorded liquidation prints are kept with
+         *     the futures archive (about 90 days). Public liquidation refill is
+         *     still about 7 days. `spanSec` is from that oldest sample to now.
+         *     Informational only.
          */
         get: operations["getMarketHistorySpan"];
         put?: never;
@@ -1793,6 +1796,11 @@ export interface paths {
          *     `range` is `24h` (5-minute bars, default), `7d` (30-minute),
          *     `30d` (2-hour), or `90d` (4-hour). Longer ranges fold stored
          *     minutes and are complete only when that tape reaches the start.
+         *     Binance minutes for the liquid USDT list are filled in the
+         *     background from public USD-M aggTrades, about 7 days, one hour
+         *     at a time. Bybit and OKX stay on the minutes this process
+         *     recorded. The coin chart draws one venue when combined is not
+         *     complete, and names a venue that starts later.
          *     `exchange=all`
          *     (default) returns Binance and Bybit separately plus a combined
          *     series. Combined uses the overlapping **time range** (a missing
@@ -2323,6 +2331,9 @@ export interface paths {
          *     Closed minutes come from the stored ladder (about 30 days).
          *     The current minute comes from the live tape when that tape
          *     already covers it. This route does not walk public trade history.
+         *     Binance minutes for the liquid USDT list are filled in the
+         *     background from public aggTrades, about 7 days. Bybit and OKX
+         *     stay on the minutes this process recorded.
          *     `exchange=all` returns each venue plus `combined`. `combined`
          *     is present only when every venue was recorded for the range.
          *     `missing` names a venue with no stored minutes. A missing venue

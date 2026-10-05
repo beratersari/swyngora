@@ -90,17 +90,45 @@ describe('chartTape', () => {
           { time: '2026-09-28T09:55:00Z', delta: '+2' },
           { time: '2026-09-28T10:00:00Z', delta: '-1' },
         ],
-        anchors: [
+        complete: true,
+      anchors: [
           { anchor: 'day', from: '2026-09-28T00:00:00Z' },
           { anchor: '4h', from: '2026-09-28T08:00:00Z' },
         ],
       },
-      venues: [{ points: [{ time: '2026-09-28T10:00:00Z', delta: '+9' }] }],
+      venues: [{ exchange: 'binance', points: [{ time: '2026-09-28T10:00:00Z', delta: '+9' }] }],
     };
-    const series = futuresCvdSeries(report);
+    const series = futuresCvdSeries(report, 'binance');
+    expect(series.source).toBe('combined');
+    expect(series.withheld).toEqual([]);
     expect(series.points.map((p) => p.delta)).toEqual([2, -1]);
     expect(series.dayFrom).toBe(Math.floor(Date.parse('2026-09-28T00:00:00Z') / 1000));
     expect(series.blockFrom).toBe(Math.floor(Date.parse('2026-09-28T08:00:00Z') / 1000));
+  });
+
+  it('draws the longer Binance tape when combined does not cover it', () => {
+    const report: MarketCvd = {
+      combined: {
+        complete: false,
+        points: [{ time: '2026-09-28T10:00:00Z', delta: '+1' }],
+      },
+      venues: [
+        {
+          exchange: 'binance',
+          complete: true,
+          points: [
+            { time: '2026-09-21T10:00:00Z', delta: '+4' },
+            { time: '2026-09-28T10:00:00Z', delta: '+2' },
+          ],
+        },
+        { exchange: 'bybit', points: [{ time: '2026-09-28T10:00:00Z', delta: '+9' }] },
+        { exchange: 'okx', points: [] },
+      ],
+    };
+    const series = futuresCvdSeries(report, 'binance');
+    expect(series.source).toBe('binance');
+    expect(series.points.map((p) => p.delta)).toEqual([4, 2]);
+    expect(series.withheld).toEqual(['bybit', 'okx']);
   });
 
   it('picks the strongest long below last and short above last per leverage', () => {

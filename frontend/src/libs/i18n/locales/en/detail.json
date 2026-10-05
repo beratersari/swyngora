@@ -44,6 +44,7 @@
     },
     "cvdRunning": "CVD {{range}}",
     "cvdPartial": "Stored minutes do not cover this whole {{range}} yet. The line starts when recording began.",
+    "cvdVenue": "This CVD line is {{exchange}}. Combined stays off until {{venues}} cover the same minutes.",
     "cvdDay": "CVD since 00:00 UTC",
     "cvd4h": "CVD since 4h open",
     "liqLevels": "Liquidation levels",

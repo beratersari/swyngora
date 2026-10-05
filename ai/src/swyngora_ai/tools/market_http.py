@@ -5410,6 +5410,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "change on the returned bars. Anchors reset the sum at 00:00 UTC (day) and at the "
                 "current 4-hour open. range is 24h (5-minute bars), 7d (30-minute), "
                 "30d (2-hour), or 90d (4-hour) from stored minutes. "
+                "Binance minutes for the liquid list are filled from public "
+                "aggTrades, about 7 days. Bybit and OKX stay on minutes this "
+                "process recorded. Combined is complete only when every venue "
+                "covers the range. "
                 "Price vs CVD divergence is the current consecutive "
                 "run only. Combined shows Binance vs Bybit when they disagree."
             ),
@@ -5645,8 +5649,11 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "together; otherwise the newest 120 candles. At most 400 candles and "
                 "30 days; truncated when the range is shortened. Closed minutes are "
                 "the stored ladder (about 30 days). The current minute uses the live "
-                "tape when that tape already covers it. This does not walk public "
-                "trade history. exchange=all returns each venue plus combined. "
+                "tape when that tape already covers it. This request does not walk "
+                "public trade history. Binance minutes for the liquid list are "
+                "filled in the background from public aggTrades, about 7 days. "
+                "Bybit and OKX stay on minutes this process recorded. "
+                "exchange=all returns each venue plus combined. "
                 "combined is present only when every venue was recorded for the range. "
                 "missing names a venue with no stored minutes and that venue is not "
                 "treated as zero. Not financial advice."
@@ -5764,9 +5771,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "oldest stored futures open interest, spot book, and "
                 "flow-at-prices sample per venue. A venue with no rows is "
                 "omitted. spanSec is from that sample to now. The startup "
-                "archive backfills the liquid USDT perpetuals, up to 36 names "
+                "archive backfills the liquid USDT perpetuals, up to 100 names "
                 "with the seed pairs first, only as far as each public endpoint "
-                "documents. Informational only."
+                "documents. Binance tape for that list is walked back about "
+                "7 days. Informational only."
             ),
             args_schema=HistorySpanInput,
         ),

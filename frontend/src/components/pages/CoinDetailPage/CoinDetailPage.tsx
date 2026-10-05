@@ -938,7 +938,11 @@ export function CoinDetailPage() {
     },
   );
   const chartCvdReport = cvdRange === '24h' ? rtkCurrent(cvdQuery) : rtkCurrent(cvdChartQuery);
-  const tapeCvd = useMemo(() => futuresCvdSeries(chartCvdReport), [chartCvdReport]);
+  const cvdExchange = exchange === 'bybit' || exchange === 'okx' ? exchange : 'binance';
+  const tapeCvd = useMemo(
+    () => futuresCvdSeries(chartCvdReport, cvdExchange),
+    [chartCvdReport, cvdExchange],
+  );
   const lowerSeries: CandleChartLowerSeries[] = useMemo(() => {
     if (isEquity || barDurationSec <= 0) return [];
     const series: CandleChartLowerSeries[] = [];
@@ -1589,6 +1593,18 @@ export function CoinDetailPage() {
             !tapeCvd.complete ? (
               <Text variant="caption" color="secondary" data-testid="chart-cvd-partial">
                 {t('detail:chart.cvdPartial', { range: cvdRange })}
+              </Text>
+            ) : null}
+            {!isEquity && tapeCvd.points.length > 0 && tapeCvd.withheld.length > 0 ? (
+              <Text variant="caption" color="secondary" data-testid="chart-cvd-venue">
+                {t('detail:chart.cvdVenue', {
+                  exchange: t(`detail:liqHeatmap.venues.${tapeCvd.source}`, {
+                    defaultValue: tapeCvd.source,
+                  }),
+                  venues: tapeCvd.withheld
+                    .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
+                    .join(', '),
+                })}
               </Text>
             ) : null}
             {!isEquity && showBook && bookWindow > CHART_BOOK_LIVE_MAX ? (

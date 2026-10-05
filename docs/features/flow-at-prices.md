@@ -32,10 +32,12 @@ prints hit that row, or what the **delta** was.
   reaches the start of the window; until then the newest public trades
   are used. Closed minutes are stored while the server runs (about
   30 days, `FLOW_AT_PRICES_RETENTION`) for the liquid recorder list
-  plus pairs someone has opened. A 4h / 1d / 3d / 7d / 30d lookback, and
+  plus pairs someone has opened. Binance minutes for that liquid list
+  are also filled from public USD-M aggregate trades, about 7 days,
+  one hour at a time. Bybit and OKX minutes before the process started
+  are still missing. A 4h / 1d / 3d / 7d / 30d lookback, and
   Bybit further back than those 1000 trades, reads that stored buy,
-  sell, delta, and print count. Minutes before the process started are
-  missing. Stored rows are about 0.05% of price wide and roll up to a
+  sell, delta, and print count. Stored rows are about 0.05% of price wide and roll up to a
   wider `tickSize`
 
 This is **not** volume profile. Volume profile spreads each candle's

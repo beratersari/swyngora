@@ -51,19 +51,64 @@ export function utc4hOpenSec(atSec: number): number {
   );
 }
 
-/** Futures CVD series: combined when it has points, otherwise the first venue that does. */
-export function futuresCvdSeries(report: MarketCvd | undefined): {
+function seriesStart(points: { time?: string }[] | undefined): number | null {
+  let min: number | null = null;
+  for (const point of points ?? []) {
+    const time = unixSeconds(point.time);
+    if (time == null) continue;
+    if (min == null || time < min) min = time;
+  }
+  return min;
+}
+
+/**
+ * Futures CVD for the chart.
+ * Combined is used only when it is complete and reaches as far back as the
+ * page venue. Otherwise the page venue is drawn, and venues that start later
+ * are named. A spot page uses Binance.
+ */
+export function futuresCvdSeries(
+  report: MarketCvd | undefined,
+  pageExchange = 'binance',
+): {
   points: TapeDeltaPoint[];
   dayFrom: number | null;
   blockFrom: number | null;
   complete: boolean;
   range: string;
   bar: string;
+  source: string;
+  withheld: string[];
 } {
-  const venue =
-    report?.combined?.points && report.combined.points.length > 0
-      ? report.combined
-      : report?.venues?.find((v) => (v.points?.length ?? 0) > 0);
+  const want = pageExchange.trim().toLowerCase();
+  const page = report?.venues?.find(
+    (venue) =>
+      (venue.exchange ?? '').toLowerCase() === want && (venue.points?.length ?? 0) > 0,
+  );
+  const combined =
+    report?.combined?.points && report.combined.points.length > 0 ? report.combined : undefined;
+  const pageStart = seriesStart(page?.points);
+  const combinedStart = seriesStart(combined?.points);
+  const combinedCovers =
+    combined != null &&
+    combined.complete === true &&
+    (pageStart == null || (combinedStart != null && combinedStart <= pageStart + 60));
+  const venue = combinedCovers
+    ? combined
+    : (page ?? report?.venues?.find((item) => (item.points?.length ?? 0) > 0));
+  const source = combinedCovers ? 'combined' : (venue?.exchange ?? '').toLowerCase();
+  const drawnStart = seriesStart(venue?.points);
+  const withheld =
+    source === 'combined' || source === ''
+      ? []
+      : (report?.venues ?? [])
+          .filter((item) => {
+            const id = (item.exchange ?? '').toLowerCase();
+            if (!id || id === source) return false;
+            const start = seriesStart(item.points);
+            return start == null || (drawnStart != null && start > drawnStart + 60);
+          })
+          .map((item) => (item.exchange ?? '').toLowerCase());
   const points: TapeDeltaPoint[] = [];
   for (const p of venue?.points ?? []) {
     const time = unixSeconds(p.time);
@@ -82,6 +127,8 @@ export function futuresCvdSeries(report: MarketCvd | undefined): {
     complete: venue?.complete === true,
     range: report?.range ?? '24h',
     bar: report?.bar ?? '5m',
+    source,
+    withheld,
   };
 }
 

@@ -8,7 +8,7 @@ const (
 	RecordedFlow         = "flow"
 	RecordedLiquidations = "liquidations"
 
-	HistorySpanNote = "Span is how long this process has stored samples for the coin. The startup archive backfills the liquid USDT perpetuals, up to 100 names with the seed pairs first, and only as far as each public endpoint documents. Spot books and flow-at-prices are kept about 30 days while this process runs. Liquidation prints this process recorded are kept with the futures archive (about 90 days); public refill is still about 7 days. A missing venue has no row. Informational only."
+	HistorySpanNote = "Span is how long this process has stored samples for the coin. The startup archive backfills the liquid USDT perpetuals, up to 100 names with the seed pairs first, and only as far as each public endpoint documents. Binance USD-M aggTrades are walked into taker minutes and flow-at-prices for that same list, about 7 days, one hour at a time. Bybit and OKX flow stay on the minutes this process recorded. Spot books and flow-at-prices are kept about 30 days. Liquidation prints this process recorded are kept with the futures archive (about 90 days); public refill is still about 7 days. A missing venue has no row. Informational only."
 )
 
 // StoredSince is the oldest row for one stored symbol on one venue.

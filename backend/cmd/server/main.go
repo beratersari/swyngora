@@ -716,6 +716,12 @@ func main() {
 		Retain:   cfg.FlowAtPricesRetention,
 		Logger:   logger,
 	}).Start(ctx)
+	go (&market.BinanceTapeBackfill{
+		Svc:     marketSvc,
+		Prints:  binanceClient,
+		Symbols: futuresHist.ArchiveSymbols,
+		Logger:  logger,
+	}).Start(ctx)
 
 	go realtimeHub.Start(ctx)
 

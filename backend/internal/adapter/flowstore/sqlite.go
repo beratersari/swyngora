@@ -84,6 +84,12 @@ CREATE TABLE IF NOT EXISTS flow_cursors (
 	last_ms  INTEGER NOT NULL,
 	PRIMARY KEY (exchange, symbol)
 );
+CREATE TABLE IF NOT EXISTS flow_scan (
+	exchange TEXT NOT NULL,
+	symbol   TEXT NOT NULL,
+	until_ms INTEGER NOT NULL,
+	PRIMARY KEY (exchange, symbol)
+);
 `
 	if _, err := s.db.Exec(schema); err != nil {
 		return fmt.Errorf("flow history schema: %w", err)
@@ -216,6 +222,100 @@ WHERE symbol IN (`+in+`) GROUP BY symbol, exchange`, args...)
 		})
 	}
 	return out, rows.Err()
+}
+
+// ReplaceFlowWindow deletes stored minutes in [from, to) and inserts cells.
+// A retry of the same window replaces those rows instead of adding to them.
+func (s *SQLite) ReplaceFlowWindow(ctx context.Context, exchange domain.Exchange, symbol string, from, to time.Time, cells []domain.FlowAtPricesCell) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	symbol = domain.NormalizeLiquidationSymbol(symbol)
+	if exchange == "" || symbol == "" || !to.After(from) {
+		return fmt.Errorf("%w: flow window", domain.ErrInvalidArgument)
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.ExecContext(ctx, `
+DELETE FROM flow_price_cells
+WHERE exchange = ? AND symbol = ? AND minute_ms >= ? AND minute_ms < ?
+`, string(exchange), symbol, from.UTC().UnixMilli(), to.UTC().UnixMilli()); err != nil {
+		return err
+	}
+	stmt, err := tx.PrepareContext(ctx, `
+INSERT INTO flow_price_cells (exchange, symbol, minute_ms, price_e8, buy, sell, buy_n, sell_n)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+	for _, c := range cells {
+		if c.Price <= 0 || c.Minute.IsZero() {
+			continue
+		}
+		minute := c.Minute.UTC()
+		if minute.Before(from) || !minute.Before(to) {
+			continue
+		}
+		sym := domain.NormalizeLiquidationSymbol(c.Symbol)
+		if sym == "" {
+			sym = symbol
+		}
+		ex := c.Exchange
+		if ex == "" {
+			ex = exchange
+		}
+		if _, err := stmt.ExecContext(ctx,
+			string(ex), sym, minute.UnixMilli(), priceE8(c.Price),
+			c.Buy, c.Sell, c.BuyN, c.SellN,
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// FlowScan is the oldest time already walked for this pair.
+// History before it has not been requested yet.
+func (s *SQLite) FlowScan(ctx context.Context, exchange domain.Exchange, symbol string) (time.Time, bool, error) {
+	if s == nil || s.db == nil {
+		return time.Time{}, false, nil
+	}
+	symbol = domain.NormalizeLiquidationSymbol(symbol)
+	if exchange == "" || symbol == "" {
+		return time.Time{}, false, fmt.Errorf("%w: flow scan", domain.ErrInvalidArgument)
+	}
+	var ms int64
+	err := s.db.QueryRowContext(ctx, `
+SELECT until_ms FROM flow_scan WHERE exchange = ? AND symbol = ?
+`, string(exchange), symbol).Scan(&ms)
+	if err == sql.ErrNoRows {
+		return time.Time{}, false, nil
+	}
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	return time.UnixMilli(ms).UTC(), true, nil
+}
+
+// SetFlowScan records the oldest time this pair has been walked through.
+func (s *SQLite) SetFlowScan(ctx context.Context, exchange domain.Exchange, symbol string, until time.Time) error {
+	if s == nil || s.db == nil || until.IsZero() {
+		return nil
+	}
+	symbol = domain.NormalizeLiquidationSymbol(symbol)
+	if exchange == "" || symbol == "" {
+		return fmt.Errorf("%w: flow scan", domain.ErrInvalidArgument)
+	}
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO flow_scan (exchange, symbol, until_ms) VALUES (?, ?, ?)
+ON CONFLICT(exchange, symbol) DO UPDATE SET until_ms = excluded.until_ms
+`, string(exchange), symbol, until.UTC().UnixMilli())
+	return err
 }
 
 // FlowCursor is the newest print time already stored.

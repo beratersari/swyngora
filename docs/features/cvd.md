@@ -17,6 +17,7 @@ Useful when:
 
 - `exchange=all` (default): **Binance**, **Bybit**, and **OKX** separately plus `combined`
 - `range`: `24h` (default, 5-minute bars), `7d` (30-minute bars), `30d` (2-hour bars), `90d` (4-hour bars). Longer ranges fold the stored minutes. The series is `complete` only when those minutes reach the start of the range
+- Binance minutes for the liquid USDT list (up to 100 names, seeds first) are filled in the background from public USD-M aggregate trades, about 7 days, one hour at a time. A rate-limit pause retries that window and does not store a partial hour. Bybit and OKX are not backfilled this way
 - Points: `buyNotional`, `sellNotional`, `delta`, running `cvd`,
   `price`, `priceChangePct`, `vsPrice`, and `divergence`
 - **Divergence:** `price_up_cvd_down` or `price_down_cvd_up` on a point,
@@ -34,8 +35,10 @@ Useful when:
   false when the stored bars start after the anchor — the number is
   then only the bars on hand. The coin tape shows both next to last CVD.
   The coin price chart draws the same resets as two lines under the
-  candles, plus each candle's buy−sell `delta` as a histogram. Both use
-  the combined futures points when `exchange=all`.
+  candles, plus each candle's buy−sell `delta` as a histogram. The chart
+  uses combined futures points only when that series is complete and
+  reaches as far as the page venue. Otherwise it draws the page venue
+  (Binance on a spot page) and names a venue that starts later.
 - Combined **adds** each venue’s delta on the overlapping **time range**
   (a quiet 5m slot on one side is treated as 0, not a hole). Combined
   `complete` follows both venues — one missing 5m bucket at the start

@@ -42,7 +42,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_funding_arb_signal` | One crossing plus predicted-vs-settled review |
 | `get_long_short_ratio` | Account long/short on Binance, Bybit, and OKX. Binance and OKX also return top-trader layers; `gap` is top long% minus crowd long%; `divergence` is top vs price with `since` / duration; `gapWindows` say if that spread is widening; `split` when crowd and size disagree |
 | `get_futures_history` | Durable stored OI / funding / long-short / liquidation history |
-| `get_history_span` | How long futures open interest, the spot book, flow-at-prices, and recorded liquidation prints have been stored for one coin. The startup archive covers the liquid set, up to 100 names. Venues with no rows are omitted |
+| `get_history_span` | How long futures open interest, the spot book, flow-at-prices, and recorded liquidation prints have been stored for one coin. The startup archive covers the liquid set, up to 100 names. Binance tape for that list is walked back about 7 days. Venues with no rows are omitted |
 | `get_unusual_context` | Funding, 24h open-interest change, completed-hour liquidations, completed-day CVD, and hourly spread versus that coin’s own stored samples. Venues stay separate. The span is the stored span. Print size stays unknown |
 | `scan_unusual` | Same readings across the liquid USDT list (up to 100). Keeps only high and low bands. Typical and unknown rows are left off. Venues stay separate |
 | `get_liquidation_max_pain` | Largest estimated liquidation pockets above (shorts) and below (longs) last price — not the hunt target |

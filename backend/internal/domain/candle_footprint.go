@@ -234,7 +234,7 @@ func BuildCandleFootprints(symbol, requested, interval string, step time.Duratio
 	return out
 }
 
-const candleFootprintNote = "Buy and sell inside each candle are aggressive futures prints at those prices, from stored minutes (about 30 days) plus the current minute when the live tape covers it. Up to 24 price rows are kept per candle. A row is marked when one side is at least 3× the other. Combined is filled only when every venue was recorded for this range. A missing venue is named and is not treated as zero. Informational only — not financial advice."
+const candleFootprintNote = "Buy and sell inside each candle are aggressive futures prints at those prices, from stored minutes (about 30 days) plus the current minute when the live tape covers it. Binance minutes for the liquid USDT list are filled from public aggTrades, about 7 days. Bybit and OKX stay on the minutes this process recorded. Up to 24 price rows are kept per candle. A row is marked when one side is at least 3× the other. Combined is filled only when every venue was recorded for this range. A missing venue is named and is not treated as zero. Informational only — not financial advice."
 
 func explainCandleFootprint(r CandleFootprintReport) string {
 	if len(r.Missing) > 0 && r.Combined == nil {
