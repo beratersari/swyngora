@@ -20,18 +20,21 @@ On a crypto coin Overview chart:
 
 The Book, Footprint, Crowd vs top, Open interest, Funding, Liquidations, Liq map, and Open levels switches turn those layers off. Footprint uses the in-candle rows when they exist, and the right-edge ladder otherwise. Range and venue show when either the map or the open levels are on. Side and source stay on the map. Equities do not get them. The three new panes read `GET /api/v1/market/futures-history` (newest 1,000 rows from the first loaded candle). A venue with no stored rows is left off that pane.
 
+The Desk control focuses one set of those layers. All keeps every layer on. Positioning turns on open interest, funding, crowd versus top, open liquidation levels, and the 10×–100× lines. A line names that page venue's later-print hit rate and the share of the model size that was kept. Open bands stay until a later candle trades through them. The liquidation heatmap stays off on that desk. Order flow turns on buy−sell, the day and 4-hour CVD, and the footprint, and writes absorption and print size under the chart. Liquidity turns on the book shading and writes perp bid share and the largest live walls on this venue. Combined absorption, print size, and perp bid share are written only when every venue covers the window. A missing venue is named and is not treated as zero. A manual layer switch leaves the desk unmatched. Equities do not get the control. These reads use the same endpoints as the chart layers and the Flow and Tape tabs.
+
 ## Where the code lives
 
 - Chart drawing: `frontend/src/components/molecules/CandleChartHost/CandleChartHost.desk.ts`
 - Mappers: `frontend/src/components/pages/CoinDetailPage/chartDesk.ts`
+- Desks: `frontend/src/components/pages/CoinDetailPage/chartPresets.ts`
 - Recorder universe: `backend/internal/domain/liquid_recorder.go` (100 names, seeds first)
 - Recording span: `GET /api/v1/market/history-span`, MCP `get_history_span`
 
 ## How to verify
 
-Open `/markets/binance/BTCUSDT`. The overview chart shows the book shading, the liquidation heatmap, buy and sell inside each candle when stored minutes exist, the right-edge footprint when they do not, the liquidation bars, and the crowd strip when those series have data. The map opens on measured prints. Source switches to the leverage model, and that caption names the mix. Open interest, funding, and liquidation panes appear under the candles once stored rows exist. The caption names the futures recording span once a sample exists. A range longer than the loaded candles asks you to pan left.
+Open `/markets/binance/BTCUSDT`. The overview chart opens on All: book shading, the liquidation heatmap, buy and sell inside each candle when stored minutes exist, the right-edge footprint when they do not, the liquidation bars, and the crowd strip when those series have data. Positioning, Order flow, and Liquidity each turn on one desk. Order flow names a venue whose absorption or print size does not cover the window. Liquidity names a venue that does not cover the perp band, and lists live walls on this venue's book. The map opens on measured prints. Source switches to the leverage model, and that caption names the mix. Open interest, funding, and liquidation panes appear under the candles once stored rows exist. The caption names the futures recording span once a sample exists. A range longer than the loaded candles asks you to pan left.
 
-`go test` for `domain`, `futureshist`, `bookhist`, `market`, and the history-span handler. Frontend: `chartDesk.test.ts` and `DetailChartToolbar.test.tsx`.
+`go test` for `domain`, `futureshist`, `bookhist`, `market`, and the history-span handler. Frontend: `chartDesk.test.ts`, `chartPresets.test.ts`, `DetailChartToolbar.test.tsx`, and `CoinDetailPage.test.tsx`.
 
 ## Limits
 

@@ -213,4 +213,28 @@ describe('DetailChartToolbar', () => {
     await user.click(await screen.findByTitle('Prints'));
     expect(onSource.mock.calls[0]?.[0]).toBe('prints');
   });
+
+  it('selects a chart desk', async () => {
+    const user = userEvent.setup();
+    const onPreset = vi.fn();
+    renderWithTheme(
+      <DetailChartToolbar
+        intervals={['1h']}
+        interval="1h"
+        onIntervalChange={() => undefined}
+        chartPreset="all"
+        presetOptions={[
+          { value: 'all', label: 'All' },
+          { value: 'positioning', label: 'Positioning' },
+          { value: 'orderFlow', label: 'Order flow' },
+          { value: 'liquidity', label: 'Liquidity' },
+        ]}
+        onChartPresetChange={onPreset}
+      />,
+    );
+    expect(screen.getByRole('radio', { name: 'All' })).toBeChecked();
+    // The desk input ignores pointer events; the visible label is what a person clicks.
+    await user.click(screen.getByText('Order flow'));
+    expect(onPreset).toHaveBeenCalledWith('orderFlow');
+  });
 });

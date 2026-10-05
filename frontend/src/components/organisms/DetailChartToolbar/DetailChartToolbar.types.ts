@@ -4,6 +4,10 @@ export type CvdChartRange = '24h' | '7d' | '30d' | '90d';
 export type { LiqHeatSource };
 
 export type DetailChartToolbarProps = {
+  /** Selected desk. Null means the layer switches no longer match a desk. */
+  chartPreset?: string | null;
+  presetOptions?: { value: string; label: string }[];
+  onChartPresetChange?: (preset: string) => void;
   intervals: string[];
   interval: string;
   intervalsLoading?: boolean;

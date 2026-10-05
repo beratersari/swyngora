@@ -23,6 +23,32 @@
     "delistAnnounced": "Announced",
     "delistHalt": "Delist",
     "haltedLast": "Last print",
+    "preset": "Desk",
+    "presets": {
+      "all": "All",
+      "positioning": "Positioning",
+      "orderFlow": "Order flow",
+      "liquidity": "Liquidity"
+    },
+    "levelReview": "{{venue}} later prints {{hit}}, kept {{kept}}",
+    "presetAbsorptionWithheld": "Combined absorption stays off until {{venues}} cover the same minutes.",
+    "presetPrintSizeWithheld": "Combined print size stays off until {{venues}} cover this window.",
+    "presetBid": "Perp bids are {{pct}}% of the book within {{range}}% of mid.",
+    "presetBidMissing": "Combined perp bid share stays off until {{venues}} cover that band.",
+    "presetBidRecorded": "Recorded: {{lines}}.",
+    "presetBidUncovered": "The perp band is not fully on the book, so this chart does not show a bid share.",
+    "presetWalls": "Live walls on this venue: {{walls}}.",
+    "presetWallsEmpty": "No large wall in this venue's live band.",
+    "presetWall": "{{side}} {{price}} · {{behavior}}",
+    "wallSide": {
+      "bid": "Bid",
+      "ask": "Ask"
+    },
+    "wallBehavior": {
+      "short": "Brief",
+      "persistent": "Resting",
+      "suspicious": "Pulled often"
+    },
     "interval": "Interval",
     "bars": "Bars",
     "loadErrorTitle": "Could not load candles",

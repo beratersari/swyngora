@@ -25,6 +25,9 @@ const mockCvd = vi.fn();
 const mockLiqHeatmap = vi.fn();
 const mockProfile = vi.fn();
 const mockCandleFootprint = vi.fn();
+const mockAbsorption = vi.fn();
+const mockPerpDepth = vi.fn();
+const mockPrintSize = vi.fn();
 
 vi.mock('@/libs/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/libs/api')>();
@@ -83,7 +86,9 @@ vi.mock('@/libs/api', async (importOriginal) => {
       isLoading: false,
     }),
     useGetMarketLiquidationLevelsQuery: () => ({ data: undefined, isError: false, isFetching: false }),
-    useGetMarketPrintSizeQuery: () => ({ data: undefined, isError: false, isFetching: false }),
+    useGetMarketPrintSizeQuery: () => mockPrintSize(),
+    useGetMarketAbsorptionQuery: () => mockAbsorption(),
+    useGetMarketPerpDepthQuery: () => mockPerpDepth(),
     useGetMarketBotTrackerQuery: () => ({ data: undefined, isError: false, isFetching: false }),
     useGetMarketOrderCountQuery: () => ({ data: undefined, isError: false, isFetching: false }),
     useGetMarketPerpDepthOverviewQuery: () => ({ data: undefined, isError: false, isFetching: false }),
@@ -321,6 +326,17 @@ describe('CoinDetailPage', () => {
       isSuccess: false,
       refetch: vi.fn(),
     });
+    const emptyDesk = {
+      data: undefined,
+      currentData: undefined,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    };
+    mockAbsorption.mockReturnValue(emptyDesk);
+    mockPerpDepth.mockReturnValue(emptyDesk);
+    mockPrintSize.mockReturnValue(emptyDesk);
   });
 
   it('renders symbol header and chart host', async () => {
@@ -338,6 +354,124 @@ describe('CoinDetailPage', () => {
     expect(screen.queryByTestId('order-book')).not.toBeInTheDocument();
     expect(screen.queryByTestId('chart-candle-footprint')).not.toBeInTheDocument();
     expect(screen.getByTestId('candle-chart')).toHaveAttribute('data-candle-foot', '0');
+    expect(screen.getByRole('radio', { name: 'All' })).toBeChecked();
+  });
+
+  /** Ant Design desk radios ignore pointer events. Click the visible label. */
+  async function chooseDesk(user: ReturnType<typeof userEvent.setup>, name: string) {
+    const radio = screen.getByRole('radio', { name });
+    const label = radio.closest('label');
+    if (!label) throw new Error(`desk option ${name} has no label`);
+    await user.click(label);
+  }
+
+  it('focuses positioning, order flow, and liquidity without treating a missing venue as zero', async () => {
+    const user = userEvent.setup();
+    const absorption = {
+      combined: { complete: false, summary: 'partial' },
+      venues: [
+        { exchange: 'binance', complete: true, summary: 'bids absorbing sells' },
+        { exchange: 'okx', complete: false, summary: 'short' },
+      ],
+    };
+    mockAbsorption.mockReturnValue({
+      data: absorption,
+      currentData: absorption,
+      isError: false,
+      isFetching: false,
+      isLoading: false,
+      refetch: vi.fn(),
+    });
+    const prints = {
+      combined: { windows: [{ window: '15m', complete: false, summary: 'combined off' }] },
+      venues: [
+        {
+          exchange: 'binance',
+          windows: [{ window: '15m', complete: true, summary: 'Last 15m: buy prints averaged 2K USDT.' }],
+        },
+        { exchange: 'bybit', error: 'quiet' },
+      ],
+    };
+    mockPrintSize.mockReturnValue({
+      data: prints,
+      currentData: prints,
+      isError: false,
+      isFetching: false,
+      isLoading: false,
+      refetch: vi.fn(),
+    });
+    const depth = {
+      rangePct: '1',
+      venues: [
+        { exchange: 'binance', headline: { rangePct: '1', complete: true, below: { notional: '60' }, above: { notional: '40' } } },
+        { exchange: 'bybit', error: 'stale' },
+      ],
+      combined: {
+        exchange: 'all',
+        headline: { rangePct: '1', complete: true, below: { notional: '60' }, above: { notional: '40' } },
+      },
+    };
+    mockPerpDepth.mockReturnValue({
+      data: depth,
+      currentData: depth,
+      isError: false,
+      isFetching: false,
+      isLoading: false,
+      refetch: vi.fn(),
+    });
+    mockOrderBook.mockReturnValue({
+      data: {
+        analysis: {
+          walls: [{ side: 'bid', price: '100', notional: '250000', behavior: 'persistent' }],
+        },
+      },
+      currentData: {
+        analysis: {
+          walls: [{ side: 'bid', price: '100', notional: '250000', behavior: 'persistent' }],
+        },
+      },
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+
+    renderDetail('/markets/binance/BTCUSDT');
+    expect(await screen.findByRole('radio', { name: 'All' })).toBeChecked();
+
+    await chooseDesk(user, 'Positioning');
+    expect(screen.getByRole('switch', { name: /open interest/i })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /funding/i })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /crowd vs top/i })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /open levels/i })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /liquidation levels/i })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /liq map/i })).not.toBeChecked();
+    expect(screen.getByRole('switch', { name: /^book$/i })).not.toBeChecked();
+    expect(screen.getByTestId('candle-chart')).toHaveAttribute('data-liq', '0');
+
+    await chooseDesk(user, 'Order flow');
+    expect(screen.getByRole('switch', { name: /buy − sell/i })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /^cvd$/i })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /footprint/i })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /open interest/i })).not.toBeChecked();
+    expect(screen.getByTestId('chart-preset-absorption')).toHaveTextContent('bids absorbing sells');
+    expect(screen.getByTestId('chart-preset-absorption')).toHaveTextContent('OKX');
+    expect(screen.getByTestId('chart-preset-print-size')).toHaveTextContent('Last 15m: buy prints averaged 2K USDT.');
+    expect(screen.getByTestId('chart-preset-print-size')).toHaveTextContent('Bybit');
+
+    await chooseDesk(user, 'Liquidity');
+    expect(screen.getByRole('switch', { name: /^book$/i })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /footprint/i })).not.toBeChecked();
+    expect(screen.getByTestId('chart-preset-bid')).toHaveTextContent(/Bybit/);
+    expect(screen.getByTestId('chart-preset-bid')).toHaveTextContent(/OKX/);
+    expect(screen.queryByText(/Perp bids are 60%/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('chart-preset-bid-recorded')).toHaveTextContent(/Binance 60%/);
+    expect(screen.getByTestId('chart-preset-walls')).toHaveTextContent(/Bid 100/);
+    expect(screen.getByTestId('chart-preset-walls')).toHaveTextContent(/Resting/);
+
+    await user.click(screen.getByRole('switch', { name: /footprint/i }));
+    expect(screen.getByRole('radio', { name: 'Liquidity' })).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: 'All' })).not.toBeChecked();
   });
 
   it('paints stored buy and sell inside candles and names a venue that did not record', async () => {

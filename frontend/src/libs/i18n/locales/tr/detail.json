@@ -23,6 +23,32 @@
     "delistAnnounced": "Duyuru",
     "delistHalt": "Delist",
     "haltedLast": "Son fiyat",
+    "preset": "Masa",
+    "presets": {
+      "all": "Tümü",
+      "positioning": "Pozisyon",
+      "orderFlow": "Emir akışı",
+      "liquidity": "Likidite"
+    },
+    "levelReview": "{{venue}} sonraki işlemler {{hit}}, tutulan {{kept}}",
+    "presetAbsorptionWithheld": "{{venues}} aynı dakikaları kapsamadan birleşik emilim kapalı kalır.",
+    "presetPrintSizeWithheld": "{{venues}} bu pencereyi kapsamadan birleşik işlem boyutu kapalı kalır.",
+    "presetBid": "Perp alışlar, ortanın {{range}}% bandında defterin {{pct}}% kadarı.",
+    "presetBidMissing": "{{venues}} bu bandı kapsamadan birleşik perp alış payı kapalı kalır.",
+    "presetBidRecorded": "Kayıtlı: {{lines}}.",
+    "presetBidUncovered": "Perp bandı defterde tam durmuyor, bu yüzden alış payı gösterilmiyor.",
+    "presetWalls": "Bu borsanın canlı duvarları: {{walls}}.",
+    "presetWallsEmpty": "Bu borsanın canlı bandında büyük duvar yok.",
+    "presetWall": "{{side}} {{price}} · {{behavior}}",
+    "wallSide": {
+      "bid": "Alış",
+      "ask": "Satış"
+    },
+    "wallBehavior": {
+      "short": "Kısa",
+      "persistent": "Duruyor",
+      "suspicious": "Sık çekilen"
+    },
     "interval": "Aralık",
     "bars": "Bar",
     "loadErrorTitle": "Mum verisi yüklenemedi",

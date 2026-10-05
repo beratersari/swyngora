@@ -94,6 +94,8 @@ import {
   useGetMarketPerpDepthOverviewQuery,
   useGetMarketParticipationQuery,
   useGetMarketPrintSizeQuery,
+  useGetMarketAbsorptionQuery,
+  useGetMarketPerpDepthQuery,
   useGetMarketBotTrackerQuery,
   useGetMarketOrderCountQuery,
   useGetMarketPressureQuery,
@@ -193,6 +195,18 @@ import {
   liquidationChartLevels,
   runningCvdByCandle,
 } from './chartTape';
+import {
+  absorptionDeskNote,
+  chartPresetLayers,
+  chartWallNotes,
+  formatDeskPct,
+  isChartPreset,
+  liquidationLevelReview,
+  matchingChartPreset,
+  perpBidShareNote,
+  printSizeDeskNote,
+  type ChartDeskLayers,
+} from './chartPresets';
 import { CoinFlowTab } from './CoinFlowTab';
 import { PastOrderBook } from './PastOrderBook';
 import { CoinStructureTab } from './CoinStructureTab';
@@ -237,18 +251,28 @@ export function CoinDetailPage() {
   const [orderBookGroup, setOrderBookGroup] = useState('');
   const [orderHeatmapWindow, setOrderHeatmapWindow] = useState(DEFAULT_ORDER_HEATMAP_WINDOW);
   const [showSignalMarkers, setShowSignalMarkers] = useState(true);
-  const [showDelta, setShowDelta] = useState(true);
-  const [showCvd, setShowCvd] = useState(true);
+  const [layers, setLayers] = useState<ChartDeskLayers>(() => chartPresetLayers('all'));
+  const chartPreset = matchingChartPreset(layers);
+  const {
+    showDelta,
+    showCvd,
+    showLiqLevels,
+    showBook,
+    showFootprint,
+    showCrowd,
+    showOi,
+    showFunding,
+    showLiqNotional,
+    showLiqMap,
+    showOpenLevels,
+  } = layers;
+  const setLayer = (key: keyof ChartDeskLayers) => (value: boolean) => {
+    setLayers((prev) => ({ ...prev, [key]: value }));
+  };
+  const choosePreset = (value: string) => {
+    if (isChartPreset(value)) setLayers(chartPresetLayers(value));
+  };
   const [cvdRange, setCvdRange] = useState<CvdChartRange>('24h');
-  const [showLiqLevels, setShowLiqLevels] = useState(true);
-  const [showBook, setShowBook] = useState(true);
-  const [showFootprint, setShowFootprint] = useState(true);
-  const [showCrowd, setShowCrowd] = useState(true);
-  const [showOi, setShowOi] = useState(true);
-  const [showFunding, setShowFunding] = useState(true);
-  const [showLiqNotional, setShowLiqNotional] = useState(true);
-  const [showLiqMap, setShowLiqMap] = useState(true);
-  const [showOpenLevels, setShowOpenLevels] = useState(true);
   const [liqMapRange, setLiqMapRange] = useState<LiqHeatRange>(DEFAULT_LIQ_HEATMAP_RANGE);
   const [liqMapVenue, setLiqMapVenue] = useState<LiqHeatVenue>('combined');
   const [liqMapSide, setLiqMapSide] = useState<LiqHeatSide>('totals');
@@ -589,6 +613,22 @@ export function CoinDetailPage() {
     pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
     refetchOnFocus: true,
   });
+  const absorptionQuery = useGetMarketAbsorptionQuery(
+    { symbol: perpSymbol, exchange: 'all' },
+    {
+      skip: skipTape || chartPreset !== 'orderFlow',
+      pollingInterval: visible && chartPreset === 'orderFlow' ? 60_000 : 0,
+      refetchOnFocus: true,
+    },
+  );
+  const perpDepthQuery = useGetMarketPerpDepthQuery(
+    { symbol: perpSymbol, exchange: 'all', rangePct: 1 },
+    {
+      skip: skipTape || chartPreset !== 'liquidity',
+      pollingInterval: visible && chartPreset === 'liquidity' ? 60_000 : 0,
+      refetchOnFocus: true,
+    },
+  );
   const botTrackerQuery = useGetMarketBotTrackerQuery(tapeQueryArg, {
     skip: skipTape,
     pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
@@ -1120,17 +1160,34 @@ export function CoinDetailPage() {
 
   const chartPriceLines: CandleChartPriceLine[] = useMemo(() => {
     if (isEquity || !showLiqLevels) return [];
+    const levels = rtkCurrent(liqLevelsQuery);
     const sideLabel = (side: 'long' | 'short') => t(`detail:chart.liqSide.${side}`);
-    return liquidationChartLevels(rtkCurrent(liqLevelsQuery)).map((line) => ({
-      id: line.id,
-      price: line.price,
-      color: line.side === 'long' ? semanticColors.chart.down : semanticColors.chart.up,
-      title:
+    return liquidationChartLevels(levels).map((line) => {
+      const review = liquidationLevelReview(levels, cvdExchange, line.side, line.leverages);
+      const base =
         line.leverages.length > 0
           ? `${line.leverages.map((n) => `${n}×`).join(' · ')} ${sideLabel(line.side)}`
-          : sideLabel(line.side),
-    }));
-  }, [isEquity, showLiqLevels, liqLevelsQuery, t]);
+          : sideLabel(line.side);
+      if (!review) {
+        return {
+          id: line.id,
+          price: line.price,
+          color: line.side === 'long' ? semanticColors.chart.down : semanticColors.chart.up,
+          title: base,
+        };
+      }
+      return {
+        id: line.id,
+        price: line.price,
+        color: line.side === 'long' ? semanticColors.chart.down : semanticColors.chart.up,
+        title: `${base} · ${t('detail:chart.levelReview', {
+          venue: t(`detail:liqHeatmap.venues.${cvdExchange}`, { defaultValue: cvdExchange }),
+          hit: `${Math.round(review.hitRate * 100)}%`,
+          kept: `${Math.round(review.sizeScale * 100)}%`,
+        })}`,
+      };
+    });
+  }, [isEquity, showLiqLevels, liqLevelsQuery, cvdExchange, t]);
 
   const chartBookHeat = useMemo(
     () => (isEquity || !showBook ? [] : bookHeatColumns(rtkCurrent(chartBookQuery))),
@@ -1313,6 +1370,11 @@ export function CoinDetailPage() {
     if (showOi) void oiHistQuery.refetch();
     if (showFunding) void fundingHistQuery.refetch();
     if (showLiqNotional) void liqHistQuery.refetch();
+    if (chartPreset === 'orderFlow') {
+      void absorptionQuery.refetch();
+      void printSizeQuery.refetch();
+    }
+    if (chartPreset === 'liquidity') void perpDepthQuery.refetch();
   };
 
   if (!exchange) {
@@ -1355,6 +1417,19 @@ export function CoinDetailPage() {
     indicatorsQuery.isFetching ||
     tickerQuery.isFetching ||
     intervalsQuery.isFetching;
+
+  const absorptionNote =
+    chartPreset === 'orderFlow'
+      ? absorptionDeskNote(rtkCurrent(absorptionQuery) as Parameters<typeof absorptionDeskNote>[0], cvdExchange)
+      : null;
+  const printSizeNote =
+    chartPreset === 'orderFlow' ? printSizeDeskNote(rtkCurrent(printSizeQuery), cvdExchange) : null;
+  const perpBid =
+    chartPreset === 'liquidity'
+      ? perpBidShareNote(rtkCurrent(perpDepthQuery) as Parameters<typeof perpBidShareNote>[0])
+      : null;
+  const liveWalls =
+    chartPreset === 'liquidity' ? chartWallNotes(rtkCurrent(orderBookQuery)?.analysis?.walls) : [];
 
   return (
     <PageStack>
@@ -1473,6 +1548,16 @@ export function CoinDetailPage() {
         </ChartTitleRow>
 
         <DetailChartToolbar
+          chartPreset={isEquity ? null : chartPreset}
+          presetOptions={
+            isEquity
+              ? undefined
+              : (['all', 'positioning', 'orderFlow', 'liquidity'] as const).map((id) => ({
+                  value: id,
+                  label: t(`detail:chart.presets.${id}`),
+                }))
+          }
+          onChartPresetChange={isEquity ? undefined : choosePreset}
           intervals={supportedIntervals ?? []}
           interval={interval}
           intervalsLoading={intervalsQuery.isLoading && !supportedIntervals?.length}
@@ -1484,29 +1569,29 @@ export function CoinDetailPage() {
           showSignalMarkers={showSignalMarkers}
           onShowSignalMarkersChange={isEquity ? undefined : setShowSignalMarkers}
           showDelta={showDelta}
-          onShowDeltaChange={isEquity ? undefined : setShowDelta}
+          onShowDeltaChange={isEquity ? undefined : setLayer('showDelta')}
           showCvd={showCvd}
-          onShowCvdChange={isEquity ? undefined : setShowCvd}
+          onShowCvdChange={isEquity ? undefined : setLayer('showCvd')}
           cvdRange={cvdRange}
           onCvdRangeChange={isEquity ? undefined : setCvdRange}
           showLiqLevels={showLiqLevels}
-          onShowLiqLevelsChange={isEquity ? undefined : setShowLiqLevels}
+          onShowLiqLevelsChange={isEquity ? undefined : setLayer('showLiqLevels')}
           showBook={showBook}
-          onShowBookChange={isEquity ? undefined : setShowBook}
+          onShowBookChange={isEquity ? undefined : setLayer('showBook')}
           showFootprint={showFootprint}
-          onShowFootprintChange={isEquity ? undefined : setShowFootprint}
+          onShowFootprintChange={isEquity ? undefined : setLayer('showFootprint')}
           showCrowd={showCrowd}
-          onShowCrowdChange={isEquity ? undefined : setShowCrowd}
+          onShowCrowdChange={isEquity ? undefined : setLayer('showCrowd')}
           showOi={showOi}
-          onShowOiChange={isEquity ? undefined : setShowOi}
+          onShowOiChange={isEquity ? undefined : setLayer('showOi')}
           showFunding={showFunding}
-          onShowFundingChange={isEquity ? undefined : setShowFunding}
+          onShowFundingChange={isEquity ? undefined : setLayer('showFunding')}
           showLiqNotional={showLiqNotional}
-          onShowLiqNotionalChange={isEquity ? undefined : setShowLiqNotional}
+          onShowLiqNotionalChange={isEquity ? undefined : setLayer('showLiqNotional')}
           showLiqMap={showLiqMap}
-          onShowLiqMapChange={isEquity ? undefined : setShowLiqMap}
+          onShowLiqMapChange={isEquity ? undefined : setLayer('showLiqMap')}
           showOpenLevels={showOpenLevels}
-          onShowOpenLevelsChange={isEquity ? undefined : setShowOpenLevels}
+          onShowOpenLevelsChange={isEquity ? undefined : setLayer('showOpenLevels')}
           liqMapRange={liqMapRange}
           onLiqMapRangeChange={isEquity ? undefined : setLiqMapRange}
           liqMapVenue={liqMapVenue}
@@ -1703,6 +1788,92 @@ export function CoinDetailPage() {
                 {rtkErrorMessage(liqMapQuery.error, {
                   resource: t('detail:resource.liqHeatmap'),
                 })}
+              </Text>
+            ) : null}
+            {!isEquity && showLiqLevels && rtkCurrent(liqLevelsQuery)?.review?.summary ? (
+              <Text variant="caption" color="secondary" data-testid="chart-level-review">
+                {rtkCurrent(liqLevelsQuery)?.review?.summary}
+              </Text>
+            ) : null}
+            {!isEquity && chartPreset === 'orderFlow' && absorptionNote ? (
+              <Text variant="caption" color="secondary" data-testid="chart-preset-absorption">
+                {absorptionNote.text}
+                {absorptionNote.exchange !== 'combined' && absorptionNote.withheld.length > 0
+                  ? ` ${t('detail:chart.presetAbsorptionWithheld', {
+                      venues: absorptionNote.withheld
+                        .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
+                        .join(', '),
+                    })}`
+                  : ''}
+              </Text>
+            ) : null}
+            {!isEquity && chartPreset === 'orderFlow' && absorptionQuery.isError ? (
+              <Text variant="caption" color="secondary" data-testid="chart-preset-absorption-error">
+                {rtkErrorMessage(absorptionQuery.error, { resource: t('detail:resource.tape') })}
+              </Text>
+            ) : null}
+            {!isEquity && chartPreset === 'orderFlow' && printSizeNote ? (
+              <Text variant="caption" color="secondary" data-testid="chart-preset-print-size">
+                {printSizeNote.text}
+                {printSizeNote.exchange !== 'combined' && printSizeNote.withheld.length > 0
+                  ? ` ${t('detail:chart.presetPrintSizeWithheld', {
+                      venues: printSizeNote.withheld
+                        .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
+                        .join(', '),
+                    })}`
+                  : ''}
+              </Text>
+            ) : null}
+            {!isEquity && chartPreset === 'liquidity' && perpBid ? (
+              <Text variant="caption" color="secondary" data-testid="chart-preset-bid">
+                {perpBid.definite && perpBid.bidPct != null
+                  ? t('detail:chart.presetBid', {
+                      pct: formatDeskPct(perpBid.bidPct),
+                      range: perpBid.rangePct,
+                    })
+                  : perpBid.missing.length > 0
+                    ? t('detail:chart.presetBidMissing', {
+                        venues: perpBid.missing
+                          .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
+                          .join(', '),
+                      })
+                    : t('detail:chart.presetBidUncovered')}
+              </Text>
+            ) : null}
+            {!isEquity && chartPreset === 'liquidity' && perpBid && perpBid.recorded.length > 0 && !perpBid.definite ? (
+              <Text variant="caption" color="secondary" data-testid="chart-preset-bid-recorded">
+                {t('detail:chart.presetBidRecorded', {
+                  lines: perpBid.recorded
+                    .map(
+                      (row) =>
+                        `${t(`detail:liqHeatmap.venues.${row.exchange}`, { defaultValue: row.exchange })} ${formatDeskPct(row.bidPct)}%`,
+                    )
+                    .join(', '),
+                })}
+              </Text>
+            ) : null}
+            {!isEquity && chartPreset === 'liquidity' && perpDepthQuery.isError ? (
+              <Text variant="caption" color="secondary" data-testid="chart-preset-bid-error">
+                {rtkErrorMessage(perpDepthQuery.error, { resource: t('detail:resource.tape') })}
+              </Text>
+            ) : null}
+            {!isEquity && chartPreset === 'liquidity' && !rtkCurrentPending(orderBookQuery) ? (
+              <Text variant="caption" color="secondary" data-testid="chart-preset-walls">
+                {liveWalls.length > 0
+                  ? t('detail:chart.presetWalls', {
+                      walls: liveWalls
+                        .map((wall) =>
+                          t('detail:chart.presetWall', {
+                            side: t(`detail:chart.wallSide.${wall.side}`),
+                            price: wall.price,
+                            behavior: wall.behavior
+                              ? t(`detail:chart.wallBehavior.${wall.behavior}`, { defaultValue: wall.behavior })
+                              : '',
+                          }),
+                        )
+                        .join('; '),
+                    })
+                  : t('detail:chart.presetWallsEmpty')}
               </Text>
             ) : null}
             <CandleChartHost

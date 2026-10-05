@@ -1,4 +1,4 @@
-import { Button, Select, Switch } from 'antd';
+import { Button, Segmented, Select, Switch } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
@@ -14,6 +14,9 @@ const LIQ_MAP_SIDES = ['totals', 'longs', 'shorts'] as const;
 const LIQ_MAP_SOURCES = ['prints', 'model'] as const;
 
 export function DetailChartToolbar({
+  chartPreset = null,
+  presetOptions,
+  onChartPresetChange,
   intervals,
   interval,
   intervalsLoading,
@@ -70,6 +73,21 @@ export function DetailChartToolbar({
 
   return (
     <ToolbarRow>
+      {onChartPresetChange && presetOptions && presetOptions.length > 0 ? (
+        // A label wrapper would name and activate only the first desk.
+        <Field as="div">
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.preset')}
+          </Text>
+          <Segmented
+            size="small"
+            aria-label={t('detail:chart.preset')}
+            value={chartPreset ?? ''}
+            options={presetOptions}
+            onChange={(value) => onChartPresetChange(String(value))}
+          />
+        </Field>
+      ) : null}
       <Field>
         <Text variant="caption" color="secondary">
           {t('detail:chart.interval')}
