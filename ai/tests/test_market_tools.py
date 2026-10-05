@@ -451,6 +451,34 @@ class _Transport(httpx2.BaseTransport):
                     "asks": {"pulled": "0", "traded": "3000000", "added": "0"},
                 },
             )
+        if request.url.path.endswith("/flow-at-prices/candles"):
+            return httpx2.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "exchange": request.url.params.get("exchange") or "all",
+                    "interval": request.url.params.get("interval") or "1h",
+                    "definite": True,
+                    "combined": {
+                        "exchange": "all",
+                        "candles": [
+                            {
+                                "time": "2026-10-04T18:00:00Z",
+                                "rows": [
+                                    {
+                                        "price": "100",
+                                        "high": "100.05",
+                                        "buyVolume": "8",
+                                        "sellVolume": "2",
+                                        "isPoc": True,
+                                        "imbalance": "buy",
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                },
+            )
         if request.url.path.endswith("/flow-at-prices"):
             return httpx2.Response(
                 200,
@@ -710,6 +738,12 @@ def test_market_tools_hit_api(monkeypatch):
     assert flow["symbol"] == "BTCUSDT"
     assert flow["poc"]["price"] == "65520"
     assert flow["levels"][0]["delta"] == "+6000000"
+
+    assert "get_candle_footprint" in by_name
+    footprint = json.loads(
+        by_name["get_candle_footprint"].invoke({"symbol": "BTCUSDT", "interval": "1h"})
+    )
+    assert footprint["combined"]["candles"][0]["rows"][0]["isPoc"] is True
 
     assert "get_market_liquidity" in by_name
     liq = json.loads(by_name["get_market_liquidity"].invoke({"symbol": "BTCUSDT"}))

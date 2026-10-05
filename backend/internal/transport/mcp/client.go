@@ -1335,6 +1335,23 @@ func (c *APIClient) GetFlowAtPrices(ctx context.Context, exchange, symbol, windo
 	return c.get(ctx, "/api/v1/market/flow-at-prices", q)
 }
 
+// GetCandleFootprint returns buy and sell inside each candle.
+func (c *APIClient) GetCandleFootprint(ctx context.Context, exchange, symbol, interval, startTime, endTime string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	q.Set("interval", interval)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if startTime != "" {
+		q.Set("startTime", startTime)
+	}
+	if endTime != "" {
+		q.Set("endTime", endTime)
+	}
+	return c.get(ctx, "/api/v1/market/flow-at-prices/candles", q)
+}
+
 // GetBasis returns futures-vs-spot premium/discount per venue.
 func (c *APIClient) GetBasis(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

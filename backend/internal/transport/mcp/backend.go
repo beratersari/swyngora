@@ -2070,6 +2070,86 @@ func (b *Backend) GetFlowAtPrices(ctx context.Context, exchange, symbol, window,
 	return mustJSON(flowAtPricesMap(got))
 }
 
+func (b *Backend) GetCandleFootprint(ctx context.Context, exchange, symbol, interval, startTime, endTime string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	var startPtr, endPtr *time.Time
+	if startTime != "" {
+		t, err := parseMCPTime(startTime)
+		if err != nil {
+			return nil, err
+		}
+		startPtr = &t
+	}
+	if endTime != "" {
+		t, err := parseMCPTime(endTime)
+		if err != nil {
+			return nil, err
+		}
+		endPtr = &t
+	}
+	got, err := b.Market.GetCandleFootprint(ctx, exchange, symbol, interval, startPtr, endPtr)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(candleFootprintMap(got))
+}
+
+func candleFootprintMap(got *domain.CandleFootprintReport) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	missing := make([]string, 0, len(got.Missing))
+	for _, ex := range got.Missing {
+		missing = append(missing, string(ex))
+	}
+	venues := make([]map[string]any, 0, len(got.Venues))
+	for _, v := range got.Venues {
+		venues = append(venues, candleFootprintBookMap(v))
+	}
+	out := map[string]any{
+		"symbol": got.Symbol, "exchange": got.Exchange, "interval": got.Interval,
+		"stepSec": int(got.Step.Seconds()),
+		"from":    got.From.UTC(), "to": got.To.UTC(), "asOf": got.AsOf.UTC(),
+		"definite": got.Definite, "truncated": got.Truncated, "missing": missing,
+		"venues": venues, "summary": got.Summary, "note": got.Note,
+	}
+	if got.Combined != nil {
+		out["combined"] = candleFootprintBookMap(*got.Combined)
+	}
+	return out
+}
+
+func candleFootprintBookMap(v domain.CandleFootprintBook) map[string]any {
+	candles := make([]map[string]any, 0, len(v.Candles))
+	for _, c := range v.Candles {
+		rows := make([]map[string]any, 0, len(c.Rows))
+		for _, row := range c.Rows {
+			item := map[string]any{
+				"price": formatHistQty(row.Price), "high": formatHistQty(row.High),
+				"buyVolume": formatHistQty(row.Buy), "sellVolume": formatHistQty(row.Sell),
+				"delta":    domain.FormatSignedQty(row.Buy - row.Sell),
+				"buyCount": row.BuyN, "sellCount": row.SellN, "isPoc": row.IsPoc,
+			}
+			if row.Imbalance != "" {
+				item["imbalance"] = row.Imbalance
+			}
+			rows = append(rows, item)
+		}
+		candle := map[string]any{
+			"time": c.Open.UTC(), "buyVolume": formatHistQty(c.Buy), "sellVolume": formatHistQty(c.Sell),
+			"delta":    domain.FormatSignedQty(c.Buy - c.Sell),
+			"buyCount": c.BuyN, "sellCount": c.SellN, "rows": rows,
+		}
+		if c.POC > 0 {
+			candle["poc"] = formatHistQty(c.POC)
+		}
+		candles = append(candles, candle)
+	}
+	return map[string]any{"exchange": string(v.Exchange), "candles": candles}
+}
+
 func flowAtPricesMap(got *domain.FlowAtPricesReport) map[string]any {
 	if got == nil {
 		return map[string]any{}

@@ -1,5 +1,7 @@
 import type {
+  CandleChartFootprintCandle,
   CandleChartFootprintLevel,
+  CandleChartFootprintRow,
   CandleChartHeatColumn,
   CandleChartLiqBar,
   CandleChartLiqCell,
@@ -19,6 +21,9 @@ import {
 import type { LiqHeatSide, LiqHeatVenue } from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.types';
 import type { ChartLinePoint } from '@/libs/utils';
 import type {
+  CandleFootprintBook,
+  CandleFootprintReport,
+  CandleFootprintRow,
   FlowAtPricesReport,
   HistorySpan,
   LiquidationHuntHeatmap,
@@ -145,6 +150,129 @@ export function footprintLevels(report: FlowAtPricesReport | undefined): CandleC
     out.push({ price, buy, sell });
   }
   return out.sort((a, b) => a.price - b.price);
+}
+
+/** Newest candles requested before the chart reports a visible span. */
+export const CANDLE_FOOTPRINT_DEFAULT_CANDLES = 120;
+
+const CANDLE_FOOTPRINT_MAX_CANDLES = 400;
+const CANDLE_FOOTPRINT_QUANTUM = 8;
+
+/**
+ * Visible candle range snapped to candle opens, then to 8-candle blocks,
+ * and capped at 400 candles. A one-candle pan stays on the same block.
+ */
+export function candleFootprintSpan(
+  intervalSec: number,
+  fromSec: number,
+  toSec: number,
+): { from: number; to: number } | null {
+  if (!Number.isFinite(intervalSec) || intervalSec <= 0) return null;
+  if (!Number.isFinite(fromSec) || !Number.isFinite(toSec) || toSec <= fromSec) return null;
+  const step = intervalSec;
+  let from = Math.floor(fromSec / step) * step;
+  let to = Math.ceil(toSec / step) * step;
+  if (to <= from) to = from + step;
+  const maxSpan = CANDLE_FOOTPRINT_MAX_CANDLES * step;
+  if (to - from > maxSpan) from = to - maxSpan;
+  const quantum = step * CANDLE_FOOTPRINT_QUANTUM;
+  from = Math.floor(from / quantum) * quantum;
+  to = Math.ceil(to / quantum) * quantum;
+  if (to - from > maxSpan) {
+    to = Math.ceil(toSec / quantum) * quantum;
+    from = to - maxSpan;
+  }
+  if (!(to > from)) return null;
+  return { from, to };
+}
+
+export type CandleFootprintChart = {
+  candles: CandleChartFootprintCandle[];
+  stepSec: number;
+  definite: boolean;
+  truncated: boolean;
+  missing: string[];
+  /** Venue drawn when the combined book is withheld. Empty when combined is drawn. */
+  exchange: string;
+};
+
+const EMPTY_CANDLE_FOOTPRINT: CandleFootprintChart = {
+  candles: [],
+  stepSec: 0,
+  definite: false,
+  truncated: false,
+  missing: [],
+  exchange: '',
+};
+
+function candleFootprintRows(rows: CandleFootprintRow[] | undefined): CandleChartFootprintRow[] {
+  const out: CandleChartFootprintRow[] = [];
+  for (const row of rows ?? []) {
+    const price = parseTapeNumber(row.price);
+    const high = parseTapeNumber(row.high);
+    const buy = parseTapeNumber(row.buyVolume) ?? 0;
+    const sell = parseTapeNumber(row.sellVolume) ?? 0;
+    if (
+      price == null ||
+      high == null ||
+      !Number.isFinite(price) ||
+      !Number.isFinite(high) ||
+      buy + sell <= 0
+    ) {
+      continue;
+    }
+    const imbalance = row.imbalance === 'buy' || row.imbalance === 'sell' ? row.imbalance : '';
+    out.push({ price, high, buy, sell, poc: row.isPoc === true, imbalance });
+  }
+  return out.sort((a, b) => a.price - b.price);
+}
+
+function candleFootprintCandles(book: CandleFootprintBook | undefined): CandleChartFootprintCandle[] {
+  const out: CandleChartFootprintCandle[] = [];
+  for (const candle of book?.candles ?? []) {
+    const time = unixSeconds(candle.time);
+    if (time == null) continue;
+    const rows = candleFootprintRows(candle.rows);
+    if (rows.length === 0) continue;
+    out.push({ time, rows });
+  }
+  return out;
+}
+
+/**
+ * Combined rows when every venue was recorded and the book has candles.
+ * Otherwise the page's venue, then any other venue that has candles.
+ */
+export function candleFootprintView(
+  report: CandleFootprintReport | undefined,
+  pageExchange: string,
+): CandleFootprintChart {
+  if (!report) return EMPTY_CANDLE_FOOTPRINT;
+  const missing = (report.missing ?? []).filter((id): id is string => Boolean(id));
+  const base: CandleFootprintChart = {
+    candles: [],
+    stepSec: report.stepSec != null && report.stepSec > 0 ? report.stepSec : 0,
+    definite: report.definite === true,
+    truncated: report.truncated === true,
+    missing,
+    exchange: '',
+  };
+  if (base.definite) {
+    const combined = candleFootprintCandles(report.combined);
+    if (combined.length > 0) return { ...base, candles: combined };
+  }
+  const want = pageExchange.toLowerCase();
+  const venues = report.venues ?? [];
+  const page = venues.find((venue) => (venue.exchange ?? '').toLowerCase() === want);
+  const pageCandles = candleFootprintCandles(page);
+  if (pageCandles.length > 0) return { ...base, candles: pageCandles, exchange: want };
+  for (const venue of venues) {
+    const candles = candleFootprintCandles(venue);
+    if (candles.length > 0) {
+      return { ...base, candles, exchange: (venue.exchange ?? '').toLowerCase() };
+    }
+  }
+  return base;
 }
 
 export type { LiqHeatSide, LiqHeatVenue };

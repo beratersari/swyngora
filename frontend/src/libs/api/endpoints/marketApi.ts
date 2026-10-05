@@ -157,6 +157,8 @@ import type {
   SymbolMarketQuery,
   VolumeProfileReport,
   FlowAtPricesReport,
+  CandleFootprintReport,
+  CandleFootprintQuery,
   MarketLongShortRatio,
   LongShortQuery,
   HistorySpan,
@@ -167,7 +169,13 @@ import type {
 import type { ForensicsRadarReview } from '@/libs/types/forensics.types';
 // delist types re-exported below
 
-export type { DerivativesCoin, DerivativesVenue } from './marketApi.types';
+export type {
+  DerivativesCoin,
+  DerivativesVenue,
+  CandleFootprintBook,
+  CandleFootprintCandle,
+  CandleFootprintRow,
+} from './marketApi.types';
 
 export type {
   SpotMarket,
@@ -246,6 +254,8 @@ export type {
   FlowAtPricesReport,
   FlowAtPricesVenue,
   FlowAtPricesLevel,
+  CandleFootprintReport,
+  CandleFootprintQuery,
   MarketParticipation,
   MarketPrintSize,
   MarketPrintSizeOverview,
@@ -679,6 +689,12 @@ export const marketApi = baseApi.injectEndpoints({
         params: compactParams({ ...arg }),
       }),
     }),
+    getMarketCandleFootprint: build.query<CandleFootprintReport, CandleFootprintQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/flow-at-prices/candles',
+        params: compactParams({ ...arg }),
+      }),
+    }),
     getMarketVWAP: build.query<MarketDeskReport, SymbolMarketQuery>({
       query: (arg) => ({
         url: '/api/v1/market/vwap',
@@ -1018,6 +1034,7 @@ export const {
   useGetMarketTakerFlowQuery,
   useGetMarketNetPositionQuery,
   useGetMarketFlowAtPricesQuery,
+  useGetMarketCandleFootprintQuery,
   useGetMarketVWAPQuery,
   useGetMarketVolumeProfileQuery,
   useGetMarketAbsorptionQuery,

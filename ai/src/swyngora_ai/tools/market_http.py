@@ -1076,6 +1076,23 @@ class FlowAtPricesInput(BaseModel):
     )
 
 
+class CandleFootprintInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|okx|all (default all). Combined only when every venue recorded.",
+    )
+    interval: str = Field(description="Candle size, same as the chart: 1m, 5m, 15m, 1h, 4h, 1d, 1w, 1M")
+    start_time: str = Field(
+        default="",
+        description="Range start (RFC3339 or unix ms). Set with end_time. Otherwise the newest 120 candles.",
+    )
+    end_time: str = Field(
+        default="",
+        description="Range end (RFC3339 or unix ms). Set with start_time.",
+    )
+
+
 class BasisInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -2829,6 +2846,20 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if max_price:
             params["maxPrice"] = max_price
         return http.get("/api/v1/market/flow-at-prices", params)
+
+    def get_candle_footprint(
+        symbol: str,
+        exchange: str = "all",
+        interval: str = "1h",
+        start_time: str = "",
+        end_time: str = "",
+    ) -> str:
+        params: dict[str, Any] = {"symbol": symbol, "interval": interval, "exchange": exchange}
+        if start_time:
+            params["startTime"] = start_time
+        if end_time:
+            params["endTime"] = end_time
+        return http.get("/api/v1/market/flow-at-prices/candles", params)
 
     def get_basis(symbol: str, exchange: str = "all") -> str:
         return http.get(
@@ -5601,6 +5632,26 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Optional min_price/max_price and tick_size. Binance + Bybit."
             ),
             args_schema=FlowAtPricesInput,
+        ),
+        StructuredTool.from_function(
+            get_candle_footprint,
+            name="get_candle_footprint",
+            description=(
+                "Buy versus sell inside each candle, at the prices that actually "
+                "printed. Each candle has price rows with buy and sell USDT, print "
+                "count, delta, the busiest row (isPoc), and imbalance buy or sell "
+                "when one side is at least 3× the other. interval matches the chart "
+                "(1m, 5m, 15m, 1h, 4h, 1d, 1w, 1M). Optional start_time and end_time "
+                "together; otherwise the newest 120 candles. At most 400 candles and "
+                "30 days; truncated when the range is shortened. Closed minutes are "
+                "the stored ladder (about 30 days). The current minute uses the live "
+                "tape when that tape already covers it. This does not walk public "
+                "trade history. exchange=all returns each venue plus combined. "
+                "combined is present only when every venue was recorded for the range. "
+                "missing names a venue with no stored minutes and that venue is not "
+                "treated as zero. Not financial advice."
+            ),
+            args_schema=CandleFootprintInput,
         ),
         StructuredTool.from_function(
             get_basis,

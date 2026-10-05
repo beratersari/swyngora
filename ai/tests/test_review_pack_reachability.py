@@ -59,6 +59,7 @@ BOOK_FLOW_ANALYTICS = frozenset(
         "get_order_count_ratio",
         "get_order_count_overview",
         "get_flow_at_prices",
+        "get_candle_footprint",
         "get_taker_flow",
         "get_net_position",
         "get_cvd",

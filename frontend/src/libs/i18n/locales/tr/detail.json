@@ -64,6 +64,9 @@
     "openLevelDelta": "Açık long − short",
     "liqMapPan": "Bu aralığın önceki kısmı için mumları yüklemek üzere sola kaydırın.",
     "bookStored": "Defter gölgesi ekrandaki mumları izler. 30 dakikadan uzun bir görünüm, yaklaşık 30 güne kadar kayıtlı dakika merdivenlerini kullanır.",
+    "candleFootprint": "Her mumun içindeki alış ve satış kayıtlı dakikalardan gelir, yaklaşık 30 gün. Açık dakika, canlı bant o dakikayı kapsıyorsa oradan gelir. En yoğun satır işaretlenir. Diğerinin en az 3 katı olan taraf çerçevelenir. Yalnızca bilgilendirme amaçlıdır.",
+    "candleFootprintVenue": "Birleşik alış ve satış bu grafikte yok çünkü {{venues}} bu aralığı kaydetmedi. Mumlar {{exchange}} verisini gösterir.",
+    "candleFootprintTruncated": "Bu görünüm en yeni 400 mumu tutar.",
     "recorded": "Kayıt: {{parts}}.",
     "recordedPart": "{{kind}} {{exchange}} {{span}}",
     "recordedEmpty": "Bu coin için kayıt, bir örnek saklanınca başlar.",
@@ -77,7 +80,7 @@
       "long": "Long",
       "short": "Short"
     },
-    "tapeHint": "Alış − satış, her mumdaki agresif vadeli akıştır. CVD aralığı 24s 5 dakikalık barlardır. 7g, 30g ve 90g kayıtlı dakikaları 30 dakika, 2 saat ve 4 saatlik barlara katlar ve biriken toplamı çizer. CVD ayrıca 00:00 UTC’de ve geçerli 4 saatlik açılışta sıfırlanır. Defter gölgesi ekrandaki mumların bekleyen büyüklüğüdür. 30 dakikadan uzun bir görünüm kayıtlı dakika merdivenlerini kullanır. Mumların arkasındaki renk, seçilen aralıktaki tahmini likidasyon yoğunluğudur. Birleşik hücre, yalnızca Binance, Bybit ve OKX’in her birinin kendi fiyatı ve açık pozisyonu varken boyanır. Açık seviyeler, fiyat içlerinden geçene kadar durur. Sağ kenar her fiyattaki alışa karşı satıştır, yanındaki çubuklar tahmini likidasyon cepleridir. Alt şerit Binance ve OKX için kalabalık long yüzdesi ile büyük traderları karşılaştırır. Açık pozisyon ve fonlama, Binance, Bybit ve OKX için ayrı kayıtlı çizgilerdir. Likidasyon çubuğu, o mumdaki short notional eksi long notionaldir. Kaldıraç karışımı bir modeldir. Yalnızca bilgi amaçlıdır.",
+    "tapeHint": "Alış − satış, her mumdaki agresif vadeli akıştır. CVD aralığı 24s 5 dakikalık barlardır. 7g, 30g ve 90g kayıtlı dakikaları 30 dakika, 2 saat ve 4 saatlik barlara katlar ve biriken toplamı çizer. CVD ayrıca 00:00 UTC’de ve geçerli 4 saatlik açılışta sıfırlanır. Defter gölgesi ekrandaki mumların bekleyen büyüklüğüdür. 30 dakikadan uzun bir görünüm kayıtlı dakika merdivenlerini kullanır. Mumların arkasındaki renk, seçilen aralıktaki tahmini likidasyon yoğunluğudur. Birleşik hücre, yalnızca Binance, Bybit ve OKX’in her birinin kendi fiyatı ve açık pozisyonu varken boyanır. Açık seviyeler, fiyat içlerinden geçene kadar durur. Kayıtlı dakikalar mumları doldurduğunda alış ve satış her mumun içinde durur. Aksi halde sağ kenar her fiyattaki alışa karşı satıştır, yanındaki çubuklar tahmini likidasyon cepleridir. Alt şerit Binance ve OKX için kalabalık long yüzdesi ile büyük traderları karşılaştırır. Açık pozisyon ve fonlama, Binance, Bybit ve OKX için ayrı kayıtlı çizgilerdir. Likidasyon çubuğu, o mumdaki short notional eksi long notionaldir. Kaldıraç karışımı bir modeldir. Yalnızca bilgi amaçlıdır.",
     "pumpOn": "Açık",
     "pumpOff": "Kapalı",
     "pumpHint": "|getiri| ≥ eşik olduğunda işaret (yalnızca bilgilendirme)",

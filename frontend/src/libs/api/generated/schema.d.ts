@@ -2298,6 +2298,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/flow-at-prices/candles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Buy and sell inside each candle
+         * @description **Candle footprint** splits aggressive futures prints into the
+         *     candle they traded in, then into price rows inside that candle.
+         *     Each row is market **buy** versus **sell** USDT, print count, and
+         *     **delta**. `isPoc` is the busiest row in that candle. `imbalance`
+         *     is `buy` or `sell` when that side is at least 3× the other.
+         *     One-sided rows below 1% of the candle are left unmarked.
+         *     This is the chart footprint. `/flow-at-prices` is still the
+         *     single ladder for a whole window.
+         *     `interval` matches the candle chart (`1m`, `5m`, `15m`, `1h`,
+         *     `4h`, `1d`, `1w`, `1M`). `startTime` and `endTime` are optional
+         *     and must be set together (RFC3339 or unix ms). A missing range
+         *     is the newest 120 candles. The read keeps at most 400 candles
+         *     and 30 days, and sets `truncated` when it shortens the range.
+         *     Closed minutes come from the stored ladder (about 30 days).
+         *     The current minute comes from the live tape when that tape
+         *     already covers it. This route does not walk public trade history.
+         *     `exchange=all` returns each venue plus `combined`. `combined`
+         *     is present only when every venue was recorded for the range.
+         *     `missing` names a venue with no stored minutes. A missing venue
+         *     is not treated as zero. Up to 24 price rows are kept per candle.
+         *     Informational only.
+         */
+        get: operations["getMarketCandleFootprint"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/venue-divergence": {
         parameters: {
             query?: never;
@@ -12844,6 +12884,38 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Per-venue and optional combined price ladder */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketCandleFootprint: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | okx | all (default all) */
+                exchange?: string;
+                /** @description Candle size, same as the chart. 1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 12h, 1d, 3d, 1w, or 1M. */
+                interval: string;
+                /** @description Range start (RFC3339 or unix ms). Set with endTime. Max 30 days and 400 candles. */
+                startTime?: string;
+                /** @description Range end (RFC3339 or unix ms). Set with startTime. */
+                endTime?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Buy and sell rows inside each candle */
             200: {
                 headers: {
                     [name: string]: unknown;

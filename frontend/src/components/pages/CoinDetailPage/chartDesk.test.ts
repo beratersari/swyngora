@@ -5,6 +5,8 @@ import {
   chartBookWindow,
   crowdTopLines,
   crowdTopSeries,
+  candleFootprintSpan,
+  candleFootprintView,
   footprintLevels,
   footprintWindow,
   formatRecordedSpan,
@@ -62,6 +64,126 @@ describe('chart desk mappers', () => {
       },
     });
     expect(levels).toEqual([{ price: 100, buy: 8, sell: 2 }]);
+  });
+
+  it('snaps the candle footprint to 8-candle blocks and keeps the newest 400', () => {
+    const block = candleFootprintSpan(
+      3600,
+      Date.parse('2026-10-05T10:10:00Z') / 1000,
+      Date.parse('2026-10-05T13:40:00Z') / 1000,
+    );
+    expect(block).toEqual({
+      from: Date.parse('2026-10-05T08:00:00Z') / 1000,
+      to: Date.parse('2026-10-05T16:00:00Z') / 1000,
+    });
+    expect(
+      candleFootprintSpan(
+        3600,
+        Date.parse('2026-10-05T11:05:00Z') / 1000,
+        Date.parse('2026-10-05T14:10:00Z') / 1000,
+      ),
+    ).toEqual(block);
+    expect(candleFootprintSpan(3600, 0, 500 * 3600)).toEqual({
+      from: 104 * 3600,
+      to: 504 * 3600,
+    });
+    expect(candleFootprintSpan(0, 1, 2)).toBeNull();
+    expect(candleFootprintSpan(Number.NaN, 1, 2)).toBeNull();
+    expect(candleFootprintSpan(60, 10, 10)).toBeNull();
+  });
+
+  it('draws combined candle rows only when the book is definite', () => {
+    const drawn = candleFootprintView(
+      {
+        definite: true,
+        stepSec: 3600,
+        truncated: true,
+        missing: [],
+        combined: {
+          candles: [
+            {
+              time: '2026-10-05T10:00:00Z',
+              rows: [
+                {
+                  price: '100',
+                  high: '100.05',
+                  buyVolume: '8',
+                  sellVolume: '2',
+                  isPoc: true,
+                  imbalance: 'buy',
+                },
+                { price: '101', high: '101.05', buyVolume: '0', sellVolume: '0' },
+              ],
+            },
+          ],
+        },
+      },
+      'binance',
+    );
+    expect(drawn.definite).toBe(true);
+    expect(drawn.truncated).toBe(true);
+    expect(drawn.exchange).toBe('');
+    expect(drawn.candles).toEqual([
+      {
+        time: Date.parse('2026-10-05T10:00:00Z') / 1000,
+        rows: [{ price: 100, high: 100.05, buy: 8, sell: 2, poc: true, imbalance: 'buy' }],
+      },
+    ]);
+
+    const withheld = candleFootprintView(
+      {
+        definite: false,
+        missing: ['okx'],
+        stepSec: 3600,
+        combined: {
+          candles: [
+            {
+              time: '2026-10-05T10:00:00Z',
+              rows: [{ price: '1', high: '2', buyVolume: '9', sellVolume: '1' }],
+            },
+          ],
+        },
+        venues: [
+          {
+            exchange: 'binance',
+            candles: [
+              {
+                time: '2026-10-05T10:00:00Z',
+                rows: [{ price: '100', high: '101', buyVolume: '5', sellVolume: '4' }],
+              },
+            ],
+          },
+        ],
+      },
+      'binance',
+    );
+    expect(withheld.definite).toBe(false);
+    expect(withheld.missing).toEqual(['okx']);
+    expect(withheld.exchange).toBe('binance');
+    expect(withheld.candles[0]?.rows[0]?.buy).toBe(5);
+
+    const other = candleFootprintView(
+      {
+        definite: false,
+        missing: ['binance'],
+        venues: [
+          { exchange: 'binance', candles: [] },
+          {
+            exchange: 'bybit',
+            candles: [
+              {
+                time: '2026-10-05T10:00:00Z',
+                rows: [{ price: '3', high: '4', buyVolume: '1', sellVolume: '1' }],
+              },
+            ],
+          },
+        ],
+      },
+      'binance',
+    );
+    expect(other.exchange).toBe('bybit');
+    expect(other.candles).toHaveLength(1);
+    expect(candleFootprintView(undefined, 'binance').candles).toEqual([]);
   });
 
   it('paints heatmap cells and skips an empty combined column', () => {

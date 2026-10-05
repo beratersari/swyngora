@@ -93,6 +93,7 @@ type DataPort interface {
 	GetMarketPressure(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeProfile(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize float64) (json.RawMessage, error)
 	GetFlowAtPrices(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize, minPrice, maxPrice float64) (json.RawMessage, error)
+	GetCandleFootprint(ctx context.Context, exchange, symbol, interval, startTime, endTime string) (json.RawMessage, error)
 	GetVWAP(ctx context.Context, exchange, symbol, window, startTime, endTime string) (json.RawMessage, error)
 	GetAround(ctx context.Context, exchange, symbol, at, window, during string) (json.RawMessage, error)
 	CompareAround(ctx context.Context, exchange, symbol, from, to, window, during string) (json.RawMessage, error)
@@ -1857,6 +1858,29 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetFlowAtPrices(ctx, req.GetString("exchange", "all"), symbol, req.GetString("window", ""), req.GetString("startTime", ""), req.GetString("endTime", ""), req.GetFloat("tickSize", 0), req.GetFloat("minPrice", 0), req.GetFloat("maxPrice", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_candle_footprint",
+		mcp.WithDescription("Buy versus sell inside each candle, at the prices that actually printed. Each candle has price rows with buy and sell USDT, print count, delta, the busiest row (isPoc), and imbalance buy or sell when one side is at least 3× the other. interval matches the chart (1m, 5m, 15m, 1h, 4h, 1d, 1w, 1M). Optional startTime and endTime together; otherwise the newest 120 candles. At most 400 candles and 30 days; truncated when the range is shortened. Closed minutes are the stored ladder (about 30 days). The current minute uses the live tape when that tape already covers it. This does not walk public trade history. exchange=all returns each venue plus combined. combined is present only when every venue was recorded for the range. missing names a venue with no stored minutes and that venue is not treated as zero. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all)")),
+		mcp.WithString("interval", mcp.Required(), mcp.Description("Candle size: 1m, 5m, 15m, 1h, 4h, 1d, 1w, or 1M.")),
+		mcp.WithString("startTime", mcp.Description("Range start (RFC3339 or unix ms). Set with endTime.")),
+		mcp.WithString("endTime", mcp.Description("Range end (RFC3339 or unix ms). Set with startTime.")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		interval, err := req.RequireString("interval")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetCandleFootprint(ctx, req.GetString("exchange", "all"), symbol, interval, req.GetString("startTime", ""), req.GetString("endTime", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

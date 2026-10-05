@@ -10,6 +10,7 @@ import type {
 } from 'lightweight-charts';
 import { semanticColors } from '@/styles/tokens';
 import type {
+  CandleChartFootprintCandle,
   CandleChartFootprintLevel,
   CandleChartHeatColumn,
   CandleChartLiqBar,
@@ -20,6 +21,8 @@ import type {
 export type DeskOverlayModel = {
   bookHeat: CandleChartHeatColumn[];
   footprint: CandleChartFootprintLevel[];
+  candleFootprints: CandleChartFootprintCandle[];
+  footprintStepSec: number;
   liqProfile: CandleChartLiqBar[];
   liqHeat: CandleChartLiqCell[];
   openLevels: CandleChartOpenLevel[];
@@ -37,10 +40,31 @@ type MediaTarget = {
 const EMPTY: DeskOverlayModel = {
   bookHeat: [],
   footprint: [],
+  candleFootprints: [],
+  footprintStepSec: 0,
   liqProfile: [],
   liqHeat: [],
   openLevels: [],
 };
+
+const FOOTPRINT_SLOT = 0.9;
+const FOOTPRINT_MIN_ROW = 3;
+const FOOTPRINT_LABEL_SLOT = 44;
+const FOOTPRINT_LABEL_ROW = 11;
+
+function trimOneDecimal(n: number): string {
+  return (Math.round(n * 10) / 10).toString().replace(/\.0$/, '');
+}
+
+/** Compact quantity for a footprint cell: 12.4k, 1.2m. */
+function compactQty(n: number): string {
+  const abs = Math.abs(n);
+  if (!Number.isFinite(abs) || abs === 0) return '0';
+  if (abs >= 1_000_000) return `${trimOneDecimal(abs / 1_000_000)}m`;
+  if (abs >= 1_000) return `${trimOneDecimal(abs / 1_000)}k`;
+  if (abs >= 100) return String(Math.round(abs));
+  return trimOneDecimal(abs);
+}
 
 const LIQ_HEAT_ALPHA = 0.72;
 
@@ -149,6 +173,76 @@ class HeatRenderer implements IPrimitivePaneRenderer {
         };
         paint(col.bids, semanticColors.chart.up);
         paint(col.asks, semanticColors.chart.down);
+      }
+      context.restore();
+    });
+  }
+}
+
+class CandleFootprintRenderer implements IPrimitivePaneRenderer {
+  constructor(
+    private readonly chart: () => IChartApi | null,
+    private readonly series: () => ISeriesApi<SeriesType> | null,
+    private readonly model: () => DeskOverlayModel,
+  ) {}
+
+  draw(target: MediaTarget): void {
+    const chart = this.chart();
+    const series = this.series();
+    const candles = this.model().candleFootprints;
+    const step = this.model().footprintStepSec;
+    if (!chart || !series || candles.length === 0 || !(step > 0)) return;
+    target.useMediaCoordinateSpace(({ context, mediaSize }) => {
+      const scale = chart.timeScale();
+      const span = visibleSpan(scale);
+      context.save();
+      context.lineWidth = 1;
+      context.font = '9px sans-serif';
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      for (const candle of candles) {
+        const xCenter = timeToX(scale, candle.time, span);
+        if (xCenter == null) continue;
+        const xNext = timeToX(scale, candle.time + step, span);
+        let slot =
+          xNext != null ? Math.abs(xNext - xCenter) : span ? Math.abs(span.pxPerSec * step) : 8;
+        if (!(slot > 0)) slot = 8;
+        const width = Math.max(2, slot * FOOTPRINT_SLOT);
+        const left = xCenter - width / 2;
+        if (left > mediaSize.width || left + width < 0) continue;
+        let sideMax = 0;
+        for (const row of candle.rows) sideMax = Math.max(sideMax, row.buy, row.sell);
+        if (!(sideMax > 0)) continue;
+        const half = width / 2;
+        for (const row of candle.rows) {
+          const yHi = series.priceToCoordinate(row.high);
+          const yLo = series.priceToCoordinate(row.price);
+          if (yHi == null || yLo == null) continue;
+          const top = Math.min(yHi, yLo);
+          const raw = Math.abs(yLo - yHi);
+          const height = Math.max(FOOTPRINT_MIN_ROW, raw);
+          if (top > mediaSize.height || top + height < 0) continue;
+          const paintSide = (x: number, qty: number, color: string) => {
+            if (!(qty > 0)) return;
+            context.globalAlpha = 0.22 + 0.62 * Math.min(1, qty / sideMax);
+            context.fillStyle = color;
+            context.fillRect(x, top, half, height);
+          };
+          paintSide(left, row.sell, semanticColors.chart.down);
+          paintSide(left + half, row.buy, semanticColors.chart.up);
+          context.globalAlpha = 1;
+          context.strokeStyle = semanticColors.accent.default;
+          if (row.poc) context.strokeRect(left, top, width, height);
+          if (row.imbalance === 'sell') context.strokeRect(left, top, half, height);
+          else if (row.imbalance === 'buy') context.strokeRect(left + half, top, half, height);
+          if (slot >= FOOTPRINT_LABEL_SLOT && raw >= FOOTPRINT_LABEL_ROW) {
+            context.fillStyle = semanticColors.text.inverse;
+            if (row.sell > 0) context.fillText(compactQty(row.sell), left + half / 2, top + height / 2);
+            if (row.buy > 0) {
+              context.fillText(compactQty(row.buy), left + half + half / 2, top + height / 2);
+            }
+          }
+        }
       }
       context.restore();
     });
@@ -279,6 +373,19 @@ class HeatView implements IPrimitivePaneView {
   }
 }
 
+class CandleFootprintView implements IPrimitivePaneView {
+  private readonly _renderer: CandleFootprintRenderer;
+  constructor(renderer: CandleFootprintRenderer) {
+    this._renderer = renderer;
+  }
+  zOrder(): 'top' {
+    return 'top';
+  }
+  renderer(): IPrimitivePaneRenderer {
+    return this._renderer;
+  }
+}
+
 class ProfileView implements IPrimitivePaneView {
   private readonly _renderer: ProfileRenderer;
   constructor(renderer: ProfileRenderer) {
@@ -292,7 +399,7 @@ class ProfileView implements IPrimitivePaneView {
   }
 }
 
-/** Book heatmap behind candles, plus footprint and liquidation profile on the right. */
+/** Book heatmap behind candles, buy/sell inside each candle, and the right-edge profile. */
 export class DeskOverlayPrimitive implements ISeriesPrimitive<Time> {
   private _chart: IChartApi | null = null;
   private _series: ISeriesApi<SeriesType> | null = null;
@@ -307,6 +414,7 @@ export class DeskOverlayPrimitive implements ISeriesPrimitive<Time> {
     this._views = [
       new HeatView(new HeatRenderer(chart, series, model)),
       new LevelView(new LevelRenderer(chart, series, model)),
+      new CandleFootprintView(new CandleFootprintRenderer(chart, series, model)),
       new ProfileView(new ProfileRenderer(series, model)),
     ];
   }

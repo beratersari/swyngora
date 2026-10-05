@@ -64,6 +64,8 @@ export function CandleChartHost({
   priceLines = [],
   bookHeat = [],
   footprint = [],
+  candleFootprints = [],
+  footprintStepSec = 0,
   liqProfile = [],
   liqHeat = [],
   openLevels = [],
@@ -363,8 +365,16 @@ export function CandleChartHost({
   }, [height]);
 
   useEffect(() => {
-    deskRef.current?.setModel({ bookHeat, footprint, liqProfile, liqHeat, openLevels });
-  }, [bookHeat, footprint, liqProfile, liqHeat, openLevels]);
+    deskRef.current?.setModel({
+      bookHeat,
+      footprint,
+      candleFootprints,
+      footprintStepSec,
+      liqProfile,
+      liqHeat,
+      openLevels,
+    });
+  }, [bookHeat, footprint, candleFootprints, footprintStepSec, liqProfile, liqHeat, openLevels]);
 
   // New symbol / interval → re-fit on next data, clear length bookkeeping.
   // Must run in useLayoutEffect *before* the data-sync layout effect so the

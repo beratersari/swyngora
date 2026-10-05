@@ -387,6 +387,61 @@ export type FlowAtPricesReport = {
   combined?: FlowAtPricesVenue;
 };
 
+/** One price row inside a candle. Quantities are API strings. */
+export type CandleFootprintRow = {
+  price?: string;
+  high?: string;
+  buyVolume?: string;
+  sellVolume?: string;
+  delta?: string;
+  buyCount?: number;
+  sellCount?: number;
+  imbalance?: string;
+  isPoc?: boolean;
+};
+
+/** One candle's buy and sell ladder. `time` is the candle open. */
+export type CandleFootprintCandle = {
+  time?: string;
+  buyVolume?: string;
+  sellVolume?: string;
+  delta?: string;
+  buyCount?: number;
+  sellCount?: number;
+  poc?: string;
+  rows?: CandleFootprintRow[];
+};
+
+export type CandleFootprintBook = {
+  exchange?: string;
+  candles?: CandleFootprintCandle[];
+};
+
+export type CandleFootprintReport = {
+  symbol?: string;
+  exchange?: string;
+  interval?: string;
+  stepSec?: number;
+  from?: string;
+  to?: string;
+  asOf?: string;
+  definite?: boolean;
+  truncated?: boolean;
+  missing?: string[];
+  venues?: CandleFootprintBook[];
+  combined?: CandleFootprintBook;
+  summary?: string;
+  note?: string;
+};
+
+export type CandleFootprintQuery = {
+  symbol: string;
+  exchange?: string;
+  interval: string;
+  startTime?: string;
+  endTime?: string;
+};
+
 export type VenueDivergenceReport = {
   symbol?: string;
   alignment?: string;

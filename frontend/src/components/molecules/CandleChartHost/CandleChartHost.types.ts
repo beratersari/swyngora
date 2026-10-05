@@ -37,6 +37,22 @@ export type CandleChartFootprintLevel = {
   sell: number;
 };
 
+/** One price row painted inside a candle. `high` is the top of the row. */
+export type CandleChartFootprintRow = {
+  price: number;
+  high: number;
+  buy: number;
+  sell: number;
+  poc: boolean;
+  imbalance: 'buy' | 'sell' | '';
+};
+
+/** Buy and sell rows for one candle. `time` is the candle open, unix seconds. */
+export type CandleChartFootprintCandle = {
+  time: number;
+  rows: CandleChartFootprintRow[];
+};
+
 /** Estimated liquidation notional at one price. Wider bars are larger pockets. */
 export type CandleChartLiqBar = {
   price: number;
@@ -98,6 +114,10 @@ export type CandleChartHostProps = WithLoadingProps & {
   bookHeat?: CandleChartHeatColumn[];
   /** Buy versus sell at each price, drawn on the right of the candle pane. */
   footprint?: CandleChartFootprintLevel[];
+  /** Buy versus sell painted inside each candle. Empty keeps the right-edge strip. */
+  candleFootprints?: CandleChartFootprintCandle[];
+  /** Seconds from one candle open to the next. Used to size each footprint. */
+  footprintStepSec?: number;
   /** Estimated liquidation pockets, drawn beside the footprint. */
   liqProfile?: CandleChartLiqBar[];
   /** Price × time liquidation intensity drawn behind the candles. */

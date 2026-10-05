@@ -47,21 +47,51 @@ fills), not individual order IDs.
 
 Informational only — not financial advice.
 
+## Candle footprint
+
+`GET /api/v1/market/flow-at-prices/candles?symbol=BTCUSDT&interval=1h`
+
+The coin chart uses this read. It splits the same stored minutes into
+the candle they traded in, then into price rows inside that candle
+(at most 24). `interval` matches the chart (`1m` through `1M`).
+`startTime` and `endTime` are optional and must be set together.
+A missing range is the newest 120 candles. The read keeps at most
+400 candles and 30 days, and sets `truncated` when it shortens the range.
+
+Closed minutes come from the stored ladder. The current minute comes
+from the live tape when that tape already covers it. This route does
+not walk public trade history.
+
+`exchange=all` returns each venue plus `combined`. `combined` is
+present only when every configured venue was recorded for the range.
+`missing` names a venue with no stored minutes. A missing venue is not
+treated as zero. `isPoc` is the busiest row in that candle. `imbalance`
+is `buy` or `sell` when that side is at least 3× the other and the row
+is at least 1% of the candle.
+
+The chart draws `combined` when it is present. Otherwise it draws the
+page's venue and names the missing venues. When no stored minutes fill
+the candles, the chart keeps the single right-edge ladder from
+`/flow-at-prices`.
+
+Informational only — not financial advice.
+
 ## Where the code lives
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/flow_at_prices.go`, `flow_at_prices_history.go` |
+| Domain | `backend/internal/domain/flow_at_prices.go`, `flow_at_prices_history.go`, `candle_footprint.go` |
 | Store | `backend/internal/adapter/flowstore` (`data/flowprices.db`) |
-| Service | `backend/internal/service/market/flowatprices.go` |
-| HTTP | `GET /api/v1/market/flow-at-prices` |
-| MCP / AI | `get_flow_at_prices` |
-| Web | Coin detail **Flow** tab (`FlowFootprint`): sell left, buy right, delta, POC highlight, and a badge when one side is at least 3× the other |
+| Service | `backend/internal/service/market/flowatprices.go`, `candlefootprint.go` |
+| HTTP | `GET /api/v1/market/flow-at-prices` and `GET /api/v1/market/flow-at-prices/candles` |
+| MCP / AI | `get_flow_at_prices`, `get_candle_footprint` |
+| Web | Coin detail **Flow** tab (`FlowFootprint`): sell left, buy right, delta, POC highlight, and a badge when one side is at least 3× the other. The Overview chart paints the same buy and sell inside each candle |
 
 ## How to verify
 
 ```bash
-cd backend && go test ./internal/domain/ ./internal/service/market/ ./internal/transport/http/... -run FlowAtPrices
+cd backend && go test ./internal/domain/ ./internal/service/market/ ./internal/transport/http/... -run "FlowAtPrices|CandleFootprint"
 curl "http://localhost:8080/api/v1/market/flow-at-prices?symbol=BTCUSDT&window=15m"
 curl "http://localhost:8080/api/v1/market/flow-at-prices?symbol=BTCUSDT&minPrice=65400&maxPrice=65600&tickSize=10"
+curl "http://localhost:8080/api/v1/market/flow-at-prices/candles?symbol=BTCUSDT&interval=1h"
 ```

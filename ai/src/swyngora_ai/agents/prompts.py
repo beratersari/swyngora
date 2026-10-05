@@ -78,6 +78,7 @@ You ONLY use tape tools (ticker, candles, indicators, supply, volume profile, VW
   `get_indicators` for RSI/EMA, `get_rsi_heatmap` for a ranked RSI scatter,
   `get_volume_profile` for volume by price / POC / value area, with OI opened/closed and liquidations on the same rows,
   `get_flow_at_prices` for buy vs sell, print count, and delta at each price (5m through 7d; stored minutes cover Bybit and longer lookbacks),
+  `get_candle_footprint` for buy vs sell inside each candle (stored minutes, about 30 days; combined only when every venue recorded),
   `get_absorption` for large buys/sells that do not move price,
   `get_liquidity_sweeps` for a poke through a prior high/low that comes back,
   `get_sweep_recovery` for how long the book took to refill after that return,
@@ -118,7 +119,7 @@ You ONLY use book/flow tools.
   `scan_funding_arb`, `get_funding_arb_history`, `create_funding_arb_watch`
   (omit symbol to follow the scan), `list_funding_arb_watches`,
   `list_funding_arb_signals`, `get_funding_arb_signal`, `get_long_short_ratio`,
-  `get_cvd`, `get_market_pressure`, `get_taker_flow`, `get_participation`, `get_volume_share`, `get_print_size`, `get_print_size_overview`, `get_bot_tracker`, `get_order_count_ratio`, `get_order_count_overview`, `get_flow_at_prices`, `get_basis`, `get_squeeze_risk`, `get_positioning`,
+  `get_cvd`, `get_market_pressure`, `get_taker_flow`, `get_participation`, `get_volume_share`, `get_print_size`, `get_print_size_overview`, `get_bot_tracker`, `get_order_count_ratio`, `get_order_count_overview`, `get_flow_at_prices`, `get_candle_footprint`, `get_basis`, `get_squeeze_risk`, `get_positioning`,
   `get_venue_divergence`, `estimate_liquidation_hunt`, `get_liquidation_heatmap`, `get_liquidation_print_heatmap`, `get_liquidation_open_levels`, `get_futures_history`, `get_history_span`, `get_unusual_context`, `scan_unusual`,
   `get_market_snapshot`, `get_support_resistance`, `get_whale_trades`,
   `get_orderbook_history`, `compare_orderbook_history`, `get_orderbook_icebergs`, `get_orderbook_liquidity_flow`,
@@ -196,6 +197,7 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
   `get_candles` → structure; `get_indicators` → RSI/EMA;
   `get_volume_profile` → volume by price (POC + 70% value area, buy/sell, OI opened/closed, liquidations on the same rows; Binance/Bybit/combined);
   `get_flow_at_prices` → buy vs sell USDT, print count, and delta at each price (not candle smear);
+  `get_candle_footprint` → buy vs sell inside each chart candle from stored minutes (combined only when every venue recorded; a missing venue is named and not treated as zero);
   `get_absorption` → large market buys/sells vs little price move (absorbing side + strength);
   `get_market_pressure` → one −1…+1 score from resting book, CVD, and absorption when they disagree, plus 1h change;
   `get_liquidity_sweeps` → poke through a prior high/low that comes back (level, excursion, time, volume);

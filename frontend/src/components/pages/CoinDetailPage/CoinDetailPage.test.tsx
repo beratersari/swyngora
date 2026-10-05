@@ -24,6 +24,7 @@ const mockLiquidations = vi.fn();
 const mockCvd = vi.fn();
 const mockLiqHeatmap = vi.fn();
 const mockProfile = vi.fn();
+const mockCandleFootprint = vi.fn();
 
 vi.mock('@/libs/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/libs/api')>();
@@ -63,6 +64,7 @@ vi.mock('@/libs/api', async (importOriginal) => {
     }),
     useGetMarketCvdQuery: () => mockCvd(),
     useGetMarketFlowAtPricesQuery: () => ({ data: undefined, isError: false, isFetching: false, isLoading: false, isSuccess: false, refetch: vi.fn() }),
+    useGetMarketCandleFootprintQuery: (...args: unknown[]) => mockCandleFootprint(...args),
     useGetMarketLongShortRatioQuery: () => ({ data: undefined, isError: false, isFetching: false, isLoading: false, isSuccess: false, refetch: vi.fn() }),
     useGetMarketHistorySpanQuery: () => ({
       data: { symbol: 'BTCUSDT', series: [{ kind: 'futures_oi', exchange: 'binance', spanSec: 3600 }] },
@@ -99,11 +101,18 @@ vi.mock('./CoinStructureTab', () => ({
 }));
 
 vi.mock('@/components/molecules/CandleChartHost', () => ({
-  CandleChartHost: (props: { data: unknown[]; liqHeat?: unknown[] }) => (
+  CandleChartHost: (props: {
+    data: unknown[];
+    liqHeat?: unknown[];
+    candleFootprints?: unknown[];
+    footprint?: unknown[];
+  }) => (
     <div
       data-testid="candle-chart"
       data-count={String((props.data ?? []).length)}
       data-liq={String(props.liqHeat?.length ?? 0)}
+      data-candle-foot={String(props.candleFootprints?.length ?? 0)}
+      data-foot-strip={String(props.footprint?.length ?? 0)}
     />
   ),
 }));
@@ -303,6 +312,15 @@ describe('CoinDetailPage', () => {
       refetch: vi.fn(),
     });
     mockProfile.mockReturnValue(emptyTape);
+    mockCandleFootprint.mockReturnValue({
+      data: undefined,
+      currentData: undefined,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      isSuccess: false,
+      refetch: vi.fn(),
+    });
   });
 
   it('renders symbol header and chart host', async () => {
@@ -318,6 +336,60 @@ describe('CoinDetailPage', () => {
     expect(screen.queryByTestId('chart-open-withheld')).not.toBeInTheDocument();
     expect(screen.getByTestId('chart-recorded')).toHaveTextContent(/binance 1h/i);
     expect(screen.queryByTestId('order-book')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('chart-candle-footprint')).not.toBeInTheDocument();
+    expect(screen.getByTestId('candle-chart')).toHaveAttribute('data-candle-foot', '0');
+  });
+
+  it('paints stored buy and sell inside candles and names a venue that did not record', async () => {
+    const report = {
+      symbol: 'BTCUSDT',
+      exchange: 'all',
+      interval: '1h',
+      stepSec: 3600,
+      definite: false,
+      truncated: true,
+      missing: ['okx'],
+      venues: [
+        {
+          exchange: 'binance',
+          candles: [
+            {
+              time: '2024-01-01T00:00:00Z',
+              rows: [
+                {
+                  price: '100',
+                  high: '101',
+                  buyVolume: '3',
+                  sellVolume: '1',
+                  isPoc: true,
+                  imbalance: 'buy',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    mockCandleFootprint.mockReturnValue({
+      data: report,
+      currentData: report,
+      isError: false,
+      isFetching: false,
+      isLoading: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    });
+    renderDetail('/markets/binance/BTCUSDT');
+    expect(await screen.findByTestId('chart-candle-footprint')).toBeInTheDocument();
+    expect(screen.getByTestId('chart-candle-footprint-venue')).toHaveTextContent(/OKX/);
+    expect(screen.getByTestId('chart-candle-footprint-venue')).toHaveTextContent(/Binance/);
+    expect(screen.getByTestId('chart-candle-footprint-truncated')).toBeInTheDocument();
+    expect(screen.getByTestId('candle-chart')).toHaveAttribute('data-candle-foot', '1');
+    expect(screen.getByTestId('candle-chart')).toHaveAttribute('data-foot-strip', '0');
+    expect(mockCandleFootprint).toHaveBeenCalledWith(
+      expect.objectContaining({ exchange: 'all', symbol: 'BTCUSDT', interval: '1h' }),
+      expect.anything(),
+    );
   });
 
   it('opens holders tab from the URL', async () => {

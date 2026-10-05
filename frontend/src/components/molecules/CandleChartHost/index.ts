@@ -1,6 +1,8 @@
 export { CandleChartHost } from './CandleChartHost';
 export type {
+  CandleChartFootprintCandle,
   CandleChartFootprintLevel,
+  CandleChartFootprintRow,
   CandleChartHeatColumn,
   CandleChartHostProps,
   CandleChartLiqBar,
