@@ -488,6 +488,7 @@
     "pricesWindow": "Fiyatlarda akış penceresi",
     "vwap": "VWAP",
     "profile": "Hacim profili",
+    "profileWindow": "Hacim profili penceresi",
     "ladder": {
       "price": "Fiyat",
       "volume": "Hacim",
@@ -499,8 +500,10 @@
       "closed": "AP kapanan",
       "longLiq": "Long likidasyon",
       "shortLiq": "Short likidasyon",
-      "aria": "Fiyata göre hacim, açık pozisyon ve likidasyon",
-      "hint": "Aynı fiyat satırları: işlem gören büyüklük, fiyat oradayken açılan veya kapanan açık pozisyon ve o fiyatta basan likidasyonlar."
+      "aria": "Fiyata göre alış ve satış baskıları, açık pozisyon ve likidasyon",
+      "partial": "{{venues}} bu pencerenin başına ulaşmıyor. Bu merdiven {{exchange}}.",
+      "late": "Bu merdivendeki baskılar pencere açıldıktan sonra başlıyor.",
+      "hint": "Her satır o fiyatta basan agresif alış ve satıştır. POC en yoğun satırdır. Bant bunun yaklaşık %70'idir."
     },
     "footprint": {
       "price": "Fiyat",

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { formatCompactAmount, formatPrice } from '@/libs/utils';
-import { columnPeak, profileLadderRows, profileVenue, splitPct } from './helpers';
+import { columnPeak, profileLadderRows, profileMissing, profileVenue, splitPct } from './helpers';
 import { Head, Legend, Row, Seg, Stack, Swatch, Track } from './VolumeProfileLadder.styles';
 import type { VolumeProfileLadderProps } from './VolumeProfileLadder.types';
 import type { VolumeProfileBin } from '@/libs/api';
@@ -46,6 +46,7 @@ export function VolumeProfileLadder({ report }: VolumeProfileLadderProps) {
   const { t } = useTranslation('detail');
   const venue = profileVenue(report);
   const rows = profileLadderRows(venue?.bins);
+  const missing = profileMissing(report).filter((name) => name !== venue?.exchange);
   if (!venue || rows.length === 0) return null;
 
   const volPeak = columnPeak(rows, 'buyVolume', 'sellVolume');
@@ -106,6 +107,16 @@ export function VolumeProfileLadder({ report }: VolumeProfileLadderProps) {
           </Row>
         ))}
       </div>
+      {missing.length > 0 ? (
+        <Text variant="caption" color="secondary">
+          {t('flow.ladder.partial', { venues: missing.join(', '), exchange: venue.exchange ?? '' })}
+        </Text>
+      ) : null}
+      {venue.complete === false ? (
+        <Text variant="caption" color="secondary">
+          {t('flow.ladder.late')}
+        </Text>
+      ) : null}
       <Text variant="caption" color="secondary">
         {t('flow.ladder.hint')}
       </Text>

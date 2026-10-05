@@ -11,9 +11,9 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const volumeProfileDisclaimer = "Volume profile bins quote (USDT) volume from spot candles across each bar's high–low — not individual prints. Buy/sell uses taker-buy when the venue publishes it (Binance klines). Bybit klines do not, so those rows are total-only. Open-interest change is the USDT added or closed between readings, spread across the candles that traded during that step, on the same price rows. Liquidations use the print price on those rows. Combined adds Binance and Bybit at the same price levels. The point of control is the row with the most volume; the value area is the block around it that holds about 70% of volume. Informational only — not financial advice."
+const volumeProfileDisclaimer = "Volume profile bins aggressive futures prints by price (USDT notional). Each row is market buy versus sell at the price that printed, not spot candle volume spread across high–low. Closed minutes come from the stored ladder (about 30 days). Binance minutes for the liquid list are also filled from public aggTrades, about 7 days. Bybit and OKX minutes before this process started are still missing. The live tape fills the window when it already reaches the start, including the current minute. Open-interest change is placed on the prices that printed between readings. Liquidations use the print price. Combined is present only when every requested venue reaches the window open. A venue that starts later is named and is not counted as zero. The point of control is the row with the most volume; the value area is the block around it that holds about 70% of volume. Informational only — not financial advice."
 
-// GetVolumeProfile returns traded volume by price for Binance, Bybit, and combined.
+// GetVolumeProfile returns aggressive buy and sell by price for the futures venues.
 func (s *Service) GetVolumeProfile(ctx context.Context, exchange, symbol, window string, start, end *time.Time, tickSize float64) (*domain.VolumeProfileReport, error) {
 	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
 	if err != nil {
@@ -31,17 +31,17 @@ func (s *Service) GetVolumeProfile(ctx context.Context, exchange, symbol, window
 	if err != nil {
 		return nil, err
 	}
-	interval := domain.ProfileBarInterval(to.Sub(from))
-	want := []domain.Exchange{domain.ExchangeBinance, domain.ExchangeBybit}
-	if ex != "all" {
-		want = []domain.Exchange{domain.Exchange(ex)}
+	if s != nil {
+		s.noteFlowSymbol(symbol)
 	}
+	want := configuredFutures(ex, func(v domain.Exchange) bool { return s.printPort(v) != nil })
 
 	type fetched struct {
-		ex   domain.Exchange
-		bars []domain.VolumeProfileBar
-		last float64
-		err  error
+		ex      domain.Exchange
+		cells   []domain.FlowAtPricesCell
+		covered bool
+		last    float64
+		err     error
 	}
 	got := make([]fetched, len(want))
 	var wg sync.WaitGroup
@@ -49,8 +49,15 @@ func (s *Service) GetVolumeProfile(ctx context.Context, exchange, symbol, window
 		wg.Add(1)
 		go func(i int, v domain.Exchange) {
 			defer wg.Done()
-			bars, last, ferr := s.volumeProfileVenue(ctx, v, symbol, interval, from, to)
-			got[i] = fetched{ex: v, bars: bars, last: last, err: ferr}
+			cells, covered, ferr := s.profileFlowCells(ctx, v, symbol, from, to, now)
+			last := 0.0
+			if tkr, terr := s.GetTicker24h(ctx, string(v), symbol); terr == nil && tkr != nil {
+				last, _ = parseFloat(tkr.LastPrice)
+			}
+			if last <= 0 {
+				last = latestProfilePrice(cells)
+			}
+			got[i] = fetched{ex: v, cells: cells, covered: covered, last: last, err: ferr}
 		}(i, v)
 	}
 	wg.Wait()
@@ -60,15 +67,15 @@ func (s *Service) GetVolumeProfile(ctx context.Context, exchange, symbol, window
 		if f.last > 0 && last == 0 {
 			last = f.last
 		}
-		for _, b := range f.bars {
-			if rangeLow == 0 || b.Low < rangeLow {
-				rangeLow = b.Low
+		for _, c := range f.cells {
+			if c.Price <= 0 {
+				continue
 			}
-			if b.High > rangeHigh {
-				rangeHigh = b.High
+			if rangeLow == 0 || c.Price < rangeLow {
+				rangeLow = c.Price
 			}
-			if last == 0 && b.Close > 0 {
-				last = b.Close
+			if c.Price > rangeHigh {
+				rangeHigh = c.Price
 			}
 		}
 	}
@@ -86,14 +93,16 @@ func (s *Service) GetVolumeProfile(ctx context.Context, exchange, symbol, window
 		From:     from,
 		To:       to,
 		AsOf:     now,
+		Source:   domain.VolumeProfileSourcePrints,
 		Venues:   make([]domain.VolumeProfileVenue, 0, len(want)),
 		Note:     volumeProfileDisclaimer,
 	}
+	barsByEx := map[domain.Exchange][]domain.VolumeProfileBar{}
 	for _, f := range got {
-		if f.err != nil && len(f.bars) == 0 {
+		if f.err != nil && len(f.cells) == 0 {
 			out.Venues = append(out.Venues, domain.VolumeProfileVenue{
 				Exchange: f.ex, Symbol: symbol, From: from, To: to,
-				Interval: string(interval), TickSize: tick, LastPrice: f.last,
+				Interval: string(domain.Interval1m), TickSize: tick, LastPrice: f.last,
 				Bins: []domain.VolumeProfileBin{}, Error: f.err.Error(), Summary: f.err.Error(),
 			})
 			continue
@@ -102,21 +111,78 @@ func (s *Service) GetVolumeProfile(ctx context.Context, exchange, symbol, window
 		if px <= 0 {
 			px = last
 		}
-		out.Venues = append(out.Venues, domain.BuildVolumeProfile(f.ex, symbol, f.bars, tick, px, from, to, interval))
+		out.Venues = append(out.Venues, domain.BuildVolumeProfileFromCells(f.ex, symbol, f.cells, tick, px, from, to, f.covered))
+		barsByEx[f.ex] = domain.ProfileBarsFromCells(f.cells)
 	}
 	sort.Slice(out.Venues, func(i, j int) bool {
 		return string(out.Venues[i].Exchange) < string(out.Venues[j].Exchange)
 	})
-	barsByEx := map[domain.Exchange][]domain.VolumeProfileBar{}
-	for _, f := range got {
-		barsByEx[f.ex] = f.bars
-	}
 	s.attachProfileActivity(ctx, out, barsByEx, from, to)
-	if ex == "all" && len(out.Venues) > 0 {
-		out.Combined = domain.CombineVolumeProfiles(symbol, out.Venues, tick, last, from, to, interval)
+	out.Definite = len(out.Venues) > 0
+	for _, v := range out.Venues {
+		if v.Complete {
+			continue
+		}
+		out.Definite = false
+		out.Missing = append(out.Missing, v.Exchange)
+	}
+	if ex == "all" && out.Definite {
+		out.Combined = domain.CombineVolumeProfiles(symbol, out.Venues, tick, last, from, to, domain.Interval1m)
 	}
 	out.Summary = domain.ExplainVolumeProfileReport(*out)
 	return out, nil
+}
+
+func (s *Service) profileFlowCells(ctx context.Context, ex domain.Exchange, symbol string, from, to, now time.Time) ([]domain.FlowAtPricesCell, bool, error) {
+	if p := s.printPort(ex); p != nil {
+		if mem, ok := p.(domain.MemoryPrintPort); ok && mem != nil {
+			prints, covered := mem.MemoryPrints(symbol, from, to)
+			if covered {
+				cells, _ := domain.AccumulateFlowPrints(prints, time.Time{})
+				for i := range cells {
+					cells[i].Exchange = ex
+					cells[i].Symbol = symbol
+				}
+				return cells, true, nil
+			}
+		}
+	}
+	var stored []domain.FlowAtPricesCell
+	if s != nil && s.flowHist != nil {
+		var err error
+		stored, err = s.flowHist.ListFlowCells(ctx, ex, symbol, from, to)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+	open := now.Truncate(time.Minute)
+	live, covered := s.openMinuteCells(ex, symbol, from, to, open)
+	if covered {
+		kept := stored[:0]
+		for _, c := range stored {
+			if !c.Minute.UTC().Before(open) {
+				continue
+			}
+			kept = append(kept, c)
+		}
+		stored = append(kept, live...)
+	}
+	return stored, false, nil
+}
+
+func latestProfilePrice(cells []domain.FlowAtPricesCell) float64 {
+	var at time.Time
+	var px float64
+	for _, c := range cells {
+		if c.Price <= 0 || c.Minute.IsZero() {
+			continue
+		}
+		if at.IsZero() || c.Minute.After(at) {
+			at = c.Minute
+			px = c.Price
+		}
+	}
+	return px
 }
 
 func (s *Service) attachProfileActivity(ctx context.Context, out *domain.VolumeProfileReport, barsByEx map[domain.Exchange][]domain.VolumeProfileBar, from, to time.Time) {

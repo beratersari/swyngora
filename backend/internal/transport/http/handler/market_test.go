@@ -675,8 +675,47 @@ func (volumeProfileMarket) GetTicker24h(_ context.Context, symbol string) (*doma
 	return &domain.Ticker24h{Symbol: symbol, LastPrice: "65500"}, nil
 }
 
+type handlerQuietTape struct{}
+
+func (handlerQuietTape) GetRecentPrints(context.Context, string) ([]domain.TakerPrint, error) {
+	return nil, nil
+}
+
+type handlerFlowStore struct {
+	rows []domain.FlowAtPricesCell
+}
+
+func (handlerFlowStore) AddFlowCells(context.Context, []domain.FlowAtPricesCell) error { return nil }
+func (s handlerFlowStore) ListFlowCells(_ context.Context, ex domain.Exchange, _ string, _, _ time.Time) ([]domain.FlowAtPricesCell, error) {
+	out := make([]domain.FlowAtPricesCell, 0, len(s.rows))
+	for _, row := range s.rows {
+		if row.Exchange == "" || row.Exchange == ex {
+			out = append(out, row)
+		}
+	}
+	return out, nil
+}
+func (handlerFlowStore) FlowCursor(context.Context, domain.Exchange, string) (time.Time, error) {
+	return time.Time{}, nil
+}
+func (handlerFlowStore) SetFlowCursor(context.Context, domain.Exchange, string, time.Time) error {
+	return nil
+}
+func (handlerFlowStore) PurgeFlowCells(context.Context, time.Time) (int, error) { return 0, nil }
+
 func TestGetVolumeProfile_OK(t *testing.T) {
-	h := NewMarketHandler(market.New(volumeProfileMarket{}, stubSupply{}))
+	now := time.Now().UTC().Truncate(time.Minute)
+	from := now.Add(-4 * time.Hour)
+	svc := market.New(volumeProfileMarket{}, stubSupply{}).
+		WithRecentPrints(map[domain.Exchange]domain.RecentPrintPort{
+			domain.ExchangeBinance: handlerQuietTape{},
+			domain.ExchangeBybit:   handlerQuietTape{},
+		}).
+		WithFlowAtPricesHistory(handlerFlowStore{rows: []domain.FlowAtPricesCell{{
+			Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Minute: from,
+			Price: 65200, Buy: 80000, Sell: 20000, BuyN: 4, SellN: 1,
+		}}})
+	h := NewMarketHandler(svc)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/volume-profile?symbol=BTCUSDT&window=4h&tickSize=100", nil)
 	rr := httptest.NewRecorder()
 	h.GetVolumeProfile(rr, req)
@@ -687,10 +726,13 @@ func TestGetVolumeProfile_OK(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body.Symbol != "BTCUSDT" || body.Window != "4h" || len(body.Venues) == 0 {
+	if body.Symbol != "BTCUSDT" || body.Window != "4h" || body.Source != "prints" || len(body.Venues) == 0 {
 		t.Fatalf("%+v", body)
 	}
-	if body.Venues[0].POC.Price == "" || body.Venues[0].ValueArea.Low == "" {
+	if body.Definite || body.Combined != nil || len(body.Missing) != 1 || body.Missing[0] != "bybit" {
+		t.Fatalf("coverage definite=%v missing=%v combined=%v", body.Definite, body.Missing, body.Combined)
+	}
+	if body.Venues[0].POC.Price == "" || body.Venues[0].ValueArea.Low == "" || body.Venues[0].BuyVolume == "" {
 		t.Fatalf("poc/va %+v", body.Venues[0])
 	}
 }

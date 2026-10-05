@@ -1024,7 +1024,7 @@ class VolumeProfileInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
         default="all",
-        description="binance|bybit|all (default all = both + combined)",
+        description="binance|bybit|okx|all (default all). combined only when every venue reaches the window open.",
     )
     window: str = Field(
         default="24h",
@@ -5611,13 +5611,16 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             get_volume_profile,
             name="get_volume_profile",
             description=(
-                "Where trading happened by price over a time range: total, "
-                "buy, and sell quote volume in each price row, plus open "
-                "interest opened/closed and long/short liquidations on those "
-                "same rows. Point of control is the most volume; the value "
-                "area holds about 70%. Works for BTC and other pairs. "
-                "Binance and Bybit separately plus combined. Use window "
-                "1h/4h/24h/7d/30d or start_time/end_time."
+                "Where aggressive futures prints happened by price: buy and "
+                "sell USDT on the printed price, plus open interest opened "
+                "or closed there and long/short liquidations on the same "
+                "rows. Point of control is the busiest price; the value area "
+                "holds about 70%. Stored minutes, about 30 days. Binance "
+                "liquid names are filled from public trades for about 7 days. "
+                "Bybit and OKX start when this process recorded them. "
+                "combined is present only when every venue reaches the "
+                "window open; missing names a later venue and is not zero. "
+                "Use window 1h/4h/24h/7d/30d or start_time/end_time."
             ),
             args_schema=VolumeProfileInput,
         ),

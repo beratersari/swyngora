@@ -488,6 +488,7 @@
     "pricesWindow": "Flow at prices lookback",
     "vwap": "VWAP",
     "profile": "Volume profile",
+    "profileWindow": "Volume profile lookback",
     "ladder": {
       "price": "Price",
       "volume": "Volume",
@@ -499,8 +500,10 @@
       "closed": "OI closed",
       "longLiq": "Long liq",
       "shortLiq": "Short liq",
-      "aria": "Volume, open interest, and liquidations by price",
-      "hint": "Same price rows: traded size, open interest added or closed while price was there, and liquidations that printed there."
+      "aria": "Buy and sell prints, open interest, and liquidations by price",
+      "partial": "{{venues}} did not reach the start of this window. This ladder is {{exchange}}.",
+      "late": "The prints on this ladder start after the window opened.",
+      "hint": "Each row is aggressive buy and sell that printed at that price. POC is the busiest row. The shaded band is about 70% of that size."
     },
     "footprint": {
       "price": "Price",

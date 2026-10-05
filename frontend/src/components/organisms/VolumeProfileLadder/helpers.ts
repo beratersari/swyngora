@@ -9,8 +9,15 @@ function num(value?: string): number {
 
 export function profileVenue(report?: VolumeProfileReport | null): VolumeProfileVenue | undefined {
   if (!report) return undefined;
-  if (report.combined?.bins && report.combined.bins.length > 0) return report.combined;
+  if (report.definite !== false && report.combined?.bins && report.combined.bins.length > 0) {
+    return report.combined;
+  }
   return report.venues?.find((v) => (v.bins?.length ?? 0) > 0 && !v.error) ?? report.venues?.[0];
+}
+
+/** Venues whose stored prints start after the window open. */
+export function profileMissing(report?: VolumeProfileReport | null): string[] {
+  return report?.definite === false ? (report.missing ?? []) : [];
 }
 
 function activity(row: VolumeProfileBin): number {

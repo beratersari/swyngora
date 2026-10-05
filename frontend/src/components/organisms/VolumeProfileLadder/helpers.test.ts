@@ -21,11 +21,25 @@ describe('profileLadderRows', () => {
 describe('profileVenue', () => {
   it('prefers the combined ladder', () => {
     const venue = profileVenue({
+      definite: true,
       venues: [{ exchange: 'binance', bins: [{ price: '1', volume: '1' }] }],
       combined: { exchange: 'all', bins: [{ price: '2', volume: '4', oiOpened: '9' }] },
     });
     expect(venue?.exchange).toBe('all');
     expect(venue?.bins?.[0]?.oiOpened).toBe('9');
+  });
+
+  it('keeps a venue that reached the start when another venue starts later', () => {
+    const venue = profileVenue({
+      definite: false,
+      missing: ['bybit'],
+      venues: [
+        { exchange: 'binance', bins: [{ price: '65200', volume: '80' }] },
+        { exchange: 'bybit', bins: [{ price: '1', volume: '1' }] },
+      ],
+      combined: { exchange: 'all', bins: [{ price: '2', volume: '4' }] },
+    });
+    expect(venue?.exchange).toBe('binance');
   });
 });
 

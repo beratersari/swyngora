@@ -325,6 +325,8 @@ export type VolumeProfileVenue = {
   exchange?: string;
   summary?: string;
   error?: string;
+  complete?: boolean;
+  started?: string;
   lastPrice?: string;
   tickSize?: string;
   oiOpened?: string;
@@ -344,6 +346,9 @@ export type VolumeProfileReport = {
   window?: string;
   summary?: string;
   note?: string;
+  source?: string;
+  definite?: boolean;
+  missing?: string[];
   venues?: VolumeProfileVenue[];
   combined?: VolumeProfileVenue;
 };

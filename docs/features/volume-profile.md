@@ -18,8 +18,13 @@ Useful when:
 
 `GET /api/v1/market/volume-profile?symbol=BTCUSDT`
 
-- Works for BTC and any other spot pair the venues list
-- `exchange=all` (default): **Binance** and **Bybit** separately plus `combined`
+- Works for BTC and any other USDT perpetual the futures venues list
+- `exchange=all` (default): **Binance** USD-M, **Bybit** linear, and **OKX**
+  USDT-swap separately. `combined` is present only when every one of those
+  venues reaches the window open
+- `missing` names a venue whose stored prints start later. `definite` is
+  false then. That venue is not treated as zero. `complete` on a venue is
+  the same reach, and `started` is the first stored minute
 - Time range: `window=1h|4h|24h|7d|30d` (default `24h`) **or** `startTime` +
   `endTime` (RFC3339 or unix ms). Max 30 days
 - Optional `tickSize` (price row width, e.g. `50`). Omit to pick a row size
@@ -27,27 +32,29 @@ Useful when:
 - Each bin: `price`–`high`, total quote volume, `buyVolume` / `sellVolume`,
   share of total, `oiOpened` / `oiClosed` (USDT), `longLiq` / `shortLiq`
   (USDT), `isPoc`, `inValueArea`, `isHvn`
+- Rows are **aggressive prints**. Buy and sell stay on the price that
+  printed. Closed minutes come from the flow store (about 30 days). Binance
+  minutes for the liquid list are also filled from public aggregate trades,
+  about 7 days. Bybit and OKX minutes before this process started are still
+  missing. The live tape fills the window when it already reaches the start
 - **Open interest** is not published per price. Each step between two OI
-  readings is spread across the high–low of the candles that traded during
-  that step (a rise is opened, a fall is closed), on the same rows as volume.
-  Readings come from the live 5-minute series and the stored futures archive
+  readings is placed on the prices that printed during that step (a rise is
+  opened, a fall is closed). Readings come from the live series and the
+  stored futures archive
 - **Liquidations** use the price on the print (long vs short notional).
   A print outside the volume rows is left off the ladder
-- Coin detail **Flow** draws those three columns on one price ladder
+- Coin detail **Flow** draws those three columns on one price ladder and
+  lets you change the lookback. A venue that starts later is named under
+  the ladder, and the ladder stays on a venue that reached the start
 - **POC:** the row with the most volume (ties go to the row closer to last)
 - **Value area:** expand from the POC to neighboring rows until about **70%**
   of volume is inside. `valueArea.low` / `high` is that band
 - `lastVsValueArea`: `above` | `inside` | `below`
-- Combined **adds** both venues at the same prices and shows `shares` on
-  each row. Combined buy/sell is **partial** when Bybit has no taker-buy
+- Combined **adds** the venues at the same prices and shows `shares` on
+  each row
 
-Volume is **quote notional** (USDT). Built from **spot candles**: each bar’s
-volume is spread evenly across the prices it traded (`high`–`low`). That is
-an approximation, not tick-level prints. Binance klines include taker-buy, so
-buy/sell is available there. Bybit klines do not.
-
-For **actual prints at a price** (buy vs sell, print count, delta — e.g.
-how much traded at 65520), use [`flow-at-prices.md`](flow-at-prices.md).
+Volume is **quote notional** (USDT). Print count and delta at one price,
+without the value area, stay on [`flow-at-prices.md`](flow-at-prices.md).
 
 Informational only — not financial advice.
 

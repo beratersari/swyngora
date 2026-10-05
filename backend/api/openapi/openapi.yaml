@@ -3571,21 +3571,26 @@ paths:
     get:
       summary: Volume profile (volume by price)
       description: |
-        **Volume profile** shows **where** trading happened by **price**
-        over a time range you choose — not just how much traded over time.
-        Each row is quote (USDT) volume in a price band, with **buy** and
-        **sell** when the venue publishes taker-buy (Binance klines; Bybit
-        is total-only). The same row also carries **open interest opened
-        and closed** (USDT change spread across the candles trading then)
-        and **long / short liquidation** notional that printed in that band.
-        `poc` is the price with the most volume. `valueArea`
-        is the contiguous block around the POC that holds about **70%** of
-        volume. `exchange=all` (default) returns Binance and Bybit separately
-        plus `combined`. Combined adds both venues at the same price levels.
-        Use `window` (`1h` / `4h` / `24h` / `7d` / `30d`, default `24h`) or
-        `startTime` + `endTime`. Optional `tickSize` sets the row width.
-        Built from spot candles (volume spread across each bar's high–low),
-        not individual prints. Informational only.
+        **Volume profile** shows **where aggressive futures prints happened**
+        by **price**. Each row is market **buy** and **sell** USDT at the
+        price that printed. The same row also carries **open interest opened
+        and closed** on the prices that traded between readings, and
+        **long / short liquidation** notional that printed in that band.
+        `poc` is the price with the most volume. `valueArea` is the
+        contiguous block around the POC that holds about **70%** of volume.
+        `exchange=all` (default) returns Binance, Bybit, and OKX separately.
+        `combined` is present only when every requested venue reaches the
+        window open. `missing` names a venue that starts later. `definite`
+        is false in that case, and that venue is not counted as zero.
+        `complete` on a venue is that same reach. `started` is the first
+        stored minute. Closed minutes come from the stored ladder (about
+        30 days). Binance minutes for the liquid list are also filled from
+        public aggregate trades, about 7 days. Bybit and OKX minutes before
+        this process started are still missing. The live tape fills the
+        window when it already reaches the start. Use `window`
+        (`1h` / `4h` / `24h` / `7d` / `30d`, default `24h`) or `startTime`
+        + `endTime`. Optional `tickSize` sets the row width.
+        Informational only.
       operationId: getMarketVolumeProfile
       tags: [Market]
       parameters:
@@ -3633,8 +3638,8 @@ paths:
         enough — for example BTC traded 65400–65600 and you want the
         row at 65520. Built from aggressive **futures prints** (Binance
         USD-M aggTrades, Bybit recent trades), not candle volume smeared
-        across high–low (that is `/volume-profile`). `exchange=all`
-        (default) returns Binance and Bybit separately plus `combined`.
+        across high–low. The volume profile uses these same stored prints.
+        `exchange=all` (default) returns Binance and Bybit separately plus `combined`.
         Use `window` (`5m` / `15m` / `1h` / `4h` / `1d` / `3d` / `7d` / `30d`,
         default `15m`) or `startTime` + `endTime` (max 30d). The live
         tape is about the last hour on Binance and the newest ~1000

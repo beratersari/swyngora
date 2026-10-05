@@ -200,6 +200,7 @@ func TestProfileBarInterval(t *testing.T) {
 
 func TestExplainVolumeProfileReport(t *testing.T) {
 	rep := VolumeProfileReport{
+		Definite: true,
 		Combined: &VolumeProfileVenue{Summary: "clustered at 100", Error: ""},
 	}
 	if ExplainVolumeProfileReport(rep) != "Combined: clustered at 100" {

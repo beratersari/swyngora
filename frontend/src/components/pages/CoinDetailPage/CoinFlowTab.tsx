@@ -30,11 +30,13 @@ import { WhaleFollowList } from './WhaleFollowList';
 import type { CoinFlowTabProps } from './CoinFlowTab.types';
 
 const FLOW_WINDOWS = ['5m', '15m', '1h', '4h', '1d', '3d', '7d', '30d'] as const;
+const PROFILE_WINDOWS = ['1h', '4h', '24h', '7d', '30d'] as const;
 
 /** Per-coin prints, book, and volume — RTK lives here (page layer), not in organisms. */
 export function CoinFlowTab({ symbol, exchange }: CoinFlowTabProps) {
   const { t } = useTranslation('detail');
   const [flowWindow, setFlowWindow] = useState<(typeof FLOW_WINDOWS)[number]>('15m');
+  const [profileWindow, setProfileWindow] = useState<(typeof PROFILE_WINDOWS)[number]>('24h');
   const arg = { symbol, exchange };
   const tapeArg = { symbol, exchange: 'all' as const };
   const err = (e: unknown) => rtkErrorMessage(e, { resource: t('resource.tape') });
@@ -49,7 +51,7 @@ export function CoinFlowTab({ symbol, exchange }: CoinFlowTabProps) {
   const netPosition = useGetMarketNetPositionQuery(tapeArg);
   const flow = useGetMarketFlowAtPricesQuery({ ...tapeArg, window: flowWindow });
   const vwap = useGetMarketVWAPQuery({ ...tapeArg, window: '24h' });
-  const profile = useGetMarketVolumeProfileQuery(tapeArg);
+  const profile = useGetMarketVolumeProfileQuery({ ...tapeArg, window: profileWindow });
   const abs = useGetMarketAbsorptionQuery(arg);
   const sweeps = useGetMarketLiquiditySweepsQuery(arg);
   const recovery = useGetSweepRecoveryQuery(arg);
@@ -115,7 +117,19 @@ export function CoinFlowTab({ symbol, exchange }: CoinFlowTabProps) {
             ) : row.key === 'whales' ? (
               <WhaleFollowList events={rtkCurrent(whales)?.events} />
             ) : row.key === 'profile' ? (
-              <VolumeProfileLadder report={rtkCurrent(profile)} />
+              <>
+                <IntervalRail
+                  intervals={[...PROFILE_WINDOWS]}
+                  value={profileWindow}
+                  onChange={(next) => {
+                    if ((PROFILE_WINDOWS as readonly string[]).includes(next)) {
+                      setProfileWindow(next as (typeof PROFILE_WINDOWS)[number]);
+                    }
+                  }}
+                  aria-label={t('flow.profileWindow')}
+                />
+                <VolumeProfileLadder report={rtkCurrent(profile)} />
+              </>
             ) : row.key === 'prices' ? (
               <>
                 <IntervalRail

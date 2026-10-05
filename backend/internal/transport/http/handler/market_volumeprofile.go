@@ -117,6 +117,8 @@ type volumeProfileVenueDTO struct {
 	ValueArea      volumeProfileValueAreaDTO `json:"valueArea"`
 	Bins           []volumeProfileBinDTO     `json:"bins"`
 	BarCount       int                       `json:"barCount"`
+	Complete       bool                      `json:"complete"`
+	Started        *time.Time                `json:"started,omitempty"`
 	Summary        string                    `json:"summary"`
 	Error          string                    `json:"error,omitempty"`
 }
@@ -130,6 +132,9 @@ type volumeProfileResponse struct {
 	AsOf     time.Time               `json:"asOf"`
 	Venues   []volumeProfileVenueDTO `json:"venues"`
 	Combined *volumeProfileVenueDTO  `json:"combined,omitempty"`
+	Source   string                  `json:"source,omitempty"`
+	Definite bool                    `json:"definite"`
+	Missing  []string                `json:"missing,omitempty"`
 	Summary  string                  `json:"summary"`
 	Note     string                  `json:"note"`
 }
@@ -142,10 +147,15 @@ func volumeProfileToDTO(a *domain.VolumeProfileReport) volumeProfileResponse {
 	for _, v := range a.Venues {
 		venues = append(venues, volumeProfileVenueToDTO(v))
 	}
+	missing := make([]string, 0, len(a.Missing))
+	for _, ex := range a.Missing {
+		missing = append(missing, string(ex))
+	}
 	out := volumeProfileResponse{
 		Symbol: a.Symbol, Exchange: a.Exchange, Window: a.Window,
 		From: a.From.UTC(), To: a.To.UTC(), AsOf: a.AsOf.UTC(),
-		Venues: venues, Summary: a.Summary, Note: a.Note,
+		Venues: venues, Source: a.Source, Definite: a.Definite, Missing: missing,
+		Summary: a.Summary, Note: a.Note,
 	}
 	if a.Combined != nil {
 		c := volumeProfileVenueToDTO(*a.Combined)
@@ -189,8 +199,17 @@ func volumeProfileVenueToDTO(v domain.VolumeProfileVenue) volumeProfileVenueDTO 
 			Volume: formatHistQty(v.ValueArea.Volume), VolumePct: formatHistQty(v.ValueArea.VolumePct),
 			BinCount: v.ValueArea.BinCount,
 		},
-		Bins: bins, BarCount: v.BarCount, Summary: v.Summary, Error: v.Error,
+		Bins: bins, BarCount: v.BarCount, Complete: v.Complete, Started: profileStarted(v.Started),
+		Summary: v.Summary, Error: v.Error,
 	}
+}
+
+func profileStarted(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	u := t.UTC()
+	return &u
 }
 
 func volumeProfileSharesToDTO(in []domain.VolumeProfileShare) []volumeProfileShareDTO {

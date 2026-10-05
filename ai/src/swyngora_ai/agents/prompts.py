@@ -76,7 +76,7 @@ You ONLY use tape tools (ticker, candles, indicators, supply, volume profile, VW
 ## Mandate
 - Never invent numbers. Call only the tape tools this task needs (`get_ticker` for last,
   `get_indicators` for RSI/EMA, `get_rsi_heatmap` for a ranked RSI scatter,
-  `get_volume_profile` for volume by price / POC / value area, with OI opened/closed and liquidations on the same rows,
+  `get_volume_profile` for buy vs sell at each printed price / POC / value area (stored minutes; combined only when every venue reaches the window open), with OI and liquidations on those rows,
   `get_flow_at_prices` for buy vs sell, print count, and delta at each price (5m through 7d; stored minutes cover Bybit and longer lookbacks),
   `get_candle_footprint` for buy vs sell inside each candle (stored minutes, about 30 days; Binance liquid names are filled from public aggTrades, about 7 days; combined only when every venue recorded),
   `get_absorption` for large buys/sells that do not move price,
@@ -195,7 +195,7 @@ Deliver tool-verified market facts suitable for a **1–2 day** tactical read:
   Exhausted if the order did not fully fill. Use `quantity` (e.g. 5 BTC)
   **or** `notional` (e.g. 1e9 USDT). `exchange=all` (default) merges three venues cheapest-first;
   `get_candles` → structure; `get_indicators` → RSI/EMA;
-  `get_volume_profile` → volume by price (POC + 70% value area, buy/sell, OI opened/closed, liquidations on the same rows; Binance/Bybit/combined);
+  `get_volume_profile` → aggressive buy/sell by printed price (POC + 70% value area, OI and liquidations on those rows; combined only when Binance, Bybit, and OKX all reach the window open);
   `get_flow_at_prices` → buy vs sell USDT, print count, and delta at each price (not candle smear);
   `get_candle_footprint` → buy vs sell inside each chart candle from stored minutes (combined only when every venue recorded; a missing venue is named and not treated as zero);
   `get_absorption` → large market buys/sells vs little price move (absorbing side + strength);

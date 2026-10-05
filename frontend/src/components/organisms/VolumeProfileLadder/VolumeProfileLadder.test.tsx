@@ -40,4 +40,40 @@ describe('VolumeProfileLadder', () => {
     expect(screen.getByText('Open interest')).toBeInTheDocument();
     expect(screen.getByText('Liquidations')).toBeInTheDocument();
   });
+
+  it('names a venue that starts after the window open and keeps the covered ladder', () => {
+    renderWithProviders(
+      <VolumeProfileLadder
+        report={{
+          definite: false,
+          missing: ['bybit'],
+          venues: [
+            {
+              exchange: 'binance',
+              complete: false,
+              bins: [
+                {
+                  price: '65200',
+                  high: '65300',
+                  volume: '100',
+                  buyVolume: '70',
+                  sellVolume: '30',
+                  isPoc: true,
+                  inValueArea: true,
+                },
+              ],
+            },
+          ],
+          combined: {
+            exchange: 'all',
+            bins: [{ price: '1', high: '2', volume: '9', buyVolume: '9', sellVolume: '0', isPoc: true }],
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText(/65[,.]200/)).toBeInTheDocument();
+    expect(screen.getByText(/bybit did not reach the start/i)).toBeInTheDocument();
+    expect(screen.getByText(/start after the window opened/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^1$/)).not.toBeInTheDocument();
+  });
 });

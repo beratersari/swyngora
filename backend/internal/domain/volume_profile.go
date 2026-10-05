@@ -28,6 +28,10 @@ const (
 	VolumeProfileVsInside  = "inside"
 	VolumeProfileVsBelow   = "below"
 	VolumeProfileVsUnknown = "unknown"
+
+	// VolumeProfileSourcePrints means each row is aggressive buy and sell
+	// that printed at that price, not candle volume spread across high–low.
+	VolumeProfileSourcePrints = "prints"
 )
 
 // VolumeProfileWindows are the named lookbacks the API accepts.
@@ -127,8 +131,12 @@ type VolumeProfileVenue struct {
 	ValueArea      VolumeProfileValueArea
 	Bins           []VolumeProfileBin
 	BarCount       int
-	Summary        string
-	Error          string
+	// Complete is true when this venue's prints reach the window open.
+	// A later start is still drawn, and Started says when those prints begin.
+	Complete bool
+	Started  time.Time
+	Summary  string
+	Error    string
 }
 
 // VolumeProfileReport is the API result.
@@ -141,8 +149,15 @@ type VolumeProfileReport struct {
 	AsOf     time.Time
 	Venues   []VolumeProfileVenue
 	Combined *VolumeProfileVenue
-	Summary  string
-	Note     string
+	// Source is "prints" when the rows are stored aggressive buy and sell.
+	Source string
+	// Definite is true when every requested venue reaches the window open.
+	// Combined is set only then.
+	Definite bool
+	// Missing names venues whose stored prints start after the window open.
+	Missing []Exchange
+	Summary string
+	Note    string
 }
 
 // ParseVolumeProfileWindow accepts 1h / 4h / 24h / 7d / 30d (empty = 24h).
@@ -634,23 +649,44 @@ func ExplainVolumeProfileVenue(v VolumeProfileVenue) string {
 			head += " At the POC: " + strings.Join(parts, ", ") + "."
 		}
 	}
+	if !v.Complete && !v.Started.IsZero() && v.Error == "" {
+		head += fmt.Sprintf(" Stored prints start at %s.", v.Started.UTC().Format("2006-01-02 15:04 UTC"))
+	}
 	return head
 }
 
-// ExplainVolumeProfileReport prefers combined, else the first venue.
+// ExplainVolumeProfileReport prefers a complete combined profile, otherwise
+// the first venue that has prints. A venue that starts late is named and is
+// not described as the whole window.
 func ExplainVolumeProfileReport(r VolumeProfileReport) string {
-	if r.Combined != nil && r.Combined.Summary != "" && r.Combined.Error == "" {
-		return "Combined: " + r.Combined.Summary
+	var head string
+	if !r.Definite && len(r.Missing) > 0 {
+		names := make([]string, len(r.Missing))
+		for i, ex := range r.Missing {
+			names[i] = string(ex)
+		}
+		head = strings.Join(names, ", ") + " did not reach the start of this window. "
+	}
+	if r.Definite && r.Combined != nil && r.Combined.Summary != "" && r.Combined.Error == "" {
+		return head + "Combined: " + r.Combined.Summary
+	}
+	for _, v := range r.Venues {
+		if v.Complete && v.Summary != "" && v.Error == "" {
+			return head + string(v.Exchange) + ": " + v.Summary
+		}
 	}
 	for _, v := range r.Venues {
 		if v.Summary != "" && v.Error == "" {
-			return string(v.Exchange) + ": " + v.Summary
+			return head + string(v.Exchange) + ": " + v.Summary
 		}
 	}
 	for _, v := range r.Venues {
 		if v.Summary != "" {
-			return v.Summary
+			return head + v.Summary
 		}
+	}
+	if head != "" {
+		return strings.TrimSpace(head)
 	}
 	return "No volume profile yet."
 }
