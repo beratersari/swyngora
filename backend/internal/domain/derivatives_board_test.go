@@ -182,6 +182,77 @@ func TestBuildDerivativesBoard_ScanColumns(t *testing.T) {
 	}
 }
 
+func TestBuildDerivativesBoard_OrderCountSumsFreshPrints(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	coin := boardCoin("BTCUSDT", now, 8e9, 1e9, 1e9, 0, 0)
+	for i := range coin.Venues {
+		coin.Venues[i].OrderOK = true
+		coin.Venues[i].OrderAt = now
+		coin.Venues[i].OrderBuy = 8
+		coin.Venues[i].OrderSell = 2
+	}
+	got := BuildDerivativesBoard("all", []DerivativesCoinInput{coin}, now)
+	row := got.Coins[0]
+	if !row.OrderDefinite || row.OrderRatio != "+0.60" || row.OrderLean != OrderCountLeanBuy || row.OrderBuy != 24 || row.OrderSell != 6 {
+		t.Fatalf("order %s %s %d %d", row.OrderRatio, row.OrderLean, row.OrderBuy, row.OrderSell)
+	}
+	if !got.Definite {
+		t.Fatal("order count must not clear the original board definite flag")
+	}
+}
+
+func TestBuildDerivativesBoard_OrderCountWithholdsAQuietVenue(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	coin := boardCoin("BTCUSDT", now, 8e9, 1e9, 1e9, 0, 0)
+	coin.Venues[0].OrderOK = true
+	coin.Venues[0].OrderAt = now
+	coin.Venues[0].OrderBuy = 8
+	coin.Venues[0].OrderSell = 2
+	coin.Venues[1].OrderOK = true
+	coin.Venues[1].OrderAt = now
+	coin.Venues[1].OrderBuy = 8
+	coin.Venues[1].OrderSell = 2
+	got := BuildDerivativesBoard("all", []DerivativesCoinInput{coin}, now)
+	row := got.Coins[0]
+	if row.OrderDefinite || row.OrderRatio != "" {
+		t.Fatalf("leaked %q", row.OrderRatio)
+	}
+	if row.Venues[0].OrderRatio != "+0.60" || row.Venues[2].OrderStatus != VenueReadMissing {
+		t.Fatalf("venues %+v", row.Venues)
+	}
+}
+
+func TestAttachBoardUnusual_NamesTheFarthestVenue(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	coin := boardCoin("BTCUSDT", now, 8e9, 1e9, 1e9, 0, 0)
+	got := BuildDerivativesBoard("all", []DerivativesCoinInput{coin}, now)
+	definite := got.Definite
+	AttachBoardUnusual(got, []UnusualScanHit{
+		{Symbol: "BTCUSDT", Exchange: "binance", Metric: UnusualMetricFunding, Band: UnusualBandExtremeHigh, Percentile: 99, Distance: 49},
+		{Symbol: "BTCUSDT", Exchange: "okx", Metric: UnusualMetricSpread, Band: UnusualBandLow, Percentile: 10, Distance: 40},
+		{Symbol: "BTCUSDT", Exchange: "bybit", Metric: UnusualMetricFunding, Band: UnusualBandTypical, Percentile: 50, Distance: 0},
+	})
+	row := got.Coins[0]
+	if !row.UnusualDefinite || row.UnusualVenue != "binance" || row.UnusualMetric != UnusualMetricFunding || row.UnusualBand != UnusualBandExtremeHigh || row.UnusualDistance != "49" {
+		t.Fatalf("unusual %s %s %s %s", row.UnusualVenue, row.UnusualMetric, row.UnusualBand, row.UnusualDistance)
+	}
+	var okxBand, bybitMetric string
+	for _, v := range row.Venues {
+		if v.Exchange == "okx" {
+			okxBand = v.UnusualBand
+		}
+		if v.Exchange == "bybit" {
+			bybitMetric = v.UnusualMetric
+		}
+	}
+	if okxBand != UnusualBandLow || bybitMetric != "" {
+		t.Fatalf("okx %s bybit %s", okxBand, bybitMetric)
+	}
+	if got.Definite != definite {
+		t.Fatal("unusual must not change the original definite flag")
+	}
+}
+
 func TestBuildDerivativesBoard_ScanColumnWithholdsIncompleteVenue(t *testing.T) {
 	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
 	coin := boardCoin("BTCUSDT", now, 8e9, 1e9, 1e9, 0, 0)

@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"strings"
 	"time"
 )
@@ -38,6 +39,7 @@ func applyBoardScan(row *DerivativesCoin, expected []Exchange, byEx map[Exchange
 	applyBoardGap(row, expected, byEx)
 	applyBoardCVD(row, expected, byEx, now)
 	applyBoardPrint(row, expected, byEx, now)
+	applyBoardOrderCount(row, expected, byEx, now)
 	applyBoardLiqHeat(row, expected, byEx, liqCover)
 	applyBoardBid(row, expected, byEx, now)
 }
@@ -203,6 +205,109 @@ func boardPrintChange(notional float64, count int, priorNotional float64, priorC
 		return 0
 	}
 	return (avg/prior - 1) * 100
+}
+
+func applyBoardOrderCount(row *DerivativesCoin, expected []Exchange, byEx map[Exchange]DerivativesVenueInput, now time.Time) {
+	samples := make([]VenueSample, 0, len(expected))
+	for _, ex := range expected {
+		v := byEx[ex]
+		if !v.OrderOK || v.OrderBuy+v.OrderSell <= 0 || v.OrderAt.IsZero() {
+			continue
+		}
+		samples = append(samples, VenueSample{Exchange: ex, OK: true, At: v.OrderAt})
+	}
+	cover := CoverVenues(expected, samples, now, VenueTapeMaxAge)
+	status := indexVenueReads(cover)
+	var buy, sell int
+	for _, ex := range expected {
+		v := byEx[ex]
+		st := status[ex]
+		if cell := boardVenueRow(row, ex); cell != nil {
+			cell.OrderStatus = st
+			if st == VenueReadFresh {
+				ratio := orderCountRatio(v.OrderBuy, v.OrderSell)
+				cell.OrderBuy = v.OrderBuy
+				cell.OrderSell = v.OrderSell
+				cell.OrderRatio = fmt.Sprintf("%+.2f", ratio)
+				cell.OrderLean = orderCountLean(ratio, v.OrderBuy+v.OrderSell)
+			}
+		}
+		if st == VenueReadFresh {
+			buy += v.OrderBuy
+			sell += v.OrderSell
+		}
+	}
+	if !cover.Complete || buy+sell <= 0 {
+		return
+	}
+	ratio := orderCountRatio(buy, sell)
+	row.OrderDefinite = true
+	row.OrderBuy = buy
+	row.OrderSell = sell
+	row.OrderRatio = fmt.Sprintf("%+.2f", ratio)
+	row.OrderLean = orderCountLean(ratio, buy+sell)
+}
+
+func orderCountRatio(buy, sell int) float64 {
+	total := buy + sell
+	if total <= 0 {
+		return 0
+	}
+	return float64(buy-sell) / float64(total)
+}
+
+// AttachBoardUnusual copies each coin's farthest standout onto the row and
+// names that venue. Other venues keep their own standout. A typical coin stays blank.
+func AttachBoardUnusual(board *DerivativesBoard, hits []UnusualScanHit) {
+	if board == nil || len(hits) == 0 {
+		return
+	}
+	type pick struct {
+		hit UnusualScanHit
+		ok  bool
+	}
+	bestByVenue := map[string]pick{}
+	for _, hit := range hits {
+		symbol := NormalizeLiquidationSymbol(hit.Symbol)
+		ex := strings.ToLower(strings.TrimSpace(hit.Exchange))
+		if symbol == "" || ex == "" || !unusualStandout(hit.Band) {
+			continue
+		}
+		hit.Symbol = symbol
+		hit.Exchange = ex
+		key := symbol + "|" + ex
+		cur := bestByVenue[key]
+		if !cur.ok || hit.Distance > cur.hit.Distance {
+			bestByVenue[key] = pick{hit: hit, ok: true}
+		}
+	}
+	for i := range board.Coins {
+		row := &board.Coins[i]
+		symbol := NormalizeLiquidationSymbol(row.Symbol)
+		var best pick
+		for j := range row.Venues {
+			cell := &row.Venues[j]
+			chosen, ok := bestByVenue[symbol+"|"+strings.ToLower(cell.Exchange)]
+			if !ok || !chosen.ok {
+				continue
+			}
+			cell.UnusualMetric = chosen.hit.Metric
+			cell.UnusualBand = chosen.hit.Band
+			cell.UnusualDistance = formatFixed(chosen.hit.Distance, 2)
+			if !best.ok || chosen.hit.Distance > best.hit.Distance {
+				best = chosen
+			}
+		}
+		if !best.ok {
+			continue
+		}
+		row.UnusualDefinite = true
+		row.UnusualMetric = best.hit.Metric
+		row.UnusualBand = best.hit.Band
+		row.UnusualDistance = formatFixed(best.hit.Distance, 2)
+		row.UnusualPercentile = formatFixed(best.hit.Percentile, 1)
+		row.UnusualVenue = best.hit.Exchange
+	}
 }
 
 func boardPrintRead(changePct float64) string {

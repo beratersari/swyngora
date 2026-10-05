@@ -240,6 +240,9 @@ func TestGetDerivativesBoard_ScanColumnsFromFeeds(t *testing.T) {
 	if !row.PrintDefinite || row.PrintChangePct != "+100" {
 		t.Fatalf("print %s", row.PrintChangePct)
 	}
+	if !row.OrderDefinite || row.OrderRatio != "+1.00" || row.OrderLean != domain.OrderCountLeanBuy || row.OrderBuy != 3 || row.OrderSell != 0 {
+		t.Fatalf("order %s %s %d %d", row.OrderRatio, row.OrderLean, row.OrderBuy, row.OrderSell)
+	}
 	if !row.BidDefinite || row.BidPct == "" {
 		t.Fatalf("bid %+v", row.BidPct)
 	}

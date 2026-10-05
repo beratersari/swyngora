@@ -16,8 +16,9 @@ const (
 )
 
 // GetDerivativesBoard returns the liquid USDT perpetual desk: mark, funding,
-// open interest, crowd long, top-versus-crowd, day CVD, print size, liquidation
-// heat, 1% bid share, taker buy share, and 24h liquidations.
+// open interest, crowd long, top-versus-crowd, day CVD, print size, 15m order
+// count, the farthest unusual reading, liquidation heat, 1% bid share, taker
+// buy share, and 24h liquidations.
 func (s *Service) GetDerivativesBoard(ctx context.Context, exchange string, limit int) (*domain.DerivativesBoard, error) {
 	ex, err := domain.ParseOpenInterestExchange(exchange)
 	if err != nil {
@@ -35,6 +36,16 @@ func (s *Service) GetDerivativesBoard(ctx context.Context, exchange string, limi
 	if err != nil && len(symbols) == 0 {
 		return nil, err
 	}
+	var (
+		scan    *domain.UnusualScan
+		scanErr error
+		scanWG  sync.WaitGroup
+	)
+	scanWG.Add(1)
+	go func() {
+		defer scanWG.Done()
+		scan, scanErr = s.ScanUnusual(ctx, ex, "all", limit)
+	}()
 	want := domain.ExpectedFuturesVenues(ex)
 	coins := make([]domain.DerivativesCoinInput, len(symbols))
 	var wg sync.WaitGroup
@@ -54,6 +65,10 @@ func (s *Service) GetDerivativesBoard(ctx context.Context, exchange string, limi
 		}(i, sym)
 	}
 	wg.Wait()
+	scanWG.Wait()
+	if scanErr != nil {
+		return nil, scanErr
+	}
 	now := time.Now().UTC()
 	out := domain.BuildDerivativesBoard(ex, coins, now)
 	if out != nil {
@@ -61,6 +76,9 @@ func (s *Service) GetDerivativesBoard(ctx context.Context, exchange string, limi
 			return nil, err
 		} else {
 			domain.AttachRecordedSpans(out, spans)
+		}
+		if scan != nil {
+			domain.AttachBoardUnusual(out, scan.Hits)
 		}
 	}
 	if c := s.derivativesBoardCache(); c != nil && out != nil {
@@ -147,29 +165,63 @@ func (s *Service) derivativesDayCVD(ctx context.Context, ex domain.Exchange, sym
 	return domain.DayCVDDelta(merged, now, started)
 }
 
-func (s *Service) derivativesPrintChange(ctx context.Context, ex domain.Exchange, symbol string) (float64, int, float64, int, time.Time, bool) {
+type derivativesTapeRead struct {
+	printNotional   float64
+	printCount      int
+	printPrior      float64
+	printPriorCount int
+	printAt         time.Time
+	printOK         bool
+	orderBuy        int
+	orderSell       int
+	orderAt         time.Time
+	orderOK         bool
+}
+
+// derivativesTape reads the 15-minute print-size change and the 15-minute
+// order-count ratio from one print slice. A window the tape does not cover
+// stays unset so the board does not treat it as zero.
+func (s *Service) derivativesTape(ctx context.Context, ex domain.Exchange, symbol string) derivativesTapeRead {
+	var out derivativesTapeRead
 	if s == nil {
-		return 0, 0, 0, 0, time.Time{}, false
+		return out
 	}
 	now := time.Now().UTC()
 	from := now.Add(-domain.PrintSizeLookback())
 	prints, covered := s.countedPrints(ctx, ex, symbol, from, now)
 	if !covered {
-		return 0, 0, 0, 0, time.Time{}, false
+		return out
 	}
-	built := domain.BuildPrintSizeVenue(ex, symbol, prints, now)
-	for _, w := range built.Windows {
+	sized := domain.BuildPrintSizeVenue(ex, symbol, prints, now)
+	for _, w := range sized.Windows {
 		if w.Window != domain.PrintSizeWindow15m || !w.Complete {
 			continue
 		}
 		count := w.Buy.Count + w.Sell.Count
 		prior := w.Buy.PriorCount + w.Sell.PriorCount
 		if count <= 0 || prior <= 0 {
-			return 0, 0, 0, 0, time.Time{}, false
+			break
 		}
-		return w.Buy.Notional + w.Sell.Notional, count, w.Buy.PriorNotional + w.Sell.PriorNotional, prior, built.Newest, true
+		out.printNotional = w.Buy.Notional + w.Sell.Notional
+		out.printCount = count
+		out.printPrior = w.Buy.PriorNotional + w.Sell.PriorNotional
+		out.printPriorCount = prior
+		out.printAt = sized.Newest
+		out.printOK = !sized.Newest.IsZero()
+		break
 	}
-	return 0, 0, 0, 0, time.Time{}, false
+	counted := domain.BuildOrderCount(ex, symbol, prints, now)
+	for _, w := range counted.Windows {
+		if w.Window != domain.OrderCount15m || !w.Complete || w.Total <= 0 || counted.Newest.IsZero() {
+			continue
+		}
+		out.orderBuy = w.BuyCount
+		out.orderSell = w.SellCount
+		out.orderAt = counted.Newest
+		out.orderOK = true
+		break
+	}
+	return out
 }
 
 func (s *Service) derivativesBidShare(ctx context.Context, ex domain.Exchange, symbol string) (float64, float64, time.Time, bool) {
@@ -225,6 +277,10 @@ func (s *Service) derivativesVenue(ctx context.Context, ex domain.Exchange, symb
 		printPriorN    int
 		printAt        time.Time
 		printOK        bool
+		orderBuy       int
+		orderSell      int
+		orderAt        time.Time
+		orderOK        bool
 		bidNotional    float64
 		askNotional    float64
 		bookAt         time.Time
@@ -280,7 +336,12 @@ func (s *Service) derivativesVenue(ctx context.Context, ex domain.Exchange, symb
 			}
 		}
 		cvdDay, cvdAt, cvdOK = s.derivativesDayCVD(ctx, ex, symbol)
-		printNotional, printCount, printPrior, printPriorN, printAt, printOK = s.derivativesPrintChange(ctx, ex, symbol)
+		tape := s.derivativesTape(ctx, ex, symbol)
+		printNotional, printCount, printPrior, printPriorN, printAt, printOK = tape.printNotional, tape.printCount, tape.printPrior, tape.printPriorCount, tape.printAt, tape.printOK
+		if tape.orderOK {
+			orderBuy, orderSell, orderAt = tape.orderBuy, tape.orderSell, tape.orderAt
+			orderOK = true
+		}
 	}()
 	go func() {
 		defer wg.Done()
@@ -327,6 +388,12 @@ func (s *Service) derivativesVenue(ctx context.Context, ex domain.Exchange, symb
 		out.PrintPriorNotional = printPrior
 		out.PrintPriorCount = printPriorN
 		out.PrintAt = printAt
+	}
+	if orderOK {
+		out.OrderOK = true
+		out.OrderBuy = orderBuy
+		out.OrderSell = orderSell
+		out.OrderAt = orderAt
 	}
 	if bookOK {
 		out.BookOK = true

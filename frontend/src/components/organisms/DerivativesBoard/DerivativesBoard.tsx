@@ -11,6 +11,7 @@ import {
   definiteText,
   formatRecordedSpan,
   fundingText,
+  orderCountText,
   recordedSummary,
   recordedTitle,
   isBoardSortKey,
@@ -19,6 +20,7 @@ import {
   priceText,
   signedAmount,
   sortBoardCoins,
+  unusualText,
 } from './helpers';
 import type { DerivativesBoardProps } from './DerivativesBoard.types';
 
@@ -35,12 +37,14 @@ const NUMERIC_KEYS: BoardSortKey[] = [
   'gapPct',
   'cvdDay',
   'printChange',
+  'orderCount',
+  'unusual',
   'liqHeat',
   'bidPct',
 ];
 
 export function DerivativesBoard({ exchange, coins, loading }: DerivativesBoardProps) {
-  const { t } = useTranslation(['derivatives', 'common']);
+  const { t } = useTranslation(['derivatives', 'unusual', 'ordercount', 'common']);
   const navigate = useNavigate();
   const venueName = (id: string): string => {
     switch (id) {
@@ -82,6 +86,46 @@ export function DerivativesBoard({ exchange, coins, loading }: DerivativesBoardP
     const pct = `${row.printChangePct}%`;
     const word = row.printRead ? printWord(row.printRead) : '';
     return word ? `${pct} ${word}` : pct;
+  };
+  const leanWord = (lean: string | undefined): string => {
+    switch (lean) {
+      case 'buy':
+        return t('ordercount:leanBuy');
+      case 'sell':
+        return t('ordercount:leanSell');
+      case 'balanced':
+        return t('ordercount:leanBalanced');
+      default:
+        return '';
+    }
+  };
+  const orderLabel = (row: DerivativesCoin): string => orderCountText(row, leanWord(row.orderLean));
+  const orderTitle = (row: DerivativesCoin): string | undefined => {
+    if (!row.orderDefinite) return undefined;
+    return t('derivatives:orderTitle', { buys: row.orderBuy ?? 0, sells: row.orderSell ?? 0 });
+  };
+  const unusualLabel = (row: DerivativesCoin): string =>
+    unusualText(
+      row,
+      row.unusualMetric ? t(`unusual:metrics.${row.unusualMetric}`, { defaultValue: row.unusualMetric }) : '',
+      row.unusualBand ? t(`unusual:bands.${row.unusualBand}`, { defaultValue: row.unusualBand }) : '',
+      row.unusualVenue ? venueName(row.unusualVenue) : '',
+    );
+  const unusualTitle = (row: DerivativesCoin): string | undefined => {
+    if (!row.venues?.length) return undefined;
+    const parts = row.venues
+      .filter((venue) => venue.unusualMetric)
+      .map((venue) => {
+        const name = venueName(venue.exchange ?? '');
+        const metric = t(`unusual:metrics.${venue.unusualMetric}`, { defaultValue: venue.unusualMetric ?? '' });
+        const band = t(`unusual:bands.${venue.unusualBand}`, { defaultValue: venue.unusualBand ?? '' });
+        return `${name} ${metric} ${band}`;
+      });
+    if (parts.length === 0) {
+      if (row.unusualDefinite) return unusualLabel(row);
+      return t('derivatives:unusualQuiet');
+    }
+    return parts.join(' · ');
   };
   const heatWord = (grade: string): string => {
     switch (grade) {
@@ -220,6 +264,26 @@ export function DerivativesBoard({ exchange, coins, loading }: DerivativesBoardP
       render: (_value, row) => printLabel(row),
     },
     {
+      title: t('derivatives:orderCount'),
+      dataIndex: 'orderRatio',
+      ...sortable('orderCount'),
+      render: (_value, row) => (
+        <Text variant="caption" title={orderTitle(row)}>
+          {orderLabel(row)}
+        </Text>
+      ),
+    },
+    {
+      title: t('derivatives:unusual'),
+      dataIndex: 'unusualDistance',
+      ...sortable('unusual'),
+      render: (_value, row) => (
+        <Text variant="caption" title={unusualTitle(row)}>
+          {unusualLabel(row)}
+        </Text>
+      ),
+    },
+    {
       title: t('derivatives:liqHeat'),
       dataIndex: 'liqHeat',
       ...sortable('liqHeat'),
@@ -270,7 +334,7 @@ export function DerivativesBoard({ exchange, coins, loading }: DerivativesBoardP
       dataSource={rows}
       loading={loading}
       pagination={false}
-      scroll={{ x: 1880 }}
+      scroll={{ x: 2280 }}
       locale={{ emptyText: t('derivatives:empty') }}
       onChange={onChange}
       onRow={(row) => ({

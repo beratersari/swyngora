@@ -43,6 +43,16 @@ vi.mock('@/libs/api', async (importOriginal) => {
             longDefinite: false,
             takerBuyPct: '62',
             takerDefinite: false,
+            orderRatio: '+0.40',
+            orderLean: 'buy',
+            orderBuy: 12,
+            orderSell: 4,
+            orderDefinite: true,
+            unusualMetric: 'funding',
+            unusualBand: 'extreme_high',
+            unusualDistance: '49',
+            unusualVenue: 'binance',
+            unusualDefinite: true,
             venues: [
               { exchange: 'binance', oiStatus: 'fresh', oiValue: '8000000000' },
               { exchange: 'okx', oiStatus: 'missing' },
@@ -75,6 +85,10 @@ describe('DerivativesPage', () => {
     expect(screen.getByRole('columnheader', { name: 'Top − crowd' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'CVD day' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Print size 15m' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Order count 15m' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Unusual' })).toBeInTheDocument();
+    expect(screen.getByText('+0.40 Buy')).toBeInTheDocument();
+    expect(screen.getByText('Funding · Extremely high · Binance')).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Liq heat' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Bid 1%' })).toBeInTheDocument();
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);

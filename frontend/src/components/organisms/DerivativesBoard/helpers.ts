@@ -86,6 +86,17 @@ export function percentText(definite: boolean | undefined, value: string | undef
   return definiteText(definite, value, (raw) => `${raw}%`);
 }
 
+export function orderCountText(coin: DerivativesCoin, lean: string): string {
+  if (!coin.orderDefinite || !coin.orderRatio) return DASH;
+  return lean ? `${coin.orderRatio} ${lean}` : coin.orderRatio;
+}
+
+export function unusualText(coin: DerivativesCoin, metric: string, band: string, venue: string): string {
+  if (!coin.unusualDefinite || !metric) return DASH;
+  const parts = [metric, band, venue].filter((part) => part);
+  return parts.join(' · ');
+}
+
 export function isBoardSortKey(value: string): value is BoardSortKey {
   return (BOARD_SORT_KEYS as readonly string[]).includes(value);
 }
@@ -138,6 +149,10 @@ function sortNumber(coin: DerivativesCoin, key: BoardSortKey): number | null {
       return coin.cvdDayDefinite ? finite(coin.cvdDay) : null;
     case 'printChange':
       return coin.printDefinite ? finite(coin.printChangePct) : null;
+    case 'orderCount':
+      return coin.orderDefinite ? finite(coin.orderRatio) : null;
+    case 'unusual':
+      return coin.unusualDefinite ? finite(coin.unusualDistance) : null;
     case 'liqHeat':
       return coin.liqHeatDefinite ? finite(coin.liqHeatRatio) : null;
     case 'bidPct':

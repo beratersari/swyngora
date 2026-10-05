@@ -33,7 +33,7 @@ const (
 	// before its 5-minute liquidation burst can be compared with its own typical rate.
 	DerivativesLiqHeatMinCoverage = 6 * time.Hour
 
-	derivativesBoardNote = "Liquid USDT perpetuals on Binance USD-M, Bybit linear, and OKX USDT-swap. Open interest, funding, crowd long percent, 1h taker buy share, and 24h liquidation totals are combined only when every expected venue is fresh for that column. A missing or old venue is named and is not counted as zero. Crowd long is the account long share, weighted by open interest when that open interest is also fresh. Taker buy share sums the last hour of aggressive buy and sell volume; a window that is not complete stays blank. Price is the mark from the fresh venue with the most open interest. Crowd-versus-top is top-trader long percent minus account long percent, in percentage points. Bybit does not publish a top-trader ratio, so that column names Bybit as unsupported and uses the venues that do. Day CVD is aggressive buy minus sell since 00:00 UTC, blank until each venue's tape reaches that open. Print size is the 15-minute average fill versus the 15 minutes before it, from the in-memory tape only. Liquidation heat is the 5-minute burst versus that venue's own typical rate, blank until the venue has been watched for 6 hours. Bid share is resting bid notional within 1% of mid. These extra columns do not change whether the rest of the row is definite. Informational only — not financial advice."
+	derivativesBoardNote = "Liquid USDT perpetuals on Binance USD-M, Bybit linear, and OKX USDT-swap. Open interest, funding, crowd long percent, 1h taker buy share, and 24h liquidation totals are combined only when every expected venue is fresh for that column. A missing or old venue is named and is not counted as zero. Crowd long is the account long share, weighted by open interest when that open interest is also fresh. Taker buy share sums the last hour of aggressive buy and sell volume; a window that is not complete stays blank. Price is the mark from the fresh venue with the most open interest. Crowd-versus-top is top-trader long percent minus account long percent, in percentage points. Bybit does not publish a top-trader ratio, so that column names Bybit as unsupported and uses the venues that do. Day CVD is aggressive buy minus sell since 00:00 UTC, blank until each venue's tape reaches that open. Print size is the 15-minute average fill versus the 15 minutes before it, from the in-memory tape or stored flow minutes when that tape does not cover the half hour. Order count is (buy − sell) / (buy + sell) over those same 15 minutes. Counts are summed only when every expected venue's window is complete and the newest print is still fresh. A venue with no fresh prints stays blank and is not counted as zero. Unusual names the farthest high or low reading versus that coin's own stored samples. Venues are not averaged, and the cell names the venue. A coin with no standout stays blank. Liquidation heat is the 5-minute burst versus that venue's own typical rate, blank until the venue has been watched for 6 hours. Bid share is resting bid notional within 1% of mid. These extra columns do not change whether the rest of the row is definite. Informational only — not financial advice."
 )
 
 // DerivativesVenueInput is one venue's live perp readings for a coin.
@@ -68,13 +68,18 @@ type DerivativesVenueInput struct {
 	PrintPriorCount    int
 	PrintAt            time.Time
 	PrintOK            bool
-	LiqGrade           string
-	LiqRatio           float64
-	LiqHeatOK          bool
-	BidNotional        float64
-	AskNotional        float64
-	BookAt             time.Time
-	BookOK             bool
+	// OrderBuy and OrderSell are aggressive print counts over the last 15 minutes.
+	OrderBuy    int
+	OrderSell   int
+	OrderAt     time.Time
+	OrderOK     bool
+	LiqGrade    string
+	LiqRatio    float64
+	LiqHeatOK   bool
+	BidNotional float64
+	AskNotional float64
+	BookAt      time.Time
+	BookOK      bool
 }
 
 // DerivativesCoinInput is one symbol before the board decides what is definite.
@@ -86,31 +91,39 @@ type DerivativesCoinInput struct {
 
 // DerivativesVenueRow is one venue on a coin, including an incomplete read.
 type DerivativesVenueRow struct {
-	Exchange       string
-	OIValue        string
-	OIStatus       string
-	FundingRate    string
-	FundingRatePct string
-	FundingPayer   string
-	FundingStatus  string
-	MarkPrice      string
-	LiqLong        string
-	LiqShort       string
-	LiqStatus      string
-	LongPct        string
-	LongStatus     string
-	TakerBuyPct    string
-	TakerStatus    string
-	GapPct         string
-	GapStatus      string
-	CVDDay         string
-	CVDStatus      string
-	PrintChangePct string
-	PrintStatus    string
-	LiqGrade       string
-	LiqHeatStatus  string
-	BidPct         string
-	BookStatus     string
+	Exchange        string
+	OIValue         string
+	OIStatus        string
+	FundingRate     string
+	FundingRatePct  string
+	FundingPayer    string
+	FundingStatus   string
+	MarkPrice       string
+	LiqLong         string
+	LiqShort        string
+	LiqStatus       string
+	LongPct         string
+	LongStatus      string
+	TakerBuyPct     string
+	TakerStatus     string
+	GapPct          string
+	GapStatus       string
+	CVDDay          string
+	CVDStatus       string
+	PrintChangePct  string
+	PrintStatus     string
+	OrderRatio      string
+	OrderLean       string
+	OrderBuy        int
+	OrderSell       int
+	OrderStatus     string
+	UnusualMetric   string
+	UnusualBand     string
+	UnusualDistance string
+	LiqGrade        string
+	LiqHeatStatus   string
+	BidPct          string
+	BookStatus      string
 }
 
 // DerivativesCoin is one row. Combined fields are empty when that column is
@@ -142,22 +155,35 @@ type DerivativesCoin struct {
 	TakerDefinite        bool
 	// GapPct is top-trader long percent minus crowd long percent.
 	// GapScope lists the venues inside that average.
-	GapPct          string
-	GapDefinite     bool
-	GapScope        string
-	CVDDay          string
-	CVDDayDefinite  bool
-	PrintChangePct  string
-	PrintRead       string
-	PrintDefinite   bool
-	LiqHeat         string
-	LiqHeatRatio    string
-	LiqHeatVenue    string
-	LiqHeatDefinite bool
-	BidPct          string
-	BidDefinite     bool
-	Venues          []DerivativesVenueRow
-	Coverage        MarketCoverage
+	GapPct         string
+	GapDefinite    bool
+	GapScope       string
+	CVDDay         string
+	CVDDayDefinite bool
+	PrintChangePct string
+	PrintRead      string
+	PrintDefinite  bool
+	OrderRatio     string
+	OrderLean      string
+	OrderBuy       int
+	OrderSell      int
+	OrderDefinite  bool
+	// Unusual* is one venue's standout versus that coin's own samples.
+	// UnusualVenue names that venue. The readings are not averaged.
+	UnusualMetric     string
+	UnusualBand       string
+	UnusualDistance   string
+	UnusualPercentile string
+	UnusualVenue      string
+	UnusualDefinite   bool
+	LiqHeat           string
+	LiqHeatRatio      string
+	LiqHeatVenue      string
+	LiqHeatDefinite   bool
+	BidPct            string
+	BidDefinite       bool
+	Venues            []DerivativesVenueRow
+	Coverage          MarketCoverage
 	// Recorded is how far back each stored series for this coin actually goes.
 	Recorded []RecordedSeries
 }

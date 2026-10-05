@@ -1383,9 +1383,15 @@ paths:
         small, and `limit=100` asks for the full recorded set. Each row has the mark price, the
         predicted funding rate, open interest, the 1h and 24h open-interest
         change, crowd long percent, the 1h taker buy share, and 24h long and
-        short liquidation notionals. `exchange=all` (default) reads Binance
+        short liquidation notionals, plus the 15-minute order-count ratio and
+        the farthest unusual reading versus that coin's own samples.
+        `exchange=all` (default) reads Binance
         USD-M, Bybit linear, and OKX USDT-swap. A combined number is present
-        only when every expected venue is fresh for that column. Crowd long is
+        only when every expected venue is fresh for that column. Order count
+        sums aggressive print counts over 15 minutes and stays blank when any
+        venue's tape does not cover that window. Unusual names one venue's
+        standout and does not average venues. A coin with no standout stays
+        blank. Crowd long is
         the account long share, weighted by open interest when that open
         interest is also fresh. Taker buy share sums the last hour of
         aggressive buy and sell volume; an incomplete hour stays blank. A
@@ -11783,6 +11789,29 @@ components:
           type: string
           description: jumped | faded | larger | smaller | stable
         printDefinite: { type: boolean }
+        orderRatio:
+          type: string
+          description: (buy − sell) / (buy + sell) over the last 15 minutes, from -1 to +1. Omitted unless every expected venue's window is complete and fresh.
+        orderLean:
+          type: string
+          description: buy | sell | balanced
+        orderBuy: { type: integer }
+        orderSell: { type: integer }
+        orderDefinite: { type: boolean }
+        unusualMetric:
+          type: string
+          description: funding | open_interest | liquidations | cvd | spread. The farthest standout versus this coin's own samples. Venues are not averaged.
+        unusualBand:
+          type: string
+          description: extreme_high | high | low | extreme_low
+        unusualDistance:
+          type: string
+          description: How far the percentile sits from 50.
+        unusualPercentile: { type: string }
+        unusualVenue:
+          type: string
+          description: Venue of that standout. Set when unusualDefinite is true.
+        unusualDefinite: { type: boolean }
         liqHeat:
           type: string
           description: Hottest 5-minute liquidation grade versus each venue's own typical rate (quiet | elevated | cascade | extreme).
@@ -11827,6 +11856,14 @@ components:
         cvdStatus: { type: string, description: fresh | stale | missing }
         printChangePct: { type: string }
         printStatus: { type: string, description: fresh | stale | missing }
+        orderRatio: { type: string }
+        orderLean: { type: string, description: buy | sell | balanced }
+        orderBuy: { type: integer }
+        orderSell: { type: integer }
+        orderStatus: { type: string, description: fresh | stale | missing }
+        unusualMetric: { type: string }
+        unusualBand: { type: string }
+        unusualDistance: { type: string, description: Set when this venue has its own standout. Empty means no standout, not a missing venue. }
         liqGrade: { type: string }
         liqHeatStatus: { type: string, description: fresh | stale | missing }
         bidPct: { type: string }

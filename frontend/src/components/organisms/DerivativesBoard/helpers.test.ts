@@ -4,10 +4,12 @@ import {
   definiteText,
   formatRecordedSpan,
   fundingText,
+  orderCountText,
   percentText,
   recordedSummary,
   signedAmount,
   sortBoardCoins,
+  unusualText,
 } from './helpers';
 import type { DerivativesCoin } from '@/libs/api';
 
@@ -68,6 +70,38 @@ describe('derivatives board helpers', () => {
       'BTC',
       'ETH',
       'SOL',
+    ]);
+  });
+
+  it('shows the 15-minute order-count ratio and the named unusual venue', () => {
+    const counted = { orderDefinite: true, orderRatio: '+0.40' } as DerivativesCoin;
+    expect(orderCountText(counted, 'Buy')).toBe('+0.40 Buy');
+    expect(orderCountText({ orderDefinite: false, orderRatio: '+0.40' }, 'Buy')).toBe('—');
+    const standout = {
+      unusualDefinite: true,
+      unusualMetric: 'funding',
+      unusualBand: 'extreme_high',
+      unusualVenue: 'binance',
+    } as DerivativesCoin;
+    expect(unusualText(standout, 'Funding', 'Extremely high', 'Binance')).toBe('Funding · Extremely high · Binance');
+    expect(unusualText({ unusualDefinite: false }, 'Funding', 'Extremely high', 'Binance')).toBe('—');
+  });
+
+  it('sorts order count and unusual and keeps a blank cell at the bottom', () => {
+    const coins = [
+      { symbol: 'ETHUSDT', base: 'ETH', orderRatio: '-0.20', orderDefinite: true, unusualDistance: '10', unusualDefinite: true },
+      { symbol: 'BTCUSDT', base: 'BTC', orderRatio: '+0.80', orderDefinite: false, unusualDistance: '49', unusualDefinite: false },
+      { symbol: 'SOLUSDT', base: 'SOL', orderRatio: '+0.40', orderDefinite: true, unusualDistance: '40', unusualDefinite: true },
+    ] as DerivativesCoin[];
+    expect(sortBoardCoins(coins, { key: 'orderCount', dir: 'desc' }).map((coin) => coin.base)).toEqual([
+      'SOL',
+      'ETH',
+      'BTC',
+    ]);
+    expect(sortBoardCoins(coins, { key: 'unusual', dir: 'desc' }).map((coin) => coin.base)).toEqual([
+      'SOL',
+      'ETH',
+      'BTC',
     ]);
   });
 

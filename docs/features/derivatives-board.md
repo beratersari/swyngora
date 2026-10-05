@@ -2,7 +2,7 @@
 
 ## Goal
 
-Rank the liquid USDT perpetuals in one sortable table: mark, funding, open interest, crowd long, top-versus-crowd, day CVD, print size, liquidation heat, bid share, taker buy share, and 24-hour liquidations.
+Rank the liquid USDT perpetuals in one sortable table: mark, funding, open interest, crowd long, top-versus-crowd, day CVD, print size, order count, unusual readings, liquidation heat, bid share, taker buy share, and 24-hour liquidations.
 
 ## Behavior
 
@@ -18,7 +18,9 @@ Each row has:
 - Long and short liquidation notional over the last 24 hours.
 - Top minus crowd, in percentage points. Bybit does not publish a top-trader ratio, so the combined cell uses the venues that do and names Bybit as unsupported. `gapScope` lists who is inside the number.
 - Day CVD: aggressive buy minus sell since 00:00 UTC. The cell stays empty until every expected venue's tape reaches that open and the newest bucket is still fresh.
-- Print size: percent change of the 15-minute average fill versus the 15 minutes before it. This reads the in-memory tape only. A tape that does not cover the half hour stays empty.
+- Print size: percent change of the 15-minute average fill versus the 15 minutes before it. This reads the in-memory tape, or stored flow-at-prices minutes when that tape does not cover the half hour. It does not walk public trade history.
+- Order count: `(buy − sell) / (buy + sell)` over those same 15 minutes. Counts are summed only when every expected venue's window is complete and the newest print is still fresh. A venue with no fresh prints stays blank and is not counted as zero.
+- Unusual: the farthest high or low reading versus that coin's own stored samples (funding, open-interest change, completed-hour liquidations, completed-day CVD, or hourly spread). The cell names the venue. Venues are not averaged. A coin with no standout stays blank, including when its own history is still too short. Print size is not part of this scan.
 - Liquidation heat: the hottest 5-minute grade versus that venue's own typical rate (`quiet`, `elevated`, `cascade`, `extreme`). It stays empty until the venue has been watched for 6 hours. When the venues disagree, the cell names the hottest one.
 - Bid share: resting bid notional within 1% of mid, summed across fresh books.
 - Recorded span: how far back stored open interest, the spot book, flow-at-prices, and liquidation prints go for that coin. The cell shows the longest span of each series. The title lists each venue.
@@ -41,4 +43,4 @@ Open `/derivatives`. The table lists the liquid perpetuals. A dash in a combined
 
 ## Limits
 
-The page can list at most 100 USDT perpetuals, which is the recorder cap. Open interest, funding, long/short, and the 1% perpetual book are live REST snapshots. The board response is cached about 20 seconds. Day CVD and print size do not start a REST history walk: day CVD uses stored minutes plus the live book, and print size uses the in-memory tape or, when that tape does not cover the window, stored flow-at-prices minutes. Liquidation heat needs about 6 hours of watching before a grade is shown. Taker buy share uses each venue's existing 1-hour window: Binance is the public taker series, Bybit is complete after this process has collected that hour, and OKX only has the newest 500 swap trades, so its hour is often incomplete. Liquidation totals are the prints this process has seen in the last 24 hours. The recorded column is stored history, not a live quote. There is no fourth exchange on this board.
+The page can list at most 100 USDT perpetuals, which is the recorder cap. It opens on 36. Choosing 100 ranks the recorded set, including order count and unusual, on this board. Open interest, funding, long/short, and the 1% perpetual book are live REST snapshots. The board response is cached about 20 seconds. Day CVD, print size, and order count do not start a REST history walk: day CVD uses stored minutes plus the live book, and print size and order count use the in-memory tape or, when that tape does not cover the window, stored flow-at-prices minutes. Unusual reads the same stored samples as the unusual scan and does not merge venues. Liquidation heat needs about 6 hours of watching before a grade is shown. Taker buy share uses each venue's existing 1-hour window: Binance is the public taker series, Bybit is complete after this process has collected that hour, and OKX only has the newest 500 swap trades, so its hour is often incomplete. Liquidation totals are the prints this process has seen in the last 24 hours. The recorded column is stored history, not a live quote. There is no fourth exchange on this board.

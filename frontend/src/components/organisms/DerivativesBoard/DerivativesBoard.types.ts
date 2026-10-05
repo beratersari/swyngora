@@ -20,6 +20,8 @@ export const BOARD_SORT_KEYS = [
   'gapPct',
   'cvdDay',
   'printChange',
+  'orderCount',
+  'unusual',
   'liqHeat',
   'bidPct',
 ] as const;
