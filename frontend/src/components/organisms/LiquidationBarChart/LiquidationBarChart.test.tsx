@@ -42,8 +42,9 @@ describe('LiquidationBarChart', () => {
     expect(screen.getByText(/^From last$|^Last’ten$/)).toBeInTheDocument();
     expect(screen.getByTestId('liquidation-levels-review')).toBeInTheDocument();
     expect(screen.getByTestId('liquidation-levels-reliability')).toBeInTheDocument();
-    expect(screen.getByText(/amount kept|tutulan pay/i)).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /amount kept|tutulan pay/i })).toBeInTheDocument();
     expect(screen.getByText('40%')).toBeInTheDocument();
+    expect(screen.getByTestId('liq-band-hit-100')).toHaveTextContent('60%');
   });
 
   it('renders market-wide time bars', () => {

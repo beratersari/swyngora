@@ -24,6 +24,34 @@ func TestParseLiquidationLevelsSymbol(t *testing.T) {
 	}
 }
 
+func TestBuildLiquidationLevels_FiveTimesSitsPastTheTenTimesBand(t *testing.T) {
+	got := BuildLiquidationLevelsFromHunt(HuntReport{
+		Symbol: "BTCUSDT", Exchange: "binance",
+		Venues: []HuntVenueReport{{
+			Exchange: ExchangeBinance, Price: 100, OpenInterestValue: 1_000_000,
+			EstShortNotional: 1_000_000,
+		}},
+	})
+	var far float64
+	for _, lv := range got.Levels {
+		px, err := strconv.ParseFloat(lv.Price, 64)
+		if err != nil || px < 112 {
+			continue
+		}
+		for _, sl := range lv.ByLeverage {
+			if sl.Leverage != 10 {
+				continue
+			}
+			n, _ := strconv.ParseFloat(sl.ShortNotional, 64)
+			far += n
+		}
+	}
+	// 5x is 15% of the short side and liquidates near +20%, past the old 10x edge.
+	if far < 100_000 {
+		t.Fatalf("5x mass above +12%% = %v", far)
+	}
+}
+
 func TestChartLeverageBucket(t *testing.T) {
 	if ChartLeverageBucket(5) != 10 || ChartLeverageBucket(10) != 10 {
 		t.Fatal("10x")

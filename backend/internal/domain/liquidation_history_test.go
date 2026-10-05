@@ -224,6 +224,41 @@ func TestNormalizeHistoryQuery_ArchiveWindow(t *testing.T) {
 	}
 }
 
+func TestHistoryCoveredSpan_TruncatedPageKeepsTheStart(t *testing.T) {
+	from := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(6 * time.Hour)
+	oldest := from.Add(5 * time.Hour)
+	gotFrom, gotTo, ok := HistoryCoveredSpan(from, to, oldest, false)
+	if !ok || !gotFrom.Equal(oldest) || !gotTo.Equal(to) {
+		t.Fatalf("partial %+v %+v %v", gotFrom, gotTo, ok)
+	}
+	fullFrom, fullTo, full := HistoryCoveredSpan(from, to, time.Time{}, true)
+	if !full || !fullFrom.Equal(from) || !fullTo.Equal(to) {
+		t.Fatalf("full %+v %+v %v", fullFrom, fullTo, full)
+	}
+	if _, _, ok := HistoryCoveredSpan(from, to, time.Time{}, false); ok {
+		t.Fatal("empty truncated page must stay uncovered")
+	}
+}
+
+func TestMergeHistoryCoverage_OneShortPageBlocksTheRest(t *testing.T) {
+	from := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+	_, _, ok := MergeHistoryCoverage([]LiquidationHistoryResult{
+		{CoveredFrom: from, CoveredTo: to},
+		{CoveredFrom: from.Add(30 * time.Minute), CoveredTo: to},
+	})
+	if !ok {
+		t.Fatal("overlap should cover the later start")
+	}
+	if _, _, ok := MergeHistoryCoverage([]LiquidationHistoryResult{
+		{CoveredFrom: from, CoveredTo: to},
+		{},
+	}); ok {
+		t.Fatal("a missing span must leave the gap")
+	}
+}
+
 func TestNormalizeHistoryQuery_RejectsTiny(t *testing.T) {
 	q, ok := NormalizeHistoryQuery(LiquidationHistoryQuery{
 		Exchange: ExchangeBybit,

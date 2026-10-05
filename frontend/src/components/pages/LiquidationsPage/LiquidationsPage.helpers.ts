@@ -1,10 +1,11 @@
+import { LIQ_CHART_RANGES } from '@/components/organisms/LiquidationBarChart/LiquidationBarChart.constants';
 import type { HuntPanel } from '@/components/organisms/LiquidationHunt/LiquidationHunt.types';
 import { isCardWindow, type LiqCardWindowId } from '@/components/organisms/LiquidationWindowCards';
 import { DEFAULT_LIQ_SYMBOL, DEFAULT_LIQ_WINDOW } from './LiquidationsPage.constants';
 
 export type LiqPageView = 'overview' | 'heatmap' | 'open' | 'chart' | 'cascade' | 'hunt' | 'max-pain';
 export type LiqPageExchange = 'all' | 'binance' | 'bybit' | 'okx';
-export type LiqChartRange = '12h' | '24h';
+export type LiqChartRange = (typeof LIQ_CHART_RANGES)[number];
 export type LiqHuntPanel = HuntPanel;
 
 export function parseLiqView(raw: string | null): LiqPageView {
@@ -42,7 +43,8 @@ export function parseLiqChartSymbol(raw: string | null): string {
 }
 
 export function parseLiqChartRange(raw: string | null): LiqChartRange {
-  return raw === '12h' ? '12h' : '24h';
+  if (raw && (LIQ_CHART_RANGES as readonly string[]).includes(raw)) return raw as LiqChartRange;
+  return '24h';
 }
 
 export function parseLiqWindow(raw: string | null): LiqCardWindowId {

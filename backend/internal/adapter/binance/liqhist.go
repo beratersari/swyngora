@@ -20,7 +20,8 @@ const (
 
 // ListLiquidationHistory loads USD-M force orders for a disconnect window.
 // Venue-wide first (no symbol); falls back to per-symbol when the API requires it.
-// A completed page walk sets CoveredFrom/To so the book can drop that gap.
+// CoveredFrom/To is only the stretch the pages actually reached.
+// A walk that stops at the page cap leaves the earlier gap in place.
 func (c *Client) ListLiquidationHistory(ctx context.Context, q domain.LiquidationHistoryQuery) (domain.LiquidationHistoryResult, error) {
 	var out domain.LiquidationHistoryResult
 	q, ok := domain.NormalizeHistoryQuery(q)
@@ -30,11 +31,12 @@ func (c *Client) ListLiquidationHistory(ctx context.Context, q domain.Liquidatio
 	if q.Exchange != "" && q.Exchange != domain.ExchangeBinance {
 		return out, fmt.Errorf("%w: binance history for %s", domain.ErrInvalidArgument, q.Exchange)
 	}
-	events, err := c.fetchForceOrdersRange(ctx, "", q.From, q.To)
+	events, reached, oldest, err := c.fetchForceOrdersRange(ctx, "", q.From, q.To)
 	if err == nil {
 		out.Events = events
-		out.CoveredFrom = q.From
-		out.CoveredTo = q.To
+		if from, to, ok := domain.HistoryCoveredSpan(q.From, q.To, oldest, reached); ok {
+			out.CoveredFrom, out.CoveredTo = from, to
+		}
 		return out, nil
 	}
 	if !forceOrderNeedsSymbol(err) && !errors.Is(err, domain.ErrInvalidArgument) && !errors.Is(err, domain.ErrNotFound) {
@@ -44,24 +46,31 @@ func (c *Client) ListLiquidationHistory(ctx context.Context, q domain.Liquidatio
 		return out, nil
 	}
 	var all []domain.LiquidationEvent
+	var spans []domain.LiquidationHistoryResult
 	for _, sym := range q.Symbols {
 		if ctx.Err() != nil {
 			return out, ctx.Err()
 		}
-		ev, err := c.fetchForceOrdersRange(ctx, sym, q.From, q.To)
+		ev, reached, oldest, err := c.fetchForceOrdersRange(ctx, sym, q.From, q.To)
 		if err != nil {
 			out.Events = all
 			return out, nil
 		}
 		all = append(all, ev...)
+		span := domain.LiquidationHistoryResult{}
+		if from, to, ok := domain.HistoryCoveredSpan(q.From, q.To, oldest, reached); ok {
+			span.CoveredFrom, span.CoveredTo = from, to
+		}
+		spans = append(spans, span)
 	}
 	out.Events = all
-	out.CoveredFrom = q.From
-	out.CoveredTo = q.To
+	if from, to, ok := domain.MergeHistoryCoverage(spans); ok {
+		out.CoveredFrom, out.CoveredTo = from, to
+	}
 	return out, nil
 }
 
-func (c *Client) fetchForceOrdersRange(ctx context.Context, symbol string, from, to time.Time) ([]domain.LiquidationEvent, error) {
+func (c *Client) fetchForceOrdersRange(ctx context.Context, symbol string, from, to time.Time) ([]domain.LiquidationEvent, bool, time.Time, error) {
 	end := to
 	var out []domain.LiquidationEvent
 	for page := 0; page < liqHistMaxPages; page++ {
@@ -74,31 +83,26 @@ func (c *Client) fetchForceOrdersRange(ctx context.Context, symbol string, from,
 		q.Set("limit", strconv.Itoa(liqHistLimit))
 		body, err := c.getFutures(ctx, "/fapi/v1/allForceOrders", q)
 		if err != nil {
-			return out, err
+			return out, false, time.Time{}, err
 		}
 		batch, err := parseForceOrderHistory(body)
 		if err != nil {
-			return out, err
+			return out, false, time.Time{}, err
 		}
 		if len(batch) == 0 {
-			return out, nil
+			return out, true, domain.OldestLiquidationTime(out), nil
 		}
 		out = append(out, batch...)
-		oldest := batch[len(batch)-1].Time
-		for _, e := range batch {
-			if e.Time.Before(oldest) {
-				oldest = e.Time
-			}
-		}
+		oldest := domain.OldestLiquidationTime(batch)
 		if !oldest.After(from) || len(batch) < liqHistLimit {
-			return out, nil
+			return out, true, domain.OldestLiquidationTime(out), nil
 		}
 		end = oldest.Add(-time.Millisecond)
 		if !end.After(from) {
-			return out, nil
+			return out, true, domain.OldestLiquidationTime(out), nil
 		}
 	}
-	return out, nil
+	return out, false, domain.OldestLiquidationTime(out), nil
 }
 
 type binanceForceOrderHist struct {

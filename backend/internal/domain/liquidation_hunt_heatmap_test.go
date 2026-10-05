@@ -105,20 +105,21 @@ func TestBuildHuntHeatmap_IntensityAtLeverageBand(t *testing.T) {
 	}
 }
 
-func TestBuildHuntHeatmap_ObservedLiquidationAndCombined(t *testing.T) {
+func TestBuildHuntHeatmap_ModelIgnoresPrints(t *testing.T) {
 	spec, _ := ParseHuntHeatmapRange("12h")
 	to := time.Date(2026, 8, 29, 12, 0, 0, 0, time.UTC)
 	cols := HuntHeatmapColumns(spec, to)
 	last := cols[len(cols)-1]
 	prices := []HuntHeatmapPricePoint{{Time: last, Price: 50_000}}
+	forced := LiquidationEvent{
+		Exchange: ExchangeBinance, Side: LiquidationSideLong,
+		Time: last.Add(-time.Minute), Price: 49_000, Notional: 80_000,
+	}
 	bin := HuntHeatmapVenueSeries{
-		Exchange: ExchangeBinance,
-		Prices:   prices,
-		OI:       []FuturesSnapshot{{SampledAt: last, Value: 1_000_000}},
-		Liquidations: []LiquidationEvent{{
-			Exchange: ExchangeBinance, Side: LiquidationSideLong,
-			Time: last.Add(-time.Minute), Price: 49_000, Notional: 80_000,
-		}},
+		Exchange:     ExchangeBinance,
+		Prices:       prices,
+		OI:           []FuturesSnapshot{{SampledAt: last, Value: 1_000_000}},
+		Liquidations: []LiquidationEvent{forced},
 	}
 	byb := HuntHeatmapVenueSeries{
 		Exchange: ExchangeBybit,
@@ -134,9 +135,19 @@ func TestBuildHuntHeatmap_ObservedLiquidationAndCombined(t *testing.T) {
 		Symbol: "ETHUSDT", Spec: spec, To: to,
 		Venues: []HuntHeatmapVenueSeries{bin, byb, okx},
 	})
+	plain := bin
+	plain.Liquidations = nil
+	without := BuildHuntHeatmap(HuntHeatmapInput{
+		Symbol: "ETHUSDT", Spec: spec, To: to,
+		Venues: []HuntHeatmapVenueSeries{plain, byb, okx},
+	})
 	idx := huntPriceBin(49_000, got.PriceMin, got.PriceMax, got.PriceStep, len(got.Prices))
-	if idx < 0 || got.Binance.Longs[len(got.Times)-1][idx] < 80_000 {
-		t.Fatalf("observed long not in binance cell idx=%d v=%v", idx, lastCol(got.Binance.Longs))
+	if idx < 0 {
+		t.Fatal("price bin")
+	}
+	lastIdx := len(got.Times) - 1
+	if got.Binance.Longs[lastIdx][idx] != without.Binance.Longs[lastIdx][idx] {
+		t.Fatalf("model cell must ignore prints: with=%v without=%v", got.Binance.Longs[lastIdx][idx], without.Binance.Longs[lastIdx][idx])
 	}
 	if got.OKX.MaxIntensity <= 0 || got.OKX.AccountBlend != "even" {
 		t.Fatalf("okx %+v", got.OKX.AccountBlend)

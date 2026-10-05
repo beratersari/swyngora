@@ -143,7 +143,7 @@ type HuntHeatmapReport struct {
 	Note string `json:"note,omitempty"`
 }
 
-const huntHeatmapNote = "Estimated liquidation intensity at each price and time from historical open interest, that venue's own price, the hunt leverage mix, blended account long/short, and observed liquidation prints in that column. Binance, Bybit, and OKX are modeled separately and never borrow each other's prices. Each venue uses its stored account ratio. A column with no stored ratio is an even split. Combined sums a column only when all three venues have their own price and open interest. Not a live order book and not financial advice."
+const huntHeatmapNote = "Estimated liquidation intensity at each price and time from historical open interest, that venue's own price, the hunt leverage mix, and blended account long/short. This grid does not add force-order prints; those are the separate measured map. Binance, Bybit, and OKX are modeled separately and never borrow each other's prices. Each venue uses its stored account ratio. A column with no stored ratio is an even split. Combined sums a column only when all three venues have their own price and open interest. Not a live order book and not financial advice."
 
 // HuntHeatmapColumns is the UTC-aligned time axis ending at or before to.
 func HuntHeatmapColumns(spec HuntHeatmapSpec, to time.Time) []time.Time {
@@ -386,7 +386,6 @@ func buildHuntVenueGrid(ex string, ser HuntHeatmapVenueSeries, times []time.Time
 		down := modelBands(LiquidationSideLong, "down", px, oi*estLong, longMix, -1)
 		addBandsToColumn(g.Shorts[i], up, pMin, pMax, pStep, nBin)
 		addBandsToColumn(g.Longs[i], down, pMin, pMax, pStep, nBin)
-		addLiqsToColumn(g.Longs[i], g.Shorts[i], ser.Liquidations, t, step, pMin, pMax, pStep, nBin)
 		for j := 0; j < nBin; j++ {
 			g.Totals[i][j] = g.Longs[i][j] + g.Shorts[i][j]
 			if g.Totals[i][j] > g.MaxIntensity {
@@ -425,31 +424,6 @@ func addBandsToColumn(col []float64, bands []HuntBand, pMin, pMax, pStep float64
 			continue
 		}
 		col[idx] += b.EstNotional
-	}
-}
-
-func addLiqsToColumn(longs, shorts []float64, ev []LiquidationEvent, col time.Time, step time.Duration, pMin, pMax, pStep float64, nBin int) {
-	if step <= 0 {
-		return
-	}
-	half := step / 2
-	lo, hi := col.Add(-half), col.Add(half)
-	for _, e := range ev {
-		if e.Notional <= 0 || e.Price <= 0 {
-			continue
-		}
-		if e.Time.Before(lo) || !e.Time.Before(hi) {
-			continue
-		}
-		idx := huntPriceBin(e.Price, pMin, pMax, pStep, nBin)
-		if idx < 0 {
-			continue
-		}
-		if e.Side == LiquidationSideShort {
-			shorts[idx] += e.Notional
-		} else {
-			longs[idx] += e.Notional
-		}
 	}
 }
 

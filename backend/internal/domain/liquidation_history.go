@@ -54,6 +54,84 @@ func (r LiquidationHistoryResult) HasCoveredRange() bool {
 	return !r.CoveredFrom.IsZero() && !r.CoveredTo.IsZero() && r.CoveredTo.After(r.CoveredFrom)
 }
 
+// OldestLiquidationTime is the earliest event time, or zero when none qualify.
+func OldestLiquidationTime(events []LiquidationEvent) time.Time {
+	var oldest time.Time
+	for _, e := range events {
+		if e.Time.IsZero() {
+			continue
+		}
+		if oldest.IsZero() || e.Time.Before(oldest) {
+			oldest = e.Time
+		}
+	}
+	return oldest
+}
+
+// NewestLiquidationTime is the latest event time, or zero when none qualify.
+func NewestLiquidationTime(events []LiquidationEvent) time.Time {
+	var newest time.Time
+	for _, e := range events {
+		if e.Time.After(newest) {
+			newest = e.Time
+		}
+	}
+	return newest
+}
+
+// HistoryCoveredSpan is the part of [reqFrom, reqTo] a history call actually completed.
+// reachedStart is true when the source walked back to reqFrom, or a time-filtered
+// short page confirmed the whole window (including a quiet one). When it is false,
+// only [oldest, reqTo] is complete. A zero oldest with reachedStart false covers nothing.
+func HistoryCoveredSpan(reqFrom, reqTo, oldest time.Time, reachedStart bool) (time.Time, time.Time, bool) {
+	reqFrom, reqTo = reqFrom.UTC(), reqTo.UTC()
+	if reqFrom.IsZero() || reqTo.IsZero() || !reqTo.After(reqFrom) {
+		return time.Time{}, time.Time{}, false
+	}
+	if reachedStart {
+		return reqFrom, reqTo, true
+	}
+	oldest = oldest.UTC()
+	if oldest.IsZero() || !oldest.Before(reqTo) {
+		return time.Time{}, time.Time{}, false
+	}
+	from := oldest
+	if from.Before(reqFrom) {
+		from = reqFrom
+	}
+	if !reqTo.After(from) {
+		return time.Time{}, time.Time{}, false
+	}
+	return from, reqTo, true
+}
+
+// MergeHistoryCoverage intersects completed windows. One incomplete span
+// makes the whole answer incomplete, so a short page cannot erase an earlier gap.
+func MergeHistoryCoverage(spans []LiquidationHistoryResult) (time.Time, time.Time, bool) {
+	if len(spans) == 0 {
+		return time.Time{}, time.Time{}, false
+	}
+	if !spans[0].HasCoveredRange() {
+		return time.Time{}, time.Time{}, false
+	}
+	from, to := spans[0].CoveredFrom, spans[0].CoveredTo
+	for _, sp := range spans[1:] {
+		if !sp.HasCoveredRange() {
+			return time.Time{}, time.Time{}, false
+		}
+		if sp.CoveredFrom.After(from) {
+			from = sp.CoveredFrom
+		}
+		if sp.CoveredTo.Before(to) {
+			to = sp.CoveredTo
+		}
+		if !to.After(from) {
+			return time.Time{}, time.Time{}, false
+		}
+	}
+	return from, to, true
+}
+
 // WatchedSymbols returns coins we have started tracking on one venue.
 func (b *LiquidationBook) WatchedSymbols(ex Exchange) []string {
 	if b == nil || ex == "" {

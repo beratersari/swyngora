@@ -19,6 +19,7 @@ import {
   LIQ_LEVERAGE_ORDER,
 } from './LiquidationBarChart.constants';
 import {
+  bandHitLabel,
   barSide,
   cumSliceNotional,
   formatAxisNotional,
@@ -196,8 +197,10 @@ export function LiquidationBarChart({
                 key={lev}
                 $color={LIQ_LEVERAGE_COLOR[lev]}
                 style={{ opacity: legendOpacity(reviewBuckets, lev) }}
+                data-testid={`liq-swatch-${lev}`}
               >
                 {t('chart.leverage', { lev })}
+                <BandHit buckets={reviewBuckets} lev={lev} />
               </Swatch>
             ))
           : (
@@ -249,12 +252,19 @@ export function LiquidationBarChart({
                 <span>{formatCompact(hover.cumShort, 'USDT')}</span>
               </TipRow>
             ) : null}
-            {hover.byLeverage?.map((sl) => (
-              <TipRow key={sl.leverage}>
-                <span>{t('chart.leverage', { lev: sl.leverage })}</span>
-                <span>{formatCompact(sl.longN + sl.shortN, 'USDT')}</span>
-              </TipRow>
-            ))}
+            {hover.byLeverage?.map((sl) => {
+              const hit = bandHitLabel(reviewBuckets, sl.leverage);
+              const sideHit = sl.shortN >= sl.longN ? hit.short : hit.long;
+              return (
+                <TipRow key={sl.leverage}>
+                  <span>
+                    {t('chart.leverage', { lev: sl.leverage })}
+                    {sideHit ? ` · ${t('chart.review.laterPrints', { hit: sideHit })}` : ''}
+                  </span>
+                  <span>{formatCompact(sl.longN + sl.shortN, 'USDT')}</span>
+                </TipRow>
+              );
+            })}
           </HoverCard>
         ) : null}
       </MapFrame>
@@ -542,6 +552,26 @@ function drawTotals(
     ctx.stroke();
     ctx.lineWidth = 1;
   }
+}
+
+function BandHit({
+  buckets,
+  lev,
+}: {
+  buckets: Parameters<typeof bandHitLabel>[0];
+  lev: number;
+}) {
+  const { t } = useTranslation('liquidations');
+  const hit = bandHitLabel(buckets, lev);
+  if (!hit.long && !hit.short) return null;
+  return (
+    <span data-testid={`liq-band-hit-${lev}`}>
+      {' '}
+      {hit.long ? t('chart.review.bandSide', { side: t('cards.long'), hit: hit.long }) : null}
+      {hit.long && hit.short ? ' · ' : null}
+      {hit.short ? t('chart.review.bandSide', { side: t('cards.short'), hit: hit.short }) : null}
+    </span>
+  );
 }
 
 function hitLevel(

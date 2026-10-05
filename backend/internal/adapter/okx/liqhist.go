@@ -4,11 +4,16 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
+
+// okxLiqHistLimit is the public liquidation-orders page size. The route has
+// no start or end, so a full page is the newest rows only.
+const okxLiqHistLimit = 100
 
 // ListLiquidationHistory loads SWAP liquidations for a disconnect window.
 func (c *Client) ListLiquidationHistory(ctx context.Context, q domain.LiquidationHistoryQuery) (domain.LiquidationHistoryResult, error) {
@@ -24,11 +29,12 @@ func (c *Client) ListLiquidationHistory(ctx context.Context, q domain.Liquidatio
 		return out, nil
 	}
 	var all []domain.LiquidationEvent
+	var spans []domain.LiquidationHistoryResult
 	for i, sym := range q.Symbols {
 		if ctx.Err() != nil {
 			return out, ctx.Err()
 		}
-		ev, err := c.fetchRecentLiquidations(ctx, sym, q.From, q.To)
+		raw, err := c.fetchRecentLiquidations(ctx, sym)
 		if err != nil {
 			if i == 0 && historyUnavailable(err) {
 				return out, nil
@@ -36,12 +42,39 @@ func (c *Client) ListLiquidationHistory(ctx context.Context, q domain.Liquidatio
 			out.Events = all
 			return out, nil
 		}
-		all = append(all, ev...)
+		oldest := domain.OldestLiquidationTime(raw)
+		newest := domain.NewestLiquidationTime(raw)
+		reached := okxHistoryReachedStart(raw, oldest, newest, q.From)
+		for _, e := range raw {
+			if e.Time.Before(q.From) || !e.Time.Before(q.To.Add(time.Millisecond)) {
+				continue
+			}
+			all = append(all, e)
+		}
+		span := domain.LiquidationHistoryResult{}
+		if from, to, ok := domain.HistoryCoveredSpan(q.From, q.To, oldest, reached); ok {
+			span.CoveredFrom, span.CoveredTo = from, to
+		}
+		spans = append(spans, span)
 	}
 	out.Events = all
-	out.CoveredFrom = q.From
-	out.CoveredTo = q.To
+	if from, to, ok := domain.MergeHistoryCoverage(spans); ok {
+		out.CoveredFrom, out.CoveredTo = from, to
+	}
 	return out, nil
+}
+
+// okxHistoryReachedStart reports whether the newest public page contains
+// every print from reqFrom forward. An empty page does not. A page whose
+// newest print is still before reqFrom has nothing inside the window.
+func okxHistoryReachedStart(raw []domain.LiquidationEvent, oldest, newest, reqFrom time.Time) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	if !newest.After(reqFrom) || !oldest.After(reqFrom) {
+		return true
+	}
+	return false
 }
 
 func historyUnavailable(err error) bool {
@@ -52,7 +85,7 @@ func historyUnavailable(err error) bool {
 	return strings.Contains(s, "404") || strings.Contains(s, "not found") || strings.Contains(s, "doesn't exist")
 }
 
-func (c *Client) fetchRecentLiquidations(ctx context.Context, symbol string, from, to time.Time) ([]domain.LiquidationEvent, error) {
+func (c *Client) fetchRecentLiquidations(ctx context.Context, symbol string) ([]domain.LiquidationEvent, error) {
 	uly := UnderlyingFromSymbol(symbol)
 	if uly == "" {
 		return nil, nil
@@ -63,23 +96,12 @@ func (c *Client) fetchRecentLiquidations(ctx context.Context, symbol string, fro
 	q.Set("instType", "SWAP")
 	q.Set("uly", uly)
 	q.Set("state", "filled")
-	q.Set("limit", "100")
+	q.Set("limit", strconv.Itoa(okxLiqHistLimit))
 	body, err := c.get(ctx, "/api/v5/public/liquidation-orders", q)
 	if err != nil {
 		return nil, err
 	}
-	evs, err := parseLiquidationOrders(body, ctVal)
-	if err != nil {
-		return nil, err
-	}
-	out := evs[:0]
-	for _, e := range evs {
-		if e.Time.Before(from) || !e.Time.Before(to.Add(time.Millisecond)) {
-			continue
-		}
-		out = append(out, e)
-	}
-	return out, nil
+	return parseLiquidationOrders(body, ctVal)
 }
 
 func parseLiquidationOrders(body []byte, ctVal float64) ([]domain.LiquidationEvent, error) {

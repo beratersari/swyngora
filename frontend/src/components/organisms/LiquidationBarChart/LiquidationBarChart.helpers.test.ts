@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  bandHitLabel,
   barSide,
   formatAxisNotional,
   formatHitRate,
@@ -111,6 +112,10 @@ describe('LiquidationBarChart helpers', () => {
     });
     expect(venue?.horizons?.[0]?.hits).toBe(2);
     expect(formatHitRate(0.5)).toBe('50%');
+    expect(bandHitLabel([{ leverage: 100, side: 'short', validated: 4, hitRate: 0.6 }], 100)).toEqual({
+      short: '60%',
+    });
+    expect(bandHitLabel([{ leverage: 100, side: 'short', validated: 0, hitRate: 0.6 }], 100)).toEqual({});
     expect(pickLevelsReview({ kind: 'levels' })).toBeUndefined();
   });
 

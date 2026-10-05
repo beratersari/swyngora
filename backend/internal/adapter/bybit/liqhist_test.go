@@ -52,6 +52,30 @@ func TestListLiquidationHistory_PerSymbol(t *testing.T) {
 	}
 }
 
+func TestListLiquidationHistory_FullPageLeavesTheStart(t *testing.T) {
+	from := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+	at := to.Add(-time.Minute)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		list := make([]map[string]any, bybitLiqHistLimit)
+		for i := range list {
+			list[i] = map[string]any{"T": at.UnixMilli(), "s": "BTCUSDT", "S": "Buy", "v": "1", "p": "1"}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"retCode": 0, "result": map[string]any{"list": list}})
+	}))
+	defer srv.Close()
+	c := NewClient(Options{BaseURL: srv.URL, HTTPClient: srv.Client()})
+	got, err := c.ListLiquidationHistory(context.Background(), domain.LiquidationHistoryQuery{
+		Exchange: domain.ExchangeBybit, Symbols: []string{"BTCUSDT"}, From: from, To: to,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.HasCoveredRange() || got.CoveredFrom.Equal(from) || !got.CoveredFrom.Equal(at.UTC()) {
+		t.Fatalf("coverage %+v", got.CoveredFrom)
+	}
+}
+
 func TestListLiquidationHistory_404Uncovered(t *testing.T) {
 	from := time.Date(2026, 8, 30, 17, 0, 0, 0, time.UTC)
 	to := from.Add(5 * time.Minute)

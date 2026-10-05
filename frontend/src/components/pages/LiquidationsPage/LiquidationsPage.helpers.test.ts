@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   parseLiqCascadeSymbol,
+  parseLiqChartRange,
   parseLiqChartSymbol,
   parseLiqExchange,
   parseLiqSymbol,
@@ -25,6 +26,9 @@ describe('LiquidationsPage helpers', () => {
     expect(parseLiqCascadeSymbol('eth')).toBe('ETHUSDT');
     expect(parseLiqChartSymbol('all')).toBe('all');
     expect(parseLiqChartSymbol('eth')).toBe('ETHUSDT');
+    expect(parseLiqChartRange('30d')).toBe('30d');
+    expect(parseLiqChartRange('90d')).toBe('24h');
+    expect(parseLiqChartRange(null)).toBe('24h');
     expect(parseLiqWindow('12h')).toBe('12h');
     expect(parseLiqWindow('5m')).toBe('24h');
     expect(parseLiqExchange('bybit')).toBe('bybit');

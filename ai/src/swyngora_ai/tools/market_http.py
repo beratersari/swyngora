@@ -5177,7 +5177,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="estimate_liquidation_hunt",
             description=(
                 "Hypothetical only: if Binance or Bybit walked their own spot "
-                "book to push price and force futures liquidations, where is "
+                "book, or OKX was priced from its USDT-swap mark with an empty "
+                "spot ladder, to push price and force futures liquidations, where is "
                 "the main long/short pressure, how much spot buy/sell the "
                 "visible book needs, and a rough desk result (book-only vs "
                 "with cascade exit). Also returns upScore/downScore (0-100) "
@@ -5193,8 +5194,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="get_liquidation_heatmap",
             description=(
                 "Price × time liquidation intensity map (CoinGlass-style) from "
-                "historical open interest, price, the hunt leverage mix, and "
-                "observed liquidations. range=12h|24h|3d|7d|14d|30d|90d. "
+                "historical open interest, price, and the hunt leverage mix. "
+                "Cells are the leverage estimate only. Measured prints are "
+                "get_liquidation_print_heatmap. range=12h|24h|3d|7d|14d|30d|90d. "
                 "90d is one column per day. Binance public open interest and "
                 "long/short are 30 days; older Binance columns are only rows "
                 "this process already stored. Bybit public open interest goes "

@@ -16,9 +16,9 @@ This is **not** options max pain. It is a futures liquidation-area read
 
 `GET /api/v1/market/liquidation-max-pain?symbol=BTCUSDT`
 
-- `exchange=all` (default) returns Binance and Bybit separately. Combined
+- `exchange=all` (default) returns Binance, Bybit, and OKX separately. Combined
   `above` / `below` is the **single largest** pocket on that side. Prices are
-  never averaged.
+  never averaged. OKX uses its USDT-swap mark. A venue with no mark is left out.
 - **Above:** shorts that would liquidate if price rises (`side=short`).
 - **Below:** longs that would liquidate if price falls (`side=long`).
 - Each pocket: `price`, `notional` (modeled + observed), `movePct`, `side`,

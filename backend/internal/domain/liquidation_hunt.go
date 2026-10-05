@@ -402,7 +402,7 @@ func BuildHuntVenue(in HuntInputs) HuntVenueReport {
 	out.EstShortNotional = in.OIValue * estShort
 
 	if in.Price <= 0 {
-		out.Error = "no spot price"
+		out.Error = "no mark price"
 		return out
 	}
 

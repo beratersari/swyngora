@@ -72,6 +72,33 @@ func TestListLiquidationHistory_PerSymbolFallback(t *testing.T) {
 	}
 }
 
+func TestListLiquidationHistory_FullPageLeavesTheStart(t *testing.T) {
+	from := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	to := from.Add(2 * time.Hour)
+	at := to.Add(-time.Minute)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rows := make([]map[string]any, liqHistLimit)
+		for i := range rows {
+			rows[i] = map[string]any{
+				"symbol": "BTCUSDT", "side": "SELL", "price": "1", "averagePrice": "1",
+				"origQty": "1", "executedQty": "1", "time": at.UnixMilli(),
+			}
+		}
+		_ = json.NewEncoder(w).Encode(rows)
+	}))
+	defer srv.Close()
+	c := NewClient(Options{FuturesBaseURL: srv.URL, HTTPClient: srv.Client()})
+	got, err := c.ListLiquidationHistory(context.Background(), domain.LiquidationHistoryQuery{
+		Exchange: domain.ExchangeBinance, From: from, To: to,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.HasCoveredRange() || got.CoveredFrom.Equal(from) || !got.CoveredFrom.Equal(at.UTC()) {
+		t.Fatalf("coverage from %s want %s events %d", got.CoveredFrom, at, len(got.Events))
+	}
+}
+
 func TestListLiquidationHistory_EmptyWindowCovered(t *testing.T) {
 	from := time.Date(2026, 8, 30, 17, 0, 0, 0, time.UTC)
 	to := from.Add(5 * time.Minute)

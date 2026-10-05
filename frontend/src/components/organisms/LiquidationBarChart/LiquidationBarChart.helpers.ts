@@ -8,6 +8,20 @@ function sliceConf(raw: number | undefined): number {
   return raw;
 }
 
+export function bandHitLabel(
+  buckets: NonNullable<LevelsReviewVenue['byLeverage']> | undefined,
+  lev: number,
+): { long?: string; short?: string } {
+  const out: { long?: string; short?: string } = {};
+  for (const row of buckets ?? []) {
+    if (row.leverage !== lev || !row.validated || row.hitRate == null || !Number.isFinite(row.hitRate)) continue;
+    const label = formatHitRate(row.hitRate);
+    if (row.side === 'long') out.long = label;
+    if (row.side === 'short') out.short = label;
+  }
+  return out;
+}
+
 export function legendOpacity(
   buckets: NonNullable<LevelsReviewVenue['byLeverage']> | undefined,
   lev: 10 | 25 | 50 | 100,

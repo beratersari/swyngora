@@ -8,7 +8,7 @@ export const LIQ_BAR_LINE = '#1E2329';
 export const LIQ_BAR_INK = '#616E85';
 export const LIQ_BAR_PLOT = '#FFFFFF';
 export const LIQ_LEVELS_POLL_MS = 60_000;
-export const LIQ_CHART_RANGES = ['12h', '24h'] as const;
+export const LIQ_CHART_RANGES = ['12h', '24h', '3d', '7d', '14d', '30d'] as const;
 
 /** CoinGlass-style leverage colors: 100x orange, 50x yellow, 25x blue, 10x light blue. */
 export const LIQ_LEVERAGE_ORDER = [100, 50, 25, 10] as const;

@@ -55,6 +55,52 @@ func TestListLiquidationHistory_PerSymbol(t *testing.T) {
 	}
 }
 
+func TestListLiquidationHistory_FullPageLeavesTheStart(t *testing.T) {
+	from := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
+	to := from.Add(6 * time.Hour)
+	at := to.Add(-time.Minute)
+	details := make([]map[string]any, okxLiqHistLimit)
+	for i := range details {
+		details[i] = map[string]any{
+			"bkPx": "100", "sz": "1", "posSide": "long", "side": "sell", "ts": ms(at),
+		}
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": "0",
+			"data": []map[string]any{{"instId": "BTC-USDT-SWAP", "details": details}},
+		})
+	}))
+	defer srv.Close()
+	c := NewClient(Options{BaseURL: srv.URL, HTTPClient: srv.Client()})
+	c.SetContractValue("BTC-USDT-SWAP", 0.01)
+	got, err := c.ListLiquidationHistory(context.Background(), domain.LiquidationHistoryQuery{
+		Exchange: domain.ExchangeOKX, Symbols: []string{"BTCUSDT"}, From: from, To: to,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.HasCoveredRange() || got.CoveredFrom.Equal(from) || !got.CoveredFrom.Equal(at.UTC()) {
+		t.Fatalf("coverage %s events %d", got.CoveredFrom, len(got.Events))
+	}
+}
+
+func TestListLiquidationHistory_EmptyPageUncovered(t *testing.T) {
+	from := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
+	to := from.Add(time.Hour)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{"code": "0", "data": []any{}})
+	}))
+	defer srv.Close()
+	c := NewClient(Options{BaseURL: srv.URL, HTTPClient: srv.Client()})
+	got, err := c.ListLiquidationHistory(context.Background(), domain.LiquidationHistoryQuery{
+		Exchange: domain.ExchangeOKX, Symbols: []string{"BTCUSDT"}, From: from, To: to,
+	})
+	if err != nil || got.HasCoveredRange() {
+		t.Fatalf("%+v %v", got, err)
+	}
+}
+
 func TestParseLiquidationWS(t *testing.T) {
 	at := time.Date(2026, 9, 13, 18, 0, 0, 0, time.UTC)
 	body, _ := json.Marshal(map[string]any{

@@ -19,8 +19,8 @@ const (
 	ChartLeverage50      = 50
 	ChartLeverage100     = 100
 	liquidationLevelBins = 80
-	// liquidationLevelPad widens the map past the 10x band so the
-	// farthest 5x/10x mass is not clipped at the edge.
+	// liquidationLevelPad widens the map past the 5x band so that
+	// distance is a real row, not piled onto the outer bin.
 	liquidationLevelPad = 0.02
 	// liquidationLevelKernelHalf is how many bins a leverage cluster
 	// is spread across (triangle). CoinGlass-style maps are a density,
@@ -297,7 +297,7 @@ func BuildLiquidationLevelsFromHunt(rep HuntReport) LiquidationLevelsReport {
 		LastPrices: map[string]string{},
 		Levels:     []LiquidationLevelBar{},
 		Missing:    []string{},
-		Note:       "Estimated liquidation notional at each price from that venue's own last, open interest, and a 10x/25x/50x/100x mix. Longs sit below last (price drop); shorts sit above (price rise). Each bar is the walk from last to that price (cumulative), plus the mass at that bin. Combined aligns venues by percent from their own last and uses an OI-weighted reference last — it does not copy a missing venue's last. Informational only.",
+		Note:       "Estimated liquidation notional at each price from that venue's own last, open interest, and a 5x–125x mix drawn as 10x/25x/50x/100x. 5x keeps its own distance and uses the 10x color; 75x and 125x use the 100x color. Longs sit below last (price drop); shorts sit above (price rise). Each bar is the walk from last to that price (cumulative), plus the mass at that bin. Combined aligns venues by percent from their own last and uses an OI-weighted reference last — it does not copy a missing venue's last. Informational only.",
 	}
 	want := FuturesVenues()
 	if rep.Exchange != "" && rep.Exchange != "all" {
@@ -356,7 +356,9 @@ func oiWeightedLast(venues []HuntVenueReport) float64 {
 }
 
 func levelGridBounds(ref float64) (lo, hi, step float64) {
-	span := HuntLiqDistance(10, HuntMaintenanceMargin) + liquidationLevelPad
+	// 5x is drawn in the 10x color, but it liquidates near 20% from last.
+	// The old 10x span clipped that weight onto the outer bins.
+	span := HuntLiqDistance(5, HuntMaintenanceMargin) + liquidationLevelPad
 	lo = ref * (1 - span)
 	hi = ref * (1 + span)
 	if lo <= 0 {

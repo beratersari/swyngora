@@ -13,6 +13,8 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
+const bybitLiqHistLimit = 1000
+
 // ListLiquidationHistory loads linear liquidations for a disconnect window.
 // Bybit has no official all-market REST tape; each watched symbol is queried
 // separately. A missing endpoint (404) leaves the gap uncovered.
@@ -29,6 +31,7 @@ func (c *Client) ListLiquidationHistory(ctx context.Context, q domain.Liquidatio
 		return out, nil
 	}
 	var all []domain.LiquidationEvent
+	var spans []domain.LiquidationHistoryResult
 	for i, sym := range q.Symbols {
 		if ctx.Err() != nil {
 			return out, ctx.Err()
@@ -42,10 +45,18 @@ func (c *Client) ListLiquidationHistory(ctx context.Context, q domain.Liquidatio
 			return out, nil
 		}
 		all = append(all, ev...)
+		oldest := domain.OldestLiquidationTime(ev)
+		reached := len(ev) < bybitLiqHistLimit || oldest.IsZero() || !oldest.After(q.From)
+		span := domain.LiquidationHistoryResult{}
+		if from, to, ok := domain.HistoryCoveredSpan(q.From, q.To, oldest, reached); ok {
+			span.CoveredFrom, span.CoveredTo = from, to
+		}
+		spans = append(spans, span)
 	}
 	out.Events = all
-	out.CoveredFrom = q.From
-	out.CoveredTo = q.To
+	if from, to, ok := domain.MergeHistoryCoverage(spans); ok {
+		out.CoveredFrom, out.CoveredTo = from, to
+	}
 	return out, nil
 }
 
@@ -55,7 +66,7 @@ func (c *Client) fetchRecentLiquidations(ctx context.Context, symbol string, fro
 	q.Set("symbol", symbol)
 	q.Set("startTime", strconv.FormatInt(from.UTC().UnixMilli(), 10))
 	q.Set("endTime", strconv.FormatInt(to.UTC().UnixMilli(), 10))
-	q.Set("limit", "1000")
+	q.Set("limit", strconv.Itoa(bybitLiqHistLimit))
 	body, err := c.get(ctx, "/v5/market/recent-liquidation", q)
 	if err != nil {
 		return nil, err

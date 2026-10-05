@@ -7,15 +7,18 @@ price and force futures liquidations, where is the main long/short pressure,
 how much visible spot buying or selling that takes, and would the tour
 approximately make or lose money?
 
-This is **not** evidence that Binance or Bybit do this. It is not financial
+This is **not** evidence that Binance, Bybit, or OKX do this. It is not financial
 advice.
 
 ## Behavior
 
 `GET /api/v1/market/liquidation-hunt?symbol=BTCUSDT`
 
-- `exchange=all` (default) returns **Binance USD-M and Bybit linear separately**.
-  They are never averaged. `exchange=binance` or `bybit` for one venue.
+- `exchange=all` (default) returns **Binance USD-M, Bybit linear, and OKX USDT-swap separately**.
+  They are never averaged. `exchange=binance`, `bybit`, or `okx` for one venue.
+- Binance and Bybit walk that venue's spot book. OKX is priced from its USDT-swap
+  mark (swap candles, then the basis mark). It has no spot book, so its walk cost stays empty
+  and the venue still appears on the level map and max pain when the mark and open interest exist.
 - **Up hunt:** buy spot → lift price → estimated shorts liquidate → they must
   buy to cover. Then unwind the spot (old bids vs assumed cascade exit at the
   target).
@@ -160,7 +163,8 @@ When stored open interest leaves a column empty, that column uses the
 venue's public hourly open-interest history, clamped to the documented
 lookback (OKX: the latest 1,440 hours). This does not extend the archive,
 and a column still stays empty when neither source has a sample.
-Observed liquidation prints in that column are added into the matching price bin.
+The cells are the leverage estimate only. Measured force-order prints stay on
+`GET /api/v1/market/liquidation-prints/heatmap`.
 
 `binance`, `bybit`, and `okx` are modeled separately and **never borrow
 another venue's price**. A venue with no price and open interest stays empty

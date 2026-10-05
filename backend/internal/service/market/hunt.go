@@ -6,6 +6,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,7 +14,8 @@ import (
 )
 
 // GetLiquidationHunt builds a hypothetical per-venue “house hunt” report.
-// exchange=all returns Binance and Bybit separately (never averaged).
+// exchange=all returns Binance, Bybit, and OKX separately (never averaged).
+// OKX is priced from its USDT-swap mark. It has no spot book.
 func (s *Service) GetLiquidationHunt(ctx context.Context, exchange, symbol string) (*domain.HuntReport, error) {
 	return s.GetLiquidationHuntWeighted(ctx, exchange, symbol, domain.DefaultHuntScoreWeights())
 }
@@ -72,7 +74,7 @@ func (s *Service) GetLiquidationHuntWeighted(ctx context.Context, exchange, symb
 	return out, nil
 }
 
-const huntDisclaimer = "Hypothetical model only — not evidence that any exchange moves the market, and not financial advice. Long/short is account count, not position size. Leverage mix is assumed. USD-M mark uses a multi-venue index, so one spot book may not move mark 1:1. Exchanges usually match users rather than take the other side; liquidationTake is an insurance-fund-like stand-in. bookOnlyPnl is the spot tour if you unwind on the current opposite side (usually a loss). netWithCascade assumes part of estimated liquidations becomes exit flow at the target. upScore / downScore rank which side looks easier or more likely from zone distance, visible book cost, price+OI trend, crowding/funding, and recent taker/liquidation flow. upCascade / downCascade list zones in price order and whether earlier estimated liquidations cheapen the next hop. coverage says how complete those inputs are; a failed venue is shown but excluded from the combined lean — not a prediction."
+const huntDisclaimer = "Hypothetical model only — not evidence that any exchange moves the market, and not financial advice. Long/short is account count, not position size. Leverage mix is assumed. USD-M mark uses a multi-venue index, so one spot book may not move mark 1:1. OKX is priced from its own USDT-swap mark and has no spot book, so its walk cost stays empty. Exchanges usually match users rather than take the other side; liquidationTake is an insurance-fund-like stand-in. bookOnlyPnl is the spot tour if you unwind on the current opposite side (usually a loss). netWithCascade assumes part of estimated liquidations becomes exit flow at the target. upScore / downScore rank which side looks easier or more likely from zone distance, visible book cost, price+OI trend, crowding/funding, and recent taker/liquidation flow. upCascade / downCascade list zones in price order and whether earlier estimated liquidations cheapen the next hop. coverage says how complete those inputs are; a failed venue is shown but excluded from the combined lean — not a prediction."
 
 func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string, now time.Time, weights domain.HuntScoreWeights) domain.HuntVenueReport {
 	in := domain.HuntInputs{Exchange: ex, Symbol: symbol}
@@ -141,6 +143,9 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 	}()
 	go func() {
 		defer wg.Done()
+		if ex == domain.ExchangeOKX {
+			return
+		}
 		books, err := s.fetchVenueBooks(ctx, symbol, []domain.Exchange{ex})
 		if err != nil {
 			bookErr = err
@@ -157,7 +162,20 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 	}()
 	go func() {
 		defer wg.Done()
-		candles, err := s.GetCandles(ctx, string(ex), symbol, "1h", 30, nil, nil)
+		var candles []domain.Candle
+		var err error
+		if ex == domain.ExchangeOKX {
+			if p := s.futuresCandle(ex); p != nil {
+				candles, err = p.GetFuturesCandles(ctx, domain.CandleQuery{
+					Symbol: symbol, Interval: domain.Interval1h, Limit: 30,
+				})
+			}
+			if px := newestCandleClose(candles); px > 0 {
+				in.Price = px
+			}
+		} else {
+			candles, err = s.GetCandles(ctx, string(ex), symbol, "1h", 30, nil, nil)
+		}
 		if err != nil || len(candles) == 0 {
 			return
 		}
@@ -244,6 +262,13 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 			}
 		}
 	}
+	if in.Price <= 0 && ex == domain.ExchangeOKX && s.basis != nil {
+		if b := s.basis[ex]; b != nil {
+			if q, berr := b.GetBasisQuote(ctx, symbol); berr == nil && q != nil && q.FuturesLast > 0 {
+				in.Price = q.FuturesLast
+			}
+		}
+	}
 	if in.Price <= 0 {
 		if tkr, err := s.GetTicker24h(ctx, string(ex), symbol); err == nil && tkr != nil {
 			if px, perr := strconv.ParseFloat(tkr.LastPrice, 64); perr == nil {
@@ -286,4 +311,26 @@ func (s *Service) huntOne(ctx context.Context, ex domain.Exchange, symbol string
 	_ = lsErr
 	_ = fundErr
 	return got
+}
+
+func newestCandleClose(bars []domain.Candle) float64 {
+	var best time.Time
+	var px float64
+	var have bool
+	for _, c := range bars {
+		ts := c.CloseTime
+		if ts.IsZero() {
+			ts = c.OpenTime
+		}
+		v, err := strconv.ParseFloat(strings.TrimSpace(c.Close), 64)
+		if err != nil || v <= 0 {
+			continue
+		}
+		if !have || ts.After(best) {
+			have = true
+			best = ts
+			px = v
+		}
+	}
+	return px
 }

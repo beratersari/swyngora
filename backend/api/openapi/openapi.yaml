@@ -3859,11 +3859,13 @@ paths:
         **Hypothetical model only** — not evidence that any exchange moves
         price, and not financial advice.
 
-        For Binance USD-M and Bybit linear separately: estimate where long/short
-        liquidation pressure sits if price moves up or down, how much **spot**
-        buying or selling the visible book needs to reach those areas, and a
-        rough desk result (unwind on the current opposite side vs assuming
-        part of estimated liquidations become exit flow). Also scores which
+        For Binance USD-M, Bybit linear, and OKX USDT-swap separately: estimate
+        where long/short liquidation pressure sits if price moves up or down,
+        how much **spot** buying or selling the visible book needs to reach
+        those areas, and a rough desk result (unwind on the current opposite
+        side vs assuming part of estimated liquidations become exit flow).
+        OKX is priced from its USDT-swap mark and has no spot book, so its
+        walk cost stays empty. Also scores which
         direction looks easier or more likely (`upScore` / `downScore` plus
         `bias`) from zone distance, visible book cost, price+OI trend,
         crowding/funding, and recent taker / liquidation flow. `upCascade` /
@@ -3921,7 +3923,8 @@ paths:
         estimated liquidation size above last (shorts) and below last (longs).
         This is **not** the hunt target (which also weighs spot-walk cost).
         Size is modeled OI at an assumed leverage mix plus 24h observed
-        clusters. Venues stay separate; report-level above/below is the single
+        clusters. Venues stay separate. OKX uses its USDT-swap mark. A venue
+        with no mark is left out. Report-level above/below is the single
         largest pocket on that side (prices are never averaged).
       operationId: getMarketLiquidationMaxPain
       tags: [Market]
@@ -3951,8 +3954,9 @@ paths:
       description: |
         CoinGlass-style grid of estimated liquidation intensity at each price
         for each time column. Built from historical open interest, mark price,
-        the hunt leverage mix (tilted by funding), blended account long/short,
-        and observed liquidation prints in that column.
+        the hunt leverage mix (tilted by funding), and blended account long/short.
+        Force-order prints are not added to these cells. They are the separate
+        measured map at `/api/v1/market/liquidation-prints/heatmap`.
 
         `range` is 12h, 24h, 3d, 7d, 14d, 30d, or 90d. 14d, 30d, and 90d use the
         startup archive. Public backfill follows each endpoint: Binance open
@@ -3960,8 +3964,9 @@ paths:
         latest 1,440 points, and Bybit open interest goes back to listing
         (this archive keeps 90 days). 90d is one column per day. Binance
         columns older than the public 30 days are only hours this process
-        already recorded. Observed liquidation prints in a column are the
-        ones already stored; public REST refills about 7 days, not the whole 90.
+        already recorded. Public REST refill of force orders is about 7 days
+        and belongs on the measured map. A page that does not reach the start
+        of a gap does not mark that earlier time as a zero.
         Binance, Bybit, and OKX are modeled separately. Each venue uses
         only its own price: Binance and Bybit use their candles, and OKX
         uses its USDT-swap candles. They never borrow another venue's price.
@@ -4113,7 +4118,9 @@ paths:
         CoinGlass-style **liquidation map** as bars.
 
         - `symbol=BTCUSDT` (or ETHUSDT, …): estimated **price levels** from
-          each venue's own last, open interest, and a 10x/25x/50x/100x mix.
+          each venue's own last, open interest, and a 5x–125x mix drawn as
+          10x/25x/50x/100x. 5x keeps its own distance in the 10x color. 75x
+          and 125x use the 100x color. OKX uses its USDT-swap mark.
           Longs sit below last; shorts sit above. Each bar has the mass at
           that price (`longNotional` / `byLeverage`) and the walk from last
           to that price (`cumLong` / `cumByLeverage`). Combined aligns
@@ -4141,7 +4148,7 @@ paths:
           schema: { type: string, default: all, example: all }
         - name: range
           in: query
-          description: 12h | 24h | 3d | 7d (totals clamp to 24h)
+          description: Review window 12h | 24h | 3d | 7d | 14d | 30d. The bars stay the live map. symbol=all totals clamp to 24h.
           schema: { type: string, default: 24h, enum: [12h, 24h, 3d, 7d, 14d, 30d] }
       responses:
         '200':
