@@ -22,5 +22,6 @@ describe('VenueCoverage', () => {
     expect(screen.getByTestId('venue-coverage')).toHaveTextContent('Bybit: old (6m old)');
     expect(screen.getByTestId('venue-coverage')).toHaveTextContent('OKX: missing');
     expect(screen.getByTestId('venue-coverage')).toHaveTextContent('Binance: fresh');
+    expect(screen.getByText('OKX: missing')).toHaveStyle({ display: 'block' });
   });
 });

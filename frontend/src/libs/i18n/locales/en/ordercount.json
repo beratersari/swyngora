@@ -1,6 +1,6 @@
 {
   "title": "Order count",
-  "subtitle": "How many aggressive futures prints were buys versus sells across the liquid USDT pairs. The ratio sums the counts, so a busier coin weighs more. The coin split is one vote per pair. Informational only — not financial advice.",
+  "subtitle": "How many aggressive futures prints were buys versus sells across the same 100 USDT perpetuals the recorder follows, seed pairs first. The ratio sums the counts, so a busier coin weighs more. The coin split is one vote per pair. Informational only — not financial advice.",
   "load": "Load market",
   "exchange": "Exchange",
   "allVenues": "All venues",

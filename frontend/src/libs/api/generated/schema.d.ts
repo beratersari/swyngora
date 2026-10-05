@@ -1581,7 +1581,8 @@ export interface paths {
          *     USDT pairs, then divides. The market average is current versus the same
          *     length just before, so it shows whether prints got larger or smaller.
          *     A busier coin weighs more. `largerCoins` and `smallerCoins` are one vote
-         *     per pair. Windows are 5m and 15m. Default universe is 20 pairs (5–30).
+         *     per pair. Windows are 5m and 15m. The list is the recorder's liquid
+         *     USDT perpetuals, seed pairs first (default 100, min 5, max 100).
          *     Informational only.
          */
         get: operations["getMarketPrintSizeOverview"];
@@ -1656,9 +1657,10 @@ export interface paths {
          * @description Sums aggressive futures print counts across the most liquid USDT pairs,
          *     then divides. `ratio` is the same −1…+1 count ratio as one coin. A
          *     busier coin counts for more of that ratio. `buyCoins`, `sellCoins`,
-         *     `balancedCoins`, and `quietCoins` are one vote per pair. Default
-         *     universe is 20 pairs (5–30). `exchange=all` sums Binance, Bybit, and
-         *     OKX per coin before the market sum. Informational only.
+         *     `balancedCoins`, and `quietCoins` are one vote per pair. The list is
+         *     the recorder's liquid USDT perpetuals, seed pairs first (default 100,
+         *     min 5, max 100). `exchange=all` sums Binance, Bybit, and OKX per coin
+         *     before the market sum. Informational only.
          */
         get: operations["getMarketOrderCountOverview"];
         put?: never;
@@ -12157,7 +12159,7 @@ export interface operations {
                 /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
                 quote?: string;
-                /** @description How many liquid pairs (default 20, min 5, max 30) */
+                /** @description How many names from the recorder list (default 100, min 5, max 100) */
                 limit?: number;
             };
             header?: never;
@@ -12237,7 +12239,7 @@ export interface operations {
                 /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
                 quote?: string;
-                /** @description How many liquid pairs (default 20, min 5, max 30) */
+                /** @description How many names from the recorder list (default 100, min 5, max 100) */
                 limit?: number;
             };
             header?: never;

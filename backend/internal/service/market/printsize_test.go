@@ -68,8 +68,8 @@ func TestGetPrintSizeOverview_SumsLiquidPairs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Universe != 2 {
-		t.Fatalf("universe %d", got.Universe)
+	if got.Universe != len(domain.DefaultFuturesHistorySymbols) {
+		t.Fatalf("universe %d, want the recorder seed list", got.Universe)
 	}
 	var w domain.PrintSizeMarketWindow
 	for _, x := range got.Windows {

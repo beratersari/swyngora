@@ -83,6 +83,10 @@ describe('PrintSizePage', () => {
       refetch,
     }));
     renderWithProviders(<PrintSizePage />, { routerEntries: ['/print-size'] });
+    expect(load).toHaveBeenCalledWith(
+      { exchange: 'all', quote: 'USDT', limit: 100 },
+      expect.objectContaining({ skip: true }),
+    );
 
     await user.click(screen.getByRole('button', { name: /load market|piyasayı yükle/i }));
     expect((await screen.findAllByText(/105000/)).length).toBeGreaterThan(0);

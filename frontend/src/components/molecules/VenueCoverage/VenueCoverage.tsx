@@ -22,7 +22,7 @@ export function VenueCoverage({ coverage }: VenueCoverageProps) {
             const age = status === 'stale' ? coverageAge(venue.ageSec) : '';
             const name = t(`exchanges.${venue.exchange}`, { defaultValue: venue.exchange ?? '' });
             return (
-              <Text key={venue.exchange} variant="caption" color="secondary">
+              <Text key={venue.exchange} variant="caption" color="secondary" style={{ display: 'block' }}>
                 {name}: {t(`coverage.${status}`)}
                 {age ? ` (${t('coverage.age', { age })})` : ''}
               </Text>

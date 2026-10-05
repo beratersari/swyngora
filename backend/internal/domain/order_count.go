@@ -16,9 +16,9 @@ const (
 	OrderCountLeanBalanced = "balanced"
 
 	orderCountLeanBand        = 0.10
-	orderCountOverviewDefault = 20
+	orderCountOverviewDefault = LiquidRecorderLimit
 	orderCountOverviewMin     = 5
-	orderCountOverviewMax     = 30
+	orderCountOverviewMax     = LiquidRecorderLimit
 )
 
 // OrderCountWindows are the market-order count lookbacks.

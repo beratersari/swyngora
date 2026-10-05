@@ -89,7 +89,7 @@ func TestBuildPrintSizeOverview_AveragesNotionalOverCount(t *testing.T) {
 }
 
 func TestParsePrintSizeOverviewLimit(t *testing.T) {
-	if ParsePrintSizeOverviewLimit(0) != 20 || ParsePrintSizeOverviewLimit(2) != 5 || ParsePrintSizeOverviewLimit(99) != 30 {
+	if ParsePrintSizeOverviewLimit(0) != LiquidRecorderLimit || ParsePrintSizeOverviewLimit(2) != 5 || ParsePrintSizeOverviewLimit(99) != 99 || ParsePrintSizeOverviewLimit(500) != LiquidRecorderLimit {
 		t.Fatal("limit clamp")
 	}
 }

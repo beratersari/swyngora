@@ -1379,10 +1379,10 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_print_size_overview",
-		mcp.WithDescription("Whole-market average print size. Sums aggressive futures notional and fill counts across the most liquid USDT pairs, then divides. Compares the last 5m and 15m with the same length just before, so you can see if prints got larger or smaller. A busier coin weighs more. largerCoins and smallerCoins are one vote per pair. Use this for the whole market, not one coin. Not financial advice."),
+		mcp.WithDescription("Whole-market average print size. Sums aggressive futures notional and fill counts across the recorder's liquid USDT perpetuals (up to 100, seed pairs first), then divides. Compares the last 5m and 15m with the same length just before, so you can see if prints got larger or smaller. A busier coin weighs more. largerCoins and smallerCoins are one vote per pair. Use this for the whole market, not one coin. Not financial advice."),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all)")),
 		mcp.WithString("quote", mcp.Description("Quote asset, default USDT")),
-		mcp.WithNumber("limit", mcp.Description("How many liquid pairs (default 20, max 30)")),
+		mcp.WithNumber("limit", mcp.Description("How many names from the recorder list (default 100, max 100)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.GetPrintSizeOverview(ctx, req.GetString("exchange", "all"), req.GetString("quote", "USDT"), int(req.GetFloat("limit", 0)))
 		if err != nil {
@@ -1424,10 +1424,10 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_order_count_overview",
-		mcp.WithDescription("Whole-market order count ratio. Sums aggressive buy and sell print counts across the most liquid USDT pairs, then divides. Ratio is −1 (all sells) to +1 (all buys). A busier coin counts for more of the ratio. buyCoins, sellCoins, balancedCoins, and quietCoins are one vote per pair. Use this for whether the market tape is buy-heavy or sell-heavy, not for one coin. Not financial advice."),
+		mcp.WithDescription("Whole-market order count ratio. Sums aggressive buy and sell print counts across the recorder's liquid USDT perpetuals (up to 100, seed pairs first), then divides. Ratio is −1 (all sells) to +1 (all buys). A busier coin counts for more of the ratio. buyCoins, sellCoins, balancedCoins, and quietCoins are one vote per pair. Use this for whether the market tape is buy-heavy or sell-heavy, not for one coin. Not financial advice."),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all)")),
 		mcp.WithString("quote", mcp.Description("Quote asset, default USDT")),
-		mcp.WithNumber("limit", mcp.Description("How many liquid pairs (default 20, max 30)")),
+		mcp.WithNumber("limit", mcp.Description("How many names from the recorder list (default 100, max 100)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.GetOrderCountOverview(ctx, req.GetString("exchange", "all"), req.GetString("quote", "USDT"), int(req.GetFloat("limit", 0)))
 		if err != nil {

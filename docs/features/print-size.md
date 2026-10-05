@@ -16,7 +16,7 @@ buy vs sell, and whether that average just jumped (e.g. 20K → 180K in
 - The market average sums notional and fill counts, then divides. A busier coin weighs more
 - Each window is compared with the same length just before, so the average shows whether prints got larger or smaller
 - `largerCoins`, `smallerCoins`, `fewLargeCoins`, and `manySmallCoins` are one vote per pair
-- Default universe is 20 pairs (5–30). The Print size page lists 5m and 15m and ranks the pairs
+- The list is the recorder's liquid USDT perpetuals, seed pairs first (default 100, min 5, max 100). The Print size page requests that full list, shows 5m and 15m, and ranks the pairs
 - `coverage` names Binance, Bybit, and OKX as fresh, old, or missing. `definite` is false when any of them is missing or old, and the page does not show a market size read (`docs/features/venue-coverage.md`)
 
 One coin:
@@ -53,5 +53,5 @@ Informational only — not financial advice.
 ```bash
 cd backend && go test ./internal/domain/ ./internal/adapter/binance/ ./internal/service/market/ ./internal/transport/http/handler/ -count=1 -run PrintSize
 curl "http://localhost:8080/api/v1/market/print-size?symbol=BTCUSDT"
-curl "http://localhost:8080/api/v1/market/print-size/overview?limit=20"
+curl "http://localhost:8080/api/v1/market/print-size/overview?limit=100"
 ```

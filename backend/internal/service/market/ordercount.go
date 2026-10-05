@@ -56,7 +56,7 @@ func (s *Service) GetOrderCount(ctx context.Context, exchange, symbol string) (*
 	return out, nil
 }
 
-const orderCountOverviewDisclaimer = "Whole-market order count sums aggressive futures print counts across the most liquid USDT pairs, then divides. A busier coin counts for more of the ratio. The coin counts are one vote each: how many pairs lean buy, sell, or balanced. Quiet pairs had no prints in that window. Windows are 1m, 5m, and 15m. Informational only — not financial advice."
+const orderCountOverviewDisclaimer = "Whole-market order count sums aggressive futures print counts across the liquid USDT perpetuals the recorder follows (up to 100, seed pairs first), then divides. A busier coin counts for more of the ratio. The coin counts are one vote each: how many pairs lean buy, sell, or balanced. Quiet pairs had no prints in that window. Windows are 1m, 5m, and 15m. Informational only — not financial advice."
 
 // GetOrderCountOverview reports the print-count ratio across liquid pairs.
 func (s *Service) GetOrderCountOverview(ctx context.Context, exchange, quote string, limit int) (*domain.OrderCountOverview, error) {
@@ -68,7 +68,7 @@ func (s *Service) GetOrderCountOverview(ctx context.Context, exchange, quote str
 		quote = "USDT"
 	}
 	limit = domain.ParseOrderCountOverviewLimit(limit)
-	symbols, err := s.orderCountUniverse(ctx, ex, quote, limit)
+	symbols, err := s.liquidOverviewSymbols(ctx, ex, quote, limit)
 	if err != nil {
 		return nil, err
 	}

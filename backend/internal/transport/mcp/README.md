@@ -58,10 +58,10 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_participation` | OI USDT delta ÷ futures taker volume (15m/1h/4h); 2B volume and OI +300M is 15% new positions |
 | `get_volume_share` | How BTC futures volume splits across Binance / Bybit / OKX (e.g. 55/30/15) plus who gained or lost share vs the prior hour |
 | `get_print_size` | Average aggressive print size (USDT per fill) 5m/15m vs the prior window; few large vs many small |
-| `get_print_size_overview` | Same average summed across the liquid USDT pairs, versus the window just before |
+| `get_print_size_overview` | Same average summed across the recorder's liquid USDT list (default 100, seeds first), versus the window just before |
 | `get_bot_tracker` | Same-size aggressive prints repeating at least 4 times inside 60s over the last 5m; buy, sell, and delta count only those clips |
 | `get_order_count_ratio` | (buy print count − sell print count) / (buy + sell) from −1 to +1 over 1m/5m/15m |
-| `get_order_count_overview` | Same ratio summed across the liquid USDT pairs. Coin leans are one vote each |
+| `get_order_count_overview` | Same ratio summed across that recorder list. Coin leans are one vote each |
 | `get_flow_at_prices` | Buy vs sell USDT, print count, and delta at each price. `window` 5m/15m/1h/4h/1d/3d/7d or `startTime`/`endTime` (max 7d). Live tape is about 1h (Bybit: newest ~1000 trades); stored minutes while the process runs cover the longer lookback. Optional `minPrice`/`maxPrice`/`tickSize` |
 | `get_candle_footprint` | Buy versus sell inside each candle. `interval` matches the chart. Optional `startTime`/`endTime` (max 30 days and 400 candles). Stored minutes, about 30 days. The open minute uses the live tape when it covers. `combined` only when every venue recorded. `missing` names a venue and is not treated as zero |
 | `get_market_pressure` | One −1…+1 score from resting book, CVD, and absorption when they disagree; `change1h` is that score vs ~1h ago |

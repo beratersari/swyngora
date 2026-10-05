@@ -13,7 +13,7 @@ back. This read is **how many** aggressive prints were buys versus sells.
 
 - The market `ratio` sums buy and sell counts, then divides. A busier coin weighs more
 - `buyCoins`, `sellCoins`, `balancedCoins`, and `quietCoins` are one vote per pair
-- Default universe is 20 pairs (5–30). `exchange=all` sums Binance, Bybit, and OKX on each coin first
+- The list is the recorder's liquid USDT perpetuals, seed pairs first (default 100, min 5, max 100). The Order count page requests that full list. `exchange=all` sums Binance, Bybit, and OKX on each coin first
 - The Order count page lists those windows and ranks the pairs
 - `coverage` names Binance, Bybit, and OKX as fresh, old, or missing. `definite` is false when any of them is missing or old, and the page does not show a market ratio (`docs/features/venue-coverage.md`)
 
@@ -48,5 +48,5 @@ Informational only — not financial advice.
 ```bash
 cd backend && go test ./internal/domain/ ./internal/service/market/ -count=1 -run OrderCount
 curl "http://localhost:8080/api/v1/market/order-count?symbol=BTCUSDT"
-curl "http://localhost:8080/api/v1/market/order-count/overview?limit=20"
+curl "http://localhost:8080/api/v1/market/order-count/overview?limit=100"
 ```

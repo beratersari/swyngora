@@ -60,6 +60,10 @@ describe('OrderCountPage', () => {
       refetch,
     }));
     renderWithProviders(<OrderCountPage />, { routerEntries: ['/order-count'] });
+    expect(load).toHaveBeenCalledWith(
+      { exchange: 'all', quote: 'USDT', limit: 100 },
+      expect.objectContaining({ skip: true }),
+    );
 
     await user.click(screen.getByRole('button', { name: /load market|piyasayı yükle/i }));
     expect(await screen.findByText('+0.40')).toBeInTheDocument();

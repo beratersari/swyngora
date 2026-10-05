@@ -751,7 +751,7 @@ class PrintSizeOverviewInput(BaseModel):
     quote: str = Field(default="USDT", description="Quote asset")
     limit: int = Field(
         default=0,
-        description="How many liquid pairs (default 20, max 30)",
+        description="How many names from the recorder list (default 100, max 100)",
     )
 
 
@@ -763,7 +763,7 @@ class OrderCountOverviewInput(BaseModel):
     quote: str = Field(default="USDT", description="Quote asset")
     limit: int = Field(
         default=0,
-        description="How many liquid pairs (default 20, max 30)",
+        description="How many names from the recorder list (default 100, max 100)",
     )
 
 

@@ -67,8 +67,8 @@ func TestGetOrderCountOverview_SumsLiquidPairs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Universe != 2 {
-		t.Fatalf("universe %d (leveraged token should be dropped)", got.Universe)
+	if got.Universe != len(domain.DefaultFuturesHistorySymbols) {
+		t.Fatalf("universe %d, want the recorder seed list", got.Universe)
 	}
 	var m1 domain.OrderCountMarketWindow
 	for _, w := range got.Windows {
@@ -79,7 +79,7 @@ func TestGetOrderCountOverview_SumsLiquidPairs(t *testing.T) {
 	if m1.BuyCount != 4 || m1.SellCount != 4 || m1.Ratio != 0 || m1.Lean != domain.OrderCountLeanBalanced {
 		t.Fatalf("%+v", m1)
 	}
-	if m1.BuyCoins != 1 || m1.SellCoins != 1 {
+	if m1.BuyCoins != 1 || m1.SellCoins != 1 || m1.QuietCoins != len(domain.DefaultFuturesHistorySymbols)-2 {
 		t.Fatalf("leans %+v", m1)
 	}
 }

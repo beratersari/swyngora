@@ -1,6 +1,6 @@
 {
   "title": "Baskı boyutu",
-  "subtitle": "Likit USDT çiftlerinde agresif vadeli işlem baskılarının ortalama USDT boyutu, hemen önceki aynı süreyle karşılaştırılır. Ortalama tutar ve adedi toplar, bu yüzden daha hareketli coin daha ağır basar. Her çift kendi boyutunun büyüyüp küçüldüğüne de oy verir. Bilgi amaçlıdır, yatırım tavsiyesi değildir.",
+  "subtitle": "Kayıtçının izlediği aynı 100 USDT perpetual’de, çekirdek çiftler önde, agresif vadeli işlem baskılarının ortalama USDT boyutu hemen önceki aynı süreyle karşılaştırılır. Ortalama tutar ve adedi toplar, bu yüzden daha hareketli coin daha ağır basar. Her çift kendi boyutunun büyüyüp küçüldüğüne de oy verir. Bilgi amaçlıdır, yatırım tavsiyesi değildir.",
   "load": "Piyasayı yükle",
   "exchange": "Borsa",
   "allVenues": "Tüm borsalar",

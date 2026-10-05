@@ -847,9 +847,15 @@ export interface paths {
          *     small, and `limit=100` asks for the full recorded set. Each row has the mark price, the
          *     predicted funding rate, open interest, the 1h and 24h open-interest
          *     change, crowd long percent, the 1h taker buy share, and 24h long and
-         *     short liquidation notionals. `exchange=all` (default) reads Binance
+         *     short liquidation notionals, plus the 15-minute order-count ratio and
+         *     the farthest unusual reading versus that coin's own samples.
+         *     `exchange=all` (default) reads Binance
          *     USD-M, Bybit linear, and OKX USDT-swap. A combined number is present
-         *     only when every expected venue is fresh for that column. Crowd long is
+         *     only when every expected venue is fresh for that column. Order count
+         *     sums aggressive print counts over 15 minutes and stays blank when any
+         *     venue's tape does not cover that window. Unusual names one venue's
+         *     standout and does not average venues. A coin with no standout stays
+         *     blank. Crowd long is
          *     the account long share, weighted by open interest when that open
          *     interest is also fresh. Taker buy share sums the last hour of
          *     aggressive buy and sell volume; an incomplete hour stays blank. A
@@ -1575,7 +1581,8 @@ export interface paths {
          *     USDT pairs, then divides. The market average is current versus the same
          *     length just before, so it shows whether prints got larger or smaller.
          *     A busier coin weighs more. `largerCoins` and `smallerCoins` are one vote
-         *     per pair. Windows are 5m and 15m. Default universe is 20 pairs (5–30).
+         *     per pair. Windows are 5m and 15m. The list is the recorder's liquid
+         *     USDT perpetuals, seed pairs first (default 100, min 5, max 100).
          *     Informational only.
          */
         get: operations["getMarketPrintSizeOverview"];
@@ -1650,9 +1657,10 @@ export interface paths {
          * @description Sums aggressive futures print counts across the most liquid USDT pairs,
          *     then divides. `ratio` is the same −1…+1 count ratio as one coin. A
          *     busier coin counts for more of that ratio. `buyCoins`, `sellCoins`,
-         *     `balancedCoins`, and `quietCoins` are one vote per pair. Default
-         *     universe is 20 pairs (5–30). `exchange=all` sums Binance, Bybit, and
-         *     OKX per coin before the market sum. Informational only.
+         *     `balancedCoins`, and `quietCoins` are one vote per pair. The list is
+         *     the recorder's liquid USDT perpetuals, seed pairs first (default 100,
+         *     min 5, max 100). `exchange=all` sums Binance, Bybit, and OKX per coin
+         *     before the market sum. Informational only.
          */
         get: operations["getMarketOrderCountOverview"];
         put?: never;
@@ -2244,21 +2252,26 @@ export interface paths {
         };
         /**
          * Volume profile (volume by price)
-         * @description **Volume profile** shows **where** trading happened by **price**
-         *     over a time range you choose — not just how much traded over time.
-         *     Each row is quote (USDT) volume in a price band, with **buy** and
-         *     **sell** when the venue publishes taker-buy (Binance klines; Bybit
-         *     is total-only). The same row also carries **open interest opened
-         *     and closed** (USDT change spread across the candles trading then)
-         *     and **long / short liquidation** notional that printed in that band.
-         *     `poc` is the price with the most volume. `valueArea`
-         *     is the contiguous block around the POC that holds about **70%** of
-         *     volume. `exchange=all` (default) returns Binance and Bybit separately
-         *     plus `combined`. Combined adds both venues at the same price levels.
-         *     Use `window` (`1h` / `4h` / `24h` / `7d` / `30d`, default `24h`) or
-         *     `startTime` + `endTime`. Optional `tickSize` sets the row width.
-         *     Built from spot candles (volume spread across each bar's high–low),
-         *     not individual prints. Informational only.
+         * @description **Volume profile** shows **where aggressive futures prints happened**
+         *     by **price**. Each row is market **buy** and **sell** USDT at the
+         *     price that printed. The same row also carries **open interest opened
+         *     and closed** on the prices that traded between readings, and
+         *     **long / short liquidation** notional that printed in that band.
+         *     `poc` is the price with the most volume. `valueArea` is the
+         *     contiguous block around the POC that holds about **70%** of volume.
+         *     `exchange=all` (default) returns Binance, Bybit, and OKX separately.
+         *     `combined` is present only when every requested venue reaches the
+         *     window open. `missing` names a venue that starts later. `definite`
+         *     is false in that case, and that venue is not counted as zero.
+         *     `complete` on a venue is that same reach. `started` is the first
+         *     stored minute. Closed minutes come from the stored ladder (about
+         *     30 days). Binance minutes for the liquid list are also filled from
+         *     public aggregate trades, about 7 days. Bybit and OKX minutes before
+         *     this process started are still missing. The live tape fills the
+         *     window when it already reaches the start. Use `window`
+         *     (`1h` / `4h` / `24h` / `7d` / `30d`, default `24h`) or `startTime`
+         *     + `endTime`. Optional `tickSize` sets the row width.
+         *     Informational only.
          */
         get: operations["getMarketVolumeProfile"];
         put?: never;
@@ -2284,8 +2297,8 @@ export interface paths {
          *     enough — for example BTC traded 65400–65600 and you want the
          *     row at 65520. Built from aggressive **futures prints** (Binance
          *     USD-M aggTrades, Bybit recent trades), not candle volume smeared
-         *     across high–low (that is `/volume-profile`). `exchange=all`
-         *     (default) returns Binance and Bybit separately plus `combined`.
+         *     across high–low. The volume profile uses these same stored prints.
+         *     `exchange=all` (default) returns Binance and Bybit separately plus `combined`.
          *     Use `window` (`5m` / `15m` / `1h` / `4h` / `1d` / `3d` / `7d` / `30d`,
          *     default `15m`) or `startTime` + `endTime` (max 30d). The live
          *     tape is about the last hour on Binance and the newest ~1000
@@ -2439,11 +2452,13 @@ export interface paths {
          * @description **Hypothetical model only** — not evidence that any exchange moves
          *     price, and not financial advice.
          *
-         *     For Binance USD-M and Bybit linear separately: estimate where long/short
-         *     liquidation pressure sits if price moves up or down, how much **spot**
-         *     buying or selling the visible book needs to reach those areas, and a
-         *     rough desk result (unwind on the current opposite side vs assuming
-         *     part of estimated liquidations become exit flow). Also scores which
+         *     For Binance USD-M, Bybit linear, and OKX USDT-swap separately: estimate
+         *     where long/short liquidation pressure sits if price moves up or down,
+         *     how much **spot** buying or selling the visible book needs to reach
+         *     those areas, and a rough desk result (unwind on the current opposite
+         *     side vs assuming part of estimated liquidations become exit flow).
+         *     OKX is priced from its USDT-swap mark and has no spot book, so its
+         *     walk cost stays empty. Also scores which
          *     direction looks easier or more likely (`upScore` / `downScore` plus
          *     `bias`) from zone distance, visible book cost, price+OI trend,
          *     crowding/funding, and recent taker / liquidation flow. `upCascade` /
@@ -2475,7 +2490,8 @@ export interface paths {
          *     estimated liquidation size above last (shorts) and below last (longs).
          *     This is **not** the hunt target (which also weighs spot-walk cost).
          *     Size is modeled OI at an assumed leverage mix plus 24h observed
-         *     clusters. Venues stay separate; report-level above/below is the single
+         *     clusters. Venues stay separate. OKX uses its USDT-swap mark. A venue
+         *     with no mark is left out. Report-level above/below is the single
          *     largest pocket on that side (prices are never averaged).
          */
         get: operations["getMarketLiquidationMaxPain"];
@@ -2498,8 +2514,9 @@ export interface paths {
          * Liquidation intensity heatmap (price × time)
          * @description CoinGlass-style grid of estimated liquidation intensity at each price
          *     for each time column. Built from historical open interest, mark price,
-         *     the hunt leverage mix (tilted by funding), blended account long/short,
-         *     and observed liquidation prints in that column.
+         *     the hunt leverage mix (tilted by funding), and blended account long/short.
+         *     Force-order prints are not added to these cells. They are the separate
+         *     measured map at `/api/v1/market/liquidation-prints/heatmap`.
          *
          *     `range` is 12h, 24h, 3d, 7d, 14d, 30d, or 90d. 14d, 30d, and 90d use the
          *     startup archive. Public backfill follows each endpoint: Binance open
@@ -2507,8 +2524,9 @@ export interface paths {
          *     latest 1,440 points, and Bybit open interest goes back to listing
          *     (this archive keeps 90 days). 90d is one column per day. Binance
          *     columns older than the public 30 days are only hours this process
-         *     already recorded. Observed liquidation prints in a column are the
-         *     ones already stored; public REST refills about 7 days, not the whole 90.
+         *     already recorded. Public REST refill of force orders is about 7 days
+         *     and belongs on the measured map. A page that does not reach the start
+         *     of a gap does not mark that earlier time as a zero.
          *     Binance, Bybit, and OKX are modeled separately. Each venue uses
          *     only its own price: Binance and Bybit use their candles, and OKX
          *     uses its USDT-swap candles. They never borrow another venue's price.
@@ -2627,7 +2645,9 @@ export interface paths {
          * @description CoinGlass-style **liquidation map** as bars.
          *
          *     - `symbol=BTCUSDT` (or ETHUSDT, …): estimated **price levels** from
-         *       each venue's own last, open interest, and a 10x/25x/50x/100x mix.
+         *       each venue's own last, open interest, and a 5x–125x mix drawn as
+         *       10x/25x/50x/100x. 5x keeps its own distance in the 10x color. 75x
+         *       and 125x use the 100x color. OKX uses its USDT-swap mark.
          *       Longs sit below last; shorts sit above. Each bar has the mass at
          *       that price (`longNotional` / `byLeverage`) and the walk from last
          *       to that price (`cumLong` / `cumByLeverage`). Combined aligns
@@ -7725,6 +7745,23 @@ export interface components {
             /** @description jumped | faded | larger | smaller | stable */
             printRead?: string;
             printDefinite?: boolean;
+            /** @description (buy − sell) / (buy + sell) over the last 15 minutes, from -1 to +1. Omitted unless every expected venue's window is complete and fresh. */
+            orderRatio?: string;
+            /** @description buy | sell | balanced */
+            orderLean?: string;
+            orderBuy?: number;
+            orderSell?: number;
+            orderDefinite?: boolean;
+            /** @description funding | open_interest | liquidations | cvd | spread. The farthest standout versus this coin's own samples. Venues are not averaged. */
+            unusualMetric?: string;
+            /** @description extreme_high | high | low | extreme_low */
+            unusualBand?: string;
+            /** @description How far the percentile sits from 50. */
+            unusualDistance?: string;
+            unusualPercentile?: string;
+            /** @description Venue of that standout. Set when unusualDefinite is true. */
+            unusualVenue?: string;
+            unusualDefinite?: boolean;
             /** @description Hottest 5-minute liquidation grade versus each venue's own typical rate (quiet | elevated | cascade | extreme). */
             liqHeat?: string;
             liqHeatRatio?: string;
@@ -7767,6 +7804,17 @@ export interface components {
             printChangePct?: string;
             /** @description fresh | stale | missing */
             printStatus?: string;
+            orderRatio?: string;
+            /** @description buy | sell | balanced */
+            orderLean?: string;
+            orderBuy?: number;
+            orderSell?: number;
+            /** @description fresh | stale | missing */
+            orderStatus?: string;
+            unusualMetric?: string;
+            unusualBand?: string;
+            /** @description Set when this venue has its own standout. Empty means no standout */
+            unusualDistance?: string;
             liqGrade?: string;
             /** @description fresh | stale | missing */
             liqHeatStatus?: string;
@@ -12111,7 +12159,7 @@ export interface operations {
                 /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
                 quote?: string;
-                /** @description How many liquid pairs (default 20, min 5, max 30) */
+                /** @description How many names from the recorder list (default 100, min 5, max 100) */
                 limit?: number;
             };
             header?: never;
@@ -12191,7 +12239,7 @@ export interface operations {
                 /** @description binance | bybit | okx | all (default all) */
                 exchange?: string;
                 quote?: string;
-                /** @description How many liquid pairs (default 20, min 5, max 30) */
+                /** @description How many names from the recorder list (default 100, min 5, max 100) */
                 limit?: number;
             };
             header?: never;
@@ -13165,7 +13213,7 @@ export interface operations {
                 symbol?: string;
                 /** @description binance | bybit | okx | all (default all = combined) */
                 exchange?: string;
-                /** @description 12h | 24h | 3d | 7d (totals clamp to 24h) */
+                /** @description Review window 12h | 24h | 3d | 7d | 14d | 30d. The bars stay the live map. symbol=all totals clamp to 24h. */
                 range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d";
             };
             header?: never;

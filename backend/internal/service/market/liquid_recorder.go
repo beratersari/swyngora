@@ -2,6 +2,7 @@ package market
 
 import (
 	"context"
+	"strings"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
@@ -28,4 +29,18 @@ func (s *Service) LiquidPerpSymbols(ctx context.Context, limit int) ([]string, e
 		}
 	}
 	return domain.MergeLiquidSymbols(domain.DefaultFuturesHistorySymbols, ranked, limit), err
+}
+
+// liquidOverviewSymbols is the list the print-size and order-count desks follow.
+// USDT uses the recorder universe: seed pairs first, then the highest-volume
+// names, capped at limit. Another quote keeps that venue's own spot ranking.
+func (s *Service) liquidOverviewSymbols(ctx context.Context, ex, quote string, limit int) ([]string, error) {
+	if quote == "" || strings.EqualFold(quote, "USDT") {
+		symbols, err := s.LiquidPerpSymbols(ctx, limit)
+		if err != nil && len(symbols) == 0 {
+			return nil, err
+		}
+		return symbols, nil
+	}
+	return s.orderCountUniverse(ctx, ex, quote, limit)
 }

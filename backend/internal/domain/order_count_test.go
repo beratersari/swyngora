@@ -80,7 +80,7 @@ func TestBuildOrderCountOverview_SumsCountsThenDivides(t *testing.T) {
 }
 
 func TestParseOrderCountOverviewLimit(t *testing.T) {
-	if ParseOrderCountOverviewLimit(0) != 20 || ParseOrderCountOverviewLimit(2) != 5 || ParseOrderCountOverviewLimit(99) != 30 {
+	if ParseOrderCountOverviewLimit(0) != LiquidRecorderLimit || ParseOrderCountOverviewLimit(2) != 5 || ParseOrderCountOverviewLimit(99) != 99 || ParseOrderCountOverviewLimit(500) != LiquidRecorderLimit {
 		t.Fatal("limit clamp")
 	}
 }

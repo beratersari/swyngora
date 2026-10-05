@@ -27,19 +27,21 @@ Each row has:
 
 A combined cell is empty unless every expected venue is fresh for that column. A missing or old venue is named on the row and is not treated as zero. `definite` on the board is true only when every row is complete. The page is `/derivatives`. It opens on 36 names, and the coin menu can ask for 100. Any column sorts, and a blank cell stays at the bottom. Clicking a row opens that coin's chart.
 
+The same page has a heatmap. Rows are the coins already on the board. One control picks the column that paints the cells: funding, open-interest change, crowd long, taker buy, top minus crowd, day CVD, print size, order count, unusual distance, liquidation heat, or bid share. The largest distance from that column's neutral is first. A cell with no definite value stays blank and is not drawn as zero. Day CVD color is this coin against the largest day CVD on the screen, because the column is a notional. The other columns use a fixed scale, so a quiet hour does not paint every cell at full strength. There is no second route and no new request.
+
 ## Where the code lives
 
 - Domain: `backend/internal/domain/derivatives_board.go`
 - Service: `backend/internal/service/market/derivatives_board.go`
 - HTTP: `GET /api/v1/market/derivatives-board`
-- Web: `frontend/src/components/pages/DerivativesPage`
+- Web: `frontend/src/components/pages/DerivativesPage` and `frontend/src/components/organisms/DerivativesHeatmap`
 - MCP / AI: `get_derivatives_board`
 
 ## How to verify
 
-`go test` for `domain`, `service/market`, and the derivatives handler. Frontend: `helpers.test.ts` and `DerivativesPage.test.tsx`.
+`go test` for `domain`, `service/market`, and the derivatives handler. Frontend: `DerivativesBoard/helpers.test.ts`, `DerivativesHeatmap/helpers.test.ts`, and `DerivativesPage.test.tsx`.
 
-Open `/derivatives`. The table lists the liquid perpetuals. A dash in a combined column means that venue set is not complete. Choosing one venue shows that venue's own numbers.
+Open `/derivatives`. The table lists the liquid perpetuals. A dash in a combined column means that venue set is not complete. Choosing one venue shows that venue's own numbers. Heatmap uses those same rows: pick a column, confirm a withheld cell stays blank, and confirm the strongest reading is first.
 
 ## Limits
 

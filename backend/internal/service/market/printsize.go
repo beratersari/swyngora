@@ -58,7 +58,7 @@ func (s *Service) GetPrintSize(ctx context.Context, exchange, symbol string) (*d
 	return out, nil
 }
 
-const printSizeOverviewDisclaimer = "Whole-market print size sums aggressive futures notional and fill counts across the most liquid USDT pairs, then divides. A busier coin weighs more in the average. Each pair also votes whether its own average got larger, smaller, a few large orders, or many small ones. Windows are 5m and 15m versus the same length just before. Informational only — not financial advice."
+const printSizeOverviewDisclaimer = "Whole-market print size sums aggressive futures notional and fill counts across the liquid USDT perpetuals the recorder follows (up to 100, seed pairs first), then divides. A busier coin weighs more in the average. Each pair also votes whether its own average got larger, smaller, a few large orders, or many small ones. Windows are 5m and 15m versus the same length just before. Informational only — not financial advice."
 
 // GetPrintSizeOverview reports whether average print size grew or shrank across liquid pairs.
 func (s *Service) GetPrintSizeOverview(ctx context.Context, exchange, quote string, limit int) (*domain.PrintSizeOverview, error) {
@@ -70,7 +70,7 @@ func (s *Service) GetPrintSizeOverview(ctx context.Context, exchange, quote stri
 		quote = "USDT"
 	}
 	limit = domain.ParsePrintSizeOverviewLimit(limit)
-	symbols, err := s.orderCountUniverse(ctx, ex, quote, limit)
+	symbols, err := s.liquidOverviewSymbols(ctx, ex, quote, limit)
 	if err != nil {
 		return nil, err
 	}

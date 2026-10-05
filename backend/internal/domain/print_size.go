@@ -407,9 +407,9 @@ func CombinePrintSizeVenues(symbol string, venues []PrintSizeVenue) *PrintSizeVe
 }
 
 const (
-	printSizeOverviewDefault = 20
+	printSizeOverviewDefault = LiquidRecorderLimit
 	printSizeOverviewMin     = 5
-	printSizeOverviewMax     = 30
+	printSizeOverviewMax     = LiquidRecorderLimit
 )
 
 // PrintSizeMarketWindow is one lookback averaged across the followed coins.

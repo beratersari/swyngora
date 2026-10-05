@@ -1,6 +1,6 @@
 {
   "title": "Print size",
-  "subtitle": "Average USDT size of aggressive futures prints across the liquid USDT pairs, compared with the same length just before. The average sums notional and fill counts, so a busier coin weighs more. Each pair also votes whether its own size got larger or smaller. Informational only — not financial advice.",
+  "subtitle": "Average USDT size of aggressive futures prints across the same 100 USDT perpetuals the recorder follows, seed pairs first, compared with the same length just before. The average sums notional and fill counts, so a busier coin weighs more. Each pair also votes whether its own size got larger or smaller. Informational only — not financial advice.",
   "load": "Load market",
   "exchange": "Exchange",
   "allVenues": "All venues",

@@ -101,4 +101,30 @@ describe('DerivativesPage', () => {
     await user.click(row as HTMLElement);
     expect(screen.getByText('coin chart')).toBeInTheDocument();
   });
+
+  it('colors one column and leaves an incomplete cell blank', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <Routes>
+        <Route path="/derivatives" element={<DerivativesPage />} />
+        <Route path="/markets/binance/BTCUSDT" element={<div>coin chart</div>} />
+      </Routes>,
+      { routerEntries: ['/derivatives'] },
+    );
+
+    await user.click(screen.getByText('Heatmap'));
+    const blank = screen.getByTestId('derivatives-heat-cell');
+    expect(blank).toHaveAttribute('data-tone', 'blank');
+    expect(blank).toHaveTextContent('—');
+    expect(screen.queryByRole('columnheader', { name: 'Recorded' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('combobox', { name: 'Color' }));
+    await user.click(await screen.findByText('Order count 15m'));
+    const colored = screen.getByTestId('derivatives-heat-cell');
+    expect(colored).toHaveAttribute('data-tone', 'up');
+    expect(colored).toHaveTextContent('+0.40');
+
+    await user.click(colored);
+    expect(screen.getByText('coin chart')).toBeInTheDocument();
+  });
 });
