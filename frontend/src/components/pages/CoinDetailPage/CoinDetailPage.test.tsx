@@ -28,6 +28,9 @@ const mockCandleFootprint = vi.fn();
 const mockAbsorption = vi.fn();
 const mockPerpDepth = vi.fn();
 const mockPrintSize = vi.fn();
+const mockVolumeProfile = vi.fn();
+const mockSweeps = vi.fn();
+const mockBots = vi.fn();
 
 vi.mock('@/libs/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/libs/api')>();
@@ -89,7 +92,9 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetMarketPrintSizeQuery: () => mockPrintSize(),
     useGetMarketAbsorptionQuery: () => mockAbsorption(),
     useGetMarketPerpDepthQuery: () => mockPerpDepth(),
-    useGetMarketBotTrackerQuery: () => ({ data: undefined, isError: false, isFetching: false }),
+    useGetMarketBotTrackerQuery: () => mockBots(),
+    useGetMarketVolumeProfileQuery: () => mockVolumeProfile(),
+    useGetMarketLiquiditySweepsQuery: () => mockSweeps(),
     useGetMarketOrderCountQuery: () => ({ data: undefined, isError: false, isFetching: false }),
     useGetMarketPerpDepthOverviewQuery: () => ({ data: undefined, isError: false, isFetching: false }),
     useGetMarketPressureQuery: () => ({ data: undefined, isError: false, isFetching: false }),
@@ -111,6 +116,8 @@ vi.mock('@/components/molecules/CandleChartHost', () => ({
     liqHeat?: unknown[];
     candleFootprints?: unknown[];
     footprint?: unknown[];
+    priceLines?: { title?: string }[];
+    markers?: { text?: string }[];
   }) => (
     <div
       data-testid="candle-chart"
@@ -118,6 +125,8 @@ vi.mock('@/components/molecules/CandleChartHost', () => ({
       data-liq={String(props.liqHeat?.length ?? 0)}
       data-candle-foot={String(props.candleFootprints?.length ?? 0)}
       data-foot-strip={String(props.footprint?.length ?? 0)}
+      data-prices={(props.priceLines ?? []).map((line) => line.title).join('|')}
+      data-marks={(props.markers ?? []).map((mark) => mark.text).join('|')}
     />
   ),
 }));
@@ -337,6 +346,70 @@ describe('CoinDetailPage', () => {
     mockAbsorption.mockReturnValue(emptyDesk);
     mockPerpDepth.mockReturnValue(emptyDesk);
     mockPrintSize.mockReturnValue(emptyDesk);
+    mockVolumeProfile.mockReturnValue(emptyDesk);
+    mockSweeps.mockReturnValue(emptyDesk);
+    mockBots.mockReturnValue(emptyDesk);
+  });
+
+  it('draws the value area, sweep arrows, and repeated-size squares on the overview chart', async () => {
+    const profile = {
+      definite: false,
+      missing: ['okx'],
+      venues: [
+        {
+          exchange: 'binance',
+          poc: { price: '100', high: '102' },
+          valueArea: { low: '90', high: '110' },
+        },
+      ],
+    };
+    mockVolumeProfile.mockReturnValue({
+      data: profile,
+      currentData: profile,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    const sweeps = {
+      venues: [
+        {
+          exchange: 'binance',
+          sweeps: [{ side: 'high', piercedAt: '2024-01-01T00:00:00Z' }],
+        },
+      ],
+    };
+    mockSweeps.mockReturnValue({
+      data: sweeps,
+      currentData: sweeps,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    const bots = {
+      clusters: [
+        { side: 'buy', count: 4, from: '2024-01-01T00:00:00Z', to: '2024-01-01T00:00:30Z' },
+      ],
+    };
+    mockBots.mockReturnValue({
+      data: bots,
+      currentData: bots,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    renderDetail('/markets/binance/BTCUSDT');
+    const chart = await screen.findByTestId('candle-chart');
+    expect(chart).toHaveAttribute('data-prices', expect.stringContaining('POC'));
+    expect(chart.getAttribute('data-prices')).toContain('VAH');
+    expect(chart.getAttribute('data-prices')).toContain('VAL');
+    expect(chart.getAttribute('data-marks')).toContain('Sweep high');
+    expect(chart.getAttribute('data-marks')).toContain('4× buy');
+    expect(screen.getByTestId('chart-profile-venue')).toHaveTextContent(/OKX/);
+    expect(screen.getByTestId('chart-sweeps')).toHaveTextContent(/Binance/);
+    expect(screen.getByTestId('chart-bots')).toBeInTheDocument();
   });
 
   it('renders symbol header and chart host', async () => {

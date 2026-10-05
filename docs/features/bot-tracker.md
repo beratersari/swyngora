@@ -35,7 +35,7 @@ A repeated size is a pattern. It is not proof of a named bot. Informational only
 | Service | `GetBotTracker` in `backend/internal/service/market/bottracker.go` |
 | HTTP | `GET /api/v1/market/bot-tracker` |
 | MCP / AI | `get_bot_tracker` |
-| Web | Coin detail futures tape, under print size |
+| Web | Coin detail futures tape, under print size. Overview chart draws a square on the candles on screen when the burst falls in that view. The read itself is still the last 5 minutes |
 
 ## How to verify
 

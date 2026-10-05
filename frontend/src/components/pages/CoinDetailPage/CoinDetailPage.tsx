@@ -12,6 +12,12 @@ import {
   candleFootprintSpan,
   candleFootprintView,
   chartBookWindow,
+  chartBotMarks,
+  chartProfileRead,
+  chartSweepMarks,
+  chartSweepVenue,
+  chartTapeSpan,
+  sweepSpanOutside,
   crowdTopSeries,
   footprintLevels,
   footprintWindow,
@@ -84,6 +90,8 @@ import {
   useGetMarketHistorySpanQuery,
   useGetMarketFuturesHistoryQuery,
   useGetMarketFlowAtPricesQuery,
+  useGetMarketLiquiditySweepsQuery,
+  useGetMarketVolumeProfileQuery,
   useGetMarketCandleFootprintQuery,
   useGetMarketUnusualQuery,
   useGetMarketLiquidationLevelsQuery,
@@ -259,6 +267,9 @@ export function CoinDetailPage() {
     showLiqLevels,
     showBook,
     showFootprint,
+    showProfile,
+    showSweeps,
+    showBots,
     showCrowd,
     showOi,
     showFunding,
@@ -280,6 +291,7 @@ export function CoinDetailPage() {
   const [footWindow, setFootWindow] = useState<'5m' | '15m' | '1h' | '4h' | '1d' | '3d' | '7d' | '30d'>('1h');
   const [footSpan, setFootSpan] = useState<{ from: number; to: number } | null>(null);
   const [bookWindow, setBookWindow] = useState(CHART_BOOK_LIVE_MAX);
+  const [tapeSpan, setTapeSpan] = useState<{ from: number; to: number } | null>(null);
   /** Guards against applying history pages after exchange/symbol/interval change. */
   const historyRequestIdRef = useRef(0);
 
@@ -315,6 +327,7 @@ export function CoinDetailPage() {
     setHistoryExhausted(false);
     setHistoryLoading(false);
     setFootSpan(null);
+    setTapeSpan(null);
   }
 
   useEffect(() => {
@@ -532,6 +545,30 @@ export function CoinDetailPage() {
             ? ORDER_HEATMAP_HISTORY_POLL_MS
             : ORDER_HEATMAP_POLL_MS
           : 0,
+      refetchOnFocus: true,
+    },
+  );
+  const chartProfileQuery = useGetMarketVolumeProfileQuery(
+    tapeSpan
+      ? {
+          exchange: 'all',
+          symbol: perpSymbol,
+          startTime: new Date(tapeSpan.from * 1000).toISOString(),
+          endTime: new Date(tapeSpan.to * 1000).toISOString(),
+        }
+      : { exchange: 'all', symbol: perpSymbol, window: '24h' },
+    {
+      skip: skipTape || !showProfile,
+      pollingInterval: visible && showProfile ? 60_000 : 0,
+      refetchOnFocus: true,
+    },
+  );
+  const sweepVenue = chartSweepVenue(exchangeArg);
+  const chartSweepQuery = useGetMarketLiquiditySweepsQuery(
+    { exchange: sweepVenue, symbol: perpSymbol },
+    {
+      skip: skipTape || !showSweeps,
+      pollingInterval: visible && showSweeps ? 60_000 : 0,
       refetchOnFocus: true,
     },
   );
@@ -1158,36 +1195,49 @@ export function CoinDetailPage() {
     t,
   ]);
 
+  const profileRead = useMemo(
+    () => (isEquity || !showProfile ? null : chartProfileRead(rtkCurrent(chartProfileQuery), exchangeArg)),
+    [isEquity, showProfile, chartProfileQuery, exchangeArg],
+  );
+
   const chartPriceLines: CandleChartPriceLine[] = useMemo(() => {
-    if (isEquity || !showLiqLevels) return [];
-    const levels = rtkCurrent(liqLevelsQuery);
-    const sideLabel = (side: 'long' | 'short') => t(`detail:chart.liqSide.${side}`);
-    return liquidationChartLevels(levels).map((line) => {
-      const review = liquidationLevelReview(levels, cvdExchange, line.side, line.leverages);
-      const base =
-        line.leverages.length > 0
-          ? `${line.leverages.map((n) => `${n}×`).join(' · ')} ${sideLabel(line.side)}`
-          : sideLabel(line.side);
-      if (!review) {
-        return {
+    const lines: CandleChartPriceLine[] = [];
+    if (!isEquity && showLiqLevels) {
+      const levels = rtkCurrent(liqLevelsQuery);
+      const sideLabel = (side: 'long' | 'short') => t(`detail:chart.liqSide.${side}`);
+      for (const line of liquidationChartLevels(levels)) {
+        const review = liquidationLevelReview(levels, cvdExchange, line.side, line.leverages);
+        const base =
+          line.leverages.length > 0
+            ? `${line.leverages.map((n) => `${n}×`).join(' · ')} ${sideLabel(line.side)}`
+            : sideLabel(line.side);
+        lines.push({
           id: line.id,
           price: line.price,
           color: line.side === 'long' ? semanticColors.chart.down : semanticColors.chart.up,
-          title: base,
-        };
+          title: review
+            ? `${base} · ${t('detail:chart.levelReview', {
+                venue: t(`detail:liqHeatmap.venues.${cvdExchange}`, { defaultValue: cvdExchange }),
+                hit: `${Math.round(review.hitRate * 100)}%`,
+                kept: `${Math.round(review.sizeScale * 100)}%`,
+              })}`
+            : base,
+        });
       }
-      return {
-        id: line.id,
-        price: line.price,
-        color: line.side === 'long' ? semanticColors.chart.down : semanticColors.chart.up,
-        title: `${base} · ${t('detail:chart.levelReview', {
-          venue: t(`detail:liqHeatmap.venues.${cvdExchange}`, { defaultValue: cvdExchange }),
-          hit: `${Math.round(review.hitRate * 100)}%`,
-          kept: `${Math.round(review.sizeScale * 100)}%`,
-        })}`,
-      };
-    });
-  }, [isEquity, showLiqLevels, liqLevelsQuery, cvdExchange, t]);
+    }
+    if (profileRead) {
+      for (const line of profileRead.lines) {
+        lines.push({
+          id: line.id,
+          price: line.price,
+          color: line.role === 'poc' ? semanticColors.chart.emaFast : semanticColors.chart.neutral,
+          lineWidth: line.role === 'poc' ? 2 : 1,
+          title: t(`detail:chart.${line.role}`),
+        });
+      }
+    }
+    return lines;
+  }, [isEquity, showLiqLevels, liqLevelsQuery, cvdExchange, profileRead, t]);
 
   const chartBookHeat = useMemo(
     () => (isEquity || !showBook ? [] : bookHeatColumns(rtkCurrent(chartBookQuery))),
@@ -1259,6 +1309,12 @@ export function CoinDetailPage() {
       if (prev && prev.from === nextFoot.from && prev.to === nextFoot.to) return prev;
       return nextFoot;
     });
+    const nextTape = chartTapeSpan(barDurationSec, from, to);
+    setTapeSpan((prev) => {
+      if (!nextTape) return prev;
+      if (prev && prev.from === nextTape.from && prev.to === nextTape.to) return prev;
+      return nextTape;
+    });
   }, [barDurationSec]);
   const recordedLine = useMemo(() => {
     if (isEquity) return '';
@@ -1300,18 +1356,49 @@ export function CoinDetailPage() {
         : [];
     const pumpSnapped = snapMarkersToCandleTimes(pumpRaw, chartData, { maxDistanceSec: maxDist });
     const signalSnapped = snapMarkersToCandleTimes(signalRaw, chartData, { maxDistanceSec: maxDist });
-    return mergeChartMarkers(pumpSnapped, signalSnapped);
+    const sweepSource = !isEquity && showSweeps ? chartSweepMarks(rtkCurrent(chartSweepQuery), sweepVenue, tapeSpan) : [];
+    const botSource = !isEquity && showBots ? chartBotMarks(rtkCurrent(botTrackerQuery), tapeSpan) : [];
+    const sweepRaw: CandleChartMarker[] = sweepSource.map((mark) => ({
+            time: mark.time,
+            position: mark.kind === 'sweep-high' ? 'aboveBar' : 'belowBar',
+            color: mark.kind === 'sweep-high' ? semanticColors.chart.down : semanticColors.chart.up,
+            shape: mark.kind === 'sweep-high' ? 'arrowDown' : 'arrowUp',
+            text: t(mark.kind === 'sweep-high' ? 'detail:chart.sweepHigh' : 'detail:chart.sweepLow'),
+          }));
+    const botRaw: CandleChartMarker[] = botSource.map((mark) => ({
+      time: mark.time,
+      position: 'aboveBar' as const,
+      color: mark.kind === 'bot-buy' ? semanticColors.chart.up : semanticColors.chart.down,
+      shape: 'square' as const,
+      text: t(mark.kind === 'bot-buy' ? 'detail:chart.botBuy' : 'detail:chart.botSell', {
+        count: mark.count ?? 0,
+      }),
+    }));
+    const sweepSnapped = snapMarkersToCandleTimes(sweepRaw, chartData, { maxDistanceSec: maxDist });
+    const botSnapped = snapMarkersToCandleTimes(botRaw, chartData, { maxDistanceSec: maxDist });
+    return mergeChartMarkers(
+      mergeChartMarkers(mergeChartMarkers(pumpSnapped, signalSnapped), sweepSnapped),
+      botSnapped,
+    );
   }, [
     showPumpMarkers,
     showSignalMarkers,
+    showSweeps,
+    showBots,
+    isEquity,
     pumpsQuery,
     historyPumpEvents,
     pumpThresholdPct,
     scannerResultsQuery.data?.results,
+    chartSweepQuery,
+    botTrackerQuery,
+    sweepVenue,
+    tapeSpan,
     exchange,
     symbol,
     chartData,
     interval,
+    t,
   ]);
 
   const chartVertLines = useMemo(
@@ -1580,6 +1667,12 @@ export function CoinDetailPage() {
           onShowBookChange={isEquity ? undefined : setLayer('showBook')}
           showFootprint={showFootprint}
           onShowFootprintChange={isEquity ? undefined : setLayer('showFootprint')}
+          showProfile={showProfile}
+          onShowProfileChange={isEquity ? undefined : setLayer('showProfile')}
+          showSweeps={showSweeps}
+          onShowSweepsChange={isEquity ? undefined : setLayer('showSweeps')}
+          showBots={showBots}
+          onShowBotsChange={isEquity ? undefined : setLayer('showBots')}
           showCrowd={showCrowd}
           onShowCrowdChange={isEquity ? undefined : setLayer('showCrowd')}
           showOi={showOi}
@@ -1611,6 +1704,8 @@ export function CoinDetailPage() {
             (showLiqNotional && liqHistQuery.isFetching) ||
             (showLiqMap && liqMapQuery.isFetching) ||
             (showOpenLevels && openLevelsQuery.isFetching) ||
+            (showProfile && chartProfileQuery.isFetching) ||
+            (showSweeps && chartSweepQuery.isFetching) ||
             (cvdRange !== '24h' && (showCvd || showDelta) && cvdChartQuery.isFetching)
           }
         />
@@ -1662,6 +1757,9 @@ export function CoinDetailPage() {
               showLiqLevels ||
               showBook ||
               showFootprint ||
+              showProfile ||
+              showSweeps ||
+              showBots ||
               showCrowd ||
               showOi ||
               showFunding ||
@@ -1695,6 +1793,43 @@ export function CoinDetailPage() {
             {!isEquity && showBook && bookWindow > CHART_BOOK_LIVE_MAX ? (
               <Text variant="caption" color="secondary" data-testid="chart-book-stored">
                 {t('detail:chart.bookStored')}
+              </Text>
+            ) : null}
+            {!isEquity && showProfile && (profileRead?.lines.length ?? 0) > 0 ? (
+              <Text variant="caption" color="secondary" data-testid="chart-profile">
+                {t('detail:chart.profileCaption')}
+              </Text>
+            ) : null}
+            {!isEquity && showProfile && profileRead && !profileRead.definite && profileRead.missing.length > 0 ? (
+              <Text variant="caption" color="secondary" data-testid="chart-profile-venue">
+                {t('detail:chart.profileVenue', {
+                  venues: profileRead.missing
+                    .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
+                    .join(', '),
+                  exchange: t(`detail:liqHeatmap.venues.${profileRead.exchange}`, {
+                    defaultValue: profileRead.exchange,
+                  }),
+                })}
+              </Text>
+            ) : null}
+            {!isEquity && showSweeps && sweepSpanOutside(tapeSpan, Date.now() / 1000) ? (
+              <Text variant="caption" color="secondary" data-testid="chart-sweeps-outside">
+                {t('detail:chart.sweepOutside')}
+              </Text>
+            ) : null}
+            {!isEquity &&
+            showSweeps &&
+            !sweepSpanOutside(tapeSpan, Date.now() / 1000) &&
+            chartSweepMarks(rtkCurrent(chartSweepQuery), sweepVenue, tapeSpan).length > 0 ? (
+              <Text variant="caption" color="secondary" data-testid="chart-sweeps">
+                {t('detail:chart.sweepCaption', {
+                  exchange: t(`detail:liqHeatmap.venues.${sweepVenue}`, { defaultValue: sweepVenue }),
+                })}
+              </Text>
+            ) : null}
+            {!isEquity && showBots && chartBotMarks(rtkCurrent(botTrackerQuery), tapeSpan).length > 0 ? (
+              <Text variant="caption" color="secondary" data-testid="chart-bots">
+                {t('detail:chart.botCaption')}
               </Text>
             ) : null}
             {!isEquity && showFootprint && chartCandleFootprint.candles.length > 0 ? (

@@ -69,6 +69,32 @@ describe('DetailChartToolbar', () => {
     expect(onRange.mock.calls[0]?.[0]).toBe('7d');
   });
 
+  it('toggles value area, sweeps, and repeated size', async () => {
+    const user = userEvent.setup();
+    const onProfile = vi.fn();
+    const onSweeps = vi.fn();
+    const onBots = vi.fn();
+    renderWithTheme(
+      <DetailChartToolbar
+        intervals={['1h']}
+        interval="1h"
+        onIntervalChange={() => undefined}
+        showProfile
+        onShowProfileChange={onProfile}
+        showSweeps
+        onShowSweepsChange={onSweeps}
+        showBots
+        onShowBotsChange={onBots}
+      />,
+    );
+    await user.click(screen.getByRole('switch', { name: /value area|değer alanı/i }));
+    await user.click(screen.getByRole('switch', { name: /sweeps|süpürme/i }));
+    await user.click(screen.getByRole('switch', { name: /repeated size|aynı boy/i }));
+    expect(onProfile.mock.calls[0]?.[0]).toBe(false);
+    expect(onSweeps.mock.calls[0]?.[0]).toBe(false);
+    expect(onBots.mock.calls[0]?.[0]).toBe(false);
+  });
+
   it('toggles delta, CVD, and liquidation levels', async () => {
     const user = userEvent.setup();
     const onDelta = vi.fn();

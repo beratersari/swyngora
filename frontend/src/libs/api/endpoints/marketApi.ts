@@ -156,6 +156,8 @@ import type {
   VenueDivergenceReport,
   SymbolMarketQuery,
   VolumeProfileReport,
+  VolumeProfileQuery,
+  LiquiditySweepReport,
   FlowAtPricesReport,
   CandleFootprintReport,
   CandleFootprintQuery,
@@ -249,6 +251,8 @@ export type {
   MarketDeskReport,
   VenueDivergenceReport,
   VolumeProfileReport,
+  VolumeProfileQuery,
+  LiquiditySweepReport,
   VolumeProfileVenue,
   VolumeProfileBin,
   FlowAtPricesReport,
@@ -701,7 +705,7 @@ export const marketApi = baseApi.injectEndpoints({
         params: compactParams({ ...arg }),
       }),
     }),
-    getMarketVolumeProfile: build.query<VolumeProfileReport, SymbolMarketQuery>({
+    getMarketVolumeProfile: build.query<VolumeProfileReport, VolumeProfileQuery>({
       query: (arg) => ({
         url: '/api/v1/market/volume-profile',
         params: compactParams({ ...arg }),
@@ -719,7 +723,7 @@ export const marketApi = baseApi.injectEndpoints({
         params: compactParams({ ...arg }),
       }),
     }),
-    getMarketLiquiditySweeps: build.query<MarketDeskReport, SymbolMarketQuery>({
+    getMarketLiquiditySweeps: build.query<LiquiditySweepReport, SymbolMarketQuery>({
       query: (arg) => ({
         url: '/api/v1/market/liquidity-sweeps',
         params: compactParams({ ...arg }),

@@ -41,6 +41,12 @@ export function DetailChartToolbar({
   onShowBookChange,
   showFootprint = true,
   onShowFootprintChange,
+  showProfile = true,
+  onShowProfileChange,
+  showSweeps = true,
+  onShowSweepsChange,
+  showBots = true,
+  onShowBotsChange,
   showCrowd = true,
   onShowCrowdChange,
   showOi = true,
@@ -230,6 +236,48 @@ export function DetailChartToolbar({
             checked={showFootprint}
             onChange={onShowFootprintChange}
             aria-label={t('detail:chart.footprint')}
+          />
+        </InlineField>
+      ) : null}
+
+      {onShowProfileChange ? (
+        <InlineField>
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.profile')}
+          </Text>
+          <Switch
+            size="small"
+            checked={showProfile}
+            onChange={onShowProfileChange}
+            aria-label={t('detail:chart.profile')}
+          />
+        </InlineField>
+      ) : null}
+
+      {onShowSweepsChange ? (
+        <InlineField>
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.sweeps')}
+          </Text>
+          <Switch
+            size="small"
+            checked={showSweeps}
+            onChange={onShowSweepsChange}
+            aria-label={t('detail:chart.sweeps')}
+          />
+        </InlineField>
+      ) : null}
+
+      {onShowBotsChange ? (
+        <InlineField>
+          <Text variant="caption" color="secondary">
+            {t('detail:chart.bots')}
+          </Text>
+          <Switch
+            size="small"
+            checked={showBots}
+            onChange={onShowBotsChange}
+            aria-label={t('detail:chart.bots')}
           />
         </InlineField>
       ) : null}

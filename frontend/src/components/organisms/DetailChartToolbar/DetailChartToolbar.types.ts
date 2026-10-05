@@ -40,6 +40,15 @@ export type DetailChartToolbarProps = {
   /** Buy versus sell at each price for the visible window. */
   showFootprint?: boolean;
   onShowFootprintChange?: (show: boolean) => void;
+  /** Point of control and the 70% value area for the candles on screen. */
+  showProfile?: boolean;
+  onShowProfileChange?: (show: boolean) => void;
+  /** Pokes through a prior high or low on the candles on screen. */
+  showSweeps?: boolean;
+  onShowSweepsChange?: (show: boolean) => void;
+  /** Same-size prints that repeat in the last 5 minutes. */
+  showBots?: boolean;
+  onShowBotsChange?: (show: boolean) => void;
   /** Binance crowd long percent versus top-trader long percent. */
   showCrowd?: boolean;
   onShowCrowdChange?: (show: boolean) => void;

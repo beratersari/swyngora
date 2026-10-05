@@ -30,7 +30,10 @@ import type {
   LiquidationOpenLevels,
   MarketLiquidationLevels,
   MarketLongShortRatio,
+  LiquiditySweepReport,
+  MarketBotTracker,
   OrderBookHeatmap,
+  VolumeProfileReport,
 } from '@/libs/api';
 import { semanticColors } from '@/styles/tokens';
 import { parseTapeNumber, unixSeconds } from './chartTape';
@@ -665,6 +668,157 @@ export function liquidationNotionalByCandle(
     i = j;
   }
   return out;
+}
+
+const TAPE_MAX_SEC = 30 * DAY;
+const TAPE_QUANTUM_SEC = 15 * MINUTE;
+/** Spot sweeps are the last ~7 days of 15-minute candles. */
+export const SWEEP_LOOKBACK_SEC = 7 * DAY;
+
+export type ChartTapeSpan = { from: number; to: number };
+
+/**
+ * Visible candle range for the profile request.
+ * Rounded to 15 minutes and capped at 30 days so a small pan does not refetch.
+ */
+export function chartTapeSpan(intervalSec: number, fromSec: number, toSec: number): ChartTapeSpan | null {
+  if (!Number.isFinite(intervalSec) || intervalSec <= 0) return null;
+  if (!Number.isFinite(fromSec) || !Number.isFinite(toSec) || toSec <= fromSec) return null;
+  let from = fromSec;
+  let to = toSec;
+  if (to - from > TAPE_MAX_SEC) from = to - TAPE_MAX_SEC;
+  const quantum = Math.max(intervalSec, TAPE_QUANTUM_SEC);
+  from = Math.floor(from / quantum) * quantum;
+  to = Math.ceil(to / quantum) * quantum;
+  if (to - from > TAPE_MAX_SEC) from = to - TAPE_MAX_SEC;
+  if (!(to > from)) return null;
+  return { from, to };
+}
+
+export type ChartProfileLine = {
+  id: string;
+  price: number;
+  role: 'poc' | 'vaHigh' | 'vaLow';
+};
+
+export type ChartProfileRead = {
+  lines: ChartProfileLine[];
+  /** `combined` or the single venue drawn. */
+  exchange: string;
+  missing: string[];
+  definite: boolean;
+};
+
+function profilePrice(raw: string | undefined): number | null {
+  const n = parseTapeNumber(raw);
+  return n != null && n > 0 ? n : null;
+}
+
+function samePrice(a: number, b: number): boolean {
+  const scale = Math.max(Math.abs(a), Math.abs(b), 1);
+  return Math.abs(a - b) / scale < 1e-8;
+}
+
+/** POC and value-area edges. Combined only when every venue reaches the window open. */
+export function chartProfileRead(
+  report: VolumeProfileReport | null | undefined,
+  pageExchange: string,
+): ChartProfileRead {
+  const missing = report?.missing ?? [];
+  const empty: ChartProfileRead = { lines: [], exchange: '', missing, definite: false };
+  if (!report) return empty;
+  const page = pageExchange.toLowerCase();
+  let venue = report.venues?.find((row) => (row.exchange ?? '').toLowerCase() === page && !row.error);
+  let exchange = page;
+  if (report.definite && report.combined && !report.combined.error) {
+    venue = report.combined;
+    exchange = 'combined';
+  } else if (!venue) {
+    venue = report.venues?.find((row) => !row.error && (row.poc?.price || row.valueArea?.low));
+    exchange = (venue?.exchange ?? '').toLowerCase();
+  }
+  if (!venue) return empty;
+  const pocLow = profilePrice(venue.poc?.price);
+  const pocHigh = profilePrice(venue.poc?.high);
+  const poc = pocLow != null && pocHigh != null ? (pocLow + pocHigh) / 2 : pocLow;
+  const vaLow = profilePrice(venue.valueArea?.low);
+  const vaHigh = profilePrice(venue.valueArea?.high);
+  const lines: ChartProfileLine[] = [];
+  if (poc != null) lines.push({ id: 'profile-poc', price: poc, role: 'poc' });
+  if (vaHigh != null && (poc == null || !samePrice(vaHigh, poc))) {
+    lines.push({ id: 'profile-va-high', price: vaHigh, role: 'vaHigh' });
+  }
+  if (vaLow != null && (poc == null || !samePrice(vaLow, poc)) && (vaHigh == null || !samePrice(vaLow, vaHigh))) {
+    lines.push({ id: 'profile-va-low', price: vaLow, role: 'vaLow' });
+  }
+  return {
+    lines,
+    exchange,
+    missing: exchange === 'combined' ? [] : missing,
+    definite: Boolean(report.definite) && exchange === 'combined',
+  };
+}
+
+export type ChartTapeMark = {
+  time: number;
+  kind: 'sweep-high' | 'sweep-low' | 'bot-buy' | 'bot-sell';
+  count?: number;
+};
+
+function overlapsSpan(start: number, end: number, span: ChartTapeSpan | null): boolean {
+  if (!span) return true;
+  return end >= span.from && start <= span.to;
+}
+
+/** Page venue when it has a spot sweep book. Coinbase uses Binance. */
+export function chartSweepVenue(pageExchange: string): 'binance' | 'bybit' {
+  return pageExchange.toLowerCase() === 'bybit' ? 'bybit' : 'binance';
+}
+
+/** Sweep pokes whose pierce time sits in the visible span. */
+export function chartSweepMarks(
+  report: LiquiditySweepReport | null | undefined,
+  venue: string,
+  span: ChartTapeSpan | null,
+): ChartTapeMark[] {
+  const want = venue.toLowerCase();
+  const rows = report?.venues?.find((row) => (row.exchange ?? '').toLowerCase() === want)?.sweeps ?? [];
+  const out: ChartTapeMark[] = [];
+  for (const row of rows) {
+    const time = unixSeconds(row.piercedAt);
+    if (time == null || !overlapsSpan(time, time, span)) continue;
+    const side = (row.side ?? '').toLowerCase();
+    if (side !== 'high' && side !== 'low') continue;
+    out.push({ time, kind: side === 'high' ? 'sweep-high' : 'sweep-low' });
+  }
+  return out.sort((a, b) => a.time - b.time);
+}
+
+/** True when the visible range ends before the sweep lookback. */
+export function sweepSpanOutside(span: ChartTapeSpan | null, nowSec: number): boolean {
+  if (!span || !Number.isFinite(nowSec)) return false;
+  return span.to < nowSec - SWEEP_LOOKBACK_SEC;
+}
+
+/** Repeated clips whose burst overlaps the visible span. */
+export function chartBotMarks(
+  report: MarketBotTracker | null | undefined,
+  span: ChartTapeSpan | null,
+): ChartTapeMark[] {
+  const out: ChartTapeMark[] = [];
+  for (const cluster of report?.clusters ?? []) {
+    const start = unixSeconds(cluster.from);
+    const end = unixSeconds(cluster.to) ?? start;
+    if (start == null || end == null || !overlapsSpan(start, end, span)) continue;
+    const side = (cluster.side ?? '').toLowerCase();
+    if (side !== 'buy' && side !== 'sell') continue;
+    out.push({
+      time: start,
+      kind: side === 'buy' ? 'bot-buy' : 'bot-sell',
+      count: cluster.count ?? 0,
+    });
+  }
+  return out.sort((a, b) => a.time - b.time);
 }
 
 /** Compact duration for the chart caption. */

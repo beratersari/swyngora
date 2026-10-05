@@ -353,6 +353,36 @@ export type VolumeProfileReport = {
   combined?: VolumeProfileVenue;
 };
 
+export type VolumeProfileQuery = {
+  symbol: string;
+  exchange?: string;
+  window?: string;
+  startTime?: string;
+  endTime?: string;
+};
+
+export type LiquiditySweepMark = {
+  side?: string;
+  level?: string;
+  piercedAt?: string;
+  status?: string;
+};
+
+export type LiquiditySweepVenue = {
+  exchange?: string;
+  summary?: string;
+  error?: string;
+  sweeps?: LiquiditySweepMark[];
+};
+
+export type LiquiditySweepReport = {
+  symbol?: string;
+  exchange?: string;
+  summary?: string;
+  note?: string;
+  venues?: LiquiditySweepVenue[];
+};
+
 export type FlowAtPricesLevel = {
   price?: string;
   high?: string;

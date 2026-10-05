@@ -8,6 +8,12 @@ export type ChartDeskLayers = {
   showLiqLevels: boolean;
   showBook: boolean;
   showFootprint: boolean;
+  /** Point of control and the 70% value area for the candles on screen. */
+  showProfile: boolean;
+  /** Pokes through a prior high or low that fall on the candles on screen. */
+  showSweeps: boolean;
+  /** Same-size prints that repeat in the last 5 minutes. */
+  showBots: boolean;
   showCrowd: boolean;
   showOi: boolean;
   showFunding: boolean;
@@ -22,6 +28,9 @@ const LAYER_KEYS = [
   'showLiqLevels',
   'showBook',
   'showFootprint',
+  'showProfile',
+  'showSweeps',
+  'showBots',
   'showCrowd',
   'showOi',
   'showFunding',
@@ -36,6 +45,9 @@ const ALL_ON: ChartDeskLayers = {
   showLiqLevels: true,
   showBook: true,
   showFootprint: true,
+  showProfile: true,
+  showSweeps: true,
+  showBots: true,
   showCrowd: true,
   showOi: true,
   showFunding: true,
@@ -50,6 +62,9 @@ const ALL_OFF: ChartDeskLayers = {
   showLiqLevels: false,
   showBook: false,
   showFootprint: false,
+  showProfile: false,
+  showSweeps: false,
+  showBots: false,
   showCrowd: false,
   showOi: false,
   showFunding: false,
@@ -79,7 +94,15 @@ export function chartPresetLayers(preset: ChartPreset): ChartDeskLayers {
         showLiqLevels: true,
       };
     case 'orderFlow':
-      return { ...ALL_OFF, showDelta: true, showCvd: true, showFootprint: true };
+      return {
+        ...ALL_OFF,
+        showDelta: true,
+        showCvd: true,
+        showFootprint: true,
+        showProfile: true,
+        showSweeps: true,
+        showBots: true,
+      };
     case 'liquidity':
       return { ...ALL_OFF, showBook: true };
     default:

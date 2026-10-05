@@ -3,6 +3,12 @@ import { heatColor } from '@/components/organisms/LiquidationHeatmap/Liquidation
 import {
   bookHeatColumns,
   chartBookWindow,
+  chartBotMarks,
+  chartProfileRead,
+  chartSweepMarks,
+  chartSweepVenue,
+  chartTapeSpan,
+  sweepSpanOutside,
   crowdTopLines,
   crowdTopSeries,
   candleFootprintSpan,
@@ -29,6 +35,79 @@ describe('chart desk mappers', () => {
     expect(chartBookWindow(20 * 60)).toBe(30 * 60);
     expect(chartBookWindow(2 * 3600)).toBe(4 * 3600);
     expect(chartBookWindow(10 * 86400)).toBe(30 * 86400);
+  });
+
+  it('rounds the tape span to 15 minutes and caps it at 30 days', () => {
+    expect(chartTapeSpan(60, 1_000, 1_000 + 50 * 60)).toEqual({ from: 900, to: 4_500 });
+    const from = 1_700_000_000;
+    const to = from + 40 * 86400;
+    const span = chartTapeSpan(3600, from, to);
+    expect(span).not.toBeNull();
+    expect((span?.to ?? 0) - (span?.from ?? 0)).toBeLessThanOrEqual(30 * 86400);
+  });
+
+  it('draws combined profile lines only when every venue reaches the open', () => {
+    const partial = chartProfileRead(
+      {
+        definite: false,
+        missing: ['okx'],
+        venues: [{ exchange: 'binance', poc: { price: '100', high: '102' }, valueArea: { low: '90', high: '110' } }],
+      },
+      'binance',
+    );
+    expect(partial.exchange).toBe('binance');
+    expect(partial.definite).toBe(false);
+    expect(partial.lines.map((line) => line.role)).toEqual(['poc', 'vaHigh', 'vaLow']);
+    expect(partial.lines[0]?.price).toBe(101);
+
+    const combined = chartProfileRead(
+      {
+        definite: true,
+        missing: [],
+        combined: { poc: { price: '200', high: '200' }, valueArea: { low: '180', high: '220' } },
+        venues: [{ exchange: 'binance', poc: { price: '1', high: '1' }, valueArea: { low: '1', high: '2' } }],
+      },
+      'binance',
+    );
+    expect(combined.exchange).toBe('combined');
+    expect(combined.definite).toBe(true);
+    expect(combined.lines.find((line) => line.role === 'poc')?.price).toBe(200);
+  });
+
+  it('keeps sweep and bot marks that overlap the candles on screen', () => {
+    expect(chartSweepVenue('bybit')).toBe('bybit');
+    expect(chartSweepVenue('coinbase')).toBe('binance');
+    const span = { from: 1_000, to: 5_000 };
+    expect(
+      chartSweepMarks(
+        {
+          venues: [
+            {
+              exchange: 'binance',
+              sweeps: [
+                { side: 'high', piercedAt: '1970-01-01T00:30:00.000Z' },
+                { side: 'low', piercedAt: '1970-01-01T02:00:00.000Z' },
+              ],
+            },
+          ],
+        },
+        'binance',
+        span,
+      ).map((mark) => mark.kind),
+    ).toEqual(['sweep-high']);
+    expect(
+      chartBotMarks(
+        {
+          clusters: [
+            { side: 'buy', count: 4, from: '1970-01-01T00:40:00.000Z', to: '1970-01-01T00:41:00.000Z' },
+            { side: 'sell', count: 6, from: '1970-01-01T03:00:00.000Z', to: '1970-01-01T03:01:00.000Z' },
+          ],
+        },
+        span,
+      ),
+    ).toEqual([{ time: 2_400, kind: 'bot-buy', count: 4 }]);
+    expect(sweepSpanOutside({ from: 0, to: 10 }, 8 * 86400)).toBe(true);
+    expect(sweepSpanOutside(span, 5_000)).toBe(false);
   });
 
   it('picks a flow window from the visible span', () => {

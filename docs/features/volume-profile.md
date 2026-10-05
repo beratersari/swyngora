@@ -66,6 +66,7 @@ Informational only — not financial advice.
 | Service | `backend/internal/service/market/volumeprofile.go` |
 | HTTP | `GET /api/v1/market/volume-profile` |
 | MCP / AI | `get_volume_profile` |
+| Web | Coin Flow tab ladder. Overview chart draws POC and the 70% value-area edges for the candles on screen (30-day cap). Combined lines stay off until every venue reaches the window open |
 
 ## How to verify
 

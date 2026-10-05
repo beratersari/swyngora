@@ -45,6 +45,7 @@ Informational only — not financial advice.
 | Service | `backend/internal/service/market/sweep.go`, `sweep_recovery.go` |
 | HTTP | `GET /api/v1/market/liquidity-sweeps`, `GET /api/v1/market/orderbook/recovery` |
 | MCP / AI | `get_liquidity_sweeps`, `get_sweep_recovery` |
+| Web | Coin Flow tab. Overview chart marks a poke whose time sits on the candles on screen. Binance or Bybit uses that page's spot candles. Coinbase uses Binance. A view older than about 7 days has no marks |
 
 `GET /api/v1/market/orderbook/recovery?symbol=BTCUSDT` times the stored spot ladder after each sweep that has come back. `beforeNotional` is the size on the swept side just before the poke. `recoverySeconds` is how long after the return that size is at least 80% restored. `recovered=false` means it was still thin two hours later. The coin Flow tab lists the clock under Book recovery. Empty until this process has been sampling that pair.
 

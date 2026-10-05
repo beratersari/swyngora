@@ -595,7 +595,7 @@ export function CandleChartHost({
     if (!series) return;
 
     const sig = priceLines
-      .map((line) => `${line.id}:${line.price}:${line.color}:${line.title}`)
+      .map((line) => `${line.id}:${line.price}:${line.color}:${line.title}:${line.lineWidth ?? 1}`)
       .join('|');
     if (sig === lastPriceLineSigRef.current) return;
     lastPriceLineSigRef.current = sig;
@@ -617,7 +617,7 @@ export function CandleChartHost({
         series.createPriceLine({
           price: line.price,
           color: line.color,
-          lineWidth: 1,
+          lineWidth: line.lineWidth ?? 1,
           lineStyle: LineStyle.Dashed,
           axisLabelVisible: true,
           title: line.title,

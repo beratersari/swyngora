@@ -58,6 +58,7 @@ Harness reference only: `simple-frontend/detail.js` (not production Atomic/RTK U
 - Layout: Header → stats → tabs (Overview chart · Order book · Tape · Flow · Structure · Holders · Indicators · Trade)
 - Poll: ticker/supply ~15s; candles ~30s; pause when tab hidden
 - Chart starts the kline fetch immediately (does not wait for the intervals list). A 100-bar first request paints the viewport, then the 300-bar live window replaces it. EMA overlays come from loaded candles so they do not block first paint. The overview chart stays mounted when switching detail tabs.
+- Order-flow layers also draw the point of control and 70% value area for the visible candles, sweep arrows from the last ~7 days of 15-minute spot candles, and squares for repeated print sizes in the last 5 minutes. Those marks follow the visible range. Equities omit them.
 - Partial errors per section; supply 404 is soft
 - After the venue halt, leftover real klines stay on the main chart. Later movement is a labeled **After delist** panel (other venue or CoinGecko), not invented home-venue bars. Announce/halt vertical lines sit on the **containing** candle for the selected interval (1m through 1M), not the nearest bar open.
 - Delist matching uses `rtkCurrent` on the current venue’s schedule so a previous exchange’s halt is not applied while the new schedule is in flight.

@@ -91,6 +91,8 @@ export type CandleChartPriceLine = {
   price: number;
   color: string;
   title: string;
+  /** 1 is the value-area hairline. 2 is the point of control. */
+  lineWidth?: 1 | 2;
 };
 
 /** Chart markers (pump/dump events) aligned to bar times (UTC seconds). */

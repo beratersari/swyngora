@@ -27,6 +27,9 @@ describe('chart presets', () => {
       showDelta: true,
       showCvd: true,
       showFootprint: true,
+      showProfile: true,
+      showSweeps: true,
+      showBots: true,
       showOi: false,
       showBook: false,
     });
@@ -35,6 +38,9 @@ describe('chart presets', () => {
       showDelta: false,
       showCvd: false,
       showFootprint: false,
+      showProfile: false,
+      showSweeps: false,
+      showBots: false,
       showBook: true,
     });
     expect(matchingChartPreset(chartPresetLayers('all'))).toBe('all');
