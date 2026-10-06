@@ -21,6 +21,47 @@ export type ChartLiqLevel = {
 
 const LIQ_LEVERAGES = [100, 50, 25, 10] as const;
 
+/** Matches backend cvdBarPriceFlatPct. A smaller move does not close a run. */
+const CVD_BAR_FLAT_PCT = 0.05;
+
+export type CvdChartSplit = {
+  time: number;
+  kind: 'price_up_cvd_down' | 'price_down_cvd_up';
+  duration: string;
+  durationSeconds: number;
+};
+
+function chartSplit(venue: {
+  divergence?: { kind?: string; since?: string; lastAt?: string; duration?: string; durationSeconds?: number };
+  points?: { time?: string; delta?: string; priceChangePct?: string }[];
+} | undefined): CvdChartSplit | null {
+  const kind = venue?.divergence?.kind;
+  if (kind !== 'price_up_cvd_down' && kind !== 'price_down_cvd_up') return null;
+  const time = unixSeconds(venue?.divergence?.since);
+  const durationSeconds = venue?.divergence?.durationSeconds ?? 0;
+  if (time == null || durationSeconds <= 0) return null;
+  const lastAt = unixSeconds(venue?.divergence?.lastAt) ?? time + durationSeconds;
+  for (const point of venue?.points ?? []) {
+    const at = unixSeconds(point.time);
+    if (at == null || at <= lastAt) continue;
+    if (!cvdPointQuiet(point)) return null;
+  }
+  return {
+    time,
+    kind,
+    duration: venue?.divergence?.duration ?? '',
+    durationSeconds,
+  };
+}
+
+/** A flat price or a zero delta does not end the run. An agreeing bar does. */
+function cvdPointQuiet(point: { delta?: string; priceChangePct?: string }): boolean {
+  const pct = parseTapeNumber(point.priceChangePct);
+  const delta = parseTapeNumber(point.delta);
+  if (pct == null || delta == null) return false;
+  return Math.abs(pct) < CVD_BAR_FLAT_PCT || delta === 0;
+}
+
 /** Parse a signed API quantity (`+1.5`, `-2`, `0`). */
 export function parseTapeNumber(raw: string | number | null | undefined): number | null {
   if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
@@ -79,6 +120,8 @@ export function futuresCvdSeries(
   bar: string;
   source: string;
   withheld: string[];
+  /** Current run on the venue whose line is drawn. Absent when price and CVD agree. */
+  split: CvdChartSplit | null;
 } {
   const want = pageExchange.trim().toLowerCase();
   const page = report?.venues?.find(
@@ -129,6 +172,7 @@ export function futuresCvdSeries(
     bar: report?.bar ?? '5m',
     source,
     withheld,
+    split: chartSplit(venue),
   };
 }
 

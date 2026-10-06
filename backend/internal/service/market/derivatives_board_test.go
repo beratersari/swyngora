@@ -3,6 +3,7 @@ package market
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
 	"time"
 
@@ -237,6 +238,9 @@ func TestGetDerivativesBoard_ScanColumnsFromFeeds(t *testing.T) {
 	if !row.CVDDayDefinite || row.CVDDay != "+72" {
 		t.Fatalf("cvd %s definite %v", row.CVDDay, row.CVDDayDefinite)
 	}
+	if row.CVDSplitDefinite || row.CVDSplit != "" {
+		t.Fatalf("split without a price leaked %q", row.CVDSplit)
+	}
 	if !row.PrintDefinite || row.PrintChangePct != "+100" {
 		t.Fatalf("print %s", row.PrintChangePct)
 	}
@@ -252,6 +256,123 @@ func TestGetDerivativesBoard_BadExchange(t *testing.T) {
 	svc := New(nil, nil)
 	if _, err := svc.GetDerivativesBoard(context.Background(), "coinbase", 5); !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("%v", err)
+	}
+}
+
+type boardCandles struct {
+	bars []domain.Candle
+}
+
+func (f boardCandles) GetCandles(context.Context, domain.CandleQuery) ([]domain.Candle, error) {
+	return f.bars, nil
+}
+
+func (boardCandles) GetTicker24h(context.Context, string) (*domain.Ticker24h, error) {
+	return nil, errors.New("unused")
+}
+
+func (boardCandles) GetOrderBook(context.Context, domain.OrderBookQuery) (*domain.RawOrderBook, error) {
+	return nil, errors.New("unused")
+}
+
+func (boardCandles) ListSpotMarkets(context.Context) ([]domain.SpotMarket, error) {
+	return nil, errors.New("unused")
+}
+
+func (boardCandles) ListProductTags(context.Context) ([]string, error) {
+	return nil, errors.New("unused")
+}
+
+func (boardCandles) TagsByBase(context.Context) (map[string][]string, error) {
+	return nil, errors.New("unused")
+}
+
+func TestGetDerivativesBoard_CVDSplitFromTape(t *testing.T) {
+	now := time.Now().UTC()
+	day := now.Truncate(24 * time.Hour)
+	buckets := []domain.TakerBucket{
+		{Start: now.Add(-domain.DefaultCVDLookback), BuyNotional: 1, SellNotional: 1},
+		{Start: day, BuyNotional: 1, SellNotional: 1},
+	}
+	bars := []domain.Candle{
+		{OpenTime: now.Add(-domain.DefaultCVDLookback), Close: "100"},
+		{OpenTime: day, Close: "100"},
+	}
+	for i := 4; i >= 1; i-- {
+		at := now.Add(-time.Duration(i) * 5 * time.Minute).Truncate(5 * time.Minute)
+		buckets = append(buckets, domain.TakerBucket{Start: at, SellNotional: 40})
+		bars = append(bars, domain.Candle{OpenTime: at, Close: strconv.FormatFloat(100+float64(5-i)*0.4, 'f', 2, 64)})
+	}
+	buckets = append(buckets, domain.TakerBucket{Start: now.Add(-30 * time.Second).Truncate(time.Minute), SellNotional: 20})
+	tape := boardTape{buckets: buckets}
+	ports := map[domain.Exchange]domain.TakerFlowPort{
+		domain.ExchangeBinance: tape,
+		domain.ExchangeBybit:   tape,
+		domain.ExchangeOKX:     tape,
+	}
+	svc := boardService(now, false).WithTakerFlow(ports)
+	short, err := svc.GetDerivativesBoard(context.Background(), "binance", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if short.Coins[0].CVDSplitDefinite {
+		t.Fatal("a price-less tape must not mark a split")
+	}
+
+	priced := New(boardCandles{bars: bars}, nil).
+		WithOpenInterest(svc.oi).
+		WithFundingRate(svc.funding).
+		WithTakerFlow(ports)
+	got, err := priced.GetDerivativesBoard(context.Background(), "binance", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := got.Coins[0]
+	if !row.CVDSplitDefinite || row.CVDSplit != domain.CVDDivPriceUpCVDDown || row.CVDSplitSeconds == "" || row.CVDSplitSeconds == "0" {
+		t.Fatalf("binance split %s %s definite %v", row.CVDSplit, row.CVDSplitSeconds, row.CVDSplitDefinite)
+	}
+
+	all, err := priced.GetDerivativesBoard(context.Background(), "all", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	combined := all.Coins[0]
+	if !combined.CVDSplitDefinite || combined.CVDSplit != domain.CVDDivPriceUpCVDDown {
+		t.Fatalf("combined %s definite %v", combined.CVDSplit, combined.CVDSplitDefinite)
+	}
+
+	dayOnly := []domain.TakerBucket{{Start: day, BuyNotional: 1, SellNotional: 1}}
+	for i := 4; i >= 1; i-- {
+		at := now.Add(-time.Duration(i) * 5 * time.Minute).Truncate(5 * time.Minute)
+		dayOnly = append(dayOnly, domain.TakerBucket{Start: at, SellNotional: 40})
+	}
+	dayOnly = append(dayOnly, domain.TakerBucket{Start: now.Add(-30 * time.Second).Truncate(time.Minute), SellNotional: 20})
+	partial := boardTape{buckets: dayOnly}
+	partialPorts := map[domain.Exchange]domain.TakerFlowPort{
+		domain.ExchangeBinance: partial,
+		domain.ExchangeBybit:   partial,
+		domain.ExchangeOKX:     partial,
+	}
+	held, err := New(boardCandles{bars: bars}, nil).
+		WithOpenInterest(svc.oi).
+		WithFundingRate(svc.funding).
+		WithTakerFlow(partialPorts).
+		GetDerivativesBoard(context.Background(), "all", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if held.Coins[0].CVDSplitDefinite || held.Coins[0].CVDSplit != "" {
+		t.Fatalf("short combined leaked %q", held.Coins[0].CVDSplit)
+	}
+	var binanceKind, binanceStatus string
+	for _, venue := range held.Coins[0].Venues {
+		if venue.Exchange == "binance" {
+			binanceKind = venue.CVDSplit
+			binanceStatus = venue.CVDSplitStatus
+		}
+	}
+	if binanceStatus != domain.VenueReadFresh || binanceKind != domain.CVDDivPriceUpCVDDown {
+		t.Fatalf("binance row %s %s", binanceStatus, binanceKind)
 	}
 }
 

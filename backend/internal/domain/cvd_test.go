@@ -552,3 +552,129 @@ func TestBuildCVDSeriesSpan_KeepsDaysBeyond24h(t *testing.T) {
 		t.Fatalf("24h points %+v", short.Points)
 	}
 }
+
+func TestVenueCVDSplit_CurrentRun(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	day := now.Truncate(24 * time.Hour)
+	buckets := []TakerBucket{{Start: day, BuyNotional: 1, SellNotional: 1}}
+	prices := []CVDPrice{{Time: day, Close: 100}}
+	for i, at := range []time.Time{
+		now.Add(-20 * time.Minute),
+		now.Add(-15 * time.Minute),
+		now.Add(-10 * time.Minute),
+		now.Add(-5 * time.Minute),
+	} {
+		buckets = append(buckets, TakerBucket{Start: at, BuyNotional: 0, SellNotional: 50})
+		prices = append(prices, CVDPrice{Time: at, Close: 101 + float64(i)*0.3})
+	}
+	split, series := VenueCVDSplit(ExchangeBinance, "BTCUSDT", buckets, prices, now)
+	if !split.OK || split.Kind != CVDDivPriceUpCVDDown || split.Seconds <= 0 || split.Since.IsZero() {
+		t.Fatalf("split %+v divergence %+v", split, series.Divergence)
+	}
+	if split.Duration == "" || !split.At.Equal(now.Add(-5*time.Minute)) {
+		t.Fatalf("duration %q at %s", split.Duration, split.At)
+	}
+}
+
+func TestVenueCVDSplit_LaterAgreementIsInLine(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	day := now.Truncate(24 * time.Hour)
+	buckets := []TakerBucket{{Start: day, BuyNotional: 1, SellNotional: 1}}
+	prices := []CVDPrice{{Time: day, Close: 100}}
+	for _, step := range []struct {
+		ago   time.Duration
+		buy   float64
+		sell  float64
+		close float64
+	}{
+		{30 * time.Minute, 0, 50, 101},
+		{25 * time.Minute, 0, 50, 101.4},
+		{10 * time.Minute, 50, 0, 102.2},
+		{5 * time.Minute, 40, 0, 102.8},
+	} {
+		at := now.Add(-step.ago)
+		buckets = append(buckets, TakerBucket{Start: at, BuyNotional: step.buy, SellNotional: step.sell})
+		prices = append(prices, CVDPrice{Time: at, Close: step.close})
+	}
+	split, series := VenueCVDSplit(ExchangeBinance, "BTCUSDT", buckets, prices, now)
+	if series.Divergence.Kind != CVDDivPriceUpCVDDown || series.Divergence.Since.IsZero() {
+		t.Fatalf("latest episode should stay on the series, got %+v", series.Divergence)
+	}
+	if !split.OK || split.Kind != CVDSplitAgrees || split.Seconds != 0 || !split.Since.IsZero() {
+		t.Fatalf("closed run leaked %+v", split)
+	}
+}
+
+func TestVenueCVDSplit_TrailingQuietKeepsTheRun(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	day := now.Truncate(24 * time.Hour)
+	buckets := []TakerBucket{{Start: day, BuyNotional: 1, SellNotional: 1}}
+	prices := []CVDPrice{{Time: day, Close: 100}}
+	for _, step := range []struct {
+		ago   time.Duration
+		buy   float64
+		sell  float64
+		close float64
+	}{
+		{20 * time.Minute, 0, 50, 101},
+		{15 * time.Minute, 0, 50, 101.4},
+		{10 * time.Minute, 1, 1, 101.4},
+		{5 * time.Minute, 1, 1, 101.4},
+	} {
+		at := now.Add(-step.ago)
+		buckets = append(buckets, TakerBucket{Start: at, BuyNotional: step.buy, SellNotional: step.sell})
+		prices = append(prices, CVDPrice{Time: at, Close: step.close})
+	}
+	split, _ := VenueCVDSplit(ExchangeBinance, "BTCUSDT", buckets, prices, now)
+	if !split.OK || split.Kind != CVDDivPriceUpCVDDown || split.Seconds <= 0 || split.Since.IsZero() {
+		t.Fatalf("quiet tail closed the run %+v", split)
+	}
+}
+
+func TestVenueCVDSplit_WithholdsWhenTapeMissesDayOpen(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	start := now.Truncate(24 * time.Hour).Add(time.Hour)
+	var buckets []TakerBucket
+	var prices []CVDPrice
+	for i := 0; i < 4; i++ {
+		at := start.Add(time.Duration(i) * 5 * time.Minute)
+		buckets = append(buckets, TakerBucket{Start: at, SellNotional: 50})
+		prices = append(prices, CVDPrice{Time: at, Close: 100 + float64(i)})
+	}
+	split, _ := VenueCVDSplit(ExchangeBybit, "BTCUSDT", buckets, prices, now)
+	if split.OK || split.Kind != "" {
+		t.Fatalf("late tape leaked %+v", split)
+	}
+}
+
+func TestVenueCVDSplit_WindowFallbackIsInLine(t *testing.T) {
+	now := time.Date(2026, 9, 29, 4, 0, 0, 0, time.UTC)
+	day := now.Truncate(24 * time.Hour)
+	var buckets []TakerBucket
+	var prices []CVDPrice
+	for i := 0; i < 48; i++ {
+		at := day.Add(time.Duration(i) * 5 * time.Minute)
+		buckets = append(buckets, TakerBucket{Start: at, SellNotional: 10})
+		prices = append(prices, CVDPrice{Time: at, Close: 100 + 0.02*float64(i)})
+	}
+	split, series := VenueCVDSplit(ExchangeBinance, "BTCUSDT", buckets, prices, now)
+	if series.Divergence.Kind != CVDDivPriceUpCVDDown || !series.Divergence.Since.IsZero() {
+		t.Fatalf("expected a window fallback, got %+v", series.Divergence)
+	}
+	if !split.OK || split.Kind != CVDSplitAgrees || split.Seconds != 0 || !split.Since.IsZero() {
+		t.Fatalf("split %+v", split)
+	}
+}
+
+func TestVenueCVDSplit_NoPriceStaysBlank(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	day := now.Truncate(24 * time.Hour)
+	buckets := []TakerBucket{
+		{Start: day, BuyNotional: 10, SellNotional: 1},
+		{Start: now.Add(-time.Minute), BuyNotional: 4, SellNotional: 1},
+	}
+	split, _ := VenueCVDSplit(ExchangeOKX, "BTCUSDT", buckets, nil, now)
+	if split.OK || split.Kind != "" {
+		t.Fatalf("price-less tape leaked %+v", split)
+	}
+}

@@ -1,6 +1,6 @@
 {
   "title": "Derivatives",
-  "subtitle": "Mark, funding, open interest, crowd versus top, day CVD, print size, order count, unusual readings, liquidation heat, bid share, and 24-hour liquidations for the liquid USDT perpetuals.",
+  "subtitle": "Mark, funding, open interest, crowd versus top, day CVD, price versus CVD, print size, order count, unusual readings, liquidation heat, bid share, and 24-hour liquidations for the liquid USDT perpetuals.",
   "exchange": "Venues",
   "allVenues": "All venues",
   "viewTable": "Table",
@@ -21,6 +21,10 @@
   "gap": "Top − crowd",
   "gapScope": "Top-trader long percent minus the crowd on {{venues}}.",
   "cvdDay": "CVD day",
+  "cvdSplit": "Price vs CVD",
+  "cvdSplitUp": "Price up, CVD down",
+  "cvdSplitDown": "Price down, CVD up",
+  "cvdSplitAgrees": "In line",
   "printSize": "Print size 15m",
   "orderCount": "Order count 15m",
   "orderTitle": "{{buys}} buys, {{sells}} sells",

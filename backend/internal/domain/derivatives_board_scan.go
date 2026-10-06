@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -32,12 +33,13 @@ func DayCVDDelta(buckets []TakerBucket, now, started time.Time) (delta float64, 
 	return delta, newest, true
 }
 
-func applyBoardScan(row *DerivativesCoin, expected []Exchange, byEx map[Exchange]DerivativesVenueInput, liqCover MarketCoverage, now time.Time) {
+func applyBoardScan(row *DerivativesCoin, expected []Exchange, in DerivativesCoinInput, byEx map[Exchange]DerivativesVenueInput, liqCover MarketCoverage, now time.Time) {
 	if row == nil {
 		return
 	}
 	applyBoardGap(row, expected, byEx)
 	applyBoardCVD(row, expected, byEx, now)
+	applyBoardCVDSplit(row, expected, in, byEx, now)
 	applyBoardPrint(row, expected, byEx, now)
 	applyBoardOrderCount(row, expected, byEx, now)
 	applyBoardLiqHeat(row, expected, byEx, liqCover)
@@ -155,6 +157,42 @@ func applyBoardCVD(row *DerivativesCoin, expected []Exchange, byEx map[Exchange]
 	}
 	row.CVDDayDefinite = true
 	row.CVDDay = FormatSignedQty(sum)
+}
+
+func applyBoardCVDSplit(row *DerivativesCoin, expected []Exchange, in DerivativesCoinInput, byEx map[Exchange]DerivativesVenueInput, now time.Time) {
+	samples := make([]VenueSample, 0, len(expected))
+	for _, ex := range expected {
+		v := byEx[ex]
+		if !v.CVDSplitOK || v.CVDSplitKind == "" {
+			continue
+		}
+		samples = append(samples, VenueSample{Exchange: ex, OK: true, At: v.CVDSplitAt})
+	}
+	cover := CoverVenues(expected, samples, now, VenueTapeMaxAge)
+	status := indexVenueReads(cover)
+	for _, ex := range expected {
+		v := byEx[ex]
+		st := status[ex]
+		if cell := boardVenueRow(row, ex); cell != nil {
+			cell.CVDSplitStatus = st
+			if st == VenueReadFresh {
+				cell.CVDSplit = v.CVDSplitKind
+				cell.CVDSplitDuration = v.CVDSplitDuration
+				cell.CVDSplitSeconds = formatSplitSeconds(v.CVDSplitSeconds)
+			}
+		}
+	}
+	if !cover.Complete || !in.CVDSplitOK || in.CVDSplitKind == "" {
+		return
+	}
+	row.CVDSplitDefinite = true
+	row.CVDSplit = in.CVDSplitKind
+	row.CVDSplitDuration = in.CVDSplitDuration
+	row.CVDSplitSeconds = formatSplitSeconds(in.CVDSplitSeconds)
+}
+
+func formatSplitSeconds(n int) string {
+	return strconv.Itoa(n)
 }
 
 func applyBoardPrint(row *DerivativesCoin, expected []Exchange, byEx map[Exchange]DerivativesVenueInput, now time.Time) {

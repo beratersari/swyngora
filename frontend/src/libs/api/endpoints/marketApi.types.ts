@@ -659,6 +659,11 @@ export type DerivativesVenue = {
   gapStatus?: string;
   cvdDay?: string;
   cvdStatus?: string;
+  /** price_up_cvd_down | price_down_cvd_up | agrees */
+  cvdSplit?: string;
+  cvdSplitDuration?: string;
+  cvdSplitSeconds?: string;
+  cvdSplitStatus?: string;
   printChangePct?: string;
   printStatus?: string;
   orderRatio?: string;
@@ -704,6 +709,12 @@ export type DerivativesCoin = {
   gapScope?: string;
   cvdDay?: string;
   cvdDayDefinite?: boolean;
+  /** price_up_cvd_down | price_down_cvd_up | agrees */
+  cvdSplit?: string;
+  cvdSplitDuration?: string;
+  /** Signed seconds. Price up / CVD down is positive. Agrees is 0. */
+  cvdSplitSeconds?: string;
+  cvdSplitDefinite?: boolean;
   printChangePct?: string;
   printRead?: string;
   printDefinite?: boolean;
@@ -957,8 +968,25 @@ export type MarketCvdPoint = {
   price?: string;
   delta?: string;
   cvd?: string;
+  /** Signed percent versus the previous bar. */
+  priceChangePct?: string;
   buyNotional?: string;
   sellNotional?: string;
+  /** price_up_cvd_down | price_down_cvd_up when this bar disagrees. */
+  divergence?: string;
+};
+
+export type MarketCvdDivergence = {
+  /** price_up_cvd_down | price_down_cvd_up. Empty when the bars agree. */
+  kind?: string;
+  since?: string;
+  /** End of the latest opposite episode. Later agreeing bars mean it is not current. */
+  lastAt?: string;
+  duration?: string;
+  durationSeconds?: number;
+  summary?: string;
+  priceMovePct?: string;
+  cvdMove?: string;
 };
 
 export type MarketCvdVenue = {
@@ -968,6 +996,8 @@ export type MarketCvdVenue = {
   summary?: string;
   error?: string;
   complete?: boolean;
+  /** Current run. A 4-hour window fallback has no since and is not a run. */
+  divergence?: MarketCvdDivergence;
   points?: MarketCvdPoint[];
   windows?: { window?: string; cvdChange?: string; label?: string; complete?: boolean }[];
   anchors?: {

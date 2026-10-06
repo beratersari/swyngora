@@ -30,39 +30,43 @@ func (h *MarketHandler) GetDerivativesBoard(w http.ResponseWriter, r *http.Reque
 }
 
 type derivativesVenueDTO struct {
-	Exchange        string `json:"exchange"`
-	OIValue         string `json:"oiValue,omitempty"`
-	OIStatus        string `json:"oiStatus"`
-	FundingRate     string `json:"fundingRate,omitempty"`
-	FundingRatePct  string `json:"fundingRatePct,omitempty"`
-	FundingPayer    string `json:"fundingPayer,omitempty"`
-	FundingStatus   string `json:"fundingStatus"`
-	MarkPrice       string `json:"markPrice,omitempty"`
-	LiqLong         string `json:"liqLong,omitempty"`
-	LiqShort        string `json:"liqShort,omitempty"`
-	LiqStatus       string `json:"liqStatus"`
-	LongPct         string `json:"longPct,omitempty"`
-	LongStatus      string `json:"longStatus"`
-	TakerBuyPct     string `json:"takerBuyPct,omitempty"`
-	TakerStatus     string `json:"takerStatus"`
-	GapPct          string `json:"gapPct,omitempty"`
-	GapStatus       string `json:"gapStatus,omitempty"`
-	CVDDay          string `json:"cvdDay,omitempty"`
-	CVDStatus       string `json:"cvdStatus,omitempty"`
-	PrintChangePct  string `json:"printChangePct,omitempty"`
-	PrintStatus     string `json:"printStatus,omitempty"`
-	OrderRatio      string `json:"orderRatio,omitempty"`
-	OrderLean       string `json:"orderLean,omitempty"`
-	OrderBuy        int    `json:"orderBuy,omitempty"`
-	OrderSell       int    `json:"orderSell,omitempty"`
-	OrderStatus     string `json:"orderStatus,omitempty"`
-	UnusualMetric   string `json:"unusualMetric,omitempty"`
-	UnusualBand     string `json:"unusualBand,omitempty"`
-	UnusualDistance string `json:"unusualDistance,omitempty"`
-	LiqGrade        string `json:"liqGrade,omitempty"`
-	LiqHeatStatus   string `json:"liqHeatStatus,omitempty"`
-	BidPct          string `json:"bidPct,omitempty"`
-	BookStatus      string `json:"bookStatus,omitempty"`
+	Exchange         string `json:"exchange"`
+	OIValue          string `json:"oiValue,omitempty"`
+	OIStatus         string `json:"oiStatus"`
+	FundingRate      string `json:"fundingRate,omitempty"`
+	FundingRatePct   string `json:"fundingRatePct,omitempty"`
+	FundingPayer     string `json:"fundingPayer,omitempty"`
+	FundingStatus    string `json:"fundingStatus"`
+	MarkPrice        string `json:"markPrice,omitempty"`
+	LiqLong          string `json:"liqLong,omitempty"`
+	LiqShort         string `json:"liqShort,omitempty"`
+	LiqStatus        string `json:"liqStatus"`
+	LongPct          string `json:"longPct,omitempty"`
+	LongStatus       string `json:"longStatus"`
+	TakerBuyPct      string `json:"takerBuyPct,omitempty"`
+	TakerStatus      string `json:"takerStatus"`
+	GapPct           string `json:"gapPct,omitempty"`
+	GapStatus        string `json:"gapStatus,omitempty"`
+	CVDDay           string `json:"cvdDay,omitempty"`
+	CVDStatus        string `json:"cvdStatus,omitempty"`
+	CVDSplit         string `json:"cvdSplit,omitempty"`
+	CVDSplitDuration string `json:"cvdSplitDuration,omitempty"`
+	CVDSplitSeconds  string `json:"cvdSplitSeconds,omitempty"`
+	CVDSplitStatus   string `json:"cvdSplitStatus,omitempty"`
+	PrintChangePct   string `json:"printChangePct,omitempty"`
+	PrintStatus      string `json:"printStatus,omitempty"`
+	OrderRatio       string `json:"orderRatio,omitempty"`
+	OrderLean        string `json:"orderLean,omitempty"`
+	OrderBuy         int    `json:"orderBuy,omitempty"`
+	OrderSell        int    `json:"orderSell,omitempty"`
+	OrderStatus      string `json:"orderStatus,omitempty"`
+	UnusualMetric    string `json:"unusualMetric,omitempty"`
+	UnusualBand      string `json:"unusualBand,omitempty"`
+	UnusualDistance  string `json:"unusualDistance,omitempty"`
+	LiqGrade         string `json:"liqGrade,omitempty"`
+	LiqHeatStatus    string `json:"liqHeatStatus,omitempty"`
+	BidPct           string `json:"bidPct,omitempty"`
+	BookStatus       string `json:"bookStatus,omitempty"`
 }
 
 type derivativesCoinDTO struct {
@@ -95,6 +99,10 @@ type derivativesCoinDTO struct {
 	GapScope             string                `json:"gapScope,omitempty"`
 	CVDDay               string                `json:"cvdDay,omitempty"`
 	CVDDayDefinite       bool                  `json:"cvdDayDefinite"`
+	CVDSplit             string                `json:"cvdSplit,omitempty"`
+	CVDSplitDuration     string                `json:"cvdSplitDuration,omitempty"`
+	CVDSplitSeconds      string                `json:"cvdSplitSeconds,omitempty"`
+	CVDSplitDefinite     bool                  `json:"cvdSplitDefinite"`
 	PrintChangePct       string                `json:"printChangePct,omitempty"`
 	PrintRead            string                `json:"printRead,omitempty"`
 	PrintDefinite        bool                  `json:"printDefinite"`
@@ -168,6 +176,7 @@ func derivativesBoardToDTO(got *domain.DerivativesBoard) derivativesBoardRespons
 				TakerBuyPct: v.TakerBuyPct, TakerStatus: v.TakerStatus,
 				GapPct: v.GapPct, GapStatus: v.GapStatus,
 				CVDDay: v.CVDDay, CVDStatus: v.CVDStatus,
+				CVDSplit: v.CVDSplit, CVDSplitDuration: v.CVDSplitDuration, CVDSplitSeconds: v.CVDSplitSeconds, CVDSplitStatus: v.CVDSplitStatus,
 				PrintChangePct: v.PrintChangePct, PrintStatus: v.PrintStatus,
 				OrderRatio: v.OrderRatio, OrderLean: v.OrderLean, OrderBuy: v.OrderBuy, OrderSell: v.OrderSell, OrderStatus: v.OrderStatus,
 				UnusualMetric: v.UnusualMetric, UnusualBand: v.UnusualBand, UnusualDistance: v.UnusualDistance,
@@ -187,6 +196,7 @@ func derivativesBoardToDTO(got *domain.DerivativesBoard) derivativesBoardRespons
 			TakerBuyPct: c.TakerBuyPct, TakerDefinite: c.TakerDefinite,
 			GapPct: c.GapPct, GapDefinite: c.GapDefinite, GapScope: c.GapScope,
 			CVDDay: c.CVDDay, CVDDayDefinite: c.CVDDayDefinite,
+			CVDSplit: c.CVDSplit, CVDSplitDuration: c.CVDSplitDuration, CVDSplitSeconds: c.CVDSplitSeconds, CVDSplitDefinite: c.CVDSplitDefinite,
 			PrintChangePct: c.PrintChangePct, PrintRead: c.PrintRead, PrintDefinite: c.PrintDefinite,
 			OrderRatio: c.OrderRatio, OrderLean: c.OrderLean, OrderBuy: c.OrderBuy, OrderSell: c.OrderSell, OrderDefinite: c.OrderDefinite,
 			UnusualMetric: c.UnusualMetric, UnusualBand: c.UnusualBand, UnusualDistance: c.UnusualDistance,

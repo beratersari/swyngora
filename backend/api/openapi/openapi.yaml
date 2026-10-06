@@ -11268,9 +11268,26 @@ components:
         kind: { type: string, enum: [more_buy, more_sell, flipped, stable] }
         complete: { type: boolean }
         sampleTime: { type: string, format: date-time }
+    MarketCvdDivergence:
+      type: object
+      description: |
+        Latest run of consecutive bars where price and CVD disagree.
+        kind is empty when no such run is in view. A later bar where price
+        and CVD move the same way means this episode is no longer current.
+        A 4-hour window that disagrees does not set since; that is not a current run.
+      properties:
+        kind:
+          type: string
+          enum: [price_up_cvd_down, price_down_cvd_up]
+        since: { type: string, format: date-time, description: Start of the current consecutive run. }
+        duration: { type: string, description: How long the current run has lasted, for example 35m. }
+        durationSeconds: { type: integer }
+        summary: { type: string }
+        priceMovePct: { type: string }
+        cvdMove: { type: string }
     MarketCvdPoint:
       type: object
-      description: One 5-minute aggressive buy-minus-sell bar
+      description: One aggressive buy-minus-sell bar. The bar size follows the requested range.
       properties:
         time: { type: string, format: date-time }
         price: { type: string }
@@ -11278,6 +11295,10 @@ components:
         cvd: { type: string, description: Running sum from the start of the series }
         buyNotional: { type: string }
         sellNotional: { type: string }
+        divergence:
+          type: string
+          enum: [price_up_cvd_down, price_down_cvd_up]
+          description: Set when this bar's price and delta move opposite ways.
     MarketCvdAnchor:
       type: object
       properties:
@@ -11293,6 +11314,7 @@ components:
         lastPrice: { type: string }
         summary: { type: string }
         complete: { type: boolean }
+        divergence: { $ref: '#/components/schemas/MarketCvdDivergence' }
         points:
           type: array
           items: { $ref: '#/components/schemas/MarketCvdPoint' }
@@ -11902,6 +11924,19 @@ components:
           type: string
           description: Aggressive buy minus sell since 00:00 UTC. Omitted unless every expected venue's tape reaches that open and is fresh.
         cvdDayDefinite: { type: boolean }
+        cvdSplit:
+          type: string
+          enum: [price_up_cvd_down, price_down_cvd_up, agrees]
+          description: |
+            Current run of price against CVD, or agrees when the tape is definite and there is no current run.
+            Omitted unless every expected venue reaches 00:00 UTC, the newest minute is fresh, the newest bar has a price, and the 24h combined tape is complete.
+        cvdSplitDuration:
+          type: string
+          description: How long the current run has lasted. Empty when cvdSplit is agrees.
+        cvdSplitSeconds:
+          type: string
+          description: Signed seconds. Price up / CVD down is positive. Agrees is 0. Omitted unless cvdSplitDefinite.
+        cvdSplitDefinite: { type: boolean }
         printChangePct:
           type: string
           description: Signed percent change of the 15-minute average print size versus the prior 15 minutes.
@@ -11974,6 +12009,12 @@ components:
         gapStatus: { type: string, description: fresh | stale | missing | unsupported }
         cvdDay: { type: string }
         cvdStatus: { type: string, description: fresh | stale | missing }
+        cvdSplit:
+          type: string
+          enum: [price_up_cvd_down, price_down_cvd_up, agrees]
+        cvdSplitDuration: { type: string }
+        cvdSplitSeconds: { type: string, description: Signed seconds for this venue's current run. }
+        cvdSplitStatus: { type: string, description: fresh | stale | missing }
         printChangePct: { type: string }
         printStatus: { type: string, description: fresh | stale | missing }
         orderRatio: { type: string }

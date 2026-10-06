@@ -12,6 +12,7 @@ import {
   formatRecordedSpan,
   fundingText,
   orderCountText,
+  cvdSplitText,
   recordedSummary,
   recordedTitle,
   isBoardSortKey,
@@ -36,6 +37,7 @@ const NUMERIC_KEYS: BoardSortKey[] = [
   'takerBuyPct',
   'gapPct',
   'cvdDay',
+  'cvdSplit',
   'printChange',
   'orderCount',
   'unusual',
@@ -256,6 +258,20 @@ export function DerivativesBoard({ exchange, coins, loading }: DerivativesBoardP
       dataIndex: 'cvdDay',
       ...sortable('cvdDay'),
       render: (_value, row) => definiteText(row.cvdDayDefinite, row.cvdDay, signedAmount),
+    },
+    {
+      title: t('derivatives:cvdSplit'),
+      dataIndex: 'cvdSplit',
+      ...sortable('cvdSplit'),
+      render: (_value, row) => (
+        <Text variant="caption">
+          {cvdSplitText(row, {
+            up: t('derivatives:cvdSplitUp'),
+            down: t('derivatives:cvdSplitDown'),
+            agrees: t('derivatives:cvdSplitAgrees'),
+          })}
+        </Text>
+      ),
     },
     {
       title: t('derivatives:printSize'),

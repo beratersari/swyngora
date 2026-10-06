@@ -58,6 +58,34 @@ describe('derivatives heatmap', () => {
     expect(cvd[1]?.strength).toBeCloseTo(0.1);
   });
 
+  it('paints a price-versus-CVD run by signed minutes and leaves agreement neutral', () => {
+    const cells = heatmapCells('all', [
+      coin({ cvdSplitDefinite: false, cvdSplit: 'price_up_cvd_down', cvdSplitSeconds: '7200', cvdSplitDuration: '2h' }),
+      coin({
+        symbol: 'ETHUSDT',
+        base: 'ETH',
+        cvdSplitDefinite: true,
+        cvdSplit: 'price_up_cvd_down',
+        cvdSplitSeconds: '3600',
+        cvdSplitDuration: '1h',
+      }),
+      coin({
+        symbol: 'SOLUSDT',
+        base: 'SOL',
+        cvdSplitDefinite: true,
+        cvdSplit: 'price_down_cvd_up',
+        cvdSplitSeconds: '-600',
+        cvdSplitDuration: '10m',
+      }),
+      coin({ symbol: 'XRPUSDT', base: 'XRP', cvdSplitDefinite: true, cvdSplit: 'agrees', cvdSplitSeconds: '0' }),
+    ], 'cvdSplit');
+    expect(cells.map((cell) => cell.label)).toEqual(['ETH', 'SOL', 'XRP', 'BTC']);
+    expect(cells[0]).toMatchObject({ tone: 'up', strength: 1, text: '+1h' });
+    expect(cells[1]).toMatchObject({ tone: 'down', text: '−10m' });
+    expect(cells[2]).toMatchObject({ tone: 'flat', strength: 0, text: '0' });
+    expect(cells[3]).toMatchObject({ tone: 'blank', text: '—' });
+  });
+
   it('leaves a blank cell on the bed color', () => {
     expect(heatFill('blank', 0)).toBe('#E9EEF5');
     expect(heatFill('up', 1)).toContain('rgba(22, 199, 132');

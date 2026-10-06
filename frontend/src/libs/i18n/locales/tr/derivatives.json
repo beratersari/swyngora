@@ -1,6 +1,6 @@
 {
   "title": "Türevler",
-  "subtitle": "Likit USDT perpetual’lerde mark fiyat, fonlama, açık pozisyon, kalabalık ile üst trader, gün CVD’si, işlem boyu, emir sayısı, olağandışı okuma, likidasyon yoğunluğu, alış payı ve 24 saatlik likidasyon.",
+  "subtitle": "Likit USDT perpetual’lerde mark fiyat, fonlama, açık pozisyon, kalabalık ile üst trader, gün CVD’si, fiyat ile CVD, işlem boyu, emir sayısı, olağandışı okuma, likidasyon yoğunluğu, alış payı ve 24 saatlik likidasyon.",
   "exchange": "Borsalar",
   "allVenues": "Tüm borsalar",
   "viewTable": "Tablo",
@@ -21,6 +21,10 @@
   "gap": "Üst − kalabalık",
   "gapScope": "Üst trader long yüzdesi eksi kalabalık: {{venues}}.",
   "cvdDay": "CVD gün",
+  "cvdSplit": "Fiyat ve CVD",
+  "cvdSplitUp": "Fiyat yukarı, CVD aşağı",
+  "cvdSplitDown": "Fiyat aşağı, CVD yukarı",
+  "cvdSplitAgrees": "Uyumlu",
   "printSize": "İşlem boyu 15dk",
   "orderCount": "Emir sayısı 15dk",
   "orderTitle": "{{buys}} alış, {{sells}} satış",

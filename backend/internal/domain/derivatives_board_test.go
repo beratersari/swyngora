@@ -182,6 +182,63 @@ func TestBuildDerivativesBoard_ScanColumns(t *testing.T) {
 	}
 }
 
+func TestBuildDerivativesBoard_CVDSplit(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	coin := boardCoin("BTCUSDT", now, 8e9, 1e9, 1e9, 0, 0)
+	for i := range coin.Venues {
+		coin.Venues[i].CVDSplitOK = true
+		coin.Venues[i].CVDSplitAt = now
+		coin.Venues[i].CVDSplitKind = CVDSplitAgrees
+	}
+	coin.Venues[0].CVDSplitKind = CVDDivPriceUpCVDDown
+	coin.Venues[0].CVDSplitDuration = "35m"
+	coin.Venues[0].CVDSplitSeconds = 35 * 60
+	coin.CVDSplitOK = true
+	coin.CVDSplitKind = CVDDivPriceDownCVDUp
+	coin.CVDSplitDuration = "20m"
+	coin.CVDSplitSeconds = -20 * 60
+
+	got := BuildDerivativesBoard("all", []DerivativesCoinInput{coin}, now)
+	row := got.Coins[0]
+	if !row.CVDSplitDefinite || row.CVDSplit != CVDDivPriceDownCVDUp || row.CVDSplitSeconds != "-1200" || row.CVDSplitDuration != "20m" {
+		t.Fatalf("combined %+v", row.CVDSplit)
+	}
+	if row.Venues[0].CVDSplit != CVDDivPriceUpCVDDown || row.Venues[0].CVDSplitSeconds != "2100" || row.Venues[0].CVDSplitStatus != VenueReadFresh {
+		t.Fatalf("binance %+v", row.Venues[0])
+	}
+	if row.Venues[1].CVDSplit != CVDSplitAgrees || row.Venues[1].CVDSplitSeconds != "0" {
+		t.Fatalf("bybit %+v", row.Venues[1])
+	}
+	if !got.Definite {
+		t.Fatal("the split column must not clear the original board definite flag")
+	}
+
+	coin.Venues[2].CVDSplitOK = false
+	coin.CVDSplitOK = false
+	got = BuildDerivativesBoard("all", []DerivativesCoinInput{coin}, now)
+	row = got.Coins[0]
+	if row.CVDSplitDefinite || row.CVDSplit != "" {
+		t.Fatalf("incomplete combined leaked %q", row.CVDSplit)
+	}
+	if row.Venues[0].CVDSplitStatus != VenueReadFresh || row.Venues[0].CVDSplit != CVDDivPriceUpCVDDown {
+		t.Fatalf("fresh venue dropped %+v", row.Venues[0])
+	}
+	if row.Venues[2].CVDSplitStatus != VenueReadMissing || row.Venues[2].CVDSplit != "" {
+		t.Fatalf("missing venue %+v", row.Venues[2])
+	}
+
+	coin.Venues[2].CVDSplitOK = true
+	coin.Venues[2].CVDSplitKind = CVDSplitAgrees
+	coin.Venues[2].CVDSplitAt = now.Add(-VenueTapeMaxAge - time.Minute)
+	coin.CVDSplitOK = true
+	coin.CVDSplitKind = CVDDivPriceUpCVDDown
+	got = BuildDerivativesBoard("all", []DerivativesCoinInput{coin}, now)
+	row = got.Coins[0]
+	if row.CVDSplitDefinite || row.Venues[2].CVDSplitStatus != VenueReadStale || row.Venues[2].CVDSplit != "" {
+		t.Fatalf("stale %+v venue %+v", row.CVDSplitDefinite, row.Venues[2])
+	}
+}
+
 func TestBuildDerivativesBoard_OrderCountSumsFreshPrints(t *testing.T) {
 	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
 	coin := boardCoin("BTCUSDT", now, 8e9, 1e9, 1e9, 0, 0)

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/service/market"
 )
 
@@ -26,6 +27,31 @@ func TestGetDerivativesBoard_NamesMissingVenues(t *testing.T) {
 	}
 	if len(body.Coverage.Missing) == 0 {
 		t.Fatalf("coverage %+v", body.Coverage)
+	}
+}
+
+func TestDerivativesBoardToDTO_CVDSplit(t *testing.T) {
+	dto := derivativesBoardToDTO(&domain.DerivativesBoard{
+		Coins: []domain.DerivativesCoin{{
+			Symbol:           "BTCUSDT",
+			CVDSplit:         domain.CVDDivPriceUpCVDDown,
+			CVDSplitDuration: "35m",
+			CVDSplitSeconds:  "2100",
+			CVDSplitDefinite: true,
+			Venues: []domain.DerivativesVenueRow{{
+				Exchange:        "binance",
+				CVDSplit:        domain.CVDSplitAgrees,
+				CVDSplitSeconds: "0",
+				CVDSplitStatus:  domain.VenueReadFresh,
+			}},
+		}},
+	})
+	coin := dto.Coins[0]
+	if !coin.CVDSplitDefinite || coin.CVDSplit != domain.CVDDivPriceUpCVDDown || coin.CVDSplitSeconds != "2100" || coin.CVDSplitDuration != "35m" {
+		t.Fatalf("coin %+v", coin)
+	}
+	if coin.Venues[0].CVDSplit != domain.CVDSplitAgrees || coin.Venues[0].CVDSplitStatus != domain.VenueReadFresh {
+		t.Fatalf("venue %+v", coin.Venues[0])
 	}
 }
 

@@ -53,6 +53,10 @@ vi.mock('@/libs/api', async (importOriginal) => {
             unusualDistance: '49',
             unusualVenue: 'binance',
             unusualDefinite: true,
+            cvdSplit: 'price_up_cvd_down',
+            cvdSplitDuration: '35m',
+            cvdSplitSeconds: '2100',
+            cvdSplitDefinite: true,
             venues: [
               { exchange: 'binance', oiStatus: 'fresh', oiValue: '8000000000' },
               { exchange: 'okx', oiStatus: 'missing' },
@@ -84,6 +88,8 @@ describe('DerivativesPage', () => {
     expect(screen.getByRole('columnheader', { name: 'Taker buy 1h' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Top − crowd' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'CVD day' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Price vs CVD' })).toBeInTheDocument();
+    expect(screen.getByText('Price up, CVD down · 35m')).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Print size 15m' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Order count 15m' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Unusual' })).toBeInTheDocument();
@@ -117,6 +123,12 @@ describe('DerivativesPage', () => {
     expect(blank).toHaveAttribute('data-tone', 'blank');
     expect(blank).toHaveTextContent('—');
     expect(screen.queryByRole('columnheader', { name: 'Recorded' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('combobox', { name: 'Color' }));
+    await user.click(await screen.findByText('Price vs CVD'));
+    const split = screen.getByTestId('derivatives-heat-cell');
+    expect(split).toHaveAttribute('data-tone', 'up');
+    expect(split).toHaveTextContent('+35m');
 
     await user.click(screen.getByRole('combobox', { name: 'Color' }));
     await user.click(await screen.findByText('Order count 15m'));

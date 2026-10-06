@@ -88,6 +88,8 @@ function readMetric(coin: DerivativesCoin, metric: HeatMetric): Reading | null {
       return signed(coin.gapDefinite, coin.gapPct, 0, (raw) => raw);
     case 'cvdDay':
       return signed(coin.cvdDayDefinite, coin.cvdDay, 0, (raw) => signedAmount(raw));
+    case 'cvdSplit':
+      return cvdSplit(coin);
     case 'printChange':
       return signed(coin.printDefinite, coin.printChangePct, 0, (raw) => `${raw}%`);
     case 'orderCount':
@@ -113,6 +115,19 @@ function signed(
   const value = finite(raw);
   if (value == null || raw == null) return null;
   return { value, neutral, text: text(raw), heat: false };
+}
+
+function cvdSplit(coin: DerivativesCoin): Reading | null {
+  if (!coin.cvdSplitDefinite) return null;
+  const value = finite(coin.cvdSplitSeconds);
+  if (value == null) return null;
+  let text = '0';
+  if (value !== 0 && coin.cvdSplitDuration) {
+    text = `${value > 0 ? '+' : '−'}${coin.cvdSplitDuration}`;
+  } else if (value !== 0) {
+    text = String(value);
+  }
+  return { value, neutral: 0, text, heat: false };
 }
 
 function unusual(coin: DerivativesCoin): Reading | null {

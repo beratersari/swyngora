@@ -7197,7 +7197,28 @@ export interface components {
             /** Format: date-time */
             sampleTime?: string;
         };
-        /** @description One 5-minute aggressive buy-minus-sell bar */
+        /**
+         * @description Latest run of consecutive bars where price and CVD disagree.
+         *     kind is empty when no such run is in view. A later bar where price
+         *     and CVD move the same way means this episode is no longer current.
+         *     A 4-hour window that disagrees does not set since; that is not a current run.
+         */
+        MarketCvdDivergence: {
+            /** @enum {string} */
+            kind?: "price_up_cvd_down" | "price_down_cvd_up";
+            /**
+             * Format: date-time
+             * @description Start of the current consecutive run.
+             */
+            since?: string;
+            /** @description How long the current run has lasted */
+            duration?: string;
+            durationSeconds?: number;
+            summary?: string;
+            priceMovePct?: string;
+            cvdMove?: string;
+        };
+        /** @description One aggressive buy-minus-sell bar. The bar size follows the requested range. */
         MarketCvdPoint: {
             /** Format: date-time */
             time?: string;
@@ -7208,6 +7229,11 @@ export interface components {
             cvd?: string;
             buyNotional?: string;
             sellNotional?: string;
+            /**
+             * @description Set when this bar's price and delta move opposite ways.
+             * @enum {string}
+             */
+            divergence?: "price_up_cvd_down" | "price_down_cvd_up";
         };
         MarketCvdAnchor: {
             /** @enum {string} */
@@ -7224,6 +7250,7 @@ export interface components {
             lastPrice?: string;
             summary?: string;
             complete?: boolean;
+            divergence?: components["schemas"]["MarketCvdDivergence"];
             points?: components["schemas"]["MarketCvdPoint"][];
             anchors?: components["schemas"]["MarketCvdAnchor"][];
         };
@@ -7831,6 +7858,17 @@ export interface components {
             /** @description Aggressive buy minus sell since 00:00 UTC. Omitted unless every expected venue's tape reaches that open and is fresh. */
             cvdDay?: string;
             cvdDayDefinite?: boolean;
+            /**
+             * @description Current run of price against CVD, or agrees when the tape is definite and there is no current run.
+             *     Omitted unless every expected venue reaches 00:00 UTC, the newest minute is fresh, the newest bar has a price, and the 24h combined tape is complete.
+             * @enum {string}
+             */
+            cvdSplit?: "price_up_cvd_down" | "price_down_cvd_up" | "agrees";
+            /** @description How long the current run has lasted. Empty when cvdSplit is agrees. */
+            cvdSplitDuration?: string;
+            /** @description Signed seconds. Price up / CVD down is positive. Agrees is 0. Omitted unless cvdSplitDefinite. */
+            cvdSplitSeconds?: string;
+            cvdSplitDefinite?: boolean;
             /** @description Signed percent change of the 15-minute average print size versus the prior 15 minutes. */
             printChangePct?: string;
             /** @description jumped | faded | larger | smaller | stable */
@@ -7892,6 +7930,13 @@ export interface components {
             cvdDay?: string;
             /** @description fresh | stale | missing */
             cvdStatus?: string;
+            /** @enum {string} */
+            cvdSplit?: "price_up_cvd_down" | "price_down_cvd_up" | "agrees";
+            cvdSplitDuration?: string;
+            /** @description Signed seconds for this venue's current run. */
+            cvdSplitSeconds?: string;
+            /** @description fresh | stale | missing */
+            cvdSplitStatus?: string;
             printChangePct?: string;
             /** @description fresh | stale | missing */
             printStatus?: string;

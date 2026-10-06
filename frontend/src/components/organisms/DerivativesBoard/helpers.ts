@@ -9,6 +9,16 @@ export function coinChartPath(exchange: string, symbol: string): string {
   return `/markets/${venue}/${symbol}`;
 }
 
+export function cvdSplitText(
+  coin: Pick<DerivativesCoin, 'cvdSplitDefinite' | 'cvdSplit' | 'cvdSplitDuration'>,
+  label: { up: string; down: string; agrees: string },
+): string {
+  if (!coin.cvdSplitDefinite || !coin.cvdSplit) return DASH;
+  if (coin.cvdSplit === 'agrees') return label.agrees;
+  const kind = coin.cvdSplit === 'price_down_cvd_up' ? label.down : label.up;
+  return coin.cvdSplitDuration ? `${kind} · ${coin.cvdSplitDuration}` : kind;
+}
+
 export function definiteText(definite: boolean | undefined, value: string | undefined, format: (value: string) => string): string {
   if (!definite || value == null || value === '') return DASH;
   return format(value);
@@ -147,6 +157,8 @@ function sortNumber(coin: DerivativesCoin, key: BoardSortKey): number | null {
       return coin.gapDefinite ? finite(coin.gapPct) : null;
     case 'cvdDay':
       return coin.cvdDayDefinite ? finite(coin.cvdDay) : null;
+    case 'cvdSplit':
+      return coin.cvdSplitDefinite ? finite(coin.cvdSplitSeconds) : null;
     case 'printChange':
       return coin.printDefinite ? finite(coin.printChangePct) : null;
     case 'orderCount':

@@ -120,6 +120,12 @@ describe('chartTape', () => {
             { time: '2026-09-21T10:00:00Z', delta: '+4' },
             { time: '2026-09-28T10:00:00Z', delta: '+2' },
           ],
+          divergence: {
+            kind: 'price_up_cvd_down',
+            since: '2026-09-21T10:00:00Z',
+            duration: '7d',
+            durationSeconds: 7 * 24 * 3600,
+          },
         },
         { exchange: 'bybit', points: [{ time: '2026-09-28T10:00:00Z', delta: '+9' }] },
         { exchange: 'okx', points: [] },
@@ -129,6 +135,99 @@ describe('chartTape', () => {
     expect(series.source).toBe('binance');
     expect(series.points.map((p) => p.delta)).toEqual([4, 2]);
     expect(series.withheld).toEqual(['bybit', 'okx']);
+    expect(series.split).toEqual({
+      time: Math.floor(Date.parse('2026-09-21T10:00:00Z') / 1000),
+      kind: 'price_up_cvd_down',
+      duration: '7d',
+      durationSeconds: 7 * 24 * 3600,
+    });
+  });
+
+  it('ignores a window fallback that has no since', () => {
+    const report: MarketCvd = {
+      combined: {
+        complete: true,
+        points: [{ time: '2026-09-28T12:00:00Z', delta: '+1' }],
+        divergence: { kind: 'price_down_cvd_up', since: '2026-09-28T12:00:00Z', duration: '5m', durationSeconds: 300 },
+      },
+      venues: [
+        {
+          exchange: 'binance',
+          points: [
+            { time: '2026-09-21T10:00:00Z', delta: '+4' },
+            { time: '2026-09-28T10:00:00Z', delta: '+2' },
+          ],
+          divergence: { kind: 'price_up_cvd_down' },
+        },
+      ],
+    };
+    const series = futuresCvdSeries(report, 'binance');
+    expect(series.source).toBe('binance');
+    expect(series.split).toBeNull();
+  });
+
+  it('marks the combined run when combined covers the page venue', () => {
+    const report: MarketCvd = {
+      combined: {
+        complete: true,
+        points: [{ time: '2026-09-28T10:00:00Z', delta: '-1' }],
+        divergence: {
+          kind: 'price_down_cvd_up',
+          since: '2026-09-28T09:25:00Z',
+          duration: '35m',
+          durationSeconds: 2100,
+        },
+      },
+      venues: [{ exchange: 'binance', points: [{ time: '2026-09-28T10:00:00Z', delta: '+9' }] }],
+    };
+    const series = futuresCvdSeries(report, 'binance');
+    expect(series.source).toBe('combined');
+    expect(series.split?.kind).toBe('price_down_cvd_up');
+    expect(series.split?.duration).toBe('35m');
+  });
+
+  it('drops a run once a later bar moves price and CVD together', () => {
+    const report: MarketCvd = {
+      venues: [
+        {
+          exchange: 'binance',
+          points: [
+            { time: '2026-09-28T10:00:00Z', delta: '-4', priceChangePct: '-0.20' },
+            { time: '2026-09-28T10:05:00Z', delta: '+9', priceChangePct: '+0.20' },
+          ],
+          divergence: {
+            kind: 'price_down_cvd_up',
+            since: '2026-09-28T10:00:00Z',
+            lastAt: '2026-09-28T10:00:00Z',
+            duration: '5m',
+            durationSeconds: 300,
+          },
+        },
+      ],
+    };
+    expect(futuresCvdSeries(report, 'binance').split).toBeNull();
+  });
+
+  it('keeps a run when only flat bars follow it', () => {
+    const report: MarketCvd = {
+      venues: [
+        {
+          exchange: 'binance',
+          points: [
+            { time: '2026-09-28T10:00:00Z', delta: '-4', priceChangePct: '+0.20' },
+            { time: '2026-09-28T10:05:00Z', delta: '0', priceChangePct: '+0.01' },
+          ],
+          divergence: {
+            kind: 'price_up_cvd_down',
+            since: '2026-09-28T10:00:00Z',
+            lastAt: '2026-09-28T10:00:00Z',
+            duration: '5m',
+            durationSeconds: 300,
+          },
+        },
+      ],
+    };
+    expect(futuresCvdSeries(report, 'binance').split?.kind).toBe('price_up_cvd_down');
   });
 
   it('picks the strongest long below last and short above last per leverage', () => {

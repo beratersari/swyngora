@@ -19,6 +19,10 @@ const (
 	CVDDivPriceUpCVDDown = "price_up_cvd_down"
 	CVDDivPriceDownCVDUp = "price_down_cvd_up"
 
+	// CVDSplitAgrees means the tape is definite and there is no current run.
+	// A 4-hour window that disagrees, with no Since, is this and not a run.
+	CVDSplitAgrees = "agrees"
+
 	CVDWindow15m = "15m"
 	CVDWindow1h  = "1h"
 	CVDWindow4h  = "4h"
@@ -958,6 +962,97 @@ func currentCVDDivergenceRun(points []CVDPoint) (kind string, start, end int) {
 		start = i
 	}
 	return kind, start, end
+}
+
+// CVDSplit is the current price-versus-CVD run on one series.
+// Kind is agrees when the series is definite and no run is open.
+// Seconds is signed: price up / CVD down is positive, the reverse is negative.
+type CVDSplit struct {
+	OK       bool
+	Kind     string
+	Duration string
+	Seconds  int
+	Since    time.Time
+	At       time.Time
+}
+
+// ReadCVDSplit reads the current run. A window fallback (kind set, Since zero)
+// is agrees. OK is false when the newest bar has no price.
+func ReadCVDSplit(series CVDVenueSeries) CVDSplit {
+	if len(series.Points) == 0 || series.LastPrice <= 0 {
+		return CVDSplit{}
+	}
+	last := series.Points[len(series.Points)-1]
+	if last.Price <= 0 {
+		return CVDSplit{}
+	}
+	out := CVDSplit{OK: true, Kind: CVDSplitAgrees, At: last.Time}
+	runKind, start, end := currentCVDDivergenceRun(series.Points)
+	// The latest episode in the series is not the current run once a later
+	// bar moves price and CVD the same way. Flat bars after the episode do
+	// not close it. A 4-hour window fallback has no since.
+	if runKind == "" || start < 0 || end < start || series.Divergence.Since.IsZero() || series.Divergence.Kind != runKind || !cvdSplitRunOpen(series.Points, end) {
+		return out
+	}
+	out.Kind = runKind
+	out.Duration = series.Divergence.Duration
+	out.Seconds = signedCVDSplitSeconds(runKind, series.Divergence.DurationSeconds)
+	out.Since = series.Divergence.Since
+	if !series.Divergence.LastAt.IsZero() {
+		out.At = series.Divergence.LastAt
+	}
+	return out
+}
+
+// VenueCVDSplit builds the 24h, 5-minute series and keeps the split only when
+// the tape reaches 00:00 UTC and the newest bar has a price.
+// At is the newest minute bucket, not the 5-minute bar open.
+func VenueCVDSplit(ex Exchange, symbol string, buckets []TakerBucket, prices []CVDPrice, now time.Time) (CVDSplit, CVDVenueSeries) {
+	if now.IsZero() {
+		now = time.Now()
+	}
+	now = now.UTC()
+	started := now
+	for _, b := range buckets {
+		if !b.Start.IsZero() && b.Start.Before(started) {
+			started = b.Start
+		}
+	}
+	series := BuildCVDSeriesSpan(ex, symbol, buckets, prices, now, started, DefaultCVDSpan())
+	_, newest, dayOK := DayCVDDelta(buckets, now, started)
+	split := ReadCVDSplit(series)
+	split.At = newest
+	if !dayOK || !split.OK {
+		return CVDSplit{At: newest}, series
+	}
+	return split, series
+}
+
+// cvdSplitRunOpen reports whether every bar after the episode is quiet.
+// A quiet bar is the same bar barDivergence leaves unmarked: a flat price
+// or a zero delta. An agreeing bar closes the run.
+func cvdSplitRunOpen(points []CVDPoint, end int) bool {
+	for i := end + 1; i < len(points); i++ {
+		p := points[i]
+		if math.Abs(p.PriceChangePct) >= cvdBarPriceFlatPct && p.Delta != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func signedCVDSplitSeconds(kind string, seconds int) int {
+	if seconds < 0 {
+		seconds = -seconds
+	}
+	switch kind {
+	case CVDDivPriceUpCVDDown:
+		return seconds
+	case CVDDivPriceDownCVDUp:
+		return -seconds
+	default:
+		return 0
+	}
 }
 
 func formatCVDDuration(d time.Duration) string {

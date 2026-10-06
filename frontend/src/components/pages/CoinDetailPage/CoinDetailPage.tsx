@@ -1376,15 +1376,34 @@ export function CoinDetailPage() {
     }));
     const sweepSnapped = snapMarkersToCandleTimes(sweepRaw, chartData, { maxDistanceSec: maxDist });
     const botSnapped = snapMarkersToCandleTimes(botRaw, chartData, { maxDistanceSec: maxDist });
+    const splitRaw: CandleChartMarker[] =
+      !isEquity && showCvd && tapeCvd.split
+        ? [
+            {
+              time: tapeCvd.split.time,
+              position: tapeCvd.split.kind === 'price_up_cvd_down' ? 'aboveBar' : 'belowBar',
+              color: semanticColors.status.warning,
+              shape: 'circle',
+              text: t(
+                tapeCvd.split.kind === 'price_up_cvd_down'
+                  ? 'detail:chart.cvdSplitUp'
+                  : 'detail:chart.cvdSplitDown',
+              ),
+            },
+          ]
+        : [];
+    const splitSnapped = snapMarkersToCandleTimes(splitRaw, chartData, { maxDistanceSec: maxDist });
     return mergeChartMarkers(
-      mergeChartMarkers(mergeChartMarkers(pumpSnapped, signalSnapped), sweepSnapped),
-      botSnapped,
+      mergeChartMarkers(mergeChartMarkers(mergeChartMarkers(pumpSnapped, signalSnapped), sweepSnapped), botSnapped),
+      splitSnapped,
     );
   }, [
     showPumpMarkers,
     showSignalMarkers,
     showSweeps,
     showBots,
+    showCvd,
+    tapeCvd.split,
     isEquity,
     pumpsQuery,
     historyPumpEvents,
@@ -1776,6 +1795,24 @@ export function CoinDetailPage() {
             !tapeCvd.complete ? (
               <Text variant="caption" color="secondary" data-testid="chart-cvd-partial">
                 {t('detail:chart.cvdPartial', { range: cvdRange })}
+              </Text>
+            ) : null}
+            {!isEquity && showCvd && tapeCvd.split ? (
+              <Text variant="caption" color="secondary" data-testid="chart-cvd-split">
+                {t(tapeCvd.withheld.length > 0 ? 'detail:chart.cvdSplitWithheld' : 'detail:chart.cvdSplit', {
+                  kind: t(
+                    tapeCvd.split.kind === 'price_down_cvd_up'
+                      ? 'detail:chart.cvdSplitDown'
+                      : 'detail:chart.cvdSplitUp',
+                  ),
+                  duration: tapeCvd.split.duration,
+                  exchange: t(`detail:liqHeatmap.venues.${tapeCvd.source}`, {
+                    defaultValue: tapeCvd.source,
+                  }),
+                  venues: tapeCvd.withheld
+                    .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
+                    .join(', '),
+                })}
               </Text>
             ) : null}
             {!isEquity && tapeCvd.points.length > 0 && tapeCvd.withheld.length > 0 ? (

@@ -5,6 +5,7 @@ import {
   formatRecordedSpan,
   fundingText,
   orderCountText,
+  cvdSplitText,
   percentText,
   recordedSummary,
   signedAmount,
@@ -116,5 +117,25 @@ describe('derivatives board helpers', () => {
       'ETH',
       'BTC',
     ]);
+  });
+
+  it('sorts a price-versus-CVD run by signed duration and keeps a blank tape last', () => {
+    const coins = [
+      { symbol: 'ETHUSDT', base: 'ETH', cvdSplit: 'price_down_cvd_up', cvdSplitSeconds: '-600', cvdSplitDefinite: true },
+      { symbol: 'BTCUSDT', base: 'BTC', cvdSplit: 'price_up_cvd_down', cvdSplitSeconds: '2100', cvdSplitDefinite: false },
+      { symbol: 'SOLUSDT', base: 'SOL', cvdSplit: 'agrees', cvdSplitSeconds: '0', cvdSplitDefinite: true },
+      { symbol: 'XRPUSDT', base: 'XRP', cvdSplit: 'price_up_cvd_down', cvdSplitSeconds: '1200', cvdSplitDefinite: true },
+    ] as DerivativesCoin[];
+    expect(sortBoardCoins(coins, { key: 'cvdSplit', dir: 'desc' }).map((coin) => coin.base)).toEqual([
+      'XRP',
+      'SOL',
+      'ETH',
+      'BTC',
+    ]);
+    const label = { up: 'Price up, CVD down', down: 'Price down, CVD up', agrees: 'In line' };
+    expect(cvdSplitText(coins[3]!, label)).toBe('Price up, CVD down');
+    expect(cvdSplitText({ ...coins[3]!, cvdSplitDuration: '20m' }, label)).toBe('Price up, CVD down · 20m');
+    expect(cvdSplitText(coins[2]!, label)).toBe('In line');
+    expect(cvdSplitText(coins[1]!, label)).toBe('—');
   });
 });

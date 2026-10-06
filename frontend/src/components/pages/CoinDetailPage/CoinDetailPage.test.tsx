@@ -599,6 +599,58 @@ describe('CoinDetailPage', () => {
     );
   });
 
+  it('marks the current price and CVD disagreement and hides it on positioning', async () => {
+    const user = userEvent.setup();
+    const cvd = {
+      range: '24h',
+      combined: {
+        complete: false,
+        points: [{ time: '2024-01-01T00:00:00Z', delta: '+1' }],
+      },
+      venues: [
+        {
+          exchange: 'binance',
+          complete: true,
+          points: [{ time: '2024-01-01T00:00:00Z', delta: '-4' }],
+          divergence: {
+            kind: 'price_up_cvd_down',
+            since: '2024-01-01T00:00:00Z',
+            duration: '35m',
+            durationSeconds: 2100,
+          },
+        },
+        { exchange: 'bybit', points: [] },
+        { exchange: 'okx', points: [] },
+      ],
+    };
+    mockCvd.mockReturnValue({
+      data: cvd,
+      currentData: cvd,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    renderDetail('/markets/binance/BTCUSDT');
+    const caption = await screen.findByTestId('chart-cvd-split');
+    expect(caption).toHaveTextContent('Price up, CVD down for 35m on Binance.');
+    expect(caption).toHaveTextContent('Bybit');
+    expect(caption).toHaveTextContent('OKX');
+    expect(screen.getByTestId('candle-chart')).toHaveAttribute(
+      'data-marks',
+      expect.stringContaining('Price up, CVD down'),
+    );
+
+    await chooseDesk(user, 'Positioning');
+    expect(screen.queryByTestId('chart-cvd-split')).not.toBeInTheDocument();
+    expect(screen.getByTestId('candle-chart').getAttribute('data-marks') ?? '').not.toContain(
+      'Price up, CVD down',
+    );
+
+    await chooseDesk(user, 'Order flow');
+    expect(screen.getByTestId('chart-cvd-split')).toHaveTextContent('Price up, CVD down for 35m on Binance.');
+  });
+
   it('opens holders tab from the URL', async () => {
     renderDetail('/markets/binance/BTCUSDT?tab=holders');
     expect(await screen.findByText(/On-chain wallet count and top addresses/i)).toBeInTheDocument();

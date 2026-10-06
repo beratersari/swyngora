@@ -54,8 +54,22 @@ Useful when:
   reverse) on 15m / 1h / 4h / 24h. Spot Binance uses 5m kline taker-buy
   volume (~24h immediately); Bybit spot uses live trades (fills in over
   time). Works for BTC and any other USDT pair.
-- A divergence **run** is only consecutive 5m bars of the same kind. If
+- A divergence **run** is only consecutive bars of the same kind. If
   it stops and the same split appears later, that is a new episode.
+  The coin chart marks that current run once, at its start, on the same
+  venue as the CVD line (combined only when combined is complete and
+  reaches as far as the page venue; otherwise the page venue, and a
+  venue that starts later is named). All and Order flow show the mark
+  while CVD is on. Positioning, Liquidity, and equities do not. Agreement
+  draws nothing. A later bar where price and CVD move the same way ends the
+  run; flat bars after it do not. A 4-hour window that disagrees without
+  `since` is not a run.
+- The derivatives board column `cvdSplit` is that same current run for the
+  liquid USDT list. It stays blank until the tape reaches 00:00 UTC, the
+  newest minute is fresh, and the newest bar has a price. `agrees` means
+  the tape is definite and there is no current run. Combined stays blank
+  unless every expected venue's 24-hour series is complete. See
+  [`derivatives-board.md`](derivatives-board.md).
 
 Futures CVD on Binance, Bybit, and OKX is the sum of measured prints
 (price × size). Minutes are stored in `data/futures.db` (`taker_buckets`)

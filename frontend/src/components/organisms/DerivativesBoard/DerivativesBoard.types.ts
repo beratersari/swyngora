@@ -19,6 +19,7 @@ export const BOARD_SORT_KEYS = [
   'takerBuyPct',
   'gapPct',
   'cvdDay',
+  'cvdSplit',
   'printChange',
   'orderCount',
   'unusual',

@@ -16,9 +16,9 @@ const (
 )
 
 // GetDerivativesBoard returns the liquid USDT perpetual desk: mark, funding,
-// open interest, crowd long, top-versus-crowd, day CVD, print size, 15m order
-// count, the farthest unusual reading, liquidation heat, 1% bid share, taker
-// buy share, and 24h liquidations.
+// open interest, crowd long, top-versus-crowd, day CVD, the current
+// price-versus-CVD run, print size, 15m order count, the farthest unusual
+// reading, liquidation heat, 1% bid share, taker buy share, and 24h liquidations.
 func (s *Service) GetDerivativesBoard(ctx context.Context, exchange string, limit int) (*domain.DerivativesBoard, error) {
 	ex, err := domain.ParseOpenInterestExchange(exchange)
 	if err != nil {
@@ -90,22 +90,31 @@ func (s *Service) GetDerivativesBoard(ctx context.Context, exchange string, limi
 
 func (s *Service) derivativesCoin(ctx context.Context, exchange, symbol string, want []domain.Exchange) domain.DerivativesCoinInput {
 	s.noteFutures(symbol)
-	venues := make([]domain.DerivativesVenueInput, len(want))
+	prices := []domain.CVDPrice(nil)
+	if s != nil {
+		prices = s.cvdPrices(ctx, symbol, domain.DefaultCVDSpan())
+	}
+	outs := make([]derivativesVenueOut, len(want))
 	var wg sync.WaitGroup
 	for i, ex := range want {
 		wg.Add(1)
 		go func(i int, ex domain.Exchange) {
 			defer wg.Done()
-			venues[i] = s.derivativesVenue(ctx, ex, symbol)
+			outs[i] = s.derivativesVenue(ctx, ex, symbol, prices)
 		}(i, ex)
 	}
 	wg.Wait()
+	venues := make([]domain.DerivativesVenueInput, len(outs))
+	for i := range outs {
+		venues[i] = outs[i].in
+	}
 	longs, shorts := s.derivativesLiquidations(exchange, symbol, time.Now().UTC().Add(-24*time.Hour))
 	for i := range venues {
 		venues[i].LiqLong = longs[venues[i].Exchange]
 		venues[i].LiqShort = shorts[venues[i].Exchange]
 	}
 	in := domain.DerivativesCoinInput{Symbol: symbol, Venues: venues}
+	in.CVDSplitKind, in.CVDSplitDuration, in.CVDSplitSeconds, in.CVDSplitOK = combineBoardCVDSplit(symbol, prices, outs)
 	if s != nil && s.liq != nil {
 		now := time.Now().UTC()
 		snap := s.liq.Snapshot(exchange, symbol)
@@ -135,12 +144,23 @@ func (s *Service) derivativesCoin(ctx context.Context, exchange, symbol string, 
 	return in
 }
 
-func (s *Service) derivativesDayCVD(ctx context.Context, ex domain.Exchange, symbol string) (float64, time.Time, bool) {
+type dayTape struct {
+	delta   float64
+	newest  time.Time
+	ok      bool
+	buckets []domain.TakerBucket
+}
+
+// derivativesDayTape loads one venue's taker minutes once. The store window is
+// the 24h CVD span so the split series and the day sum share the same buckets.
+// Day CVD still counts only from 00:00 UTC.
+func (s *Service) derivativesDayTape(ctx context.Context, ex domain.Exchange, symbol string) dayTape {
+	var out dayTape
 	if s == nil {
-		return 0, time.Time{}, false
+		return out
 	}
 	now := time.Now().UTC()
-	from := now.Truncate(24 * time.Hour)
+	from := now.Add(-domain.DefaultCVDLookback)
 	var live []domain.TakerBucket
 	if p := s.bucketPort(ex); p != nil {
 		got, err := p.GetTakerBuckets(ctx, symbol)
@@ -153,8 +173,9 @@ func (s *Service) derivativesDayCVD(ctx context.Context, ex domain.Exchange, sym
 		stored, _ = s.takerStore.ListTakerBuckets(ctx, string(ex), symbol, from, now)
 	}
 	merged := domain.MergeTakerBuckets(stored, live)
+	out.buckets = merged
 	if len(merged) == 0 {
-		return 0, time.Time{}, false
+		return out
 	}
 	started := now
 	for _, b := range merged {
@@ -162,7 +183,42 @@ func (s *Service) derivativesDayCVD(ctx context.Context, ex domain.Exchange, sym
 			started = b.Start
 		}
 	}
-	return domain.DayCVDDelta(merged, now, started)
+	out.delta, out.newest, out.ok = domain.DayCVDDelta(merged, now, started)
+	return out
+}
+
+type derivativesVenueOut struct {
+	in     domain.DerivativesVenueInput
+	series domain.CVDVenueSeries
+}
+
+func combineBoardCVDSplit(symbol string, prices []domain.CVDPrice, outs []derivativesVenueOut) (kind, duration string, seconds int, ok bool) {
+	if len(outs) == 0 {
+		return "", "", 0, false
+	}
+	if len(outs) == 1 {
+		v := outs[0].in
+		if !v.CVDSplitOK {
+			return "", "", 0, false
+		}
+		return v.CVDSplitKind, v.CVDSplitDuration, v.CVDSplitSeconds, true
+	}
+	series := make([]domain.CVDVenueSeries, 0, len(outs))
+	for _, row := range outs {
+		if !row.in.CVDSplitOK {
+			return "", "", 0, false
+		}
+		series = append(series, row.series)
+	}
+	combined := domain.CombineCVDVenues(symbol, series, prices, time.Now().UTC())
+	if combined == nil || !combined.Complete {
+		return "", "", 0, false
+	}
+	split := domain.ReadCVDSplit(*combined)
+	if !split.OK {
+		return "", "", 0, false
+	}
+	return split.Kind, split.Duration, split.Seconds, true
 }
 
 type derivativesTapeRead struct {
@@ -247,10 +303,10 @@ func (s *Service) derivativesBidShare(ctx context.Context, ex domain.Exchange, s
 	return ven.Headline.Below.Notional, ven.Headline.Above.Notional, at, true
 }
 
-func (s *Service) derivativesVenue(ctx context.Context, ex domain.Exchange, symbol string) domain.DerivativesVenueInput {
+func (s *Service) derivativesVenue(ctx context.Context, ex domain.Exchange, symbol string, prices []domain.CVDPrice) derivativesVenueOut {
 	out := domain.DerivativesVenueInput{Exchange: ex}
 	if s == nil {
-		return out
+		return derivativesVenueOut{in: out}
 	}
 	var (
 		oi             *domain.OpenInterestSeries
@@ -271,6 +327,8 @@ func (s *Service) derivativesVenue(ctx context.Context, ex domain.Exchange, symb
 		cvdDay         float64
 		cvdAt          time.Time
 		cvdOK          bool
+		split          domain.CVDSplit
+		series         domain.CVDVenueSeries
 		printNotional  float64
 		printCount     int
 		printPrior     float64
@@ -335,11 +393,15 @@ func (s *Service) derivativesVenue(ctx context.Context, ex domain.Exchange, symb
 				takerOK = true
 			}
 		}
-		cvdDay, cvdAt, cvdOK = s.derivativesDayCVD(ctx, ex, symbol)
-		tape := s.derivativesTape(ctx, ex, symbol)
-		printNotional, printCount, printPrior, printPriorN, printAt, printOK = tape.printNotional, tape.printCount, tape.printPrior, tape.printPriorCount, tape.printAt, tape.printOK
-		if tape.orderOK {
-			orderBuy, orderSell, orderAt = tape.orderBuy, tape.orderSell, tape.orderAt
+		tape := s.derivativesDayTape(ctx, ex, symbol)
+		if tape.ok {
+			cvdDay, cvdAt, cvdOK = tape.delta, tape.newest, true
+		}
+		split, series = domain.VenueCVDSplit(ex, symbol, tape.buckets, prices, time.Now().UTC())
+		prints := s.derivativesTape(ctx, ex, symbol)
+		printNotional, printCount, printPrior, printPriorN, printAt, printOK = prints.printNotional, prints.printCount, prints.printPrior, prints.printPriorCount, prints.printAt, prints.printOK
+		if prints.orderOK {
+			orderBuy, orderSell, orderAt = prints.orderBuy, prints.orderSell, prints.orderAt
 			orderOK = true
 		}
 	}()
@@ -381,6 +443,13 @@ func (s *Service) derivativesVenue(ctx context.Context, ex domain.Exchange, symb
 		out.CVDDay = cvdDay
 		out.CVDAt = cvdAt
 	}
+	if split.OK {
+		out.CVDSplitOK = true
+		out.CVDSplitKind = split.Kind
+		out.CVDSplitDuration = split.Duration
+		out.CVDSplitSeconds = split.Seconds
+		out.CVDSplitAt = split.At
+	}
 	if printOK {
 		out.PrintOK = true
 		out.PrintNotional = printNotional
@@ -401,7 +470,7 @@ func (s *Service) derivativesVenue(ctx context.Context, ex domain.Exchange, symb
 		out.AskNotional = askNotional
 		out.BookAt = bookAt
 	}
-	return out
+	return derivativesVenueOut{in: out, series: series}
 }
 
 func derivativesLongShortRead(ser *domain.LongShortSeries, err error) (crowd float64, at time.Time, crowdOK bool, top float64, topOK, unsupported bool) {
