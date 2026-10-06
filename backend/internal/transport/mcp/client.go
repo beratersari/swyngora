@@ -928,6 +928,31 @@ func (c *APIClient) GetCVD(ctx context.Context, exchange, symbol, rangeID string
 	return c.get(ctx, "/api/v1/market/cvd", q)
 }
 
+// GetTapeBacktest replays stored CVD, liquidation prints, or spot-book share.
+func (c *APIClient) GetTapeBacktest(ctx context.Context, exchange, symbol, condition, side string, threshold float64, from, to string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if condition != "" {
+		q.Set("condition", condition)
+	}
+	if side != "" {
+		q.Set("side", side)
+	}
+	if threshold > 0 {
+		q.Set("threshold", strconv.FormatFloat(threshold, 'f', -1, 64))
+	}
+	if from != "" {
+		q.Set("from", from)
+	}
+	if to != "" {
+		q.Set("to", to)
+	}
+	return c.get(ctx, "/api/v1/market/tape-backtest", q)
+}
+
 // GetVolumeSurge returns current vs typical volume (5m / 15m / 1h, buy/sell).
 func (c *APIClient) GetVolumeSurge(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

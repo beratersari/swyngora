@@ -2816,6 +2816,66 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/tape-backtest:
+    get:
+      summary: Replay stored tape and score the next 1h, 4h, and 24h
+      description: |
+        Replays minutes already stored for one coin. `condition=cvd` fires when a
+        finished UTC hour (at least 50 minute buckets) crosses a buy or sell
+        share after the previous hour was below it. `condition=liquidation`
+        fires when a 5-minute force-order notional is at least `threshold`
+        times that side's own median printed bucket. The side is the position
+        that was liquidated (`long` or `short`). This is measured prints, not
+        estimated leverage levels. `condition=book` fires when the last spot
+        ladder in a 15-minute block crosses a bid or ask share. Spot books are
+        Binance, Coinbase, and Bybit. `exchange=all` returns each venue and a
+        combined series only for blocks every expected venue recorded. A missing
+        venue is named and combined is omitted (`definite` false). Forward
+        returns use the spot 5-minute close at the signal, then 1 hour, 4 hours,
+        and 24 hours later. A horizon is omitted until that candle has closed.
+        Liquidations are the newest 2,500 prints. Books are the newest 500
+        snapshots. Default window is 7 days, maximum 30. Informational only.
+      operationId: getMarketTapeBacktest
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: exchange
+          in: query
+          description: cvd and liquidation use binance, bybit, okx, or all. book uses binance, coinbase, bybit, or all.
+          schema: { type: string, default: all }
+        - name: condition
+          in: query
+          description: cvd, liquidation, or book
+          schema: { type: string, default: cvd, enum: [cvd, liquidation, book] }
+        - name: side
+          in: query
+          description: buy or sell, long or short, or bid or ask. Empty uses the condition default.
+          schema: { type: string }
+        - name: threshold
+          in: query
+          description: Share from 0.55 to 0.90 (or a percent such as 65), or a liquidation multiple from 2 to 12. Empty uses 0.65 or 4.
+          schema: { type: number }
+        - name: from
+          in: query
+          description: Range start (RFC3339 or unix milliseconds). Empty is 7 days before `to`.
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          description: Range end (RFC3339 or unix milliseconds). Empty is now.
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Per-venue tape crosses and forward returns
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TapeBacktestReport' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/volume-surge:
     get:
       summary: Volume versus typical (5m / 15m / 1h)
@@ -11260,6 +11320,64 @@ components:
           items: { $ref: '#/components/schemas/MarketCvdSeries' }
         combined: { $ref: '#/components/schemas/MarketCvdSeries' }
         spotCombined: { $ref: '#/components/schemas/MarketCvdSeries' }
+    TapeBacktestReport:
+      type: object
+      description: Stored-tape replay. Combined is omitted when any expected venue has no complete bar.
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        condition: { type: string, enum: [cvd, liquidation, book] }
+        side: { type: string }
+        threshold: { type: number }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        asOf: { type: string, format: date-time }
+        priceExchange: { type: string }
+        definite: { type: boolean }
+        missing:
+          type: array
+          items: { type: string }
+        venues:
+          type: array
+          items: { $ref: '#/components/schemas/TapeBacktestVenue' }
+        combined: { $ref: '#/components/schemas/TapeBacktestVenue' }
+        summary: { type: string }
+        note: { type: string }
+    TapeBacktestVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        signalCount: { type: integer }
+        bars: { type: integer }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        horizons:
+          type: array
+          items: { $ref: '#/components/schemas/TapeBacktestHorizon' }
+        signals:
+          type: array
+          items: { $ref: '#/components/schemas/TapeBacktestSignal' }
+        error: { type: string }
+        note: { type: string }
+    TapeBacktestHorizon:
+      type: object
+      properties:
+        horizon: { type: string, enum: [1h, 4h, 24h] }
+        sampleCount: { type: integer }
+        average: { type: number }
+        median: { type: number }
+        winRate: { type: number, description: Share of returns greater than 0, from 0 to 100 }
+    TapeBacktestSignal:
+      type: object
+      properties:
+        at: { type: string, format: date-time }
+        barStart: { type: string, format: date-time }
+        side: { type: string }
+        value: { type: number, description: Buy/sell or bid/ask share from 0 to 1, or a liquidation multiple }
+        close: { type: number }
+        return1h: { type: number }
+        return4h: { type: number }
+        return24h: { type: number }
     MarketPressure:
       type: object
       description: Combined −1…+1 market pressure from book, CVD, and absorption

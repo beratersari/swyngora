@@ -736,6 +736,12 @@ func (s *SQLite) ListTakerBuckets(ctx context.Context, exchange, symbol string, 
 		return nil, fmt.Errorf("futures store is nil")
 	}
 	ex := domain.ParseExchange(exchange)
+	if ex == "" {
+		raw := strings.ToLower(strings.TrimSpace(exchange))
+		if domain.IsFuturesVenue(domain.Exchange(raw)) {
+			ex = domain.Exchange(raw)
+		}
+	}
 	symbol = domain.NormalizeLiquidationSymbol(symbol)
 	if symbol == "" || ex == "" {
 		return nil, fmt.Errorf("%w: exchange and symbol are required", domain.ErrInvalidArgument)

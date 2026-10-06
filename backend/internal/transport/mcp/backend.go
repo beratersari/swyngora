@@ -1807,6 +1807,39 @@ func (b *Backend) GetCVD(ctx context.Context, exchange, symbol, rangeID string) 
 	return mustJSON(got)
 }
 
+func (b *Backend) GetTapeBacktest(ctx context.Context, exchange, symbol, condition, side string, threshold float64, from, to string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	fromT, err := parseTapeClock(from)
+	if err != nil {
+		return nil, err
+	}
+	toT, err := parseTapeClock(to)
+	if err != nil {
+		return nil, err
+	}
+	got, err := b.Market.GetTapeBacktest(ctx, exchange, symbol, condition, side, threshold, fromT, toT)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
+func parseTapeClock(raw string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, nil
+	}
+	if t, err := time.Parse(time.RFC3339Nano, raw); err == nil {
+		return t.UTC(), nil
+	}
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t.UTC(), nil
+	}
+	return time.Time{}, fmt.Errorf("%w: time must be RFC3339", domain.ErrInvalidArgument)
+}
+
 func (b *Backend) GetVolumeSurge(ctx context.Context, exchange, symbol string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

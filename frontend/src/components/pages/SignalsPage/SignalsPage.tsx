@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { PageHeader } from '@/components/molecules/PageHeader';
 import { SignalsBacktestPanel } from '@/components/organisms/SignalsBacktestPanel';
+import { TapeBacktestPanel } from '@/components/organisms/TapeBacktestPanel';
 import {
   CUSTOM_SIGNAL_BUILT_IN_ID,
   defaultCustomWeightDraft,
@@ -554,6 +555,11 @@ export function SignalsPage() {
                 }}
               />
             ),
+          },
+          {
+            key: 'tape',
+            label: t('signals:tabs.tape'),
+            children: <TapeBacktestPanel />,
           },
         ]}
       />

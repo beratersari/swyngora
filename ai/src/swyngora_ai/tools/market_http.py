@@ -725,6 +725,28 @@ class CvdInput(BaseModel):
     )
 
 
+class TapeBacktestInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="cvd/liquidation: binance|bybit|okx|all. book: binance|coinbase|bybit|all.",
+    )
+    condition: str = Field(
+        default="cvd",
+        description="cvd | liquidation | book",
+    )
+    side: str = Field(
+        default="",
+        description="buy|sell, long|short, or bid|ask. Empty uses the condition default.",
+    )
+    threshold: float = Field(
+        default=0,
+        description="Share 0.55-0.90 or a percent, or a liquidation multiple 2-12. 0 uses the default.",
+    )
+    start: str = Field(default="", description="RFC3339 start. Empty is 7 days before end.")
+    end: str = Field(default="", description="RFC3339 end. Empty is now.")
+
+
 class RSIHeatmapInput(BaseModel):
     exchange: str = Field(
         default="binance",
@@ -2490,6 +2512,30 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if range:
             params["range"] = range
         return http.get("/api/v1/market/cvd", params)
+
+    def get_tape_backtest(
+        symbol: str,
+        exchange: str = "all",
+        condition: str = "cvd",
+        side: str = "",
+        threshold: float = 0,
+        start: str = "",
+        end: str = "",
+    ) -> str:
+        params: dict[str, Any] = {
+            "symbol": symbol,
+            "exchange": exchange,
+            "condition": condition,
+        }
+        if side:
+            params["side"] = side
+        if threshold:
+            params["threshold"] = threshold
+        if start:
+            params["from"] = start
+        if end:
+            params["to"] = end
+        return http.get("/api/v1/market/tape-backtest", params)
 
     def get_absorption(symbol: str, exchange: str = "all") -> str:
         return http.get(
@@ -5427,6 +5473,22 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "run only. Combined shows Binance vs Bybit when they disagree."
             ),
             args_schema=CvdInput,
+        ),
+        StructuredTool.from_function(
+            get_tape_backtest,
+            name="get_tape_backtest",
+            description=(
+                "Replay stored tape for one coin and score the spot close "
+                "1 hour, 4 hours, and 24 hours later. cvd is a finished UTC "
+                "hour whose buy or sell share crosses the threshold. "
+                "liquidation is a 5-minute force-order burst versus that "
+                "side's own median (not estimated leverage levels). book is "
+                "a 15-minute spot bid or ask share cross. exchange=all "
+                "withholds combined unless every expected venue has the bar. "
+                "Liquidations are the newest 2,500 prints. Books are the "
+                "newest 500 snapshots. Informational only."
+            ),
+            args_schema=TapeBacktestInput,
         ),
         StructuredTool.from_function(
             get_volume_surge,

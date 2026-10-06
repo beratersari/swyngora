@@ -994,6 +994,65 @@ export type MarketCvd = {
   spotCombined?: MarketCvdVenue;
   spotFutures?: { summary?: string };
 };
+
+export type TapeBacktestQuery = {
+  symbol: string;
+  exchange?: string;
+  condition?: string;
+  side?: string;
+  threshold?: number;
+  from?: string;
+  to?: string;
+};
+
+export type TapeBacktestHorizon = {
+  horizon?: string;
+  sampleCount?: number;
+  average?: number;
+  median?: number;
+  winRate?: number;
+};
+
+export type TapeBacktestSignal = {
+  at?: string;
+  barStart?: string;
+  side?: string;
+  value?: number;
+  close?: number;
+  return1h?: number;
+  return4h?: number;
+  return24h?: number;
+};
+
+export type TapeBacktestVenue = {
+  exchange?: string;
+  signalCount?: number;
+  bars?: number;
+  from?: string;
+  to?: string;
+  horizons?: TapeBacktestHorizon[];
+  signals?: TapeBacktestSignal[];
+  error?: string;
+  note?: string;
+};
+
+export type TapeBacktestReport = {
+  symbol?: string;
+  exchange?: string;
+  condition?: string;
+  side?: string;
+  threshold?: number;
+  from?: string;
+  to?: string;
+  asOf?: string;
+  priceExchange?: string;
+  definite?: boolean;
+  missing?: string[];
+  venues?: TapeBacktestVenue[];
+  combined?: TapeBacktestVenue;
+  summary?: string;
+  note?: string;
+};
 export type IntervalsQuery = NonNullable<operations['listIntervals']['parameters']['query']>;
 export type IndicatorsQuery = NonNullable<operations['getIndicators']['parameters']['query']>;
 export type PumpEventsQuery = NonNullable<operations['getPumpEvents']['parameters']['query']>;

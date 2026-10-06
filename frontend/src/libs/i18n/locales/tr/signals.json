@@ -27,7 +27,8 @@
     "custom": "Özel",
     "hits": "Eşleşmeler",
     "rules": "Kurallar",
-    "lab": "Lab"
+    "lab": "Lab",
+    "tape": "Bant"
   },
   "engine": {
     "hint": "Kalite kapılı 4s tarama (Wilder RSI/ADX/ATR, SuperTrend, MACD, BTC rejimi). Tetik için taze olay ve ≥1.8 R:R gerekir.",
@@ -261,5 +262,46 @@
       "forensics": "Adli bant",
       "similar_setup": "Benzer kurulumlar"
     }
+  },
+  "tape": {
+    "title": "Kayıtlı bant tekrarı",
+    "hint": "Bu coin için saklanan dakikaları yeniden oynatır. CVD kesişimi kapanmış bir UTC saatidir. Likidasyon patlaması ölçülmüş emir baskılarıdır, tahmini kaldıraç seviyesi değildir. Defter kesişimi spot merdivendir, sürekli sözleşme defteri değildir. Birleşik sonuç yalnızca beklenen her borsanın çubuğu varken gösterilir. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
+    "condition": "Koşul",
+    "conditions": {
+      "cvd": "CVD payı",
+      "liquidation": "Likidasyon baskıları",
+      "book": "Spot defter"
+    },
+    "side": "Yön",
+    "sides": {
+      "buy": "Alış",
+      "sell": "Satış",
+      "long": "Long likidasyonu",
+      "short": "Short likidasyonu",
+      "bid": "Alış kademesi",
+      "ask": "Satış kademesi"
+    },
+    "threshold": "Eşik",
+    "range": "Pencere",
+    "ranges": {
+      "1d": "1 gün",
+      "3d": "3 gün",
+      "7d": "7 gün"
+    },
+    "run": "Yeniden oynat",
+    "loading": "Kayıtlı bant oynatılıyor…",
+    "all": "Tüm borsalar",
+    "withheld": "{{names}} tam çubuğu olmadığı için birleşik sonuç gösterilmiyor.",
+    "definite": "Beklenen her borsanın tam çubuğu var.",
+    "combined": "Birleşik",
+    "bars": "{{count}} çubuk",
+    "avg": "Ortalama",
+    "median": "Medyan",
+    "win": "Kazanma oranı",
+    "samples": "Örnek",
+    "when": "Zaman",
+    "value": "Okuma",
+    "close": "Kapanış",
+    "empty": "Bu pencerede kesişim yok."
   }
 }

@@ -90,6 +90,7 @@ type DataPort interface {
 	GetOrderCount(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetOrderCountOverview(ctx context.Context, exchange, quote string, limit int) (json.RawMessage, error)
 	GetCVD(ctx context.Context, exchange, symbol, rangeID string) (json.RawMessage, error)
+	GetTapeBacktest(ctx context.Context, exchange, symbol, condition, side string, threshold float64, from, to string) (json.RawMessage, error)
 	GetMarketPressure(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetVolumeProfile(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize float64) (json.RawMessage, error)
 	GetFlowAtPrices(ctx context.Context, exchange, symbol, window, startTime, endTime string, tickSize, minPrice, maxPrice float64) (json.RawMessage, error)
@@ -1495,6 +1496,27 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetCVD(ctx, req.GetString("exchange", "all"), symbol, req.GetString("range", "24h"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_tape_backtest",
+		mcp.WithDescription("Replay stored tape for one coin and score the spot close 1 hour, 4 hours, and 24 hours later. condition=cvd is a finished UTC hour (at least 50 minute buckets) whose buy or sell share crosses the threshold after the previous hour was below. condition=liquidation is a 5-minute force-order burst at least N times that side's own median printed bucket (side is the position liquidated: long or short). It does not replay estimated leverage levels. condition=book is the last spot-book sample in a 15-minute block whose bid or ask share crosses the threshold. exchange=all keeps per-venue results and withholds combined unless every expected venue has that bar. Liquidations use the newest 2,500 prints. Books use the newest 500 snapshots. Prices are spot 5-minute closes. A horizon is omitted until that candle has closed. Informational only — not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("cvd and liquidation: binance | bybit | okx | all. book: binance | coinbase | bybit | all. Default all.")),
+		mcp.WithString("condition", mcp.Description("cvd | liquidation | book (default cvd)")),
+		mcp.WithString("side", mcp.Description("buy | sell, long | short, or bid | ask. Empty uses the condition default.")),
+		mcp.WithNumber("threshold", mcp.Description("Share 0.55–0.90 (or a percent), or a liquidation multiple 2–12. 0 uses the default 0.65 or 4×.")),
+		mcp.WithString("from", mcp.Description("RFC3339 start. Empty is 7 days before to.")),
+		mcp.WithString("to", mcp.Description("RFC3339 end. Empty is now.")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetTapeBacktest(ctx, req.GetString("exchange", "all"), symbol, req.GetString("condition", "cvd"), req.GetString("side", ""), req.GetFloat("threshold", 0), req.GetString("from", ""), req.GetString("to", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

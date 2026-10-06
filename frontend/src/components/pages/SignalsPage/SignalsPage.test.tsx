@@ -60,6 +60,12 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useDuplicateCustomSignalProfileMutation: () => [vi.fn(), { isLoading: false }],
     useSetDefaultCustomSignalProfileMutation: () => [vi.fn(), { isLoading: false }],
     useLazyListSpotMarketsQuery: () => [vi.fn(), { data: undefined, isFetching: false }],
+    useGetMarketTapeBacktestQuery: () => ({
+      data: undefined,
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+    }),
   };
 });
 
@@ -69,5 +75,6 @@ describe('SignalsPage', () => {
     expect(await screen.findByRole('heading', { name: /swing signals|salınım sinyalleri/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /setups|kurulumlar/i })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /custom|özel/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /^tape$|^bant$/i })).toBeInTheDocument();
   });
 });

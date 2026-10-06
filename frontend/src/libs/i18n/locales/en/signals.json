@@ -27,7 +27,8 @@
     "custom": "Custom",
     "hits": "Hits",
     "rules": "Rules",
-    "lab": "Lab"
+    "lab": "Lab",
+    "tape": "Tape"
   },
   "engine": {
     "hint": "Quality-gated 4h swing scan (Wilder RSI/ADX/ATR, SuperTrend, MACD, BTC regime). Trigger needs a fresh event and ≥1.8 R:R.",
@@ -261,5 +262,46 @@
       "forensics": "Forensics tape",
       "similar_setup": "Similar setups"
     }
+  },
+  "tape": {
+    "title": "Stored tape replay",
+    "hint": "Replays minutes already stored for this coin. A CVD cross is a finished UTC hour. A liquidation burst is measured force-order prints, not an estimated leverage level. A book cross is the spot ladder, not the perpetual book. Combined is shown only when every expected venue has the bar. Informational only — not financial advice.",
+    "condition": "Condition",
+    "conditions": {
+      "cvd": "CVD share",
+      "liquidation": "Liquidation prints",
+      "book": "Spot book"
+    },
+    "side": "Side",
+    "sides": {
+      "buy": "Buy",
+      "sell": "Sell",
+      "long": "Longs liquidated",
+      "short": "Shorts liquidated",
+      "bid": "Bid",
+      "ask": "Ask"
+    },
+    "threshold": "Threshold",
+    "range": "Window",
+    "ranges": {
+      "1d": "1 day",
+      "3d": "3 days",
+      "7d": "7 days"
+    },
+    "run": "Replay",
+    "loading": "Replaying stored tape…",
+    "all": "All venues",
+    "withheld": "Combined is withheld because {{names}} has no complete bar.",
+    "definite": "Every expected venue has a complete bar.",
+    "combined": "Combined",
+    "bars": "{{count}} bars",
+    "avg": "Average",
+    "median": "Median",
+    "win": "Win rate",
+    "samples": "Samples",
+    "when": "When",
+    "value": "Reading",
+    "close": "Close",
+    "empty": "No cross in this window."
   }
 }

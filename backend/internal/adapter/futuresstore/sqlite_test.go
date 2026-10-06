@@ -127,6 +127,24 @@ func TestMigrateV6_DropsEstimatedBinanceTape(t *testing.T) {
 	}
 }
 
+func TestListTakerBuckets_OKX(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "futures.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	t0 := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
+	if _, err := s.UpsertTakerBuckets(context.Background(), []domain.TakerBucket{
+		{Exchange: domain.ExchangeOKX, Symbol: "BTCUSDT", Start: t0, BuyNotional: 8, SellNotional: 2},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.ListTakerBuckets(context.Background(), "okx", "BTCUSDT", t0.Add(-time.Minute), t0.Add(time.Minute))
+	if err != nil || len(got) != 1 || got[0].Exchange != domain.ExchangeOKX || got[0].BuyNotional != 8 {
+		t.Fatalf("%+v %v", got, err)
+	}
+}
+
 func TestInsertLiquidation_NoDuplicatesAndPurge(t *testing.T) {
 	s, err := Open(filepath.Join(t.TempDir(), "futures.db"))
 	if err != nil {

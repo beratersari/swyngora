@@ -76,6 +76,8 @@ import type {
   MarketUnusualScan,
   UnusualQuery,
   UnusualScanQuery,
+  TapeBacktestQuery,
+  TapeBacktestReport,
   OpenInterestQuery,
   LiquidationsQuery,
   LiquidationOverviewQuery,
@@ -169,6 +171,8 @@ import type {
   FuturesHistoryQuery,
 } from './marketApi.types';
 import type { ForensicsRadarReview } from '@/libs/types/forensics.types';
+
+export type { TapeBacktestVenue, TapeBacktestHorizon, TapeBacktestSignal } from './marketApi.types';
 // delist types re-exported below
 
 export type {
@@ -227,6 +231,8 @@ export type {
   MarketUnusualScanHit,
   UnusualQuery,
   UnusualScanQuery,
+  TapeBacktestQuery,
+  TapeBacktestReport,
   MarketVolumeShare,
   SpotPerpLiquidity,
   SpotPerpBook,
@@ -622,6 +628,13 @@ export const marketApi = baseApi.injectEndpoints({
       query: (arg) => ({
         url: '/api/v1/market/unusual/scan',
         params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
+
+    getMarketTapeBacktest: build.query<TapeBacktestReport, TapeBacktestQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/tape-backtest',
+        params: compactParams({ ...arg }),
       }),
     }),
 
@@ -1026,6 +1039,7 @@ export const {
   useGetMarketCvdQuery,
   useGetMarketUnusualQuery,
   useScanMarketUnusualQuery,
+  useGetMarketTapeBacktestQuery,
   useGetMarketVolumeShareQuery,
   useGetMarketPerpDepthOverviewQuery,
   useGetMarketBreadthQuery,

@@ -1827,6 +1827,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/tape-backtest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Replay stored tape and score the next 1h, 4h, and 24h
+         * @description Replays minutes already stored for one coin. `condition=cvd` fires when a
+         *     finished UTC hour (at least 50 minute buckets) crosses a buy or sell
+         *     share after the previous hour was below it. `condition=liquidation`
+         *     fires when a 5-minute force-order notional is at least `threshold`
+         *     times that side's own median printed bucket. The side is the position
+         *     that was liquidated (`long` or `short`). This is measured prints, not
+         *     estimated leverage levels. `condition=book` fires when the last spot
+         *     ladder in a 15-minute block crosses a bid or ask share. Spot books are
+         *     Binance, Coinbase, and Bybit. `exchange=all` returns each venue and a
+         *     combined series only for blocks every expected venue recorded. A missing
+         *     venue is named and combined is omitted (`definite` false). Forward
+         *     returns use the spot 5-minute close at the signal, then 1 hour, 4 hours,
+         *     and 24 hours later. A horizon is omitted until that candle has closed.
+         *     Liquidations are the newest 2,500 prints. Books are the newest 500
+         *     snapshots. Default window is 7 days, maximum 30. Informational only.
+         */
+        get: operations["getMarketTapeBacktest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/volume-surge": {
         parameters: {
             query?: never;
@@ -7215,6 +7249,63 @@ export interface components {
             combined?: components["schemas"]["MarketCvdSeries"];
             spotCombined?: components["schemas"]["MarketCvdSeries"];
         };
+        /** @description Stored-tape replay. Combined is omitted when any expected venue has no complete bar. */
+        TapeBacktestReport: {
+            symbol?: string;
+            exchange?: string;
+            /** @enum {string} */
+            condition?: "cvd" | "liquidation" | "book";
+            side?: string;
+            threshold?: number;
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            /** Format: date-time */
+            asOf?: string;
+            priceExchange?: string;
+            definite?: boolean;
+            missing?: string[];
+            venues?: components["schemas"]["TapeBacktestVenue"][];
+            combined?: components["schemas"]["TapeBacktestVenue"];
+            summary?: string;
+            note?: string;
+        };
+        TapeBacktestVenue: {
+            exchange?: string;
+            signalCount?: number;
+            bars?: number;
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            horizons?: components["schemas"]["TapeBacktestHorizon"][];
+            signals?: components["schemas"]["TapeBacktestSignal"][];
+            error?: string;
+            note?: string;
+        };
+        TapeBacktestHorizon: {
+            /** @enum {string} */
+            horizon?: "1h" | "4h" | "24h";
+            sampleCount?: number;
+            average?: number;
+            median?: number;
+            /** @description Share of returns greater than 0 */
+            winRate?: number;
+        };
+        TapeBacktestSignal: {
+            /** Format: date-time */
+            at?: string;
+            /** Format: date-time */
+            barStart?: string;
+            side?: string;
+            /** @description Buy/sell or bid/ask share from 0 to 1 */
+            value?: number;
+            close?: number;
+            return1h?: number;
+            return4h?: number;
+            return24h?: number;
+        };
         /** @description Combined −1…+1 market pressure from book, CVD, and absorption */
         MarketPressure: {
             symbol?: string;
@@ -12387,6 +12478,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketCvdReport"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketTapeBacktest: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description cvd and liquidation use binance, bybit, okx, or all. book uses binance, coinbase, bybit, or all. */
+                exchange?: string;
+                /** @description cvd, liquidation, or book */
+                condition?: "cvd" | "liquidation" | "book";
+                /** @description buy or sell, long or short, or bid or ask. Empty uses the condition default. */
+                side?: string;
+                /** @description Share from 0.55 to 0.90 (or a percent such as 65), or a liquidation multiple from 2 to 12. Empty uses 0.65 or 4. */
+                threshold?: number;
+                /** @description Range start (RFC3339 or unix milliseconds). Empty is 7 days before `to`. */
+                from?: string;
+                /** @description Range end (RFC3339 or unix milliseconds). Empty is now. */
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Per-venue tape crosses and forward returns */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TapeBacktestReport"];
                 };
             };
             400: components["responses"]["Error"];

@@ -641,6 +641,35 @@ func TestAPIClient_GetHolders(t *testing.T) {
 	}
 }
 
+func TestAPIClient_GetTapeBacktest(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/market/tape-backtest" {
+			http.NotFound(w, r)
+			return
+		}
+		q := r.URL.Query()
+		if q.Get("symbol") != "BTCUSDT" || q.Get("condition") != "liquidation" || q.Get("side") != "long" || q.Get("threshold") != "4" || q.Get("from") != "2026-10-01T00:00:00Z" {
+			t.Fatalf("query=%s", r.URL.RawQuery)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"symbol": "BTCUSDT", "condition": "liquidation", "definite": false,
+		})
+	}))
+	defer srv.Close()
+	c := NewAPIClient(srv.URL, 0)
+	raw, err := c.GetTapeBacktest(context.Background(), "all", "BTCUSDT", "liquidation", "long", 4, "2026-10-01T00:00:00Z", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m["symbol"] != "BTCUSDT" || m["condition"] != "liquidation" || m["definite"] != false {
+		t.Fatalf("%v", m)
+	}
+}
+
 func TestAPIClient_ErrorStatus(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
