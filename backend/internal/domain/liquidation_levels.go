@@ -149,6 +149,9 @@ func PickHuntHeatmapGrid(rep HuntHeatmapReport, exchange string) HuntHeatmapGrid
 	}
 }
 
+// maxLiquidationTimeBars caps the all-coin chart so a 30-day range stays one screen.
+const maxLiquidationTimeBars = 96
+
 // LiquidationTimeBarStep is the bucket size for an observed-totals window.
 func LiquidationTimeBarStep(window time.Duration) time.Duration {
 	switch {
@@ -181,8 +184,8 @@ func (b *LiquidationBook) TimeBars(exchange, symbol string, from, to time.Time, 
 	if n < 1 {
 		n = 1
 	}
-	if n > 96 {
-		n = 96
+	if n > maxLiquidationTimeBars {
+		n = maxLiquidationTimeBars
 		step = to.Sub(from) / time.Duration(n)
 		if step <= 0 {
 			step = time.Hour

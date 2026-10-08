@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  hasLiquidationTotals,
   parseLiqCascadeSymbol,
   parseLiqChartRange,
   parseLiqChartSymbol,
@@ -36,5 +37,12 @@ describe('LiquidationsPage helpers', () => {
     expect(parseLiqExchange('coinbase')).toBe('all');
     expect(parseLiqSymbol('btc-usd')).toBe('BTCUSDT');
     expect(parseLiqSymbol('')).toBe('BTCUSDT');
+  });
+
+  it('keeps stored overview totals when a venue is not definite', () => {
+    expect(hasLiquidationTotals(undefined)).toBe(false);
+    expect(hasLiquidationTotals({ coins: [], windows: [{ totalNotional: '0', count: 0 }] })).toBe(false);
+    expect(hasLiquidationTotals({ coins: [{ symbol: 'BTCUSDT' }], windows: [] })).toBe(true);
+    expect(hasLiquidationTotals({ windows: [{ totalNotional: '12', count: 1 }] })).toBe(true);
   });
 });

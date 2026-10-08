@@ -692,6 +692,17 @@ func (b *LiquidationBook) marketStartLocked(exchange string) time.Time {
 	return latest
 }
 
+// MarketCoverage is how long the requested venue set has actually been live.
+// Combined uses the shortest venue clock. A venue that never started counts as zero.
+func (b *LiquidationBook) MarketCoverage(exchange string) time.Duration {
+	if b == nil {
+		return 0
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.marketCoverageLocked(exchange, b.now().UTC())
+}
+
 func (b *LiquidationBook) marketCoverageLocked(exchange string, now time.Time) time.Duration {
 	if exchange != "all" {
 		return b.venueClock[Exchange(exchange)].elapsed(now)

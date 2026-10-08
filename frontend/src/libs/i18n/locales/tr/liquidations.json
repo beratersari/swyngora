@@ -1,6 +1,6 @@
 {
   "title": "Likidasyonlar",
-  "subtitle": "Binance USD-M ve Bybit linear genelinde vadeli long/short likidasyonlar.",
+  "subtitle": "Binance USD-M, Bybit linear ve OKX USDT-swap genelinde vadeli long/short likidasyonlar.",
   "tabs": {
     "overview": "Genel bakış",
     "chart": "Grafik",
@@ -28,7 +28,7 @@
   "treemap": {
     "aria": "Likidasyon coin haritası",
     "empty": "Bu pencerede henüz likidasyon yok.",
-    "emptyHint": "Toplamlar canlı force-order akışı geldikçe dolar.",
+    "emptyHint": "Toplamlar kayıtlı force-order basımlarından gelir. Likidasyon akışları bağlıyken büyür.",
     "legendLong": "Daha çok long likide",
     "legendShort": "Daha çok short likide",
     "openHeatmap": "{{symbol}} ısı haritasını aç"
@@ -202,7 +202,8 @@
     "levelsTitle": "Likidasyon seviyeleri",
     "totalsTitle": "Toplam likidasyonlar",
     "levelsHint": "CoinGlass haritası: çubuk boyu last fiyattan o seviyeye kadar likidasyon. Last üstünde short, altında long. Renkler 100x / 50x / 25x / 10x. 5x kendi uzaklığında 10x rengiyle, 75x ve 125x 100x rengiyle çizilir. Sonra az basılan bantlar kısa ve soluk. Basılan ama tahminimizden küçük kalan bantlar o tutara doğru kısalır. Aralık, sonraki basım kontrolünün ne kadar geriye baktığıdır. Çubuklar canlı haritadır.",
-    "totalsHint": "Seçilen borsada izlenen tüm coinlerin zaman içindeki gerçekleşen long ve short likidasyonları.",
+    "totalsHint": "Seçilen borsalardaki tüm coinlerin kayıtlı force-order basımları, henüz kayda geçmemiş basımlar dahil. Sıfır çubuk sessiz bir aralıktır veya kayıt o sırada kapalıydı.",
+    "storedStart": "Bu aralıkta kayıtlı basımlar {{time}} UTC tarihinde başlıyor. Daha önceki çubuklar kaydedilmedi.",
     "lastPrice": "Son",
     "cumLine": "Last’ten",
     "leverage": "{{lev}}x",

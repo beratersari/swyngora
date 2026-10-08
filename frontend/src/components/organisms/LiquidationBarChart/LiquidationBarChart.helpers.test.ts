@@ -10,6 +10,7 @@ import {
   maxCum,
   maxSide,
   pickLevelsReview,
+  storedPrintStart,
   toLevelRows,
   toTimeRows,
 } from './LiquidationBarChart.helpers';
@@ -34,6 +35,15 @@ describe('LiquidationBarChart helpers', () => {
     });
     expect(bars[0]?.label).toBe('12:00');
     expect(bars[0]?.totalN).toBe(5);
+    expect(storedPrintStart(bars)).toBeNull();
+    const late = toTimeRows({
+      kind: 'totals',
+      bars: [
+        { t: '2026-08-30T12:00:00.000Z', longNotional: '0', shortNotional: '0', totalNotional: '0' },
+        { t: '2026-08-31T12:00:00.000Z', longNotional: '3', shortNotional: '2', totalNotional: '5' },
+      ],
+    });
+    expect(storedPrintStart(late)).toBe(Date.parse('2026-08-31T12:00:00.000Z'));
   });
 
   it('maps leverage slices and side vs last', () => {

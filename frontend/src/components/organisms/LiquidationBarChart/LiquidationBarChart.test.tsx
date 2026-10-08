@@ -61,4 +61,20 @@ describe('LiquidationBarChart', () => {
     );
     expect(screen.getByText(/total liquidations|toplam likidasyon/i)).toBeInTheDocument();
   });
+
+  it('names when stored prints start after the left edge', () => {
+    renderWithProviders(
+      <LiquidationBarChart
+        data={{
+          kind: 'totals',
+          symbol: 'all',
+          bars: [
+            { t: '2026-08-30T12:00:00.000Z', longNotional: '0', shortNotional: '0', totalNotional: '0' },
+            { t: '2026-08-31T12:00:00.000Z', longNotional: '20', shortNotional: '10', totalNotional: '30' },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByTestId('liquidation-stored-start')).toHaveTextContent('2026-08-31 12:00');
+  });
 });

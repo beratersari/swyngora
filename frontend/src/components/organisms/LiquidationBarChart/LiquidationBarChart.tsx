@@ -34,6 +34,8 @@ import {
   parseNotional,
   pickLevelsReview,
   sliceConfidence,
+  formatStoredPrintStart,
+  storedPrintStart,
   toLevelRows,
   toTimeRows,
 } from './LiquidationBarChart.helpers';
@@ -78,6 +80,7 @@ export function LiquidationBarChart({
   const levels = useMemo(() => toLevelRows(frozen), [frozen]);
   const times = useMemo(() => toTimeRows(data), [data]);
   const mapMode = isLevelsKind(data);
+  const storedStart = mapMode ? null : storedPrintStart(times);
   const lastPrice = parseNotional(frozen?.lastPrice);
   const viewingPast = asOf !== 'live' && (frozen?.levels?.length ?? 0) > 0;
 
@@ -183,6 +186,11 @@ export function LiquidationBarChart({
       <Text variant="caption" color="secondary">
         {viewingPast ? t('chart.review.frozenHint') : mapMode ? t('chart.levelsHint') : t('chart.totalsHint')}
       </Text>
+      {storedStart != null ? (
+        <Text variant="caption" color="secondary" data-testid="liquidation-stored-start">
+          {t('chart.storedStart', { time: formatStoredPrintStart(storedStart) })}
+        </Text>
+      ) : null}
       {data?.missing && data.missing.length > 0 ? (
         <Alert
           type="warning"

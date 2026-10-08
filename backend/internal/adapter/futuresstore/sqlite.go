@@ -194,6 +194,16 @@ CREATE TABLE IF NOT EXISTS liquidation_coverage (
 		if err := sqliteutil.SetUserVersion(s.db, 6); err != nil {
 			return err
 		}
+		v = 6
+	}
+	// v7 serves the liquidation desk, which scans every coin by time.
+	if v < 7 {
+		if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_futures_liq_time ON futures_liquidations(time_ms)`); err != nil {
+			return fmt.Errorf("liquidation time index: %w", err)
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 7); err != nil {
+			return err
+		}
 	}
 	return nil
 }

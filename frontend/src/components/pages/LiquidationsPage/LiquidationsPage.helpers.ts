@@ -56,6 +56,23 @@ export function parseLiqExchange(raw: string | null): LiqPageExchange {
   return 'all';
 }
 
+export function hasLiquidationTotals(
+  overview:
+    | {
+        coins?: unknown[] | null;
+        windows?: { totalNotional?: string | null; count?: number | null }[] | null;
+      }
+    | null
+    | undefined,
+): boolean {
+  if (!overview) return false;
+  if ((overview.coins?.length ?? 0) > 0) return true;
+  return (overview.windows ?? []).some((row) => {
+    const total = Number(row.totalNotional);
+    return (Number.isFinite(total) && total > 0) || (row.count ?? 0) > 0;
+  });
+}
+
 export function parseLiqSymbol(raw: string | null): string {
   const s = (raw ?? '').trim().toUpperCase().replace(/-/g, '');
   if (!s) return DEFAULT_LIQ_SYMBOL;

@@ -177,6 +177,18 @@ export function barSide(row: LevelRow, lastPrice: number): 'long' | 'short' {
   return row.shortN >= row.longN ? 'short' : 'long';
 }
 
+/** First stored print when earlier bars in the requested range are empty. */
+export function storedPrintStart(rows: TimeRow[]): number | null {
+  const first = rows.findIndex((row) => row.totalN > 0);
+  if (first <= 0) return null;
+  const at = rows[first]?.t ?? 0;
+  return at > 0 ? at : null;
+}
+
+export function formatStoredPrintStart(at: number): string {
+  return new Date(at).toISOString().slice(0, 16).replace('T', ' ');
+}
+
 export function toTimeRows(data?: MarketLiquidationLevels | null): TimeRow[] {
   return (data?.bars ?? []).map((bar) => {
     const t = Date.parse(bar.t ?? '');

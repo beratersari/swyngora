@@ -882,7 +882,6 @@ func (s *Service) GetLiquidations(ctx context.Context, exchange, symbol string) 
 
 // GetLiquidationOverview returns market-wide 1h/4h/12h/24h totals plus ranked coins.
 func (s *Service) GetLiquidationOverview(ctx context.Context, exchange, window string, limit int) (*domain.LiquidationOverview, error) {
-	_ = ctx
 	ex, err := domain.ParseLiquidationExchange(exchange)
 	if err != nil {
 		return nil, err
@@ -900,9 +899,9 @@ func (s *Service) GetLiquidationOverview(ctx context.Context, exchange, window s
 			Coins:      []domain.LiquidationCoinTile{},
 		}
 		domain.ApplyLiquidationCoverage(out, time.Now().UTC())
-		return out, nil
+		return s.applyStoredLiquidationOverview(ctx, out, ex, win, lim), nil
 	}
-	return s.liq.Overview(ex, win, lim), nil
+	return s.applyStoredLiquidationOverview(ctx, s.liq.Overview(ex, win, lim), ex, win, lim), nil
 }
 
 // GetLiquidationLevels returns CoinGlass-style price bars for one coin, or
@@ -923,16 +922,23 @@ func (s *Service) GetLiquidationLevels(ctx context.Context, exchange, symbol, ra
 	now := time.Now().UTC()
 	from := now.Add(-spec.Window)
 	if sym == "all" {
-		if spec.Window > 24*time.Hour {
-			from = now.Add(-24 * time.Hour)
-			spec.Window = 24 * time.Hour
-		}
-		step := domain.LiquidationTimeBarStep(spec.Window)
+		note := "Observed long/short liquidations for every tracked coin. Binance USD-M, Bybit linear, and OKX USDT-swap stay separate unless exchange=all. Combined does not invent the other venue's prints. Informational only."
 		var bars []domain.LiquidationTimeBar
-		if s.liq != nil {
-			bars = s.liq.TimeBars(ex, "all", from, now, step)
+		if stored, origin, ok := s.storedLiquidationBars(ctx, ex, from, now); ok {
+			bars = stored
+			from = origin
+			note = liquidationStoredNote
 		} else {
-			bars = []domain.LiquidationTimeBar{}
+			if spec.Window > 24*time.Hour {
+				from = now.Add(-24 * time.Hour)
+				spec.Window = 24 * time.Hour
+			}
+			step := domain.LiquidationTimeBarStep(spec.Window)
+			if s.liq != nil {
+				bars = s.liq.TimeBars(ex, "all", from, now, step)
+			} else {
+				bars = []domain.LiquidationTimeBar{}
+			}
 		}
 		rep := &domain.LiquidationLevelsReport{
 			Kind:     domain.LiquidationLevelsKindTotal,
@@ -942,7 +948,7 @@ func (s *Service) GetLiquidationLevels(ctx context.Context, exchange, symbol, ra
 			From:     from,
 			To:       now,
 			Bars:     bars,
-			Note:     "Observed long/short liquidations for every tracked coin. Binance USD-M and Bybit linear stay separate unless exchange=all. Combined does not invent the other venue's prints. Informational only.",
+			Note:     note,
 		}
 		if s.liq != nil {
 			rep.Feed = s.liq.Feed(ex)
