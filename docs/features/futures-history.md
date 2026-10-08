@@ -72,11 +72,22 @@ server restart and can be queried later by users or the AI.
 
 `metric`: `open_interest` | `funding` | `long_short` | `liquidations`
 
+Optional `bucket` is `5m`, `30m`, `2h`, or `4h`. With a bucket, the window is
+capped at 90 days and `limit` is ignored. Open interest, funding, and
+long/short keep the last sample in each step. Funding prefers a settled print
+over a later predicted one. Liquidations sum notional and quantity per venue
+and side, and the row time is the step open. A step with no sample is omitted
+and is not zero. Long/short items still carry `sizeLongPct` and
+`topAccLongPct` when that venue published them. Bybit has no top-trader share.
+An empty `bucket` keeps the newest raw rows. The coin chart sends the step
+that matches the loaded candles and draws open interest, plus the
+top-minus-crowd gap, from 00:00 UTC and from the current 4-hour open.
+
 ## Where the code lives
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/futures_history.go` |
+| Domain | `backend/internal/domain/futures_history.go`, `backend/internal/domain/futures_pane.go` |
 | Store | `backend/internal/adapter/futuresstore/` |
 | Service | `backend/internal/service/futureshist/` |
 | HTTP | `GET /api/v1/market/futures-history` |
@@ -98,4 +109,5 @@ server restart and can be queried later by users or the AI.
 ```bash
 cd backend && go test ./internal/domain/ ./internal/adapter/futuresstore/ ./internal/service/futureshist/ ./internal/transport/http/handler/
 curl "http://localhost:8080/api/v1/market/futures-history?metric=open_interest&symbol=BTCUSDT"
+curl "http://localhost:8080/api/v1/market/futures-history?metric=open_interest&symbol=BTCUSDT&bucket=2h"
 ```

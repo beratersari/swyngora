@@ -2,6 +2,7 @@ package futureshist
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -227,11 +228,42 @@ func (s *Service) History(ctx context.Context, q domain.FuturesHistoryQuery) (an
 	}
 	q.Exchange = ex
 	q.Limit = domain.ClampFuturesHistoryLimit(q.Limit)
+	if q.Bucket > 0 {
+		return s.bucketedHistory(ctx, q, metric)
+	}
 	if metric == "liquidations" {
 		return s.Store.ListLiquidations(ctx, ex, symbol, q.From, q.To, q.Limit)
 	}
 	q.Metric = metric
 	return s.Store.ListSnapshots(ctx, q)
+}
+
+type snapshotWindowStore interface {
+	ListSnapshotsWindow(ctx context.Context, q domain.FuturesHistoryQuery) ([]domain.FuturesSnapshot, error)
+}
+
+type liquidationBucketStore interface {
+	ListLiquidationBuckets(ctx context.Context, q domain.FuturesHistoryQuery) ([]domain.LiquidationEvent, error)
+}
+
+func (s *Service) bucketedHistory(ctx context.Context, q domain.FuturesHistoryQuery, metric string) (any, error) {
+	if metric == "liquidations" {
+		store, ok := s.Store.(liquidationBucketStore)
+		if !ok {
+			return nil, fmt.Errorf("%w: futures store cannot bucket liquidations", domain.ErrUpstream)
+		}
+		return store.ListLiquidationBuckets(ctx, q)
+	}
+	store, ok := s.Store.(snapshotWindowStore)
+	if !ok {
+		return nil, fmt.Errorf("%w: futures store cannot bucket snapshots", domain.ErrUpstream)
+	}
+	q.Metric = metric
+	rows, err := store.ListSnapshotsWindow(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	return domain.DownsampleSnapshots(metric, rows, q.Bucket), nil
 }
 
 // SaveSymbol fetches one venue independently and upserts samples.

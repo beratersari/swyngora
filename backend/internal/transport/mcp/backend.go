@@ -2337,7 +2337,7 @@ func (b *Backend) GetWhales(ctx context.Context, exchange, symbol string, minNot
 	return mustJSON(got)
 }
 
-func (b *Backend) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
+func (b *Backend) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to, bucket string, limit int) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
 	}
@@ -2356,11 +2356,17 @@ func (b *Backend) GetFuturesHistory(ctx context.Context, metric, exchange, symbo
 		}
 		toPtr = &t
 	}
-	got, err := b.Market.GetFuturesHistory(ctx, metric, exchange, symbol, fromPtr, toPtr, limit)
+	got, err := b.Market.GetFuturesHistory(ctx, metric, exchange, symbol, fromPtr, toPtr, limit, bucket)
 	if err != nil {
 		return nil, err
 	}
-	return mustJSON(futuresHistoryMap(metric, exchange, symbol, got))
+	body := futuresHistoryMap(metric, exchange, symbol, got)
+	if step, err := domain.ParseFuturesBucket(bucket); err == nil {
+		label, _ := domain.FuturesBucketLabel(step)
+		body["bucket"] = label
+		body["note"] = domain.FuturesPaneNote(step)
+	}
+	return mustJSON(body)
 }
 
 func (b *Backend) GetHistorySpan(ctx context.Context, symbol string) (json.RawMessage, error) {
@@ -2429,6 +2435,12 @@ func futuresHistoryMap(metric, exchange, symbol string, raw any) map[string]any 
 				item["shortPct"] = formatHistQty(r.ShortShare * 100)
 				item["ratio"] = formatHistQty(r.Ratio)
 				item["bias"] = domain.LongShortBias(r.Ratio)
+				if r.SizeLongShare > 0 {
+					item["sizeLongPct"] = formatHistQty(r.SizeLongShare * 100)
+				}
+				if r.TopAccLongShare > 0 {
+					item["topAccLongPct"] = formatHistQty(r.TopAccLongShare * 100)
+				}
 			}
 			items = append(items, item)
 		}

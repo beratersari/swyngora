@@ -1961,6 +1961,53 @@ func TestGetFuturesHistory_OK(t *testing.T) {
 	}
 }
 
+type recordFutHist struct {
+	q domain.FuturesHistoryQuery
+}
+
+func (r *recordFutHist) History(_ context.Context, q domain.FuturesHistoryQuery) (any, error) {
+	r.q = q
+	return []domain.FuturesSnapshot{}, nil
+}
+
+func TestGetFuturesHistory_BucketCapsTheWindow(t *testing.T) {
+	rec := &recordFutHist{}
+	svc := market.New(stubMarket{}, stubSupply{})
+	svc.SetFuturesHistory(rec)
+	h := NewMarketHandler(svc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/futures-history?metric=open_interest&symbol=BTCUSDT&bucket=2h&from=2020-01-01T00:00:00Z", nil)
+	rr := httptest.NewRecorder()
+	h.GetFuturesHistory(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if rec.q.Bucket != 2*time.Hour {
+		t.Fatalf("bucket %s", rec.q.Bucket)
+	}
+	if rec.q.From.Before(time.Now().UTC().Add(-91 * 24 * time.Hour)) {
+		t.Fatalf("from %s", rec.q.From)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["bucket"] != "2h" {
+		t.Fatalf("%+v", body["bucket"])
+	}
+}
+
+func TestGetFuturesHistory_BadBucket(t *testing.T) {
+	svc := market.New(stubMarket{}, stubSupply{})
+	svc.SetFuturesHistory(stubFutHist{})
+	h := NewMarketHandler(svc)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/futures-history?metric=open_interest&symbol=BTCUSDT&bucket=1h", nil)
+	rr := httptest.NewRecorder()
+	h.GetFuturesHistory(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestGetLongShortRatio_OK(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/long-short-ratio?symbol=BTCUSDT", nil)

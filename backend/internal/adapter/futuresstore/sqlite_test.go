@@ -342,3 +342,37 @@ func TestReopenKeepsRows(t *testing.T) {
 		t.Fatalf("reopen %+v %v", got, err)
 	}
 }
+
+func TestLiquidationBuckets_SumPerStep(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "futures.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	t0 := time.Date(2026, 10, 8, 10, 7, 0, 0, time.UTC)
+	events := []domain.LiquidationEvent{
+		{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Side: "short", Price: 1, Quantity: 1, Notional: 5, Time: t0},
+		{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Side: "short", Price: 1, Quantity: 1, Notional: 2, Time: t0.Add(time.Minute)},
+		{Exchange: domain.ExchangeBybit, Symbol: "BTCUSDT", Side: "long", Price: 1, Quantity: 1, Notional: 4, Time: t0.Add(2 * time.Minute)},
+	}
+	for _, e := range events {
+		if _, err := s.InsertLiquidation(context.Background(), e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := s.ListLiquidationBuckets(context.Background(), domain.FuturesHistoryQuery{
+		Symbol: "BTCUSDT", Exchange: "all", Bucket: 30 * time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := domain.DownsampleLiquidations(events, 30*time.Minute)
+	if len(got) != len(want) {
+		t.Fatalf("got %d want %d (%+v)", len(got), len(want), got)
+	}
+	for _, row := range got {
+		if row.Exchange == domain.ExchangeBinance && row.Side == "short" && row.Notional != 7 {
+			t.Fatalf("%+v", row)
+		}
+	}
+}

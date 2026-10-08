@@ -384,12 +384,18 @@ func (h *MarketHandler) GetFuturesHistory(w http.ResponseWriter, r *http.Request
 		}
 		toPtr = &t
 	}
-	got, err := h.svc.GetFuturesHistory(r.Context(), q.Get("metric"), q.Get("exchange"), q.Get("symbol"), fromPtr, toPtr, limit)
+	got, err := h.svc.GetFuturesHistory(r.Context(), q.Get("metric"), q.Get("exchange"), q.Get("symbol"), fromPtr, toPtr, limit, q.Get("bucket"))
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, futuresHistoryToDTO(q.Get("metric"), q.Get("exchange"), q.Get("symbol"), got))
+	body := futuresHistoryToDTO(q.Get("metric"), q.Get("exchange"), q.Get("symbol"), got)
+	if step, err := domain.ParseFuturesBucket(q.Get("bucket")); err == nil {
+		label, _ := domain.FuturesBucketLabel(step)
+		body["bucket"] = label
+		body["note"] = domain.FuturesPaneNote(step)
+	}
+	writeJSON(w, http.StatusOK, body)
 }
 
 // GetMarketLiquidity handles GET /api/v1/market/orderbook/liquidity.

@@ -153,6 +153,8 @@ type FuturesSnapshot struct {
 }
 
 // FuturesHistoryQuery filters durable samples.
+// Bucket, when set, asks for one sample per venue per step across the window
+// instead of the newest raw rows.
 type FuturesHistoryQuery struct {
 	Metric   string
 	Exchange string // binance | bybit | all
@@ -160,6 +162,7 @@ type FuturesHistoryQuery struct {
 	From     time.Time
 	To       time.Time
 	Limit    int
+	Bucket   time.Duration
 }
 
 // FuturesHistoryStore persists futures samples and liquidation events.

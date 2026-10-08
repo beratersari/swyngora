@@ -348,7 +348,9 @@ func (s *Service) SetFuturesHistory(r FuturesHistoryReader) {
 }
 
 // GetFuturesHistory returns persisted OI, funding, long/short, or liquidation rows.
-func (s *Service) GetFuturesHistory(ctx context.Context, metric, exchange, symbol string, from, to *time.Time, limit int) (any, error) {
+// bucket is empty for the newest raw rows, or 5m, 30m, 2h, or 4h for one
+// sample per step across the window.
+func (s *Service) GetFuturesHistory(ctx context.Context, metric, exchange, symbol string, from, to *time.Time, limit int, bucket string) (any, error) {
 	if s == nil || s.futHist == nil {
 		return nil, fmt.Errorf("%w: futures history not configured", domain.ErrUpstream)
 	}
@@ -358,6 +360,14 @@ func (s *Service) GetFuturesHistory(ctx context.Context, metric, exchange, symbo
 	}
 	if to != nil {
 		q.To = *to
+	}
+	if strings.TrimSpace(bucket) != "" {
+		step, err := domain.ParseFuturesBucket(bucket)
+		if err != nil {
+			return nil, err
+		}
+		q.Bucket = step
+		q.From, q.To = domain.ClampFuturesPaneWindow(q.From, q.To, time.Now().UTC())
 	}
 	s.noteFutures(symbol)
 	return s.futHist.History(ctx, q)

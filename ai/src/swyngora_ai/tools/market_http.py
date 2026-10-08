@@ -1192,10 +1192,14 @@ class FearGreedInput(BaseModel):
 class FuturesHistoryInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     metric: str = Field(description="open_interest | funding | long_short | liquidations")
-    exchange: str = Field(default="all", description="binance|bybit|all")
+    exchange: str = Field(default="all", description="binance|bybit|okx|all")
     limit: int = Field(default=200, ge=1, le=1000)
     start: str = Field(default="", description="RFC3339 or unix ms")
     end: str = Field(default="", description="RFC3339 or unix ms")
+    bucket: str = Field(
+        default="",
+        description="5m|30m|2h|4h. One sample per step across the window, capped at 90 days. Omit for the newest raw rows.",
+    )
 
 
 class HistorySpanInput(BaseModel):
@@ -2968,6 +2972,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         limit: int = 200,
         start: str = "",
         end: str = "",
+        bucket: str = "",
     ) -> str:
         params: dict[str, Any] = {
             "symbol": symbol,
@@ -2979,6 +2984,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             params["from"] = start
         if end:
             params["to"] = end
+        if bucket:
+            params["bucket"] = bucket
         return http.get("/api/v1/market/futures-history", params)
 
     def get_history_span(symbol: str) -> str:
@@ -5844,8 +5851,14 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="get_futures_history",
             description=(
                 "Durable stored history of futures open interest, funding, "
-                "long/short ratio, or liquidations. Survives restarts. "
-                "metric=open_interest|funding|long_short|liquidations."
+                "long/short ratio, or liquidations for Binance, Bybit, and OKX. "
+                "Survives restarts. metric=open_interest|funding|long_short|"
+                "liquidations. bucket=5m|30m|2h|4h returns one sample per step "
+                "across the window, capped at 90 days. Open interest, funding, "
+                "and long/short keep the last sample in the step. Funding "
+                "prefers a settled print. Liquidations sum notional. A step "
+                "with no sample is omitted and is not zero. Bybit long/short "
+                "has no top-trader share. Omit bucket for the newest raw rows."
             ),
             args_schema=FuturesHistoryInput,
         ),

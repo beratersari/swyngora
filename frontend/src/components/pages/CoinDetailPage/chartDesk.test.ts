@@ -25,8 +25,17 @@ import {
   fundingRateLines,
   futuresRecorded,
   liquidationNotionalByCandle,
+  liquidationBucketBars,
   liquidationProfile,
   openInterestLines,
+  anchoredChange,
+  anchoredVenueSeries,
+  chartAnchors,
+  chartPaneBucket,
+  chartPaneFromSec,
+  crowdGapLines,
+  crowdStoredLines,
+  venuesWithoutTop,
 } from './chartDesk';
 
 describe('chart desk mappers', () => {
@@ -509,6 +518,103 @@ describe('chart desk mappers', () => {
     ).toEqual([
       { kind: 'futures_oi', exchange: 'binance', spanSec: 3600 },
       { kind: 'flow', exchange: 'bybit', spanSec: 120 },
+    ]);
+  });
+
+  it('picks the stored step from the candle span', () => {
+    expect(chartPaneBucket(24 * 3600)).toBe('5m');
+    expect(chartPaneBucket(24 * 3600 + 1)).toBe('30m');
+    expect(chartPaneBucket(7 * 86400)).toBe('30m');
+    expect(chartPaneBucket(7 * 86400 + 1)).toBe('2h');
+    expect(chartPaneBucket(30 * 86400)).toBe('2h');
+    expect(chartPaneBucket(30 * 86400 + 1)).toBe('4h');
+  });
+
+  it('floors the pane start onto the step and keeps it inside 90 days', () => {
+    const now = 1_000_000_000;
+    expect(chartPaneFromSec(now - 3 * 3600, now, '5m') % 300).toBe(0);
+    const capped = chartPaneFromSec(now - 200 * 86400, now, '4h');
+    expect(capped).toBeGreaterThanOrEqual(now - 90 * 86400);
+    expect(now - capped).toBeLessThanOrEqual(90 * 86400);
+    expect(capped % (4 * 3600)).toBe(0);
+  });
+
+  it('anchors a level at the last sample that reached the open', () => {
+    const anchor = Date.parse('2026-10-08T00:00:00Z') / 1000;
+    expect(
+      anchoredChange(
+        [
+          { time: anchor - 3600, value: 100 },
+          { time: anchor + 3600, value: 140 },
+        ],
+        anchor,
+      ),
+    ).toEqual([
+      { time: anchor, value: 0 },
+      { time: anchor + 3600, value: 40 },
+    ]);
+    expect(anchoredChange([{ time: anchor + 60, value: 10 }], anchor)).toEqual([]);
+  });
+
+  it('plots stored crowd and top, and names Bybit when it has no top share', () => {
+    const rows = crowdStoredLines([
+      {
+        exchange: 'binance',
+        sampledAt: '2026-10-08T12:00:00Z',
+        longPct: '48',
+        sizeLongPct: '61',
+        topAccLongPct: '10',
+      },
+      { exchange: 'bybit', sampledAt: '2026-10-08T12:00:00Z', longPct: '55' },
+      { exchange: 'okx', sampledAt: '2026-10-08T12:00:00Z', longPct: '52', topAccLongPct: '70' },
+    ]);
+    expect(rows.map((row) => row.exchange)).toEqual(['binance', 'bybit', 'okx']);
+    expect(rows[0]?.top[0]?.value).toBe(61);
+    expect(rows[1]?.top).toEqual([]);
+    expect(rows[2]?.top[0]?.value).toBe(70);
+    expect(venuesWithoutTop(rows)).toEqual(['bybit']);
+    expect(crowdGapLines(rows).map((line) => line.exchange)).toEqual(['binance', 'okx']);
+    expect(crowdGapLines(rows)[0]?.data[0]?.value).toBe(13);
+  });
+
+  it('draws the day and 4-hour change and names a venue that has not reached the open', () => {
+    const day = Date.parse('2026-10-08T00:00:00Z') / 1000;
+    const block = Date.parse('2026-10-08T12:00:00Z') / 1000;
+    const read = anchoredVenueSeries(
+      [
+        {
+          exchange: 'binance',
+          data: [
+            { time: day - 3600, value: 100 },
+            { time: block, value: 130 },
+          ],
+        },
+        {
+          exchange: 'okx',
+          data: [{ time: block + 3600, value: 80 }],
+        },
+      ],
+      { day, block },
+      { day: (exchange) => `${exchange} day`, block: (exchange) => `${exchange} 4h` },
+      3,
+      'oi',
+    );
+    expect(read.series.map((line) => line.id)).toEqual(['oi-day-binance', 'oi-4h-binance']);
+    expect(read.series[0]?.data[0]?.value).toBe(0);
+    expect(read.missingDay).toEqual(['okx']);
+    expect(read.missingBlock).toEqual(['okx']);
+    expect(chartAnchors(block + 60).block).toBe(block);
+  });
+
+  it('sums liquidation steps across venues', () => {
+    const bars = liquidationBucketBars([
+      { time: '2026-10-08T10:00:00Z', side: 'short', notional: '5', exchange: 'binance' },
+      { time: '2026-10-08T10:00:00Z', side: 'long', notional: '2', exchange: 'bybit' },
+      { time: '2026-10-08T10:30:00Z', side: 'long', notional: '4', exchange: 'okx' },
+    ]);
+    expect(bars).toEqual([
+      { time: Date.parse('2026-10-08T10:00:00Z') / 1000, value: 3 },
+      { time: Date.parse('2026-10-08T10:30:00Z') / 1000, value: -4 },
     ]);
   });
 });

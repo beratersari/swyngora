@@ -516,6 +516,8 @@ describe('CoinDetailPage', () => {
     expect(screen.getByRole('switch', { name: /open interest/i })).toBeChecked();
     expect(screen.getByRole('switch', { name: /funding/i })).toBeChecked();
     expect(screen.getByRole('switch', { name: /crowd vs top/i })).toBeChecked();
+    expect(screen.getByTestId('chart-no-top')).toHaveTextContent(/Bybit/);
+    expect(screen.getByTestId('chart-no-top')).toHaveTextContent(/top-trader ratio/);
     expect(screen.getByRole('switch', { name: /open levels/i })).toBeChecked();
     expect(screen.getByRole('switch', { name: /liquidation levels/i })).toBeChecked();
     expect(screen.getByRole('switch', { name: /liq map/i })).not.toBeChecked();

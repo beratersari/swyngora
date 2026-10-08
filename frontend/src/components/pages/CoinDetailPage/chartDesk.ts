@@ -41,8 +41,80 @@ import { parseTapeNumber, unixSeconds } from './chartTape';
 /** Pane order for Binance, Bybit, and OKX lines. */
 export const FUTURES_PANE_VENUES = ['binance', 'bybit', 'okx'] as const;
 
-/** Newest stored rows the chart panes request. Matches the OpenAPI limit. */
+/** Raw futures-history reads cap here. The chart sends `bucket` instead. */
 export const FUTURES_PANE_LIMIT = 1000;
+
+export type ChartPaneBucket = '5m' | '30m' | '2h' | '4h';
+
+/** Stored chart window. Matches the futures archive cap. */
+export const CHART_PANE_MAX_SEC = 90 * 24 * 60 * 60;
+
+const PANE_BUCKET_SEC: Record<ChartPaneBucket, number> = {
+  '5m': 5 * 60,
+  '30m': 30 * 60,
+  '2h': 2 * 60 * 60,
+  '4h': 4 * 60 * 60,
+};
+
+/**
+ * Step for stored open interest, funding, crowd, and liquidation notional.
+ * Same cuts CVD uses: 5 minutes through 24 hours, 30 minutes through 7 days,
+ * 2 hours through 30 days, and 4 hours after that.
+ */
+export function chartPaneBucket(spanSec: number): ChartPaneBucket {
+  if (!Number.isFinite(spanSec) || spanSec <= DAY) return '5m';
+  if (spanSec <= 7 * DAY) return '30m';
+  if (spanSec <= 30 * DAY) return '2h';
+  return '4h';
+}
+
+/**
+ * Start of the stored window, floored to the step so a small tick does not refetch.
+ * Flooring never starts before the 90-day cap. The next step is used when the
+ * bucket open would fall outside that cap.
+ */
+export function chartPaneFromSec(firstSec: number, nowSec: number, bucket: ChartPaneBucket): number {
+  const step = PANE_BUCKET_SEC[bucket];
+  const earliest = nowSec - CHART_PANE_MAX_SEC;
+  const from = Math.max(firstSec, earliest);
+  const floored = Math.floor(from / step) * step;
+  if (floored < earliest) return floored + step;
+  return floored;
+}
+
+/** UTC day open and the current 4-hour open, in unix seconds. */
+export function chartAnchors(nowSec: number): { day: number; block: number } {
+  return {
+    day: Math.floor(nowSec / DAY) * DAY,
+    block: Math.floor(nowSec / (4 * HOUR)) * (4 * HOUR),
+  };
+}
+
+/**
+ * Change from the last sample at or before the anchor.
+ * Empty when no sample has reached that open. The line starts at zero there.
+ */
+export function anchoredChange(points: ChartLinePoint[], anchorSec: number): ChartLinePoint[] {
+  if (!Number.isFinite(anchorSec)) return [];
+  const sorted = points
+    .filter((point) => Number.isFinite(point.time) && Number.isFinite(point.value))
+    .sort((a, b) => a.time - b.time);
+  let baseline: number | null = null;
+  for (const point of sorted) {
+    if (point.time <= anchorSec) baseline = point.value;
+    else break;
+  }
+  if (baseline == null) return [];
+  const out: ChartLinePoint[] = [];
+  for (const point of sorted) {
+    if (point.time < anchorSec) continue;
+    out.push({ time: point.time, value: point.value - baseline });
+  }
+  if (out.length > 0 && out[0]!.time > anchorSec) {
+    out.unshift({ time: anchorSec, value: 0 });
+  }
+  return out;
+}
 
 /** Line color for one futures venue on a lower pane. */
 export function futuresPaneColor(exchange: string): string {
@@ -66,7 +138,23 @@ export type FuturesPaneRow = {
   predicted?: boolean;
   side?: string;
   notional?: string;
+  longPct?: string;
+  sizeLongPct?: string;
+  topAccLongPct?: string;
 };
+
+/** Day line uses the venue color. The 4-hour line uses a second color so the two anchors stay distinct. */
+export function futuresAnchorColor(exchange: string, anchor: 'day' | '4h'): string {
+  if (anchor === 'day') return futuresPaneColor(exchange);
+  switch (exchange) {
+    case 'bybit':
+      return semanticColors.chart.down;
+    case 'okx':
+      return semanticColors.chart.up;
+    default:
+      return semanticColors.text.link;
+  }
+}
 
 const HEAT_COLUMNS = 90;
 const HEAT_LEVELS = 24;
@@ -668,6 +756,173 @@ export function liquidationNotionalByCandle(
     i = j;
   }
   return out;
+}
+
+/**
+ * Liquidation notional already summed into chart steps.
+ * Positive is short liquidations. Negative is long liquidations.
+ * Venues at the same step are added. A step with no prints is omitted.
+ */
+export function liquidationBucketBars(items: FuturesPaneRow[] | undefined): ChartLinePoint[] {
+  const byTime = new Map<number, number>();
+  for (const row of items ?? []) {
+    const time = unixSeconds(row.time ?? row.sampledAt);
+    const notional = parseTapeNumber(row.notional);
+    if (time == null || notional == null || notional === 0) continue;
+    const side = (row.side ?? '').toLowerCase();
+    const signed = side === 'long' ? -Math.abs(notional) : side === 'short' ? Math.abs(notional) : 0;
+    if (signed === 0) continue;
+    byTime.set(time, (byTime.get(time) ?? 0) + signed);
+  }
+  return [...byTime.entries()]
+    .filter(([, value]) => value !== 0)
+    .map(([time, value]) => ({ time, value }))
+    .sort((a, b) => a.time - b.time);
+}
+
+export type CrowdStored = {
+  exchange: string;
+  crowd: ChartLinePoint[];
+  top: ChartLinePoint[];
+};
+
+/** Crowd long percent and top-trader long percent from stored long/short rows. */
+export function crowdStoredLines(items: FuturesPaneRow[] | undefined): CrowdStored[] {
+  const grouped = rowsByVenue(items);
+  const out: CrowdStored[] = [];
+  for (const exchange of FUTURES_PANE_VENUES) {
+    const crowd: ChartLinePoint[] = [];
+    const top: ChartLinePoint[] = [];
+    for (const row of grouped.get(exchange) ?? []) {
+      const time = unixSeconds(row.sampledAt);
+      const crowdPct = parseTapeNumber(row.longPct);
+      if (time == null || crowdPct == null) continue;
+      crowd.push({ time, value: crowdPct });
+      const sizePct = parseTapeNumber(row.sizeLongPct);
+      const accountPct = parseTapeNumber(row.topAccLongPct);
+      const topPct = sizePct != null && sizePct > 0 ? sizePct : accountPct;
+      if (topPct != null && topPct > 0) top.push({ time, value: topPct });
+    }
+    const crowdPoints = uniquePoints(crowd);
+    const topPoints = uniquePoints(top);
+    if (crowdPoints.length > 0 || topPoints.length > 0) {
+      out.push({ exchange, crowd: crowdPoints, top: topPoints });
+    }
+  }
+  return out;
+}
+
+/** Top long percent minus crowd long percent, only where both exist at the same time. */
+export function crowdGapLines(rows: CrowdStored[]): { exchange: string; data: ChartLinePoint[] }[] {
+  const out: { exchange: string; data: ChartLinePoint[] }[] = [];
+  for (const row of rows) {
+    const top = new Map(row.top.map((point) => [point.time, point.value]));
+    const data: ChartLinePoint[] = [];
+    for (const point of row.crowd) {
+      const topPct = top.get(point.time);
+      if (topPct == null) continue;
+      data.push({ time: point.time, value: topPct - point.value });
+    }
+    if (data.length > 0) out.push({ exchange: row.exchange, data });
+  }
+  return out;
+}
+
+/**
+ * Bybit never publishes a top-trader ratio. Another venue is named only when
+ * its crowd line is present and its top-trader share is not.
+ */
+export function venuesWithoutTop(rows: CrowdStored[]): string[] {
+  const hasTop = new Set(rows.filter((row) => row.top.length > 0).map((row) => row.exchange));
+  return FUTURES_PANE_VENUES.filter((id) => {
+    if (hasTop.has(id)) return false;
+    if (id === 'bybit') return true;
+    return rows.some((row) => row.exchange === id && row.crowd.length > 0);
+  });
+}
+
+export function crowdStoredSeries(
+  rows: CrowdStored[],
+  labels: CrowdChartLabels,
+  colors: { crowd: string; top: string; crowdAlt?: string; topAlt?: string },
+  pane: number,
+): CandleChartLowerSeries[] {
+  const out: CandleChartLowerSeries[] = [];
+  rows.forEach((row, index) => {
+    const suffix = rows.length > 1 ? `-${row.exchange}` : '';
+    const crowdTitle = labels.venueCrowd ? labels.venueCrowd(row.exchange) : labels.crowd;
+    const topTitle = labels.venueTop ? labels.venueTop(row.exchange) : labels.top;
+    const crowdColor = index === 0 ? colors.crowd : (colors.crowdAlt ?? colors.crowd);
+    const topColor = index === 0 ? colors.top : (colors.topAlt ?? colors.top);
+    if (row.crowd.length > 0) {
+      out.push({
+        id: `crowd-long${suffix}`,
+        pane,
+        kind: 'line',
+        title: crowdTitle,
+        color: crowdColor,
+        data: row.crowd,
+      });
+    }
+    if (row.top.length > 0) {
+      out.push({
+        id: `top-long${suffix}`,
+        pane,
+        kind: 'line',
+        title: topTitle,
+        color: topColor,
+        data: row.top,
+      });
+    }
+  });
+  return out;
+}
+
+export type AnchoredVenueSeries = {
+  series: CandleChartLowerSeries[];
+  missingDay: string[];
+  missingBlock: string[];
+};
+
+/** Change since the UTC day open and since the current 4-hour open, one pair of lines per venue. */
+export function anchoredVenueSeries(
+  lines: { exchange: string; data: ChartLinePoint[] }[],
+  anchors: { day: number; block: number },
+  titles: { day: (exchange: string) => string; block: (exchange: string) => string },
+  pane: number,
+  idPrefix: string,
+): AnchoredVenueSeries {
+  const series: CandleChartLowerSeries[] = [];
+  const missingDay: string[] = [];
+  const missingBlock: string[] = [];
+  for (const line of lines) {
+    if (line.data.length === 0) continue;
+    const day = anchoredChange(line.data, anchors.day);
+    const block = anchoredChange(line.data, anchors.block);
+    if (day.length === 0) missingDay.push(line.exchange);
+    else {
+      series.push({
+        id: `${idPrefix}-day-${line.exchange}`,
+        pane,
+        kind: 'line',
+        title: titles.day(line.exchange),
+        color: futuresAnchorColor(line.exchange, 'day'),
+        data: day,
+      });
+    }
+    if (block.length === 0) missingBlock.push(line.exchange);
+    else {
+      series.push({
+        id: `${idPrefix}-4h-${line.exchange}`,
+        pane,
+        kind: 'line',
+        title: titles.block(line.exchange),
+        color: futuresAnchorColor(line.exchange, '4h'),
+        data: block,
+      });
+    }
+  }
+  return { series, missingDay, missingBlock };
 }
 
 const TAPE_MAX_SEC = 30 * DAY;

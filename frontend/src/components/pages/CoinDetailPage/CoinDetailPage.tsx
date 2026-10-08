@@ -18,12 +18,17 @@ import {
   chartSweepVenue,
   chartTapeSpan,
   sweepSpanOutside,
-  crowdTopSeries,
+  anchoredVenueSeries,
+  chartAnchors,
+  chartPaneBucket,
+  chartPaneFromSec,
+  crowdGapLines,
+  crowdStoredLines,
+  crowdStoredSeries,
   footprintLevels,
   footprintWindow,
   formatRecordedSpan,
   fundingRateLines,
-  FUTURES_PANE_LIMIT,
   futuresPaneColor,
   recordedParts,
   liqHeatCells,
@@ -31,9 +36,10 @@ import {
   openLevelDelta,
   openLevelNotes,
   openLevelSegments,
-  liquidationNotionalByCandle,
+  liquidationBucketBars,
   liquidationProfile,
   openInterestLines,
+  venuesWithoutTop,
   type LiqHeatSide,
   type LiqHeatVenue,
 } from './chartDesk';
@@ -86,7 +92,6 @@ import {
   useGetMarketNetPositionQuery,
   useGetMarketLiquidationsQuery,
   useGetMarketCvdQuery,
-  useGetMarketLongShortRatioQuery,
   useGetMarketHistorySpanQuery,
   useGetMarketFuturesHistoryQuery,
   useGetMarketFlowAtPricesQuery,
@@ -582,14 +587,6 @@ export function CoinDetailPage() {
       refetchOnFocus: true,
     },
   );
-  const longShortQuery = useGetMarketLongShortRatioQuery(
-    { exchange: 'all', symbol: perpSymbol, limit: 100 },
-    {
-      skip: skipTape || !showCrowd,
-      pollingInterval: visible && showCrowd ? 60_000 : 0,
-      refetchOnFocus: true,
-    },
-  );
   const historySpanQuery = useGetMarketHistorySpanQuery(
     { symbol: perpSymbol },
     { skip: skipTape, refetchOnFocus: true },
@@ -769,17 +766,34 @@ export function CoinDetailPage() {
     return out;
   }, [allCandles, convert, displayCurrency, exchange, symbol]);
 
-  const futuresFrom = chartData[0] ? new Date(chartData[0].time * 1000).toISOString() : undefined;
+  const paneBarSec = candleIntervalSeconds(interval);
+  const paneSpanSec =
+    chartData.length > 0 && paneBarSec > 0
+      ? chartData[chartData.length - 1]!.time + paneBarSec - chartData[0]!.time
+      : 0;
+  const paneBucket = chartPaneBucket(paneSpanSec);
+  const paneFromSec =
+    chartData[0] != null
+      ? chartPaneFromSec(chartData[0].time, Math.floor(Date.now() / 1000), paneBucket)
+      : undefined;
   const futuresPaneBase = {
     symbol: perpSymbol,
-    exchange: 'all',
-    limit: FUTURES_PANE_LIMIT,
-    from: futuresFrom,
+    exchange: 'all' as const,
+    from: paneFromSec != null ? new Date(paneFromSec * 1000).toISOString() : undefined,
+    bucket: paneBucket,
   };
+  const crowdHistQuery = useGetMarketFuturesHistoryQuery(
+    { ...futuresPaneBase, metric: 'long_short' },
+    {
+      skip: skipTape || !showCrowd || paneFromSec == null,
+      pollingInterval: visible && showCrowd ? 60_000 : 0,
+      refetchOnFocus: true,
+    },
+  );
   const oiHistQuery = useGetMarketFuturesHistoryQuery(
     { ...futuresPaneBase, metric: 'open_interest' },
     {
-      skip: skipTape || !showOi,
+      skip: skipTape || !showOi || paneFromSec == null,
       pollingInterval: visible && showOi ? 60_000 : 0,
       refetchOnFocus: true,
     },
@@ -787,7 +801,7 @@ export function CoinDetailPage() {
   const fundingHistQuery = useGetMarketFuturesHistoryQuery(
     { ...futuresPaneBase, metric: 'funding' },
     {
-      skip: skipTape || !showFunding,
+      skip: skipTape || !showFunding || paneFromSec == null,
       pollingInterval: visible && showFunding ? 60_000 : 0,
       refetchOnFocus: true,
     },
@@ -795,7 +809,7 @@ export function CoinDetailPage() {
   const liqHistQuery = useGetMarketFuturesHistoryQuery(
     { ...futuresPaneBase, metric: 'liquidations' },
     {
-      skip: skipTape || !showLiqNotional,
+      skip: skipTape || !showLiqNotional || paneFromSec == null,
       pollingInterval: visible && showLiqNotional ? 60_000 : 0,
       refetchOnFocus: true,
     },
@@ -1027,6 +1041,39 @@ export function CoinDetailPage() {
     () => spotCvdSeries(chartCvdReport, spotExchange),
     [chartCvdReport, spotExchange],
   );
+  const positioningRead = useMemo(() => {
+    const anchors = chartAnchors(Math.floor(Date.now() / 1000));
+    const venueName = (id: string) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id });
+    const crowd = crowdStoredLines(rtkCurrent(crowdHistQuery)?.items);
+    const oiLines = openInterestLines(rtkCurrent(oiHistQuery)?.items);
+    return {
+      crowd,
+      noTop: venuesWithoutTop(crowd),
+      oiLines,
+      funding: fundingRateLines(rtkCurrent(fundingHistQuery)?.items),
+      liqBars: liquidationBucketBars(rtkCurrent(liqHistQuery)?.items),
+      oiAnchor: anchoredVenueSeries(
+        oiLines,
+        anchors,
+        {
+          day: (id) => t('detail:chart.oiDay', { venue: venueName(id) }),
+          block: (id) => t('detail:chart.oi4h', { venue: venueName(id) }),
+        },
+        0,
+        'oi',
+      ),
+      gapAnchor: anchoredVenueSeries(
+        crowdGapLines(crowd),
+        anchors,
+        {
+          day: (id) => t('detail:chart.gapDay', { venue: venueName(id) }),
+          block: (id) => t('detail:chart.gap4h', { venue: venueName(id) }),
+        },
+        0,
+        'gap',
+      ),
+    };
+  }, [crowdHistQuery, oiHistQuery, fundingHistQuery, liqHistQuery, t]);
   const lowerSeries: CandleChartLowerSeries[] = useMemo(() => {
     if (isEquity || barDurationSec <= 0) return [];
     const series: CandleChartLowerSeries[] = [];
@@ -1128,15 +1175,16 @@ export function CoinDetailPage() {
       }
     }
     if (showCrowd) {
+      const venueName = (id: string) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id });
       const before = series.length;
       series.push(
-        ...crowdTopSeries(
-          rtkCurrent(longShortQuery),
+        ...crowdStoredSeries(
+          positioningRead.crowd,
           {
             crowd: t('detail:chart.crowdLine'),
             top: t('detail:chart.topLine'),
-            venueCrowd: (venue) => t('detail:chart.crowdLineVenue', { venue }),
-            venueTop: (venue) => t('detail:chart.topLineVenue', { venue }),
+            venueCrowd: (venue) => t('detail:chart.crowdLineVenue', { venue: venueName(venue) }),
+            venueTop: (venue) => t('detail:chart.topLineVenue', { venue: venueName(venue) }),
           },
           {
             crowd: semanticColors.accent.default,
@@ -1148,32 +1196,46 @@ export function CoinDetailPage() {
         ),
       );
       if (series.length > before) pane += 1;
+      if (positioningRead.gapAnchor.series.length > 0) {
+        for (const line of positioningRead.gapAnchor.series) {
+          series.push({ ...line, pane });
+        }
+        pane += 1;
+      }
     }
     if (showOi) {
-      const lines = openInterestLines(rtkCurrent(oiHistQuery)?.items);
-      if (lines.length > 0) {
-        for (const line of lines) {
+      if (positioningRead.oiLines.length > 0) {
+        for (const line of positioningRead.oiLines) {
           series.push({
             id: `oi-${line.exchange}`,
             pane,
             kind: 'line',
-            title: t('detail:chart.oiLine', { exchange: line.exchange }),
+            title: t('detail:chart.oiLine', {
+              exchange: t(`detail:liqHeatmap.venues.${line.exchange}`, { defaultValue: line.exchange }),
+            }),
             color: futuresPaneColor(line.exchange),
             data: line.data,
           });
         }
         pane += 1;
       }
+      if (positioningRead.oiAnchor.series.length > 0) {
+        for (const line of positioningRead.oiAnchor.series) {
+          series.push({ ...line, pane });
+        }
+        pane += 1;
+      }
     }
     if (showFunding) {
-      const lines = fundingRateLines(rtkCurrent(fundingHistQuery)?.items);
-      if (lines.length > 0) {
-        for (const line of lines) {
+      if (positioningRead.funding.length > 0) {
+        for (const line of positioningRead.funding) {
           series.push({
             id: `funding-${line.exchange}`,
             pane,
             kind: 'line',
-            title: t('detail:chart.fundingLine', { exchange: line.exchange }),
+            title: t('detail:chart.fundingLine', {
+              exchange: t(`detail:liqHeatmap.venues.${line.exchange}`, { defaultValue: line.exchange }),
+            }),
             color: futuresPaneColor(line.exchange),
             data: line.data,
           });
@@ -1182,11 +1244,7 @@ export function CoinDetailPage() {
       }
     }
     if (showLiqNotional) {
-      const bars = liquidationNotionalByCandle(
-        chartData,
-        rtkCurrent(liqHistQuery)?.items,
-        barDurationSec,
-      );
+      const bars = positioningRead.liqBars;
       if (bars.length > 0) {
         series.push({
           id: 'liq-notional',
@@ -1229,10 +1287,7 @@ export function CoinDetailPage() {
     chartData,
     tapeCvd,
     spotCvd,
-    longShortQuery,
-    oiHistQuery,
-    fundingHistQuery,
-    liqHistQuery,
+    positioningRead,
     openLevelsQuery,
     t,
   ]);
@@ -1515,6 +1570,7 @@ export function CoinDetailPage() {
     if (showSignalMarkers) {
       void scannerResultsQuery.refetch();
     }
+    if (showCrowd) void crowdHistQuery.refetch();
     if (showOi) void oiHistQuery.refetch();
     if (showFunding) void fundingHistQuery.refetch();
     if (showLiqNotional) void liqHistQuery.refetch();
@@ -1760,6 +1816,7 @@ export function CoinDetailPage() {
             historyLoading ||
             (showPumpMarkers && pumpsQuery.isFetching) ||
             (showSignalMarkers && scannerResultsQuery.isFetching) ||
+            (showCrowd && crowdHistQuery.isFetching) ||
             (showOi && oiHistQuery.isFetching) ||
             (showFunding && fundingHistQuery.isFetching) ||
             (showLiqNotional && liqHistQuery.isFetching) ||
@@ -1829,6 +1886,51 @@ export function CoinDetailPage() {
               showOpenLevels) ? (
               <Text variant="caption" color="secondary">
                 {t('detail:chart.tapeHint')}
+              </Text>
+            ) : null}
+            {!isEquity && showCrowd && positioningRead.noTop.length > 0 ? (
+              <Text variant="caption" color="secondary" data-testid="chart-no-top">
+                {t('detail:chart.noTopVenue', {
+                  venues: positioningRead.noTop
+                    .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
+                    .join(', '),
+                })}
+              </Text>
+            ) : null}
+            {!isEquity && showOi && positioningRead.oiAnchor.missingDay.length > 0 ? (
+              <Text variant="caption" color="secondary" data-testid="chart-oi-day-missing">
+                {t('detail:chart.oiDayMissing', {
+                  venues: positioningRead.oiAnchor.missingDay
+                    .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
+                    .join(', '),
+                })}
+              </Text>
+            ) : null}
+            {!isEquity && showOi && positioningRead.oiAnchor.missingBlock.length > 0 ? (
+              <Text variant="caption" color="secondary" data-testid="chart-oi-4h-missing">
+                {t('detail:chart.oi4hMissing', {
+                  venues: positioningRead.oiAnchor.missingBlock
+                    .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
+                    .join(', '),
+                })}
+              </Text>
+            ) : null}
+            {!isEquity && showCrowd && positioningRead.gapAnchor.missingDay.length > 0 ? (
+              <Text variant="caption" color="secondary" data-testid="chart-gap-day-missing">
+                {t('detail:chart.gapDayMissing', {
+                  venues: positioningRead.gapAnchor.missingDay
+                    .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
+                    .join(', '),
+                })}
+              </Text>
+            ) : null}
+            {!isEquity && showCrowd && positioningRead.gapAnchor.missingBlock.length > 0 ? (
+              <Text variant="caption" color="secondary" data-testid="chart-gap-4h-missing">
+                {t('detail:chart.gap4hMissing', {
+                  venues: positioningRead.gapAnchor.missingBlock
+                    .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
+                    .join(', '),
+                })}
               </Text>
             ) : null}
             {!isEquity &&
@@ -2171,7 +2273,23 @@ export function CoinDetailPage() {
                     ? 72
                     : 100
                   : 0) +
-                (lowerSeries.some((s) => s.id.startsWith('oi-')) ? (isPhone ? 72 : 100) : 0) +
+                (lowerSeries.some((s) => s.id.startsWith('gap-day-') || s.id.startsWith('gap-4h-'))
+                  ? isPhone
+                    ? 72
+                    : 100
+                  : 0) +
+                (lowerSeries.some(
+                  (s) => s.id === 'oi-binance' || s.id === 'oi-bybit' || s.id === 'oi-okx',
+                )
+                  ? isPhone
+                    ? 72
+                    : 100
+                  : 0) +
+                (lowerSeries.some((s) => s.id.startsWith('oi-day-') || s.id.startsWith('oi-4h-'))
+                  ? isPhone
+                    ? 72
+                    : 100
+                  : 0) +
                 (lowerSeries.some((s) => s.id.startsWith('funding-')) ? (isPhone ? 72 : 100) : 0) +
                 (lowerSeries.some((s) => s.id === 'liq-notional') ? (isPhone ? 72 : 120) : 0) +
                 (lowerSeries.some((s) => s.id === 'open-liq-delta') ? (isPhone ? 72 : 100) : 0)

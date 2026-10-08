@@ -1463,7 +1463,7 @@ func (c *APIClient) GetWhales(ctx context.Context, exchange, symbol string, minN
 }
 
 // GetFuturesHistory returns durable stored futures samples or liquidation events.
-func (c *APIClient) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error) {
+func (c *APIClient) GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to, bucket string, limit int) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)
 	q.Set("metric", metric)
@@ -1475,6 +1475,9 @@ func (c *APIClient) GetFuturesHistory(ctx context.Context, metric, exchange, sym
 	}
 	if to != "" {
 		q.Set("to", to)
+	}
+	if bucket != "" {
+		q.Set("bucket", bucket)
 	}
 	if limit > 0 {
 		q.Set("limit", strconv.Itoa(limit))

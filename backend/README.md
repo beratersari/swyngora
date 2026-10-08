@@ -73,7 +73,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/funding-arb/signals` | Open/closed min-profit crossings (predicted vs settled when clocks have passed) |
 | `GET` | `/api/v1/funding-arb/signals/{id}` | One crossing plus predicted-vs-settled review |
 | `GET` | `/api/v1/market/long-short-ratio` | Account long/short ratio + recent 5m history on Binance, Bybit, and OKX. Binance and OKX `gap` is top long% minus crowd long%; `divergence` is top vs price |
-| `GET` | `/api/v1/market/futures-history` | Durable stored OI / funding / long-short / liquidation history |
+| `GET` | `/api/v1/market/futures-history` | Durable stored OI / funding / long-short / liquidation history. Optional `bucket` of `5m`, `30m`, `2h`, or `4h` returns one sample per step across at most 90 days. A step with no sample is omitted. Bybit long/short has no top-trader share |
 | `GET` | `/api/v1/market/unusual` | Whether funding, 24h open-interest change, completed-hour liquidations, completed-day CVD, and hourly spread are high or low versus that coin’s own stored samples. Venues stay separate. Print size stays unknown |
 | `GET` | `/api/v1/market/unusual/scan` | Liquid USDT perpetuals (up to 100) whose same readings are high or low versus their own stored samples. Typical and unknown rows are left off |
 | `GET` | `/api/v1/market/history-span` | How long futures open interest, the spot book, and flow-at-prices have actually been stored for one coin. Venues with no rows are omitted. Binance tape for the liquid list is walked back about 7 days |

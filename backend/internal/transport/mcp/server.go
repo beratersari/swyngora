@@ -68,7 +68,7 @@ type DataPort interface {
 	ListFundingArbSignals(ctx context.Context, clientID, status string, limit int) (json.RawMessage, error)
 	GetFundingArbSignal(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
-	GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to string, limit int) (json.RawMessage, error)
+	GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to, bucket string, limit int) (json.RawMessage, error)
 	GetHistorySpan(ctx context.Context, symbol string) (json.RawMessage, error)
 	GetUnusual(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	ScanUnusual(ctx context.Context, exchange, metric string, limit int) (json.RawMessage, error)
@@ -1114,13 +1114,14 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_futures_history",
-		mcp.WithDescription("Durable stored history of futures open interest, funding, long/short ratio, or liquidations (Binance USD-M + Bybit linear). Survives restarts. metric=open_interest|funding|long_short|liquidations. Prefer this for past values, not the live snapshot tools."),
+		mcp.WithDescription("Durable stored history of futures open interest, funding, long/short ratio, or liquidations for Binance USD-M, Bybit linear, and OKX USDT-swap. Survives restarts. metric=open_interest|funding|long_short|liquidations. bucket=5m|30m|2h|4h returns one sample per step across from..to, capped at 90 days: last open interest, last funding (settled preferred), last crowd and top-trader long share, or summed liquidation notional. A bucket with no sample is omitted and is not zero. Bybit long/short has no top-trader share. Omit bucket for the newest raw rows. The coin chart uses these steps for the candles on screen and draws open interest and the top-minus-crowd gap since 00:00 UTC and since the current 4-hour open. Prefer this for past values, not the live snapshot tools."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("metric", mcp.Required(), mcp.Description("open_interest | funding | long_short | liquidations")),
-		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all)")),
 		mcp.WithString("from", mcp.Description("RFC3339 or unix ms start")),
 		mcp.WithString("to", mcp.Description("RFC3339 or unix ms end")),
-		mcp.WithNumber("limit", mcp.Description("Max rows, default 200")),
+		mcp.WithString("bucket", mcp.Description("5m | 30m | 2h | 4h. Omit for the newest raw rows.")),
+		mcp.WithNumber("limit", mcp.Description("Max raw rows, default 200. Ignored when bucket is set.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")
 		if err != nil {
@@ -1130,7 +1131,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.GetFuturesHistory(ctx, metric, req.GetString("exchange", "all"), symbol, req.GetString("from", ""), req.GetString("to", ""), int(req.GetFloat("limit", 0)))
+		raw, err := api.GetFuturesHistory(ctx, metric, req.GetString("exchange", "all"), symbol, req.GetString("from", ""), req.GetString("to", ""), req.GetString("bucket", ""), int(req.GetFloat("limit", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

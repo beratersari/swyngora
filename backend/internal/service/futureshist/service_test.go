@@ -85,6 +85,17 @@ func (m *memStore) PurgeOlderThan(context.Context, time.Time) (int, int, error) 
 	return 0, 0, nil
 }
 
+func (m *memStore) ListSnapshotsWindow(ctx context.Context, q domain.FuturesHistoryQuery) ([]domain.FuturesSnapshot, error) {
+	return m.ListSnapshots(ctx, q)
+}
+
+func (m *memStore) ListLiquidationBuckets(_ context.Context, q domain.FuturesHistoryQuery) ([]domain.LiquidationEvent, error) {
+	m.mu.Lock()
+	rows := append([]domain.LiquidationEvent(nil), m.liq...)
+	m.mu.Unlock()
+	return domain.DownsampleLiquidations(rows, q.Bucket), nil
+}
+
 type fakeOI struct {
 	ser *domain.OpenInterestSeries
 	err error
@@ -258,5 +269,34 @@ func TestWorker_RunOnceIndependentVenues(t *testing.T) {
 	})
 	if len(got) != 1 {
 		t.Fatalf("want binance row only, got %+v", got)
+	}
+}
+
+func TestHistory_BucketKeepsLastSample(t *testing.T) {
+	t0 := time.Date(2026, 10, 8, 10, 0, 0, 0, time.UTC)
+	st := &memStore{snap: []domain.FuturesSnapshot{
+		{Metric: domain.FuturesMetricOpenInterest, Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", SampledAt: t0, Value: 100},
+		{Metric: domain.FuturesMetricOpenInterest, Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", SampledAt: t0.Add(10 * time.Minute), Value: 140},
+		{Metric: domain.FuturesMetricOpenInterest, Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", SampledAt: t0.Add(time.Hour), Value: 90},
+	}}
+	svc := &Service{Store: st}
+	raw, err := svc.History(context.Background(), domain.FuturesHistoryQuery{
+		Metric: domain.FuturesMetricOpenInterest, Exchange: "all", Symbol: "BTCUSDT", Bucket: 30 * time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := raw.([]domain.FuturesSnapshot)
+	if len(got) != 2 {
+		t.Fatalf("%d %+v", len(got), got)
+	}
+	var early float64
+	for _, row := range got {
+		if row.SampledAt.Equal(t0.Add(10 * time.Minute)) {
+			early = row.Value
+		}
+	}
+	if early != 140 {
+		t.Fatalf("early %v %+v", early, got)
 	}
 }

@@ -1202,8 +1202,20 @@ export interface paths {
          *     interval and (for liquidations) as events arrive. Duplicates are ignored.
          *     One venue failing does not drop the other. Survives process restarts.
          *     Items are newest first. Open interest rows carry contracts and value.
-         *     Funding rows carry rate, ratePct, and predicted. Liquidation rows carry
-         *     time, side, price, quantity, and notional.
+         *     Funding rows carry rate, ratePct, and predicted. Long/short rows carry
+         *     the account long share, and Binance and OKX also carry top-trader
+         *     position and account long shares. Bybit has no top-trader share.
+         *     Liquidation rows carry time, side, price, quantity, and notional.
+         *     Without bucket, the response is the newest raw rows up to limit.
+         *     With bucket (5m, 30m, 2h, or 4h), each item is one step across from..to,
+         *     capped at 90 days. Open interest, funding, and long/short keep the last
+         *     sample in the step. Funding prefers a settled print. Liquidations sum
+         *     notional per venue and side, and the row time is the step open. A step
+         *     with no sample is omitted and is not zero. The coin chart uses these
+         *     steps for the candles on screen: 5 minutes through 24 hours, 30 minutes
+         *     through 7 days, 2 hours through 30 days, and 4 hours through 90 days.
+         *     It also draws open interest and the top-minus-crowd gap since 00:00 UTC
+         *     and since the current 4-hour open.
          */
         get: operations["getMarketFuturesHistory"];
         put?: never;
@@ -5990,6 +6002,8 @@ export interface components {
             metric?: "open_interest" | "funding" | "long_short" | "liquidations";
             exchange?: string;
             symbol?: string;
+            /** @description Set when each item is one 5m, 30m, 2h, or 4h step. */
+            bucket?: string;
             count?: number;
             note?: string;
             items?: components["schemas"]["MarketFuturesHistoryItem"][];
@@ -11941,7 +11955,13 @@ export interface operations {
                 exchange?: string;
                 from?: string;
                 to?: string;
+                /** @description Max raw rows. Ignored when bucket is set. */
                 limit?: number;
+                /**
+                 * @description 5m, 30m, 2h, or 4h. One sample per step across the window instead
+                 *     of the newest raw rows. A step with no sample is omitted.
+                 */
+                bucket?: "5m" | "30m" | "2h" | "4h";
             };
             header?: never;
             path?: never;

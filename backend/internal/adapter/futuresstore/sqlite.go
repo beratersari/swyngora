@@ -368,13 +368,25 @@ func (s *SQLite) earliestSpans(ctx context.Context, prefix, metric string, symbo
 	return out, rows.Err()
 }
 
-// ListSnapshots returns samples newest first.
+// ListSnapshots returns samples newest first, capped at the raw history limit.
 func (s *SQLite) ListSnapshots(ctx context.Context, q domain.FuturesHistoryQuery) ([]domain.FuturesSnapshot, error) {
+	return s.listSnapshots(ctx, q, domain.ClampFuturesHistoryLimit(q.Limit))
+}
+
+// ListSnapshotsWindow returns samples in the query window, newest first,
+// up to MaxFuturesPaneRows. Callers fold the rows into chart buckets.
+func (s *SQLite) ListSnapshotsWindow(ctx context.Context, q domain.FuturesHistoryQuery) ([]domain.FuturesSnapshot, error) {
+	return s.listSnapshots(ctx, q, domain.MaxFuturesPaneRows)
+}
+
+func (s *SQLite) listSnapshots(ctx context.Context, q domain.FuturesHistoryQuery, limit int) ([]domain.FuturesSnapshot, error) {
 	if s == nil || s.db == nil {
 		return nil, fmt.Errorf("futures store is nil")
 	}
 	q.Symbol = domain.NormalizeLiquidationSymbol(q.Symbol)
-	limit := domain.ClampFuturesHistoryLimit(q.Limit)
+	if limit <= 0 {
+		limit = domain.DefaultFuturesHistoryLimit
+	}
 	var b strings.Builder
 	args := []any{q.Metric, q.Symbol}
 	b.WriteString(`SELECT metric, exchange, symbol, sampled_at_ms, predicted,
@@ -467,6 +479,62 @@ func (s *SQLite) ListLiquidations(ctx context.Context, exchange, symbol string, 
 			return nil, err
 		}
 		e.Exchange = domain.Exchange(ex)
+		e.Time = time.UnixMilli(ms).UTC()
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// ListLiquidationBuckets sums notional per venue and side inside each bucket.
+// The row time is the bucket open. A bucket with no prints is absent.
+func (s *SQLite) ListLiquidationBuckets(ctx context.Context, q domain.FuturesHistoryQuery) ([]domain.LiquidationEvent, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("futures store is nil")
+	}
+	if q.Bucket <= 0 {
+		return nil, fmt.Errorf("%w: bucket is required", domain.ErrInvalidArgument)
+	}
+	symbol := domain.NormalizeLiquidationSymbol(q.Symbol)
+	bucketMs := q.Bucket.Milliseconds()
+	var b strings.Builder
+	args := []any{bucketMs, bucketMs, symbol}
+	b.WriteString(`SELECT exchange, side, (time_ms / ?) * ?, SUM(quantity), SUM(notional)
+		FROM futures_liquidations WHERE symbol = ?`)
+	if q.Exchange != "" && q.Exchange != "all" {
+		b.WriteString(` AND exchange = ?`)
+		args = append(args, q.Exchange)
+	}
+	if !q.From.IsZero() {
+		b.WriteString(` AND time_ms >= ?`)
+		args = append(args, q.From.UTC().UnixMilli())
+	}
+	if !q.To.IsZero() {
+		b.WriteString(` AND time_ms <= ?`)
+		args = append(args, q.To.UTC().UnixMilli())
+	}
+	b.WriteString(` GROUP BY exchange, side, time_ms / ? ORDER BY 3 DESC`)
+	args = append(args, bucketMs)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows, err := s.db.QueryContext(ctx, b.String(), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.LiquidationEvent
+	for rows.Next() {
+		var e domain.LiquidationEvent
+		var ex string
+		var ms int64
+		if err := rows.Scan(&ex, &e.Side, &ms, &e.Quantity, &e.Notional); err != nil {
+			return nil, err
+		}
+		if e.Notional == 0 && e.Quantity == 0 {
+			continue
+		}
+		e.Exchange = domain.Exchange(ex)
+		e.Symbol = symbol
 		e.Time = time.UnixMilli(ms).UTC()
 		out = append(out, e)
 	}
