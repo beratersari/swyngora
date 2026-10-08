@@ -102,16 +102,12 @@ function seriesStart(points: { time?: string }[] | undefined): number | null {
   return min;
 }
 
-/**
- * Futures CVD for the chart.
- * Combined is used only when it is complete and reaches as far back as the
- * page venue. Otherwise the page venue is drawn, and venues that start later
- * are named. A spot page uses Binance.
- */
-export function futuresCvdSeries(
-  report: MarketCvd | undefined,
-  pageExchange = 'binance',
-): {
+/** Futures combined needs every one of these. A missing venue is not zero. */
+export const FUTURES_CVD_VENUES = ['binance', 'bybit', 'okx'] as const;
+/** Spot CVD is Binance klines and Bybit trades. OKX has no spot tape. */
+export const SPOT_CVD_VENUES = ['binance', 'bybit'] as const;
+
+export type CvdChartSeries = {
   points: TapeDeltaPoint[];
   dayFrom: number | null;
   blockFrom: number | null;
@@ -122,36 +118,66 @@ export function futuresCvdSeries(
   withheld: string[];
   /** Current run on the venue whose line is drawn. Absent when price and CVD agree. */
   split: CvdChartSplit | null;
-} {
+};
+
+type CvdSide = {
+  venues?: MarketCvd['venues'];
+  combined?: MarketCvd['combined'];
+};
+
+function venueId(venue: { exchange?: string } | undefined): string {
+  return (venue?.exchange ?? '').trim().toLowerCase();
+}
+
+/** Ready means this venue's own tape reaches the window and has bars. */
+function venueReady(venue: NonNullable<MarketCvd['venues']>[number] | undefined): boolean {
+  if (!venue || venue.error) return false;
+  if (venue.complete !== true) return false;
+  return (venue.points?.length ?? 0) > 0;
+}
+
+/**
+ * CVD for one market.
+ * Combined is drawn only when it is complete, it reaches the page venue,
+ * and every expected venue's own tape is complete. Otherwise the page venue
+ * is drawn. A Coinbase or OKX page asks for Binance spot. Venues that do
+ * not cover the window are named.
+ */
+function pickCvdSeries(
+  side: CvdSide | undefined,
+  pageExchange: string,
+  expected: readonly string[],
+  range: string,
+  bar: string,
+): CvdChartSeries {
+  const venues = side?.venues ?? [];
   const want = pageExchange.trim().toLowerCase();
-  const page = report?.venues?.find(
-    (venue) =>
-      (venue.exchange ?? '').toLowerCase() === want && (venue.points?.length ?? 0) > 0,
-  );
+  const page = venues.find((venue) => venueId(venue) === want && (venue.points?.length ?? 0) > 0);
   const combined =
-    report?.combined?.points && report.combined.points.length > 0 ? report.combined : undefined;
+    side?.combined?.points && side.combined.points.length > 0 ? side.combined : undefined;
   const pageStart = seriesStart(page?.points);
   const combinedStart = seriesStart(combined?.points);
+  const everyVenueReady = expected.every((id) => venues.some((venue) => venueId(venue) === id && venueReady(venue)));
   const combinedCovers =
+    everyVenueReady &&
     combined != null &&
     combined.complete === true &&
     (pageStart == null || (combinedStart != null && combinedStart <= pageStart + 60));
   const venue = combinedCovers
     ? combined
-    : (page ?? report?.venues?.find((item) => (item.points?.length ?? 0) > 0));
-  const source = combinedCovers ? 'combined' : (venue?.exchange ?? '').toLowerCase();
+    : (page ?? venues.find((item) => (item.points?.length ?? 0) > 0));
+  const source = combinedCovers ? 'combined' : venueId(venue);
   const drawnStart = seriesStart(venue?.points);
   const withheld =
     source === 'combined' || source === ''
       ? []
-      : (report?.venues ?? [])
-          .filter((item) => {
-            const id = (item.exchange ?? '').toLowerCase();
-            if (!id || id === source) return false;
-            const start = seriesStart(item.points);
-            return start == null || (drawnStart != null && start > drawnStart + 60);
-          })
-          .map((item) => (item.exchange ?? '').toLowerCase());
+      : expected.filter((id) => {
+          const row = venues.find((item) => venueId(item) === id);
+          if (id === source && venueReady(row)) return false;
+          if (!venueReady(row)) return true;
+          const start = seriesStart(row?.points);
+          return start == null || (drawnStart != null && start > drawnStart + 60);
+        });
   const points: TapeDeltaPoint[] = [];
   for (const p of venue?.points ?? []) {
     const time = unixSeconds(p.time);
@@ -168,12 +194,37 @@ export function futuresCvdSeries(
     dayFrom: dayAnchor ?? (last != null ? utcDayOpenSec(last) : null),
     blockFrom: blockAnchor ?? (last != null ? utc4hOpenSec(last) : null),
     complete: venue?.complete === true,
-    range: report?.range ?? '24h',
-    bar: report?.bar ?? '5m',
+    range,
+    bar,
     source,
     withheld,
     split: chartSplit(venue),
   };
+}
+
+/** Futures CVD. A spot page passes Binance as the page venue. */
+export function futuresCvdSeries(report: MarketCvd | undefined, pageExchange = 'binance'): CvdChartSeries {
+  return pickCvdSeries(
+    { venues: report?.venues, combined: report?.combined },
+    pageExchange,
+    FUTURES_CVD_VENUES,
+    report?.range ?? '24h',
+    report?.bar ?? '5m',
+  );
+}
+
+/**
+ * Spot CVD. OKX is not expected. A Coinbase or OKX page passes Binance so the
+ * line is named Binance when combined is off.
+ */
+export function spotCvdSeries(report: MarketCvd | undefined, pageExchange = 'binance'): CvdChartSeries {
+  return pickCvdSeries(
+    { venues: report?.spotVenues, combined: report?.spotCombined },
+    pageExchange,
+    SPOT_CVD_VENUES,
+    report?.range ?? '24h',
+    report?.bar ?? '5m',
+  );
 }
 
 /**

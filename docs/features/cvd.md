@@ -34,17 +34,22 @@ Useful when:
   and the same confirms / opposite / absorption label. `complete` is
   false when the stored bars start after the anchor — the number is
   then only the bars on hand. The coin tape shows both next to last CVD.
-  The coin price chart draws the same resets as two lines under the
-  candles, plus each candle's buy−sell `delta` as a histogram. The chart
-  uses combined futures points only when that series is complete and
-  reaches as far as the page venue. Otherwise it draws the page venue
-  (Binance on a spot page) and names a venue that starts later.
+  The coin price chart draws futures and spot separately. Each market
+  gets a line since 00:00 UTC and a line since the current 4-hour open,
+  labeled with Futures or Spot and the venue (or Combined). On a range
+  longer than 24h it also draws that market's running sum. Buy−sell
+  `delta` stays the futures histogram. Combined is drawn only when every
+  expected venue's own tape is complete and reaches the page venue.
+  Futures expects Binance, Bybit, and OKX. Spot expects Binance and Bybit.
+  Otherwise the chart draws the page venue and names who is missing.
+  A Coinbase or OKX page uses Binance for spot and says Binance.
 - Combined **adds** each venue’s delta on the overlapping **time range**
   (a quiet 5m slot on one side is treated as 0, not a hole). Combined
-  `complete` follows both venues — one missing 5m bucket at the start
-  does not make a 24h tape look unfinished. A short Bybit history still
-  does **not** make combined complete. `overlapFrom` / `overlapTo` mark
-  that range.
+  `complete` is false when any venue passed in has no points or has not
+  reached the window open. One missing 5m bucket at the start, when every
+  venue otherwise covers the lookback, does not make a 24h tape look
+  unfinished. A short Bybit history still does **not** make combined
+  complete. `overlapFrom` / `overlapTo` mark that range.
 - Combined points and `contributions` show how much **Binance** and
   **Bybit** each added. `venueSplit` flags when one venue’s CVD rose
   while the other fell (`alignment=opposite`)
@@ -76,8 +81,9 @@ Futures CVD on Binance, Bybit, and OKX is the sum of measured prints
 while the server is recording. A 24h series is `complete` only after
 that tape covers it. A 7d, 30d, or 90d series uses the same minutes and
 is `complete` only when the oldest stored minute reaches the start of
-that range. The coin chart keeps the day and 4-hour anchors, and on a
-longer range also draws the running sum across the whole range. Older
+that range. The coin chart keeps the day and 4-hour anchors for futures
+and for spot, and on a longer range also draws each market's running sum.
+Older
 Binance rows that were base volume × the mark were dropped once (schema
 version 6) so they are not added on top of the measured minutes.
 

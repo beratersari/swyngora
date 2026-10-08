@@ -5477,8 +5477,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "30d (2-hour), or 90d (4-hour) from stored minutes. "
                 "Binance minutes for the liquid list are filled from public "
                 "aggTrades, about 7 days. Bybit and OKX stay on minutes this "
-                "process recorded. Combined is complete only when every venue "
-                "covers the range. "
+                "process recorded. Futures combined is complete only when Binance, "
+                "Bybit, and OKX each cover the range. Spot combined "
+                "(spotVenues / spotCombined) needs Binance and Bybit. OKX has "
+                "no spot CVD. A missing venue keeps combined incomplete. "
                 "Price vs CVD divergence is the current consecutive "
                 "run only. Combined shows Binance vs Bybit when they disagree."
             ),

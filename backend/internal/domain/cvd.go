@@ -388,10 +388,10 @@ func BuildCVDSeriesSpan(ex Exchange, symbol string, buckets []TakerBucket, price
 	return out
 }
 
-// CombineCVDVenues sums per-bar delta on the overlap both venues have (never averages).
-// Combined is complete only when every contributing venue is complete and the overlap
-// covers the full lookback — a short Bybit history must not make a Binance-heavy series
-// look finished.
+// CombineCVDVenues sums per-bar delta on the overlap the venues share (never averages).
+// Combined is complete only when every venue passed in has points and is itself
+// complete. A missing venue is not treated as zero. A short history on one venue
+// must not make the others' longer tape look finished.
 func CombineCVDVenues(symbol string, venues []CVDVenueSeries, prices []CVDPrice, now time.Time) *CVDVenueSeries {
 	symbol = NormalizeLiquidationSymbol(symbol)
 	now = now.UTC()
@@ -489,23 +489,52 @@ func CombineCVDVenues(symbol string, venues []CVDVenueSeries, prices []CVDPrice,
 		out.Windows = append(out.Windows, stat)
 	}
 	out.Anchors = attachCVDAnchors(out.Points, now, started)
-	allComplete := true
+	usableIncomplete := false
 	for _, v := range usable {
 		if !v.Complete {
-			allComplete = false
+			usableIncomplete = true
 			break
 		}
 	}
-	// Both venues already have a full lookback: do not fail complete just
-	// because the first shared 5m slot is a bucket later than now-24h.
-	out.Complete = allComplete
+	// A venue that was requested and has no bars is not zero. Combined stays
+	// incomplete until every venue passed in reaches the window open.
+	// Venues that do cover the lookback stay complete when the first shared
+	// bar is one bucket later than the cut.
+	missing := cvdVenuesWithoutPoints(venues)
+	out.Complete = !usableIncomplete && len(missing) == 0
 	out.Divergence = summarizeCVDDivergence(out.Points, out.Windows)
 	out.VenueSplit = pickCVDVenueSplit(out.Windows)
 	out.Summary = ExplainCVDVenue(*out)
 	if !out.Complete {
-		out.Summary = strings.TrimSpace(overlapIncompleteNote(from, now) + " " + out.Summary)
+		notes := make([]string, 0, 2)
+		if len(missing) > 0 {
+			notes = append(notes, fmt.Sprintf(
+				"Combined CVD stays incomplete until %s reaches the window open.",
+				strings.Join(missing, ", "),
+			))
+		}
+		if usableIncomplete {
+			notes = append(notes, overlapIncompleteNote(from, now))
+		}
+		out.Summary = strings.TrimSpace(strings.Join(notes, " ") + " " + out.Summary)
 	}
 	return out
+}
+
+// cvdVenuesWithoutPoints names venues that were asked for and did not return bars.
+func cvdVenuesWithoutPoints(venues []CVDVenueSeries) []string {
+	missing := make([]string, 0)
+	for _, v := range venues {
+		if v.Error == "" && len(v.Points) > 0 {
+			continue
+		}
+		name := string(v.Exchange)
+		if name == "" {
+			name = "venue"
+		}
+		missing = append(missing, name)
+	}
+	return missing
 }
 
 // CVDPrice is a close used to plot CVD against price.

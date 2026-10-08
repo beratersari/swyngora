@@ -200,8 +200,10 @@ import {
   anchoredCvdByCandle,
   deltaByCandle,
   futuresCvdSeries,
+  spotCvdSeries,
   liquidationChartLevels,
   runningCvdByCandle,
+  type CvdChartSeries,
 } from './chartTape';
 import {
   absorptionDeskNote,
@@ -1020,6 +1022,11 @@ export function CoinDetailPage() {
     () => futuresCvdSeries(chartCvdReport, cvdExchange),
     [chartCvdReport, cvdExchange],
   );
+  const spotExchange = exchange === 'bybit' ? 'bybit' : 'binance';
+  const spotCvd = useMemo(
+    () => spotCvdSeries(chartCvdReport, spotExchange),
+    [chartCvdReport, spotExchange],
+  );
   const lowerSeries: CandleChartLowerSeries[] = useMemo(() => {
     if (isEquity || barDurationSec <= 0) return [];
     const series: CandleChartLowerSeries[] = [];
@@ -1039,51 +1046,85 @@ export function CoinDetailPage() {
         pane += 1;
       }
     }
-    if (showCvd && cvdRange !== '24h') {
-      const running = runningCvdByCandle(chartData, tapeCvd.points, barDurationSec);
-      if (running.length > 0) {
-        series.push({
-          id: 'cvd-range',
-          pane,
-          kind: 'line',
-          title: t('detail:chart.cvdRunning', { range: cvdRange }),
-          color: semanticColors.text.link,
-          data: running,
-        });
-        pane += 1;
-      }
-    }
     if (showCvd) {
-      const day =
-        tapeCvd.dayFrom != null
-          ? anchoredCvdByCandle(chartData, tapeCvd.points, tapeCvd.dayFrom, barDurationSec)
-          : [];
-      const block =
-        tapeCvd.blockFrom != null
-          ? anchoredCvdByCandle(chartData, tapeCvd.points, tapeCvd.blockFrom, barDurationSec)
-          : [];
-      if (day.length > 0 || block.length > 0) {
-        if (day.length > 0) {
-          series.push({
-            id: 'cvd-day',
-            pane,
-            kind: 'line',
-            title: t('detail:chart.cvdDay'),
-            color: semanticColors.accent.default,
-            data: day,
-          });
+      const cvdLayers: {
+        prefix: string;
+        tape: CvdChartSeries;
+        market: string;
+        running: string;
+        day: string;
+        block: string;
+      }[] = [
+        {
+          prefix: '',
+          tape: tapeCvd,
+          market: t('detail:chart.cvdFutures'),
+          running: semanticColors.text.link,
+          day: semanticColors.accent.default,
+          block: semanticColors.status.warning,
+        },
+        {
+          prefix: 'spot-',
+          tape: spotCvd,
+          market: t('detail:chart.cvdSpot'),
+          running: semanticColors.chart.down,
+          day: semanticColors.chart.up,
+          block: semanticColors.text.link,
+        },
+      ];
+      for (const layer of cvdLayers) {
+        const venue = t(`detail:liqHeatmap.venues.${layer.tape.source}`, {
+          defaultValue: layer.tape.source,
+        });
+        if (cvdRange !== '24h') {
+          const running = runningCvdByCandle(chartData, layer.tape.points, barDurationSec);
+          if (running.length > 0) {
+            series.push({
+              id: `${layer.prefix}cvd-range`,
+              pane,
+              kind: 'line',
+              title: t('detail:chart.cvdRunningNamed', {
+                market: layer.market,
+                venue,
+                range: cvdRange,
+              }),
+              color: layer.running,
+              data: running,
+            });
+            pane += 1;
+          }
         }
-        if (block.length > 0) {
-          series.push({
-            id: 'cvd-4h',
-            pane,
-            kind: 'line',
-            title: t('detail:chart.cvd4h'),
-            color: semanticColors.status.warning,
-            data: block,
-          });
+        const day =
+          layer.tape.dayFrom != null
+            ? anchoredCvdByCandle(chartData, layer.tape.points, layer.tape.dayFrom, barDurationSec)
+            : [];
+        const block =
+          layer.tape.blockFrom != null
+            ? anchoredCvdByCandle(chartData, layer.tape.points, layer.tape.blockFrom, barDurationSec)
+            : [];
+        if (day.length > 0 || block.length > 0) {
+          if (day.length > 0) {
+            series.push({
+              id: `${layer.prefix}cvd-day`,
+              pane,
+              kind: 'line',
+              title: t('detail:chart.cvdDayNamed', { market: layer.market, venue }),
+              color: layer.day,
+              data: day,
+            });
+          }
+          if (block.length > 0) {
+            series.push({
+              id: `${layer.prefix}cvd-4h`,
+              pane,
+              kind: 'line',
+              title: t('detail:chart.cvd4hNamed', { market: layer.market, venue }),
+              color: layer.block,
+              data: block,
+            });
+          }
+          pane += 1;
         }
-        pane += 1;
       }
     }
     if (showCrowd) {
@@ -1187,6 +1228,7 @@ export function CoinDetailPage() {
     liqMapVenue,
     chartData,
     tapeCvd,
+    spotCvd,
     longShortQuery,
     oiHistQuery,
     fundingHistQuery,
@@ -1794,7 +1836,22 @@ export function CoinDetailPage() {
             tapeCvd.points.length > 0 &&
             !tapeCvd.complete ? (
               <Text variant="caption" color="secondary" data-testid="chart-cvd-partial">
-                {t('detail:chart.cvdPartial', { range: cvdRange })}
+                {t('detail:chart.cvdPartialNamed', {
+                  market: t('detail:chart.cvdFutures'),
+                  range: cvdRange,
+                })}
+              </Text>
+            ) : null}
+            {!isEquity &&
+            showCvd &&
+            cvdRange !== '24h' &&
+            spotCvd.points.length > 0 &&
+            !spotCvd.complete ? (
+              <Text variant="caption" color="secondary" data-testid="chart-spot-cvd-partial">
+                {t('detail:chart.cvdPartialNamed', {
+                  market: t('detail:chart.cvdSpot'),
+                  range: cvdRange,
+                })}
               </Text>
             ) : null}
             {!isEquity && showCvd && tapeCvd.split ? (
@@ -1822,6 +1879,18 @@ export function CoinDetailPage() {
                     defaultValue: tapeCvd.source,
                   }),
                   venues: tapeCvd.withheld
+                    .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
+                    .join(', '),
+                })}
+              </Text>
+            ) : null}
+            {!isEquity && showCvd && spotCvd.points.length > 0 && spotCvd.withheld.length > 0 ? (
+              <Text variant="caption" color="secondary" data-testid="chart-spot-cvd-venue">
+                {t('detail:chart.cvdVenueSpot', {
+                  exchange: t(`detail:liqHeatmap.venues.${spotCvd.source}`, {
+                    defaultValue: spotCvd.source,
+                  }),
+                  venues: spotCvd.withheld
                     .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
                     .join(', '),
                 })}
@@ -2087,6 +2156,12 @@ export function CoinDetailPage() {
                 (lowerSeries.some((s) => s.id === 'delta') ? (isPhone ? 72 : 120) : 0) +
                 (lowerSeries.some((s) => s.id === 'cvd-range') ? (isPhone ? 72 : 120) : 0) +
                 (lowerSeries.some((s) => s.id === 'cvd-day' || s.id === 'cvd-4h')
+                  ? isPhone
+                    ? 72
+                    : 120
+                  : 0) +
+                (lowerSeries.some((s) => s.id === 'spot-cvd-range') ? (isPhone ? 72 : 120) : 0) +
+                (lowerSeries.some((s) => s.id === 'spot-cvd-day' || s.id === 'spot-cvd-4h')
                   ? isPhone
                     ? 72
                     : 120

@@ -251,6 +251,42 @@ func TestCombineCVDVenues_CompleteDespiteBucketSkew(t *testing.T) {
 	}
 }
 
+func TestCombineCVDVenues_MissingVenueIsNotComplete(t *testing.T) {
+	t0 := time.Date(2026, 8, 16, 0, 0, 0, 0, time.UTC)
+	now := t0.Add(24 * time.Hour)
+	var binBuckets, bybBuckets []TakerBucket
+	var prices []CVDPrice
+	for i := 0; i < 24*12; i++ {
+		at := t0.Add(time.Duration(i) * 5 * time.Minute)
+		binBuckets = append(binBuckets, TakerBucket{
+			Exchange: ExchangeBinance, Symbol: "BTCUSDT", Start: at, BuyNotional: 10,
+		})
+		bybBuckets = append(bybBuckets, TakerBucket{
+			Exchange: ExchangeBybit, Symbol: "BTCUSDT", Start: at, BuyNotional: 4,
+		})
+		prices = append(prices, CVDPrice{Time: at, Close: 64000})
+	}
+	bin := BuildCVDSeries(ExchangeBinance, "BTCUSDT", binBuckets, prices, now, t0)
+	byb := BuildCVDSeries(ExchangeBybit, "BTCUSDT", bybBuckets, prices, now, t0)
+	okx := CVDVenueSeries{Exchange: ExchangeOKX, Symbol: "BTCUSDT", Error: "no tape"}
+	if !bin.Complete || !byb.Complete {
+		t.Fatalf("setup complete bin=%v byb=%v", bin.Complete, byb.Complete)
+	}
+	got := CombineCVDVenues("BTCUSDT", []CVDVenueSeries{bin, byb, okx}, prices, now)
+	if got == nil {
+		t.Fatal("nil")
+	}
+	if got.Complete {
+		t.Fatalf("complete summary=%s", got.Summary)
+	}
+	if len(got.Points) == 0 {
+		t.Fatal("overlap of the venues that have bars should still be returned")
+	}
+	if !strings.Contains(got.Summary, "okx") {
+		t.Fatalf("summary %s", got.Summary)
+	}
+}
+
 func TestCombineCVDVenues_FillsMissingMiddleBucket(t *testing.T) {
 	t0 := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
 	now := t0.Add(15 * time.Minute)

@@ -1021,6 +1021,8 @@ export type MarketCvd = {
   note?: string;
   venues?: MarketCvdVenue[];
   combined?: MarketCvdVenue;
+  /** Binance and Bybit spot tape. OKX is not a spot CVD venue. */
+  spotVenues?: MarketCvdVenue[];
   spotCombined?: MarketCvdVenue;
   spotFutures?: { summary?: string };
 };

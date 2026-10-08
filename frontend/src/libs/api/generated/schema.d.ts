@@ -1807,13 +1807,16 @@ export interface paths {
          *     Binance minutes for the liquid USDT list are filled in the
          *     background from public USD-M aggTrades, about 7 days, one hour
          *     at a time. Bybit and OKX stay on the minutes this process
-         *     recorded. The coin chart draws one venue when combined is not
-         *     complete, and names a venue that starts later.
+         *     recorded. The coin chart draws futures and spot as separate lines.
+         *     Combined is drawn only when every expected venue reaches the window
+         *     open. Otherwise it draws the page venue and names who is missing.
+         *     A Coinbase page shows Binance spot CVD and says Binance.
          *     `exchange=all`
-         *     (default) returns Binance and Bybit separately plus a combined
-         *     series. Combined uses the overlapping **time range** (a missing
-         *     5m slot is 0) and is `complete` when both venues are. Combined
-         *     `venueSplit` flags Binance CVD up / Bybit down (or the reverse).
+         *     (default) returns each futures venue plus combined. Combined uses
+         *     the overlapping **time range** (a missing 5m slot is 0) and is
+         *     `complete` only when every venue passed in has reached the window
+         *     open. Futures expects Binance, Bybit, and OKX. Spot expects Binance
+         *     and Bybit. OKX has no spot CVD.
          *     `venues` / `combined` are futures; `spotVenues` / `spotCombined`
          *     are spot. `spotFutures` flags when spot CVD and futures CVD
          *     disagree. Informational only.
@@ -7259,7 +7262,11 @@ export interface components {
          *     uses 5-minute bars. `7d` uses 30-minute bars, `30d` uses 2-hour bars,
          *     and `90d` uses 4-hour bars, folded from stored minutes. Anchors reset
          *     the sum at 00:00 UTC (`day`) and the current 4-hour open (`4h`).
-         *     The coin chart rebases those points onto candle times.
+         *     The coin chart draws futures and spot as separate lines and rebases
+         *     those points onto candle times. Futures combined is complete only when
+         *     Binance, Bybit, and OKX each reach the window open. Spot combined is
+         *     complete only when Binance and Bybit do. OKX has no spot CVD. A missing
+         *     venue is named and is not counted as zero.
          */
         MarketCvdReport: {
             symbol?: string;
@@ -7274,6 +7281,8 @@ export interface components {
             note?: string;
             venues?: components["schemas"]["MarketCvdSeries"][];
             combined?: components["schemas"]["MarketCvdSeries"];
+            /** @description Binance and Bybit spot CVD. OKX is omitted. */
+            spotVenues?: components["schemas"]["MarketCvdSeries"][];
             spotCombined?: components["schemas"]["MarketCvdSeries"];
         };
         /** @description Stored-tape replay. Combined is omitted when any expected venue has no complete bar. */

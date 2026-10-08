@@ -4,6 +4,7 @@ import {
   anchoredCvdByCandle,
   deltaByCandle,
   futuresCvdSeries,
+  spotCvdSeries,
   liquidationChartLevels,
   parseTapeNumber,
   runningCvdByCandle,
@@ -96,7 +97,11 @@ describe('chartTape', () => {
           { anchor: '4h', from: '2026-09-28T08:00:00Z' },
         ],
       },
-      venues: [{ exchange: 'binance', points: [{ time: '2026-09-28T10:00:00Z', delta: '+9' }] }],
+      venues: [
+        { exchange: 'binance', complete: true, points: [{ time: '2026-09-28T10:00:00Z', delta: '+9' }] },
+        { exchange: 'bybit', complete: true, points: [{ time: '2026-09-28T10:00:00Z', delta: '+4' }] },
+        { exchange: 'okx', complete: true, points: [{ time: '2026-09-28T10:00:00Z', delta: '+1' }] },
+      ],
     };
     const series = futuresCvdSeries(report, 'binance');
     expect(series.source).toBe('combined');
@@ -178,7 +183,11 @@ describe('chartTape', () => {
           durationSeconds: 2100,
         },
       },
-      venues: [{ exchange: 'binance', points: [{ time: '2026-09-28T10:00:00Z', delta: '+9' }] }],
+      venues: [
+        { exchange: 'binance', complete: true, points: [{ time: '2026-09-28T10:00:00Z', delta: '+9' }] },
+        { exchange: 'bybit', complete: true, points: [{ time: '2026-09-28T10:00:00Z', delta: '+4' }] },
+        { exchange: 'okx', complete: true, points: [{ time: '2026-09-28T10:00:00Z', delta: '+1' }] },
+      ],
     };
     const series = futuresCvdSeries(report, 'binance');
     expect(series.source).toBe('combined');
@@ -228,6 +237,70 @@ describe('chartTape', () => {
       ],
     };
     expect(futuresCvdSeries(report, 'binance').split?.kind).toBe('price_up_cvd_down');
+  });
+
+  it('does not draw futures combined while OKX is missing', () => {
+    const report: MarketCvd = {
+      combined: {
+        complete: true,
+        points: [{ time: '2026-09-28T10:00:00Z', delta: '+3' }],
+      },
+      venues: [
+        { exchange: 'binance', complete: true, points: [{ time: '2026-09-28T10:00:00Z', delta: '+9' }] },
+        { exchange: 'bybit', complete: true, points: [{ time: '2026-09-28T10:00:00Z', delta: '+4' }] },
+      ],
+    };
+    const series = futuresCvdSeries(report, 'coinbase');
+    expect(series.source).toBe('binance');
+    expect(series.withheld).toEqual(['okx']);
+    expect(series.points.map((p) => p.delta)).toEqual([9]);
+  });
+
+  it('draws combined spot CVD only when Binance and Bybit both cover the window', () => {
+    const covered = { time: '2026-09-28T10:00:00Z', delta: '+2' };
+    const report: MarketCvd = {
+      spotCombined: { complete: true, points: [{ time: '2026-09-28T10:00:00Z', delta: '+6' }] },
+      spotVenues: [
+        { exchange: 'binance', complete: true, points: [covered] },
+        { exchange: 'bybit', complete: true, points: [{ time: '2026-09-28T10:00:00Z', delta: '+4' }] },
+      ],
+    };
+    expect(spotCvdSeries(report, 'binance').source).toBe('combined');
+    expect(spotCvdSeries(report, 'binance').withheld).toEqual([]);
+  });
+
+  it('names Binance spot CVD on a Coinbase page when Bybit has not covered the window', () => {
+    const report: MarketCvd = {
+      spotCombined: {
+        complete: true,
+        points: [{ time: '2026-09-28T10:00:00Z', delta: '+6' }],
+      },
+      spotVenues: [
+        {
+          exchange: 'binance',
+          complete: true,
+          points: [{ time: '2026-09-28T10:00:00Z', delta: '+8' }],
+        },
+        { exchange: 'bybit', complete: false, points: [] },
+      ],
+    };
+    const series = spotCvdSeries(report, 'binance');
+    expect(series.source).toBe('binance');
+    expect(series.withheld).toEqual(['bybit']);
+    expect(series.points.map((p) => p.delta)).toEqual([8]);
+  });
+
+  it('names Bybit when the Bybit spot line is the one that has not covered the window', () => {
+    const at = { time: '2026-09-28T10:00:00Z', delta: '+1' };
+    const report: MarketCvd = {
+      spotVenues: [
+        { exchange: 'binance', complete: true, points: [{ time: '2026-09-28T10:00:00Z', delta: '+8' }] },
+        { exchange: 'bybit', complete: false, points: [at] },
+      ],
+    };
+    const series = spotCvdSeries(report, 'bybit');
+    expect(series.source).toBe('bybit');
+    expect(series.withheld).toEqual(['bybit']);
   });
 
   it('picks the strongest long below last and short above last per leverage', () => {
