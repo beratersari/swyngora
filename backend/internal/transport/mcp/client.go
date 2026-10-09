@@ -1501,6 +1501,26 @@ func (c *APIClient) GetFuturesHistory(ctx context.Context, metric, exchange, sym
 	return c.get(ctx, "/api/v1/market/futures-history", q)
 }
 
+// GetPositioningAnchor restarts open interest, funding, and liquidation notional at one candle.
+func (c *APIClient) GetPositioningAnchor(ctx context.Context, exchange, symbol, anchor, bucket, from, to string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	q.Set("anchor", anchor)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if bucket != "" {
+		q.Set("bucket", bucket)
+	}
+	if from != "" {
+		q.Set("from", from)
+	}
+	if to != "" {
+		q.Set("to", to)
+	}
+	return c.get(ctx, "/api/v1/market/positioning-anchor", q)
+}
+
 // GetHistorySpan returns how long stored futures, book, and flow samples cover.
 func (c *APIClient) GetHistorySpan(ctx context.Context, symbol string) (json.RawMessage, error) {
 	q := url.Values{}

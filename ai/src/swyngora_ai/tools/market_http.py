@@ -741,6 +741,21 @@ class CvdInput(BaseModel):
     )
 
 
+class PositioningAnchorInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    anchor: str = Field(description="RFC3339 candle time. Restarts open interest, funding, and liquidation notional from that bar.")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|okx|all (default all)",
+    )
+    bucket: str = Field(
+        default="",
+        description="5m | 30m | 2h | 4h. Empty follows the from..to span the same way the coin chart does.",
+    )
+    start: str = Field(default="", description="Optional RFC3339 start of the stored window")
+    end: str = Field(default="", description="Optional RFC3339 end of the stored window")
+
+
 class TapeBacktestInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -2544,6 +2559,23 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if anchor:
             params["anchor"] = anchor
         return http.get("/api/v1/market/cvd", params)
+
+    def get_positioning_anchor(
+        symbol: str,
+        anchor: str,
+        exchange: str = "all",
+        bucket: str = "",
+        start: str = "",
+        end: str = "",
+    ) -> str:
+        params: dict[str, Any] = {"symbol": symbol, "anchor": anchor, "exchange": exchange}
+        if bucket:
+            params["bucket"] = bucket
+        if start:
+            params["from"] = start
+        if end:
+            params["to"] = end
+        return http.get("/api/v1/market/positioning-anchor", params)
 
     def get_tape_backtest(
         symbol: str,
@@ -5534,6 +5566,21 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "run only. Combined shows Binance vs Bybit when they disagree."
             ),
             args_schema=CvdInput,
+        ),
+        StructuredTool.from_function(
+            get_positioning_anchor,
+            name="get_positioning_anchor",
+            description=(
+                "Restart stored open interest, funding, and liquidation notional "
+                "at one candle for Binance, Bybit, and OKX. Open interest and "
+                "funding are the change from the last sample at or before that "
+                "candle. A venue with no sample by then is named and left off. "
+                "Liquidation notional sums from that candle, short positive and "
+                "long negative. A first print after the candle is late and the "
+                "line starts there. anchor is RFC3339. bucket is 5m, 30m, 2h, "
+                "or 4h."
+            ),
+            args_schema=PositioningAnchorInput,
         ),
         StructuredTool.from_function(
             get_tape_backtest,

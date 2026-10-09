@@ -991,6 +991,37 @@ export function anchoredVenueSeries(
   return { series, missingDay, missingBlock };
 }
 
+/** Click-anchor lines from the positioning-anchor read. Empty points stay off. */
+export function positioningClickLines(
+  series: { exchange?: string; points?: { time?: string; value?: string }[] }[] | undefined,
+  title: (exchange: string) => string,
+  pane: number,
+  idPrefix: string,
+): CandleChartLowerSeries[] {
+  const out: CandleChartLowerSeries[] = [];
+  for (const row of series ?? []) {
+    const exchange = (row.exchange ?? '').toLowerCase();
+    const data: ChartLinePoint[] = [];
+    for (const point of row.points ?? []) {
+      const time = unixSeconds(point.time);
+      const value = parseTapeNumber(point.value);
+      if (time == null || value == null) continue;
+      data.push({ time, value });
+    }
+    const points = uniquePoints(data);
+    if (!exchange || points.length === 0) continue;
+    out.push({
+      id: `${idPrefix}-${exchange}`,
+      pane,
+      kind: 'line',
+      title: title(exchange),
+      color: futuresPaneColor(exchange),
+      data: points,
+    });
+  }
+  return out;
+}
+
 const TAPE_MAX_SEC = 30 * DAY;
 const TAPE_QUANTUM_SEC = 15 * MINUTE;
 /** Spot sweeps are the last ~7 days of 15-minute candles. */

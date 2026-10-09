@@ -40,6 +40,7 @@ import {
   liquidationBucketBars,
   liquidationProfile,
   openInterestLines,
+  positioningClickLines,
   venuesWithoutTop,
   type LiqHeatSide,
   type LiqHeatVenue,
@@ -95,6 +96,7 @@ import {
   useGetMarketCvdQuery,
   useGetMarketHistorySpanQuery,
   useGetMarketFuturesHistoryQuery,
+  useGetMarketPositioningAnchorQuery,
   useGetMarketFlowAtPricesQuery,
   useGetMarketLiquiditySweepsQuery,
   useGetMarketVolumeProfileQuery,
@@ -842,6 +844,47 @@ export function CoinDetailPage() {
       refetchOnFocus: true,
     },
   );
+  const positioningClickOn = !isEquity && (showOi || showFunding || showLiqNotional);
+  const positioningAnchorQuery = useGetMarketPositioningAnchorQuery(
+    {
+      symbol: perpSymbol ?? '',
+      exchange: 'all',
+      anchor: cvdClickSec != null ? new Date(cvdClickSec * 1000).toISOString() : '',
+      from: futuresPaneBase.from,
+      bucket: paneBucket,
+    },
+    {
+      skip: skipTape || !positioningClickOn || cvdClickSec == null || !perpSymbol || paneFromSec == null,
+      refetchOnFocus: true,
+    },
+  );
+  const positioningClickText = useMemo(() => {
+    if (!positioningClickOn || cvdClickSec == null) return '';
+    const report = rtkCurrent(positioningAnchorQuery);
+    const venueName = (id: string) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id });
+    const join = (ids?: string[]) => (ids ?? []).map(venueName).filter(Boolean).join(', ');
+    const changes = (rows?: { exchange?: string; change?: string }[]) =>
+      (rows ?? [])
+        .filter((row) => row.exchange && row.change)
+        .map((row) => `${venueName(row.exchange ?? '')} ${row.change}`)
+        .join(', ');
+    const parts = [t('detail:chart.positioningClickSince', { time: formatUtcMinute(cvdClickSec) })];
+    const oi = changes(report?.openInterest);
+    const funding = changes(report?.funding);
+    const liq = changes(report?.liquidations);
+    if (oi) parts.push(t('detail:chart.positioningClickOi', { changes: oi }));
+    if (funding) parts.push(t('detail:chart.positioningClickFunding', { changes: funding }));
+    if (liq) parts.push(t('detail:chart.positioningClickLiq', { changes: liq }));
+    const missingOi = join(report?.missingOpenInterest);
+    const missingFunding = join(report?.missingFunding);
+    const missingLiq = join(report?.missingLiquidations);
+    const late = join(report?.lateLiquidations);
+    if (missingOi) parts.push(t('detail:chart.positioningClickOiMissing', { venues: missingOi }));
+    if (missingFunding) parts.push(t('detail:chart.positioningClickFundingMissing', { venues: missingFunding }));
+    if (missingLiq) parts.push(t('detail:chart.positioningClickLiqMissing', { venues: missingLiq }));
+    if (late) parts.push(t('detail:chart.positioningClickLiqLate', { venues: late }));
+    return parts.join(' ');
+  }, [positioningClickOn, cvdClickSec, positioningAnchorQuery, t]);
 
   // Live pump window matches the polled candle head (API max 1000).
   const pumpsQuery = useGetPumpEventsQuery(
@@ -1035,12 +1078,12 @@ export function CoinDetailPage() {
   const barDurationSec = candleIntervalSeconds(interval);
   const onCandleAnchor = useCallback(
     (timeSec: number) => {
-      if (!showCvd || barDurationSec <= 0) return;
+      if (!(showCvd || showOi || showFunding || showLiqNotional) || barDurationSec <= 0) return;
       const open = snapCandleOpen(chartData, timeSec, barDurationSec);
       if (open == null) return;
       setCvdClickSec((prev) => (prev === open ? null : open));
     },
-    [showCvd, barDurationSec, chartData],
+    [showCvd, showOi, showFunding, showLiqNotional, barDurationSec, chartData],
   );
   const activeFootSpan = historySeriesKey === seriesKey ? footSpan : null;
   const candleFootRange = useMemo(() => {
@@ -1288,6 +1331,19 @@ export function CoinDetailPage() {
         }
         pane += 1;
       }
+      if (cvdClickSec != null) {
+        const venueName = (id: string) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id });
+        const lines = positioningClickLines(
+          rtkCurrent(positioningAnchorQuery)?.openInterest,
+          (id) => t('detail:chart.oiClick', { venue: venueName(id) }),
+          pane,
+          'oi-click',
+        );
+        if (lines.length > 0) {
+          series.push(...lines);
+          pane += 1;
+        }
+      }
     }
     if (showFunding) {
       if (positioningRead.funding.length > 0) {
@@ -1305,6 +1361,19 @@ export function CoinDetailPage() {
         }
         pane += 1;
       }
+      if (cvdClickSec != null) {
+        const venueName = (id: string) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id });
+        const lines = positioningClickLines(
+          rtkCurrent(positioningAnchorQuery)?.funding,
+          (id) => t('detail:chart.fundingClick', { venue: venueName(id) }),
+          pane,
+          'funding-click',
+        );
+        if (lines.length > 0) {
+          series.push(...lines);
+          pane += 1;
+        }
+      }
     }
     if (showLiqNotional) {
       const bars = positioningRead.liqBars;
@@ -1319,6 +1388,19 @@ export function CoinDetailPage() {
           data: bars,
         });
         pane += 1;
+      }
+      if (cvdClickSec != null) {
+        const venueName = (id: string) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id });
+        const lines = positioningClickLines(
+          rtkCurrent(positioningAnchorQuery)?.liquidations,
+          (id) => t('detail:chart.liqClick', { venue: venueName(id) }),
+          pane,
+          'liq-click',
+        );
+        if (lines.length > 0) {
+          series.push(...lines);
+          pane += 1;
+        }
       }
     }
     if (showOpenLevels) {
@@ -1352,6 +1434,7 @@ export function CoinDetailPage() {
     spotCvd,
     cvdClickSec,
     positioningRead,
+    positioningAnchorQuery,
     openLevelsQuery,
     t,
   ]);
@@ -1589,17 +1672,17 @@ export function CoinDetailPage() {
       announcedColor: semanticColors.status.warning,
       delistColor: semanticColors.status.error,
     });
-    if (!isEquity && showCvd && cvdClickSec != null) {
+    if (!isEquity && cvdClickSec != null && (showCvd || showOi || showFunding || showLiqNotional)) {
       lines.push({
         id: 'cvd-click',
         time: cvdClickSec,
         color: semanticColors.chart.rsi,
-        label: t('detail:chart.cvd'),
+        label: showCvd ? t('detail:chart.cvd') : t('detail:chart.positioningClickMark'),
         labelOffsetY: lines.length > 0 ? 18 : 0,
       });
     }
     return lines;
-  }, [announcedAt, delistTime, t, isEquity, showCvd, cvdClickSec]);
+  }, [announcedAt, delistTime, t, isEquity, showCvd, showOi, showFunding, showLiqNotional, cvdClickSec]);
 
   const tab: DetailTab = useMemo(() => {
     if (
@@ -2074,6 +2157,11 @@ export function CoinDetailPage() {
                 {t('detail:chart.cvdClickHint')}
               </Text>
             ) : null}
+            {!isEquity && positioningClickOn && cvdClickSec == null ? (
+              <Text variant="caption" color="secondary" data-testid="chart-positioning-click-hint">
+                {t('detail:chart.positioningClickHint')}
+              </Text>
+            ) : null}
             {!isEquity && showCvd && clickCvd ? (
               <Text variant="caption" color="secondary" data-testid="chart-cvd-click">
                 {t(
@@ -2093,6 +2181,19 @@ export function CoinDetailPage() {
                   size="small"
                   onClick={() => setCvdClickSec(null)}
                   data-testid="chart-cvd-click-clear"
+                >
+                  {t('detail:chart.cvdClickClear')}
+                </Button>
+              </Text>
+            ) : null}
+            {!isEquity && positioningClickOn && cvdClickSec != null ? (
+              <Text variant="caption" color="secondary" data-testid="chart-positioning-click">
+                {positioningClickText}{' '}
+                <Button
+                  type="link"
+                  size="small"
+                  onClick={() => setCvdClickSec(null)}
+                  data-testid="chart-positioning-click-clear"
                 >
                   {t('detail:chart.cvdClickClear')}
                 </Button>
@@ -2353,7 +2454,9 @@ export function CoinDetailPage() {
               liqHeat={chartLiqHeat}
               openLevels={chartOpenLevels}
               onVisibleSpan={isEquity ? undefined : onVisibleSpan}
-              onBarTimeClick={isEquity || !showCvd ? undefined : onCandleAnchor}
+              onBarTimeClick={
+                isEquity || !(showCvd || showOi || showFunding || showLiqNotional) ? undefined : onCandleAnchor
+              }
               rightPadding={
                 !isEquity &&
                 (showLiqLevels || (showFootprint && chartCandleFootprint.candles.length === 0))
@@ -2412,8 +2515,15 @@ export function CoinDetailPage() {
                     ? 72
                     : 100
                   : 0) +
-                (lowerSeries.some((s) => s.id.startsWith('funding-')) ? (isPhone ? 72 : 100) : 0) +
+                (lowerSeries.some((s) => s.id.startsWith('oi-click-')) ? (isPhone ? 72 : 100) : 0) +
+                (lowerSeries.some((s) => s.id.startsWith('funding-') && !s.id.startsWith('funding-click-'))
+                  ? isPhone
+                    ? 72
+                    : 100
+                  : 0) +
+                (lowerSeries.some((s) => s.id.startsWith('funding-click-')) ? (isPhone ? 72 : 100) : 0) +
                 (lowerSeries.some((s) => s.id === 'liq-notional') ? (isPhone ? 72 : 120) : 0) +
+                (lowerSeries.some((s) => s.id.startsWith('liq-click-')) ? (isPhone ? 72 : 100) : 0) +
                 (lowerSeries.some((s) => s.id === 'open-liq-delta') ? (isPhone ? 72 : 100) : 0)
               }
             />

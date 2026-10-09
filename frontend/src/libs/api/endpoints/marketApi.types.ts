@@ -163,6 +163,11 @@ export type MarketFuturesHistory = components['schemas']['MarketFuturesHistory']
 export type FuturesHistoryQuery = NonNullable<
   operations['getMarketFuturesHistory']['parameters']['query']
 >;
+export type MarketPositioningAnchor = components['schemas']['MarketPositioningAnchor'];
+export type MarketPositioningAnchorSeries = components['schemas']['MarketPositioningAnchorSeries'];
+export type PositioningAnchorQuery = NonNullable<
+  operations['getMarketPositioningAnchor']['parameters']['query']
+>;
 export type MarketVolumeShare = components['schemas']['MarketVolumeShare'];
 export type VolumeShareQuery = NonNullable<operations['getMarketVolumeShare']['parameters']['query']>;
 export type SpotPerpLiquidity = components['schemas']['SpotPerpLiquidity'];

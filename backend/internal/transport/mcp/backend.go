@@ -2380,6 +2380,32 @@ func (b *Backend) GetFuturesHistory(ctx context.Context, metric, exchange, symbo
 	return mustJSON(body)
 }
 
+func (b *Backend) GetPositioningAnchor(ctx context.Context, exchange, symbol, anchor, bucket, from, to string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	var fromPtr, toPtr *time.Time
+	if strings.TrimSpace(from) != "" {
+		t, err := parseMCPTime(from)
+		if err != nil {
+			return nil, err
+		}
+		fromPtr = &t
+	}
+	if strings.TrimSpace(to) != "" {
+		t, err := parseMCPTime(to)
+		if err != nil {
+			return nil, err
+		}
+		toPtr = &t
+	}
+	got, err := b.Market.GetPositioningAnchor(ctx, exchange, symbol, anchor, bucket, fromPtr, toPtr)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) GetHistorySpan(ctx context.Context, symbol string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

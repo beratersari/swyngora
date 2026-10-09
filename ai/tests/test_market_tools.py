@@ -856,6 +856,39 @@ def test_get_cvd_sends_click_anchor(monkeypatch):
     assert "anchor" not in seen[-1].url.params
 
 
+def test_get_positioning_anchor_sends_candle(monkeypatch):
+    seen: list[httpx2.Request] = []
+    real_client = httpx2.Client
+
+    class _AnchorTransport(httpx2.BaseTransport):
+        def handle_request(self, request: httpx2.Request) -> httpx2.Response:
+            seen.append(request)
+            return httpx2.Response(200, json={"symbol": "BTCUSDT", "bucket": "5m"})
+
+    def fake_client(*args, **kwargs):
+        kwargs.pop("timeout", None)
+        return real_client(*args, timeout=5.0, transport=_AnchorTransport())
+
+    monkeypatch.setattr(httpx2, "Client", fake_client)
+    tools = build_market_tools(Settings(api_base_url="http://test"))
+    by_name = {t.name: t for t in tools}
+    out = json.loads(
+        by_name["get_positioning_anchor"].invoke(
+            {
+                "symbol": "BTCUSDT",
+                "anchor": "2026-10-08T12:00:00Z",
+                "bucket": "5m",
+                "start": "2026-10-08T00:00:00Z",
+            }
+        )
+    )
+    assert out["symbol"] == "BTCUSDT"
+    assert seen[-1].url.path.endswith("/positioning-anchor")
+    assert seen[-1].url.params["anchor"] == "2026-10-08T12:00:00Z"
+    assert seen[-1].url.params["bucket"] == "5m"
+    assert seen[-1].url.params["from"] == "2026-10-08T00:00:00Z"
+
+
 def test_memory_key_isolates_tenants():
     mem = SessionMemory()
     a = memory_key("alice", "shared")

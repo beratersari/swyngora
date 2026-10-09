@@ -38,6 +38,7 @@ export {
   useGetMarketLongShortRatioQuery,
   useGetMarketHistorySpanQuery,
   useGetMarketFuturesHistoryQuery,
+  useGetMarketPositioningAnchorQuery,
   useGetMarketCvdQuery,
   useGetMarketUnusualQuery,
   useScanMarketUnusualQuery,

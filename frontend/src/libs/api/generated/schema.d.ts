@@ -1253,6 +1253,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/positioning-anchor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Positioning restarted at a clicked candle
+         * @description Stored open interest, funding, and liquidation notional for Binance
+         *     USD-M, Bybit linear, and OKX USDT-swap, each restarted at one candle.
+         *     Open interest and funding are later samples minus the last sample at
+         *     or before that candle. A venue with no sample by then is named in
+         *     missingOpenInterest or missingFunding and is left off. Liquidation
+         *     notional is the running sum from that candle. Short notional is
+         *     positive and long notional is negative. A print at or before the
+         *     candle starts the sum at zero. A venue whose first print is later is
+         *     named in lateLiquidations and its line starts at that print. A venue
+         *     with no prints in the window is named in missingLiquidations. A
+         *     missing venue is not counted as zero. bucket is 5m, 30m, 2h, or 4h.
+         *     Omit bucket and the step follows from..to the same way the coin chart
+         *     does. The window is capped at 90 days. Informational only — not
+         *     financial advice.
+         */
+        get: operations["getMarketPositioningAnchor"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/unusual": {
         parameters: {
             query?: never;
@@ -6062,6 +6095,33 @@ export interface components {
             price?: string;
             quantity?: string;
             notional?: string;
+        };
+        /** @description Open interest, funding, and liquidation notional restarted at one candle. */
+        MarketPositioningAnchor: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            anchor?: string;
+            bucket?: string;
+            openInterest?: components["schemas"]["MarketPositioningAnchorSeries"][];
+            funding?: components["schemas"]["MarketPositioningAnchorSeries"][];
+            liquidations?: components["schemas"]["MarketPositioningAnchorSeries"][];
+            missingOpenInterest?: string[];
+            missingFunding?: string[];
+            missingLiquidations?: string[];
+            lateLiquidations?: string[];
+            note?: string;
+        };
+        MarketPositioningAnchorSeries: {
+            exchange?: string;
+            complete?: boolean;
+            change?: string;
+            points?: components["schemas"]["MarketPositioningAnchorPoint"][];
+        };
+        MarketPositioningAnchorPoint: {
+            /** Format: date-time */
+            time?: string;
+            value?: string;
         };
         /** @description How long stored samples for one coin actually cover */
         HistorySpan: {
@@ -12075,6 +12135,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketFuturesHistory"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketPositioningAnchor: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description RFC3339 candle time to restart from. */
+                anchor: string;
+                exchange?: string;
+                /** @description 5m, 30m, 2h, or 4h. Omit to follow the from..to span. */
+                bucket?: "5m" | "30m" | "2h" | "4h";
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Series restarted at the candle */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketPositioningAnchor"];
                 };
             };
             400: components["responses"]["Error"];

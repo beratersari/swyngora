@@ -70,6 +70,7 @@ type DataPort interface {
 	GetFundingArbSignal(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	GetLongShortRatio(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFuturesHistory(ctx context.Context, metric, exchange, symbol, from, to, bucket string, limit int) (json.RawMessage, error)
+	GetPositioningAnchor(ctx context.Context, exchange, symbol, anchor, bucket, from, to string) (json.RawMessage, error)
 	GetHistorySpan(ctx context.Context, symbol string) (json.RawMessage, error)
 	GetUnusual(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	ScanUnusual(ctx context.Context, exchange, metric string, limit int) (json.RawMessage, error)
@@ -1150,6 +1151,30 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.GetFuturesHistory(ctx, metric, req.GetString("exchange", "all"), symbol, req.GetString("from", ""), req.GetString("to", ""), req.GetString("bucket", ""), int(req.GetFloat("limit", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_positioning_anchor",
+		mcp.WithDescription("Restart stored open interest, funding, and liquidation notional at one clicked candle for Binance USD-M, Bybit linear, and OKX USDT-swap. Open interest and funding are the change from the last sample at or before that candle. A venue with no sample by then is named in missingOpenInterest or missingFunding and is left off. Liquidation notional is the running sum from that candle, short positive and long negative. A print at or before the candle starts the sum at zero. A venue whose first print is later is listed in lateLiquidations and the line starts at that print. A venue with no prints is named in missingLiquidations. A missing venue is not zero. anchor is the candle time (RFC3339). bucket is 5m, 30m, 2h, or 4h; omit it and the step follows from..to the same way the coin chart does. from and to bound the stored window, capped at 90 days. Informational only — not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("anchor", mcp.Required(), mcp.Description("RFC3339 candle time to restart from")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all)")),
+		mcp.WithString("bucket", mcp.Description("5m | 30m | 2h | 4h. Omit to follow the from..to span.")),
+		mcp.WithString("from", mcp.Description("RFC3339 or unix ms start of the stored window")),
+		mcp.WithString("to", mcp.Description("RFC3339 or unix ms end of the stored window")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		anchor, err := req.RequireString("anchor")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetPositioningAnchor(ctx, req.GetString("exchange", "all"), symbol, anchor, req.GetString("bucket", ""), req.GetString("from", ""), req.GetString("to", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -22,6 +22,7 @@ const mockOrderHeatmap = vi.fn();
 const mockOpenInterest = vi.fn();
 const mockLiquidations = vi.fn();
 const mockCvd = vi.fn();
+const mockPositioningAnchor = vi.fn();
 const mockLiqHeatmap = vi.fn();
 const mockProfile = vi.fn();
 const mockCandleFootprint = vi.fn();
@@ -70,6 +71,7 @@ vi.mock('@/libs/api', async (importOriginal) => {
       refetch: vi.fn(),
     }),
     useGetMarketCvdQuery: () => mockCvd(),
+    useGetMarketPositioningAnchorQuery: () => mockPositioningAnchor(),
     useGetMarketFlowAtPricesQuery: () => ({ data: undefined, isError: false, isFetching: false, isLoading: false, isSuccess: false, refetch: vi.fn() }),
     useGetMarketCandleFootprintQuery: (...args: unknown[]) => mockCandleFootprint(...args),
     useGetMarketLongShortRatioQuery: () => ({ data: undefined, isError: false, isFetching: false, isLoading: false, isSuccess: false, refetch: vi.fn() }),
@@ -292,6 +294,7 @@ describe('CoinDetailPage', () => {
     mockOpenInterest.mockReturnValue(emptyTape);
     mockLiquidations.mockReturnValue(emptyTape);
     mockCvd.mockReturnValue(emptyTape);
+    mockPositioningAnchor.mockReturnValue(emptyTape);
     mockLiqHeatmap.mockReturnValue({
       data: {
         symbol: 'BTCUSDT',
@@ -697,6 +700,64 @@ describe('CoinDetailPage', () => {
     await user.click(screen.getByTestId('chart-bar-click'));
     expect(screen.queryByTestId('chart-cvd-click')).not.toBeInTheDocument();
     expect(screen.getByTestId('chart-cvd-click-hint')).toBeInTheDocument();
+  });
+
+  it('restarts open interest, funding, and liquidations from a clicked candle', async () => {
+    const user = userEvent.setup();
+    const open = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    open.setUTCMinutes(0, 0, 0);
+    chartClickAt = Math.floor(open.getTime() / 1000);
+    const openIso = open.toISOString();
+    mockCandles.mockReturnValue({
+      data: { candles: [{ ...candle, openTime: openIso }] },
+      currentData: { candles: [{ ...candle, openTime: openIso }] },
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    const report = {
+      anchor: openIso,
+      openInterest: [
+        {
+          exchange: 'binance',
+          complete: true,
+          change: '6',
+          points: [
+            { time: openIso, value: '0' },
+            { time: new Date(open.getTime() + 60 * 60 * 1000).toISOString(), value: '6' },
+          ],
+        },
+      ],
+      funding: [],
+      liquidations: [{ exchange: 'binance', complete: true, change: '0', points: [{ time: openIso, value: '0' }] }],
+      missingOpenInterest: ['bybit', 'okx'],
+      missingFunding: ['binance', 'bybit', 'okx'],
+      missingLiquidations: ['bybit', 'okx'],
+      lateLiquidations: [],
+    };
+    mockPositioningAnchor.mockReturnValue({
+      data: report,
+      currentData: report,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    renderDetail('/markets/binance/BTCUSDT');
+    await chooseDesk(user, 'Positioning');
+    expect(await screen.findByTestId('chart-positioning-click-hint')).toBeInTheDocument();
+    await user.click(screen.getByTestId('chart-bar-click'));
+    const caption = await screen.findByTestId('chart-positioning-click');
+    expect(caption).toHaveTextContent('Binance 6');
+    expect(caption).toHaveTextContent('Bybit');
+    expect(caption).toHaveTextContent('OKX');
+    expect(caption).toHaveTextContent(/stays off/i);
+    expect(screen.getByTestId('candle-chart')).toHaveAttribute('data-verts', expect.stringContaining('Anchor'));
+    await user.click(screen.getByTestId('chart-positioning-click-clear'));
+    expect(screen.queryByTestId('chart-positioning-click')).not.toBeInTheDocument();
+    expect(screen.getByTestId('chart-positioning-click-hint')).toBeInTheDocument();
   });
 
   it('marks the current price and CVD disagreement and hides it on positioning', async () => {

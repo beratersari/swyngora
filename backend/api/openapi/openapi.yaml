@@ -2097,6 +2097,60 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/positioning-anchor:
+    get:
+      summary: Positioning restarted at a clicked candle
+      description: |
+        Stored open interest, funding, and liquidation notional for Binance
+        USD-M, Bybit linear, and OKX USDT-swap, each restarted at one candle.
+        Open interest and funding are later samples minus the last sample at
+        or before that candle. A venue with no sample by then is named in
+        missingOpenInterest or missingFunding and is left off. Liquidation
+        notional is the running sum from that candle. Short notional is
+        positive and long notional is negative. A print at or before the
+        candle starts the sum at zero. A venue whose first print is later is
+        named in lateLiquidations and its line starts at that print. A venue
+        with no prints in the window is named in missingLiquidations. A
+        missing venue is not counted as zero. bucket is 5m, 30m, 2h, or 4h.
+        Omit bucket and the step follows from..to the same way the coin chart
+        does. The window is capped at 90 days. Informational only — not
+        financial advice.
+      operationId: getMarketPositioningAnchor
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: anchor
+          in: query
+          required: true
+          description: RFC3339 candle time to restart from.
+          schema: { type: string, format: date-time }
+        - name: exchange
+          in: query
+          schema: { type: string, default: all }
+        - name: bucket
+          in: query
+          description: 5m, 30m, 2h, or 4h. Omit to follow the from..to span.
+          schema: { type: string, enum: [5m, 30m, 2h, 4h] }
+        - name: from
+          in: query
+          schema: { type: string }
+        - name: to
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Series restarted at the candle
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketPositioningAnchor'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/unusual:
     get:
       summary: Whether a coin's tape is unusual versus its own stored history
@@ -10206,6 +10260,50 @@ components:
         price: { type: string }
         quantity: { type: string }
         notional: { type: string }
+    MarketPositioningAnchor:
+      type: object
+      description: Open interest, funding, and liquidation notional restarted at one candle.
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        anchor: { type: string, format: date-time }
+        bucket: { type: string }
+        openInterest:
+          type: array
+          items: { $ref: '#/components/schemas/MarketPositioningAnchorSeries' }
+        funding:
+          type: array
+          items: { $ref: '#/components/schemas/MarketPositioningAnchorSeries' }
+        liquidations:
+          type: array
+          items: { $ref: '#/components/schemas/MarketPositioningAnchorSeries' }
+        missingOpenInterest:
+          type: array
+          items: { type: string }
+        missingFunding:
+          type: array
+          items: { type: string }
+        missingLiquidations:
+          type: array
+          items: { type: string }
+        lateLiquidations:
+          type: array
+          items: { type: string }
+        note: { type: string }
+    MarketPositioningAnchorSeries:
+      type: object
+      properties:
+        exchange: { type: string }
+        complete: { type: boolean }
+        change: { type: string }
+        points:
+          type: array
+          items: { $ref: '#/components/schemas/MarketPositioningAnchorPoint' }
+    MarketPositioningAnchorPoint:
+      type: object
+      properties:
+        time: { type: string, format: date-time }
+        value: { type: string }
     HistorySpan:
       type: object
       description: How long stored samples for one coin actually cover

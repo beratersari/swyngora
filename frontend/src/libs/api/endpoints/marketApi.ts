@@ -171,6 +171,8 @@ import type {
   HistorySpanQuery,
   MarketFuturesHistory,
   FuturesHistoryQuery,
+  MarketPositioningAnchor,
+  PositioningAnchorQuery,
 } from './marketApi.types';
 import type { ForensicsRadarReview } from '@/libs/types/forensics.types';
 
@@ -614,6 +616,12 @@ export const marketApi = baseApi.injectEndpoints({
         params: compactParams({ ...arg }),
       }),
     }),
+    getMarketPositioningAnchor: build.query<MarketPositioningAnchor, PositioningAnchorQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/positioning-anchor',
+        params: compactParams({ ...arg }),
+      }),
+    }),
     getMarketCvd: build.query<MarketCvd, CvdQuery>({
       query: (arg) => ({
         url: '/api/v1/market/cvd',
@@ -1047,6 +1055,7 @@ export const {
   useGetMarketLongShortRatioQuery,
   useGetMarketHistorySpanQuery,
   useGetMarketFuturesHistoryQuery,
+  useGetMarketPositioningAnchorQuery,
   useGetMarketCvdQuery,
   useGetMarketUnusualQuery,
   useScanMarketUnusualQuery,

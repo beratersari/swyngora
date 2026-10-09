@@ -31,6 +31,7 @@ import {
   openInterestLines,
   anchoredChange,
   anchoredVenueSeries,
+  positioningClickLines,
   chartAnchors,
   chartPaneBucket,
   chartPaneFromSec,
@@ -627,6 +628,27 @@ describe('chart desk mappers', () => {
     expect(read.missingDay).toEqual(['okx']);
     expect(read.missingBlock).toEqual(['okx']);
     expect(chartAnchors(block + 60).block).toBe(block);
+  });
+
+  it('plots a click anchor per venue and drops an empty series', () => {
+    const lines = positioningClickLines(
+      [
+        {
+          exchange: 'binance',
+          points: [
+            { time: '2026-10-08T12:00:00Z', value: '0' },
+            { time: '2026-10-08T13:00:00Z', value: '40' },
+          ],
+        },
+        { exchange: 'okx', points: [] },
+      ],
+      (exchange) => `${exchange} since`,
+      4,
+      'oi-click',
+    );
+    expect(lines.map((line) => line.id)).toEqual(['oi-click-binance']);
+    expect(lines[0]?.data[1]?.value).toBe(40);
+    expect(lines[0]?.pane).toBe(4);
   });
 
   it('sums liquidation steps across venues', () => {
