@@ -37,6 +37,8 @@
     "presetBidMissing": "Combined perp bid share stays off until {{venues}} cover that band.",
     "presetBidRecorded": "Recorded: {{lines}}.",
     "presetBidUncovered": "The perp band is not fully on the book, so this chart does not show a bid share.",
+    "perpBook": "Perp bid and ask within 1% of price follow the candles on screen. The shade stops where the book runs out. A minute is kept only when Binance, Bybit, and OKX are all fresh.",
+    "perpBookGap": "Some minutes stay blank because {{venues}} was missing or old.",
     "presetWalls": "Live walls on this venue: {{walls}}.",
     "presetWallsEmpty": "No large wall in this venue's live band.",
     "presetWall": "{{side}} {{price}} · {{behavior}}",

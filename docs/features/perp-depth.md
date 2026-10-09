@@ -77,17 +77,41 @@ ETH 17%** of 2.4B bid + 1.8B ask).
   by 1% it is 1.0B. `leaders` are who fills that distance; `addedLeaders`
   are who added the extra size vs the previous tighter band.
 - `exchange=all` (default) adds Binance USD-M, Bybit linear, and OKX USDT-swap per coin
+- `chart` is that same total, folded across the stored window (up to
+  **30 days**): 1 minute through 6 hours, 5 minutes through 24 hours,
+  30 minutes through 7 days, and 2 hours after that. Jumps stay on the
+  6-hour minute tape.
+- Samples are kept for **30 days** (`PERP_DEPTH_HISTORY_RETENTION`, default 30 days).
 - MCP: `get_perp_depth_overview`
+
+## Per-coin book behind the candles
+
+`GET /api/v1/market/perp-depth/book?symbol=BTCUSDT&windowSec=86400`
+
+The background sampler walks the liquid USDT list (seeds first, up to 100)
+and stores bid and ask within **0.1%**, **0.5%**, and **1%** of mid.
+A minute is written only when Binance, Bybit, and OKX are all fresh
+(a book older than 45 seconds is old). `coverBid` and `coverAsk` say how
+far the snapshot reached. The chart stops the shade there, so a 1% band
+on BTC is not drawn out to 1% when the book only reaches about 0.15%.
+`exchange=all` is the combined book. `gaps` name the venue
+that was missing or old. `windowSec` defaults to 24 hours and stops at 30 days.
+`startTime` and `endTime` override it.
+
+The coin chart **Liquidity** desk paints those bands behind the candles
+for the same span as the spot book. The Markets perp line uses `chart`.
+
+MCP / AI: `get_perp_book_history`.
 
 ## Where the code lives
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/perp_depth.go`, `perp_depth_overview.go` |
+| Domain | `backend/internal/domain/perp_depth.go`, `perp_depth_overview.go`, `perp_book_history.go` |
 | Adapters | `adapter/binance/futures_depth.go`, `adapter/bybit/futures_depth.go`, `adapter/okx/futures_depth.go`, `adapter/perpdepthstore` |
-| Service | `GetPerpDepth`, `GetPerpDepthOverview`, `PerpDepthHistoryWorker` |
-| HTTP | `GET /api/v1/market/perp-depth`, `GET /api/v1/market/perp-depth/overview` |
-| MCP / AI | `get_perp_depth`, `get_perp_depth_overview` |
+| Service | `GetPerpDepth`, `GetPerpDepthOverview`, `GetPerpBookHistory`, `SamplePerpBookBands`, `PerpDepthHistoryWorker` |
+| HTTP | `GET /api/v1/market/perp-depth`, `GET /api/v1/market/perp-depth/overview`, `GET /api/v1/market/perp-depth/book` |
+| MCP / AI | `get_perp_depth`, `get_perp_depth_overview`, `get_perp_book_history` |
 
 ## How to verify
 
@@ -97,4 +121,5 @@ curl "http://localhost:8080/api/v1/market/perp-depth?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/perp-depth?symbol=BTCUSDT&exchange=binance&rangePct=1"
 curl "http://localhost:8080/api/v1/market/perp-depth/overview"
 curl "http://localhost:8080/api/v1/market/perp-depth/overview?limit=20&rangePct=1"
+curl "http://localhost:8080/api/v1/market/perp-depth/book?symbol=BTCUSDT&windowSec=3600"
 ```

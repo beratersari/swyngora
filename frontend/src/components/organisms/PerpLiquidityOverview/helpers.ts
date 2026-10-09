@@ -86,7 +86,23 @@ export function historyGapRanges(gaps?: HistoryGap[] | null): {
   return out.map(({ key, when, missing, stale }) => ({ key, when, missing, stale }));
 }
 
-/** Minute totals for the depth chart, oldest first. */
+const DEPTH_MINUTE_TAPE_MS = 6 * 60 * 60 * 1000;
+
+/** The stored line once it runs past 6 hours. Until then, the minute tape. */
+export function depthChartSeries(
+  data?: { chart?: { time?: string; total?: string; price?: string }[] | null; history?: { time?: string; total?: string; price?: string }[] | null } | null,
+): { time?: string; total?: string; price?: string }[] {
+  const chart = data?.chart ?? [];
+  const history = data?.history ?? [];
+  if (chart.length >= 2) {
+    const start = Date.parse(chart[0]?.time ?? '');
+    const end = Date.parse(chart[chart.length - 1]?.time ?? '');
+    if (Number.isFinite(start) && Number.isFinite(end) && end - start > DEPTH_MINUTE_TAPE_MS) return chart;
+  }
+  if (history.length >= 2) return history;
+  return chart;
+}
+
 export function depthHistoryLine(
   points?: { time?: string; total?: string }[] | null,
 ): { time: number; value: number }[] {

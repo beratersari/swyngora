@@ -816,7 +816,8 @@ export interface paths {
          *     how close that book is to mid (e.g. **80M inside 0.1%** is **8% of
          *     the 1% book**, growing to 1.0B at 1%) and which coins fill each
          *     distance. `history` is total bid+ask each minute for the last 6 hours,
-         *     with BTC's close on the same minutes. `moves` are the largest jumps
+         *     with BTC's close on the same minutes. `chart` is that same total
+         *     folded across the stored window, up to 30 days. `moves` are the largest jumps
          *     and drops of at least 5% that finish within 15 minutes, plus BTC
          *     during that stretch and 15 minutes later. Sampled while the desk runs.
          *     `exchange=all` (default)
@@ -825,6 +826,32 @@ export interface paths {
          *     book, not spot. Informational only.
          */
         get: operations["getMarketPerpDepthOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/perp-depth/book": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stored perpetual bid and ask bands for one coin
+         * @description Resting perpetual bid and ask within **0.1%**, **0.5%**, and **1%**
+         *     of mid for one coin. A minute is stored only when **Binance USD-M**,
+         *     **Bybit linear**, and **OKX USDT-swap** are all fresh. A band the
+         *     snapshot does not reach is left out. `windowSec` is the lookback
+         *     (default 24h, max 30 days). `startTime` and `endTime` override it.
+         *     `gaps` name minutes that were not stored. The liquid USDT list is
+         *     sampled while the server runs. Informational only.
+         */
+        get: operations["getMarketPerpBookHistory"];
         put?: never;
         post?: never;
         delete?: never;
@@ -7595,6 +7622,8 @@ export interface components {
             windows?: components["schemas"]["MarketPerpDepthShareWindow"][];
             /** @description Total bid+ask each minute for the last 6 hours, oldest first */
             history?: components["schemas"]["MarketPerpDepthTotalPoint"][];
+            /** @description The same total book folded across the stored window, up to 30 days */
+            chart?: components["schemas"]["MarketPerpDepthTotalPoint"][];
             /** @description Largest jumps and drops of at least 5% inside 15 minutes, biggest first, with BTC around each and whether Binance, Bybit, and OKX moved together */
             moves?: components["schemas"]["MarketPerpDepthBookMove"][];
             /** @description Minutes skipped because a venue was missing or old. These are not totals. */
@@ -7605,6 +7634,40 @@ export interface components {
             coverage?: components["schemas"]["MarketVenueCoverage"];
             /** @description False when any expected venue book is missing or old. The lean is not a market read. */
             definite?: boolean;
+        };
+        MarketPerpBookBand: {
+            rangePct?: string;
+            bid?: string;
+            ask?: string;
+        };
+        MarketPerpBookColumn: {
+            /** Format: date-time */
+            time?: string;
+            mid?: string;
+            /** @description How far below mid the snapshot reached */
+            coverBid?: string;
+            /** @description How far above mid the snapshot reached */
+            coverAsk?: string;
+            bands?: components["schemas"]["MarketPerpBookBand"][];
+        };
+        MarketPerpBookGap: {
+            /** Format: date-time */
+            time?: string;
+            missing?: string[];
+            stale?: string[];
+        };
+        /** @description Stored perp bid and ask bands for one coin */
+        MarketPerpBookHistory: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            stepSec?: number;
+            columns?: components["schemas"]["MarketPerpBookColumn"][];
+            gaps?: components["schemas"]["MarketPerpBookGap"][];
+            note?: string;
         };
         /** @description One coin's share of a ±% market-wide perp band */
         MarketPerpDepthOverviewBandCoin: {
@@ -11445,6 +11508,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketPerpDepthOverview"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketPerpBookHistory: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | okx | all (default all) */
+                exchange?: string;
+                /** @description Lookback in seconds (default 86400, max 30 days) */
+                windowSec?: number;
+                startTime?: string;
+                endTime?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stored perp book columns */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketPerpBookHistory"];
                 };
             };
             400: components["responses"]["Error"];

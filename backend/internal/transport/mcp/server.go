@@ -52,6 +52,7 @@ type DataPort interface {
 	GetPerpDepth(ctx context.Context, exchange, symbol string, rangePct float64) (json.RawMessage, error)
 	CompareSpotPerpLiquidity(ctx context.Context, symbol string, rangePct float64) (json.RawMessage, error)
 	GetPerpDepthOverview(ctx context.Context, exchange string, rangePct float64, limit int) (json.RawMessage, error)
+	GetPerpBookHistory(ctx context.Context, exchange, symbol string, windowSec int) (json.RawMessage, error)
 	GetDerivativesBoard(ctx context.Context, exchange string, limit int) (json.RawMessage, error)
 	GetOptions(ctx context.Context, exchange, asset string) (json.RawMessage, error)
 	GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
@@ -795,6 +796,23 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("limit", mcp.Description("How many liquid perps (default 20, max 40)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.GetPerpDepthOverview(ctx, req.GetString("exchange", "all"), req.GetFloat("rangePct", 0), req.GetInt("limit", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_perp_book_history",
+		mcp.WithDescription("Stored perpetual bid and ask within 0.1%, 0.5%, and 1% of mid for one coin. A minute is kept only when Binance, Bybit, and OKX are all fresh. Bands the snapshot does not reach are left out. windowSec is the lookback (default 24h, max 30d). The liquid USDT list is sampled while the server runs. exchange=all is the combined book. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all)")),
+		mcp.WithNumber("windowSec", mcp.Description("Lookback in seconds (default 86400, max 30 days)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetPerpBookHistory(ctx, req.GetString("exchange", "all"), symbol, req.GetInt("windowSec", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

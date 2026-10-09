@@ -10,7 +10,7 @@
     "leanEven": "Balanced",
     "window": "{{window}} bid share",
     "depth": "{{window}} book size",
-    "history": "Total book and BTC, last 6 hours",
+    "history": "Total book and BTC, stored up to 30 days",
     "book": "Book",
     "btc": "BTC",
     "historyWait": "The path shows up after this desk has been sampling.",

@@ -10,7 +10,7 @@
     "leanEven": "Dengeli",
     "window": "{{window}} bid payı",
     "depth": "{{window}} defter boyutu",
-    "history": "Son 6 saatlik toplam defter ve BTC",
+    "history": "Toplam defter ve BTC, 30 güne kadar saklanır",
     "book": "Defter",
     "btc": "BTC",
     "historyWait": "Yol, bu masa örneklemeye başladıktan sonra görünür.",

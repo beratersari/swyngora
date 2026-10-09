@@ -616,6 +616,18 @@ class DerivativesBoardInput(BaseModel):
     )
 
 
+class PerpBookHistoryInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|okx|all (default all)",
+    )
+    window_sec: int = Field(
+        default=86400,
+        description="Lookback in seconds (default 24h, max 30 days)",
+    )
+
+
 class PerpDepthOverviewInput(BaseModel):
     exchange: str = Field(
         default="all",
@@ -2394,6 +2406,14 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if limit:
             params["limit"] = limit
         return http.get("/api/v1/market/derivatives-board", params)
+
+    def get_perp_book_history(
+        symbol: str, exchange: str = "all", window_sec: int = 86400
+    ) -> str:
+        params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
+        if window_sec:
+            params["windowSec"] = window_sec
+        return http.get("/api/v1/market/perp-depth/book", params)
 
     def get_perp_depth_overview(
         exchange: str = "all", range_pct: float = 1, limit: int = 20
@@ -5088,6 +5108,18 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "are not treated as zero. limit default 36, max 100."
             ),
             args_schema=DerivativesBoardInput,
+        ),
+        StructuredTool.from_function(
+            get_perp_book_history,
+            name="get_perp_book_history",
+            description=(
+                "Stored perpetual bid and ask within 0.1%, 0.5%, and 1% of mid "
+                "for one coin. A minute is kept only when Binance, Bybit, and "
+                "OKX are all fresh. Bands the snapshot does not reach are left "
+                "out. window_sec is the lookback, default 24h, max 30 days. "
+                "The liquid USDT list is sampled while the server runs."
+            ),
+            args_schema=PerpBookHistoryInput,
         ),
         StructuredTool.from_function(
             get_perp_depth_overview,

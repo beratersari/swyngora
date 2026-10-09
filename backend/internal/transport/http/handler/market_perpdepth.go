@@ -298,6 +298,7 @@ type perpDepthOverviewResponse struct {
 	Missing   []string                   `json:"missing,omitempty"`
 	Windows   []perpDepthShareWindowDTO  `json:"windows"`
 	History   []perpDepthTotalPointDTO   `json:"history"`
+	Chart     []perpDepthTotalPointDTO   `json:"chart"`
 	Moves     []perpDepthBookMoveDTO     `json:"moves"`
 	Gaps      []perpDepthHistoryGapDTO   `json:"gaps"`
 	Bands     []perpDepthOverviewBandDTO `json:"bands"`
@@ -356,14 +357,8 @@ func perpDepthOverviewToDTO(a *domain.PerpDepthOverview) perpDepthOverviewRespon
 		}
 		wins = append(wins, row)
 	}
-	history := make([]perpDepthTotalPointDTO, 0, len(a.History))
-	for _, p := range a.History {
-		row := perpDepthTotalPointDTO{Time: p.Time.UTC(), Total: formatHistQty(p.Total)}
-		if p.Price > 0 {
-			row.Price = formatHistQty(p.Price)
-		}
-		history = append(history, row)
-	}
+	history := perpDepthPointsToDTO(a.History)
+	chart := perpDepthPointsToDTO(a.Chart)
 	moves := make([]perpDepthBookMoveDTO, 0, len(a.Moves))
 	for _, m := range a.Moves {
 		row := perpDepthBookMoveDTO{
@@ -441,7 +436,125 @@ func perpDepthOverviewToDTO(a *domain.PerpDepthOverview) perpDepthOverviewRespon
 		Exchange: a.Exchange, RangePct: formatHistQty(a.RangePct), Universe: a.Universe, Known: a.Known,
 		AsOf: a.AsOf.UTC(), Bid: formatHistQty(a.Bid), Ask: formatHistQty(a.Ask), Total: formatHistQty(a.Total),
 		Imbalance: domain.FormatSignedQty(a.Imbalance), BidPct: formatHistQty(a.BidPct), AskPct: formatHistQty(a.AskPct),
-		Lean: a.Lean, Coins: coins, Leaders: a.Leaders, Missing: a.Missing, Windows: wins, History: history, Moves: moves, Gaps: gaps, Bands: bands,
+		Lean: a.Lean, Coins: coins, Leaders: a.Leaders, Missing: a.Missing, Windows: wins, History: history, Chart: chart, Moves: moves, Gaps: gaps, Bands: bands,
 		Summary: a.Summary, Note: a.Note, Coverage: coverageToDTO(a.Coverage), Definite: a.Definite,
+	}
+}
+
+func perpDepthPointsToDTO(points []domain.PerpDepthTotalPoint) []perpDepthTotalPointDTO {
+	out := make([]perpDepthTotalPointDTO, 0, len(points))
+	for _, p := range points {
+		row := perpDepthTotalPointDTO{Time: p.Time.UTC(), Total: formatHistQty(p.Total)}
+		if p.Price > 0 {
+			row.Price = formatHistQty(p.Price)
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+type perpBookBandDTO struct {
+	RangePct string `json:"rangePct"`
+	Bid      string `json:"bid"`
+	Ask      string `json:"ask"`
+}
+
+type perpBookColumnDTO struct {
+	Time     time.Time         `json:"time"`
+	Mid      string            `json:"mid"`
+	CoverBid string            `json:"coverBid"`
+	CoverAsk string            `json:"coverAsk"`
+	Bands    []perpBookBandDTO `json:"bands"`
+}
+
+type perpBookGapDTO struct {
+	Time    time.Time `json:"time"`
+	Missing []string  `json:"missing"`
+	Stale   []string  `json:"stale"`
+}
+
+type perpBookHistoryResponse struct {
+	Symbol   string              `json:"symbol"`
+	Exchange string              `json:"exchange"`
+	From     time.Time           `json:"from"`
+	To       time.Time           `json:"to"`
+	StepSec  int                 `json:"stepSec"`
+	Columns  []perpBookColumnDTO `json:"columns"`
+	Gaps     []perpBookGapDTO    `json:"gaps"`
+	Note     string              `json:"note"`
+}
+
+// GetPerpBookHistory handles GET /api/v1/market/perp-depth/book.
+func (h *MarketHandler) GetPerpBookHistory(w http.ResponseWriter, r *http.Request) {
+	if h == nil || h.svc == nil {
+		writeError(w, domain.ErrUpstream)
+		return
+	}
+	q := r.URL.Query()
+	windowSec := 0
+	if raw := q.Get("windowSec"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 0 {
+			writeError(w, fmt.Errorf("%w: windowSec must be a positive integer", domain.ErrInvalidArgument))
+			return
+		}
+		windowSec = n
+	}
+	var fromPtr, toPtr *time.Time
+	if raw := q.Get("startTime"); raw != "" {
+		t, err := parseTimeParam(raw)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		fromPtr = &t
+	}
+	if raw := q.Get("endTime"); raw != "" {
+		t, err := parseTimeParam(raw)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		toPtr = &t
+	}
+	got, err := h.svc.GetPerpBookHistory(r.Context(), q.Get("exchange"), q.Get("symbol"), windowSec, fromPtr, toPtr)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, perpBookHistoryToDTO(got))
+}
+
+func perpBookHistoryToDTO(a *domain.PerpBookHistory) perpBookHistoryResponse {
+	if a == nil {
+		return perpBookHistoryResponse{Columns: []perpBookColumnDTO{}, Gaps: []perpBookGapDTO{}}
+	}
+	cols := make([]perpBookColumnDTO, 0, len(a.Columns))
+	for _, c := range a.Columns {
+		bands := make([]perpBookBandDTO, 0, len(c.Bands))
+		for _, b := range c.Bands {
+			bands = append(bands, perpBookBandDTO{
+				RangePct: formatHistQty(b.RangePct), Bid: formatHistQty(b.Bid), Ask: formatHistQty(b.Ask),
+			})
+		}
+		cols = append(cols, perpBookColumnDTO{
+			Time: c.Time.UTC(), Mid: formatHistQty(c.Mid),
+			CoverBid: formatHistQty(c.CoverBid), CoverAsk: formatHistQty(c.CoverAsk), Bands: bands,
+		})
+	}
+	gaps := make([]perpBookGapDTO, 0, len(a.Gaps))
+	for _, g := range a.Gaps {
+		missing, stale := g.Missing, g.Stale
+		if missing == nil {
+			missing = []string{}
+		}
+		if stale == nil {
+			stale = []string{}
+		}
+		gaps = append(gaps, perpBookGapDTO{Time: g.Time.UTC(), Missing: missing, Stale: stale})
+	}
+	return perpBookHistoryResponse{
+		Symbol: a.Symbol, Exchange: a.Exchange, From: a.From.UTC(), To: a.To.UTC(),
+		StepSec: int(a.Step / time.Second), Columns: cols, Gaps: gaps, Note: a.Note,
 	}
 }

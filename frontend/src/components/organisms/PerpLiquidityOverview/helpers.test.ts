@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bandLeaderLabel, bandShareLabel, bidSharePct, depthHistoryLine, depthLine, depthPriceLine, distanceBands, driverNames, historyGapRanges, leaderCoins, mixLine, moveAfterLine, moveBookLine, moveDriverLine, moveDuringLine, moveVenueLine, shareLabel, sizeDriverLine } from './helpers';
+import { bandLeaderLabel, bandShareLabel, bidSharePct, depthChartSeries, depthHistoryLine, depthLine, depthPriceLine, distanceBands, driverNames, historyGapRanges, leaderCoins, mixLine, moveAfterLine, moveBookLine, moveDriverLine, moveDuringLine, moveVenueLine, shareLabel, sizeDriverLine } from './helpers';
 
 describe('PerpLiquidityOverview helpers', () => {
   it('drops empty or errored coins then keeps the largest', () => {
@@ -79,6 +79,17 @@ describe('PerpLiquidityOverview helpers', () => {
       { when: '12:04–12:05', missing: 'okx', stale: '' },
       { when: '12:08', missing: 'okx', stale: 'bybit' },
     ]);
+  });
+
+  it('uses the stored chart once it runs past 6 hours', () => {
+    const chart = [{ time: '2026-10-01T00:00:00Z', total: '1' }, { time: '2026-10-02T00:00:00Z', total: '2' }];
+    const history = [
+      { time: '2026-10-09T00:00:00Z', total: '9' },
+      { time: '2026-10-09T01:00:00Z', total: '8' },
+    ];
+    expect(depthChartSeries({ chart, history })).toBe(chart);
+    const short = [{ time: '2026-10-09T00:00:00Z', total: '1' }, { time: '2026-10-09T02:00:00Z', total: '2' }];
+    expect(depthChartSeries({ chart: short, history })).toBe(history);
   });
 
   it('keeps minute totals in time order for the depth chart', () => {

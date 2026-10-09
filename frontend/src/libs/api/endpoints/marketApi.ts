@@ -88,6 +88,8 @@ import type {
   SpotPerpQuery,
   MarketPerpDepthOverview,
   PerpDepthOverviewQuery,
+  MarketPerpBookHistory,
+  PerpBookHistoryQuery,
   MarketPerpDepthShareWindow,
   MarketPerpDepthShareDriver,
   MarketParticipation,
@@ -244,6 +246,8 @@ export type {
   MarketPerpDepthShareDriver,
   MarketPerpDepthOverviewBand,
   MarketPerpDepthOverviewBandCoin,
+  MarketPerpBookHistory,
+  PerpBookHistoryQuery,
   MarketBreadth,
   MarketBreadthWindow,
   MarketNetPosition,
@@ -645,6 +649,13 @@ export const marketApi = baseApi.injectEndpoints({
       }),
     }),
 
+    getMarketPerpBookHistory: build.query<MarketPerpBookHistory, PerpBookHistoryQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/perp-depth/book',
+        params: compactParams({ ...arg }),
+      }),
+    }),
+
     getMarketPerpDepthOverview: build.query<MarketPerpDepthOverview, PerpDepthOverviewQuery | void>({
       query: (arg) => ({
         url: '/api/v1/market/perp-depth/overview',
@@ -1042,6 +1053,7 @@ export const {
   useGetMarketTapeBacktestQuery,
   useGetMarketVolumeShareQuery,
   useGetMarketPerpDepthOverviewQuery,
+  useGetMarketPerpBookHistoryQuery,
   useGetMarketBreadthQuery,
   useGetMarketFearGreedQuery,
   useScanMarketVolumeSurgesQuery,

@@ -32,8 +32,26 @@ func TestSQLiteInsertListPurge(t *testing.T) {
 	if err != nil || len(totals) != 1 || totals[0].Total != 120 {
 		t.Fatalf("totals %+v %v", totals, err)
 	}
-	dropped, err := s.PurgeOlderThan(context.Background(), now.Add(time.Minute))
-	if err != nil || dropped != 2 {
+	buckets, err := s.ListBucketTotals(context.Background(), "all", 1, now.Add(-time.Hour), now.Add(time.Minute), time.Hour)
+	if err != nil || len(buckets) != 1 || buckets[0].Total != 120 {
+		t.Fatalf("buckets %+v %v", buckets, err)
+	}
+	bn, err := s.InsertBookBands(context.Background(), []domain.PerpBookBandSample{
+		{Time: now, Exchange: "all", Symbol: "BTCUSDT", RangePct: 0.1, Bid: 3, Ask: 1, Mid: 100},
+		{Time: now.Add(20 * time.Minute), Exchange: "all", Symbol: "BTCUSDT", RangePct: 1, Bid: 8, Ask: 2, Mid: 101},
+	})
+	if err != nil || bn != 2 {
+		t.Fatalf("bands %d %v", bn, err)
+	}
+	if err := s.InsertBookGap(context.Background(), domain.PerpBookGap{Time: now.Add(-time.Minute), Symbol: "BTCUSDT", Missing: []string{"okx"}}); err != nil {
+		t.Fatal(err)
+	}
+	folded, err := s.ListBookBandBuckets(context.Background(), "all", "BTCUSDT", now.Add(-time.Hour), now.Add(time.Hour), time.Hour)
+	if err != nil || len(folded) != 2 {
+		t.Fatalf("folded %+v %v", folded, err)
+	}
+	dropped, err := s.PurgeOlderThan(context.Background(), now.Add(time.Hour))
+	if err != nil || dropped < 4 {
 		t.Fatalf("purge %d %v", dropped, err)
 	}
 }

@@ -145,6 +145,13 @@ type PerpDepthHistoryStore interface {
 	ListSamples(ctx context.Context, exchange string, rangePct float64, from, to time.Time) ([]PerpDepthSample, error)
 	// ListMinuteTotals returns one summed bid+ask per minute, oldest first.
 	ListMinuteTotals(ctx context.Context, exchange string, rangePct float64, from, to time.Time) ([]PerpDepthTotalPoint, error)
+	// ListBucketTotals returns the newest minute's bid+ask inside each step.
+	ListBucketTotals(ctx context.Context, exchange string, rangePct float64, from, to time.Time, step time.Duration) ([]PerpDepthTotalPoint, error)
+	InsertBookBands(ctx context.Context, rows []PerpBookBandSample) (int, error)
+	ListBookBandBuckets(ctx context.Context, exchange, symbol string, from, to time.Time, step time.Duration) ([]PerpBookBandSample, error)
+	InsertBookGap(ctx context.Context, gap PerpBookGap) error
+	ListBookGaps(ctx context.Context, symbol string, from, to time.Time) ([]PerpBookGap, error)
+	ClearBookGap(ctx context.Context, symbol string, at time.Time) error
 	// InsertGap records why a minute has no total. A minute that already has samples is left alone.
 	InsertGap(ctx context.Context, gap PerpDepthHistoryGap) error
 	// ListGaps returns gap minutes in [from, to], oldest first.

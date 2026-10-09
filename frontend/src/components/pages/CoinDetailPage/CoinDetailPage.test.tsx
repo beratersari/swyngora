@@ -27,6 +27,7 @@ const mockProfile = vi.fn();
 const mockCandleFootprint = vi.fn();
 const mockAbsorption = vi.fn();
 const mockPerpDepth = vi.fn();
+const mockPerpBook = vi.fn();
 const mockPrintSize = vi.fn();
 const mockVolumeProfile = vi.fn();
 const mockSweeps = vi.fn();
@@ -92,6 +93,7 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetMarketPrintSizeQuery: () => mockPrintSize(),
     useGetMarketAbsorptionQuery: () => mockAbsorption(),
     useGetMarketPerpDepthQuery: () => mockPerpDepth(),
+    useGetMarketPerpBookHistoryQuery: () => mockPerpBook(),
     useGetMarketBotTrackerQuery: () => mockBots(),
     useGetMarketVolumeProfileQuery: () => mockVolumeProfile(),
     useGetMarketLiquiditySweepsQuery: () => mockSweeps(),
@@ -345,6 +347,14 @@ describe('CoinDetailPage', () => {
     };
     mockAbsorption.mockReturnValue(emptyDesk);
     mockPerpDepth.mockReturnValue(emptyDesk);
+    mockPerpBook.mockReturnValue({
+      data: { columns: [], gaps: [], stepSec: 60 },
+      currentData: { columns: [], gaps: [], stepSec: 60 },
+      isError: false,
+      isFetching: false,
+      isLoading: false,
+      refetch: vi.fn(),
+    });
     mockPrintSize.mockReturnValue(emptyDesk);
     mockVolumeProfile.mockReturnValue(emptyDesk);
     mockSweeps.mockReturnValue(emptyDesk);
@@ -484,6 +494,28 @@ describe('CoinDetailPage', () => {
         headline: { rangePct: '1', complete: true, below: { notional: '60' }, above: { notional: '40' } },
       },
     };
+    const book = {
+      stepSec: 60,
+      columns: [
+        {
+          time: '2024-01-01T00:00:00Z',
+          mid: '100',
+          bands: [
+            { rangePct: '0.1', bid: '20', ask: '10' },
+            { rangePct: '1', bid: '80', ask: '40' },
+          ],
+        },
+      ],
+      gaps: [{ time: '2024-01-01T00:01:00Z', missing: ['okx'], stale: [] }],
+    };
+    mockPerpBook.mockReturnValue({
+      data: book,
+      currentData: book,
+      isError: false,
+      isFetching: false,
+      isLoading: false,
+      refetch: vi.fn(),
+    });
     mockPerpDepth.mockReturnValue({
       data: depth,
       currentData: depth,
@@ -543,6 +575,8 @@ describe('CoinDetailPage', () => {
     expect(screen.getByTestId('chart-preset-bid-recorded')).toHaveTextContent(/Binance 60%/);
     expect(screen.getByTestId('chart-preset-walls')).toHaveTextContent(/Bid 100/);
     expect(screen.getByTestId('chart-preset-walls')).toHaveTextContent(/Resting/);
+    expect(screen.getByTestId('chart-perp-book')).toHaveTextContent(/OKX/);
+    expect(Number(screen.getByTestId('candle-chart').getAttribute('data-liq'))).toBeGreaterThan(0);
 
     await user.click(screen.getByRole('switch', { name: /footprint/i }));
     expect(screen.getByRole('radio', { name: 'Liquidity' })).not.toBeChecked();

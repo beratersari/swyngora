@@ -78,13 +78,15 @@ type PerpDepthOverview struct {
 	Missing   []string
 	Windows   []PerpDepthShareWindow
 	History   []PerpDepthTotalPoint
-	Moves     []PerpDepthBookMove
-	Gaps      []PerpDepthHistoryGap
-	Bands     []PerpDepthOverviewBand
-	Summary   string
-	Note      string
-	Coverage  MarketCoverage
-	Definite  bool
+	// Chart is the same total book folded across the stored window (up to 30 days).
+	Chart    []PerpDepthTotalPoint
+	Moves    []PerpDepthBookMove
+	Gaps     []PerpDepthHistoryGap
+	Bands    []PerpDepthOverviewBand
+	Summary  string
+	Note     string
+	Coverage MarketCoverage
+	Definite bool
 }
 
 // PerpDepthOverviewBandCoin is one coin's slice of a ±% market-wide band.

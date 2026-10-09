@@ -7,6 +7,7 @@ import { CandleChartHost } from '@/components/molecules/CandleChartHost';
 import { snapMarkersToCandleTimes } from '@/components/molecules/CandleChartHost/CandleChartHost.markers';
 import {
   bookHeatColumns,
+  perpBookCells,
   CANDLE_FOOTPRINT_DEFAULT_CANDLES,
   CHART_BOOK_LIVE_MAX,
   candleFootprintSpan,
@@ -109,6 +110,7 @@ import {
   useGetMarketPrintSizeQuery,
   useGetMarketAbsorptionQuery,
   useGetMarketPerpDepthQuery,
+  useGetMarketPerpBookHistoryQuery,
   useGetMarketBotTrackerQuery,
   useGetMarketOrderCountQuery,
   useGetMarketPressureQuery,
@@ -659,6 +661,14 @@ export function CoinDetailPage() {
   );
   const perpDepthQuery = useGetMarketPerpDepthQuery(
     { symbol: perpSymbol, exchange: 'all', rangePct: 1 },
+    {
+      skip: skipTape || chartPreset !== 'liquidity',
+      pollingInterval: visible && chartPreset === 'liquidity' ? 60_000 : 0,
+      refetchOnFocus: true,
+    },
+  );
+  const perpBookQuery = useGetMarketPerpBookHistoryQuery(
+    { symbol: perpSymbol, exchange: 'all', windowSec: bookWindow },
     {
       skip: skipTape || chartPreset !== 'liquidity',
       pollingInterval: visible && chartPreset === 'liquidity' ? 60_000 : 0,
@@ -1358,13 +1368,12 @@ export function CoinDetailPage() {
     () => (isEquity || !showLiqLevels ? [] : liquidationProfile(rtkCurrent(liqLevelsQuery))),
     [isEquity, showLiqLevels, liqLevelsQuery],
   );
-  const chartLiqHeat = useMemo(
-    () =>
-      isEquity || !showLiqMap
-        ? []
-        : liqHeatCells(rtkCurrent(liqMapQuery), liqMapVenue, liqMapSide),
-    [isEquity, showLiqMap, liqMapQuery, liqMapVenue, liqMapSide],
-  );
+  const chartLiqHeat = useMemo(() => {
+    if (isEquity) return [];
+    if (showLiqMap) return liqHeatCells(rtkCurrent(liqMapQuery), liqMapVenue, liqMapSide);
+    if (chartPreset === 'liquidity') return perpBookCells(rtkCurrent(perpBookQuery));
+    return [];
+  }, [isEquity, showLiqMap, liqMapQuery, liqMapVenue, liqMapSide, chartPreset, perpBookQuery]);
   const chartOpenLevels = useMemo(
     () =>
       isEquity || !showOpenLevels
@@ -2193,6 +2202,25 @@ export function CoinDetailPage() {
                     )
                     .join(', '),
                 })}
+              </Text>
+            ) : null}
+            {!isEquity && chartPreset === 'liquidity' ? (
+              <Text variant="caption" color="secondary" data-testid="chart-perp-book">
+                {t('detail:chart.perpBook')}
+                {(rtkCurrent(perpBookQuery)?.gaps?.length ?? 0) > 0
+                  ? ` ${t('detail:chart.perpBookGap', {
+                      venues: [
+                        ...new Set(
+                          (rtkCurrent(perpBookQuery)?.gaps ?? []).flatMap((gap) => [
+                            ...(gap.missing ?? []),
+                            ...(gap.stale ?? []),
+                          ]),
+                        ),
+                      ]
+                        .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
+                        .join(', '),
+                    })}`
+                  : ''}
               </Text>
             ) : null}
             {!isEquity && chartPreset === 'liquidity' && perpDepthQuery.isError ? (

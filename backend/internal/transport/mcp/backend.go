@@ -1048,6 +1048,17 @@ func derivativesBoardMap(got *domain.DerivativesBoard) map[string]any {
 	}
 }
 
+func (b *Backend) GetPerpBookHistory(ctx context.Context, exchange, symbol string, windowSec int) (json.RawMessage, error) {
+	if b == nil || b.Market == nil {
+		return nil, fmt.Errorf("market service unavailable")
+	}
+	got, err := b.Market.GetPerpBookHistory(ctx, exchange, symbol, windowSec, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) GetPerpDepthOverview(ctx context.Context, exchange string, rangePct float64, limit int) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

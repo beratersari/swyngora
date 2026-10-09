@@ -35,7 +35,7 @@ import type {
   OrderBookHeatmap,
   VolumeProfileReport,
 } from '@/libs/api';
-import { semanticColors } from '@/styles/tokens';
+import { semanticColors, withAlpha } from '@/styles/tokens';
 import { parseTapeNumber, unixSeconds } from './chartTape';
 
 /** Pane order for Binance, Bybit, and OKX lines. */
@@ -226,6 +226,72 @@ export function bookHeatColumns(heat: OrderBookHeatmap | undefined): CandleChart
     out.push({ time, bids, asks });
   }
   return out;
+}
+
+const PERP_BOOK_RINGS = [
+  { pct: 1, inner: 0.5 },
+  { pct: 0.5, inner: 0.1 },
+  { pct: 0.1, inner: 0 },
+] as const;
+
+type PerpBookBand = { rangePct?: string; bid?: string; ask?: string };
+type PerpBookColumn = { time?: string; mid?: string; coverBid?: string; coverAsk?: string; bands?: PerpBookBand[] };
+
+/** Perp bid and ask bands drawn behind the candles. Nested rings avoid painting the same size twice. */
+export function perpBookCells(report?: { stepSec?: number; columns?: PerpBookColumn[] } | null): CandleChartLiqCell[] {
+  const columns = report?.columns ?? [];
+  if (columns.length === 0) return [];
+  const stepSec = report?.stepSec && report.stepSec > 0 ? report.stepSec : 60;
+  const rings: { time: number; priceHi: number; priceLo: number; notional: number; side: 'bid' | 'ask' }[] = [];
+  for (const col of columns) {
+    const time = unixSeconds(col.time);
+    const mid = parseTapeNumber(col.mid);
+    const coverBid = parseTapeNumber(col.coverBid) ?? 0;
+    const coverAsk = parseTapeNumber(col.coverAsk) ?? 0;
+    if (time == null || mid == null || mid <= 0) continue;
+    const byPct = new Map<number, { bid: number; ask: number }>();
+    for (const band of col.bands ?? []) {
+      const pct = parseTapeNumber(band.rangePct);
+      const bid = parseTapeNumber(band.bid) ?? 0;
+      const ask = parseTapeNumber(band.ask) ?? 0;
+      if (pct == null || bid + ask <= 0) continue;
+      byPct.set(pct, { bid, ask });
+    }
+    const tighter = (pct: number, side: 'bid' | 'ask') => {
+      let best = 0;
+      for (const [bandPct, band] of byPct) {
+        if (bandPct < pct) best = Math.max(best, side === 'bid' ? band.bid : band.ask);
+      }
+      return best;
+    };
+    for (const ring of PERP_BOOK_RINGS) {
+      const outer = byPct.get(ring.pct);
+      if (!outer) continue;
+      const bid = Math.max(0, outer.bid - tighter(ring.pct, 'bid'));
+      const ask = Math.max(0, outer.ask - tighter(ring.pct, 'ask'));
+      const bidEdge = coverBid > 0 ? Math.min(ring.pct, coverBid) : ring.pct;
+      const askEdge = coverAsk > 0 ? Math.min(ring.pct, coverAsk) : ring.pct;
+      const priceLo = mid * (1 - bidEdge / 100);
+      const priceHi = mid * (1 + askEdge / 100);
+      const innerLo = mid * (1 - ring.inner / 100);
+      const innerHi = mid * (1 + ring.inner / 100);
+      if (bid > 0 && bidEdge > ring.inner) rings.push({ time, priceHi: innerLo, priceLo, notional: bid, side: 'bid' });
+      if (ask > 0 && askEdge > ring.inner) rings.push({ time, priceHi, priceLo: innerHi, notional: ask, side: 'ask' });
+    }
+  }
+  let max = 0;
+  for (const ring of rings) max = Math.max(max, ring.notional);
+  if (max <= 0) return [];
+  return rings.map((ring) => ({
+    time: ring.time,
+    stepSec,
+    priceHi: ring.priceHi,
+    priceLo: ring.priceLo,
+    color: withAlpha(
+      ring.side === 'bid' ? semanticColors.chart.up : semanticColors.chart.down,
+      0.18 + 0.55 * Math.min(1, ring.notional / max),
+    ),
+  }));
 }
 
 /** Buy versus sell rows for the footprint on the right of the chart. */

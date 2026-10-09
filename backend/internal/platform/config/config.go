@@ -358,7 +358,7 @@ func Load() Config {
 		FlowAtPricesDBPath:        getenv("FLOW_AT_PRICES_DB_PATH", "data/flowprices.db"),
 		FlowAtPricesInterval:      positiveDurationEnv("FLOW_AT_PRICES_INTERVAL", 10*time.Second),
 		FlowAtPricesRetention:     positiveDurationEnv("FLOW_AT_PRICES_RETENTION", 30*24*time.Hour),
-		PerpDepthHistoryRetention: positiveDurationEnv("PERP_DEPTH_HISTORY_RETENTION", 2*24*time.Hour),
+		PerpDepthHistoryRetention: positiveDurationEnv("PERP_DEPTH_HISTORY_RETENTION", 30*24*time.Hour),
 
 		APIAuthToken: strings.TrimSpace(os.Getenv("API_AUTH_TOKEN")),
 		// AllowOpenAuth permits empty API_AUTH_TOKEN when HTTP_ADDR is non-loopback.

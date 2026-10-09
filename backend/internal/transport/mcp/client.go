@@ -478,6 +478,19 @@ func (c *APIClient) GetPerpDepthOverview(ctx context.Context, exchange string, r
 	return c.get(ctx, "/api/v1/market/perp-depth/overview", q)
 }
 
+// GetPerpBookHistory returns stored perp bid/ask bands for one coin.
+func (c *APIClient) GetPerpBookHistory(ctx context.Context, exchange, symbol string, windowSec int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("symbol", symbol)
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if windowSec > 0 {
+		q.Set("windowSec", strconv.Itoa(windowSec))
+	}
+	return c.get(ctx, "/api/v1/market/perp-depth/book", q)
+}
+
 // GetDerivativesBoard returns the liquid perpetual price, funding, open interest, crowd long, taker buy share, and liquidation board.
 func (c *APIClient) GetDerivativesBoard(ctx context.Context, exchange string, limit int) (json.RawMessage, error) {
 	q := url.Values{}

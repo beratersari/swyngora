@@ -262,6 +262,7 @@ func (s *Service) attachPerpDepthWindows(ctx context.Context, out *domain.PerpDe
 	}
 	domain.AttachPerpDepthHistory(out, totals)
 	s.attachPerpDepthBTC(ctx, out)
+	s.attachPerpDepthChart(ctx, out)
 	coinRows, err := s.perpHist.ListSamples(ctx, out.Exchange, out.RangePct, fromTotals, out.AsOf.Add(time.Minute))
 	if err != nil {
 		return
@@ -310,6 +311,52 @@ func (s *Service) attachPerpDepthBTC(ctx context.Context, out *domain.PerpDepthO
 		return
 	}
 	domain.AttachPerpDepthPrices(out, candles)
+}
+
+func (s *Service) attachPerpDepthChart(ctx context.Context, out *domain.PerpDepthOverview) {
+	if s == nil || s.perpHist == nil || out == nil {
+		return
+	}
+	from := out.AsOf.Add(-domain.PerpDepthChartSpan)
+	step := domain.PerpBookHistoryStep(domain.PerpDepthChartSpan)
+	totals, err := s.perpHist.ListBucketTotals(ctx, out.Exchange, out.RangePct, from, out.AsOf.Add(time.Minute), step)
+	if err != nil {
+		return
+	}
+	domain.AttachPerpDepthChart(out, totals)
+	s.attachPerpDepthChartPrices(ctx, out)
+}
+
+func (s *Service) attachPerpDepthChartPrices(ctx context.Context, out *domain.PerpDepthOverview) {
+	if s == nil || out == nil || len(out.Chart) < 2 {
+		return
+	}
+	start := out.Chart[0].Time
+	end := out.AsOf.Add(time.Minute)
+	interval, limit := "4h", 200
+	if len(out.Chart) >= 2 {
+		step := out.Chart[1].Time.Sub(out.Chart[0].Time)
+		switch {
+		case step <= time.Minute:
+			interval, limit = "1m", 400
+		case step <= 5*time.Minute:
+			interval, limit = "5m", 400
+		case step <= 30*time.Minute:
+			interval, limit = "1h", 400
+		}
+	}
+	ex := "binance"
+	if out.Exchange == string(domain.ExchangeBybit) {
+		ex = string(domain.ExchangeBybit)
+	}
+	candles, err := s.GetCandles(ctx, ex, "BTCUSDT", interval, limit, &start, &end)
+	if (err != nil || len(candles) == 0) && ex != string(domain.ExchangeBinance) {
+		candles, err = s.GetCandles(ctx, string(domain.ExchangeBinance), "BTCUSDT", interval, limit, &start, &end)
+	}
+	if err != nil || len(candles) == 0 {
+		return
+	}
+	domain.AttachPerpDepthChartPrices(out, candles)
 }
 
 // PurgePerpDepthHistory drops samples older than cutoff.

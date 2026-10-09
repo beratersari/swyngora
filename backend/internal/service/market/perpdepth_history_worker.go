@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"time"
+
+	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
 // PerpDepthHistoryWorker samples market-wide perp bid/ask on a timer.
@@ -43,7 +45,7 @@ func (w *PerpDepthHistoryWorker) Start(ctx context.Context) {
 		w.Interval = time.Minute
 	}
 	if w.Retain <= 0 {
-		w.Retain = 2 * 24 * time.Hour
+		w.Retain = domain.PerpDepthChartSpan
 	}
 	w.RunOnce(ctx)
 	for {
@@ -71,6 +73,11 @@ func (w *PerpDepthHistoryWorker) RunOnce(ctx context.Context) {
 		w.Logger.Debug("perp depth history sample", "err", err)
 	} else if got != nil && got.Known > 0 {
 		w.Logger.Debug("perp depth history sample", "coins", got.Known)
+	}
+	if stored, gaps, berr := w.Svc.SamplePerpBookBands(ctx); berr != nil {
+		w.Logger.Debug("perp book band sample", "err", berr)
+	} else if stored > 0 || gaps > 0 {
+		w.Logger.Debug("perp book band sample", "stored", stored, "gaps", gaps)
 	}
 	if w.Retain > 0 {
 		if dropped, perr := w.Svc.PurgePerpDepthHistory(ctx, w.now().UTC().Add(-w.Retain)); perr != nil {

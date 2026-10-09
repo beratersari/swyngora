@@ -178,6 +178,10 @@ export type MarketPerpDepthOverviewBandCoin = components['schemas']['MarketPerpD
 export type PerpDepthOverviewQuery = NonNullable<
   operations['getMarketPerpDepthOverview']['parameters']['query']
 >;
+export type MarketPerpBookHistory = components['schemas']['MarketPerpBookHistory'];
+export type PerpBookHistoryQuery = NonNullable<
+  operations['getMarketPerpBookHistory']['parameters']['query']
+>;
 export type SymbolMarketQuery = { symbol: string; exchange?: string; window?: string };
 
 export type MarketBreadthWindow = {

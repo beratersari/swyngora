@@ -15,6 +15,7 @@ import {
   bidSharePct,
   historyGapRanges,
   distanceBands,
+  depthChartSeries,
   depthLine,
   moveAfterLine,
   moveBookLine,
@@ -148,7 +149,7 @@ export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLi
             <Text variant="caption" color="secondary">
               {t('perpLiq.history')}
             </Text>
-            {(data?.history?.length ?? 0) >= 2 ? (
+            {(depthChartSeries(data).length ?? 0) >= 2 ? (
               <Legend>
                 <Text variant="caption" color="secondary">
                   <Swatch $color={financeColors.cobalt} />
@@ -160,8 +161,8 @@ export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLi
                 </Text>
               </Legend>
             ) : null}
-            {(data?.history?.length ?? 0) >= 2 ? (
-              <PerpLiquidityDepthChart history={data?.history} />
+            {depthChartSeries(data).length >= 2 ? (
+              <PerpLiquidityDepthChart history={depthChartSeries(data)} />
             ) : (
               <Text variant="caption" color="secondary">
                 {t('perpLiq.historyWait')}
@@ -176,7 +177,7 @@ export function PerpLiquidityOverview({ data, error, isLoading = false }: PerpLi
                     : t('perpLiq.gapStale', { when: gap.when, venues: gap.stale })}
               </Text>
             ))}
-            {(data?.history?.length ?? 0) >= 2 ? (
+            {(data?.history?.length ?? 0) >= 2 || depthChartSeries(data).length >= 2 ? (
               <>
                 <Text variant="caption" color="secondary">
                   {t('perpLiq.moves')}

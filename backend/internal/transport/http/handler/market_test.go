@@ -1481,6 +1481,33 @@ func TestGetPerpDepthOverview_OK(t *testing.T) {
 	}
 }
 
+func TestGetPerpBookHistory_OK(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/perp-depth/book?symbol=BTCUSDT&windowSec=3600", nil)
+	rr := httptest.NewRecorder()
+	h.GetPerpBookHistory(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	var body perpBookHistoryResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Symbol != "BTCUSDT" || body.Columns == nil || body.StepSec <= 0 {
+		t.Fatalf("%+v", body)
+	}
+}
+
+func TestGetPerpBookHistory_BadSymbol(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/perp-depth/book", nil)
+	rr := httptest.NewRecorder()
+	h.GetPerpBookHistory(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d", rr.Code)
+	}
+}
+
 func TestGetPerpDepthOverview_BadLimit(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/perp-depth/overview?limit=nope", nil)

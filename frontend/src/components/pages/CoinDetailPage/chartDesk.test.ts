@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { heatColor } from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.helpers';
 import {
   bookHeatColumns,
+  perpBookCells,
   chartBookWindow,
   chartBotMarks,
   chartProfileRead,
@@ -140,6 +141,28 @@ describe('chart desk mappers', () => {
     expect(cols.length).toBeLessThanOrEqual(90);
     expect(cols[0]?.bids[0]?.price).toBe(99);
     expect(cols[0]?.asks[0]?.notional).toBe(20);
+  });
+
+  it('paints perp bid and ask rings around the stored mid', () => {
+    const cells = perpBookCells({
+      stepSec: 60,
+      columns: [
+        {
+          time: '2026-10-09T12:00:00Z',
+          mid: '100',
+          bands: [
+            { rangePct: '0.1', bid: '10', ask: '5' },
+            { rangePct: '1', bid: '40', ask: '20' },
+          ],
+        },
+      ],
+    });
+    const bids = cells.filter((cell) => cell.priceHi <= 100);
+    const asks = cells.filter((cell) => cell.priceLo >= 100);
+    expect(bids.length).toBe(2);
+    expect(asks.length).toBe(2);
+    expect(bids.some((cell) => cell.priceLo < 99.5)).toBe(true);
+    expect(cells.every((cell) => cell.stepSec === 60)).toBe(true);
   });
 
   it('reads combined footprint rows', () => {
