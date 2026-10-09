@@ -31,6 +31,8 @@ const (
 	// Anchors reset the sum at a clock, unlike the rolling windows above.
 	CVDAnchorDay = "day"
 	CVDAnchor4h  = "4h"
+	// CVDAnchorClick is a candle the reader chose. Bars that start before it are left out.
+	CVDAnchorClick = "click"
 
 	CVDDirUp   = "up"
 	CVDDirDown = "down"
@@ -90,6 +92,28 @@ func ParseCVDRange(raw string) (CVDSpan, error) {
 	default:
 		return CVDSpan{}, fmt.Errorf("%w: cvd range must be 24h, 7d, 30d, or 90d", ErrInvalidArgument)
 	}
+}
+
+// ParseCVDAnchor reads an optional RFC3339 candle time. Empty means no click anchor.
+// The time has to fall inside the 90-day tape. A minute of clock skew still counts as now.
+func ParseCVDAnchor(raw string, now time.Time) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, nil
+	}
+	at, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("%w: anchor must be RFC3339", ErrInvalidArgument)
+	}
+	at = at.UTC()
+	now = now.UTC()
+	if at.After(now.Add(time.Minute)) {
+		return time.Time{}, fmt.Errorf("%w: anchor is in the future", ErrInvalidArgument)
+	}
+	if now.Sub(at) > 90*24*time.Hour {
+		return time.Time{}, fmt.Errorf("%w: anchor is older than 90 days", ErrInvalidArgument)
+	}
+	return at, nil
 }
 
 // BarLabel is the candle-interval name for this span.
@@ -171,10 +195,10 @@ type CVDVenueSplit struct {
 	Summary       string
 }
 
-// CVDAnchor is CVD rebased to zero at a fixed clock (day open or 4h open).
+// CVDAnchor is CVD rebased to zero at a fixed clock (day open, 4h open, or a chosen candle).
 // A rolling 4h window at 10:30 starts at 06:30; the 4h anchor starts at 08:00.
 type CVDAnchor struct {
-	Anchor         string // day | 4h
+	Anchor         string // day | 4h | click
 	From           time.Time
 	CVD            float64 // sum of bar deltas with start >= From
 	CVDChangePct   float64
@@ -1195,6 +1219,41 @@ func attachCVDAnchors(points []CVDPoint, now, started time.Time) []CVDAnchor {
 	return out
 }
 
+// AttachCVDClickAnchor sums each series again from a chosen candle.
+// Day and 4h anchors stay. A bar that opened before the candle is not included.
+func AttachCVDClickAnchor(rep *CVDReport, at time.Time) {
+	if rep == nil || at.IsZero() {
+		return
+	}
+	for i := range rep.Venues {
+		stampClickAnchor(&rep.Venues[i], at)
+	}
+	if rep.Combined != nil {
+		stampClickAnchor(rep.Combined, at)
+	}
+	for i := range rep.SpotVenues {
+		stampClickAnchor(&rep.SpotVenues[i], at)
+	}
+	if rep.SpotCombined != nil {
+		stampClickAnchor(rep.SpotCombined, at)
+	}
+	rep.Summary = ExplainCVDReport(*rep)
+}
+
+func stampClickAnchor(v *CVDVenueSeries, at time.Time) {
+	if v == nil {
+		return
+	}
+	started := time.Time{}
+	if len(v.Points) > 0 {
+		started = v.Points[0].Time
+	}
+	v.Anchors = append(v.Anchors, summarizeCVDAnchor(v.Points, CVDAnchorClick, at, started))
+	if v.Error == "" {
+		v.Summary = ExplainCVDVenue(*v)
+	}
+}
+
 func summarizeCVDAnchor(points []CVDPoint, anchor string, from, started time.Time) CVDAnchor {
 	out := CVDAnchor{Anchor: anchor, From: from.UTC()}
 	var first, last *CVDPoint
@@ -1239,10 +1298,14 @@ func summarizeCVDAnchor(points []CVDPoint, anchor string, from, started time.Tim
 }
 
 func cvdAnchorLabel(anchor string) string {
-	if anchor == CVDAnchorDay {
+	switch anchor {
+	case CVDAnchorDay:
 		return "day open"
+	case CVDAnchorClick:
+		return "chosen candle"
+	default:
+		return "4h open"
 	}
-	return "4h open"
 }
 
 func explainCVDAnchor(a CVDAnchor) string {
@@ -1259,6 +1322,9 @@ func explainCVDAnchor(a CVDAnchor) string {
 		pxWord = "price fell"
 	}
 	clock := a.From.UTC().Format("15:04")
+	if a.Anchor == CVDAnchorClick {
+		clock = a.From.UTC().Format("2006-01-02 15:04")
+	}
 	nums := fmt.Sprintf("Since the %s (%s UTC), CVD %s, price %s%%",
 		cvdAnchorLabel(a.Anchor), clock, FormatSignedQty(a.CVD), FormatSignedPct(a.PriceChangePct))
 	switch a.VsPrice {

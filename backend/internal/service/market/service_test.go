@@ -1800,7 +1800,7 @@ func TestGetCVD_PerVenueAndCombined(t *testing.T) {
 		domain.ExchangeBinance: &fakeTaker{buckets: bn, flow: &domain.TakerVenueFlow{}},
 		domain.ExchangeBybit:   &fakeTaker{buckets: by, flow: &domain.TakerVenueFlow{}},
 	})
-	got, err := svc.GetCVD(context.Background(), "all", "BTCUSDT", "")
+	got, err := svc.GetCVD(context.Background(), "all", "BTCUSDT", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1826,7 +1826,7 @@ func TestGetCVD_PerVenueAndCombined(t *testing.T) {
 
 func TestGetCVD_BadSymbol(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{})
-	_, err := svc.GetCVD(context.Background(), "all", "  ", "")
+	_, err := svc.GetCVD(context.Background(), "all", "  ", "", "")
 	if !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("%v", err)
 	}
@@ -1843,7 +1843,7 @@ func TestGetCVD_LongerRangeKeepsOlderBars(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{}).WithTakerFlow(map[domain.Exchange]domain.TakerFlowPort{
 		domain.ExchangeBinance: &fakeTaker{buckets: buckets, flow: &domain.TakerVenueFlow{}},
 	})
-	week, err := svc.GetCVD(context.Background(), "binance", "BTCUSDT", "7d")
+	week, err := svc.GetCVD(context.Background(), "binance", "BTCUSDT", "7d", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1862,7 +1862,7 @@ func TestGetCVD_LongerRangeKeepsOlderBars(t *testing.T) {
 	if week.Venues[0].Complete {
 		t.Fatal("a single 3-day-old bar must not complete a 7d range")
 	}
-	day, err := svc.GetCVD(context.Background(), "binance", "BTCUSDT", "24h")
+	day, err := svc.GetCVD(context.Background(), "binance", "BTCUSDT", "24h", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1871,7 +1871,7 @@ func TestGetCVD_LongerRangeKeepsOlderBars(t *testing.T) {
 			t.Fatalf("24h kept %s", p.Time)
 		}
 	}
-	if _, err := svc.GetCVD(context.Background(), "binance", "BTCUSDT", "1y"); !errors.Is(err, domain.ErrInvalidArgument) {
+	if _, err := svc.GetCVD(context.Background(), "binance", "BTCUSDT", "1y", ""); !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("%v", err)
 	}
 }

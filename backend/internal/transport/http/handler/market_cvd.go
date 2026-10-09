@@ -10,7 +10,7 @@ import (
 // GetCVD handles GET /api/v1/market/cvd.
 func (h *MarketHandler) GetCVD(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	got, err := h.svc.GetCVD(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("range"))
+	got, err := h.svc.GetCVD(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("range"), q.Get("anchor"))
 	if err != nil {
 		writeError(w, err)
 		return

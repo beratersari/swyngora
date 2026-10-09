@@ -523,6 +523,85 @@ func TestBuildCVDSeries_AnchorsResetAtDayAnd4hOpen(t *testing.T) {
 	}
 }
 
+func TestAttachCVDClickAnchor_SumsFromThatBar(t *testing.T) {
+	day := time.Date(2026, 9, 26, 0, 0, 0, 0, time.UTC)
+	bars := []struct {
+		at    time.Time
+		buy   float64
+		sell  float64
+		price float64
+	}{
+		{day.Add(6*time.Hour + 35*time.Minute), 1, 0, 99},
+		{day.Add(7 * time.Hour), 100, 0, 100},
+		{day.Add(8 * time.Hour), 0, 40, 101},
+		{day.Add(10*time.Hour + 25*time.Minute), 10, 0, 102},
+	}
+	var buckets []TakerBucket
+	var prices []CVDPrice
+	for _, b := range bars {
+		buckets = append(buckets, TakerBucket{Start: b.at, BuyNotional: b.buy, SellNotional: b.sell})
+		prices = append(prices, CVDPrice{Time: b.at, Close: b.price})
+	}
+	now := day.Add(10*time.Hour + 30*time.Minute)
+	series := BuildCVDSeries(ExchangeBinance, "BTCUSDT", buckets, prices, now, bars[0].at)
+	rep := &CVDReport{Symbol: "BTCUSDT", Venues: []CVDVenueSeries{series}}
+	AttachCVDClickAnchor(rep, day.Add(8*time.Hour))
+	var click CVDAnchor
+	for _, a := range rep.Venues[0].Anchors {
+		if a.Anchor == CVDAnchorClick {
+			click = a
+		}
+	}
+	if click.From != day.Add(8*time.Hour) || click.CVD != -30 || !click.Complete {
+		t.Fatalf("click %+v", click)
+	}
+	if !strings.Contains(click.Summary, "chosen candle") || !strings.Contains(click.Summary, "2026-09-26 08:00 UTC") {
+		t.Fatalf("summary %s", click.Summary)
+	}
+	var dayA CVDAnchor
+	for _, a := range rep.Venues[0].Anchors {
+		if a.Anchor == CVDAnchorDay {
+			dayA = a
+		}
+	}
+	if dayA.CVD != 71 {
+		t.Fatalf("day anchor changed %+v", dayA)
+	}
+
+	early := BuildCVDSeries(ExchangeBinance, "BTCUSDT", buckets, prices, now, bars[0].at)
+	rep = &CVDReport{Venues: []CVDVenueSeries{early}}
+	AttachCVDClickAnchor(rep, day)
+	click = CVDAnchor{}
+	for _, a := range rep.Venues[0].Anchors {
+		if a.Anchor == CVDAnchorClick {
+			click = a
+		}
+	}
+	if click.Complete || !strings.Contains(click.Summary, "bars on hand") {
+		t.Fatalf("day click should be partial %+v", click)
+	}
+}
+
+func TestParseCVDAnchor(t *testing.T) {
+	now := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	if at, err := ParseCVDAnchor("", now); err != nil || !at.IsZero() {
+		t.Fatalf("empty %+v %v", at, err)
+	}
+	at, err := ParseCVDAnchor("2026-10-09T08:15:00Z", now)
+	if err != nil || !at.Equal(now.Add(-4*time.Hour+15*time.Minute)) {
+		t.Fatalf("%+v %v", at, err)
+	}
+	if _, err := ParseCVDAnchor("tomorrow", now); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("bad %v", err)
+	}
+	if _, err := ParseCVDAnchor(now.Add(2*time.Hour).Format(time.RFC3339), now); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("future %v", err)
+	}
+	if _, err := ParseCVDAnchor(now.Add(-91*24*time.Hour).Format(time.RFC3339), now); !errors.Is(err, ErrInvalidArgument) {
+		t.Fatalf("old %v", err)
+	}
+}
+
 func TestParseCVDRange(t *testing.T) {
 	def, err := ParseCVDRange("")
 	if err != nil || def.ID != "24h" || def.Bar != CVDBar || def.Lookback != DefaultCVDLookback {

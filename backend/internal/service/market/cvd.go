@@ -9,7 +9,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const cvdDisclaimer = "CVD is the running sum of aggressive market-buy notional minus market-sell notional. Futures CVD sums measured prints (price × size) on Binance USD-M, Bybit linear, and OKX USDT-swap. Stored minutes extend the line while this process is recording. range 24h uses 5-minute bars. 7d uses 30-minute bars, 30d uses 2-hour bars, and 90d uses 4-hour bars, folded from those minutes. A range is complete only when the stored tape reaches its start. Spot CVD is who hit the spot book (Binance from 5m klines, Bybit from live spot trades). It is not account long/short. Windows show 15m / 1h / 4h / 24h change on the returned bars. Anchors reset that sum at 00:00 UTC (day) and at the current 4-hour open (00/04/08/12/16/20 UTC). Combined futures/spot each use the overlapping time range and stay incomplete when any requested venue has not reached the window open. Futures combined expects Binance, Bybit, and OKX. Spot combined expects Binance and Bybit. OKX has no spot CVD. spotFutures flags when spot buying and futures selling (or the reverse). Divergence runs do not merge across a quiet gap. Informational only — not financial advice."
+const cvdDisclaimer = "CVD is the running sum of aggressive market-buy notional minus market-sell notional. Futures CVD sums measured prints (price × size) on Binance USD-M, Bybit linear, and OKX USDT-swap. Stored minutes extend the line while this process is recording. range 24h uses 5-minute bars. 7d uses 30-minute bars, 30d uses 2-hour bars, and 90d uses 4-hour bars, folded from those minutes. A range is complete only when the stored tape reaches its start. Spot CVD is who hit the spot book (Binance from 5m klines, Bybit from live spot trades). It is not account long/short. Windows show 15m / 1h / 4h / 24h change on the returned bars. Anchors reset that sum at 00:00 UTC (day) and at the current 4-hour open (00/04/08/12/16/20 UTC). anchor is an optional RFC3339 candle time: a click anchor sums bars that start at or after it, and stays incomplete when the tape starts later. Combined futures/spot each use the overlapping time range and stay incomplete when any requested venue has not reached the window open. Futures combined expects Binance, Bybit, and OKX. Spot combined expects Binance and Bybit. OKX has no spot CVD. spotFutures flags when spot buying and futures selling (or the reverse). Divergence runs do not merge across a quiet gap. Informational only — not financial advice."
 
 // WithTakerBucketStore attaches durable taker bars for CVD.
 func (s *Service) WithTakerBucketStore(store domain.TakerBucketStore) *Service {
@@ -21,7 +21,8 @@ func (s *Service) WithTakerBucketStore(store domain.TakerBucketStore) *Service {
 
 // GetCVD returns cumulative taker buy−sell versus price for Binance, Bybit, and combined.
 // rangeID is 24h (default), 7d, 30d, or 90d. Empty is 24h.
-func (s *Service) GetCVD(ctx context.Context, exchange, symbol, rangeID string) (*domain.CVDReport, error) {
+// anchor is an optional RFC3339 time. Empty leaves the day and 4h anchors unchanged.
+func (s *Service) GetCVD(ctx context.Context, exchange, symbol, rangeID, anchor string) (*domain.CVDReport, error) {
 	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
 	if err != nil {
 		return nil, err
@@ -31,6 +32,10 @@ func (s *Service) GetCVD(ctx context.Context, exchange, symbol, rangeID string) 
 		return nil, err
 	}
 	ex, err := domain.ParseTakerExchange(exchange)
+	if err != nil {
+		return nil, err
+	}
+	clickAt, err := domain.ParseCVDAnchor(anchor, time.Now().UTC())
 	if err != nil {
 		return nil, err
 	}
@@ -118,6 +123,9 @@ func (s *Service) GetCVD(ctx context.Context, exchange, symbol, rangeID string) 
 	}
 	out.SpotFutures = domain.CompareSpotFutures(spot, fut)
 	out.Summary = domain.ExplainCVDReport(*out)
+	if !clickAt.IsZero() {
+		domain.AttachCVDClickAnchor(out, clickAt)
+	}
 	return out, nil
 }
 

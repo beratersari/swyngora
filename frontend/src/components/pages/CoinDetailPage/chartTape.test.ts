@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { MarketCvd, MarketLiquidationLevels } from '@/libs/api';
 import {
   anchoredCvdByCandle,
+  cvdAnchorStartsLate,
+  cvdBarSeconds,
+  cvdRangeForAnchor,
   deltaByCandle,
+  formatUtcMinute,
+  snapCandleOpen,
   futuresCvdSeries,
   spotCvdSeries,
   liquidationChartLevels,
@@ -334,5 +339,22 @@ describe('chartTape', () => {
     const short100 = lines.find((line) => line.side === 'short' && line.leverages.includes(100));
     expect(long100?.price).toBe(95);
     expect(short100?.price).toBe(110);
+  });
+
+  it('widens the CVD range to the candle and snaps the click onto that candle', () => {
+    const now = Math.floor(Date.parse('2026-10-09T12:00:00Z') / 1000);
+    const twoDays = now - 2 * 24 * 60 * 60;
+    expect(cvdRangeForAnchor('24h', now - 3600, now)).toBe('24h');
+    expect(cvdRangeForAnchor('24h', twoDays, now)).toBe('7d');
+    expect(cvdRangeForAnchor('30d', twoDays, now)).toBe('30d');
+    expect(cvdRangeForAnchor('24h', now - 40 * 24 * 60 * 60, now)).toBe('90d');
+    expect(cvdBarSeconds('2h')).toBe(7200);
+    const hour = Math.floor(Date.parse('2026-10-09T11:00:00Z') / 1000);
+    expect(snapCandleOpen([{ time: hour }, { time: hour + 3600 }], hour + 120, 3600)).toBe(hour);
+    expect(snapCandleOpen([{ time: hour }], hour - 10, 3600)).toBeNull();
+    expect(formatUtcMinute(hour)).toBe('2026-10-09 11:00');
+    expect(cvdAnchorStartsLate([{ time: hour }, { time: hour + 300 }], hour, 300)).toBe(false);
+    expect(cvdAnchorStartsLate([{ time: hour + 3600 }], hour, 300)).toBe(true);
+    expect(cvdAnchorStartsLate([], hour, 300)).toBe(true);
   });
 });

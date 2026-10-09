@@ -329,6 +329,88 @@ export function anchoredCvdByCandle(
   return out;
 }
 
+export const CVD_FETCH_RANGES = ['24h', '7d', '30d', '90d'] as const;
+export type CvdFetchRange = (typeof CVD_FETCH_RANGES)[number];
+
+const CVD_RANGE_SEC: Record<CvdFetchRange, number> = {
+  '24h': 24 * 60 * 60,
+  '7d': 7 * 24 * 60 * 60,
+  '30d': 30 * 24 * 60 * 60,
+  '90d': 90 * 24 * 60 * 60,
+};
+
+/** Widens the CVD request so the stored bars reach a clicked candle. */
+export function cvdRangeForAnchor(
+  selected: CvdFetchRange,
+  anchorSec: number | null,
+  nowSec: number,
+): CvdFetchRange {
+  if (anchorSec == null || !Number.isFinite(anchorSec) || !Number.isFinite(nowSec)) return selected;
+  const age = Math.max(0, nowSec - anchorSec);
+  let need: CvdFetchRange = '90d';
+  for (const id of CVD_FETCH_RANGES) {
+    if (age <= CVD_RANGE_SEC[id]) {
+      need = id;
+      break;
+    }
+  }
+  return CVD_FETCH_RANGES.indexOf(need) > CVD_FETCH_RANGES.indexOf(selected) ? need : selected;
+}
+
+/** Bar size of a CVD range. Unknown labels stay on the 24h 5-minute bar. */
+export function cvdBarSeconds(bar: string): number {
+  switch (bar) {
+    case '30m':
+      return 30 * 60;
+    case '2h':
+      return 2 * 60 * 60;
+    case '4h':
+      return 4 * 60 * 60;
+    default:
+      return 5 * 60;
+  }
+}
+
+/** Candle open that contains `timeSec`. A click between candles does not anchor. */
+export function snapCandleOpen(
+  candles: { time: number }[],
+  timeSec: number,
+  barDurationSec: number,
+): number | null {
+  if (!Number.isFinite(timeSec) || barDurationSec <= 0) return null;
+  for (let i = candles.length - 1; i >= 0; i -= 1) {
+    const open = candles[i]?.time;
+    if (open == null || !Number.isFinite(open)) continue;
+    if (timeSec >= open && timeSec < open + barDurationSec) return open;
+  }
+  return null;
+}
+
+export function formatUtcMinute(sec: number): string {
+  const d = new Date(sec * 1000);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+}
+
+/**
+ * True when no stored bar starts inside one CVD bar of the anchor.
+ * The line then begins later than the candle the reader clicked.
+ */
+export function cvdAnchorStartsLate(
+  points: { time: number }[],
+  anchorSec: number,
+  barSec: number,
+): boolean {
+  if (!Number.isFinite(anchorSec) || barSec <= 0) return true;
+  let first: number | null = null;
+  for (const point of points) {
+    if (!Number.isFinite(point.time) || point.time < anchorSec) continue;
+    if (first == null || point.time < first) first = point.time;
+  }
+  if (first == null) return true;
+  return first > anchorSec + barSec;
+}
+
 /**
  * Strongest estimated long level at or below last, and short level at or above
  * last, for each of 10× / 25× / 50× / 100×. Same price on one side collapses

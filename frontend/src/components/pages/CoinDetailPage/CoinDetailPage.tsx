@@ -205,13 +205,19 @@ import {
 } from './CoinDetailPage.helpers';
 import {
   anchoredCvdByCandle,
+  cvdAnchorStartsLate,
+  cvdBarSeconds,
+  cvdRangeForAnchor,
   deltaByCandle,
+  formatUtcMinute,
   futuresCvdSeries,
+  snapCandleOpen,
   spotCvdSeries,
   liquidationChartLevels,
   runningCvdByCandle,
   type CvdChartSeries,
 } from './chartTape';
+import { formatSignedTapeNum } from '@/components/organisms/TapePanel/TapePanel.helpers';
 import {
   absorptionDeskNote,
   chartPresetLayers,
@@ -293,6 +299,11 @@ export function CoinDetailPage() {
     if (isChartPreset(value)) setLayers(chartPresetLayers(value));
   };
   const [cvdRange, setCvdRange] = useState<CvdChartRange>('24h');
+  /** Candle open, unix seconds, where CVD restarts. Null keeps the day and 4h lines only. */
+  const [cvdClickSec, setCvdClickSec] = useState<number | null>(null);
+  useEffect(() => {
+    setCvdClickSec(null);
+  }, [exchange, symbol]);
   const [liqMapRange, setLiqMapRange] = useState<LiqHeatRange>(DEFAULT_LIQ_HEATMAP_RANGE);
   const [liqMapVenue, setLiqMapVenue] = useState<LiqHeatVenue>('combined');
   const [liqMapSide, setLiqMapSide] = useState<LiqHeatSide>('totals');
@@ -526,16 +537,23 @@ export function CoinDetailPage() {
     pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
     refetchOnFocus: true,
   });
+  const cvdFetchRange = cvdRangeForAnchor(
+    cvdRange,
+    showCvd ? cvdClickSec : null,
+    Math.floor(Date.now() / 1000),
+  );
+  const cvdClickIso =
+    showCvd && cvdClickSec != null ? new Date(cvdClickSec * 1000).toISOString() : undefined;
   const cvdQuery = useGetMarketCvdQuery(tapeQueryArg, {
     skip: skipTape,
     pollingInterval: visible ? DEFAULT_DETAIL_TICKER_POLL_MS : 0,
     refetchOnFocus: true,
   });
   const cvdChartQuery = useGetMarketCvdQuery(
-    { exchange: 'all', symbol: perpSymbol, range: cvdRange },
+    { exchange: 'all', symbol: perpSymbol, range: cvdFetchRange, anchor: cvdClickIso },
     {
-      skip: skipTape || cvdRange === '24h' || (!showCvd && !showDelta),
-      pollingInterval: visible && cvdRange !== '24h' ? 60_000 : 0,
+      skip: skipTape || cvdFetchRange === '24h' || (!showCvd && !showDelta),
+      pollingInterval: visible && cvdFetchRange !== '24h' ? 60_000 : 0,
       refetchOnFocus: true,
     },
   );
@@ -1015,6 +1033,15 @@ export function CoinDetailPage() {
   }, [showEma, emaPeriods, overlayPoints, chartData, mergedCandles.length, t]);
 
   const barDurationSec = candleIntervalSeconds(interval);
+  const onCandleAnchor = useCallback(
+    (timeSec: number) => {
+      if (!showCvd || barDurationSec <= 0) return;
+      const open = snapCandleOpen(chartData, timeSec, barDurationSec);
+      if (open == null) return;
+      setCvdClickSec((prev) => (prev === open ? null : open));
+    },
+    [showCvd, barDurationSec, chartData],
+  );
   const activeFootSpan = historySeriesKey === seriesKey ? footSpan : null;
   const candleFootRange = useMemo(() => {
     if (!(barDurationSec > 0)) return null;
@@ -1040,7 +1067,7 @@ export function CoinDetailPage() {
       refetchOnFocus: true,
     },
   );
-  const chartCvdReport = cvdRange === '24h' ? rtkCurrent(cvdQuery) : rtkCurrent(cvdChartQuery);
+  const chartCvdReport = cvdFetchRange === '24h' ? rtkCurrent(cvdQuery) : rtkCurrent(cvdChartQuery);
   const cvdExchange = exchange === 'bybit' || exchange === 'okx' ? exchange : 'binance';
   const tapeCvd = useMemo(
     () => futuresCvdSeries(chartCvdReport, cvdExchange),
@@ -1051,6 +1078,18 @@ export function CoinDetailPage() {
     () => spotCvdSeries(chartCvdReport, spotExchange),
     [chartCvdReport, spotExchange],
   );
+  const clickCvd = useMemo(() => {
+    if (isEquity || !showCvd || cvdClickSec == null || barDurationSec <= 0) return null;
+    const line = anchoredCvdByCandle(chartData, tapeCvd.points, cvdClickSec, barDurationSec);
+    const last = line.length > 0 ? line[line.length - 1]!.value : null;
+    return {
+      time: formatUtcMinute(cvdClickSec),
+      amount: last == null ? '' : formatSignedTapeNum(last),
+      exchange: t(`detail:liqHeatmap.venues.${tapeCvd.source}`, { defaultValue: tapeCvd.source }),
+      late: cvdAnchorStartsLate(tapeCvd.points, cvdClickSec, cvdBarSeconds(tapeCvd.bar)),
+      empty: line.length === 0,
+    };
+  }, [isEquity, showCvd, cvdClickSec, barDurationSec, chartData, tapeCvd, t]);
   const positioningRead = useMemo(() => {
     const anchors = chartAnchors(Math.floor(Date.now() / 1000));
     const venueName = (id: string) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id });
@@ -1159,7 +1198,11 @@ export function CoinDetailPage() {
           layer.tape.blockFrom != null
             ? anchoredCvdByCandle(chartData, layer.tape.points, layer.tape.blockFrom, barDurationSec)
             : [];
-        if (day.length > 0 || block.length > 0) {
+        const click =
+          cvdClickSec != null
+            ? anchoredCvdByCandle(chartData, layer.tape.points, cvdClickSec, barDurationSec)
+            : [];
+        if (day.length > 0 || block.length > 0 || click.length > 0) {
           if (day.length > 0) {
             series.push({
               id: `${layer.prefix}cvd-day`,
@@ -1178,6 +1221,16 @@ export function CoinDetailPage() {
               title: t('detail:chart.cvd4hNamed', { market: layer.market, venue }),
               color: layer.block,
               data: block,
+            });
+          }
+          if (click.length > 0) {
+            series.push({
+              id: `${layer.prefix}cvd-click`,
+              pane,
+              kind: 'line',
+              title: t('detail:chart.cvdClickNamed', { market: layer.market, venue }),
+              color: semanticColors.chart.rsi,
+              data: click,
             });
           }
           pane += 1;
@@ -1297,6 +1350,7 @@ export function CoinDetailPage() {
     chartData,
     tapeCvd,
     spotCvd,
+    cvdClickSec,
     positioningRead,
     openLevelsQuery,
     t,
@@ -1526,18 +1580,26 @@ export function CoinDetailPage() {
     t,
   ]);
 
-  const chartVertLines = useMemo(
-    () =>
-      delistEventsToVertLines({
-        announcedAt,
-        delistTime,
-        announcedLabel: t('detail:chart.delistAnnounced'),
-        delistLabel: t('detail:chart.delistHalt'),
-        announcedColor: semanticColors.status.warning,
-        delistColor: semanticColors.status.error,
-      }),
-    [announcedAt, delistTime, t],
-  );
+  const chartVertLines = useMemo(() => {
+    const lines = delistEventsToVertLines({
+      announcedAt,
+      delistTime,
+      announcedLabel: t('detail:chart.delistAnnounced'),
+      delistLabel: t('detail:chart.delistHalt'),
+      announcedColor: semanticColors.status.warning,
+      delistColor: semanticColors.status.error,
+    });
+    if (!isEquity && showCvd && cvdClickSec != null) {
+      lines.push({
+        id: 'cvd-click',
+        time: cvdClickSec,
+        color: semanticColors.chart.rsi,
+        label: t('detail:chart.cvd'),
+        labelOffsetY: lines.length > 0 ? 18 : 0,
+      });
+    }
+    return lines;
+  }, [announcedAt, delistTime, t, isEquity, showCvd, cvdClickSec]);
 
   const tab: DetailTab = useMemo(() => {
     if (
@@ -2007,6 +2069,35 @@ export function CoinDetailPage() {
                 })}
               </Text>
             ) : null}
+            {!isEquity && showCvd && cvdClickSec == null ? (
+              <Text variant="caption" color="secondary" data-testid="chart-cvd-click-hint">
+                {t('detail:chart.cvdClickHint')}
+              </Text>
+            ) : null}
+            {!isEquity && showCvd && clickCvd ? (
+              <Text variant="caption" color="secondary" data-testid="chart-cvd-click">
+                {t(
+                  clickCvd.empty
+                    ? 'detail:chart.cvdClickEmpty'
+                    : clickCvd.late
+                      ? 'detail:chart.cvdClickLate'
+                      : 'detail:chart.cvdClick',
+                  {
+                    time: clickCvd.time,
+                    amount: clickCvd.amount,
+                    exchange: clickCvd.exchange,
+                  },
+                )}{' '}
+                <Button
+                  type="link"
+                  size="small"
+                  onClick={() => setCvdClickSec(null)}
+                  data-testid="chart-cvd-click-clear"
+                >
+                  {t('detail:chart.cvdClickClear')}
+                </Button>
+              </Text>
+            ) : null}
             {!isEquity && showBook && bookWindow > CHART_BOOK_LIVE_MAX ? (
               <Text variant="caption" color="secondary" data-testid="chart-book-stored">
                 {t('detail:chart.bookStored')}
@@ -2262,6 +2353,7 @@ export function CoinDetailPage() {
               liqHeat={chartLiqHeat}
               openLevels={chartOpenLevels}
               onVisibleSpan={isEquity ? undefined : onVisibleSpan}
+              onBarTimeClick={isEquity || !showCvd ? undefined : onCandleAnchor}
               rightPadding={
                 !isEquity &&
                 (showLiqLevels || (showFootprint && chartCandleFootprint.candles.length === 0))
@@ -2285,13 +2377,15 @@ export function CoinDetailPage() {
                 (isPhone ? PHONE_CHART_HEIGHT : DESK_CHART_HEIGHT) +
                 (lowerSeries.some((s) => s.id === 'delta') ? (isPhone ? 72 : 120) : 0) +
                 (lowerSeries.some((s) => s.id === 'cvd-range') ? (isPhone ? 72 : 120) : 0) +
-                (lowerSeries.some((s) => s.id === 'cvd-day' || s.id === 'cvd-4h')
+                (lowerSeries.some((s) => s.id === 'cvd-day' || s.id === 'cvd-4h' || s.id === 'cvd-click')
                   ? isPhone
                     ? 72
                     : 120
                   : 0) +
                 (lowerSeries.some((s) => s.id === 'spot-cvd-range') ? (isPhone ? 72 : 120) : 0) +
-                (lowerSeries.some((s) => s.id === 'spot-cvd-day' || s.id === 'spot-cvd-4h')
+                (lowerSeries.some(
+                  (s) => s.id === 'spot-cvd-day' || s.id === 'spot-cvd-4h' || s.id === 'spot-cvd-click',
+                )
                   ? isPhone
                     ? 72
                     : 120

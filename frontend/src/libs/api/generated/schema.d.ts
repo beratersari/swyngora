@@ -1837,7 +1837,9 @@ export interface paths {
          *     and label `confirms`, `opposite`, or `absorption`. **Anchors**
          *     reset the sum at a clock instead of a rolling lookback: `day`
          *     is 00:00 UTC, `4h` is the current 4-hour open (00/04/08/12/16/20
-         *     UTC). Each anchor's `cvd` is buy minus sell since that time, with
+         *     UTC). Optional `anchor` (RFC3339) adds a `click` anchor that sums
+         *     bars whose start is at or after that candle. Pick a `range` that
+         *     reaches it. Each anchor's `cvd` is buy minus sell since that time, with
          *     price change and the same confirms / opposite / absorption label.
          *     `complete` is false when stored bars start after the anchor.
          *     `range` is `24h` (5-minute bars, default), `7d` (30-minute),
@@ -7280,8 +7282,11 @@ export interface components {
             divergence?: "price_up_cvd_down" | "price_down_cvd_up";
         };
         MarketCvdAnchor: {
-            /** @enum {string} */
-            anchor?: "day" | "4h";
+            /**
+             * @description day and 4h are clocks. click is the anchor query time.
+             * @enum {string}
+             */
+            anchor?: "day" | "4h" | "click";
             /** Format: date-time */
             from?: string;
             /** @description Buy minus sell since from */
@@ -7303,6 +7308,7 @@ export interface components {
          *     uses 5-minute bars. `7d` uses 30-minute bars, `30d` uses 2-hour bars,
          *     and `90d` uses 4-hour bars, folded from stored minutes. Anchors reset
          *     the sum at 00:00 UTC (`day`) and the current 4-hour open (`4h`).
+         *     Query `anchor` adds a `click` anchor from that candle.
          *     The coin chart draws futures and spot as separate lines and rebases
          *     those points onto candle times. Futures combined is complete only when
          *     Binance, Bybit, and OKX each reach the window open. Spot combined is
@@ -12629,8 +12635,10 @@ export interface operations {
                 symbol: string;
                 /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
-                /** @description 24h (5m bars) | 7d (30m) | 30d (2h) | 90d (4h). Default 24h. */
+                /** @description 24h (5m bars) | 7d (30m) | 30d (2h) | 90d (4h). Default 24h. Use a range that reaches anchor. */
                 range?: "24h" | "7d" | "30d" | "90d";
+                /** @description Optional RFC3339 candle time. Adds a click anchor from that bar. Empty keeps day and 4h only. */
+                anchor?: string;
             };
             header?: never;
             path?: never;

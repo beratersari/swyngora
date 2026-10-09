@@ -37,7 +37,15 @@ Useful when:
   The coin price chart draws futures and spot separately. Each market
   gets a line since 00:00 UTC and a line since the current 4-hour open,
   labeled with Futures or Spot and the venue (or Combined). On a range
-  longer than 24h it also draws that market's running sum. Buy−sell
+  longer than 24h it also draws that market's running sum. Click a
+  candle and both markets restart at that candle's open. The request
+  widens to 7d, 30d, or 90d when the candle is older than the selected
+  range, so the line uses the stored bars that reach it (5 minutes
+  inside a day, then 30 minutes, 2 hours, and 4 hours). A bar that
+  opened before the click is left out. The caption names the venue and
+  says when the tape starts later. Click the same candle, or Clear, to
+  remove it. `anchor` on this route is that time in RFC3339 and adds a
+  `click` anchor on each series. Buy−sell
   `delta` stays the futures histogram. Combined is drawn only when every
   expected venue's own tape is complete and reaches the page venue.
   Futures expects Binance, Bybit, and OKX. Spot expects Binance and Bybit.
@@ -105,4 +113,5 @@ Informational only — not financial advice.
 cd backend && go test ./internal/domain/ ./internal/service/market/ ./internal/adapter/futuresstore/ -run CVD
 curl "http://localhost:8080/api/v1/market/cvd?symbol=BTCUSDT"
 curl "http://localhost:8080/api/v1/market/cvd?symbol=BTCUSDT&range=7d"
+curl "http://localhost:8080/api/v1/market/cvd?symbol=BTCUSDT&range=7d&anchor=2026-10-07T08:00:00Z"
 ```

@@ -82,6 +82,7 @@ export function CandleChartHost({
   onNeedMoreHistory,
   rightPadding = INITIAL_RIGHT_PADDING,
   anchorEndIndex,
+  onBarTimeClick,
 }: CandleChartHostProps) {
   const { t } = useTranslation('common');
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -192,11 +193,13 @@ export function CandleChartHost({
   const isLoadingMoreRef = useRef(isLoadingMore);
   const hasMoreHistoryRef = useRef(hasMoreHistory);
   const onVisibleSpanRef = useRef(onVisibleSpan);
+  const onBarTimeClickRef = useRef(onBarTimeClick);
   const dataRef = useRef(data);
   onNeedMoreHistoryRef.current = onNeedMoreHistory;
   isLoadingMoreRef.current = isLoadingMore;
   hasMoreHistoryRef.current = hasMoreHistory;
   onVisibleSpanRef.current = onVisibleSpan;
+  onBarTimeClickRef.current = onBarTimeClick;
   dataRef.current = data;
 
   // Create chart once (layout phase so the data effect below can sync same frame).
@@ -309,7 +312,18 @@ export function CandleChartHost({
     };
     chart.timeScale().subscribeVisibleLogicalRangeChange(onVisibleRange);
 
+    const onChartClick = (param: { time?: Time; point?: unknown }) => {
+      if (param.point == null || typeof param.time !== 'number' || !Number.isFinite(param.time)) return;
+      onBarTimeClickRef.current?.(param.time);
+    };
+    if (typeof chart.subscribeClick === 'function') {
+      chart.subscribeClick(onChartClick);
+    }
+
     return () => {
+      if (typeof chart.unsubscribeClick === 'function') {
+        chart.unsubscribeClick(onChartClick);
+      }
       el.removeEventListener('pointerdown', onPointerDown);
       el.removeEventListener('pointerup', onPointerUp);
       el.removeEventListener('pointercancel', onPointerUp);

@@ -584,6 +584,30 @@ func TestGetCVD_OK(t *testing.T) {
 	}
 }
 
+func TestGetCVD_ClickAnchor(t *testing.T) {
+	h := newTestHandler()
+	anchor := time.Now().UTC().Add(-time.Hour).Format(time.RFC3339)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/cvd?symbol=BTCUSDT&anchor="+anchor, nil)
+	rr := httptest.NewRecorder()
+	h.GetCVD(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), `"anchor":"click"`) {
+		t.Fatalf("body=%s", rr.Body.String())
+	}
+}
+
+func TestGetCVD_BadAnchor(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/cvd?symbol=BTCUSDT&anchor=yesterday", nil)
+	rr := httptest.NewRecorder()
+	h.GetCVD(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestGetCVD_BadRange(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/cvd?symbol=BTCUSDT&range=1y", nil)

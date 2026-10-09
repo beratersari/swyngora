@@ -156,4 +156,6 @@ export type CandleChartHostProps = WithLoadingProps & {
   rightPadding?: number;
   /** Index after the last real (non-carried) bar; initial view stays on last trade. */
   anchorEndIndex?: number;
+  /** Unix seconds of the candle under a click. Absent when the click misses the plot. */
+  onBarTimeClick?: (timeSec: number) => void;
 };

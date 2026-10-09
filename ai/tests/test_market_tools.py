@@ -823,6 +823,39 @@ def test_read_only_scope_blocks_mutations(monkeypatch):
         reset_tool_scope(toks)
 
 
+def test_get_cvd_sends_click_anchor(monkeypatch):
+    seen: list[httpx2.Request] = []
+    real_client = httpx2.Client
+
+    class _CvdTransport(httpx2.BaseTransport):
+        def handle_request(self, request: httpx2.Request) -> httpx2.Response:
+            seen.append(request)
+            return httpx2.Response(200, json={"symbol": "BTCUSDT", "range": "7d"})
+
+    def fake_client(*args, **kwargs):
+        kwargs.pop("timeout", None)
+        return real_client(*args, timeout=5.0, transport=_CvdTransport())
+
+    monkeypatch.setattr(httpx2, "Client", fake_client)
+    tools = build_market_tools(Settings(api_base_url="http://test"))
+    by_name = {t.name: t for t in tools}
+    out = json.loads(
+        by_name["get_cvd"].invoke(
+            {
+                "symbol": "BTCUSDT",
+                "range": "7d",
+                "anchor": "2026-10-07T08:00:00Z",
+            }
+        )
+    )
+    assert out["symbol"] == "BTCUSDT"
+    assert seen[-1].url.path.endswith("/cvd")
+    assert seen[-1].url.params["anchor"] == "2026-10-07T08:00:00Z"
+    assert seen[-1].url.params["range"] == "7d"
+    by_name["get_cvd"].invoke({"symbol": "BTCUSDT"})
+    assert "anchor" not in seen[-1].url.params
+
+
 def test_memory_key_isolates_tenants():
     mem = SessionMemory()
     a = memory_key("alice", "shared")

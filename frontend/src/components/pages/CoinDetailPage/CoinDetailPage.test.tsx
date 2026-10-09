@@ -112,6 +112,8 @@ vi.mock('./CoinStructureTab', () => ({
   CoinStructureTab: () => <div data-testid="coin-structure-tab" />,
 }));
 
+let chartClickAt = 0;
+
 vi.mock('@/components/molecules/CandleChartHost', () => ({
   CandleChartHost: (props: {
     data: unknown[];
@@ -120,6 +122,8 @@ vi.mock('@/components/molecules/CandleChartHost', () => ({
     footprint?: unknown[];
     priceLines?: { title?: string }[];
     markers?: { text?: string }[];
+    vertLines?: { label?: string }[];
+    onBarTimeClick?: (timeSec: number) => void;
   }) => (
     <div
       data-testid="candle-chart"
@@ -129,7 +133,12 @@ vi.mock('@/components/molecules/CandleChartHost', () => ({
       data-foot-strip={String(props.footprint?.length ?? 0)}
       data-prices={(props.priceLines ?? []).map((line) => line.title).join('|')}
       data-marks={(props.markers ?? []).map((mark) => mark.text).join('|')}
-    />
+      data-verts={(props.vertLines ?? []).map((line) => line.label).join('|')}
+    >
+      <button type="button" data-testid="chart-bar-click" onClick={() => props.onBarTimeClick?.(chartClickAt)}>
+        candle
+      </button>
+    </div>
   ),
 }));
 vi.mock('@/components/molecules/IndicatorChartHost', () => ({
@@ -633,6 +642,61 @@ describe('CoinDetailPage', () => {
       expect.objectContaining({ exchange: 'all', symbol: 'BTCUSDT', interval: '1h' }),
       expect.anything(),
     );
+  });
+
+  it('restarts CVD at a clicked candle and clears it on the same candle', async () => {
+    const user = userEvent.setup();
+    const open = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    open.setUTCMinutes(0, 0, 0);
+    chartClickAt = Math.floor(open.getTime() / 1000);
+    const openIso = open.toISOString();
+    mockCandles.mockReturnValue({
+      data: { candles: [{ ...candle, openTime: openIso }] },
+      currentData: { candles: [{ ...candle, openTime: openIso }] },
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    const cvd = {
+      range: '24h',
+      bar: '5m',
+      combined: { complete: false, points: [] },
+      venues: [
+        {
+          exchange: 'binance',
+          complete: true,
+          points: [
+            { time: openIso, delta: '+5' },
+            { time: new Date(open.getTime() + 5 * 60 * 1000).toISOString(), delta: '-2' },
+          ],
+        },
+        { exchange: 'bybit', points: [] },
+        { exchange: 'okx', points: [] },
+      ],
+    };
+    mockCvd.mockReturnValue({
+      data: cvd,
+      currentData: cvd,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    renderDetail('/markets/binance/BTCUSDT');
+    expect(await screen.findByTestId('chart-cvd-click-hint')).toBeInTheDocument();
+    await user.click(screen.getByTestId('chart-bar-click'));
+    const caption = await screen.findByTestId('chart-cvd-click');
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const stamp = `${open.getUTCFullYear()}-${pad(open.getUTCMonth() + 1)}-${pad(open.getUTCDate())} ${pad(open.getUTCHours())}:${pad(open.getUTCMinutes())}`;
+    expect(caption).toHaveTextContent(stamp);
+    expect(caption).toHaveTextContent('Binance');
+    expect(caption).toHaveTextContent('+3');
+    expect(screen.getByTestId('candle-chart')).toHaveAttribute('data-verts', expect.stringContaining('CVD'));
+    await user.click(screen.getByTestId('chart-bar-click'));
+    expect(screen.queryByTestId('chart-cvd-click')).not.toBeInTheDocument();
+    expect(screen.getByTestId('chart-cvd-click-hint')).toBeInTheDocument();
   });
 
   it('marks the current price and CVD disagreement and hides it on positioning', async () => {

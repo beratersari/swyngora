@@ -40,6 +40,8 @@ vi.mock('lightweight-charts', () => ({
     }),
     priceScale: () => ({ applyOptions: vi.fn() }),
     panes: () => [{ setStretchFactor }, { setStretchFactor }],
+    subscribeClick: vi.fn(),
+    unsubscribeClick: vi.fn(),
   })),
   createSeriesMarkers: vi.fn(() => ({ setMarkers: vi.fn(), markers: () => [] })),
   CandlestickSeries: 'CandlestickSeries',
@@ -92,6 +94,26 @@ describe('CandleChartHost', () => {
     };
     expect(opts.timeScale?.timeVisible).toBe(true);
     expect(opts.timeScale?.secondsVisible).toBe(true);
+  });
+
+  it('reports the candle time when the plot is clicked', () => {
+    const onBarTimeClick = vi.fn();
+    renderWithTheme(
+      <CandleChartHost
+        data={[{ time: 100, open: 1, high: 2, low: 0.5, close: 1.5 }]}
+        onBarTimeClick={onBarTimeClick}
+      />,
+    );
+    const chart = vi.mocked(createChart).mock.results.at(-1)?.value as {
+      subscribeClick: ReturnType<typeof vi.fn>;
+    };
+    const handler = chart.subscribeClick.mock.calls[0]?.[0] as
+      | ((param: { time?: number; point?: { x: number; y: number } }) => void)
+      | undefined;
+    handler?.({ time: 100, point: { x: 4, y: 8 } });
+    handler?.({ time: 100 });
+    expect(onBarTimeClick).toHaveBeenCalledTimes(1);
+    expect(onBarTimeClick).toHaveBeenCalledWith(100);
   });
 
   it('snaps vertical lines onto existing candles without a whitespace series', () => {

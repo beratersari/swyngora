@@ -733,7 +733,11 @@ class CvdInput(BaseModel):
     )
     range: str = Field(
         default="24h",
-        description="24h | 7d | 30d | 90d. 24h is 5-minute bars. 7d is 30-minute, 30d is 2-hour, 90d is 4-hour, from stored minutes.",
+        description="24h | 7d | 30d | 90d. 24h is 5-minute bars. 7d is 30-minute, 30d is 2-hour, 90d is 4-hour, from stored minutes. Pick a range that reaches anchor.",
+    )
+    anchor: str = Field(
+        default="",
+        description="Optional RFC3339 candle time. Adds a click anchor that sums bars from that time. Empty keeps the day and 4h anchors only.",
     )
 
 
@@ -2531,10 +2535,14 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"symbol": symbol, "exchange": exchange},
         )
 
-    def get_cvd(symbol: str, exchange: str = "all", range: str = "24h") -> str:
+    def get_cvd(
+        symbol: str, exchange: str = "all", range: str = "24h", anchor: str = ""
+    ) -> str:
         params: dict[str, Any] = {"symbol": symbol, "exchange": exchange}
         if range:
             params["range"] = range
+        if anchor:
+            params["anchor"] = anchor
         return http.get("/api/v1/market/cvd", params)
 
     def get_tape_backtest(
@@ -5512,7 +5520,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "are separate; spotFutures flags when spot buying and futures "
                 "selling (or the reverse). Windows show 15m / 1h / 4h / 24h "
                 "change on the returned bars. Anchors reset the sum at 00:00 UTC (day) and at the "
-                "current 4-hour open. range is 24h (5-minute bars), 7d (30-minute), "
+                "current 4-hour open. anchor is an optional RFC3339 candle time: a click "
+                "anchor sums bars from that candle and is incomplete when the tape starts "
+                "later. Choose a range that reaches it. range is 24h (5-minute bars), 7d (30-minute), "
                 "30d (2-hour), or 90d (4-hour) from stored minutes. "
                 "Binance minutes for the liquid list are filled from public "
                 "aggTrades, about 7 days. Bybit and OKX stay on minutes this "

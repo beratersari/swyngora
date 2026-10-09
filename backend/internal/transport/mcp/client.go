@@ -929,7 +929,7 @@ func (c *APIClient) GetMarketPressure(ctx context.Context, exchange, symbol stri
 
 // GetCVD returns cumulative taker buy−sell versus price.
 // rangeID is 24h, 7d, 30d, or 90d. Empty stays on the API default (24h).
-func (c *APIClient) GetCVD(ctx context.Context, exchange, symbol, rangeID string) (json.RawMessage, error) {
+func (c *APIClient) GetCVD(ctx context.Context, exchange, symbol, rangeID, anchor string) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)
 	if exchange != "" {
@@ -937,6 +937,9 @@ func (c *APIClient) GetCVD(ctx context.Context, exchange, symbol, rangeID string
 	}
 	if rangeID != "" {
 		q.Set("range", rangeID)
+	}
+	if anchor != "" {
+		q.Set("anchor", anchor)
 	}
 	return c.get(ctx, "/api/v1/market/cvd", q)
 }
