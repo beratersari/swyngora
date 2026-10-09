@@ -1886,6 +1886,16 @@ export interface paths {
          *     background from public USD-M aggTrades, about 7 days, one hour
          *     at a time. Bybit and OKX stay on the minutes this process
          *     recorded. The coin chart draws futures and spot as separate lines.
+         *     Futures points may include whaleDelta and retailDelta. A whale is
+         *     one aggressive print of at least 100,000 USD, as that venue reports
+         *     the print. Retail is every smaller print. Both fields are omitted
+         *     when the minute was stored before print size was known, and that
+         *     omission is not a zero. Combined size is set only when every venue's
+         *     bar at that step was sized. Spot points do not carry the split.
+         *     The coin chart draws whale and retail on their own panes under the
+         *     futures line, for the same day, 4-hour, click, and running anchors.
+         *     Combined size is drawn only when those bars are sized; otherwise
+         *     the page venue is drawn and a venue with no size is named.
          *     Combined is drawn only when every expected venue reaches the window
          *     open. Otherwise it draws the page venue and names who is missing.
          *     A Coinbase page shows Binance spot CVD and says Binance.
@@ -7335,7 +7345,12 @@ export interface components {
             priceMovePct?: string;
             cvdMove?: string;
         };
-        /** @description One aggressive buy-minus-sell bar. The bar size follows the requested range. */
+        /**
+         * @description One aggressive buy-minus-sell bar. The bar size follows the requested range.
+         *     whaleDelta and retailDelta are present together only when every minute in
+         *     the bar was split by print size. A whale is one aggressive print of at least
+         *     100,000 USD. Retail is every smaller print. Omitted fields are not zero.
+         */
         MarketCvdPoint: {
             /** Format: date-time */
             time?: string;
@@ -7344,6 +7359,13 @@ export interface components {
             delta?: string;
             /** @description Running sum from the start of the series */
             cvd?: string;
+            /**
+             * @description Whale buy minus whale sell. Present only when print size was stored for this bar.
+             *     "0" is a real zero. Omitted when the bar was stored before size was known.
+             */
+            whaleDelta?: string;
+            /** @description Retail buy minus retail sell. Same presence rule as whaleDelta. */
+            retailDelta?: string;
             buyNotional?: string;
             sellNotional?: string;
             /**
@@ -7384,7 +7406,12 @@ export interface components {
          *     those points onto candle times. Futures combined is complete only when
          *     Binance, Bybit, and OKX each reach the window open. Spot combined is
          *     complete only when Binance and Bybit do. OKX has no spot CVD. A missing
-         *     venue is named and is not counted as zero.
+         *     venue is named and is not counted as zero. whaleDelta and retailDelta
+         *     split a futures bar when print size was stored. A whale is one aggressive
+         *     print of at least 100,000 USD. Retail is every smaller print. A minute
+         *     stored before size was known omits both, and that is not zero. Combined
+         *     size is set only when every venue's bar at that step was sized. Spot
+         *     points do not carry the split.
          */
         MarketCvdReport: {
             symbol?: string;

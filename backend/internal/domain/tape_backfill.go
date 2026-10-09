@@ -55,9 +55,11 @@ func TakerBucketsFromPrints(prints []TakerPrint) []TakerBucket {
 		}
 		if p.Side == TakerSideSell {
 			b.SellNotional += p.Notional
-			continue
+		} else {
+			b.BuyNotional += p.Notional
 		}
-		b.BuyNotional += p.Notional
+		AddTakerPrintSize(b, p.Side, p.Notional)
+		b.SizeKnown = true
 	}
 	out := make([]TakerBucket, 0, len(acc))
 	for _, b := range acc {

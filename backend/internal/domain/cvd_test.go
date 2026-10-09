@@ -455,6 +455,72 @@ func TestCompareSpotFutures_Opposite(t *testing.T) {
 	}
 }
 
+func TestResampleTakerBuckets_UnknownMinuteClearsTheBar(t *testing.T) {
+	t0 := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	known := TakerBucket{
+		Start: t0, BuyNotional: DefaultWhaleMinNotional, SellNotional: 1,
+		WhaleBuy: DefaultWhaleMinNotional, RetailSell: 1, SizeKnown: true,
+	}
+	unknown := TakerBucket{Start: t0.Add(time.Minute), BuyNotional: 5}
+	got := ResampleTakerBuckets([]TakerBucket{known, unknown}, 5*time.Minute)
+	if len(got) != 1 || got[0].SizeKnown || got[0].WhaleBuy != 0 || got[0].BuyNotional != DefaultWhaleMinNotional+5 {
+		t.Fatalf("cleared %+v", got)
+	}
+	also := TakerBucket{Start: t0.Add(time.Minute), BuyNotional: 10, RetailBuy: 10, SizeKnown: true}
+	kept := ResampleTakerBuckets([]TakerBucket{known, also}, 5*time.Minute)
+	if len(kept) != 1 || !kept[0].SizeKnown || kept[0].WhaleBuy != DefaultWhaleMinNotional || kept[0].RetailBuy != 10 {
+		t.Fatalf("kept %+v", kept)
+	}
+}
+
+func TestBuildCVDSeries_SizeSkipsUnknownBars(t *testing.T) {
+	t0 := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	now := t0.Add(20 * time.Minute)
+	got := BuildCVDSeries(ExchangeBinance, "BTCUSDT", []TakerBucket{
+		{Start: t0, BuyNotional: DefaultWhaleMinNotional, WhaleBuy: DefaultWhaleMinNotional, SizeKnown: true},
+		{Start: t0.Add(5 * time.Minute), BuyNotional: 50, SellNotional: 20},
+		{Start: t0.Add(10 * time.Minute), SellNotional: 30_000, RetailSell: 30_000, SizeKnown: true},
+	}, nil, now, t0)
+	if len(got.Points) != 3 {
+		t.Fatalf("points %d", len(got.Points))
+	}
+	if !got.Points[0].SizeKnown || got.Points[0].WhaleDelta != DefaultWhaleMinNotional || got.Points[0].RetailDelta != 0 || got.Points[0].WhaleCVD != DefaultWhaleMinNotional {
+		t.Fatalf("first %+v", got.Points[0])
+	}
+	if got.Points[1].SizeKnown || got.Points[1].WhaleDelta != 0 || got.Points[1].WhaleCVD != 0 || got.Points[1].RetailDelta != 0 {
+		t.Fatalf("unknown must not be zero whale %+v", got.Points[1])
+	}
+	if !got.Points[2].SizeKnown || got.Points[2].RetailDelta != -30_000 || got.Points[2].WhaleCVD != DefaultWhaleMinNotional || got.Points[2].RetailCVD != -30_000 {
+		t.Fatalf("third %+v", got.Points[2])
+	}
+}
+
+func TestCombineCVDVenues_SizeNeedsEveryVenue(t *testing.T) {
+	t0 := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	now := t0.Add(10 * time.Minute)
+	bin := BuildCVDSeries(ExchangeBinance, "BTCUSDT", []TakerBucket{
+		{Start: t0, BuyNotional: DefaultWhaleMinNotional, WhaleBuy: DefaultWhaleMinNotional, SizeKnown: true},
+		{Start: t0.Add(5 * time.Minute), BuyNotional: 10, RetailBuy: 10, SizeKnown: true},
+	}, nil, now, t0)
+	byb := BuildCVDSeries(ExchangeBybit, "BTCUSDT", []TakerBucket{
+		{Start: t0, BuyNotional: 40_000, RetailBuy: 40_000, SizeKnown: true},
+		{Start: t0.Add(5 * time.Minute), BuyNotional: 8},
+	}, nil, now, t0)
+	got := CombineCVDVenues("BTCUSDT", []CVDVenueSeries{bin, byb}, nil, now)
+	if got == nil || len(got.Points) < 2 {
+		t.Fatalf("%+v", got)
+	}
+	if !got.Points[0].SizeKnown || got.Points[0].WhaleDelta != DefaultWhaleMinNotional || got.Points[0].RetailDelta != 40_000 {
+		t.Fatalf("sized %+v", got.Points[0])
+	}
+	if got.Points[1].SizeKnown || got.Points[1].WhaleDelta != 0 || got.Points[1].RetailDelta != 0 {
+		t.Fatalf("unsized venue is not zero %+v", got.Points[1])
+	}
+	if got.Points[1].Delta != 18 {
+		t.Fatalf("total still sums %+v", got.Points[1])
+	}
+}
+
 func TestResampleTakerBuckets_1mTo5m(t *testing.T) {
 	t0 := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
 	in := []TakerBucket{

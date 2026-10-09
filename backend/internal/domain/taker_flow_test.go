@@ -79,6 +79,33 @@ func TestExplainTakerFlow_LongBuildup(t *testing.T) {
 	}
 }
 
+func TestTakerBook_RecordClassifiesAFreshMinute(t *testing.T) {
+	b := NewTakerBook()
+	now := time.Date(2026, 10, 9, 12, 0, 30, 0, time.UTC)
+	b.now = func() time.Time { return now }
+	b.Record(TakerPrint{Exchange: ExchangeBinance, Symbol: "BTCUSDT", Side: TakerSideBuy, Notional: DefaultWhaleMinNotional, Time: now})
+	b.Record(TakerPrint{Exchange: ExchangeBinance, Symbol: "BTCUSDT", Side: TakerSideSell, Notional: 20_000, Time: now.Add(time.Second)})
+	got := b.Buckets(ExchangeBinance, "BTCUSDT")
+	if len(got) != 1 || !got[0].SizeKnown || got[0].WhaleBuy != DefaultWhaleMinNotional || got[0].RetailSell != 20_000 {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestTakerBook_RecordLeavesAnUnknownMinuteUnknown(t *testing.T) {
+	b := NewTakerBook()
+	now := time.Date(2026, 10, 9, 12, 0, 30, 0, time.UTC)
+	b.now = func() time.Time { return now }
+	b.LoadBuckets([]TakerBucket{{
+		Exchange: ExchangeBinance, Symbol: "BTCUSDT", Start: now.Truncate(time.Minute),
+		BuyNotional: 50, SellNotional: 10,
+	}})
+	b.Record(TakerPrint{Exchange: ExchangeBinance, Symbol: "BTCUSDT", Side: TakerSideBuy, Notional: DefaultWhaleMinNotional, Time: now})
+	got := b.Buckets(ExchangeBinance, "BTCUSDT")
+	if len(got) != 1 || got[0].SizeKnown || got[0].WhaleBuy != 0 || got[0].BuyNotional != 50+DefaultWhaleMinNotional {
+		t.Fatalf("%+v", got)
+	}
+}
+
 func TestTakerBook_RecordAndSnapshot(t *testing.T) {
 	b := NewTakerBook()
 	now := time.Date(2026, 8, 14, 16, 10, 30, 0, time.UTC)

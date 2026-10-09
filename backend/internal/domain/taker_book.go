@@ -58,14 +58,27 @@ func (b *TakerBook) Record(p TakerPrint) {
 		b.byKey[k] = m
 	}
 	cur := m[ms]
+	prior := cur.BuyNotional + cur.SellNotional
 	cur.Exchange = p.Exchange
 	cur.Symbol = p.Symbol
 	cur.Start = time.UnixMilli(ms).UTC()
+	// A minute that already has notional and was not classified stays unknown.
+	// Mixing a new sized print into that total would make whale+retail disagree
+	// with the bar. A fresh minute, or one already sized, takes this print.
+	classify := prior <= 0 || cur.SizeKnown
 	switch p.Side {
 	case TakerSideBuy:
 		cur.BuyNotional += p.Notional
+		if classify {
+			AddTakerPrintSize(&cur, TakerSideBuy, p.Notional)
+			cur.SizeKnown = true
+		}
 	case TakerSideSell:
 		cur.SellNotional += p.Notional
+		if classify {
+			AddTakerPrintSize(&cur, TakerSideSell, p.Notional)
+			cur.SizeKnown = true
+		}
 	}
 	m[ms] = cur
 	for t := range m {
@@ -126,11 +139,31 @@ func (b *TakerBook) LoadBuckets(buckets []TakerBucket) {
 		}
 		ms := TruncateToBucket(rec.Start, takerBucket).UnixMilli()
 		cur := m[ms]
+		prior := cur.BuyNotional + cur.SellNotional
 		cur.Exchange = rec.Exchange
 		cur.Symbol = rec.Symbol
 		cur.Start = time.UnixMilli(ms).UTC()
 		cur.BuyNotional += rec.BuyNotional
 		cur.SellNotional += rec.SellNotional
+		switch {
+		case prior <= 0:
+			cur.WhaleBuy = rec.WhaleBuy
+			cur.WhaleSell = rec.WhaleSell
+			cur.RetailBuy = rec.RetailBuy
+			cur.RetailSell = rec.RetailSell
+			cur.SizeKnown = rec.SizeKnown
+		case cur.SizeKnown && rec.SizeKnown:
+			cur.WhaleBuy += rec.WhaleBuy
+			cur.WhaleSell += rec.WhaleSell
+			cur.RetailBuy += rec.RetailBuy
+			cur.RetailSell += rec.RetailSell
+		default:
+			cur.WhaleBuy = 0
+			cur.WhaleSell = 0
+			cur.RetailBuy = 0
+			cur.RetailSell = 0
+			cur.SizeKnown = false
+		}
 		m[ms] = cur
 		if t0, ok := b.started[k]; !ok || rec.Start.Before(t0) {
 			b.started[k] = rec.Start.UTC()

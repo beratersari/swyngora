@@ -125,6 +125,49 @@ func TestMigrateV6_DropsEstimatedBinanceTape(t *testing.T) {
 	if err != nil || len(by) != 1 || by[0].BuyNotional != 4 {
 		t.Fatalf("bybit rows %+v %v", by, err)
 	}
+	if by[0].SizeKnown || by[0].WhaleBuy != 0 || by[0].RetailBuy != 0 {
+		t.Fatalf("old minute stays unsized %+v", by[0])
+	}
+}
+
+func TestTakerBuckets_SizeSurvivesATotalOnlyUpsert(t *testing.T) {
+	s, err := Open(filepath.Join(t.TempDir(), "futures.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	t0 := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	sized := domain.TakerBucket{
+		Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Start: t0,
+		BuyNotional: 140_000, SellNotional: 10,
+		WhaleBuy: 100_000, RetailBuy: 40_000, RetailSell: 10, SizeKnown: true,
+	}
+	if _, err := s.UpsertTakerBuckets(context.Background(), []domain.TakerBucket{sized}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.ListTakerBuckets(context.Background(), "binance", "BTCUSDT", t0.Add(-time.Minute), t0.Add(time.Minute))
+	if err != nil || len(got) != 1 || !got[0].SizeKnown || got[0].WhaleBuy != 100_000 || got[0].RetailBuy != 40_000 || got[0].RetailSell != 10 {
+		t.Fatalf("round trip %+v %v", got, err)
+	}
+	if _, err := s.UpsertTakerBuckets(context.Background(), []domain.TakerBucket{{
+		Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Start: t0,
+		BuyNotional: 150_000, SellNotional: 12,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.ListTakerBuckets(context.Background(), "binance", "BTCUSDT", t0.Add(-time.Minute), t0.Add(time.Minute))
+	if err != nil || len(got) != 1 || got[0].BuyNotional != 150_000 || got[0].SellNotional != 12 || !got[0].SizeKnown || got[0].WhaleBuy != 100_000 {
+		t.Fatalf("total-only upsert wiped size %+v %v", got, err)
+	}
+	sized.BuyNotional = 160_000
+	sized.WhaleBuy = 120_000
+	if _, err := s.UpsertTakerBuckets(context.Background(), []domain.TakerBucket{sized}); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.ListTakerBuckets(context.Background(), "binance", "BTCUSDT", t0.Add(-time.Minute), t0.Add(time.Minute))
+	if err != nil || len(got) != 1 || got[0].BuyNotional != 160_000 || got[0].WhaleBuy != 120_000 || !got[0].SizeKnown {
+		t.Fatalf("sized rewrite %+v %v", got, err)
+	}
 }
 
 func TestListTakerBuckets_OKX(t *testing.T) {

@@ -85,6 +85,17 @@ describe('CandleChartHost helpers', () => {
     ).toEqual([{ time: 2, value: 5 }]);
   });
 
+  it('breaks a line on a gap and keeps a value at the same time', () => {
+    expect(
+      toLineData([
+        { time: 1, value: 10 },
+        { time: 2, value: Number.NaN, gap: true },
+        { time: 3, value: 14 },
+        { time: 3, value: Number.NaN, gap: true },
+      ]),
+    ).toEqual([{ time: 1, value: 10 }, { time: 2 }, { time: 3, value: 14 }]);
+  });
+
   it('builds stable candle signatures', () => {
     const a = [
       { time: 1, open: 1, high: 1, low: 1, close: 1 },

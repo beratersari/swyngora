@@ -51,16 +51,20 @@ type cvdVenueSplitDTO struct {
 }
 
 type cvdPointDTO struct {
-	Time           time.Time     `json:"time"`
-	Price          string        `json:"price"`
-	PriceChangePct string        `json:"priceChangePct"`
-	BuyNotional    string        `json:"buyNotional"`
-	SellNotional   string        `json:"sellNotional"`
-	Delta          string        `json:"delta"`
-	CVD            string        `json:"cvd"`
-	VsPrice        string        `json:"vsPrice"`
-	Divergence     string        `json:"divergence,omitempty"`
-	Shares         []cvdShareDTO `json:"shares,omitempty"`
+	Time           time.Time `json:"time"`
+	Price          string    `json:"price"`
+	PriceChangePct string    `json:"priceChangePct"`
+	BuyNotional    string    `json:"buyNotional"`
+	SellNotional   string    `json:"sellNotional"`
+	Delta          string    `json:"delta"`
+	CVD            string    `json:"cvd"`
+	// WhaleDelta and RetailDelta are set only when this bar's print size was stored.
+	// "0" is a real zero on a sized bar. Omitted means the bar was not split.
+	WhaleDelta  string        `json:"whaleDelta,omitempty"`
+	RetailDelta string        `json:"retailDelta,omitempty"`
+	VsPrice     string        `json:"vsPrice"`
+	Divergence  string        `json:"divergence,omitempty"`
+	Shares      []cvdShareDTO `json:"shares,omitempty"`
 }
 
 type cvdAnchorDTO struct {
@@ -174,13 +178,18 @@ func cvdToDTO(a *domain.CVDReport) cvdResponse {
 func cvdVenueToDTO(v domain.CVDVenueSeries) cvdVenueDTO {
 	pts := make([]cvdPointDTO, 0, len(v.Points))
 	for _, p := range v.Points {
-		pts = append(pts, cvdPointDTO{
+		pt := cvdPointDTO{
 			Time: p.Time.UTC(), Price: formatHistQty(p.Price),
 			PriceChangePct: domain.FormatSignedPct(p.PriceChangePct),
 			BuyNotional:    formatHistQty(p.BuyNotional), SellNotional: formatHistQty(p.SellNotional),
 			Delta: domain.FormatSignedQty(p.Delta), CVD: domain.FormatSignedQty(p.CVD),
 			VsPrice: p.VsPrice, Divergence: p.Divergence, Shares: cvdSharesToDTO(p.Shares),
-		})
+		}
+		if p.SizeKnown {
+			pt.WhaleDelta = domain.FormatSignedQty(p.WhaleDelta)
+			pt.RetailDelta = domain.FormatSignedQty(p.RetailDelta)
+		}
+		pts = append(pts, pt)
 	}
 	anchors := make([]cvdAnchorDTO, 0, len(v.Anchors))
 	for _, a := range v.Anchors {

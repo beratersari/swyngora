@@ -4,6 +4,8 @@ import type { IndicatorsResponse } from '@/libs/api';
 export type ChartLinePoint = {
   time: number;
   value: number;
+  /** Breaks the line at this time. `value` is ignored. */
+  gap?: boolean;
 };
 
 const DASH = '—';

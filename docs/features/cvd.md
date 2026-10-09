@@ -20,6 +20,24 @@ Useful when:
 - Binance minutes for the liquid USDT list (up to 100 names, seeds first) are filled in the background from public USD-M aggregate trades, about 7 days, one hour at a time. A rate-limit pause retries that window and does not store a partial hour. Bybit and OKX are not backfilled this way
 - Points: `buyNotional`, `sellNotional`, `delta`, running `cvd`,
   `price`, `priceChangePct`, `vsPrice`, and `divergence`
+- **Whale and retail** are on futures points only. A whale is one aggressive
+  print of at least $100,000, as that venue reports the print (a Binance
+  aggregate trade can already merge fills of one taker order). Retail is
+  every smaller print. `whaleDelta` and `retailDelta` are buy minus sell
+  inside that class. They are present only when every minute in the bar
+  was split. A minute stored before print size was known omits both, and
+  that omission is not a zero whale or zero retail. One unknown minute
+  inside a coarser bar clears the split for that whole bar. The background
+  Binance walk classifies hours it has not scanned yet. It does not
+  re-read hours already stored. Bybit and OKX grow only while this process
+  is recording. Combined size is set only when every venue's bar at that
+  step was sized. An empty slot is not zero. Spot points do not carry the
+  split. The coin chart draws whale and retail under the futures line, for
+  the same day, 4-hour, click, and running anchors. Combined size is drawn
+  only when those bars are sized. Otherwise the page venue is drawn and
+  the other venues are named. The size line holds the last sum for one bar,
+  then breaks. The missing bar is not drawn as zero, and the sum continues
+  from the next sized bar.
 - **Divergence:** `price_up_cvd_down` or `price_down_cvd_up` on a point,
   on each 15m / 1h / 4h / 24h window, and on the series `divergence`
   object — how long the current split has been running (`duration`,

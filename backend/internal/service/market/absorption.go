@@ -144,6 +144,7 @@ func (s *Service) absorptionSpotOne(ctx context.Context, ex domain.Exchange, sym
 		out.Summary = out.Error
 		return out
 	}
+	domain.ClearTakerBucketSize(live)
 	storeEx := domain.SpotStoreExchange(ex)
 	from := now.Add(-domain.DefaultCVDLookback)
 	var stored []domain.TakerBucket
@@ -154,6 +155,7 @@ func (s *Service) absorptionSpotOne(ctx context.Context, ex domain.Exchange, sym
 		for i := range persist {
 			persist[i].Exchange = domain.Exchange(storeEx)
 		}
+		domain.ClearTakerBucketSize(persist)
 		if len(persist) > 0 {
 			_, _ = s.takerStore.UpsertTakerBuckets(ctx, persist)
 		}

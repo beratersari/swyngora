@@ -1,4 +1,4 @@
-import type { CandlestickData, HistogramData, LineData, Time } from 'lightweight-charts';
+import type { CandlestickData, HistogramData, LineData, Time, WhitespaceData } from 'lightweight-charts';
 import type { ChartCandle, ChartLinePoint } from '@/libs/utils';
 import type { CandleChartOverlay } from './CandleChartHost.types';
 
@@ -151,20 +151,21 @@ export function toHistogramData(
   return out;
 }
 
-export function toLineData(points: ChartLinePoint[]): LineData<Time>[] {
+export function toLineData(points: ChartLinePoint[]): (LineData<Time> | WhitespaceData<Time>)[] {
   if (!points.length) return [];
   const sorted = [...points]
-    .filter((p) => Number.isFinite(p.time) && Number.isFinite(p.value))
-    .sort((a, b) => a.time - b.time);
-  const out: LineData<Time>[] = [];
+    .filter((p) => Number.isFinite(p.time) && (p.gap === true || Number.isFinite(p.value)))
+    .sort((a, b) => a.time - b.time || Number(a.gap === true) - Number(b.gap === true));
+  const out: (LineData<Time> | WhitespaceData<Time>)[] = [];
   let lastTime: number | null = null;
   for (const p of sorted) {
     if (lastTime !== null && p.time === lastTime) {
+      if (p.gap) continue;
       // Keep the later value for the same timestamp.
       out[out.length - 1] = { time: p.time as Time, value: p.value };
       continue;
     }
-    out.push({ time: p.time as Time, value: p.value });
+    out.push(p.gap ? { time: p.time as Time } : { time: p.time as Time, value: p.value });
     lastTime = p.time;
   }
   return out;

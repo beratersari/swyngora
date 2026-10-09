@@ -189,6 +189,8 @@ func (s *Service) cvdSpotOne(ctx context.Context, ex domain.Exchange, symbol str
 		out.Summary = out.Error
 		return out
 	}
+	// Spot is kline taker volume or a short trade list, not the futures print tape.
+	domain.ClearTakerBucketSize(live)
 	storeEx := domain.SpotStoreExchange(ex)
 	from := now.Add(-span.Lookback)
 	var stored []domain.TakerBucket
@@ -199,11 +201,13 @@ func (s *Service) cvdSpotOne(ctx context.Context, ex domain.Exchange, symbol str
 		for i := range persist {
 			persist[i].Exchange = domain.Exchange(storeEx)
 		}
+		domain.ClearTakerBucketSize(persist)
 		if len(persist) > 0 {
 			_, _ = s.takerStore.UpsertTakerBuckets(ctx, persist)
 		}
 	}
 	merged := domain.MergeTakerBuckets(stored, live)
+	domain.ClearTakerBucketSize(merged)
 	started := now
 	for _, b := range merged {
 		if !b.Start.IsZero() && b.Start.Before(started) {

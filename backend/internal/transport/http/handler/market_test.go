@@ -670,6 +670,39 @@ func TestCVDToDTO_SharesAndDivergence(t *testing.T) {
 	}
 }
 
+func TestCVDToDTO_SizeOnlyWhenKnown(t *testing.T) {
+	at := time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC)
+	rep := &domain.CVDReport{
+		Symbol: "BTCUSDT",
+		Venues: []domain.CVDVenueSeries{{
+			Exchange: domain.ExchangeBinance,
+			Points: []domain.CVDPoint{
+				{Time: at, Delta: 100_000, CVD: 100_000, SizeKnown: true, WhaleDelta: 100_000, RetailDelta: 0},
+				{Time: at.Add(5 * time.Minute), Delta: 10, CVD: 100_010},
+			},
+		}},
+	}
+	got := cvdToDTO(rep)
+	if len(got.Venues) != 1 || len(got.Venues[0].Points) != 2 {
+		t.Fatalf("%+v", got.Venues)
+	}
+	sized := got.Venues[0].Points[0]
+	if sized.WhaleDelta != "+100000" || sized.RetailDelta != "0" {
+		t.Fatalf("sized %+v", sized)
+	}
+	unknown := got.Venues[0].Points[1]
+	if unknown.WhaleDelta != "" || unknown.RetailDelta != "" {
+		t.Fatalf("unknown %+v", unknown)
+	}
+	raw, err := json.Marshal(unknown)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "whaleDelta") || strings.Contains(string(raw), "retailDelta") {
+		t.Fatalf("omitempty %s", raw)
+	}
+}
+
 func TestGetCVD_BadSymbol(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/cvd", nil)

@@ -82,7 +82,10 @@ func (c *Client) GetSpotTakerBuckets(ctx context.Context, symbol string) ([]doma
 	for _, p := range prints {
 		book.Record(p)
 	}
-	return book.Buckets(domain.ExchangeBybit, symbol), nil
+	out := book.Buckets(domain.ExchangeBybit, symbol)
+	// These are spot trades. The whale/retail split is the futures tape only.
+	domain.ClearTakerBucketSize(out)
+	return out, nil
 }
 
 // PullRecentTrades merges the newest linear trades into the tape.

@@ -9,6 +9,8 @@ import {
   formatUtcMinute,
   snapCandleOpen,
   futuresCvdSeries,
+  futuresSizeSeries,
+  sizedCvdByCandle,
   spotCvdSeries,
   liquidationChartLevels,
   parseTapeNumber,
@@ -114,6 +116,100 @@ describe('chartTape', () => {
     expect(series.points.map((p) => p.delta)).toEqual([2, -1]);
     expect(series.dayFrom).toBe(Math.floor(Date.parse('2026-09-28T00:00:00Z') / 1000));
     expect(series.blockFrom).toBe(Math.floor(Date.parse('2026-09-28T08:00:00Z') / 1000));
+  });
+
+  it('maps whale and retail deltas and skips a bar with no size', () => {
+    const report: MarketCvd = {
+      venues: [
+        {
+          exchange: 'binance',
+          complete: true,
+          points: [
+            { time: '2026-09-28T10:00:00Z', delta: '+10', whaleDelta: '+100000', retailDelta: '-500' },
+            { time: '2026-09-28T10:05:00Z', delta: '+3' },
+            { time: '2026-09-28T10:10:00Z', delta: '+1', whaleDelta: '+5' },
+            { time: '2026-09-28T10:15:00Z', delta: '0', whaleDelta: '0', retailDelta: '+2' },
+          ],
+        },
+        { exchange: 'bybit', points: [] },
+        { exchange: 'okx', points: [] },
+      ],
+    };
+    const series = futuresCvdSeries(report, 'binance');
+    expect(series.points.map((point) => point.whaleDelta)).toEqual([100000, undefined, undefined, 0]);
+    expect(series.points.map((point) => point.retailDelta)).toEqual([-500, undefined, undefined, 2]);
+    const size = futuresSizeSeries(report, 'binance');
+    expect(size.source).toBe('binance');
+    expect(size.withheld).toEqual(['bybit', 'okx']);
+    expect(size.whale.map((point) => point.delta)).toEqual([100000, 0]);
+    expect(size.whale.map((point) => point.cvd)).toEqual([100000, 100000]);
+    expect(size.retail.map((point) => point.delta)).toEqual([-500, 2]);
+    expect(size.retail.map((point) => point.cvd)).toEqual([-500, -498]);
+  });
+
+  it('uses combined size only when a combined bar was sized', () => {
+    const venues: MarketCvd['venues'] = [
+      { exchange: 'binance', complete: true, points: [{ time: '2026-09-28T10:00:00Z', delta: '+9', whaleDelta: '+9', retailDelta: '0' }] },
+      { exchange: 'bybit', complete: true, points: [{ time: '2026-09-28T10:00:00Z', delta: '+4', whaleDelta: '0', retailDelta: '+4' }] },
+      { exchange: 'okx', complete: true, points: [{ time: '2026-09-28T10:00:00Z', delta: '+1', whaleDelta: '0', retailDelta: '+1' }] },
+    ];
+    const sized = futuresSizeSeries(
+      {
+        combined: {
+          complete: true,
+          points: [
+            { time: '2026-09-28T10:00:00Z', delta: '+2', whaleDelta: '+1', retailDelta: '+1' },
+            { time: '2026-09-28T10:05:00Z', delta: '+4' },
+          ],
+        },
+        venues,
+      },
+      'binance',
+    );
+    expect(sized.source).toBe('combined');
+    expect(sized.withheld).toEqual([]);
+    expect(sized.whale.map((point) => point.delta)).toEqual([1]);
+    const withheld = futuresSizeSeries(
+      {
+        combined: { complete: true, points: [{ time: '2026-09-28T10:00:00Z', delta: '+2' }] },
+        venues,
+      },
+      'binance',
+    );
+    expect(futuresCvdSeries({ combined: { complete: true, points: [{ time: '2026-09-28T10:00:00Z', delta: '+2' }] }, venues }, 'binance').source).toBe('combined');
+    expect(withheld.source).toBe('binance');
+    expect(withheld.whale.map((point) => point.delta)).toEqual([9]);
+    expect(withheld.withheld).toEqual(['bybit', 'okx']);
+  });
+
+  it('holds a sized bar for one step, then breaks instead of drawing zero', () => {
+    const candles = [0, 60, 120, 180, 240, 300, 360].map((time) => ({ time }));
+    const points = [
+      { time: 0, delta: 10, cvd: 10 },
+      { time: 360, delta: 4, cvd: 14 },
+    ];
+    expect(sizedCvdByCandle(candles, points, null, 60, 300)).toEqual([
+      { time: 0, value: 10 },
+      { time: 60, value: 10 },
+      { time: 120, value: 10 },
+      { time: 180, value: 10 },
+      { time: 240, value: 10 },
+      { time: 300, value: Number.NaN, gap: true },
+      { time: 360, value: 14 },
+    ]);
+    expect(sizedCvdByCandle(candles, points, 360, 60, 300)).toEqual([{ time: 360, value: 4 }]);
+    expect(
+      sizedCvdByCandle(
+        candles,
+        [
+          { time: 0, delta: 10, cvd: 10 },
+          { time: 300, delta: 4, cvd: 14 },
+        ],
+        null,
+        60,
+        300,
+      ).some((point) => point.gap),
+    ).toBe(false);
   });
 
   it('draws the longer Binance tape when combined does not cover it', () => {

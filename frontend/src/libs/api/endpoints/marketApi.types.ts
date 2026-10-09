@@ -985,6 +985,13 @@ export type MarketCvdPoint = {
   sellNotional?: string;
   /** price_up_cvd_down | price_down_cvd_up when this bar disagrees. */
   divergence?: string;
+  /**
+   * Whale buy minus whale sell. Present with retailDelta only when this bar's
+   * print size was stored. "0" is a real zero. Omitted is not zero.
+   */
+  whaleDelta?: string;
+  /** Retail buy minus retail sell. Same presence rule as whaleDelta. */
+  retailDelta?: string;
 };
 
 export type MarketCvdDivergence = {

@@ -214,6 +214,8 @@ import {
   deltaByCandle,
   formatUtcMinute,
   futuresCvdSeries,
+  futuresSizeSeries,
+  sizedCvdByCandle,
   snapCandleOpen,
   spotCvdSeries,
   liquidationChartLevels,
@@ -1117,6 +1119,10 @@ export function CoinDetailPage() {
     () => futuresCvdSeries(chartCvdReport, cvdExchange),
     [chartCvdReport, cvdExchange],
   );
+  const tapeSize = useMemo(
+    () => futuresSizeSeries(chartCvdReport, cvdExchange),
+    [chartCvdReport, cvdExchange],
+  );
   const spotExchange = exchange === 'bybit' ? 'bybit' : 'binance';
   const spotCvd = useMemo(
     () => spotCvdSeries(chartCvdReport, spotExchange),
@@ -1279,6 +1285,89 @@ export function CoinDetailPage() {
           }
           pane += 1;
         }
+        if (layer.prefix === '') {
+          const sizeVenue = t(`detail:liqHeatmap.venues.${tapeSize.source}`, {
+            defaultValue: tapeSize.source,
+          });
+          const drawSize = (
+            id: string,
+            points: typeof tapeSize.whale,
+            titles: { running: string; day: string; block: string; click: string },
+          ) => {
+            if (points.length === 0) return;
+            const holdSec = cvdBarSeconds(layer.tape.bar);
+            if (cvdRange !== '24h') {
+              const running = sizedCvdByCandle(chartData, points, null, barDurationSec, holdSec);
+              if (running.some((point) => !point.gap)) {
+                series.push({
+                  id: `${id}-range`,
+                  pane,
+                  kind: 'line',
+                  title: titles.running,
+                  color: semanticColors.text.link,
+                  data: running,
+                });
+                pane += 1;
+              }
+            }
+            const sizeDay =
+              layer.tape.dayFrom != null
+                ? sizedCvdByCandle(chartData, points, layer.tape.dayFrom, barDurationSec, holdSec)
+                : [];
+            const sizeBlock =
+              layer.tape.blockFrom != null
+                ? sizedCvdByCandle(chartData, points, layer.tape.blockFrom, barDurationSec, holdSec)
+                : [];
+            const sizeClick =
+              cvdClickSec != null
+                ? sizedCvdByCandle(chartData, points, cvdClickSec, barDurationSec, holdSec)
+                : [];
+            if (sizeDay.length === 0 && sizeBlock.length === 0 && sizeClick.length === 0) return;
+            if (sizeDay.length > 0) {
+              series.push({
+                id: `${id}-day`,
+                pane,
+                kind: 'line',
+                title: titles.day,
+                color: semanticColors.accent.default,
+                data: sizeDay,
+              });
+            }
+            if (sizeBlock.length > 0) {
+              series.push({
+                id: `${id}-4h`,
+                pane,
+                kind: 'line',
+                title: titles.block,
+                color: semanticColors.status.warning,
+                data: sizeBlock,
+              });
+            }
+            if (sizeClick.length > 0) {
+              series.push({
+                id: `${id}-click`,
+                pane,
+                kind: 'line',
+                title: titles.click,
+                color: semanticColors.chart.rsi,
+                data: sizeClick,
+              });
+            }
+            pane += 1;
+          };
+          drawSize('whale', tapeSize.whale, {
+            running: t('detail:chart.cvdWhaleRunningNamed', { venue: sizeVenue, range: cvdRange }),
+            day: t('detail:chart.cvdWhaleDayNamed', { venue: sizeVenue }),
+            block: t('detail:chart.cvdWhale4hNamed', { venue: sizeVenue }),
+            click: t('detail:chart.cvdWhaleClickNamed', { venue: sizeVenue }),
+          });
+          drawSize('retail', tapeSize.retail, {
+            running: t('detail:chart.cvdRetailRunningNamed', { venue: sizeVenue, range: cvdRange }),
+            day: t('detail:chart.cvdRetailDayNamed', { venue: sizeVenue }),
+            block: t('detail:chart.cvdRetail4hNamed', { venue: sizeVenue }),
+            click: t('detail:chart.cvdRetailClickNamed', { venue: sizeVenue }),
+          });
+        }
       }
     }
     if (showCrowd) {
@@ -1432,6 +1521,7 @@ export function CoinDetailPage() {
     liqMapVenue,
     chartData,
     tapeCvd,
+    tapeSize,
     spotCvd,
     cvdClickSec,
     positioningRead,
@@ -2141,6 +2231,27 @@ export function CoinDetailPage() {
                 })}
               </Text>
             ) : null}
+            {!isEquity && showCvd && (tapeSize.whale.length > 0 || tapeSize.retail.length > 0) ? (
+              <Text variant="caption" color="secondary" data-testid="chart-cvd-size">
+                {t('detail:chart.cvdSize')}
+              </Text>
+            ) : null}
+            {!isEquity &&
+            showCvd &&
+            tapeSize.source !== '' &&
+            tapeSize.source !== 'combined' &&
+            tapeSize.withheld.length > 0 ? (
+              <Text variant="caption" color="secondary" data-testid="chart-cvd-size-venue">
+                {t('detail:chart.cvdSizeVenue', {
+                  exchange: t(`detail:liqHeatmap.venues.${tapeSize.source}`, {
+                    defaultValue: tapeSize.source,
+                  }),
+                  venues: tapeSize.withheld
+                    .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
+                    .join(', '),
+                })}
+              </Text>
+            ) : null}
             {!isEquity && showCvd && spotCvd.points.length > 0 && spotCvd.withheld.length > 0 ? (
               <Text variant="caption" color="secondary" data-testid="chart-spot-cvd-venue">
                 {t('detail:chart.cvdVenueSpot', {
@@ -2487,6 +2598,18 @@ export function CoinDetailPage() {
                 (lowerSeries.some((s) => s.id === 'delta') ? (isPhone ? 72 : 120) : 0) +
                 (lowerSeries.some((s) => s.id === 'cvd-range') ? (isPhone ? 72 : 120) : 0) +
                 (lowerSeries.some((s) => s.id === 'cvd-day' || s.id === 'cvd-4h' || s.id === 'cvd-click')
+                  ? isPhone
+                    ? 72
+                    : 120
+                  : 0) +
+                (lowerSeries.some((s) => s.id === 'whale-range') ? (isPhone ? 72 : 120) : 0) +
+                (lowerSeries.some((s) => s.id === 'whale-day' || s.id === 'whale-4h' || s.id === 'whale-click')
+                  ? isPhone
+                    ? 72
+                    : 120
+                  : 0) +
+                (lowerSeries.some((s) => s.id === 'retail-range') ? (isPhone ? 72 : 120) : 0) +
+                (lowerSeries.some((s) => s.id === 'retail-day' || s.id === 'retail-4h' || s.id === 'retail-click')
                   ? isPhone
                     ? 72
                     : 120

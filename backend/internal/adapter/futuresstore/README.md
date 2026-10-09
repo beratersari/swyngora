@@ -1,8 +1,11 @@
 # Futures history store
 
-SQLite persistence for Binance USD-M and Bybit linear **open interest**,
+SQLite persistence for Binance USD-M, Bybit linear, and OKX USDT-swap **open interest**,
 **funding**, **long/short ratio** (including Binance top-trader size/account
 shares), **liquidation** events, and **taker buy/sell bars** used for CVD.
+A taker minute also stores whale and retail notional when each print's size
+was known. `size_known` stays 0 for older minutes, and a later total-only
+write does not erase a sized minute.
 
 Duplicates are rejected by primary key:
 

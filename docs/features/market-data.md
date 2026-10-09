@@ -74,7 +74,7 @@ Coin detail also has an **order heatmap** (resting bid/ask size over time) from 
 - `GET /api/v1/market/venue-divergence` Binance, Bybit, and OKX: who moves together and who is the outlier. See [`venue-divergence.md`](venue-divergence.md).
 - `GET /api/v1/market/taker-flow` aggressive futures buy vs sell volume (5m/1h/4h). See [`taker-flow.md`](taker-flow.md).
 - `GET /api/v1/market/pressure` one −1…+1 score from resting book, CVD, and absorption, plus 1h change. See [`market-pressure.md`](market-pressure.md).
-- `GET /api/v1/market/cvd` spot and futures CVD versus price (15m / 1h / 4h / 24h) plus anchored day (00:00 UTC) and current 4h open; venue split and spot-vs-futures split. See [`cvd.md`](cvd.md).
+- `GET /api/v1/market/cvd` spot and futures CVD versus price (15m / 1h / 4h / 24h) plus anchored day (00:00 UTC) and current 4h open; venue split and spot-vs-futures split. Futures bars can split whale (one aggressive print of at least $100,000) from retail when print size was stored. A minute from before that stays off both lines. See [`cvd.md`](cvd.md).
 - `GET /api/v1/market/bot-tracker` same-size aggressive prints that repeat at least 4 times inside 60 seconds. Buy, sell, and delta count only those clips. See [`bot-tracker.md`](bot-tracker.md).
 - `GET /api/v1/market/order-count` aggressive print counts and the −1…+1 buy/sell count ratio. `GET /api/v1/market/order-count/overview` sums that ratio across the liquid USDT pairs. See [`order-count.md`](order-count.md).
 - `GET /api/v1/market/volume-profile` aggressive buy/sell by printed price (POC + 70% value area). Combined only when Binance, Bybit, and OKX all reach the window open. See [`volume-profile.md`](volume-profile.md).

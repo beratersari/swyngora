@@ -194,6 +194,26 @@ CREATE TABLE IF NOT EXISTS liquidation_coverage (
 		if err := sqliteutil.SetUserVersion(s.db, 6); err != nil {
 			return err
 		}
+		v = 6
+	}
+	// v7 stores whale and retail notional beside the minute total.
+	// size_known defaults to 0 so minutes written before print size was
+	// stored are not read back as zero whale and zero retail.
+	if v < 7 {
+		for _, stmt := range []string{
+			`ALTER TABLE taker_buckets ADD COLUMN whale_buy REAL NOT NULL DEFAULT 0`,
+			`ALTER TABLE taker_buckets ADD COLUMN whale_sell REAL NOT NULL DEFAULT 0`,
+			`ALTER TABLE taker_buckets ADD COLUMN retail_buy REAL NOT NULL DEFAULT 0`,
+			`ALTER TABLE taker_buckets ADD COLUMN retail_sell REAL NOT NULL DEFAULT 0`,
+			`ALTER TABLE taker_buckets ADD COLUMN size_known INTEGER NOT NULL DEFAULT 0`,
+		} {
+			if err := sqliteutil.ExecAllowExists(s.db, stmt); err != nil {
+				return err
+			}
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 7); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -770,11 +790,18 @@ func (s *SQLite) UpsertTakerBuckets(ctx context.Context, recs []domain.TakerBuck
 		return 0, err
 	}
 	stmt, err := tx.PrepareContext(ctx, `
-INSERT INTO taker_buckets (exchange, symbol, start_ms, buy_notional, sell_notional)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO taker_buckets (
+	exchange, symbol, start_ms, buy_notional, sell_notional,
+	whale_buy, whale_sell, retail_buy, retail_sell, size_known)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(exchange, symbol, start_ms) DO UPDATE SET
 	buy_notional = excluded.buy_notional,
-	sell_notional = excluded.sell_notional`)
+	sell_notional = excluded.sell_notional,
+	whale_buy = CASE WHEN excluded.size_known = 1 THEN excluded.whale_buy ELSE taker_buckets.whale_buy END,
+	whale_sell = CASE WHEN excluded.size_known = 1 THEN excluded.whale_sell ELSE taker_buckets.whale_sell END,
+	retail_buy = CASE WHEN excluded.size_known = 1 THEN excluded.retail_buy ELSE taker_buckets.retail_buy END,
+	retail_sell = CASE WHEN excluded.size_known = 1 THEN excluded.retail_sell ELSE taker_buckets.retail_sell END,
+	size_known = CASE WHEN excluded.size_known = 1 THEN 1 ELSE taker_buckets.size_known END`)
 	if err != nil {
 		_ = tx.Rollback()
 		return 0, err
@@ -786,7 +813,15 @@ ON CONFLICT(exchange, symbol, start_ms) DO UPDATE SET
 		if rec.Symbol == "" || rec.Exchange == "" || rec.Start.IsZero() {
 			continue
 		}
-		if _, err := stmt.ExecContext(ctx, string(rec.Exchange), rec.Symbol, rec.Start.UTC().UnixMilli(), rec.BuyNotional, rec.SellNotional); err != nil {
+		known := 0
+		if rec.SizeKnown {
+			known = 1
+		}
+		if _, err := stmt.ExecContext(ctx,
+			string(rec.Exchange), rec.Symbol, rec.Start.UTC().UnixMilli(),
+			rec.BuyNotional, rec.SellNotional,
+			rec.WhaleBuy, rec.WhaleSell, rec.RetailBuy, rec.RetailSell, known,
+		); err != nil {
 			_ = tx.Rollback()
 			return n, err
 		}
@@ -815,7 +850,8 @@ func (s *SQLite) ListTakerBuckets(ctx context.Context, exchange, symbol string, 
 		return nil, fmt.Errorf("%w: exchange and symbol are required", domain.ErrInvalidArgument)
 	}
 	args := []any{string(ex), symbol}
-	q := `SELECT exchange, symbol, start_ms, buy_notional, sell_notional
+	q := `SELECT exchange, symbol, start_ms, buy_notional, sell_notional,
+			whale_buy, whale_sell, retail_buy, retail_sell, size_known
 		FROM taker_buckets WHERE exchange = ? AND symbol = ?`
 	if !from.IsZero() {
 		q += ` AND start_ms >= ?`
@@ -838,11 +874,16 @@ func (s *SQLite) ListTakerBuckets(ctx context.Context, exchange, symbol string, 
 		var rec domain.TakerBucket
 		var exs string
 		var ms int64
-		if err := rows.Scan(&exs, &rec.Symbol, &ms, &rec.BuyNotional, &rec.SellNotional); err != nil {
+		var known int
+		if err := rows.Scan(
+			&exs, &rec.Symbol, &ms, &rec.BuyNotional, &rec.SellNotional,
+			&rec.WhaleBuy, &rec.WhaleSell, &rec.RetailBuy, &rec.RetailSell, &known,
+		); err != nil {
 			return nil, err
 		}
 		rec.Exchange = domain.Exchange(exs)
 		rec.Start = time.UnixMilli(ms).UTC()
+		rec.SizeKnown = known == 1
 		out = append(out, rec)
 	}
 	return out, rows.Err()

@@ -1,10 +1,17 @@
 import type { MarketCvd, MarketLiquidationLevels } from '@/libs/api';
+import type { ChartLinePoint } from '@/libs/utils';
 
 export type TapeDeltaPoint = {
   time: number;
   delta: number;
   /** Running sum from the start of the returned range. */
   cvd?: number | null;
+  /**
+   * Whale and retail buy−sell. Both are set only when this bar's print size
+   * was stored. A missing pair is not zero.
+   */
+  whaleDelta?: number | null;
+  retailDelta?: number | null;
 };
 
 export type ChartBarPoint = {
@@ -183,7 +190,14 @@ function pickCvdSeries(
     const time = unixSeconds(p.time);
     const delta = parseTapeNumber(p.delta);
     if (time == null || delta == null) continue;
-    points.push({ time, delta, cvd: parseTapeNumber(p.cvd) });
+    const point: TapeDeltaPoint = { time, delta, cvd: parseTapeNumber(p.cvd) };
+    const whaleDelta = parseTapeNumber(p.whaleDelta);
+    const retailDelta = parseTapeNumber(p.retailDelta);
+    if (whaleDelta != null && retailDelta != null) {
+      point.whaleDelta = whaleDelta;
+      point.retailDelta = retailDelta;
+    }
+    points.push(point);
   }
   points.sort((a, b) => a.time - b.time);
   const last = points.length > 0 ? points[points.length - 1]!.time : null;
@@ -199,6 +213,78 @@ function pickCvdSeries(
     source,
     withheld,
     split: chartSplit(venue),
+  };
+}
+
+export type CvdSizeSeries = {
+  whale: TapeDeltaPoint[];
+  retail: TapeDeltaPoint[];
+  source: string;
+  withheld: string[];
+};
+
+function barHasSize(point: { whaleDelta?: string; retailDelta?: string } | undefined): boolean {
+  return parseTapeNumber(point?.whaleDelta) != null && parseTapeNumber(point?.retailDelta) != null;
+}
+
+/** Sized bars only. The running sum does not treat a missing bar as zero. */
+function sizeTape(points: { time?: string; whaleDelta?: string; retailDelta?: string }[] | undefined): {
+  whale: TapeDeltaPoint[];
+  retail: TapeDeltaPoint[];
+} {
+  const rows: { time: number; whale: number; retail: number }[] = [];
+  for (const point of points ?? []) {
+    const time = unixSeconds(point.time);
+    const whale = parseTapeNumber(point.whaleDelta);
+    const retail = parseTapeNumber(point.retailDelta);
+    if (time == null || whale == null || retail == null) continue;
+    rows.push({ time, whale, retail });
+  }
+  rows.sort((a, b) => a.time - b.time);
+  let whaleSum = 0;
+  let retailSum = 0;
+  const whale: TapeDeltaPoint[] = [];
+  const retail: TapeDeltaPoint[] = [];
+  for (const row of rows) {
+    whaleSum += row.whale;
+    retailSum += row.retail;
+    whale.push({ time: row.time, delta: row.whale, cvd: whaleSum });
+    retail.push({ time: row.time, delta: row.retail, cvd: retailSum });
+  }
+  return { whale, retail };
+}
+
+/**
+ * Whale and retail futures CVD.
+ * Combined is used only when the total line is combined and at least one
+ * combined bar was sized. Otherwise the page venue's sized bars are used
+ * and the other venues are named. A bar without whaleDelta and retailDelta
+ * is left out.
+ */
+export function futuresSizeSeries(report: MarketCvd | undefined, pageExchange = 'binance'): CvdSizeSeries {
+  const totals = futuresCvdSeries(report, pageExchange);
+  const venues = report?.venues ?? [];
+  const want = pageExchange.trim().toLowerCase();
+  const venueById = (id: string) => venues.find((venue) => venueId(venue) === id);
+  const combinedPoints = report?.combined?.points;
+  const combinedSized = totals.source === 'combined' && (combinedPoints ?? []).some((point) => barHasSize(point));
+  const empty = { whale: [], retail: [], source: '', withheld: [] };
+  if (combinedSized) {
+    return { ...sizeTape(combinedPoints), source: 'combined', withheld: [] };
+  }
+  const page = venueById(want);
+  const drawn = venueById(totals.source);
+  const pick = (page?.points ?? []).some((point) => barHasSize(point))
+    ? page
+    : (drawn?.points ?? []).some((point) => barHasSize(point))
+      ? drawn
+      : undefined;
+  if (!pick) return empty;
+  const source = venueId(pick);
+  return {
+    ...sizeTape(pick.points),
+    source,
+    withheld: FUTURES_CVD_VENUES.filter((id) => id !== source),
   };
 }
 
@@ -258,6 +344,64 @@ export function deltaByCandle(
     }
     if (any) out.push({ time: bar.time, value: sum });
     i = j;
+  }
+  return out;
+}
+
+/**
+ * Whale or retail CVD on candle opens.
+ * The last sized sum is held for one CVD bar, the same way a coarser print
+ * sits on finer candles. The next candle after that hold is a break.
+ * An unsized bar adds nothing and is not drawn as zero. The sum continues
+ * when the next sized bar arrives.
+ * `fromSec` null keeps every sized bar. A clock anchor drops earlier bars
+ * and starts the sum at zero.
+ */
+export function sizedCvdByCandle(
+  candles: { time: number }[],
+  points: TapeDeltaPoint[],
+  fromSec: number | null,
+  candleSec: number,
+  holdSec: number,
+): ChartLinePoint[] {
+  if (candleSec <= 0 || holdSec <= 0) return [];
+  const pts = points
+    .filter(
+      (p) =>
+        Number.isFinite(p.time) &&
+        Number.isFinite(p.delta) &&
+        (fromSec == null || p.time >= fromSec),
+    )
+    .sort((a, b) => a.time - b.time);
+  if (pts.length === 0) return [];
+  const bars = candles
+    .filter((c) => Number.isFinite(c.time) && (fromSec == null || c.time + candleSec > fromSec))
+    .sort((a, b) => a.time - b.time);
+  const out: ChartLinePoint[] = [];
+  let i = 0;
+  let sum = 0;
+  let lastPointTime: number | null = null;
+  let broken = true;
+  const first = pts[0]!.time;
+  for (const bar of bars) {
+    const end = bar.time + candleSec;
+    let hit = false;
+    while (i < pts.length && pts[i]!.time < end) {
+      sum += pts[i]!.delta;
+      lastPointTime = pts[i]!.time;
+      hit = true;
+      i += 1;
+    }
+    if (lastPointTime == null || end <= first) continue;
+    if (!hit && bar.time >= lastPointTime + holdSec) {
+      if (!broken) {
+        out.push({ time: bar.time, value: Number.NaN, gap: true });
+        broken = true;
+      }
+      continue;
+    }
+    out.push({ time: bar.time, value: sum });
+    broken = false;
   }
   return out;
 }

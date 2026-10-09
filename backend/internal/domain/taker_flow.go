@@ -44,12 +44,54 @@ type TakerPrint struct {
 }
 
 // TakerBucket is buy/sell notional in one time bucket (usually 1m).
+// Whale and retail are set only when SizeKnown is true. A minute stored
+// before each print's size was known stays SizeKnown false, and its size
+// fields are not a real zero.
 type TakerBucket struct {
 	Exchange     Exchange
 	Symbol       string
 	Start        time.Time
 	BuyNotional  float64
 	SellNotional float64
+	WhaleBuy     float64
+	WhaleSell    float64
+	RetailBuy    float64
+	RetailSell   float64
+	SizeKnown    bool
+}
+
+// AddTakerPrintSize counts one aggressive print as whale or retail.
+// At or above DefaultWhaleMinNotional is a whale, matching the whale desk.
+// A smaller positive print is retail. The caller sets SizeKnown.
+func AddTakerPrintSize(b *TakerBucket, side string, notional float64) {
+	if b == nil || notional <= 0 {
+		return
+	}
+	if notional >= DefaultWhaleMinNotional {
+		if side == TakerSideSell {
+			b.WhaleSell += notional
+			return
+		}
+		b.WhaleBuy += notional
+		return
+	}
+	if side == TakerSideSell {
+		b.RetailSell += notional
+		return
+	}
+	b.RetailBuy += notional
+}
+
+// ClearTakerBucketSize drops a split that was not measured on this tape.
+// Spot bars are candle volume or a short trade list, not the futures print tape.
+func ClearTakerBucketSize(in []TakerBucket) {
+	for i := range in {
+		in[i].WhaleBuy = 0
+		in[i].WhaleSell = 0
+		in[i].RetailBuy = 0
+		in[i].RetailSell = 0
+		in[i].SizeKnown = false
+	}
 }
 
 // TakerWindowFlow is aggressive volume in one lookback.

@@ -155,9 +155,17 @@ type CVDPoint struct {
 	SellNotional   float64
 	Delta          float64
 	CVD            float64
-	VsPrice        string // confirms | opposite | absorption | mixed
-	Divergence     string // price_up_cvd_down | price_down_cvd_up | ""
-	Shares         []CVDShare
+	// SizeKnown is true when every minute in this bar was split into whale and retail.
+	// WhaleDelta and RetailDelta are buy minus sell inside that class.
+	// WhaleCVD and RetailCVD run only across sized bars. An unknown bar leaves them zero.
+	SizeKnown   bool
+	WhaleDelta  float64
+	RetailDelta float64
+	WhaleCVD    float64
+	RetailCVD   float64
+	VsPrice     string // confirms | opposite | absorption | mixed
+	Divergence  string // price_up_cvd_down | price_down_cvd_up | ""
+	Shares      []CVDShare
 }
 
 // CVDShare is how much one venue added to combined CVD.
@@ -298,12 +306,21 @@ type TakerBucketStore interface {
 	PurgeTakerBuckets(ctx context.Context, cutoff time.Time) (int, error)
 }
 
+// sizedFold is one coarser bar. cleared means a constituent minute had notional
+// and no print-size split, so the coarse bar must not pretend to be sized.
+type sizedFold struct {
+	bar     TakerBucket
+	cleared bool
+}
+
 // ResampleTakerBuckets folds bars into a coarser step (e.g. 1m → 5m).
+// The coarse bar is sized only when every minute that has notional is sized.
+// One unknown minute clears whale and retail on that coarse bar.
 func ResampleTakerBuckets(in []TakerBucket, step time.Duration) []TakerBucket {
 	if step <= 0 {
 		step = CVDBar
 	}
-	acc := map[int64]*TakerBucket{}
+	acc := map[int64]*sizedFold{}
 	for _, b := range in {
 		if b.Start.IsZero() || (b.BuyNotional <= 0 && b.SellNotional <= 0) {
 			continue
@@ -311,21 +328,35 @@ func ResampleTakerBuckets(in []TakerBucket, step time.Duration) []TakerBucket {
 		ms := TruncateToBucket(b.Start.UTC(), step).UnixMilli()
 		cur := acc[ms]
 		if cur == nil {
-			cur = &TakerBucket{
+			cur = &sizedFold{bar: TakerBucket{
 				Exchange: b.Exchange, Symbol: NormalizeLiquidationSymbol(b.Symbol),
 				Start: time.UnixMilli(ms).UTC(),
-			}
+			}}
 			acc[ms] = cur
 		}
-		cur.BuyNotional += b.BuyNotional
-		cur.SellNotional += b.SellNotional
-		if cur.Exchange == "" {
-			cur.Exchange = b.Exchange
+		cur.bar.BuyNotional += b.BuyNotional
+		cur.bar.SellNotional += b.SellNotional
+		if cur.bar.Exchange == "" {
+			cur.bar.Exchange = b.Exchange
 		}
+		if cur.cleared || !b.SizeKnown {
+			cur.cleared = true
+			cur.bar.SizeKnown = false
+			cur.bar.WhaleBuy = 0
+			cur.bar.WhaleSell = 0
+			cur.bar.RetailBuy = 0
+			cur.bar.RetailSell = 0
+			continue
+		}
+		cur.bar.SizeKnown = true
+		cur.bar.WhaleBuy += b.WhaleBuy
+		cur.bar.WhaleSell += b.WhaleSell
+		cur.bar.RetailBuy += b.RetailBuy
+		cur.bar.RetailSell += b.RetailSell
 	}
 	out := make([]TakerBucket, 0, len(acc))
 	for _, b := range acc {
-		out = append(out, *b)
+		out = append(out, b.bar)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Start.Before(out[j].Start) })
 	return out
@@ -381,7 +412,7 @@ func BuildCVDSeriesSpan(ex Exchange, symbol string, buckets []TakerBucket, price
 		Range: span.ID, Bar: span.Bar, MaxPoints: span.MaxPoints,
 		Points: []CVDPoint{}, Windows: []CVDWindowStat{},
 	}
-	var cvd float64
+	var cvd, whaleCVD, retailCVD float64
 	for _, b := range bars {
 		if b.Start.Before(cut) {
 			continue
@@ -391,6 +422,15 @@ func BuildCVDSeriesSpan(ex Exchange, symbol string, buckets []TakerBucket, price
 		pt := CVDPoint{
 			Time: b.Start, BuyNotional: b.BuyNotional, SellNotional: b.SellNotional,
 			Delta: delta, CVD: cvd, Price: priceAtBar(prices, b.Start, span.Bar),
+		}
+		if b.SizeKnown {
+			pt.SizeKnown = true
+			pt.WhaleDelta = b.WhaleBuy - b.WhaleSell
+			pt.RetailDelta = b.RetailBuy - b.RetailSell
+			whaleCVD += pt.WhaleDelta
+			retailCVD += pt.RetailDelta
+			pt.WhaleCVD = whaleCVD
+			pt.RetailCVD = retailCVD
 		}
 		out.Points = append(out.Points, pt)
 	}
@@ -468,13 +508,15 @@ func CombineCVDVenues(symbol string, venues []CVDVenueSeries, prices []CVDPrice,
 	}
 
 	venueCvd := make([]float64, len(usable))
-	var cvd float64
+	var cvd, whaleCVD, retailCVD float64
 	for at := from; !at.After(to); at = at.Add(bar) {
 		ms := at.UnixMilli()
 		pt := CVDPoint{Time: at}
 		shares := make([]CVDShare, 0, len(usable))
+		sizeOK := true
+		var whaleDelta, retailDelta float64
 		for i, v := range usable {
-			src := indexes[i][ms] // zero value if that 5m slot is empty on one venue
+			src, ok := indexes[i][ms] // missing slot is not a sized zero
 			pt.BuyNotional += src.BuyNotional
 			pt.SellNotional += src.SellNotional
 			pt.Delta += src.Delta
@@ -482,9 +524,26 @@ func CombineCVDVenues(symbol string, venues []CVDVenueSeries, prices []CVDPrice,
 			shares = append(shares, CVDShare{
 				Exchange: v.Exchange, Delta: src.Delta, CVD: venueCvd[i],
 			})
+			if !ok || !src.SizeKnown {
+				sizeOK = false
+				continue
+			}
+			whaleDelta += src.WhaleDelta
+			retailDelta += src.RetailDelta
 		}
 		cvd += pt.Delta
 		pt.CVD = cvd
+		// Combined whale and retail exist only when every venue's bar at this
+		// step was sized. An empty slot or an unsized venue is not zero.
+		if sizeOK {
+			pt.SizeKnown = true
+			pt.WhaleDelta = whaleDelta
+			pt.RetailDelta = retailDelta
+			whaleCVD += whaleDelta
+			retailCVD += retailDelta
+			pt.WhaleCVD = whaleCVD
+			pt.RetailCVD = retailCVD
+		}
 		pt.Price = priceAtBar(prices, pt.Time, bar)
 		for i := range shares {
 			if cvd != 0 {

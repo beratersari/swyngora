@@ -5572,6 +5572,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Bybit, and OKX each cover the range. Spot combined "
                 "(spotVenues / spotCombined) needs Binance and Bybit. OKX has "
                 "no spot CVD. A missing venue keeps combined incomplete. "
+                "whaleDelta and retailDelta split a futures bar when print size "
+                "was stored: a whale is one aggressive print of at least "
+                "100,000 USD, and retail is every smaller print. A minute "
+                "stored before size was known omits both and is not zero. "
+                "Combined size is set only when every venue's bar at that step "
+                "was sized. Spot points do not carry the split. "
                 "Price vs CVD divergence is the current consecutive "
                 "run only. Combined shows Binance vs Bybit when they disagree."
             ),
