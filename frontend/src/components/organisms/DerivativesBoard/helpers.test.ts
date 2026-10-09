@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  change24hMissingTitle,
   coinChartPath,
   definiteText,
   formatRecordedSpan,
@@ -23,6 +24,13 @@ describe('derivatives board helpers', () => {
   it('withholds a combined number that is not definite', () => {
     expect(definiteText(false, '100', (value) => value)).toBe('—');
     expect(definiteText(true, '100', (value) => value)).toBe('100');
+  });
+
+  it('names the venues with no 24h open-interest sample', () => {
+    expect(change24hMissingTitle(['okx'], (id) => id.toUpperCase())).toBe('OKX');
+    expect(change24hMissingTitle(['binance', ' bybit '], (id) => id)).toBe('binance, bybit');
+    expect(change24hMissingTitle(undefined, (id) => id)).toBe('');
+    expect(change24hMissingTitle([], (id) => id)).toBe('');
   });
 
   it('signs a compact open-interest change', () => {

@@ -9,7 +9,10 @@ import (
 
 const (
 	HuntHeatmapPriceBins = 48
-	// MaxHuntHeatmapHistory is how many OI / LS / funding rows we load per metric.
+	// MaxHuntHeatmapHistory is the raw page of newest OI, long/short, and
+	// funding rows. Windows past 24 hours do not use this cap. They read one
+	// stored sample per bucket so older hourly rows stay in the grid.
+	// See HuntSnapshotBucket.
 	MaxHuntHeatmapHistory = 2500
 	// HuntHeatmapMaxColumns caps the time axis (30d at 6h is 120; 90d at 1d is 90).
 	HuntHeatmapMaxColumns = 128
@@ -46,6 +49,17 @@ var HuntHeatmapSpecs = []HuntHeatmapSpec{
 	{Range: HuntHeatmap14d, Window: 14 * 24 * time.Hour, Step: 4 * time.Hour, CandleIV: "4h", CandleLim: 90},
 	{Range: HuntHeatmap30d, Window: 30 * 24 * time.Hour, Step: 6 * time.Hour, CandleIV: "4h", CandleLim: 190},
 	{Range: HuntHeatmap90d, Window: 90 * 24 * time.Hour, Step: 24 * time.Hour, CandleIV: "1d", CandleLim: 100},
+}
+
+// HuntSnapshotBucket is the stored-sample step for a heatmap or open-level
+// window. Up to 24 hours stays on the newest raw rows. A longer window asks
+// for one sample per chart bucket so newer five-minute rows do not crowd
+// out older hourly archive rows. A zero result means the raw page.
+func HuntSnapshotBucket(span time.Duration) time.Duration {
+	if span <= 24*time.Hour {
+		return 0
+	}
+	return FuturesPaneBucketForSpan(span)
 }
 
 // ParseHuntHeatmapRange accepts 12h, 24h, 3d, 7d, 14d, 30d, 90d (default 24h).

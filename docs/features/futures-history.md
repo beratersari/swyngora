@@ -82,6 +82,10 @@ and is not zero. Long/short items still carry `sizeLongPct` and
 An empty `bucket` keeps the newest raw rows. The coin chart sends the step
 that matches the loaded candles and draws open interest, plus the
 top-minus-crowd gap, from 00:00 UTC and from the current 4-hour open.
+The model heatmap and open levels use that same step for windows past a
+day. 12-hour and 24-hour maps stay on the newest raw rows. A column with
+no sample stays empty. The review's liquidation check still uses the
+newest 2,500 prints.
 
 ## Where the code lives
 

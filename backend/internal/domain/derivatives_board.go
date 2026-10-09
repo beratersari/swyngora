@@ -162,13 +162,16 @@ type DerivativesCoin struct {
 	Change24h            string
 	Change24hPct         string
 	Change24hDefinite    bool
-	LiqLong              string
-	LiqShort             string
-	LiqDefinite          bool
-	LongPct              string
-	LongDefinite         bool
-	TakerBuyPct          string
-	TakerDefinite        bool
+	// Change24hMissing names venues with no open-interest sample about 24
+	// hours ago. It is set only when the combined change is withheld.
+	Change24hMissing []string
+	LiqLong          string
+	LiqShort         string
+	LiqDefinite      bool
+	LongPct          string
+	LongDefinite     bool
+	TakerBuyPct      string
+	TakerDefinite    bool
 	// GapPct is top-trader long percent minus crowd long percent.
 	// GapScope lists the venues inside that average.
 	GapPct           string
@@ -358,6 +361,8 @@ func buildDerivativesCoin(symbol string, expected []Exchange, in DerivativesCoin
 	if row.Change24hDefinite {
 		row.Change24h = change24h
 		row.Change24hPct = pct24h
+	} else if missing := derivativesOISampleMissing(expected, byEx, 24*time.Hour, now); len(missing) > 0 {
+		row.Change24hMissing = missing
 	}
 	if fundCover.Complete {
 		rate, weight := derivativesFunding(expected, byEx, oiCover.Complete)
@@ -456,6 +461,26 @@ func indexVenueReads(c MarketCoverage) map[Exchange]string {
 		out[v.Exchange] = v.Status
 	}
 	return out
+}
+
+// derivativesOISampleMissing names venues whose history has no sample
+// within slack of now-dur. A nil series counts as missing. The names stay
+// in venue order so a partial sum is not presented as the market change.
+func derivativesOISampleMissing(expected []Exchange, byEx map[Exchange]DerivativesVenueInput, dur time.Duration, now time.Time) []string {
+	target := now.Add(-dur)
+	slack := OpenInterestSampleSlack(dur)
+	var missing []string
+	for _, ex := range expected {
+		v := byEx[ex]
+		if v.OI == nil {
+			missing = append(missing, string(ex))
+			continue
+		}
+		if _, complete := FindOpenInterestSample(v.OI.History, target, slack); !complete {
+			missing = append(missing, string(ex))
+		}
+	}
+	return missing
 }
 
 func derivativesOIChange(expected []Exchange, byEx map[Exchange]DerivativesVenueInput, windowID string, dur time.Duration, now time.Time) (string, string, bool) {

@@ -706,6 +706,8 @@ export type DerivativesCoin = {
   change24h?: string;
   change24hPct?: string;
   change24hDefinite?: boolean;
+  /** Venues with no open-interest sample about 24 hours ago. Set only when the combined change is withheld. */
+  change24hMissing?: string[];
   liqLong?: string;
   liqShort?: string;
   liqDefinite?: boolean;

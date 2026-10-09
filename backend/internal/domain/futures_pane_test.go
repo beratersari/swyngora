@@ -20,6 +20,27 @@ func TestParseFuturesBucket(t *testing.T) {
 	}
 }
 
+func TestHuntSnapshotBucket(t *testing.T) {
+	if HuntSnapshotBucket(12*time.Hour) != 0 || HuntSnapshotBucket(24*time.Hour) != 0 {
+		t.Fatal("a day stays on the raw page")
+	}
+	if HuntSnapshotBucket(3*24*time.Hour) != 30*time.Minute {
+		t.Fatal("3d")
+	}
+	if HuntSnapshotBucket(7*24*time.Hour) != 30*time.Minute {
+		t.Fatal("7d")
+	}
+	if HuntSnapshotBucket(14*24*time.Hour) != 2*time.Hour {
+		t.Fatal("14d")
+	}
+	if HuntSnapshotBucket(30*24*time.Hour) != 2*time.Hour {
+		t.Fatal("30d")
+	}
+	if HuntSnapshotBucket(90*24*time.Hour) != 4*time.Hour {
+		t.Fatal("90d")
+	}
+}
+
 func TestFuturesPaneBucketForSpan(t *testing.T) {
 	if FuturesPaneBucketForSpan(12*time.Hour) != 5*time.Minute {
 		t.Fatal("24h")

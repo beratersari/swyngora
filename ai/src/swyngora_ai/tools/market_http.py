@@ -5145,7 +5145,11 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "been watched for 6 hours. bidPct is resting bid share within "
                 "1% of mid. definite is false when any coin is incomplete on "
                 "the original columns; missing and old venues are named and "
-                "are not treated as zero. limit default 36, max 100."
+                "are not treated as zero. The 24h open-interest change uses "
+                "the stored sample within 90 minutes of 24 hours ago when the "
+                "live series does not reach that hour. change24hMissing names "
+                "each venue with no sample, and that venue is not treated as "
+                "zero. limit default 36, max 100."
             ),
             args_schema=DerivativesBoardInput,
         ),
@@ -5339,6 +5343,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "historical open interest, price, and the hunt leverage mix. "
                 "Cells are the leverage estimate only. Measured prints are "
                 "get_liquidation_print_heatmap. range=12h|24h|3d|7d|14d|30d|90d. "
+                "Windows past 24 hours read one stored open-interest, funding, "
+                "and long/short sample per bucket from the archive. A column "
+                "with no sample stays empty. The review's liquidation check "
+                "still uses the newest 2,500 prints. "
                 "90d is one column per day. Binance public open interest and "
                 "long/short are 30 days; older Binance columns are only rows "
                 "this process already stored. Bybit public open interest goes "
@@ -5381,7 +5389,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "Estimated liquidation levels that stay at the price where "
                 "that slice of open interest was placed, until a later candle "
-                "trades through them. range=12h|24h|3d|7d|14d|30d|90d. The "
+                "trades through them. range=12h|24h|3d|7d|14d|30d|90d. Windows "
+                "past 24 hours read one stored open-interest sample per bucket "
+                "from the archive. A column with no sample stays empty. The "
                 "first column places the open interest already on the books. "
                 "Later columns only add an increase. A traded-through level "
                 "is not put back. An open-interest drop closes the oldest "

@@ -16,6 +16,8 @@
   "openInterest": "Açık pozisyon",
   "change1h": "AP 1s",
   "change24h": "AP 24s",
+  "change24hHint": "Yaklaşık 24 saat önceki kayıtlı açık pozisyon örneğinden değişim. O saatte örneği olmayan bir borsa varsa hücre boş kalır.",
+  "change24hMissing": "{{venues}} için yaklaşık 24 saat önceki kayıtlı örnek yok.",
   "longPct": "Kalabalık long",
   "takerBuy": "Alıcı 1s",
   "gap": "Üst − kalabalık",

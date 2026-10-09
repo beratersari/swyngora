@@ -87,6 +87,7 @@ type derivativesCoinDTO struct {
 	Change24h            string                `json:"change24h,omitempty"`
 	Change24hPct         string                `json:"change24hPct,omitempty"`
 	Change24hDefinite    bool                  `json:"change24hDefinite"`
+	Change24hMissing     []string              `json:"change24hMissing,omitempty"`
 	LiqLong              string                `json:"liqLong,omitempty"`
 	LiqShort             string                `json:"liqShort,omitempty"`
 	LiqDefinite          bool                  `json:"liqDefinite"`
@@ -191,7 +192,8 @@ func derivativesBoardToDTO(got *domain.DerivativesBoard) derivativesBoardRespons
 			OpenInterest: c.OpenInterest, OpenInterestDefinite: c.OpenInterestDefinite,
 			Change1h: c.Change1h, Change1hPct: c.Change1hPct, Change1hDefinite: c.Change1hDefinite,
 			Change24h: c.Change24h, Change24hPct: c.Change24hPct, Change24hDefinite: c.Change24hDefinite,
-			LiqLong: c.LiqLong, LiqShort: c.LiqShort, LiqDefinite: c.LiqDefinite,
+			Change24hMissing: c.Change24hMissing,
+			LiqLong:          c.LiqLong, LiqShort: c.LiqShort, LiqDefinite: c.LiqDefinite,
 			LongPct: c.LongPct, LongDefinite: c.LongDefinite,
 			TakerBuyPct: c.TakerBuyPct, TakerDefinite: c.TakerDefinite,
 			GapPct: c.GapPct, GapDefinite: c.GapDefinite, GapScope: c.GapScope,

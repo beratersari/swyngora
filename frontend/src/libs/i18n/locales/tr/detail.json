@@ -445,6 +445,7 @@
     "title": "Likidasyon ısı haritası",
     "subtitle": "Fiyat ve zamana göre tahmini likidasyon yoğunluğu. Binance, Bybit ve OKX kendi fiyatını kullanır. Birleşik sütun yalnızca üçünün de açık pozisyonu varken dolar. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
     "subtitlePrints": "Kayıtlı likidasyon baskıları, fiyat ve zamana göre. Long, satış likidasyonuyla kapanan pozisyondur. Short, alış likidasyonuyla kapanan pozisyondur. Birleşik sütun yalnızca Binance, Bybit ve OKX üçünün de kayıtlı olduğu yerde dolar. Sessiz kayıtlı sütun gerçek sıfırdır. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
+    "archive": "Bir günden uzun aralıklar, her adım için kayıtlı bir açık pozisyon örneği okur. Örneği olmayan sütun boş kalır.",
     "leverageMix": "Kaldıraç dağılımı: {{mix}}. Bu, açık pozisyonun nerede durabileceğine dair modeldir; yayımlanmış bir emir defteri değildir.",
     "evenBlend": "{{venues}} long/short eşit bölünür; bu borsa için kayıtlı hesap oranı yok.",
     "missing": "{{venues}} bu pencerede fiyat ve açık pozisyon taşımıyor. Birleşik harita o sütunları boş bırakır.",

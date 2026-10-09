@@ -411,6 +411,7 @@ func (s *Service) derivativesVenue(ctx context.Context, ex domain.Exchange, symb
 	}()
 	wg.Wait()
 	if oiOK {
+		oi = s.derivativesOIWithArchive(ctx, ex, symbol, oi)
 		out.OI = oi
 		out.OIValue = oi.Current.Value
 		out.OIAt = oi.Current.Time
@@ -516,6 +517,68 @@ func derivativesSeriesPresent(ser *domain.OpenInterestSeries) bool {
 	}
 	cur := ser.Current
 	return !cur.Time.IsZero() || cur.Value != 0 || cur.Contracts != 0
+}
+
+// derivativesOIWithArchive appends a stored open-interest sample from about
+// 24 hours ago when the live series does not reach that hour. Current open
+// interest stays the live reading. The live series is not mutated. A venue
+// with no live series is left alone, and a sample outside the 24-hour slack
+// is not appended.
+func (s *Service) derivativesOIWithArchive(ctx context.Context, ex domain.Exchange, symbol string, ser *domain.OpenInterestSeries) *domain.OpenInterestSeries {
+	if s == nil || s.futHist == nil || ser == nil {
+		return ser
+	}
+	now := time.Now().UTC()
+	target := now.Add(-24 * time.Hour)
+	slack := domain.OpenInterestSampleSlack(24 * time.Hour)
+	if _, complete := domain.FindOpenInterestSample(ser.History, target, slack); complete {
+		return ser
+	}
+	raw, err := s.futHist.History(ctx, domain.FuturesHistoryQuery{
+		Metric:   domain.FuturesMetricOpenInterest,
+		Exchange: string(ex),
+		Symbol:   symbol,
+		From:     target.Add(-slack),
+		To:       target,
+		Limit:    8,
+	})
+	if err != nil || raw == nil {
+		return ser
+	}
+	rows, ok := raw.([]domain.FuturesSnapshot)
+	if !ok {
+		return ser
+	}
+	pt, ok := archiveOpenInterestPoint(rows, target)
+	if !ok {
+		return ser
+	}
+	cp := *ser
+	cp.History = append(append([]domain.OpenInterestPoint{}, ser.History...), pt)
+	return &cp
+}
+
+func archiveOpenInterestPoint(rows []domain.FuturesSnapshot, target time.Time) (domain.OpenInterestPoint, bool) {
+	var best domain.FuturesSnapshot
+	found := false
+	for _, row := range rows {
+		if row.SampledAt.IsZero() || row.SampledAt.After(target) {
+			continue
+		}
+		if row.Value <= 0 {
+			continue
+		}
+		if !found || row.SampledAt.After(best.SampledAt) {
+			best = row
+			found = true
+		}
+	}
+	if !found {
+		return domain.OpenInterestPoint{}, false
+	}
+	return domain.OpenInterestPoint{
+		Time: best.SampledAt.UTC(), Value: best.Value, Contracts: best.Contracts,
+	}, true
 }
 
 func (s *Service) derivativesLiquidations(exchange, symbol string, since time.Time) (map[domain.Exchange]float64, map[domain.Exchange]float64) {

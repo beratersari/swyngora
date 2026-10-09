@@ -16,6 +16,8 @@
   "openInterest": "Open interest",
   "change1h": "OI 1h",
   "change24h": "OI 24h",
+  "change24hHint": "Change from the stored open-interest sample about 24 hours ago. The cell stays blank when any venue has no sample in that hour.",
+  "change24hMissing": "No stored sample about 24 hours ago on {{venues}}.",
   "longPct": "Crowd long",
   "takerBuy": "Taker buy 1h",
   "gap": "Top − crowd",

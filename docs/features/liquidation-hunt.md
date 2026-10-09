@@ -159,6 +159,10 @@ OKX is not a spot book here. If Binance or OKX top-trader positions lean
 opposite the crowd, estimated size uses the top-trader print. A column with
 no stored account ratio stays an even split (`accountBlend=even`). OKX rows
 use the stored OKX ratio once the archive has sampled it.
+Windows past a day read one stored open-interest, funding, and long/short
+sample per bucket from the archive (30 minutes through 7 days, 2 hours
+through 30 days, 4 hours after that). 12-hour and 24-hour maps stay on the
+newest raw rows. A column with no sample stays empty.
 When stored open interest leaves a column empty, that column uses the
 venue's public hourly open-interest history, clamped to the documented
 lookback (OKX: the latest 1,440 hours). This does not extend the archive,
@@ -193,7 +197,7 @@ against **later candles from the same venue**:
   (`liqMissing`). Not filled from the other exchange.
 - **Hit / false / hit rate** — scored only on **validated** signals.
 - **Liqs rose** — among validated hits, whether observed notional in the zone
-  rose vs the prior window.
+  rose vs the prior window. That check still uses the newest 2,500 prints.
 - **Combined** uses the summed grid and counts a hit if **any** of Binance,
   Bybit, or OKX's own price reached the zone.
 
@@ -206,7 +210,8 @@ exchange.
 
 MCP: `get_liquidation_heatmap`.
 
-14-day, 30-day, and 90-day maps read the startup archive. Public backfill
+Maps past a day read one stored sample per bucket from the startup archive.
+A column with no sample stays empty. Public backfill
 follows each endpoint: Binance open interest and long/short are 30 days,
 OKX hourly open interest is the latest 1,440 points, and Bybit open interest
 goes back to the symbol listing (this archive keeps 90 days). The 90-day map
@@ -289,7 +294,9 @@ placed until a later candle trades through it.
 - `leverageMix` is the labeled hunt model (5× through 125×, 0.40%
   maintenance). Binance public open interest is 30 days.
 
-Ranges match the heatmap: 12h, 24h, 3d, 7d, 14d, 30d, 90d.
+Ranges match the heatmap: 12h, 24h, 3d, 7d, 14d, 30d, 90d. Windows past a
+day read one stored open-interest sample per bucket. A column with no
+sample stays empty. 12h and 24h stay on the newest raw rows.
 
 MCP / AI: `get_liquidation_open_levels`.
 

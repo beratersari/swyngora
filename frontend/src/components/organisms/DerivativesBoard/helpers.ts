@@ -19,6 +19,18 @@ export function cvdSplitText(
   return coin.cvdSplitDuration ? `${kind} · ${coin.cvdSplitDuration}` : kind;
 }
 
+/** Venue names for a blank 24h cell. Empty when every venue has a sample. */
+export function change24hMissingTitle(
+  missing: readonly string[] | undefined,
+  venueName: (id: string) => string,
+): string {
+  return (missing ?? [])
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .map(venueName)
+    .join(', ');
+}
+
 export function definiteText(definite: boolean | undefined, value: string | undefined, format: (value: string) => string): string {
   if (!definite || value == null || value === '') return DASH;
   return format(value);

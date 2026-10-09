@@ -816,7 +816,8 @@ export interface paths {
          *     how close that book is to mid (e.g. **80M inside 0.1%** is **8% of
          *     the 1% book**, growing to 1.0B at 1%) and which coins fill each
          *     distance. `history` is total bid+ask each minute for the last 6 hours,
-         *     with BTC's close on the same minutes. `moves` are the largest jumps
+         *     with BTC's close on the same minutes. `chart` is that same total
+         *     folded across the stored window, up to 30 days. `moves` are the largest jumps
          *     and drops of at least 5% that finish within 15 minutes, plus BTC
          *     during that stretch and 15 minutes later. Sampled while the desk runs.
          *     `exchange=all` (default)
@@ -825,6 +826,32 @@ export interface paths {
          *     book, not spot. Informational only.
          */
         get: operations["getMarketPerpDepthOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/perp-depth/book": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stored perpetual bid and ask bands for one coin
+         * @description Resting perpetual bid and ask within **0.1%**, **0.5%**, and **1%**
+         *     of mid for one coin. A minute is stored only when **Binance USD-M**,
+         *     **Bybit linear**, and **OKX USDT-swap** are all fresh. A band the
+         *     snapshot does not reach is left out. `windowSec` is the lookback
+         *     (default 24h, max 30 days). `startTime` and `endTime` override it.
+         *     `gaps` name minutes that were not stored. The liquid USDT list is
+         *     sampled while the server runs. Informational only.
+         */
+        get: operations["getMarketPerpBookHistory"];
         put?: never;
         post?: never;
         delete?: never;
@@ -860,7 +887,11 @@ export interface paths {
          *     interest is also fresh. Taker buy share sums the last hour of
          *     aggressive buy and sell volume; an incomplete hour stays blank. A
          *     missing or old venue is named on `coverage` and on that coin's
-         *     `venues` row, and is not counted as zero. `definite` is false when
+         *     `venues` row, and is not counted as zero. The 24h open-interest
+         *     change uses the stored sample within 90 minutes of 24 hours ago
+         *     when the live series does not reach that hour. `change24hMissing`
+         *     names each venue with no sample in that hour, and that venue is
+         *     not treated as zero. `definite` is false when
          *     any coin is incomplete. `recorded` says how far back open interest, the
          *     spot book, flow-at-prices, and stored liquidation prints actually go
          *     for that coin. Informational only.
@@ -1218,6 +1249,39 @@ export interface paths {
          *     and since the current 4-hour open.
          */
         get: operations["getMarketFuturesHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/positioning-anchor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Positioning restarted at a clicked candle
+         * @description Stored open interest, funding, and liquidation notional for Binance
+         *     USD-M, Bybit linear, and OKX USDT-swap, each restarted at one candle.
+         *     Open interest and funding are later samples minus the last sample at
+         *     or before that candle. A venue with no sample by then is named in
+         *     missingOpenInterest or missingFunding and is left off. Liquidation
+         *     notional is the running sum from that candle. Short notional is
+         *     positive and long notional is negative. A print at or before the
+         *     candle starts the sum at zero. A venue whose first print is later is
+         *     named in lateLiquidations and its line starts at that print. A venue
+         *     with no prints in the window is named in missingLiquidations. A
+         *     missing venue is not counted as zero. bucket is 5m, 30m, 2h, or 4h.
+         *     Omit bucket and the step follows from..to the same way the coin chart
+         *     does. The window is capped at 90 days. Informational only — not
+         *     financial advice.
+         */
+        get: operations["getMarketPositioningAnchor"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1810,7 +1874,9 @@ export interface paths {
          *     and label `confirms`, `opposite`, or `absorption`. **Anchors**
          *     reset the sum at a clock instead of a rolling lookback: `day`
          *     is 00:00 UTC, `4h` is the current 4-hour open (00/04/08/12/16/20
-         *     UTC). Each anchor's `cvd` is buy minus sell since that time, with
+         *     UTC). Optional `anchor` (RFC3339) adds a `click` anchor that sums
+         *     bars whose start is at or after that candle. Pick a `range` that
+         *     reaches it. Each anchor's `cvd` is buy minus sell since that time, with
          *     price change and the same confirms / opposite / absorption label.
          *     `complete` is false when stored bars start after the anchor.
          *     `range` is `24h` (5-minute bars, default), `7d` (30-minute),
@@ -2567,15 +2633,19 @@ export interface paths {
          *     Force-order prints are not added to these cells. They are the separate
          *     measured map at `/api/v1/market/liquidation-prints/heatmap`.
          *
-         *     `range` is 12h, 24h, 3d, 7d, 14d, 30d, or 90d. 14d, 30d, and 90d use the
-         *     startup archive. Public backfill follows each endpoint: Binance open
-         *     interest and long/short are 30 days, OKX hourly open interest is the
-         *     latest 1,440 points, and Bybit open interest goes back to listing
-         *     (this archive keeps 90 days). 90d is one column per day. Binance
-         *     columns older than the public 30 days are only hours this process
-         *     already recorded. Public REST refill of force orders is about 7 days
-         *     and belongs on the measured map. A page that does not reach the start
-         *     of a gap does not mark that earlier time as a zero.
+         *     `range` is 12h, 24h, 3d, 7d, 14d, 30d, or 90d. Windows past a day
+         *     read one stored open-interest, funding, and long/short sample per
+         *     bucket from the archive. A column with no sample stays empty. 12h
+         *     and 24h stay on the newest raw rows. Public backfill follows each
+         *     endpoint: Binance open interest and long/short are 30 days, OKX
+         *     hourly open interest is the latest 1,440 points, and Bybit open
+         *     interest goes back to listing (this archive keeps 90 days). 90d is
+         *     one column per day. Binance columns older than the public 30 days
+         *     are only hours this process already recorded. Public REST refill of
+         *     force orders is about 7 days and belongs on the measured map. A
+         *     page that does not reach the start of a gap does not mark that
+         *     earlier time as a zero. The review's liquidation check still uses
+         *     the newest 2,500 prints.
          *     Binance, Bybit, and OKX are modeled separately. Each venue uses
          *     only its own price: Binance and Bybit use their candles, and OKX
          *     uses its USDT-swap candles. They never borrow another venue's price.
@@ -2659,7 +2729,10 @@ export interface paths {
          *     later candle low reaches it. A short level is hit when a later
          *     candle high reaches it. The candle that placed a level cannot hit it.
          *
-         *     `range` is 12h, 24h, 3d, 7d, 14d, 30d, or 90d. Binance, Bybit, and
+         *     `range` is 12h, 24h, 3d, 7d, 14d, 30d, or 90d. Windows past a day
+         *     read one stored open-interest sample per bucket from the archive.
+         *     A column with no sample stays empty. 12h and 24h stay on the newest
+         *     raw rows. Binance, Bybit, and
          *     OKX each use only their own price and open interest. `combined`
          *     sums a column only when all three have both, and `combined.definite`
          *     is false (empty segments and cumulative) when any venue has none
@@ -6034,6 +6107,33 @@ export interface components {
             quantity?: string;
             notional?: string;
         };
+        /** @description Open interest, funding, and liquidation notional restarted at one candle. */
+        MarketPositioningAnchor: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            anchor?: string;
+            bucket?: string;
+            openInterest?: components["schemas"]["MarketPositioningAnchorSeries"][];
+            funding?: components["schemas"]["MarketPositioningAnchorSeries"][];
+            liquidations?: components["schemas"]["MarketPositioningAnchorSeries"][];
+            missingOpenInterest?: string[];
+            missingFunding?: string[];
+            missingLiquidations?: string[];
+            lateLiquidations?: string[];
+            note?: string;
+        };
+        MarketPositioningAnchorSeries: {
+            exchange?: string;
+            complete?: boolean;
+            change?: string;
+            points?: components["schemas"]["MarketPositioningAnchorPoint"][];
+        };
+        MarketPositioningAnchorPoint: {
+            /** Format: date-time */
+            time?: string;
+            value?: string;
+        };
         /** @description How long stored samples for one coin actually cover */
         HistorySpan: {
             symbol?: string;
@@ -7253,8 +7353,11 @@ export interface components {
             divergence?: "price_up_cvd_down" | "price_down_cvd_up";
         };
         MarketCvdAnchor: {
-            /** @enum {string} */
-            anchor?: "day" | "4h";
+            /**
+             * @description day and 4h are clocks. click is the anchor query time.
+             * @enum {string}
+             */
+            anchor?: "day" | "4h" | "click";
             /** Format: date-time */
             from?: string;
             /** @description Buy minus sell since from */
@@ -7276,6 +7379,7 @@ export interface components {
          *     uses 5-minute bars. `7d` uses 30-minute bars, `30d` uses 2-hour bars,
          *     and `90d` uses 4-hour bars, folded from stored minutes. Anchors reset
          *     the sum at 00:00 UTC (`day`) and the current 4-hour open (`4h`).
+         *     Query `anchor` adds a `click` anchor from that candle.
          *     The coin chart draws futures and spot as separate lines and rebases
          *     those points onto candle times. Futures combined is complete only when
          *     Binance, Bybit, and OKX each reach the window open. Spot combined is
@@ -7595,6 +7699,8 @@ export interface components {
             windows?: components["schemas"]["MarketPerpDepthShareWindow"][];
             /** @description Total bid+ask each minute for the last 6 hours, oldest first */
             history?: components["schemas"]["MarketPerpDepthTotalPoint"][];
+            /** @description The same total book folded across the stored window, up to 30 days */
+            chart?: components["schemas"]["MarketPerpDepthTotalPoint"][];
             /** @description Largest jumps and drops of at least 5% inside 15 minutes, biggest first, with BTC around each and whether Binance, Bybit, and OKX moved together */
             moves?: components["schemas"]["MarketPerpDepthBookMove"][];
             /** @description Minutes skipped because a venue was missing or old. These are not totals. */
@@ -7605,6 +7711,40 @@ export interface components {
             coverage?: components["schemas"]["MarketVenueCoverage"];
             /** @description False when any expected venue book is missing or old. The lean is not a market read. */
             definite?: boolean;
+        };
+        MarketPerpBookBand: {
+            rangePct?: string;
+            bid?: string;
+            ask?: string;
+        };
+        MarketPerpBookColumn: {
+            /** Format: date-time */
+            time?: string;
+            mid?: string;
+            /** @description How far below mid the snapshot reached */
+            coverBid?: string;
+            /** @description How far above mid the snapshot reached */
+            coverAsk?: string;
+            bands?: components["schemas"]["MarketPerpBookBand"][];
+        };
+        MarketPerpBookGap: {
+            /** Format: date-time */
+            time?: string;
+            missing?: string[];
+            stale?: string[];
+        };
+        /** @description Stored perp bid and ask bands for one coin */
+        MarketPerpBookHistory: {
+            symbol?: string;
+            exchange?: string;
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            stepSec?: number;
+            columns?: components["schemas"]["MarketPerpBookColumn"][];
+            gaps?: components["schemas"]["MarketPerpBookGap"][];
+            note?: string;
         };
         /** @description One coin's share of a ±% market-wide perp band */
         MarketPerpDepthOverviewBandCoin: {
@@ -7864,6 +8004,8 @@ export interface components {
             change24h?: string;
             change24hPct?: string;
             change24hDefinite?: boolean;
+            /** @description Venues with no open-interest sample within 90 minutes of 24 hours ago. Set only when the combined 24h change is withheld. A named venue is not treated as zero. */
+            change24hMissing?: string[];
             liqLong?: string;
             liqShort?: string;
             liqDefinite?: boolean;
@@ -11451,6 +11593,36 @@ export interface operations {
             502: components["responses"]["Error"];
         };
     };
+    getMarketPerpBookHistory: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description binance | bybit | okx | all (default all) */
+                exchange?: string;
+                /** @description Lookback in seconds (default 86400, max 30 days) */
+                windowSec?: number;
+                startTime?: string;
+                endTime?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stored perp book columns */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketPerpBookHistory"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
     getMarketDerivativesBoard: {
         parameters: {
             query?: {
@@ -11976,6 +12148,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketFuturesHistory"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketPositioningAnchor: {
+        parameters: {
+            query: {
+                symbol: string;
+                /** @description RFC3339 candle time to restart from. */
+                anchor: string;
+                exchange?: string;
+                /** @description 5m, 30m, 2h, or 4h. Omit to follow the from..to span. */
+                bucket?: "5m" | "30m" | "2h" | "4h";
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Series restarted at the candle */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketPositioningAnchor"];
                 };
             };
             400: components["responses"]["Error"];
@@ -12536,8 +12739,10 @@ export interface operations {
                 symbol: string;
                 /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
-                /** @description 24h (5m bars) | 7d (30m) | 30d (2h) | 90d (4h). Default 24h. */
+                /** @description 24h (5m bars) | 7d (30m) | 30d (2h) | 90d (4h). Default 24h. Use a range that reaches anchor. */
                 range?: "24h" | "7d" | "30d" | "90d";
+                /** @description Optional RFC3339 candle time. Adds a click anchor from that bar. Empty keeps day and 4h only. */
+                anchor?: string;
             };
             header?: never;
             path?: never;

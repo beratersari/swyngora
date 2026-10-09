@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import { Text } from '@/components/atoms/Text';
-import { LIQ_HEATMAP_RANGES } from './LiquidationHeatmap.constants';
+import { LIQ_HEATMAP_RANGES, liqMapReadsArchive } from './LiquidationHeatmap.constants';
 import {
   buildLayout,
   drawHeatmap,
@@ -130,6 +130,7 @@ export function LiquidationHeatmap({
   );
 
   const prints = source != null ? source === 'prints' : data?.kind === 'prints';
+  const readsArchive = !prints && liqMapReadsArchive(range);
   const coveragePct =
     grid && Number.isFinite(grid.coverage) ? Math.round((grid.coverage ?? 0) * 100) : null;
   const mixLabel = formatLeverageMix(data?.leverageMix);
@@ -151,6 +152,11 @@ export function LiquidationHeatmap({
       <Text variant="caption" color="secondary">
         {t(prints ? 'liqHeatmap.subtitlePrints' : 'liqHeatmap.subtitle')}
       </Text>
+      {readsArchive ? (
+        <Text variant="caption" color="secondary" data-testid="liquidation-heatmap-archive">
+          {t('liqHeatmap.archive')}
+        </Text>
+      ) : null}
       {mixLabel ? (
         <Text variant="caption" color="secondary" data-testid="liquidation-heatmap-mix">
           {t('liqHeatmap.leverageMix', { mix: mixLabel })}

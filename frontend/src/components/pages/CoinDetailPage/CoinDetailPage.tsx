@@ -61,6 +61,7 @@ import { UnusualContext, UNUSUAL_POLL_MS } from '@/components/organisms/UnusualC
 import {
   DEFAULT_LIQ_HEATMAP_RANGE,
   LIQ_HEATMAP_POLL_MS,
+  liqMapReadsArchive,
 } from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.constants';
 import type { LiqHeatRange, LiqHeatSource } from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.types';
 import { PERP_LIQUIDITY_LIMIT } from '@/components/organisms/PerpLiquidityOverview';
@@ -2275,6 +2276,11 @@ export function CoinDetailPage() {
             {!isEquity && showLiqMap && liqMapSource === 'prints' ? (
               <Text variant="caption" color="secondary" data-testid="chart-liq-prints">
                 {t('detail:liqHeatmap.subtitlePrints')}
+              </Text>
+            ) : null}
+            {!isEquity && showLiqMap && liqMapSource === 'model' && liqMapReadsArchive(liqMapRange) ? (
+              <Text variant="caption" color="secondary" data-testid="chart-liq-archive">
+                {t('detail:liqHeatmap.archive')}
               </Text>
             ) : null}
             {!isEquity && chartMix ? (

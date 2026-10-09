@@ -232,10 +232,21 @@ func (s *Service) huntHistSnapshots(ctx context.Context, metric, exchange, symbo
 	if s.futHist == nil {
 		return nil
 	}
-	raw, err := s.futHist.History(ctx, domain.FuturesHistoryQuery{
+	lead := 30 * time.Minute
+	q := domain.FuturesHistoryQuery{
 		Metric: metric, Exchange: exchange, Symbol: symbol,
-		From: from.Add(-30 * time.Minute), To: to, Limit: domain.MaxHuntHeatmapHistory,
-	})
+		From: from.Add(-lead), To: to, Limit: domain.MaxHuntHeatmapHistory,
+	}
+	// Past a day, the newest 2,500 five-minute rows hide older hourly
+	// archive samples. One sample per bucket keeps those hours, and a
+	// bucket with no row is left out.
+	if bucket := domain.HuntSnapshotBucket(to.Sub(from)); bucket > 0 {
+		q.Bucket = bucket
+		if bucket > lead {
+			q.From = from.Add(-bucket)
+		}
+	}
+	raw, err := s.futHist.History(ctx, q)
 	if err != nil || raw == nil {
 		return nil
 	}

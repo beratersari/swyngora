@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -52,6 +53,35 @@ func TestDerivativesBoardToDTO_CVDSplit(t *testing.T) {
 	}
 	if coin.Venues[0].CVDSplit != domain.CVDSplitAgrees || coin.Venues[0].CVDSplitStatus != domain.VenueReadFresh {
 		t.Fatalf("venue %+v", coin.Venues[0])
+	}
+}
+
+func TestDerivativesBoardToDTO_Change24hMissing(t *testing.T) {
+	dto := derivativesBoardToDTO(&domain.DerivativesBoard{
+		Coins: []domain.DerivativesCoin{{
+			Symbol:           "BTCUSDT",
+			Change24hMissing: []string{"okx"},
+		}},
+	})
+	if len(dto.Coins) != 1 || len(dto.Coins[0].Change24hMissing) != 1 || dto.Coins[0].Change24hMissing[0] != "okx" {
+		t.Fatalf("%+v", dto.Coins)
+	}
+	raw, err := json.Marshal(dto)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(raw, []byte(`"change24hMissing":["okx"]`)) {
+		t.Fatalf("%s", raw)
+	}
+	empty := derivativesBoardToDTO(&domain.DerivativesBoard{
+		Coins: []domain.DerivativesCoin{{Symbol: "ETHUSDT"}},
+	})
+	raw, err = json.Marshal(empty)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(raw, []byte("change24hMissing")) {
+		t.Fatalf("empty list should be omitted: %s", raw)
 	}
 }
 

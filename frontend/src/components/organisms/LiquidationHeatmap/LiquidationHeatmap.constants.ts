@@ -6,6 +6,11 @@ export const LIQ_HEATMAP_RANGES: readonly LiqHeatRange[] = ['12h', '24h', '3d', 
 
 export const DEFAULT_LIQ_HEATMAP_RANGE: LiqHeatRange = '24h';
 
+/** Model maps past a day read one stored sample per step. 12h and 24h stay on the raw page. */
+export function liqMapReadsArchive(range: LiqHeatRange): boolean {
+  return range !== '12h' && range !== '24h';
+}
+
 export const HEATMAP_PAD = {
   left: 76,
   right: 18,

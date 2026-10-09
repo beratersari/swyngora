@@ -147,6 +147,24 @@ describe('LiquidationHeatmap', () => {
     expect(onSideChange).toHaveBeenCalledWith('longs');
   });
 
+  it('says a model range past a day reads the stored archive', () => {
+    const props = {
+      data,
+      onRangeChange: () => undefined,
+      venue: 'combined' as const,
+      onVenueChange: () => undefined,
+      side: 'totals' as const,
+      onSideChange: () => undefined,
+      source: 'model' as const,
+    };
+    const { rerender } = renderWithProviders(<LiquidationHeatmap {...props} range="30d" />);
+    expect(screen.getByTestId('liquidation-heatmap-archive')).toHaveTextContent(/stored open-interest sample/i);
+    rerender(<LiquidationHeatmap {...props} range="24h" />);
+    expect(screen.queryByTestId('liquidation-heatmap-archive')).not.toBeInTheDocument();
+    rerender(<LiquidationHeatmap {...props} range="30d" source="prints" />);
+    expect(screen.queryByTestId('liquidation-heatmap-archive')).not.toBeInTheDocument();
+  });
+
   it('shows empty copy when there is no grid yet', () => {
     renderWithProviders(
       <LiquidationHeatmap

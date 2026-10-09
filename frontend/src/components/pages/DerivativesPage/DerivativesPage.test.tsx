@@ -35,7 +35,8 @@ vi.mock('@/libs/api', async (importOriginal) => {
             fundingDefinite: false,
             change1h: '+100',
             change1hDefinite: false,
-            change24hDefinite: false,
+            change24h: '1000000000',
+            change24hDefinite: true,
             liqLong: '1000',
             liqShort: '2000',
             liqDefinite: false,
@@ -83,6 +84,9 @@ describe('DerivativesPage', () => {
     );
     const link = screen.getByRole('link', { name: 'BTC' });
     expect(link).toHaveAttribute('href', '/markets/binance/BTCUSDT');
+    expect(screen.getByRole('columnheader', { name: 'OI 24h' })).toBeInTheDocument();
+    expect(screen.getByText('+1.00B')).toBeInTheDocument();
+    expect(screen.getAllByTitle(/stored open-interest sample about 24 hours ago/i).length).toBeGreaterThan(0);
     expect(screen.getByRole('columnheader', { name: 'Recorded' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Crowd long' })).toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Taker buy 1h' })).toBeInTheDocument();

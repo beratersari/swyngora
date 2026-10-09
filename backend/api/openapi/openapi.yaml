@@ -1440,7 +1440,11 @@ paths:
         interest is also fresh. Taker buy share sums the last hour of
         aggressive buy and sell volume; an incomplete hour stays blank. A
         missing or old venue is named on `coverage` and on that coin's
-        `venues` row, and is not counted as zero. `definite` is false when
+        `venues` row, and is not counted as zero. The 24h open-interest
+        change uses the stored sample within 90 minutes of 24 hours ago
+        when the live series does not reach that hour. `change24hMissing`
+        names each venue with no sample in that hour, and that venue is
+        not treated as zero. `definite` is false when
         any coin is incomplete. `recorded` says how far back open interest, the
         spot book, flow-at-prices, and stored liquidation prints actually go
         for that coin. Informational only.
@@ -4152,15 +4156,19 @@ paths:
         Force-order prints are not added to these cells. They are the separate
         measured map at `/api/v1/market/liquidation-prints/heatmap`.
 
-        `range` is 12h, 24h, 3d, 7d, 14d, 30d, or 90d. 14d, 30d, and 90d use the
-        startup archive. Public backfill follows each endpoint: Binance open
-        interest and long/short are 30 days, OKX hourly open interest is the
-        latest 1,440 points, and Bybit open interest goes back to listing
-        (this archive keeps 90 days). 90d is one column per day. Binance
-        columns older than the public 30 days are only hours this process
-        already recorded. Public REST refill of force orders is about 7 days
-        and belongs on the measured map. A page that does not reach the start
-        of a gap does not mark that earlier time as a zero.
+        `range` is 12h, 24h, 3d, 7d, 14d, 30d, or 90d. Windows past a day
+        read one stored open-interest, funding, and long/short sample per
+        bucket from the archive. A column with no sample stays empty. 12h
+        and 24h stay on the newest raw rows. Public backfill follows each
+        endpoint: Binance open interest and long/short are 30 days, OKX
+        hourly open interest is the latest 1,440 points, and Bybit open
+        interest goes back to listing (this archive keeps 90 days). 90d is
+        one column per day. Binance columns older than the public 30 days
+        are only hours this process already recorded. Public REST refill of
+        force orders is about 7 days and belongs on the measured map. A
+        page that does not reach the start of a gap does not mark that
+        earlier time as a zero. The review's liquidation check still uses
+        the newest 2,500 prints.
         Binance, Bybit, and OKX are modeled separately. Each venue uses
         only its own price: Binance and Bybit use their candles, and OKX
         uses its USDT-swap candles. They never borrow another venue's price.
@@ -4266,7 +4274,10 @@ paths:
         later candle low reaches it. A short level is hit when a later
         candle high reaches it. The candle that placed a level cannot hit it.
 
-        `range` is 12h, 24h, 3d, 7d, 14d, 30d, or 90d. Binance, Bybit, and
+        `range` is 12h, 24h, 3d, 7d, 14d, 30d, or 90d. Windows past a day
+        read one stored open-interest sample per bucket from the archive.
+        A column with no sample stays empty. 12h and 24h stay on the newest
+        raw rows. Binance, Bybit, and
         OKX each use only their own price and open interest. `combined`
         sums a column only when all three have both, and `combined.definite`
         is false (empty segments and cumulative) when any venue has none
@@ -12130,6 +12141,13 @@ components:
         change24h: { type: string }
         change24hPct: { type: string }
         change24hDefinite: { type: boolean }
+        change24hMissing:
+          type: array
+          description: >
+            Venues with no open-interest sample within 90 minutes of 24 hours
+            ago. Set only when the combined 24h change is withheld. A named
+            venue is not treated as zero.
+          items: { type: string }
         liqLong: { type: string }
         liqShort: { type: string }
         liqDefinite: { type: boolean }

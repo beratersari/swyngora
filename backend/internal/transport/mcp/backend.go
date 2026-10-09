@@ -1023,7 +1023,7 @@ func derivativesBoardMap(got *domain.DerivativesBoard) map[string]any {
 				"bidPct": v.BidPct, "bookStatus": v.BookStatus,
 			})
 		}
-		coins = append(coins, map[string]any{
+		coin := map[string]any{
 			"symbol": c.Symbol, "base": c.Base, "price": c.Price, "priceExchange": c.PriceExchange,
 			"fundingRate": c.FundingRate, "fundingRatePct": c.FundingRatePct, "fundingPayer": c.FundingPayer,
 			"fundingWeight": c.FundingWeight, "fundingDefinite": c.FundingDefinite,
@@ -1039,7 +1039,11 @@ func derivativesBoardMap(got *domain.DerivativesBoard) map[string]any {
 			"liqHeat": c.LiqHeat, "liqHeatRatio": c.LiqHeatRatio, "liqHeatVenue": c.LiqHeatVenue, "liqHeatDefinite": c.LiqHeatDefinite,
 			"bidPct": c.BidPct, "bidDefinite": c.BidDefinite,
 			"venues": venues, "coverage": coverageMap(c.Coverage),
-		})
+		}
+		if len(c.Change24hMissing) > 0 {
+			coin["change24hMissing"] = c.Change24hMissing
+		}
+		coins = append(coins, coin)
 	}
 	return map[string]any{
 		"exchange": got.Exchange, "universe": got.Universe, "asOf": got.AsOf.UTC(),

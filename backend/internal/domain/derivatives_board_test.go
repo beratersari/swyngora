@@ -360,6 +360,9 @@ func TestBuildDerivativesBoard_IncompleteWindowIsNotZero(t *testing.T) {
 	if !row.OpenInterestDefinite || !row.Change1hDefinite || row.Change24hDefinite || row.Change24h != "" {
 		t.Fatalf("window %+v", row)
 	}
+	if len(row.Change24hMissing) != 1 || row.Change24hMissing[0] != string(ExchangeBybit) {
+		t.Fatalf("missing %+v", row.Change24hMissing)
+	}
 }
 
 func boardCoin(symbol string, now time.Time, binance, bybit, okx, liqLong, liqShort float64) DerivativesCoinInput {

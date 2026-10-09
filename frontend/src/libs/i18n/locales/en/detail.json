@@ -445,6 +445,7 @@
     "title": "Liquidation heatmap",
     "subtitle": "Estimated liquidation intensity by price and time. Binance, Bybit, and OKX each use their own price. Combined adds a column only when all three have open interest. Informational only — not financial advice.",
     "subtitlePrints": "Stored liquidation prints by price and time. Longs are positions closed by a sell. Shorts are positions closed by a buy. Combined adds a column only when Binance, Bybit, and OKX were all recorded. A quiet recorded column is a real zero. Informational only — not financial advice.",
+    "archive": "Ranges past a day read one stored open-interest sample per step. A column with no sample stays empty.",
     "leverageMix": "Leverage mix: {{mix}}. This is the model's assumed share of open interest, not a published book.",
     "evenBlend": "{{venues}} uses an even long/short split because no account ratio is stored for that venue.",
     "missing": "{{venues}} has no price and open interest in this window. Combined leaves those columns empty.",

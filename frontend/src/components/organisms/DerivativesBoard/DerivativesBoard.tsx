@@ -7,6 +7,7 @@ import { Text } from '@/components/atoms/Text';
 import type { DerivativesCoin, DerivativesVenue } from '@/libs/api';
 import type { BoardSort, BoardSortKey } from './DerivativesBoard.types';
 import {
+  change24hMissingTitle,
   coinChartPath,
   definiteText,
   formatRecordedSpan,
@@ -64,6 +65,11 @@ export function DerivativesBoard({ exchange, coins, loading }: DerivativesBoardP
     if (!row.gapDefinite || !row.gapScope) return undefined;
     const names = row.gapScope.split(',').filter(Boolean).map(venueName);
     return t('derivatives:gapScope', { venues: names.join(', ') });
+  };
+  const change24hTitle = (row: DerivativesCoin): string => {
+    const names = change24hMissingTitle(row.change24hMissing, venueName);
+    if (names) return t('derivatives:change24hMissing', { venues: names });
+    return t('derivatives:change24hHint');
   };
   const printWord = (read: string): string => {
     switch (read) {
@@ -226,10 +232,14 @@ export function DerivativesBoard({ exchange, coins, loading }: DerivativesBoardP
       render: (_value, row) => definiteText(row.change1hDefinite, row.change1h, signedAmount),
     },
     {
-      title: t('derivatives:change24h'),
+      title: <span title={t('derivatives:change24hHint')}>{t('derivatives:change24h')}</span>,
       dataIndex: 'change24h',
       ...sortable('change24h'),
-      render: (_value, row) => definiteText(row.change24hDefinite, row.change24h, signedAmount),
+      render: (_value, row) => (
+        <Text variant="caption" title={change24hTitle(row)}>
+          {definiteText(row.change24hDefinite, row.change24h, signedAmount)}
+        </Text>
+      ),
     },
     {
       title: t('derivatives:longPct'),

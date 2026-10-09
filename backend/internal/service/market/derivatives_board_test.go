@@ -401,3 +401,165 @@ func boardService(now time.Time, skipOKX bool) *Service {
 	}
 	return New(nil, nil).WithOpenInterest(oiPorts).WithFundingRate(fundPorts)
 }
+
+type boardArchive struct {
+	byEx map[domain.Exchange]domain.FuturesSnapshot
+}
+
+func (a boardArchive) History(_ context.Context, q domain.FuturesHistoryQuery) (any, error) {
+	if q.Metric != domain.FuturesMetricOpenInterest {
+		return []domain.FuturesSnapshot{}, nil
+	}
+	row, ok := a.byEx[domain.Exchange(q.Exchange)]
+	if !ok || row.SampledAt.IsZero() {
+		return []domain.FuturesSnapshot{}, nil
+	}
+	if !q.From.IsZero() && row.SampledAt.Before(q.From) {
+		return []domain.FuturesSnapshot{}, nil
+	}
+	if !q.To.IsZero() && row.SampledAt.After(q.To) {
+		return []domain.FuturesSnapshot{}, nil
+	}
+	if q.Symbol != "" && row.Symbol != "" && row.Symbol != q.Symbol {
+		return []domain.FuturesSnapshot{}, nil
+	}
+	return []domain.FuturesSnapshot{row}, nil
+}
+
+func boardCoinRow(got *domain.DerivativesBoard, symbol string) *domain.DerivativesCoin {
+	if got == nil {
+		return nil
+	}
+	for i := range got.Coins {
+		if got.Coins[i].Symbol == symbol {
+			return &got.Coins[i]
+		}
+	}
+	return nil
+}
+
+func TestGetDerivativesBoard_ArchiveFills24hOpenInterest(t *testing.T) {
+	now := time.Now().UTC()
+	live := &domain.OpenInterestSeries{
+		Current: domain.OpenInterestPoint{Time: now, Value: 2e9, Contracts: 2e9},
+		History: []domain.OpenInterestPoint{
+			{Time: now.Add(-time.Hour), Value: 2e9, Contracts: 2e9},
+		},
+	}
+	fund := &domain.FundingSeries{
+		Current: domain.FundingPoint{Time: now, Rate: 0.0001, MarkPrice: 100000},
+	}
+	oiPorts := map[domain.Exchange]domain.OpenInterestPort{}
+	fundPorts := map[domain.Exchange]domain.FundingRatePort{}
+	for _, ex := range domain.FuturesVenues() {
+		oiPorts[ex] = boardOI{series: live}
+		fundPorts[ex] = boardFunding{series: fund}
+	}
+	archiveAt := now.Add(-24 * time.Hour)
+	points := map[domain.Exchange]domain.FuturesSnapshot{}
+	for _, ex := range domain.FuturesVenues() {
+		points[ex] = domain.FuturesSnapshot{
+			Metric: domain.FuturesMetricOpenInterest, Exchange: ex, Symbol: "BTCUSDT",
+			SampledAt: archiveAt, Value: 1e9, Contracts: 1e9,
+		}
+	}
+	svc := New(nil, nil).WithOpenInterest(oiPorts).WithFundingRate(fundPorts)
+	svc.SetFuturesHistory(boardArchive{byEx: points})
+	got, err := svc.GetDerivativesBoard(context.Background(), "all", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(live.History) != 1 {
+		t.Fatalf("live history mutated: %+v", live.History)
+	}
+	row := boardCoinRow(got, "BTCUSDT")
+	if row == nil || !row.OpenInterestDefinite || !row.Change1hDefinite || row.Change1h != "0" {
+		t.Fatalf("1h %+v", row)
+	}
+	if !row.Change24hDefinite || row.Change24h != "+3000000000" || row.Change24hPct != "+100" || len(row.Change24hMissing) != 0 {
+		t.Fatalf("24h %+v missing %+v", row.Change24h, row.Change24hMissing)
+	}
+}
+
+func TestGetDerivativesBoard_MissingArchiveNamesTheVenue(t *testing.T) {
+	now := time.Now().UTC()
+	live := &domain.OpenInterestSeries{
+		Current: domain.OpenInterestPoint{Time: now, Value: 2e9, Contracts: 2e9},
+		History: []domain.OpenInterestPoint{
+			{Time: now.Add(-time.Hour), Value: 2e9, Contracts: 2e9},
+		},
+	}
+	fund := &domain.FundingSeries{
+		Current: domain.FundingPoint{Time: now, Rate: 0.0001, MarkPrice: 100000},
+	}
+	oiPorts := map[domain.Exchange]domain.OpenInterestPort{}
+	fundPorts := map[domain.Exchange]domain.FundingRatePort{}
+	for _, ex := range domain.FuturesVenues() {
+		oiPorts[ex] = boardOI{series: live}
+		fundPorts[ex] = boardFunding{series: fund}
+	}
+	archiveAt := now.Add(-24 * time.Hour)
+	points := map[domain.Exchange]domain.FuturesSnapshot{
+		domain.ExchangeBinance: {
+			Metric: domain.FuturesMetricOpenInterest, Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT",
+			SampledAt: archiveAt, Value: 1e9, Contracts: 1e9,
+		},
+		domain.ExchangeBybit: {
+			Metric: domain.FuturesMetricOpenInterest, Exchange: domain.ExchangeBybit, Symbol: "BTCUSDT",
+			SampledAt: archiveAt, Value: 1e9, Contracts: 1e9,
+		},
+	}
+	svc := New(nil, nil).WithOpenInterest(oiPorts).WithFundingRate(fundPorts)
+	svc.SetFuturesHistory(boardArchive{byEx: points})
+	got, err := svc.GetDerivativesBoard(context.Background(), "all", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := boardCoinRow(got, "BTCUSDT")
+	if row == nil || !row.OpenInterestDefinite || !row.Change1hDefinite {
+		t.Fatalf("current %+v", row)
+	}
+	if row.Change24hDefinite || row.Change24h != "" || len(row.Change24hMissing) != 1 || row.Change24hMissing[0] != string(domain.ExchangeOKX) {
+		t.Fatalf("24h %q missing %+v", row.Change24h, row.Change24hMissing)
+	}
+}
+
+func TestGetDerivativesBoard_ArchiveOutsideSlackStaysBlank(t *testing.T) {
+	now := time.Now().UTC()
+	live := &domain.OpenInterestSeries{
+		Current: domain.OpenInterestPoint{Time: now, Value: 2e9, Contracts: 2e9},
+		History: []domain.OpenInterestPoint{
+			{Time: now.Add(-time.Hour), Value: 2e9, Contracts: 2e9},
+		},
+	}
+	fund := &domain.FundingSeries{
+		Current: domain.FundingPoint{Time: now, Rate: 0.0001, MarkPrice: 100000},
+	}
+	oiPorts := map[domain.Exchange]domain.OpenInterestPort{}
+	fundPorts := map[domain.Exchange]domain.FundingRatePort{}
+	for _, ex := range domain.FuturesVenues() {
+		oiPorts[ex] = boardOI{series: live}
+		fundPorts[ex] = boardFunding{series: fund}
+	}
+	tooOld := now.Add(-26 * time.Hour)
+	points := map[domain.Exchange]domain.FuturesSnapshot{}
+	for _, ex := range domain.FuturesVenues() {
+		points[ex] = domain.FuturesSnapshot{
+			Metric: domain.FuturesMetricOpenInterest, Exchange: ex, Symbol: "BTCUSDT",
+			SampledAt: tooOld, Value: 1e9, Contracts: 1e9,
+		}
+	}
+	svc := New(nil, nil).WithOpenInterest(oiPorts).WithFundingRate(fundPorts)
+	svc.SetFuturesHistory(boardArchive{byEx: points})
+	got, err := svc.GetDerivativesBoard(context.Background(), "all", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := boardCoinRow(got, "BTCUSDT")
+	if row == nil || row.Change24hDefinite || row.Change24h != "" || len(row.Change24hMissing) != 3 {
+		t.Fatalf("24h %q missing %+v", row.Change24h, row.Change24hMissing)
+	}
+	if !row.Change1hDefinite {
+		t.Fatal("1h should still use the live sample")
+	}
+}
