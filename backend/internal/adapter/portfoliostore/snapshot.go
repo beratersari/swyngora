@@ -363,11 +363,7 @@ func (s *SQLite) txInsertSnapshot(ctx context.Context, tx *sql.Tx, snap domain.P
 		if t.ID == "" {
 			continue
 		}
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, lot_method, fee, last_price, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL,
-			t.PendingOrderID, string(t.LotMethod), t.Fee, t.LastPrice, fmtTime(t.CreatedAt)); err != nil {
+		if err := execInsertTrade(ctx, tx, t, t.CreatedAt); err != nil {
 			return err
 		}
 	}

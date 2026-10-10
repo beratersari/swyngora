@@ -423,7 +423,7 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 					ID: row["id"], Exchange: row["exchange"], Symbol: row["symbol"], Side: row["side"],
 					Quantity: csvF64(row, "quantity"), Price: csvF64(row, "price"), Notional: csvF64(row, "notional"),
 					RealizedPnL: csvF64(row, "realizedPnL"), PendingOrderID: row["pendingOrderId"], LotMethod: row["lotMethod"],
-					Fee: csvF64(row, "fee"), LastPrice: csvF64(row, "lastPrice"), CreatedAt: row["createdAt"],
+					Fee: csvF64(row, "fee"), LastPrice: csvF64(row, "lastPrice"), Situation: situationFromCSV(row["situation"]), CreatedAt: row["createdAt"],
 				})
 			}
 		case "portfolio_orders":
@@ -579,7 +579,7 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 				b.RiskLimits = &wirePFRisk{
 					MaxDailyLossPct: csvOptF64(row, "maxDailyLossPct"), MaxAssetWeightPct: csvOptF64(row, "maxAssetWeightPct"),
 					MaxExposurePct: csvOptF64(row, "maxExposurePct"),
-					DayKey: row["dayKey"], DayStartEquity: csvF64(row, "dayStartEquity"), UpdatedAt: row["updatedAt"],
+					DayKey:         row["dayKey"], DayStartEquity: csvF64(row, "dayStartEquity"), UpdatedAt: row["updatedAt"],
 				}
 			}
 		case "customSignals":

@@ -124,6 +124,7 @@ import {
   useGetMarketBotTrackerQuery,
   useGetMarketOrderCountQuery,
   useGetMarketPressureQuery,
+  useGetMarketSituationQuery,
   useGetMarketSnapshotQuery,
   useGetTicker24hQuery,
   useGetSpotOrderBookQuery,
@@ -242,6 +243,7 @@ import {
   printSizeDeskNote,
   type ChartDeskLayers,
 } from './chartPresets';
+import { CoinSituation } from '@/components/molecules/CoinSituation';
 import { CoinFlowTab } from './CoinFlowTab';
 import { PastOrderBook } from './PastOrderBook';
 import { CoinStructureTab } from './CoinStructureTab';
@@ -331,6 +333,14 @@ export function CoinDetailPage() {
   // RTK args require a concrete exchange; skipped when path venue is invalid.
   const exchangeArg = exchange ?? 'binance';
   const isEquity = exchange === 'nasdaq' || exchange === 'bist';
+  const situationQuery = useGetMarketSituationQuery(
+    { symbol: symbol ?? '' },
+    {
+      skip: skip || isEquity,
+      pollingInterval: visible ? 60_000 : 0,
+      refetchOnFocus: true,
+    },
+  );
   const intervalsQuery = useListIntervalsQuery(
     { exchange: exchangeArg },
     { skip: !exchange },
@@ -2025,6 +2035,20 @@ export function CoinDetailPage() {
               : null
         }
       />
+
+      {!isEquity && exchange && symbol ? (
+        <CoinSituation
+          report={rtkCurrent(situationQuery)}
+          isLoading={situationQuery.isLoading}
+          error={
+            situationQuery.isError
+              ? rtkErrorMessage(situationQuery.error, {
+                  resource: t('detail:situation.title'),
+                })
+              : null
+          }
+        />
+      ) : null}
 
       <DeskTabs
         activeKey={tab}

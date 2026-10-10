@@ -158,6 +158,8 @@ import type {
   MarketNetPosition,
   NetPositionQuery,
   FearGreedReport,
+  CoinSituation,
+  CoinSituationQuery,
   MarketVolumeSurgeScan,
   MarketVolumeSurgeScanQuery,
   MarketDeskReport,
@@ -259,6 +261,10 @@ export type {
   MarketNetPosition,
   MarketNetPositionWindow,
   FearGreedReport,
+  CoinSituation,
+  CoinSituationPriceCVD,
+  CoinSituationOpenInterest,
+  CoinSituationLiquidation,
   FearGreedFactor,
   FearGreedSample,
   FearGreedWindow,
@@ -690,6 +696,13 @@ export const marketApi = baseApi.injectEndpoints({
       query: () => ({ url: '/api/v1/market/fear-greed' }),
     }),
 
+    getMarketSituation: build.query<CoinSituation, CoinSituationQuery>({
+      query: (arg) => ({
+        url: '/api/v1/market/situation',
+        params: compactParams({ symbol: arg.symbol }),
+      }),
+    }),
+
     scanMarketVolumeSurges: build.query<MarketVolumeSurgeScan, MarketVolumeSurgeScanQuery | void>({
       query: (arg) => ({
         url: '/api/v1/market/volume-surge/scan',
@@ -1079,6 +1092,7 @@ export const {
   useGetMarketPerpBookHistoryQuery,
   useGetMarketBreadthQuery,
   useGetMarketFearGreedQuery,
+  useGetMarketSituationQuery,
   useScanMarketVolumeSurgesQuery,
   useLazyScanMarketVolumeSurgesQuery,
   useGetSpotPerpLiquidityQuery,

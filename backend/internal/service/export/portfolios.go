@@ -1,6 +1,7 @@
 package export
 
 import (
+	"encoding/json"
 	"strconv"
 	"time"
 
@@ -8,38 +9,38 @@ import (
 )
 
 type portfolioBookPayload struct {
-	ID               string                     `json:"id"`
-	Name             string                     `json:"name"`
-	Currency         string                     `json:"currency"`
-	StartingBalance  float64                    `json:"startingBalance"`
-	CashBalance      float64                    `json:"cashBalance"`
-	RealizedPnLTotal float64                    `json:"realizedPnLTotal"`
-	NetDeposits      float64                    `json:"netDeposits"`
-	MarginMode       string                     `json:"marginMode"`
-	CreatedAt        string                     `json:"createdAt"`
-	UpdatedAt        string                     `json:"updatedAt"`
-	Positions        []portfolioPosPayload      `json:"positions,omitempty"`
-	Trades           []portfolioTradePayload    `json:"trades,omitempty"`
-	OpenOrders       []portfolioOrderPayload    `json:"openOrders,omitempty"`
-	Lots             []portfolioLotPayload      `json:"lots,omitempty"`
-	LotFills         []portfolioLotFillPayload  `json:"lotFills,omitempty"`
-	RecurringBuys    []portfolioRecurringPayload `json:"recurringBuys,omitempty"`
+	ID               string                         `json:"id"`
+	Name             string                         `json:"name"`
+	Currency         string                         `json:"currency"`
+	StartingBalance  float64                        `json:"startingBalance"`
+	CashBalance      float64                        `json:"cashBalance"`
+	RealizedPnLTotal float64                        `json:"realizedPnLTotal"`
+	NetDeposits      float64                        `json:"netDeposits"`
+	MarginMode       string                         `json:"marginMode"`
+	CreatedAt        string                         `json:"createdAt"`
+	UpdatedAt        string                         `json:"updatedAt"`
+	Positions        []portfolioPosPayload          `json:"positions,omitempty"`
+	Trades           []portfolioTradePayload        `json:"trades,omitempty"`
+	OpenOrders       []portfolioOrderPayload        `json:"openOrders,omitempty"`
+	Lots             []portfolioLotPayload          `json:"lots,omitempty"`
+	LotFills         []portfolioLotFillPayload      `json:"lotFills,omitempty"`
+	RecurringBuys    []portfolioRecurringPayload    `json:"recurringBuys,omitempty"`
 	RecurringRuns    []portfolioRecurringRunPayload `json:"recurringRuns,omitempty"`
-	MarginPositions  []portfolioMarginPosPayload `json:"marginPositions,omitempty"`
-	MarginOrders     []portfolioMarginOrdPayload `json:"marginOrders,omitempty"`
-	MarginTrades     []portfolioMarginTrPayload `json:"marginTrades,omitempty"`
-	Shares           []portfolioSharePayload    `json:"shares,omitempty"`
-	Baskets          []portfolioBasketPayload   `json:"baskets,omitempty"`
-	Rebalances       []portfolioRebalancePayload `json:"rebalances,omitempty"`
-	RiskLimits       *portfolioRiskPayload      `json:"riskLimits,omitempty"`
+	MarginPositions  []portfolioMarginPosPayload    `json:"marginPositions,omitempty"`
+	MarginOrders     []portfolioMarginOrdPayload    `json:"marginOrders,omitempty"`
+	MarginTrades     []portfolioMarginTrPayload     `json:"marginTrades,omitempty"`
+	Shares           []portfolioSharePayload        `json:"shares,omitempty"`
+	Baskets          []portfolioBasketPayload       `json:"baskets,omitempty"`
+	Rebalances       []portfolioRebalancePayload    `json:"rebalances,omitempty"`
+	RiskLimits       *portfolioRiskPayload          `json:"riskLimits,omitempty"`
 }
 
 type portfolioBasketPayload struct {
-	ID        string                       `json:"id"`
-	Name      string                       `json:"name"`
+	ID        string                         `json:"id"`
+	Name      string                         `json:"name"`
 	Targets   []portfolioBasketTargetPayload `json:"targets"`
-	CreatedAt string                       `json:"createdAt"`
-	UpdatedAt string                       `json:"updatedAt"`
+	CreatedAt string                         `json:"createdAt"`
+	UpdatedAt string                         `json:"updatedAt"`
 }
 
 type portfolioBasketTargetPayload struct {
@@ -49,32 +50,32 @@ type portfolioBasketTargetPayload struct {
 }
 
 type portfolioRebalancePayload struct {
-	ID                   string                         `json:"id"`
-	BasketID             string                         `json:"basketId"`
-	BasketName           string                         `json:"basketName"`
-	Currency             string                         `json:"currency"`
-	Status               string                         `json:"status"`
-	PlannedLegs          int                            `json:"plannedLegs"`
-	FilledLegs           int                            `json:"filledLegs"`
-	FailedLegs           int                            `json:"failedLegs"`
-	BeforeEquity         float64                        `json:"beforeEquity"`
-	AfterEquity          float64                        `json:"afterEquity"`
-	BeforeCash           float64                        `json:"beforeCash"`
-	AfterCash            float64                        `json:"afterCash"`
-	RemainingAbsDriftPct float64                        `json:"remainingAbsDriftPct"`
-	MaxSleeveDriftPct    float64                        `json:"maxSleeveDriftPct"`
-	RemainingNotional    float64                        `json:"remainingNotional"`
-	TotalFee             float64                        `json:"totalFee"`
-	TotalSlippage        float64                        `json:"totalSlippage"`
-	TotalCost            float64                        `json:"totalCost"`
-	Summary              string                         `json:"summary,omitempty"`
-	Note                 string                         `json:"note,omitempty"`
-	CreatedAt            string                         `json:"createdAt"`
-	UpdatedAt            string                         `json:"updatedAt"`
-	AttemptCount         int                            `json:"attemptCount"`
-	CanContinue          bool                           `json:"canContinue"`
-	Legs                 []portfolioRebalanceLegPayload `json:"legs,omitempty"`
-	Lines                []portfolioRebalanceLinePayload `json:"lines,omitempty"`
+	ID                   string                             `json:"id"`
+	BasketID             string                             `json:"basketId"`
+	BasketName           string                             `json:"basketName"`
+	Currency             string                             `json:"currency"`
+	Status               string                             `json:"status"`
+	PlannedLegs          int                                `json:"plannedLegs"`
+	FilledLegs           int                                `json:"filledLegs"`
+	FailedLegs           int                                `json:"failedLegs"`
+	BeforeEquity         float64                            `json:"beforeEquity"`
+	AfterEquity          float64                            `json:"afterEquity"`
+	BeforeCash           float64                            `json:"beforeCash"`
+	AfterCash            float64                            `json:"afterCash"`
+	RemainingAbsDriftPct float64                            `json:"remainingAbsDriftPct"`
+	MaxSleeveDriftPct    float64                            `json:"maxSleeveDriftPct"`
+	RemainingNotional    float64                            `json:"remainingNotional"`
+	TotalFee             float64                            `json:"totalFee"`
+	TotalSlippage        float64                            `json:"totalSlippage"`
+	TotalCost            float64                            `json:"totalCost"`
+	Summary              string                             `json:"summary,omitempty"`
+	Note                 string                             `json:"note,omitempty"`
+	CreatedAt            string                             `json:"createdAt"`
+	UpdatedAt            string                             `json:"updatedAt"`
+	AttemptCount         int                                `json:"attemptCount"`
+	CanContinue          bool                               `json:"canContinue"`
+	Legs                 []portfolioRebalanceLegPayload     `json:"legs,omitempty"`
+	Lines                []portfolioRebalanceLinePayload    `json:"lines,omitempty"`
 	Attempts             []portfolioRebalanceAttemptPayload `json:"attempts,omitempty"`
 }
 
@@ -151,46 +152,47 @@ type portfolioPosPayload struct {
 }
 
 type portfolioTradePayload struct {
-	ID             string  `json:"id"`
-	Exchange       string  `json:"exchange"`
-	Symbol         string  `json:"symbol"`
-	Side           string  `json:"side"`
-	Quantity       float64 `json:"quantity"`
-	Price          float64 `json:"price"`
-	Notional       float64 `json:"notional"`
-	RealizedPnL    float64 `json:"realizedPnL"`
-	PendingOrderID string  `json:"pendingOrderId,omitempty"`
-	LotMethod      string  `json:"lotMethod,omitempty"`
-	Fee            float64 `json:"fee"`
-	LastPrice      float64 `json:"lastPrice,omitempty"`
-	CreatedAt      string  `json:"createdAt"`
+	ID             string                `json:"id"`
+	Exchange       string                `json:"exchange"`
+	Symbol         string                `json:"symbol"`
+	Side           string                `json:"side"`
+	Quantity       float64               `json:"quantity"`
+	Price          float64               `json:"price"`
+	Notional       float64               `json:"notional"`
+	RealizedPnL    float64               `json:"realizedPnL"`
+	PendingOrderID string                `json:"pendingOrderId,omitempty"`
+	LotMethod      string                `json:"lotMethod,omitempty"`
+	Fee            float64               `json:"fee"`
+	LastPrice      float64               `json:"lastPrice,omitempty"`
+	Situation      *domain.CoinSituation `json:"situation,omitempty"`
+	CreatedAt      string                `json:"createdAt"`
 }
 
 type portfolioOrderPayload struct {
-	ID                string   `json:"id"`
-	Exchange          string   `json:"exchange"`
-	Symbol            string   `json:"symbol"`
-	Type              string   `json:"type"`
-	Side              string   `json:"side"`
-	Quantity          float64  `json:"quantity"`
-	FilledQuantity    float64  `json:"filledQuantity"`
-	RemainingQuantity float64  `json:"remainingQuantity"`
-	TriggerPrice      float64  `json:"triggerPrice"`
-	ReservedCash      float64  `json:"reservedCash"`
-	ReservedQuantity  float64  `json:"reservedQuantity"`
-	TimeInForce       string   `json:"timeInForce"`
-	ExpiresAt         *string  `json:"expiresAt,omitempty"`
-	Status            string   `json:"status"`
-	OCOGroupID        string   `json:"ocoGroupId,omitempty"`
-	OCOPeerID         string   `json:"ocoPeerId,omitempty"`
-	TrailType         string   `json:"trailType,omitempty"`
-	TrailValue        float64  `json:"trailValue,omitempty"`
-	TrailPeak         float64  `json:"trailPeak,omitempty"`
-	BracketID         string   `json:"bracketId,omitempty"`
-	BracketRole       string   `json:"bracketRole,omitempty"`
-	LotMethod         string   `json:"lotMethod,omitempty"`
-	CreatedAt         string   `json:"createdAt"`
-	UpdatedAt         string   `json:"updatedAt"`
+	ID                string  `json:"id"`
+	Exchange          string  `json:"exchange"`
+	Symbol            string  `json:"symbol"`
+	Type              string  `json:"type"`
+	Side              string  `json:"side"`
+	Quantity          float64 `json:"quantity"`
+	FilledQuantity    float64 `json:"filledQuantity"`
+	RemainingQuantity float64 `json:"remainingQuantity"`
+	TriggerPrice      float64 `json:"triggerPrice"`
+	ReservedCash      float64 `json:"reservedCash"`
+	ReservedQuantity  float64 `json:"reservedQuantity"`
+	TimeInForce       string  `json:"timeInForce"`
+	ExpiresAt         *string `json:"expiresAt,omitempty"`
+	Status            string  `json:"status"`
+	OCOGroupID        string  `json:"ocoGroupId,omitempty"`
+	OCOPeerID         string  `json:"ocoPeerId,omitempty"`
+	TrailType         string  `json:"trailType,omitempty"`
+	TrailValue        float64 `json:"trailValue,omitempty"`
+	TrailPeak         float64 `json:"trailPeak,omitempty"`
+	BracketID         string  `json:"bracketId,omitempty"`
+	BracketRole       string  `json:"bracketRole,omitempty"`
+	LotMethod         string  `json:"lotMethod,omitempty"`
+	CreatedAt         string  `json:"createdAt"`
+	UpdatedAt         string  `json:"updatedAt"`
 }
 
 type portfolioLotPayload struct {
@@ -338,7 +340,7 @@ func snapshotToPayload(snap domain.PortfolioSnapshot) portfolioBookPayload {
 		StartingBalance: snap.Book.StartingBalance, CashBalance: snap.Book.CashBalance,
 		RealizedPnLTotal: snap.Book.RealizedPnLTotal, NetDeposits: snap.Book.NetDeposits,
 		MarginMode: string(snap.Book.MarginMode),
-		CreatedAt: rfcNano(snap.Book.CreatedAt), UpdatedAt: rfcNano(snap.Book.UpdatedAt),
+		CreatedAt:  rfcNano(snap.Book.CreatedAt), UpdatedAt: rfcNano(snap.Book.UpdatedAt),
 	}
 	for _, pos := range snap.Positions {
 		p.Positions = append(p.Positions, portfolioPosPayload{
@@ -351,7 +353,7 @@ func snapshotToPayload(snap domain.PortfolioSnapshot) portfolioBookPayload {
 			ID: t.ID, Exchange: string(t.Exchange), Symbol: t.Symbol, Side: string(t.Side),
 			Quantity: t.Quantity, Price: t.Price, Notional: t.Notional, RealizedPnL: t.RealizedPnL,
 			PendingOrderID: t.PendingOrderID, LotMethod: string(t.LotMethod), Fee: t.Fee, LastPrice: t.LastPrice,
-			CreatedAt: rfcNano(t.CreatedAt),
+			Situation: t.Situation, CreatedAt: rfcNano(t.CreatedAt),
 		})
 	}
 	for _, o := range snap.OpenOrders {
@@ -445,7 +447,7 @@ func snapshotToPayload(snap domain.PortfolioSnapshot) portfolioBookPayload {
 		p.RiskLimits = &portfolioRiskPayload{
 			MaxDailyLossPct: snap.RiskLimits.MaxDailyLossPct, MaxAssetWeightPct: snap.RiskLimits.MaxAssetWeightPct,
 			MaxExposurePct: snap.RiskLimits.MaxExposurePct,
-			DayKey: snap.RiskLimits.DayKey, DayStartEquity: snap.RiskLimits.DayStartEquity,
+			DayKey:         snap.RiskLimits.DayKey, DayStartEquity: snap.RiskLimits.DayStartEquity,
 			UpdatedAt: rfcNano(snap.RiskLimits.UpdatedAt),
 		}
 	}
@@ -505,6 +507,17 @@ func rebalanceLineToPayload(ln domain.RebalanceLineSnapshot) portfolioRebalanceL
 		BeforeValue: ln.BeforeValue, AfterValue: ln.AfterValue, TargetValue: ln.TargetValue,
 		AfterDelta: ln.AfterDelta, Attempt: ln.Attempt,
 	}
+}
+
+func situationCSV(s *domain.CoinSituation) string {
+	if s == nil {
+		return ""
+	}
+	raw, err := json.Marshal(s)
+	if err != nil {
+		return ""
+	}
+	return string(raw)
 }
 
 func f64(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }

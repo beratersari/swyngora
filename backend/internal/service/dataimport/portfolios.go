@@ -2,6 +2,7 @@ package dataimport
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 	"strings"
 	"time"
@@ -12,38 +13,38 @@ import (
 )
 
 type wirePortfolioBook struct {
-	ID               string                    `json:"id"`
-	Name             string                    `json:"name"`
-	Currency         string                    `json:"currency"`
-	StartingBalance  float64                   `json:"startingBalance"`
-	CashBalance      float64                   `json:"cashBalance"`
-	RealizedPnLTotal float64                   `json:"realizedPnLTotal"`
-	NetDeposits      float64                   `json:"netDeposits"`
-	MarginMode       string                    `json:"marginMode"`
-	CreatedAt        string                    `json:"createdAt"`
-	UpdatedAt        string                    `json:"updatedAt"`
-	Positions        []wirePFPos               `json:"positions"`
-	Trades           []wirePFTrade             `json:"trades"`
-	OpenOrders       []wirePFOrder             `json:"openOrders"`
-	Lots             []wirePFLot               `json:"lots"`
-	LotFills         []wirePFLotFill           `json:"lotFills"`
-	RecurringBuys    []wirePFRecurring         `json:"recurringBuys"`
-	RecurringRuns    []wirePFRecurringRun      `json:"recurringRuns"`
-	MarginPositions  []wirePFMarginPos         `json:"marginPositions"`
-	MarginOrders     []wirePFMarginOrd         `json:"marginOrders"`
-	MarginTrades     []wirePFMarginTr          `json:"marginTrades"`
-	Shares           []wirePFShare             `json:"shares"`
-	Baskets          []wirePFBasket            `json:"baskets"`
-	Rebalances       []wirePFRebalance         `json:"rebalances"`
-	RiskLimits       *wirePFRisk               `json:"riskLimits"`
+	ID               string               `json:"id"`
+	Name             string               `json:"name"`
+	Currency         string               `json:"currency"`
+	StartingBalance  float64              `json:"startingBalance"`
+	CashBalance      float64              `json:"cashBalance"`
+	RealizedPnLTotal float64              `json:"realizedPnLTotal"`
+	NetDeposits      float64              `json:"netDeposits"`
+	MarginMode       string               `json:"marginMode"`
+	CreatedAt        string               `json:"createdAt"`
+	UpdatedAt        string               `json:"updatedAt"`
+	Positions        []wirePFPos          `json:"positions"`
+	Trades           []wirePFTrade        `json:"trades"`
+	OpenOrders       []wirePFOrder        `json:"openOrders"`
+	Lots             []wirePFLot          `json:"lots"`
+	LotFills         []wirePFLotFill      `json:"lotFills"`
+	RecurringBuys    []wirePFRecurring    `json:"recurringBuys"`
+	RecurringRuns    []wirePFRecurringRun `json:"recurringRuns"`
+	MarginPositions  []wirePFMarginPos    `json:"marginPositions"`
+	MarginOrders     []wirePFMarginOrd    `json:"marginOrders"`
+	MarginTrades     []wirePFMarginTr     `json:"marginTrades"`
+	Shares           []wirePFShare        `json:"shares"`
+	Baskets          []wirePFBasket       `json:"baskets"`
+	Rebalances       []wirePFRebalance    `json:"rebalances"`
+	RiskLimits       *wirePFRisk          `json:"riskLimits"`
 }
 
 type wirePFBasket struct {
-	ID        string              `json:"id"`
-	Name      string              `json:"name"`
+	ID        string               `json:"id"`
+	Name      string               `json:"name"`
 	Targets   []wirePFBasketTarget `json:"targets"`
-	CreatedAt string              `json:"createdAt"`
-	UpdatedAt string              `json:"updatedAt"`
+	CreatedAt string               `json:"createdAt"`
+	UpdatedAt string               `json:"updatedAt"`
 }
 
 type wirePFBasketTarget struct {
@@ -154,19 +155,20 @@ type wirePFPos struct {
 }
 
 type wirePFTrade struct {
-	ID             string  `json:"id"`
-	Exchange       string  `json:"exchange"`
-	Symbol         string  `json:"symbol"`
-	Side           string  `json:"side"`
-	Quantity       float64 `json:"quantity"`
-	Price          float64 `json:"price"`
-	Notional       float64 `json:"notional"`
-	RealizedPnL    float64 `json:"realizedPnL"`
-	PendingOrderID string  `json:"pendingOrderId"`
-	LotMethod      string  `json:"lotMethod"`
-	Fee            float64 `json:"fee"`
-	LastPrice      float64 `json:"lastPrice"`
-	CreatedAt      string  `json:"createdAt"`
+	ID             string                `json:"id"`
+	Exchange       string                `json:"exchange"`
+	Symbol         string                `json:"symbol"`
+	Side           string                `json:"side"`
+	Quantity       float64               `json:"quantity"`
+	Price          float64               `json:"price"`
+	Notional       float64               `json:"notional"`
+	RealizedPnL    float64               `json:"realizedPnL"`
+	PendingOrderID string                `json:"pendingOrderId"`
+	LotMethod      string                `json:"lotMethod"`
+	Fee            float64               `json:"fee"`
+	LastPrice      float64               `json:"lastPrice"`
+	Situation      *domain.CoinSituation `json:"situation,omitempty"`
+	CreatedAt      string                `json:"createdAt"`
 }
 
 type wirePFOrder struct {
@@ -366,7 +368,7 @@ func normalizePortfolioBook(w wirePortfolioBook, fileOwner, importer string) (do
 			ID: t.ID, ClientID: id, Exchange: ex, Symbol: domain.NormalizeSymbol(ex, t.Symbol), Side: side,
 			Quantity: t.Quantity, Price: t.Price, Notional: t.Notional, RealizedPnL: t.RealizedPnL,
 			PendingOrderID: t.PendingOrderID, LotMethod: lm, Fee: t.Fee, LastPrice: t.LastPrice,
-			CreatedAt: parseTimeOrNow(t.CreatedAt),
+			Situation: t.Situation, CreatedAt: parseTimeOrNow(t.CreatedAt),
 		})
 	}
 	for _, o := range w.OpenOrders {
@@ -668,7 +670,7 @@ func normalizeImportedRisk(w wirePFRisk, bookID string) (domain.RiskLimits, bool
 	return domain.RiskLimits{
 		ClientID: bookID, MaxDailyLossPct: w.MaxDailyLossPct, MaxAssetWeightPct: w.MaxAssetWeightPct,
 		MaxExposurePct: w.MaxExposurePct,
-		DayKey: strings.TrimSpace(w.DayKey), DayStartEquity: w.DayStartEquity,
+		DayKey:         strings.TrimSpace(w.DayKey), DayStartEquity: w.DayStartEquity,
 		UpdatedAt: parseTimeOrNow(w.UpdatedAt),
 	}, true
 }
@@ -713,6 +715,18 @@ func csvOptStr(row map[string]string, key string) *string {
 	}
 	return &s
 }
+func situationFromCSV(raw string) *domain.CoinSituation {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var s domain.CoinSituation
+	if err := json.Unmarshal([]byte(raw), &s); err != nil {
+		return nil
+	}
+	return &s
+}
+
 func csvOptF64(row map[string]string, key string) *float64 {
 	s := strings.TrimSpace(row[key])
 	if s == "" {

@@ -24,6 +24,11 @@ type PriceFetcher interface {
 	GetTicker24h(ctx context.Context, exchange, symbol string) (*domain.Ticker24h, error)
 }
 
+// SituationSource loads the coin-page read stored on a paper order.
+type SituationSource interface {
+	GetCoinSituation(ctx context.Context, symbol string) (*domain.CoinSituation, error)
+}
+
 // AccountChecker reports whether a tenant account is closed (optional).
 type AccountChecker interface {
 	IsClosed(ctx context.Context, clientID string) (bool, *domain.Account, error)
@@ -31,12 +36,13 @@ type AccountChecker interface {
 
 // Service orchestrates paper-trading portfolios.
 type Service struct {
-	store    domain.PortfolioPort
-	market   PriceFetcher
-	sink     domain.PortfolioChangeSink
-	account  AccountChecker
-	costFor  func(domain.Exchange) domain.TradingCost
-	clientMu sync.Map // clientID → *sync.Mutex; serializes RMW per client
+	store      domain.PortfolioPort
+	market     PriceFetcher
+	sink       domain.PortfolioChangeSink
+	account    AccountChecker
+	costFor    func(domain.Exchange) domain.TradingCost
+	situations SituationSource
+	clientMu   sync.Map // clientID → *sync.Mutex; serializes RMW per client
 }
 
 // New constructs a portfolio service.
@@ -64,6 +70,28 @@ func (s *Service) paperCost(ex domain.Exchange) domain.TradingCost {
 		return s.costFor(ex)
 	}
 	return domain.TradingCostFor(ex)
+}
+
+// SetSituationSource stores the coin-page read on new paper orders. Optional.
+func (s *Service) SetSituationSource(src SituationSource) {
+	if s != nil {
+		s.situations = src
+	}
+}
+
+// captureSituation reads the combined tape at order time.
+// Equities have no futures tape. A failed or slow read leaves the order without one.
+func (s *Service) captureSituation(ctx context.Context, ex domain.Exchange, symbol string) *domain.CoinSituation {
+	if s == nil || s.situations == nil || domain.IsEquityExchange(ex) {
+		return nil
+	}
+	cctx, cancel := context.WithTimeout(ctx, 12*time.Second)
+	defer cancel()
+	got, err := s.situations.GetCoinSituation(cctx, symbol)
+	if err != nil {
+		return nil
+	}
+	return got
 }
 
 // SetChangeSink receives order/position/cash mutations for realtime subscribers.
@@ -559,6 +587,7 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 		LotMethod:   lotMethod,
 		Fee:         fee,
 		LastPrice:   last,
+		Situation:   s.captureSituation(ctx, ex, sym),
 		CreatedAt:   now,
 	}
 	if lotOps != nil {
@@ -851,6 +880,11 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 		LotMethod: pendingLotMethod(in.LotMethod),
 		CreatedAt: now, UpdatedAt: now,
 	}
+	if sit := s.captureSituation(ctx, ex, sym); sit != nil {
+		entryOrd.Situation = sit
+		tpOrd.Situation = sit
+		slOrd.Situation = sit
+	}
 	ctx = s.withIdempotency(ctx, clientID, idempKey, idempHash, domain.IdempotencyKindBracket, idempIDs{EntryID: entryID, TakeProfitID: tpID, StopLossID: slID})
 	entry, tp, sl, err = s.store.CreateBracket(ctx, entryOrd, tpOrd, slOrd)
 	if err != nil {
@@ -962,6 +996,10 @@ func (s *Service) PlaceOCOOrder(ctx context.Context, in OCOOrderInput) (tp, sl *
 		CreatedAt: now, UpdatedAt: now,
 	}
 	ctx = s.withIdempotency(ctx, clientID, idempKey, idempHash, domain.IdempotencyKindOCO, idempIDs{TakeProfitID: tpID, StopLossID: slID})
+	if sit := s.captureSituation(ctx, ex, sym); sit != nil {
+		tpOrd.Situation = sit
+		slOrd.Situation = sit
+	}
 	tp, sl, err = s.store.CreateOCOPair(ctx, tpOrd, slOrd)
 	if err != nil {
 		if isIdempotencyHit(err) {
@@ -1144,6 +1182,7 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 		TrailValue:        trailValue,
 		TrailPeak:         trailPeak,
 		LotMethod:         pendingLotMethod(in.LotMethod),
+		Situation:         s.captureSituation(ctx, ex, sym),
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}
@@ -1868,7 +1907,7 @@ func (s *Service) tryFillPendingOrderLocked(ctx context.Context, o domain.Pendin
 		ID: tradeID, ClientID: o.ClientID, Exchange: o.Exchange, Symbol: o.Symbol,
 		Side: o.Side, Quantity: fillQty, Price: fillPrice, Notional: fillQty * fillPrice,
 		RealizedPnL: realized, PendingOrderID: o.ID, LotMethod: lotMethod,
-		Fee: fee, LastPrice: lastPrice, CreatedAt: now,
+		Fee: fee, LastPrice: lastPrice, Situation: o.Situation, CreatedAt: now,
 	}
 	if lotOps != nil {
 		tr.LotFills = lotOps.Fills

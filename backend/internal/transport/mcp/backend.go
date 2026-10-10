@@ -2356,6 +2356,17 @@ func (b *Backend) GetBreadth(ctx context.Context, exchange string, limit int) (j
 	return mustJSON(got)
 }
 
+func (b *Backend) GetCoinSituation(ctx context.Context, symbol string) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetCoinSituation(ctx, symbol)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) GetFearGreed(ctx context.Context) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

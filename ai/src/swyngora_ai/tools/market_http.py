@@ -1243,6 +1243,10 @@ class BreadthInput(BaseModel):
     )
 
 
+class CoinSituationInput(BaseModel):
+    symbol: str = Field(description="Pair e.g. BTCUSDT")
+
+
 class FearGreedInput(BaseModel):
     """Market-wide index. No symbol."""
 
@@ -3068,6 +3072,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             "/api/v1/market/breadth",
             {"exchange": exchange, "limit": limit},
         )
+
+    def get_coin_situation(symbol: str) -> str:
+        return http.get("/api/v1/market/situation", {"symbol": symbol})
 
     def get_fear_greed() -> str:
         return http.get("/api/v1/market/fear-greed", {})
@@ -5982,6 +5989,20 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "coins are carrying it."
             ),
             args_schema=BreadthInput,
+        ),
+        StructuredTool.from_function(
+            get_coin_situation,
+            name="get_coin_situation",
+            description=(
+                "Short read for one coin from data Swyngora already has. "
+                "priceCvd.kind is price_up_cvd_down, price_down_cvd_up, or agrees. "
+                "openInterest.flow is opened, closed, or flat over the last hour. "
+                "liquidation.side is long when longs below last are closer, short "
+                "when shorts above last are closer, or none. A clause is omitted "
+                "and its Missing list names Binance, Bybit, or OKX when that venue "
+                "does not cover it. The same read is stored on a paper fill."
+            ),
+            args_schema=CoinSituationInput,
         ),
         StructuredTool.from_function(
             get_fear_greed,

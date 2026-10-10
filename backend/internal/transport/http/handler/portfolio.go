@@ -87,20 +87,21 @@ type taxLotFillDTO struct {
 }
 
 type tradeDTO struct {
-	ID             string          `json:"id"`
-	Exchange       string          `json:"exchange"`
-	Symbol         string          `json:"symbol"`
-	Side           string          `json:"side"`
-	Quantity       float64         `json:"quantity"`
-	Price          float64         `json:"price"`
-	Notional       float64         `json:"notional"`
-	RealizedPnL    float64         `json:"realizedPnL"`
-	PendingOrderID string          `json:"pendingOrderId,omitempty"`
-	LotMethod      string          `json:"lotMethod,omitempty"`
-	LotFills       []taxLotFillDTO `json:"lotFills,omitempty"`
-	Fee            float64         `json:"fee"`
-	LastPrice      float64         `json:"lastPrice,omitempty"`
-	CreatedAt      string          `json:"createdAt"`
+	ID             string                `json:"id"`
+	Exchange       string                `json:"exchange"`
+	Symbol         string                `json:"symbol"`
+	Side           string                `json:"side"`
+	Quantity       float64               `json:"quantity"`
+	Price          float64               `json:"price"`
+	Notional       float64               `json:"notional"`
+	RealizedPnL    float64               `json:"realizedPnL"`
+	PendingOrderID string                `json:"pendingOrderId,omitempty"`
+	LotMethod      string                `json:"lotMethod,omitempty"`
+	LotFills       []taxLotFillDTO       `json:"lotFills,omitempty"`
+	Fee            float64               `json:"fee"`
+	LastPrice      float64               `json:"lastPrice,omitempty"`
+	Situation      *domain.CoinSituation `json:"situation,omitempty"`
+	CreatedAt      string                `json:"createdAt"`
 }
 
 func portfolioViewDTO(v *domain.PortfolioView) portfolioDTO {
@@ -144,7 +145,7 @@ func tradeToDTO(t *domain.Trade) tradeDTO {
 		ID: t.ID, Exchange: string(t.Exchange), Symbol: t.Symbol, Side: string(t.Side),
 		Quantity: t.Quantity, Price: t.Price, Notional: t.Notional, RealizedPnL: t.RealizedPnL,
 		PendingOrderID: t.PendingOrderID, LotMethod: string(t.LotMethod),
-		Fee: t.Fee, LastPrice: t.LastPrice,
+		Fee: t.Fee, LastPrice: t.LastPrice, Situation: t.Situation,
 		CreatedAt: t.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 	if len(fills) > 0 {
@@ -303,15 +304,15 @@ type orderBody struct {
 	Symbol          string  `json:"symbol"`
 	Side            string  `json:"side"`
 	Quantity        float64 `json:"quantity"`
-	Type            string  `json:"type"`         // market | limit_buy | limit_sell | stop_loss | trailing_stop | oco | bracket
-	TriggerPrice    float64 `json:"triggerPrice"` // pending single-leg / bracket entry
+	Type            string  `json:"type"`            // market | limit_buy | limit_sell | stop_loss | trailing_stop | oco | bracket
+	TriggerPrice    float64 `json:"triggerPrice"`    // pending single-leg / bracket entry
 	TakeProfitPrice float64 `json:"takeProfitPrice"` // oco / bracket
 	StopLossPrice   float64 `json:"stopLossPrice"`   // oco / bracket
-	TrailType       string  `json:"trailType"`        // trailing_stop: percent | offset
-	TrailValue      float64 `json:"trailValue"`       // trailing_stop distance
-	TimeInForce     string  `json:"timeInForce"`      // gtc | ioc | fok
-	ExpiresAt       string  `json:"expiresAt"`        // RFC3339; GTC only
-	LotMethod       string  `json:"lotMethod"`        // fifo | lifo (sells)
+	TrailType       string  `json:"trailType"`       // trailing_stop: percent | offset
+	TrailValue      float64 `json:"trailValue"`      // trailing_stop distance
+	TimeInForce     string  `json:"timeInForce"`     // gtc | ioc | fok
+	ExpiresAt       string  `json:"expiresAt"`       // RFC3339; GTC only
+	LotMethod       string  `json:"lotMethod"`       // fifo | lifo (sells)
 	IdempotencyKey  string  `json:"idempotencyKey"`
 }
 
@@ -656,10 +657,10 @@ func (h *PortfolioHandler) CancelAllOrders(w http.ResponseWriter, r *http.Reques
 		note = "No open paper orders to cancel."
 	}
 	out := map[string]any{
-		"orders":    items,
-		"canceled":  len(items),
-		"scope":     scope,
-		"note":      note,
+		"orders":   items,
+		"canceled": len(items),
+		"scope":    scope,
+		"note":     note,
 	}
 	if view != nil {
 		out["portfolio"] = portfolioViewDTO(view)

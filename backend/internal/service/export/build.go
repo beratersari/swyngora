@@ -457,7 +457,7 @@ func buildCSV(pl *payload) ([]byte, error) {
 			for _, t := range b.Trades {
 				tradeRows = append(tradeRows, []string{
 					b.ID, t.ID, t.Exchange, t.Symbol, t.Side, f64(t.Quantity), f64(t.Price), f64(t.Notional),
-					f64(t.RealizedPnL), t.PendingOrderID, t.LotMethod, f64(t.Fee), f64(t.LastPrice), t.CreatedAt,
+					f64(t.RealizedPnL), t.PendingOrderID, t.LotMethod, f64(t.Fee), f64(t.LastPrice), situationCSV(t.Situation), t.CreatedAt,
 				})
 			}
 			for _, o := range b.OpenOrders {
@@ -556,7 +556,7 @@ func buildCSV(pl *payload) ([]byte, error) {
 		}
 		_ = writeSection("portfolio_positions", []string{"portfolioId", "exchange", "symbol", "quantity", "avgCost", "updatedAt"}, posRows)
 		_ = writeSection("portfolio_trades", []string{
-			"portfolioId", "id", "exchange", "symbol", "side", "quantity", "price", "notional", "realizedPnL", "pendingOrderId", "lotMethod", "fee", "lastPrice", "createdAt",
+			"portfolioId", "id", "exchange", "symbol", "side", "quantity", "price", "notional", "realizedPnL", "pendingOrderId", "lotMethod", "fee", "lastPrice", "situation", "createdAt",
 		}, tradeRows)
 		_ = writeSection("portfolio_orders", []string{
 			"portfolioId", "id", "exchange", "symbol", "type", "side", "quantity", "filledQuantity", "remainingQuantity",

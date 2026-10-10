@@ -484,6 +484,8 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_
 		`ALTER TABLE trades ADD COLUMN lot_method TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE trades ADD COLUMN fee REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE trades ADD COLUMN last_price REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE trades ADD COLUMN situation_json TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE pending_orders ADD COLUMN situation_json TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE margin_trades ADD COLUMN fee REAL NOT NULL DEFAULT 0`,
 		`CREATE TABLE IF NOT EXISTS cash_movements (
 	id                  TEXT PRIMARY KEY NOT NULL,
@@ -803,12 +805,7 @@ func (s *SQLite) InsertTrade(ctx context.Context, t domain.Trade) (*domain.Trade
 	if t.CreatedAt.IsZero() {
 		t.CreatedAt = time.Now().UTC()
 	}
-	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.PendingOrderID,
-		t.CreatedAt.UTC().Format(time.RFC3339Nano))
-	if err != nil {
+	if err := execInsertTrade(ctx, s.db, t, t.CreatedAt); err != nil {
 		return nil, err
 	}
 	cp := t
@@ -825,7 +822,7 @@ func (s *SQLite) ListTrades(ctx context.Context, clientID string, limit, offset 
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id,
-		       COALESCE(lot_method, ''), COALESCE(fee, 0), COALESCE(last_price, 0), created_at
+		       COALESCE(lot_method, ''), COALESCE(fee, 0), COALESCE(last_price, 0), COALESCE(situation_json, ''), created_at
 		FROM trades WHERE client_id = ?
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?
@@ -836,15 +833,10 @@ func (s *SQLite) ListTrades(ctx context.Context, clientID string, limit, offset 
 	defer rows.Close()
 	out := make([]domain.Trade, 0)
 	for rows.Next() {
-		var t domain.Trade
-		var ex, side, cAt, lotMethod string
-		if err := rows.Scan(&t.ID, &t.ClientID, &ex, &t.Symbol, &side, &t.Quantity, &t.Price, &t.Notional, &t.RealizedPnL, &t.PendingOrderID, &lotMethod, &t.Fee, &t.LastPrice, &cAt); err != nil {
+		t, err := scanTrade(rows)
+		if err != nil {
 			return nil, err
 		}
-		t.LotMethod, _ = domain.NormalizeLotMethod(lotMethod)
-		t.Exchange = domain.Exchange(ex)
-		t.Side = domain.TradeSide(side)
-		t.CreatedAt = parseTime(cAt)
 		out = append(out, t)
 	}
 	return out, rows.Err()
@@ -911,11 +903,7 @@ func (s *SQLite) ExecuteTrade(ctx context.Context, p *domain.Portfolio, pos *dom
 		}
 	}
 
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, lot_method, fee, last_price, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.PendingOrderID,
-		string(t.LotMethod), t.Fee, t.LastPrice, at.UTC().Format(time.RFC3339Nano)); err != nil {
+	if err := execInsertTrade(ctx, tx, t, at); err != nil {
 		return err
 	}
 	if err := applyLotOps(ctx, tx, lots, t.ID, at); err != nil {
@@ -1016,8 +1004,8 @@ const pendingOrderInsertSQL = `
 			id, client_id, exchange, symbol, order_type, side, quantity, filled_quantity, remaining_quantity,
 			trigger_price, reserved_cash, reserved_quantity, time_in_force, expires_at, status,
 			created_at, updated_at, filled_at, canceled_at, fill_trade_id, fill_price, reject_reason, cancel_reason,
-			oco_group_id, oco_peer_id, trail_type, trail_value, trail_peak, bracket_id, bracket_role, lot_method
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			oco_group_id, oco_peer_id, trail_type, trail_value, trail_peak, bracket_id, bracket_role, lot_method, situation_json
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 func (s *SQLite) txInsertPendingOrder(ctx context.Context, tx *sql.Tx, o domain.PendingOrder) error {
 	_, err := tx.ExecContext(ctx, pendingOrderInsertSQL,
@@ -1026,6 +1014,7 @@ func (s *SQLite) txInsertPendingOrder(ctx context.Context, tx *sql.Tx, o domain.
 		o.CreatedAt.UTC().Format(time.RFC3339Nano), o.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		nullTime(o.FilledAt), nullTime(o.CanceledAt), o.FillTradeID, o.FillPrice, o.RejectReason, o.CancelReason,
 		o.OCOGroupID, o.OCOPeerID, o.TrailType, o.TrailValue, o.TrailPeak, o.BracketID, o.BracketRole, lotMethodOrDefault(o.LotMethod),
+		marshalSituation(o.Situation),
 	)
 	return err
 }
@@ -1596,10 +1585,7 @@ func (s *SQLite) ExecutePendingFill(ctx context.Context, order *domain.PendingOr
 	if t.PendingOrderID == "" {
 		t.PendingOrderID = order.ID
 	}
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, lot_method, fee, last_price, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.PendingOrderID, string(t.LotMethod), t.Fee, t.LastPrice, atStr); err != nil {
+	if err := execInsertTrade(ctx, tx, t, at); err != nil {
 		return err
 	}
 	if err := applyLotOps(ctx, tx, lots, t.ID, at); err != nil {
@@ -1713,10 +1699,7 @@ func (s *SQLite) ExecuteOCOFill(ctx context.Context, filled *domain.PendingOrder
 	if t.PendingOrderID == "" {
 		t.PendingOrderID = filled.ID
 	}
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO trades (id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id, lot_method, fee, last_price, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, t.ID, t.ClientID, string(t.Exchange), t.Symbol, string(t.Side), t.Quantity, t.Price, t.Notional, t.RealizedPnL, t.PendingOrderID, string(t.LotMethod), t.Fee, t.LastPrice, atStr); err != nil {
+	if err := execInsertTrade(ctx, tx, t, at); err != nil {
 		return err
 	}
 	if err := applyLotOps(ctx, tx, lots, t.ID, at); err != nil {
@@ -1801,7 +1784,8 @@ const pendingOrderSelect = `
 		created_at, updated_at, filled_at, canceled_at, fill_trade_id, fill_price, reject_reason, cancel_reason,
 		COALESCE(oco_group_id, ''), COALESCE(oco_peer_id, ''),
 		COALESCE(trail_type, ''), COALESCE(trail_value, 0), COALESCE(trail_peak, 0),
-		COALESCE(bracket_id, ''), COALESCE(bracket_role, ''), COALESCE(lot_method, 'fifo')
+		COALESCE(bracket_id, ''), COALESCE(bracket_role, ''), COALESCE(lot_method, 'fifo'),
+		COALESCE(situation_json, '')
 	FROM pending_orders`
 
 type scannable interface {
@@ -1810,18 +1794,19 @@ type scannable interface {
 
 func scanPendingOrder(row scannable) (*domain.PendingOrder, error) {
 	var o domain.PendingOrder
-	var ex, typ, side, tif, st, cAt, uAt, lotMethod string
+	var ex, typ, side, tif, st, cAt, uAt, lotMethod, situation string
 	var filledAt, canceledAt, expiresAt sql.NullString
 	if err := row.Scan(
 		&o.ID, &o.ClientID, &ex, &o.Symbol, &typ, &side, &o.Quantity, &o.FilledQuantity, &o.RemainingQuantity,
 		&o.TriggerPrice, &o.ReservedCash, &o.ReservedQuantity, &tif, &expiresAt, &st,
 		&cAt, &uAt, &filledAt, &canceledAt, &o.FillTradeID, &o.FillPrice, &o.RejectReason, &o.CancelReason,
 		&o.OCOGroupID, &o.OCOPeerID, &o.TrailType, &o.TrailValue, &o.TrailPeak,
-		&o.BracketID, &o.BracketRole, &lotMethod,
+		&o.BracketID, &o.BracketRole, &lotMethod, &situation,
 	); err != nil {
 		return nil, err
 	}
 	o.LotMethod, _ = domain.NormalizeLotMethod(lotMethod)
+	o.Situation = unmarshalSituation(situation)
 	o.Exchange = domain.Exchange(ex)
 	o.Type = domain.PendingOrderType(typ)
 	o.Side = domain.TradeSide(side)

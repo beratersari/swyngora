@@ -84,20 +84,15 @@ func (s *SQLite) txInsertIdempotency(ctx context.Context, tx *sql.Tx) error {
 func (s *SQLite) GetTrade(ctx context.Context, clientID, id string) (*domain.Trade, error) {
 	row := s.db.QueryRowContext(ctx, `
 		SELECT id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id,
-		       COALESCE(lot_method, ''), COALESCE(fee, 0), COALESCE(last_price, 0), created_at
+		       COALESCE(lot_method, ''), COALESCE(fee, 0), COALESCE(last_price, 0), COALESCE(situation_json, ''), created_at
 		FROM trades WHERE client_id = ? AND id = ?
 	`, clientID, id)
-	var t domain.Trade
-	var ex, side, cAt, lotMethod string
-	if err := row.Scan(&t.ID, &t.ClientID, &ex, &t.Symbol, &side, &t.Quantity, &t.Price, &t.Notional, &t.RealizedPnL, &t.PendingOrderID, &lotMethod, &t.Fee, &t.LastPrice, &cAt); err != nil {
+	t, err := scanTrade(row)
+	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, domain.ErrNotFound
 		}
 		return nil, err
 	}
-	t.LotMethod, _ = domain.NormalizeLotMethod(lotMethod)
-	t.Exchange = domain.Exchange(ex)
-	t.Side = domain.TradeSide(side)
-	t.CreatedAt = parseTime(cAt)
 	return &t, nil
 }

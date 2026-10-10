@@ -647,5 +647,35 @@
     "successSell": "Kağıt satım doldu",
     "failed": "Kağıt emir başarısız",
     "availableCash": "Kullanılabilir nakit {{amount}}"
+  },
+  "situation": {
+    "title": "Durum",
+    "loading": "Birleşik bant okunuyor…",
+    "priceCvd": {
+      "price_up_cvd_down": "Fiyat yükselirken vadeli CVD düşüyor.",
+      "price_down_cvd_up": "Fiyat düşerken vadeli CVD yükseliyor.",
+      "agrees": "Fiyat ile vadeli CVD aynı yönde.",
+      "missing": "Fiyat ve CVD, {{venues}} bandı kapatana kadar boş kalır."
+    },
+    "openInterest": {
+      "opened": "Açık pozisyon son bir saatte artıyor.",
+      "closed": "Açık pozisyon son bir saatte kapanıyor.",
+      "flat": "Açık pozisyon son bir saatte yatay.",
+      "missing": "Açık pozisyon, {{venues}} son saati verene kadar boş kalır."
+    },
+    "liquidation": {
+      "long": "Fiyatın altındaki long likidasyonlar daha yakın (%{{pct}}).",
+      "short": "Fiyatın üstündeki short likidasyonlar daha yakın (%{{pct}}).",
+      "none": "İki tarafta da tahmini likidasyon cebi yok.",
+      "missing": "Daha yakın likidasyon tarafı, {{venues}} haritayı verene kadar boş kalır."
+    },
+    "venues": {
+      "binance": "Binance",
+      "bybit": "Bybit",
+      "okx": "OKX",
+      "hyperliquid": "Hyperliquid",
+      "two": "{{a}} ve {{b}}",
+      "many": "{{list}} ve {{last}}"
+    }
   }
 }

@@ -647,5 +647,35 @@
     "successSell": "Paper sell filled",
     "failed": "Paper order failed",
     "availableCash": "Available cash {{amount}}"
+  },
+  "situation": {
+    "title": "Situation",
+    "loading": "Reading the combined tape…",
+    "priceCvd": {
+      "price_up_cvd_down": "Price is rising while futures CVD is falling.",
+      "price_down_cvd_up": "Price is falling while futures CVD is rising.",
+      "agrees": "Price and futures CVD are moving together.",
+      "missing": "Price versus CVD stays blank until {{venues}} cover the tape."
+    },
+    "openInterest": {
+      "opened": "Open interest is building over the last hour.",
+      "closed": "Open interest is closing over the last hour.",
+      "flat": "Open interest is flat over the last hour.",
+      "missing": "Open interest stays blank until {{venues}} have the last hour."
+    },
+    "liquidation": {
+      "long": "Long liquidations below price are closer ({{pct}}%).",
+      "short": "Short liquidations above price are closer ({{pct}}%).",
+      "none": "No estimated liquidation pocket sits on either side.",
+      "missing": "The closer liquidation side stays blank until {{venues}} have a map."
+    },
+    "venues": {
+      "binance": "Binance",
+      "bybit": "Bybit",
+      "okx": "OKX",
+      "hyperliquid": "Hyperliquid",
+      "two": "{{a}} and {{b}}",
+      "many": "{{list}}, and {{last}}"
+    }
   }
 }

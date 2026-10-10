@@ -1,0 +1,59 @@
+import type { CoinSituation } from '@/libs/api';
+
+type Translate = (key: string, options?: Record<string, unknown>) => string;
+
+export function situationVenueList(ids: string[] | undefined, t: Translate): string {
+  const names = (ids ?? [])
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .map((id) => t(`detail:situation.venues.${id}`, { defaultValue: id }));
+  if (names.length <= 1) return names[0] ?? '';
+  if (names.length === 2) {
+    return t('detail:situation.venues.two', { a: names[0], b: names[1] });
+  }
+  return t('detail:situation.venues.many', {
+    list: names.slice(0, -1).join(', '),
+    last: names[names.length - 1],
+  });
+}
+
+/** Three sentences. A missing venue keeps that sentence blank of a number and names who is absent. */
+export function situationLines(report: CoinSituation | null | undefined, t: Translate): string[] {
+  if (!report) return [];
+  const lines: string[] = [];
+  if (report.priceCvd?.kind) {
+    lines.push(t(`detail:situation.priceCvd.${report.priceCvd.kind}`, { defaultValue: report.priceCvd.kind }));
+  } else if ((report.priceCvdMissing ?? []).length > 0) {
+    lines.push(
+      t('detail:situation.priceCvd.missing', { venues: situationVenueList(report.priceCvdMissing, t) }),
+    );
+  }
+  if (report.openInterest?.flow) {
+    lines.push(
+      t(`detail:situation.openInterest.${report.openInterest.flow}`, {
+        defaultValue: report.openInterest.flow,
+      }),
+    );
+  } else if ((report.openInterestMissing ?? []).length > 0) {
+    lines.push(
+      t('detail:situation.openInterest.missing', {
+        venues: situationVenueList(report.openInterestMissing, t),
+      }),
+    );
+  }
+  if (report.liquidation?.side) {
+    lines.push(
+      t(`detail:situation.liquidation.${report.liquidation.side}`, {
+        pct: report.liquidation.distancePct ?? 0,
+        defaultValue: report.liquidation.side,
+      }),
+    );
+  } else if ((report.liquidationMissing ?? []).length > 0) {
+    lines.push(
+      t('detail:situation.liquidation.missing', {
+        venues: situationVenueList(report.liquidationMissing, t),
+      }),
+    );
+  }
+  return lines;
+}

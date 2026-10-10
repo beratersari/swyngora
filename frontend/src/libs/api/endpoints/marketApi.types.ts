@@ -264,6 +264,32 @@ export type FearGreedWindow = {
   complete?: boolean;
   sampleTime?: string;
 };
+export type CoinSituationPriceCVD = {
+  kind?: 'price_up_cvd_down' | 'price_down_cvd_up' | 'agrees';
+};
+export type CoinSituationOpenInterest = {
+  flow?: 'opened' | 'closed' | 'flat';
+  window?: string;
+};
+export type CoinSituationLiquidation = {
+  side?: 'long' | 'short' | 'none';
+  distancePct?: number;
+};
+export type CoinSituation = {
+  symbol?: string;
+  asOf?: string;
+  priceCvd?: CoinSituationPriceCVD | null;
+  priceCvdMissing?: string[];
+  openInterest?: CoinSituationOpenInterest | null;
+  openInterestMissing?: string[];
+  liquidation?: CoinSituationLiquidation | null;
+  liquidationMissing?: string[];
+  note?: string;
+};
+export type CoinSituationQuery = {
+  symbol: string;
+};
+
 export type FearGreedReport = {
   score?: number;
   level?: string;

@@ -71,6 +71,7 @@ BOOK_FLOW_ANALYTICS = frozenset(
         "get_basis",
         "get_price_correlation",
         "get_market_breadth",
+        "get_coin_situation",
         "get_fear_greed",
         "get_price_volatility",
         "get_market_snapshot",

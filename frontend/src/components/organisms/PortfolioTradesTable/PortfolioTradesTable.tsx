@@ -4,13 +4,14 @@ import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
 import { DeskEmpty } from '@/components/molecules/DeskEmpty';
+import { situationLines } from '@/components/molecules/CoinSituation';
 import type { PaperTrade } from '@/libs/api';
 import { formatDateTime, formatPrice, formatSymbolDisplay } from '@/libs/utils';
 import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
 import type { PortfolioTradesTableProps } from './PortfolioTradesTable.types';
 
 export function PortfolioTradesTable({ items, loading, onOpen }: PortfolioTradesTableProps) {
-  const { t } = useTranslation('portfolio');
+  const { t } = useTranslation(['portfolio', 'detail']);
   const columns: ColumnsType<PaperTrade> = [
     {
       title: t('trades.time'),
@@ -63,6 +64,23 @@ export function PortfolioTradesTable({ items, loading, onOpen }: PortfolioTrades
       key: 'f',
       align: 'right',
       render: (v: number | undefined) => formatPrice(v),
+    },
+    {
+      title: t('trades.situation'),
+      key: 'situation',
+      render: (_, row) => {
+        const lines = situationLines(row.situation, t);
+        if (lines.length === 0) return '—';
+        return (
+          <div>
+            {lines.map((line) => (
+              <Text key={line} variant="caption">
+                {line}
+              </Text>
+            ))}
+          </div>
+        );
+      },
     },
     {
       title: t('trades.realized'),

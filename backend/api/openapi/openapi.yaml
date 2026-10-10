@@ -2469,6 +2469,44 @@ paths:
                 type: object
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/situation:
+    get:
+      summary: Short coin read from the combined futures tape
+      description: |
+        One read for a coin, built from data Swyngora already collects.
+        Three clauses:
+
+        - `priceCvd.kind`: `price_up_cvd_down`, `price_down_cvd_up`, or `agrees`
+          on the combined futures tape.
+        - `openInterest.flow`: `opened`, `closed`, or `flat` over the last hour.
+        - `liquidation.side`: `long` when the nearest estimated long-liquidation
+          pocket below last is closer, `short` when the nearest short pocket
+          above last is closer, `none` when the map has no pocket.
+          `distancePct` is that distance from last.
+
+        A clause is omitted, and `priceCvdMissing`, `openInterestMissing`, or
+        `liquidationMissing` names Binance, Bybit, or OKX, when that venue does
+        not cover it. A missing venue is not treated as zero. The same object
+        is stored on a paper fill at the moment the order is placed.
+      operationId: getMarketSituation
+      tags: [Market]
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string }
+          description: Pair such as BTCUSDT
+      responses:
+        '200':
+          description: Combined price-versus-CVD, 1h open interest, and closer liquidation side
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoinSituation'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/volatility:
     get:
       summary: Price volatility vs recent history and BTC/ETH
@@ -13745,7 +13783,41 @@ components:
           items: { $ref: '#/components/schemas/TaxLotFill' }
         fee: { type: number, description: Quote-currency taker fee }
         lastPrice: { type: number, description: Last/mark before slippage (0 if not stored) }
+        situation:
+          $ref: '#/components/schemas/CoinSituation'
         createdAt: { type: string, format: date-time }
+    CoinSituation:
+      type: object
+      description: Short combined read. A missing clause lists the venues that did not cover it.
+      properties:
+        symbol: { type: string }
+        asOf: { type: string, format: date-time }
+        priceCvd:
+          type: object
+          properties:
+            kind:
+              type: string
+              enum: [price_up_cvd_down, price_down_cvd_up, agrees]
+        priceCvdMissing:
+          type: array
+          items: { type: string }
+        openInterest:
+          type: object
+          properties:
+            flow: { type: string, enum: [opened, closed, flat] }
+            window: { type: string }
+        openInterestMissing:
+          type: array
+          items: { type: string }
+        liquidation:
+          type: object
+          properties:
+            side: { type: string, enum: [long, short, none] }
+            distancePct: { type: number }
+        liquidationMissing:
+          type: array
+          items: { type: string }
+        note: { type: string }
     PaperTradingCost:
       type: object
       properties:

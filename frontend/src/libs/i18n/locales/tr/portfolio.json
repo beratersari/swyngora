@@ -188,7 +188,8 @@
     "fee": "Komisyon",
     "notional": "Nominal",
     "realized": "Gerçekleşen",
-    "time": "Zaman"
+    "time": "Zaman",
+    "situation": "Durum"
   },
   "movements": {
     "title": "Nakit defteri",

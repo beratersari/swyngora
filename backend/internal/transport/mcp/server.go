@@ -117,6 +117,7 @@ type DataPort interface {
 	GetCorrelation(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetBreadth(ctx context.Context, exchange string, limit int) (json.RawMessage, error)
 	GetFearGreed(ctx context.Context) (json.RawMessage, error)
+	GetCoinSituation(ctx context.Context, symbol string) (json.RawMessage, error)
 	GetVolatility(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetSnapshot(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLevels(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -2008,6 +2009,21 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("limit", mcp.Description("How many liquid coins to include (default 80, max 150)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.GetBreadth(ctx, req.GetString("exchange", ""), req.GetInt("limit", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_coin_situation",
+		mcp.WithDescription("Short read for one coin from data Swyngora already has. priceCvd.kind is price_up_cvd_down, price_down_cvd_up, or agrees. openInterest.flow is opened, closed, or flat over 1h. liquidation.side is long (longs below last are closer), short (shorts above last are closer), or none. A clause is omitted and its *Missing list names Binance, Bybit, or OKX when that venue does not cover it. The same read is stored on a paper fill placed while it is current. Not financial advice."),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.GetCoinSituation(ctx, symbol)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

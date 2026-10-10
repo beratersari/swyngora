@@ -188,7 +188,8 @@
     "fee": "Fee",
     "notional": "Notional",
     "realized": "Realized",
-    "time": "Time"
+    "time": "Time",
+    "situation": "Situation"
   },
   "movements": {
     "title": "Cash ledger",

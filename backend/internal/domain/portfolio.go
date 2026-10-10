@@ -102,7 +102,10 @@ type Trade struct {
 	LotFills       []TaxLotFill // sell allocations; not required on list
 	Fee            float64      // quote-currency taker fee
 	LastPrice      float64      // last/mark before slippage (0 = not stored)
-	CreatedAt      time.Time
+	// Situation is the coin-page read at the moment the order was placed.
+	// A pending fill keeps the read from placement, not from the later fill.
+	Situation *CoinSituation
+	CreatedAt time.Time
 }
 
 // PendingOrderType is a resting paper order kind.
@@ -197,6 +200,8 @@ type PendingOrder struct {
 	TrailType string
 	// TrailValue is the trail distance (fraction for percent, price units for offset).
 	TrailValue float64
+	// Situation is the coin-page read captured when this resting order was placed.
+	Situation *CoinSituation
 	// TrailPeak is the high-water mark for a sell trailing stop (only ratchets up).
 	TrailPeak float64
 	// BracketID links entry + take-profit + stop-loss of a bracket order.

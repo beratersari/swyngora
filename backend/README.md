@@ -120,6 +120,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/market/correlation` | How similarly a coin moves with BTC and ETH (1h / 4h / 24h) |
 | `GET` | `/api/v1/market/breadth` | How many followed coins are up vs down (1h / 4h / 24h) |
 | `GET` | `/api/v1/market/fear-greed` | 0–100 fear and greed from our own tape (breadth, BTC move, volatility, funding, long/short, liquidations, perp book, taker flow), which input moved the score, and stored past scores |
+| `GET` | `/api/v1/market/situation` | Combined price-versus-CVD, 1h open interest, and the closer liquidation side. A missing venue is named and that clause stays blank. Paper fills store the same read |
 | `GET` | `/api/v1/market/volatility` | How much a coin moved (range + vs normal / BTC / ETH) |
 | `GET` | `/api/v1/market/snapshot` | Price, volume, mcap, OI, funding, LS, and taker flow together |
 | `GET` | `/api/v1/market/levels` | Support and resistance areas plus breakout strength |
