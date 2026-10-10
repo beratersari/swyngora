@@ -752,8 +752,10 @@ export interface paths {
          *     Sources: **Binance USD-M** (`/fapi/v1/openInterest` + 5m hist),
          *     **Bybit linear perpetual**, and **OKX USDT-swap**.
          *     `contracts` is venue-published size in the base asset; `value` is USDT
-         *     notional. `exchange=all` (default) sums venues and keeps per-venue
-         *     rows. `complete` is false
+         *     notional. `exchange=all` (default) sums those three venues and keeps per-venue
+         *     rows. `exchange=hyperliquid` is that venue alone. Its `value` is the mark
+         *     times coin size. The margin is USDC, lined up with the USDT name, and
+         *     it is not inside `exchange=all`. `complete` is false
          *     when the historical sample is missing or older than the window slack.
          *     The `funding` object is the predicted next funding rate plus recent
          *     settlements (same payload as `/funding-rate`). `longShort` is the
@@ -878,7 +880,12 @@ export interface paths {
          *     the farthest unusual reading versus that coin's own samples.
          *     `exchange=all` (default) reads Binance
          *     USD-M, Bybit linear, and OKX USDT-swap. A combined number is present
-         *     only when every expected venue is fresh for that column. Order count
+         *     only when every expected venue is fresh for that column.
+         *     `exchange=hyperliquid` fills the mark, open interest, and the hourly
+         *     funding rate. Open interest is the mark times coin size. The margin
+         *     is USDC, lined up with the USDT name. Liquidation, crowd, tape, CVD,
+         *     print size, order count, and book columns stay blank and are named
+         *     unsupported. Hyperliquid is not part of `exchange=all`. Order count
          *     sums aggressive print counts over 15 minutes and stays blank when any
          *     venue's tape does not cover that window. Unusual names one venue's
          *     standout and does not average venues. A coin with no standout stays
@@ -897,6 +904,42 @@ export interface paths {
          *     for that coin. Informational only.
          */
         get: operations["getMarketDerivativesBoard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/derivatives-grid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Liquid perpetual time grid
+         * @description Coins down the side and stored time across, for the same liquid USDT
+         *     perpetuals as the derivatives board (default 36, max 100). `range=24h`
+         *     is one column per clock hour. `range=7d` is one column per UTC day.
+         *     `metric` is `funding` (latest settled rate in the cell, or the latest
+         *     predicted rate when that cell has no settlement), `oi` (percent change
+         *     in open interest from the previous cell), `cvd` (aggressive buy minus
+         *     sell), or `liquidations` (stored force-order notional). A watched hour
+         *     with no liquidation print is a real zero. `exchange=all` reads Binance
+         *     USD-M, Bybit linear, and OKX USDT-swap. A cell is present only when
+         *     every expected venue has that column. `missing` names a venue that is
+         *     absent, and that venue is not counted as zero.
+         *     `exchange=hyperliquid` publishes mark, open interest, and hourly funding
+         *     only. It is not folded into `exchange=all`. CVD and liquidation cells
+         *     stay blank and name Hyperliquid. They are not zeros. The open column stays
+         *     blank when its newest sample is older than five minutes, or when the
+         *     tape does not reach both edges of the column. `heat` on a liquidation
+         *     cell is that column versus the coin's own median. Informational only.
+         */
+        get: operations["getMarketDerivativesGrid"];
         put?: never;
         post?: never;
         delete?: never;
@@ -957,7 +1000,8 @@ export interface paths {
          *     **Binance USD-M**, **Bybit linear**, and **OKX USDT-swap**. `rate` is decimal
          *     (`0.0001` = 0.01%); `ratePct` is percent. `payer` is who pays at
          *     settlement (`long` = longs pay shorts). Combined `exchange=all` keeps
-         *     each venue as its own row. `pressure` is **OI-weighted** combined
+         *     each venue as its own row. `exchange=hyperliquid` is the hourly rate
+         *     and is not inside `pressure` or `exchange=all`. `pressure` is **OI-weighted** combined
          *     predicted funding (USDT open-interest share), so an 8B book at +0.01%
          *     outweighs a 1B book at −0.01%. `pressureHistory` / `pressureWindows`
          *     (1h/4h/24h) / `pressureMoves` show how that blend changed. `limit` is
@@ -1230,7 +1274,9 @@ export interface paths {
          * Durable futures history
          * @description Stored open interest, funding, long/short, or liquidation rows for
          *     Binance USD-M, Bybit linear, and OKX USDT-swap. Written on a background
-         *     interval and (for liquidations) as events arrive. Duplicates are ignored.
+         *     interval and (for liquidations) as events arrive. `exchange=hyperliquid`
+         *     is sampled open interest and settled hourly funding. It has no long/short
+         *     ratio and no liquidation history. Duplicates are ignored.
          *     One venue failing does not drop the other. Survives process restarts.
          *     Items are newest first. Open interest rows carry contracts and value.
          *     Funding rows carry rate, ratePct, and predicted. Long/short rows carry
@@ -1276,7 +1322,10 @@ export interface paths {
          *     candle starts the sum at zero. A venue whose first print is later is
          *     named in lateLiquidations and its line starts at that print. A venue
          *     with no prints in the window is named in missingLiquidations. A
-         *     missing venue is not counted as zero. bucket is 5m, 30m, 2h, or 4h.
+         *     missing venue is not counted as zero. `exchange=all` includes Hyperliquid
+         *     on open interest and hourly funding when a sample exists. Hyperliquid
+         *     publishes no liquidation prints, so it is not named in missingLiquidations.
+         *     bucket is 5m, 30m, 2h, or 4h.
          *     Omit bucket and the step follows from..to the same way the coin chart
          *     does. The window is capped at 90 days. Informational only — not
          *     financial advice.
@@ -1485,6 +1534,40 @@ export interface paths {
          *     (about every 15 minutes).
          */
         get: operations["getFearGreed"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/situation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Short coin read from the combined futures tape
+         * @description One read for a coin, built from data Swyngora already collects.
+         *     Three clauses:
+         *
+         *     - `priceCvd.kind`: `price_up_cvd_down`, `price_down_cvd_up`, or `agrees`
+         *       on the combined futures tape.
+         *     - `openInterest.flow`: `opened`, `closed`, or `flat` over the last hour.
+         *     - `liquidation.side`: `long` when the nearest estimated long-liquidation
+         *       pocket below last is closer, `short` when the nearest short pocket
+         *       above last is closer, `none` when the map has no pocket.
+         *       `distancePct` is that distance from last.
+         *
+         *     A clause is omitted, and `priceCvdMissing`, `openInterestMissing`, or
+         *     `liquidationMissing` names Binance, Bybit, or OKX, when that venue does
+         *     not cover it. A missing venue is not treated as zero. The same object
+         *     is stored on a paper fill at the moment the order is placed.
+         */
+        get: operations["getMarketSituation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3445,6 +3528,10 @@ export interface paths {
         /**
          * Get paper portfolio snapshot
          * @description Cash, open positions (mark-to-market), realized and unrealized P&L.
+         *     Each open crypto position includes entrySituation: the coin read stored on
+         *     the newest buy that still has remaining quantity. An equity omits it.
+         *     A buy that stored no read leaves the field off. The live read is
+         *     GET /api/v1/market/situation.
          *     When the client has more than one book, pass portfolioId (or X-Portfolio-Id).
          */
         get: operations["getPortfolio"];
@@ -8064,6 +8151,39 @@ export interface components {
             summary?: string;
             note?: string;
         };
+        /** @description Coins by time. A cell value is omitted when that column is not definite. */
+        MarketDerivativesGrid: {
+            exchange?: string;
+            /** @description funding | oi | cvd | liquidations */
+            metric?: string;
+            /** @description 24h | 7d */
+            range?: string;
+            stepSec?: number;
+            /** Format: date-time */
+            asOf?: string;
+            columns?: string[];
+            rows?: components["schemas"]["MarketDerivativesGridRow"][];
+            universe?: number;
+            note?: string;
+        };
+        MarketDerivativesGridRow: {
+            symbol?: string;
+            base?: string;
+            cells?: components["schemas"]["MarketDerivativesGridCell"][];
+        };
+        MarketDerivativesGridCell: {
+            /** Format: date-time */
+            time?: string;
+            /** @description Omitted when definite is false, so a blank is not a zero. */
+            value?: number;
+            text?: string;
+            /** @description Liquidation notional divided by this coin's median definite cell. Omitted until three definite cells exist. */
+            heat?: number;
+            definite?: boolean;
+            missing?: string[];
+            /** @description oi | equal */
+            weight?: string;
+        };
         MarketDerivativesCoin: {
             symbol?: string;
             base?: string;
@@ -9371,13 +9491,37 @@ export interface components {
             realizedPnLTotal?: number;
             /** @description equity minus contributedCapital (deposits/withdrawals are not P&L) */
             totalPnL?: number;
-            positions?: Record<string, never>[];
+            positions?: components["schemas"]["PortfolioPosition"][];
             marginPositions?: components["schemas"]["MarginPosition"][];
             note?: string;
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
             updatedAt?: string;
+        };
+        /**
+         * @description Open spot holding. entrySituation is the coin read stored on the newest
+         *     buy that still has remaining quantity. Equities omit it. The live read
+         *     is GET /api/v1/market/situation.
+         */
+        PortfolioPosition: {
+            exchange?: string;
+            symbol?: string;
+            quantity?: number;
+            reservedQuantity?: number;
+            availableQuantity?: number;
+            avgCost?: number;
+            markPrice?: number;
+            marketValue?: number;
+            unrealizedPnL?: number;
+            costBasis?: number;
+            lots?: components["schemas"]["TaxLot"][];
+            entrySituation?: components["schemas"]["CoinSituation"];
+            /**
+             * Format: date-time
+             * @description When the buy that stored entrySituation was placed
+             */
+            entryAt?: string;
         };
         /** @description One remaining (or closed) buy lot used for FIFO/LIFO realized PnL */
         TaxLot: {
@@ -9424,8 +9568,33 @@ export interface components {
             fee?: number;
             /** @description Last/mark before slippage (0 if not stored) */
             lastPrice?: number;
+            situation?: components["schemas"]["CoinSituation"];
             /** Format: date-time */
             createdAt?: string;
+        };
+        /** @description Short combined read. A missing clause lists the venues that did not cover it. */
+        CoinSituation: {
+            symbol?: string;
+            /** Format: date-time */
+            asOf?: string;
+            priceCvd?: {
+                /** @enum {string} */
+                kind?: "price_up_cvd_down" | "price_down_cvd_up" | "agrees";
+            };
+            priceCvdMissing?: string[];
+            openInterest?: {
+                /** @enum {string} */
+                flow?: "opened" | "closed" | "flat";
+                window?: string;
+            };
+            openInterestMissing?: string[];
+            liquidation?: {
+                /** @enum {string} */
+                side?: "long" | "short" | "none";
+                distancePct?: number;
+            };
+            liquidationMissing?: string[];
+            note?: string;
         };
         PaperTradingCost: {
             /** @enum {string} */
@@ -11592,7 +11761,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | okx | all (default all) */
+                /** @description binance | bybit | okx | hyperliquid | all (default all) */
                 exchange?: string;
             };
             header?: never;
@@ -11706,7 +11875,7 @@ export interface operations {
     getMarketDerivativesBoard: {
         parameters: {
             query?: {
-                /** @description binance | bybit | okx | all (default all) */
+                /** @description binance | bybit | okx | hyperliquid | all (default all) */
                 exchange?: string;
                 /** @description How many liquid perpetuals to include (default 36, min 5, max 100) */
                 limit?: number;
@@ -11724,6 +11893,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketDerivativesBoard"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketDerivativesGrid: {
+        parameters: {
+            query?: {
+                /** @description binance | bybit | okx | hyperliquid | all (default all) */
+                exchange?: string;
+                /** @description funding | oi | cvd | liquidations (default funding) */
+                metric?: string;
+                /** @description 24h | 7d (default 24h) */
+                range?: string;
+                /** @description How many liquid perpetuals to include (default 36, min 5, max 100) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Coin-by-time grid */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketDerivativesGrid"];
                 };
             };
             400: components["responses"]["Error"];
@@ -11765,7 +11965,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | okx | all (default all) */
+                /** @description binance | bybit | okx | hyperliquid | all (default all) */
                 exchange?: string;
                 /** @description Settled history size (1–30, default 12) */
                 limit?: number;
@@ -12437,6 +12637,31 @@ export interface operations {
                     "application/json": Record<string, never>;
                 };
             };
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketSituation: {
+        parameters: {
+            query: {
+                /** @description Pair such as BTCUSDT */
+                symbol: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Combined price-versus-CVD, 1h open interest, and closer liquidation side */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoinSituation"];
+                };
+            };
+            400: components["responses"]["Error"];
             502: components["responses"]["Error"];
         };
     };

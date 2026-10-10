@@ -3528,6 +3528,10 @@ export interface paths {
         /**
          * Get paper portfolio snapshot
          * @description Cash, open positions (mark-to-market), realized and unrealized P&L.
+         *     Each open crypto position includes entrySituation: the coin read stored on
+         *     the newest buy that still has remaining quantity. An equity omits it.
+         *     A buy that stored no read leaves the field off. The live read is
+         *     GET /api/v1/market/situation.
          *     When the client has more than one book, pass portfolioId (or X-Portfolio-Id).
          */
         get: operations["getPortfolio"];
@@ -9487,13 +9491,37 @@ export interface components {
             realizedPnLTotal?: number;
             /** @description equity minus contributedCapital (deposits/withdrawals are not P&L) */
             totalPnL?: number;
-            positions?: Record<string, never>[];
+            positions?: components["schemas"]["PortfolioPosition"][];
             marginPositions?: components["schemas"]["MarginPosition"][];
             note?: string;
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
             updatedAt?: string;
+        };
+        /**
+         * @description Open spot holding. entrySituation is the coin read stored on the newest
+         *     buy that still has remaining quantity. Equities omit it. The live read
+         *     is GET /api/v1/market/situation.
+         */
+        PortfolioPosition: {
+            exchange?: string;
+            symbol?: string;
+            quantity?: number;
+            reservedQuantity?: number;
+            availableQuantity?: number;
+            avgCost?: number;
+            markPrice?: number;
+            marketValue?: number;
+            unrealizedPnL?: number;
+            costBasis?: number;
+            lots?: components["schemas"]["TaxLot"][];
+            entrySituation?: components["schemas"]["CoinSituation"];
+            /**
+             * Format: date-time
+             * @description When the buy that stored entrySituation was placed
+             */
+            entryAt?: string;
         };
         /** @description One remaining (or closed) buy lot used for FIFO/LIFO realized PnL */
         TaxLot: {

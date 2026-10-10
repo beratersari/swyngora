@@ -656,6 +656,10 @@
   },
   "situation": {
     "title": "Durum",
+    "compare": "Pozisyon okuması",
+    "entered": "Girişte",
+    "now": "Şimdi",
+    "nowLoading": "Şimdiki bant okunuyor…",
     "loading": "Birleşik bant okunuyor…",
     "priceCvd": {
       "price_up_cvd_down": "Fiyat yükselirken vadeli CVD düşüyor.",

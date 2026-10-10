@@ -18,6 +18,8 @@ The coin page shows the same clauses in English and Turkish, above the tabs. Equ
 
 A paper market order, limit, stop, bracket, or OCO stores this read at the moment the order is placed. A later fill keeps that read. The portfolio trade history shows it beside the fill. Nasdaq and BIST orders do not call the futures read.
 
+An open crypto position shows two reads. **Entered as** is the read stored on the newest buy that still has remaining quantity. Selling that buy, lifo or fifo, moves the line to the newest buy that remains. A buy that stored no read leaves the line off, even when an older lot has one. **Now** is the live `GET /api/v1/market/situation` for that symbol. The same pair is on the coin Trade tab when the selected book holds the coin. An equity position stays on size and profit.
+
 ## Where the code lives
 
 - `backend/internal/domain/situation.go` builds the read.
@@ -30,11 +32,11 @@ A paper market order, limit, stop, bracket, or OCO stores this read at the momen
 
 ```bash
 cd backend
-go test ./internal/domain/ -run TestBuildCoinSituation
-go test ./internal/service/portfolio/ -run 'TestPlaceOrder_StoresCoinSituation|TestPlacePendingOrder_Keeps|TestPlaceOrder_Equity'
+go test ./internal/domain/ -run 'TestBuildCoinSituation|TestLatestOpenLot'
+go test ./internal/service/portfolio/ -run 'TestPlaceOrder_StoresCoinSituation|TestPlacePendingOrder_Keeps|TestPlaceOrder_Equity|TestView_EntrySituation'
 
 cd frontend
-npx vitest run src/components/molecules/CoinSituation/CoinSituation.test.tsx
+npx vitest run src/components/molecules/CoinSituation/CoinSituation.test.tsx src/components/molecules/PositionSituation/PositionSituation.test.tsx src/components/organisms/PortfolioPositionsTable/PortfolioPositionsTable.test.tsx
 ```
 
 Open `/markets/binance/BTCUSDT`. The situation card sits under the stats. Place a paper buy, then open the portfolio trade history. The fill shows the same kind of sentences.

@@ -53,17 +53,19 @@ type portfolioDTO struct {
 }
 
 type positionDTO struct {
-	Exchange          string      `json:"exchange"`
-	Symbol            string      `json:"symbol"`
-	Quantity          float64     `json:"quantity"`
-	ReservedQuantity  float64     `json:"reservedQuantity"`
-	AvailableQuantity float64     `json:"availableQuantity"`
-	AvgCost           float64     `json:"avgCost"`
-	MarkPrice         float64     `json:"markPrice"`
-	MarketValue       float64     `json:"marketValue"`
-	UnrealizedPnL     float64     `json:"unrealizedPnL"`
-	CostBasis         float64     `json:"costBasis"`
-	Lots              []taxLotDTO `json:"lots,omitempty"`
+	Exchange          string                `json:"exchange"`
+	Symbol            string                `json:"symbol"`
+	Quantity          float64               `json:"quantity"`
+	ReservedQuantity  float64               `json:"reservedQuantity"`
+	AvailableQuantity float64               `json:"availableQuantity"`
+	AvgCost           float64               `json:"avgCost"`
+	MarkPrice         float64               `json:"markPrice"`
+	MarketValue       float64               `json:"marketValue"`
+	UnrealizedPnL     float64               `json:"unrealizedPnL"`
+	CostBasis         float64               `json:"costBasis"`
+	Lots              []taxLotDTO           `json:"lots,omitempty"`
+	EntrySituation    *domain.CoinSituation `json:"entrySituation,omitempty"`
+	EntryAt           string                `json:"entryAt,omitempty"`
 }
 
 type taxLotDTO struct {
@@ -107,13 +109,17 @@ type tradeDTO struct {
 func portfolioViewDTO(v *domain.PortfolioView) portfolioDTO {
 	pos := make([]positionDTO, 0, len(v.Positions))
 	for _, p := range v.Positions {
-		pos = append(pos, positionDTO{
+		row := positionDTO{
 			Exchange: string(p.Exchange), Symbol: p.Symbol, Quantity: p.Quantity,
 			ReservedQuantity: p.ReservedQuantity, AvailableQuantity: p.AvailableQuantity,
 			AvgCost: p.AvgCost, MarkPrice: p.MarkPrice, MarketValue: p.MarketValue,
 			UnrealizedPnL: p.UnrealizedPnL, CostBasis: p.CostBasis,
-			Lots: taxLotsDTO(p.Lots),
-		})
+			Lots: taxLotsDTO(p.Lots), EntrySituation: p.EntrySituation,
+		}
+		if !p.EntryAt.IsZero() {
+			row.EntryAt = p.EntryAt.UTC().Format(time.RFC3339Nano)
+		}
+		pos = append(pos, row)
 	}
 	mpos := make([]marginPositionDTO, 0, len(v.MarginPositions))
 	for i := range v.MarginPositions {

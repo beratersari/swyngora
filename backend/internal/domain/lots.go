@@ -10,9 +10,9 @@ import (
 
 // Lot matching methods for paper sells.
 const (
-	LotMethodFIFO LotMethod = "fifo"
-	LotMethodLIFO LotMethod = "lifo"
-	DefaultLotMethod        = LotMethodFIFO
+	LotMethodFIFO    LotMethod = "fifo"
+	LotMethodLIFO    LotMethod = "lifo"
+	DefaultLotMethod           = LotMethodFIFO
 )
 
 // LotMethod is fifo (oldest first) or lifo (newest first).
@@ -20,21 +20,49 @@ type LotMethod string
 
 // TaxLot is one buy remaining in a paper book (quantity may shrink on partial sells).
 type TaxLot struct {
-	ID                string
-	ClientID          string // book id
-	Exchange          Exchange
-	Symbol            string
-	Quantity          float64 // remaining
-	OriginalQuantity  float64
-	Price             float64 // unit cost
-	OpenedAt          time.Time
-	SourceTradeID     string
-	ClosedAt          *time.Time
+	ID               string
+	ClientID         string // book id
+	Exchange         Exchange
+	Symbol           string
+	Quantity         float64 // remaining
+	OriginalQuantity float64
+	Price            float64 // unit cost
+	OpenedAt         time.Time
+	SourceTradeID    string
+	ClosedAt         *time.Time
 }
 
 // Open reports remaining quantity above the flat epsilon.
 func (l TaxLot) Open() bool {
 	return l.Quantity > PositionEpsilon && l.ClosedAt == nil
+}
+
+// LatestOpenLot is the newest lot that still has remaining quantity.
+// A closed lot is ignored. Equal open times keep the greater source-trade id,
+// then the greater lot id, so the choice does not depend on slice order.
+func LatestOpenLot(lots []TaxLot) (TaxLot, bool) {
+	var best TaxLot
+	found := false
+	for _, lot := range lots {
+		if !lot.Open() {
+			continue
+		}
+		if !found || laterOpenLot(lot, best) {
+			best = lot
+			found = true
+		}
+	}
+	return best, found
+}
+
+func laterOpenLot(a, b TaxLot) bool {
+	if !a.OpenedAt.Equal(b.OpenedAt) {
+		return a.OpenedAt.After(b.OpenedAt)
+	}
+	if a.SourceTradeID != b.SourceTradeID {
+		return a.SourceTradeID > b.SourceTradeID
+	}
+	return a.ID > b.ID
 }
 
 // TaxLotFill is how much of one lot a sell consumed.

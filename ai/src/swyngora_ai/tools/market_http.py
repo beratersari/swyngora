@@ -6610,7 +6610,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         StructuredTool.from_function(
             get_portfolio,
             name="get_portfolio",
-            description="Get paper portfolio cash, positions, realized/unrealized P&L. Pass portfolio_id when the client has more than one book.",
+            description="Get paper portfolio cash, positions, realized/unrealized P&L. Each open crypto position includes entrySituation from the newest buy still held. The live read is get_coin_situation. Pass portfolio_id when the client has more than one book.",
             args_schema=PortfolioGetInput,
         ),
         StructuredTool.from_function(

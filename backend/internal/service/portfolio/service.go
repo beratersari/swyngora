@@ -79,6 +79,29 @@ func (s *Service) SetSituationSource(src SituationSource) {
 	}
 }
 
+// entrySituation is the read on the newest buy still open in this position.
+// Equities have no futures tape. A missing fill leaves the read blank.
+func (s *Service) entrySituation(ctx context.Context, bookID string, ex domain.Exchange, lots []domain.TaxLot) (*domain.CoinSituation, time.Time, error) {
+	if s == nil || s.store == nil || domain.IsEquityExchange(ex) {
+		return nil, time.Time{}, nil
+	}
+	lot, ok := domain.LatestOpenLot(lots)
+	if !ok || strings.TrimSpace(lot.SourceTradeID) == "" {
+		return nil, time.Time{}, nil
+	}
+	tr, err := s.store.GetTrade(ctx, bookID, lot.SourceTradeID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, time.Time{}, nil
+		}
+		return nil, time.Time{}, err
+	}
+	if tr == nil || tr.Situation == nil {
+		return nil, time.Time{}, nil
+	}
+	return tr.Situation, tr.CreatedAt, nil
+}
+
 // captureSituation reads the combined tape at order time.
 // Equities have no futures tape. A failed or slow read leaves the order without one.
 func (s *Service) captureSituation(ctx context.Context, ex domain.Exchange, symbol string) *domain.CoinSituation {
@@ -350,6 +373,11 @@ func (s *Service) buildView(ctx context.Context, p *domain.Portfolio, role domai
 		}
 		mv := pos.Quantity * mark
 		u := domain.UnrealizedPnL(pos.Quantity, pos.AvgCost, mark)
+		lots := lotsByPair[string(pos.Exchange)+":"+pos.Symbol]
+		entry, entryAt, eerr := s.entrySituation(ctx, bookID, pos.Exchange, lots)
+		if eerr != nil {
+			return nil, eerr
+		}
 		views = append(views, domain.PositionView{
 			Exchange:          pos.Exchange,
 			Symbol:            pos.Symbol,
@@ -361,7 +389,9 @@ func (s *Service) buildView(ctx context.Context, p *domain.Portfolio, role domai
 			MarketValue:       mv,
 			UnrealizedPnL:     u,
 			CostBasis:         pos.Quantity * pos.AvgCost,
-			Lots:              lotsByPair[string(pos.Exchange)+":"+pos.Symbol],
+			Lots:              lots,
+			EntrySituation:    entry,
+			EntryAt:           entryAt,
 		})
 		posValue += mv
 		spotUnreal += u

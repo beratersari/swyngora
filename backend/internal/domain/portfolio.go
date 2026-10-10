@@ -249,6 +249,11 @@ type PositionView struct {
 	UnrealizedPnL     float64
 	CostBasis         float64
 	Lots              []TaxLot
+	// EntrySituation is the coin read stored on the newest buy that still has
+	// remaining quantity. Nil for an equity, and when that fill stored no read.
+	EntrySituation *CoinSituation
+	// EntryAt is when that buy was placed.
+	EntryAt time.Time
 }
 
 // PortfolioView is the full paper-trading snapshot for a client.

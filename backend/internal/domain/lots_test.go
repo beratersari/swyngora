@@ -11,6 +11,32 @@ func testLot(id string, qty, px float64, opened time.Time) TaxLot {
 	return TaxLot{ID: id, Quantity: qty, OriginalQuantity: qty, Price: px, OpenedAt: opened}
 }
 
+func TestLatestOpenLot_NewestRemainingBuy(t *testing.T) {
+	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	closed := t0.Add(2 * time.Hour)
+	lots := []TaxLot{
+		{ID: "old", Quantity: 1, OpenedAt: t0, SourceTradeID: "buy-old"},
+		{ID: "gone", Quantity: 1, OpenedAt: t0.Add(2 * time.Hour), SourceTradeID: "buy-gone", ClosedAt: &closed},
+		{ID: "new", Quantity: 0.4, OpenedAt: t0.Add(time.Hour), SourceTradeID: "buy-new"},
+		{ID: "flat", Quantity: 0, OpenedAt: t0.Add(3 * time.Hour), SourceTradeID: "buy-flat"},
+	}
+	got, ok := LatestOpenLot(lots)
+	if !ok || got.SourceTradeID != "buy-new" {
+		t.Fatalf("latest %+v ok=%v", got, ok)
+	}
+	same := []TaxLot{
+		{ID: "a", Quantity: 1, OpenedAt: t0, SourceTradeID: "m"},
+		{ID: "b", Quantity: 1, OpenedAt: t0, SourceTradeID: "z"},
+	}
+	got, ok = LatestOpenLot(same)
+	if !ok || got.ID != "b" {
+		t.Fatalf("tie %+v", got)
+	}
+	if _, ok := LatestOpenLot(nil); ok {
+		t.Fatal("empty")
+	}
+}
+
 func TestConsumeLots_FIFOPartialAndRemaining(t *testing.T) {
 	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	t1 := t0.Add(time.Hour)

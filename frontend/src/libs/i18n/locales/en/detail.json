@@ -656,6 +656,10 @@
   },
   "situation": {
     "title": "Situation",
+    "compare": "Position read",
+    "entered": "Entered as",
+    "now": "Now",
+    "nowLoading": "Reading the tape now…",
     "loading": "Reading the combined tape…",
     "priceCvd": {
       "price_up_cvd_down": "Price is rising while futures CVD is falling.",

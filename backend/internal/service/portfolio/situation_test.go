@@ -93,6 +93,69 @@ func TestPlacePendingOrder_KeepsTheReadFromPlacement(t *testing.T) {
 	}
 }
 
+func TestView_EntrySituationFollowsTheNewestOpenBuy(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100", "nasdaq|AAPL": "100"}}
+	svc := newSvc(t, px)
+	src := &fakeSituation{got: &domain.CoinSituation{
+		Symbol:   "BTCUSDT",
+		PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceUp},
+	}}
+	svc.SetSituationSource(src)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "sit-open", StartingBalance: 100000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{
+		ClientID: "sit-open", Symbol: "BTCUSDT", Side: "buy", Quantity: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	src.got = &domain.CoinSituation{
+		Symbol:   "BTCUSDT",
+		PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceDown},
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{
+		ClientID: "sit-open", Symbol: "BTCUSDT", Side: "buy", Quantity: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	view, err := svc.View(ctx, "sit-open")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Positions) != 1 || view.Positions[0].EntrySituation == nil || view.Positions[0].EntrySituation.PriceCVD.Kind != domain.SituationCVDPriceDown {
+		t.Fatalf("newest buy %+v", view.Positions[0].EntrySituation)
+	}
+	if view.Positions[0].EntryAt.IsZero() {
+		t.Fatal("entry time")
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{
+		ClientID: "sit-open", Symbol: "BTCUSDT", Side: "sell", Quantity: 1, LotMethod: "lifo",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	view, err = svc.View(ctx, "sit-open")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Positions) != 1 || view.Positions[0].EntrySituation == nil || view.Positions[0].EntrySituation.PriceCVD.Kind != domain.SituationCVDPriceUp {
+		t.Fatalf("older lot remains %+v", view.Positions[0].EntrySituation)
+	}
+	svc.situations = nil
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{
+		ClientID: "sit-open", Symbol: "BTCUSDT", Side: "buy", Quantity: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	view, err = svc.View(ctx, "sit-open")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Positions) != 1 || view.Positions[0].EntrySituation != nil || !view.Positions[0].EntryAt.IsZero() {
+		t.Fatalf("blank newest buy %+v at %v", view.Positions[0].EntrySituation, view.Positions[0].EntryAt)
+	}
+}
+
 func TestPlaceOrder_EquitySkipsTheFuturesRead(t *testing.T) {
 	px := &fakePx{prices: map[string]string{"nasdaq|AAPL": "100"}}
 	svc := newSvc(t, px)
@@ -109,5 +172,12 @@ func TestPlaceOrder_EquitySkipsTheFuturesRead(t *testing.T) {
 	}
 	if src.n != 0 {
 		t.Fatalf("equity called the futures read %d times", src.n)
+	}
+	view, err := svc.View(ctx, "sit-eq")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Positions) != 1 || view.Positions[0].EntrySituation != nil || !view.Positions[0].EntryAt.IsZero() {
+		t.Fatalf("equity position %+v", view.Positions)
 	}
 }

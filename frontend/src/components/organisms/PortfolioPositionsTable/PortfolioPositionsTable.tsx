@@ -7,6 +7,7 @@ import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import type { SpotPosition } from '@/libs/api';
 import { formatPrice, formatSymbolDisplay } from '@/libs/utils';
 import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
+import { PositionRead } from './PositionRead';
 import type { PortfolioPositionsTableProps } from './PortfolioPositionsTable.types';
 
 export function PortfolioPositionsTable({ items, loading, onOpen }: PortfolioPositionsTableProps) {
@@ -16,9 +17,12 @@ export function PortfolioPositionsTable({ items, loading, onOpen }: PortfolioPos
       title: t('portfolio:positions.symbol'),
       key: 'symbol',
       render: (_, row) => (
-        <Text variant="label" mono color="primary">
-          {formatSymbolDisplay(row.symbol)}
-        </Text>
+        <div>
+          <Text variant="label" mono color="primary">
+            {formatSymbolDisplay(row.symbol)}
+          </Text>
+          <PositionRead row={row} />
+        </div>
       ),
     },
     {

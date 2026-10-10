@@ -245,6 +245,7 @@ import {
   type ChartDeskLayers,
 } from './chartPresets';
 import { CoinSituation } from '@/components/molecules/CoinSituation';
+import { openPositionFor, PositionSituation } from '@/components/molecules/PositionSituation';
 import {
   clickSecFromForensicsAt,
   COIN_FORENSICS_DURING,
@@ -464,6 +465,11 @@ export function CoinDetailPage() {
   const paperPortfolio = useGetPortfolioQuery(
     paperBookId ? { portfolioId: paperBookId } : undefined,
     { skip: !paperBookId, refetchOnFocus: true },
+  );
+  const heldPosition = openPositionFor(
+    rtkCurrent(paperPortfolio)?.positions,
+    exchange ?? '',
+    symbol ?? '',
   );
   const [placePaperOrder, placePaperState] = usePlacePortfolioOrderMutation();
   const scannerResultsQuery = useListScannerResultsQuery(
@@ -3215,6 +3221,13 @@ export function CoinDetailPage() {
                   amount: formatPrice(rtkCurrent(paperPortfolio)?.availableCash),
                 })}
               </Text>
+            ) : null}
+            {heldPosition && !isEquity ? (
+              <PositionSituation
+                entry={heldPosition.entrySituation}
+                now={rtkCurrent(situationQuery)}
+                nowLoading={rtkCurrentPending(situationQuery)}
+              />
             ) : null}
             <PaperTradeForm
               lockedExchange={exchangeArg}

@@ -22,24 +22,9 @@ export type RebalanceLegOutcome = components['schemas']['RebalanceLegOutcome'];
 export type RebalanceLineSnapshot = components['schemas']['RebalanceLineSnapshot'];
 export type PendingOrder = components['schemas']['PendingOrder'];
 
-/** Spot position row (OpenAPI codegen flattens positions to `Record<string, never>[]`). */
-export type SpotPosition = {
-  exchange?: string;
-  symbol?: string;
-  quantity?: number;
-  reservedQuantity?: number;
-  availableQuantity?: number;
-  avgCost?: number;
-  markPrice?: number;
-  marketValue?: number;
-  unrealizedPnL?: number;
-  costBasis?: number;
-  lots?: TaxLot[];
-};
+export type SpotPosition = components['schemas']['PortfolioPosition'];
 
-export type PortfolioView = Omit<components['schemas']['PortfolioView'], 'positions'> & {
-  positions?: SpotPosition[];
-};
+export type PortfolioView = components['schemas']['PortfolioView'];
 
 export type PaperOrderType =
   | 'market'
