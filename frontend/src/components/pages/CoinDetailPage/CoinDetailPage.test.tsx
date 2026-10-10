@@ -33,6 +33,7 @@ const mockPrintSize = vi.fn();
 const mockVolumeProfile = vi.fn();
 const mockSweeps = vi.fn();
 const mockBots = vi.fn();
+const mockForensics = vi.fn();
 
 vi.mock('@/libs/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/libs/api')>();
@@ -79,6 +80,7 @@ vi.mock('@/libs/api', async (importOriginal) => {
       isFetching: false,
       refetch: vi.fn(),
     }),
+    useGetMarketForensicsQuery: (...args: unknown[]) => mockForensics(...args),
     useGetMarketPositioningAnchorQuery: () => mockPositioningAnchor(),
     useGetMarketFlowAtPricesQuery: () => ({ data: undefined, isError: false, isFetching: false, isLoading: false, isSuccess: false, refetch: vi.fn() }),
     useGetMarketCandleFootprintQuery: (...args: unknown[]) => mockCandleFootprint(...args),
@@ -175,6 +177,15 @@ const candle = {
 
 describe('CoinDetailPage', () => {
   beforeEach(() => {
+    mockForensics.mockReset();
+    mockForensics.mockReturnValue({
+      data: undefined,
+      currentData: undefined,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
     mockIntervals.mockReturnValue({
       data: { intervals: ['1h', '4h'], exchange: 'binance' },
       isLoading: false,
@@ -708,6 +719,74 @@ describe('CoinDetailPage', () => {
     await user.click(screen.getByTestId('chart-bar-click'));
     expect(screen.queryByTestId('chart-cvd-click')).not.toBeInTheDocument();
     expect(screen.getByTestId('chart-cvd-click-hint')).toBeInTheDocument();
+  });
+
+  it('shows the forensics read for a clicked candle', async () => {
+    const user = userEvent.setup();
+    const open = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    open.setUTCMinutes(0, 0, 0);
+    chartClickAt = Math.floor(open.getTime() / 1000);
+    const openIso = open.toISOString();
+    mockCandles.mockReturnValue({
+      data: { candles: [{ ...candle, openTime: openIso }] },
+      currentData: { candles: [{ ...candle, openTime: openIso }] },
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    mockForensics.mockReturnValue({
+      data: undefined,
+      currentData: {
+        why: {
+          headline: 'Price rose while open interest fell.',
+          before: 'Bids had thinned before the candle.',
+        },
+        timeline: {
+          events: [{ at: openIso, title: 'Binance open interest started down', offsetLabel: '-8m' }],
+        },
+        similar: {
+          summary: 'One similar setup sold off afterward.',
+          matches: [
+            {
+              at: '2024-06-01T12:00:00Z',
+              until: '2024-06-01T12:15:00Z',
+              direction: 'down',
+              similarity: '70',
+              coverage: '80',
+              afterReturnPct: '-1.2',
+            },
+          ],
+        },
+      },
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    renderDetail('/markets/binance/BTCUSDT');
+    expect(await screen.findByTestId('chart-forensics-hint')).toBeInTheDocument();
+    await user.click(screen.getByTestId('chart-bar-click'));
+    expect(await screen.findByTestId('chart-forensics')).toHaveTextContent(
+      'Price rose while open interest fell.',
+    );
+    expect(screen.getByTestId('chart-forensics')).toHaveTextContent('One similar setup sold off afterward.');
+    expect(mockForensics).toHaveBeenCalledWith(
+      expect.objectContaining({
+        symbol: 'BTCUSDT',
+        at: openIso,
+        exchange: 'all',
+        window: '1h',
+        during: '15m',
+      }),
+      expect.objectContaining({ skip: false }),
+    );
+    await user.click(screen.getByText('-1.2'));
+    expect(screen.getByTestId('chart-forensics')).toHaveTextContent('2024-06-01 12:00');
+    await user.click(screen.getByTestId('chart-forensics-clear'));
+    expect(screen.queryByTestId('chart-forensics')).not.toBeInTheDocument();
+    expect(screen.getByTestId('chart-forensics-hint')).toBeInTheDocument();
   });
 
   it('restarts open interest, funding, and liquidations from a clicked candle', async () => {

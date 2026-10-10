@@ -36,6 +36,7 @@ Do **not** reintroduce `src/features/` for product UI until multiple product are
 | `HolderPanel` | CoinDetailPage |
 | `PostDelistPanel` | CoinDetailPage |
 | `DetailChartToolbar` | CoinDetailPage |
+| `CoinCandleForensics` | CoinDetailPage — forensics read for a clicked candle |
 | `IndicatorPanel` | CoinDetailPage |
 | `OrderBookPanel` | CoinDetailPage |
 | `OrderDepthChart` | CoinDetailPage |

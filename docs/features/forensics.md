@@ -15,6 +15,16 @@ moves** and how price moved after those.
 
 Web: `/forensics?symbol=BTCUSDT&at=2026-08-20T14:00:00Z`
 
+On a crypto coin chart (`/markets/binance/BTCUSDT`), clicking a candle
+opens this same read under the chart. `at` is that candle's open.
+The window stays the forensics default: one hour before the open, then
+15 minutes. The card shows the why-story, the timeline, and what
+similar setups did next. A row in that table moves the read to that
+past time. Clear, or the same candle, removes it. The link opens
+`/forensics` with the same symbol, time, `exchange=all`, `window=1h`,
+and `during=15m`. Nasdaq and BIST charts do not call it. The click
+still restarts CVD and the positioning lines when those layers are on.
+
 This is a composition of existing analysis — it does not rebuild the
 tape:
 
@@ -181,7 +191,7 @@ Informational only — not financial advice.
 | Service | `backend/internal/service/market/around_forensics.go` |
 | HTTP | `GET /api/v1/market/forensics`, `GET /api/v1/market/forensics/scan`, `GET /api/v1/market/forensics/radar` |
 | MCP / AI | `get_market_forensics`, `scan_market_forensics`, `review_setup_radar` |
-| Web | `/forensics` — `frontend/src/components/pages/ForensicsPage/` |
+| Web | `/forensics` — `frontend/src/components/pages/ForensicsPage/`; coin chart click — `frontend/src/components/organisms/CoinCandleForensics/` |
 
 ## How to verify
 
@@ -198,3 +208,8 @@ time-ordered timeline, three phase cards, and the similar-move table
 (or a soft similar error). Click a similar row to load that past
 event's timeline and before / during / after tape (same symbol,
 window, and during).
+
+On `/markets/binance/BTCUSDT`, click a candle. The card under the chart
+states what changed around that open and what similar setups did next.
+Clear, or the same candle, removes it. Open the full forensics desk
+keeps the same symbol and time.

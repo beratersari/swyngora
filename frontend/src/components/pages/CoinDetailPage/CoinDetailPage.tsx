@@ -125,6 +125,7 @@ import {
   useGetMarketOrderCountQuery,
   useGetMarketPressureQuery,
   useGetMarketSituationQuery,
+  useGetMarketForensicsQuery,
   useGetMarketSnapshotQuery,
   useGetTicker24hQuery,
   useGetSpotOrderBookQuery,
@@ -244,6 +245,15 @@ import {
   type ChartDeskLayers,
 } from './chartPresets';
 import { CoinSituation } from '@/components/molecules/CoinSituation';
+import {
+  clickSecFromForensicsAt,
+  COIN_FORENSICS_DURING,
+  COIN_FORENSICS_EXCHANGE,
+  COIN_FORENSICS_WINDOW,
+  coinForensicsHref,
+  CoinCandleForensics,
+} from '@/components/organisms/CoinCandleForensics';
+import type { ForensicsReport } from '@/libs/types/forensics.types';
 import { CoinFlowTab } from './CoinFlowTab';
 import { PastOrderBook } from './PastOrderBook';
 import { CoinStructureTab } from './CoinStructureTab';
@@ -338,6 +348,21 @@ export function CoinDetailPage() {
     {
       skip: skip || isEquity,
       pollingInterval: visible ? 60_000 : 0,
+      refetchOnFocus: true,
+    },
+  );
+  const forensicsAt =
+    !isEquity && cvdClickSec != null ? new Date(cvdClickSec * 1000).toISOString() : undefined;
+  const forensicsQuery = useGetMarketForensicsQuery(
+    {
+      symbol: symbol ?? '',
+      at: forensicsAt ?? '',
+      exchange: COIN_FORENSICS_EXCHANGE,
+      window: COIN_FORENSICS_WINDOW,
+      during: COIN_FORENSICS_DURING,
+    },
+    {
+      skip: skip || isEquity || !symbol || forensicsAt == null || !visible,
       refetchOnFocus: true,
     },
   );
@@ -1098,14 +1123,12 @@ export function CoinDetailPage() {
   const barDurationSec = candleIntervalSeconds(interval);
   const onCandleAnchor = useCallback(
     (timeSec: number) => {
-      if (!(showCvd || showOi || showFunding || showLiqNotional || showOpenLevels) || barDurationSec <= 0) {
-        return;
-      }
+      if (barDurationSec <= 0) return;
       const open = snapCandleOpen(chartData, timeSec, barDurationSec);
       if (open == null) return;
       setCvdClickSec((prev) => (prev === open ? null : open));
     },
-    [showCvd, showOi, showFunding, showLiqNotional, showOpenLevels, barDurationSec, chartData],
+    [barDurationSec, chartData],
   );
   const activeFootSpan = historySeriesKey === seriesKey ? footSpan : null;
   const candleFootRange = useMemo(() => {
@@ -2722,11 +2745,7 @@ export function CoinDetailPage() {
               liqHeat={chartLiqHeat}
               openLevels={chartOpenLevels}
               onVisibleSpan={isEquity ? undefined : onVisibleSpan}
-              onBarTimeClick={
-                isEquity || !(showCvd || showOi || showFunding || showLiqNotional || showOpenLevels)
-                  ? undefined
-                  : onCandleAnchor
-              }
+              onBarTimeClick={isEquity ? undefined : onCandleAnchor}
               rightPadding={
                 !isEquity &&
                 (showLiqLevels || (showFootprint && chartCandleFootprint.candles.length === 0))
@@ -2816,6 +2835,29 @@ export function CoinDetailPage() {
                   : 0)
               }
             />
+            {!isEquity && symbol ? (
+              <CoinCandleForensics
+                timeLabel={cvdClickSec != null ? formatUtcMinute(cvdClickSec) : null}
+                report={rtkCurrent(forensicsQuery) as ForensicsReport | undefined}
+                isLoading={rtkCurrentPending(forensicsQuery)}
+                error={
+                  forensicsQuery.isError
+                    ? rtkErrorMessage(forensicsQuery.error, {
+                        resource: t('detail:chart.forensicsTitle'),
+                      })
+                    : null
+                }
+                fullReadTo={
+                  symbol && forensicsAt ? coinForensicsHref(symbol, forensicsAt) : null
+                }
+                onClear={() => setCvdClickSec(null)}
+                onOpenMove={(at) => {
+                  const sec = clickSecFromForensicsAt(at);
+                  if (sec == null || sec === cvdClickSec) return;
+                  setCvdClickSec(sec);
+                }}
+              />
+            ) : null}
           </>
         )}
       </ChartCard>
