@@ -2,6 +2,7 @@ package domain
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -218,6 +219,65 @@ func TestBuildDerivativesGrid_QuietWatchedHourIsZero(t *testing.T) {
 	cell = gridTestCell(t, got, "ETHUSDT", col)
 	if cell.Definite || len(cell.Missing) != 1 || cell.Missing[0] != "okx" {
 		t.Fatalf("unwatched %+v", cell)
+	}
+}
+
+func TestBuildDerivativesGrid_HyperliquidIsFundingAndOpenInterestOnly(t *testing.T) {
+	now := time.Date(2026, 10, 10, 15, 40, 0, 0, time.UTC)
+	col := time.Date(2026, 10, 10, 14, 0, 0, 0, time.UTC)
+	prev := col.Add(-time.Hour)
+	at := col.Add(20 * time.Minute)
+	spec := func(metric string) GridSpec {
+		return GridSpec{Metric: metric, Range: GridRange24h, Step: time.Hour}
+	}
+	snaps := []GridSnapshot{
+		{Metric: GridMetricFunding, Exchange: ExchangeHyperliquid, Symbol: "BTCUSDT", Bucket: col, SampledAt: at, FundingRate: 0.0000125},
+		{Metric: GridMetricOI, Exchange: ExchangeHyperliquid, Symbol: "BTCUSDT", Bucket: prev, SampledAt: prev.Add(time.Minute), Value: 100},
+		{Metric: GridMetricOI, Exchange: ExchangeHyperliquid, Symbol: "BTCUSDT", Bucket: col, SampledAt: at, Value: 110},
+	}
+	funding := BuildDerivativesGrid(GridBuildInput{
+		Exchange: "hyperliquid", Now: now, Symbols: []string{"BTCUSDT"},
+		Spec: spec(GridMetricFunding), Snapshots: snaps,
+	})
+	if !strings.Contains(funding.Note, "not zeros") {
+		t.Fatalf("note %s", funding.Note)
+	}
+	cell := gridTestCell(t, funding, "BTCUSDT", col)
+	if !cell.Definite || math.Abs(cell.Value-0.0000125) > 1e-12 || len(cell.Missing) != 0 {
+		t.Fatalf("funding %+v", cell)
+	}
+	oi := BuildDerivativesGrid(GridBuildInput{
+		Exchange: "hyperliquid", Now: now, Symbols: []string{"BTCUSDT"},
+		Spec: spec(GridMetricOI), Snapshots: snaps,
+	})
+	cell = gridTestCell(t, oi, "BTCUSDT", col)
+	if !cell.Definite || math.Abs(cell.Value-10) > 1e-9 {
+		t.Fatalf("oi %+v", cell)
+	}
+	for _, metric := range []string{GridMetricCVD, GridMetricLiquidations} {
+		got := BuildDerivativesGrid(GridBuildInput{
+			Exchange: "hyperliquid", Now: now, Symbols: []string{"BTCUSDT"},
+			Spec: spec(metric),
+		})
+		cell = gridTestCell(t, got, "BTCUSDT", col)
+		if cell.Definite || cell.Text != "" || cell.Value != 0 || len(cell.Missing) != 1 || cell.Missing[0] != "hyperliquid" {
+			t.Fatalf("%s %+v", metric, cell)
+		}
+	}
+
+	combined := []GridSnapshot{
+		{Metric: GridMetricFunding, Exchange: ExchangeBinance, Symbol: "BTCUSDT", Bucket: col, SampledAt: at, FundingRate: 0.0001},
+		{Metric: GridMetricFunding, Exchange: ExchangeBybit, Symbol: "BTCUSDT", Bucket: col, SampledAt: at, FundingRate: 0.0001},
+		{Metric: GridMetricFunding, Exchange: ExchangeOKX, Symbol: "BTCUSDT", Bucket: col, SampledAt: at, FundingRate: 0.0001},
+		{Metric: GridMetricFunding, Exchange: ExchangeHyperliquid, Symbol: "BTCUSDT", Bucket: col, SampledAt: at, FundingRate: 0.01},
+	}
+	all := BuildDerivativesGrid(GridBuildInput{
+		Exchange: "all", Now: now, Symbols: []string{"BTCUSDT"},
+		Spec: spec(GridMetricFunding), Snapshots: combined,
+	})
+	cell = gridTestCell(t, all, "BTCUSDT", col)
+	if !cell.Definite || math.Abs(cell.Value-0.0001) > 1e-12 || len(cell.Missing) != 0 {
+		t.Fatalf("combined must ignore hyperliquid %+v", cell)
 	}
 }
 

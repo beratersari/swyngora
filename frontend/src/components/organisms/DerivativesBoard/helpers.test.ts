@@ -19,6 +19,7 @@ describe('derivatives board helpers', () => {
   it('opens the binance chart for a combined row', () => {
     expect(coinChartPath('all', 'BTCUSDT')).toBe('/markets/binance/BTCUSDT');
     expect(coinChartPath('bybit', 'ETHUSDT')).toBe('/markets/bybit/ETHUSDT');
+    expect(coinChartPath('hyperliquid', 'BTCUSDT')).toBe('/markets/binance/BTCUSDT');
   });
 
   it('withholds a combined number that is not definite', () => {

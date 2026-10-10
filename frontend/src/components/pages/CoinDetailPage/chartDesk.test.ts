@@ -28,6 +28,7 @@ import {
   openLevelSizeSince,
   recordedParts,
   fundingRateLines,
+  futuresPaneColor,
   futuresRecorded,
   liquidationNotionalByCandle,
   liquidationBucketBars,
@@ -546,6 +547,25 @@ describe('chart desk mappers', () => {
     expect(lines[0]?.data).toEqual([{ time: Date.parse('2026-09-29T08:00:00Z') / 1000, value: 0.01 }]);
     expect(lines[1]?.exchange).toBe('okx');
     expect(lines[1]?.data[0]?.value).toBe(-0.02);
+  });
+
+  it('plots Hyperliquid open interest and hourly funding after the other venues', () => {
+    const oi = openInterestLines([
+      { exchange: 'binance', sampledAt: '2026-09-29T12:00:00Z', value: '100' },
+      { exchange: 'hyperliquid', sampledAt: '2026-09-29T12:00:00Z', value: '50' },
+    ]);
+    expect(oi.map((line) => line.exchange)).toEqual(['binance', 'hyperliquid']);
+    expect(oi[1]?.data[0]?.value).toBe(50);
+    const funding = fundingRateLines([
+      { exchange: 'hyperliquid', sampledAt: '2026-09-29T12:00:00Z', ratePct: '0.001', predicted: true },
+    ]);
+    expect(funding).toEqual([
+      {
+        exchange: 'hyperliquid',
+        data: [{ time: Date.parse('2026-09-29T12:00:00Z') / 1000, value: 0.001 }],
+      },
+    ]);
+    expect(futuresPaneColor('hyperliquid')).toBe('#16C784');
   });
 
   it('buckets liquidation notional onto candles, short positive and long negative', () => {

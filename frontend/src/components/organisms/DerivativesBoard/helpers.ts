@@ -5,7 +5,10 @@ import { BOARD_SORT_KEYS, type BoardSort, type BoardSortKey } from './Derivative
 const DASH = '—';
 
 export function coinChartPath(exchange: string, symbol: string): string {
-  const venue = !exchange || exchange === 'all' ? 'binance' : exchange;
+  const raw = (exchange || '').toLowerCase();
+  // Hyperliquid has no candle page. Its mark, open interest, and funding
+  // are drawn on the Binance coin chart.
+  const venue = !raw || raw === 'all' || raw === 'hyperliquid' ? 'binance' : raw;
   return `/markets/${venue}/${symbol}`;
 }
 

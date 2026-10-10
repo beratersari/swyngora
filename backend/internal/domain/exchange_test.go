@@ -17,6 +17,16 @@ func TestFuturesVenuesIncludesOKX(t *testing.T) {
 	if _, err := ParseLiquidationExchange("coinbase"); err == nil {
 		t.Fatal("coinbase is not a futures book")
 	}
+	if IsFuturesVenue(ExchangeHyperliquid) || !IsMarkOnlyVenue(ExchangeHyperliquid) {
+		t.Fatal("hyperliquid is mark, open interest, and funding only")
+	}
+	if _, err := ParseLiquidationExchange("hyperliquid"); err == nil {
+		t.Fatal("liquidations do not accept hyperliquid")
+	}
+	gotEx, err := ParseOpenInterestExchange("hyperliquid")
+	if err != nil || gotEx != "hyperliquid" {
+		t.Fatalf("oi exchange %s %v", gotEx, err)
+	}
 }
 
 func TestLiquidationSideFromOKX(t *testing.T) {

@@ -581,7 +581,7 @@ class OpenInterestInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
         default="all",
-        description="binance|bybit|all (default all = both venues)",
+        description="binance|bybit|okx|hyperliquid|all (default all sums Binance, Bybit, and OKX; hyperliquid is mark times coin size and is not in that sum)",
     )
 
 
@@ -608,7 +608,7 @@ class PerpDepthInput(BaseModel):
 class DerivativesBoardInput(BaseModel):
     exchange: str = Field(
         default="all",
-        description="binance|bybit|okx|all (default all)",
+        description="binance|bybit|okx|hyperliquid|all (default all). hyperliquid is mark, open interest, and hourly funding only",
     )
     limit: int = Field(
         default=36,
@@ -619,7 +619,7 @@ class DerivativesBoardInput(BaseModel):
 class DerivativesGridInput(BaseModel):
     exchange: str = Field(
         default="all",
-        description="binance|bybit|okx|all (default all)",
+        description="binance|bybit|okx|hyperliquid|all (default all). hyperliquid funding and open interest only; CVD and liquidations stay blank",
     )
     metric: str = Field(
         default="funding",
@@ -773,7 +773,7 @@ class PositioningAnchorInput(BaseModel):
     anchor: str = Field(description="RFC3339 candle time. Restarts open interest, funding, and liquidation notional from that bar.")
     exchange: str = Field(
         default="all",
-        description="binance|bybit|okx|all (default all)",
+        description="binance|bybit|okx|hyperliquid|all (default all). all includes Hyperliquid on open interest and hourly funding, not on liquidations",
     )
     bucket: str = Field(
         default="",
@@ -1250,7 +1250,10 @@ class FearGreedInput(BaseModel):
 class FuturesHistoryInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     metric: str = Field(description="open_interest | funding | long_short | liquidations")
-    exchange: str = Field(default="all", description="binance|bybit|okx|all")
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|okx|hyperliquid|all. hyperliquid is sampled open interest and hourly funding, not liquidations",
+    )
     limit: int = Field(default=200, ge=1, le=1000)
     start: str = Field(default="", description="RFC3339 or unix ms")
     end: str = Field(default="", description="RFC3339 or unix ms")
@@ -1297,7 +1300,7 @@ class FundingRateInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
         default="all",
-        description="binance|bybit|okx|all (default all = per-venue rows plus OI-weighted pressure)",
+        description="binance|bybit|okx|hyperliquid|all (default all = per-venue rows plus OI-weighted pressure). hyperliquid is the hourly rate and is not inside pressure",
     )
     limit: int = Field(default=12, ge=1, le=30, description="Settled history size")
 
@@ -5123,7 +5126,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "24 hours as USDT amount and percent, per venue and combined. "
                 "flow=opened|closed; openedValue/closedValue is the USDT added "
                 "or closed. contracts is base-asset size; value is USDT notional. "
-                "Binance USD-M + Bybit linear + OKX. exchange=all sums venues."
+                "Binance USD-M + Bybit linear + OKX. exchange=all sums those three. "
+                "exchange=hyperliquid is mark times coin size and is not in that sum."
             ),
             args_schema=OpenInterestInput,
         ),
@@ -5193,7 +5197,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "the stored sample within 90 minutes of 24 hours ago when the "
                 "live series does not reach that hour. change24hMissing names "
                 "each venue with no sample, and that venue is not treated as "
-                "zero. limit default 36, max 100."
+                "zero. exchange=hyperliquid fills mark, open interest, and the "
+                "hourly funding rate. Liquidation, tape, and book columns stay "
+                "blank and are named unsupported. It is not part of exchange=all. "
+                "limit default 36, max 100."
             ),
             args_schema=DerivativesBoardInput,
         ),
@@ -5212,6 +5219,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "column. missing names the venue that is absent, and that "
                 "venue is not counted as zero. The open column also stays "
                 "blank when its newest sample is older than five minutes. "
+                "exchange=hyperliquid is mark, open interest, and hourly funding "
+                "only. It is not folded into exchange=all. CVD and liquidation "
+                "cells stay blank and name Hyperliquid. They are not zeros. "
                 "limit default 36, max 100."
             ),
             args_schema=DerivativesGridInput,
@@ -5254,6 +5264,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Perpetual futures funding rate: predicted next payment plus recent "
                 "settled history. rate is decimal (0.0001 = 0.01%); ratePct is percent. "
                 "payer=long means longs pay shorts. Binance USD-M + Bybit linear + OKX. "
+                "exchange=hyperliquid is the hourly rate and is not inside pressure. "
                 "Per-venue rows stay separate. pressure is OI-weighted combined predicted "
                 "funding (USDT open-interest share) so a large book outweighs a small one; "
                 "pressureWindows (1h/4h/24h) and pressureMoves show how that blend changed."
@@ -5656,7 +5667,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="get_positioning_anchor",
             description=(
                 "Restart stored open interest, funding, and liquidation notional "
-                "at one candle for Binance, Bybit, and OKX. Open interest and "
+                "at one candle for Binance, Bybit, and OKX. exchange=all also "
+                "includes Hyperliquid on open interest and hourly funding when "
+                "a sample exists, and does not name it as a missing liquidation "
+                "feed. Open interest and "
                 "funding are the change from the last sample at or before that "
                 "candle. A venue with no sample by then is named and left off. "
                 "Liquidation notional sums from that candle, short positive and "
@@ -6033,6 +6047,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "Durable stored history of futures open interest, funding, "
                 "long/short ratio, or liquidations for Binance, Bybit, and OKX. "
+                "exchange=hyperliquid is sampled open interest and hourly funding. "
+                "It has no long/short ratio and no liquidation history. "
                 "Survives restarts. metric=open_interest|funding|long_short|"
                 "liquidations. bucket=5m|30m|2h|4h returns one sample per step "
                 "across the window, capped at 90 days. Open interest, funding, "

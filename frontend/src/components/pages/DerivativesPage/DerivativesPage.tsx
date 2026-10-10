@@ -164,11 +164,13 @@ export function DerivativesPage() {
       ) : null}
 
       <Text variant="caption" color="secondary">
-        {view === 'time'
-          ? t('derivatives:gridHint')
-          : view === 'heatmap'
-            ? t('derivatives:heatmapHint')
-            : t('derivatives:withheld')}
+        {exchange === 'hyperliquid'
+          ? t('derivatives:hyperliquidHint')
+          : view === 'time'
+            ? t('derivatives:gridHint')
+            : view === 'heatmap'
+              ? t('derivatives:heatmapHint')
+              : t('derivatives:withheld')}
       </Text>
 
       {view === 'time' ? (

@@ -151,6 +151,8 @@
     "oiLine": "{{exchange}} open interest",
     "funding": "Funding",
     "fundingLine": "{{exchange}} funding %",
+    "fundingLineHourly": "{{exchange}} funding % per hour",
+    "hyperliquidLimit": "Hyperliquid is mark, open interest, and hourly funding only. It has no liquidation, tape, or book on this chart. Open interest is the mark times coin size, and the margin is USDC lined up with this USDT name.",
     "liqNotional": "Liquidations",
     "liqMap": "Liq map",
     "openLevels": "Open levels",
@@ -517,7 +519,8 @@
       "combined": "Combined",
       "binance": "Binance",
       "bybit": "Bybit",
-      "okx": "OKX"
+      "okx": "OKX",
+      "hyperliquid": "Hyperliquid"
     },
     "sides": {
       "totals": "All",

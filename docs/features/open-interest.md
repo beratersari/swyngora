@@ -12,6 +12,7 @@ can ask “how much BTC OI was added in the last hour?”
 - `GET /api/v1/market/open-interest?symbol=BTCUSDT`
   - `exchange=all` (default) sums **Binance USD-M**, **Bybit linear perpetual**, and **OKX USDT-swap**
   - `exchange=binance`, `bybit`, or `okx` for one venue
+  - `exchange=hyperliquid` is that venue alone. `value` is the mark times coin size. The margin is USDC, lined up with the USDT name. It is not inside `exchange=all`
 - Current reading:
   - `contracts` — venue-published outstanding size in the **base asset** (e.g. BTC)
   - `value` — USDT notional

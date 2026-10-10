@@ -38,7 +38,7 @@ func TestBuildPositioningAnchor_RebasesLevelsAndNamesALateVenue(t *testing.T) {
 	if got.OpenInterest[0].Points[0].Time != anchor || got.OpenInterest[0].Points[0].Value != "0" {
 		t.Fatalf("oi start %+v", got.OpenInterest[0].Points[0])
 	}
-	if len(got.MissingOpenInterest) != 2 || got.MissingOpenInterest[0] != "bybit" || got.MissingOpenInterest[1] != "okx" {
+	if len(got.MissingOpenInterest) != 3 || got.MissingOpenInterest[0] != "bybit" || got.MissingOpenInterest[1] != "okx" || got.MissingOpenInterest[2] != "hyperliquid" {
 		t.Fatalf("missing oi %v", got.MissingOpenInterest)
 	}
 	if len(got.Funding) != 1 || got.Funding[0].Change != "0.02" {
@@ -47,7 +47,7 @@ func TestBuildPositioningAnchor_RebasesLevelsAndNamesALateVenue(t *testing.T) {
 	if got.Funding[0].Points[1].Value != "0.02" {
 		t.Fatalf("settled funding won: %+v", got.Funding[0].Points)
 	}
-	if len(got.MissingFunding) != 2 || got.MissingFunding[0] != "bybit" {
+	if len(got.MissingFunding) != 3 || got.MissingFunding[0] != "bybit" || got.MissingFunding[2] != "hyperliquid" {
 		t.Fatalf("missing funding %v", got.MissingFunding)
 	}
 	if len(got.Liquidations) != 2 {
@@ -66,6 +66,11 @@ func TestBuildPositioningAnchor_RebasesLevelsAndNamesALateVenue(t *testing.T) {
 	}
 	if len(got.MissingLiquidations) != 1 || got.MissingLiquidations[0] != "bybit" {
 		t.Fatalf("missing liq %v", got.MissingLiquidations)
+	}
+	for _, name := range got.MissingLiquidations {
+		if name == "hyperliquid" {
+			t.Fatal("hyperliquid has no liquidation feed and is not a missing print")
+		}
 	}
 }
 

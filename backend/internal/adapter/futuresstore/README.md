@@ -3,6 +3,8 @@
 SQLite persistence for Binance USD-M, Bybit linear, and OKX USDT-swap **open interest**,
 **funding**, **long/short ratio** (including Binance top-trader size/account
 shares), **liquidation** events, and **taker buy/sell bars** used for CVD.
+Hyperliquid rows in the same file are sampled open interest and hourly funding.
+There is no Hyperliquid long/short, tape, or liquidation feed.
 A taker minute also stores whale and retail notional when each print's size
 was known. `size_known` stays 0 for older minutes, and a later total-only
 write does not erase a sized minute.

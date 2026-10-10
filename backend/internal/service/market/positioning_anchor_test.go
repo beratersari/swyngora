@@ -54,8 +54,13 @@ func TestGetPositioningAnchor_UsesTheChartWindow(t *testing.T) {
 	if len(got.OpenInterest) != 1 || got.OpenInterest[0].Change != "6" {
 		t.Fatalf("oi %+v", got.OpenInterest)
 	}
-	if len(got.MissingFunding) != 3 {
+	if len(got.MissingFunding) != 4 || got.MissingFunding[3] != "hyperliquid" {
 		t.Fatalf("funding should stay off: %+v missing %v", got.Funding, got.MissingFunding)
+	}
+	for _, name := range got.MissingLiquidations {
+		if name == "hyperliquid" {
+			t.Fatal("hyperliquid liquidations are not an expected feed")
+		}
 	}
 	if len(got.Liquidations) != 1 || !got.Liquidations[0].Complete || got.Liquidations[0].Change != "-1" {
 		t.Fatalf("liq %+v", got.Liquidations)

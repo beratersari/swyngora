@@ -33,7 +33,9 @@ const (
 	// before its 5-minute liquidation burst can be compared with its own typical rate.
 	DerivativesLiqHeatMinCoverage = 6 * time.Hour
 
-	derivativesBoardNote = "Liquid USDT perpetuals on Binance USD-M, Bybit linear, and OKX USDT-swap. Open interest, funding, crowd long percent, 1h taker buy share, and 24h liquidation totals are combined only when every expected venue is fresh for that column. A missing or old venue is named and is not counted as zero. Crowd long is the account long share, weighted by open interest when that open interest is also fresh. Taker buy share sums the last hour of aggressive buy and sell volume; a window that is not complete stays blank. Price is the mark from the fresh venue with the most open interest. Crowd-versus-top is top-trader long percent minus account long percent, in percentage points. Bybit does not publish a top-trader ratio, so that column names Bybit as unsupported and uses the venues that do. Day CVD is aggressive buy minus sell since 00:00 UTC, blank until each venue's tape reaches that open. Price versus CVD names the current run (price up while CVD falls, or the reverse) and how long it has lasted, or says the two are in line. That cell stays blank until the tape reaches 00:00 UTC, the newest minute is fresh, and the newest bar has a price. Combined reads the summed series and stays blank unless every expected venue's 24-hour tape is complete. A 4-hour window that disagrees without a current run counts as in line. Print size is the 15-minute average fill versus the 15 minutes before it, from the in-memory tape or stored flow minutes when that tape does not cover the half hour. Order count is (buy − sell) / (buy + sell) over those same 15 minutes. Counts are summed only when every expected venue's window is complete and the newest print is still fresh. A venue with no fresh prints stays blank and is not counted as zero. Unusual names the farthest high or low reading versus that coin's own stored samples. Venues are not averaged, and the cell names the venue. A coin with no standout stays blank. Liquidation heat is the 5-minute burst versus that venue's own typical rate, blank until the venue has been watched for 6 hours. Bid share is resting bid notional within 1% of mid. These extra columns do not change whether the rest of the row is definite. Informational only — not financial advice."
+	derivativesBoardNote = "Liquid USDT perpetuals on Binance USD-M, Bybit linear, and OKX USDT-swap. Open interest, funding, crowd long percent, 1h taker buy share, and 24h liquidation totals are combined only when every expected venue is fresh for that column. A missing or old venue is named and is not counted as zero. Crowd long is the account long share, weighted by open interest when that open interest is also fresh. Taker buy share sums the last hour of aggressive buy and sell volume; a window that is not complete stays blank. Price is the mark from the fresh venue with the most open interest. Crowd-versus-top is top-trader long percent minus account long percent, in percentage points. Bybit does not publish a top-trader ratio, so that column names Bybit as unsupported and uses the venues that do. Day CVD is aggressive buy minus sell since 00:00 UTC, blank until each venue's tape reaches that open. Price versus CVD names the current run (price up while CVD falls, or the reverse) and how long it has lasted, or says the two are in line. That cell stays blank until the tape reaches 00:00 UTC, the newest minute is fresh, and the newest bar has a price. Combined reads the summed series and stays blank unless every expected venue's 24-hour tape is complete. A 4-hour window that disagrees without a current run counts as in line. Print size is the 15-minute average fill versus the 15 minutes before it, from the in-memory tape or stored flow minutes when that tape does not cover the half hour. Order count is (buy − sell) / (buy + sell) over those same 15 minutes. Counts are summed only when every expected venue's window is complete and the newest print is still fresh. A venue with no fresh prints stays blank and is not counted as zero. Unusual names the farthest high or low reading versus that coin's own stored samples. Venues are not averaged, and the cell names the venue. A coin with no standout stays blank. Liquidation heat is the 5-minute burst versus that venue's own typical rate, blank until the venue has been watched for 6 hours. Bid share is resting bid notional within 1% of mid. These extra columns do not change whether the rest of the row is definite. Hyperliquid is a separate venue for mark, open interest, and hourly funding. It is not part of exchange=all, because it does not publish liquidations, tape, or a book. Informational only — not financial advice."
+
+	hyperliquidBoardNote = "Hyperliquid USDC-margined perpetuals, lined up with the USDT name (BTC is BTCUSDT). The mark, open interest, and hourly funding rate are filled when that coin is listed. Open interest is the mark times coin size. Liquidation, crowd, tape, CVD, print size, order count, and book columns stay blank and are named unsupported. They are not zeros and they are not a missing feed. Open-interest history grows only while this process is sampling. Funding history can be read back from Hyperliquid's settled hourly prints. Informational only — not financial advice."
 )
 
 // DerivativesVenueInput is one venue's live perp readings for a coin.
@@ -270,12 +272,16 @@ func BuildDerivativesBoard(exchange string, coins []DerivativesCoinInput, now ti
 			break
 		}
 	}
+	note := derivativesBoardNote
+	if IsMarkOnlyVenue(Exchange(ex)) {
+		note = hyperliquidBoardNote
+	}
 	out := &DerivativesBoard{
 		Exchange: ex,
 		Universe: len(rows),
 		AsOf:     now,
 		Coins:    rows,
-		Note:     derivativesBoardNote,
+		Note:     note,
 	}
 	out.Coverage = derivativesBoardCoverage(expected, rows, now)
 	out.Definite = len(rows) > 0 && out.Coverage.Complete && derivativesRowsDefinite(rows)
@@ -445,7 +451,75 @@ func buildDerivativesCoin(symbol string, expected []Exchange, in DerivativesCoin
 		}
 	}
 	applyBoardScan(&row, expected, in, byEx, liqCover, now)
+	applyMarkOnlyBoard(&row, expected)
 	return row, freshOI
+}
+
+// applyMarkOnlyBoard blanks every column Hyperliquid does not publish.
+// The status is unsupported, not missing, so a quiet feed is not invented as zero.
+func applyMarkOnlyBoard(row *DerivativesCoin, expected []Exchange) {
+	if row == nil {
+		return
+	}
+	markOnly := 0
+	for _, ex := range expected {
+		if !IsMarkOnlyVenue(ex) {
+			continue
+		}
+		markOnly++
+		cell := boardVenueRow(row, ex)
+		if cell == nil {
+			continue
+		}
+		cell.LiqStatus = VenueReadUnsupported
+		cell.LiqLong, cell.LiqShort = "", ""
+		cell.LongStatus = VenueReadUnsupported
+		cell.LongPct = ""
+		cell.TakerStatus = VenueReadUnsupported
+		cell.TakerBuyPct = ""
+		cell.GapStatus = VenueReadUnsupported
+		cell.GapPct = ""
+		cell.CVDStatus = VenueReadUnsupported
+		cell.CVDDay = ""
+		cell.CVDSplitStatus = VenueReadUnsupported
+		cell.CVDSplit, cell.CVDSplitDuration, cell.CVDSplitSeconds = "", "", ""
+		cell.PrintStatus = VenueReadUnsupported
+		cell.PrintChangePct = ""
+		cell.OrderStatus = VenueReadUnsupported
+		cell.OrderRatio, cell.OrderLean = "", ""
+		cell.OrderBuy, cell.OrderSell = 0, 0
+		cell.LiqHeatStatus = VenueReadUnsupported
+		cell.LiqGrade = ""
+		cell.BookStatus = VenueReadUnsupported
+		cell.BidPct = ""
+	}
+	if markOnly == 0 || markOnly != len(expected) {
+		return
+	}
+	row.LiqDefinite = false
+	row.LiqLong, row.LiqShort = "", ""
+	row.LongDefinite = false
+	row.LongPct = ""
+	row.TakerDefinite = false
+	row.TakerBuyPct = ""
+	row.GapDefinite = false
+	row.GapPct, row.GapScope = "", ""
+	row.CVDDayDefinite = false
+	row.CVDDay = ""
+	row.CVDSplitDefinite = false
+	row.CVDSplit, row.CVDSplitDuration, row.CVDSplitSeconds = "", "", ""
+	row.PrintDefinite = false
+	row.PrintChangePct, row.PrintRead = "", ""
+	row.OrderDefinite = false
+	row.OrderRatio, row.OrderLean = "", ""
+	row.OrderBuy, row.OrderSell = 0, 0
+	row.LiqHeatDefinite = false
+	row.LiqHeat, row.LiqHeatRatio, row.LiqHeatVenue = "", "", ""
+	row.BidDefinite = false
+	row.BidPct = ""
+	row.UnusualDefinite = false
+	row.UnusualMetric, row.UnusualBand, row.UnusualDistance = "", "", ""
+	row.UnusualPercentile, row.UnusualVenue = "", ""
 }
 
 func coverageExchange(expected []Exchange) string {

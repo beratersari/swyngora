@@ -58,6 +58,14 @@ func PublicFuturesHistoryLookback(ex Exchange, metric string, to time.Time) time
 		to = time.Now().UTC()
 	}
 	to = to.UTC()
+	// Hyperliquid publishes settled funding. It does not publish open-interest
+	// or long/short history, so those series only grow while this process samples them.
+	if ex == ExchangeHyperliquid {
+		if metric == FuturesMetricFunding {
+			return FuturesHistoryMaxLookback
+		}
+		return 0
+	}
 	switch metric {
 	case FuturesMetricOpenInterest:
 		switch ex {

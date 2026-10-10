@@ -110,6 +110,17 @@ func (a *Archive) pass(ctx context.Context) bool {
 				return true
 			}
 		}
+		for _, ex := range domain.MarkOnlyVenues() {
+			if ctx.Err() != nil {
+				return false
+			}
+			n, stop := a.fillFunding(ctx, ex, sym, now)
+			fundN += n
+			if stop {
+				a.finish(oiN, fundN, lsN, liqN, true)
+				return true
+			}
+		}
 	}
 	liqN = a.fillLiquidations(ctx, symbols, from, now)
 	a.finish(oiN, fundN, lsN, liqN, false)
@@ -213,9 +224,13 @@ func (a *Archive) fillFunding(ctx context.Context, ex domain.Exchange, symbol st
 		if p.Time.IsZero() || p.Time.Before(from) || p.Time.After(now) {
 			continue
 		}
+		hours := 8
+		if ex == domain.ExchangeHyperliquid {
+			hours = 1
+		}
 		ok, err := a.Hist.Store.InsertSnapshot(ctx, domain.FuturesSnapshot{
 			Metric: domain.FuturesMetricFunding, Exchange: ex, Symbol: symbol,
-			SampledAt: p.Time.UTC(), FundingRate: p.Rate, IntervalHours: 8,
+			SampledAt: p.Time.UTC(), FundingRate: p.Rate, IntervalHours: hours,
 		})
 		if err != nil {
 			continue

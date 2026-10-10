@@ -5,6 +5,9 @@
 Show the **current (predicted next) funding rate** and **recent settled history**
 for a coin on Binance USD-M, Bybit linear, and OKX USDT-swap, next to open
 interest, so a user or the AI can ask “are longs paying to hold BTC?”
+Hyperliquid is a separate venue. Its published rate is hourly. `exchange=hyperliquid`
+returns that rate alone. It is not folded into `exchange=all`, and it is not
+part of the OI-weighted pressure, because that blend is the 8-hour venues.
 
 Venue rates stay separate. Combined `exchange=all` also exposes **one
 OI-weighted pressure** so an 8B book at +0.01% is not treated the same as a
@@ -14,7 +17,7 @@ OI-weighted pressure** so an 8B book at +0.01% is not treated the same as a
 
 - `GET /api/v1/market/funding-rate?symbol=BTCUSDT`
   - `exchange=all` (default) returns **each venue separately**
-  - `exchange=binance`, `bybit`, or `okx` hoists `current` + `history` to the top level
+  - `exchange=binance`, `bybit`, `okx`, or `hyperliquid` hoists `current` + `history` to the top level. Hyperliquid `intervalHours` is 1. The other venues are usually 8.
   - `limit` settled prints (default 12, max 30)
   - `pressure` is predicted funding **weighted by USDT open interest**
     (`sum(rate × OI) / sum(OI)`). Venues with no OI are omitted. `weightPct`

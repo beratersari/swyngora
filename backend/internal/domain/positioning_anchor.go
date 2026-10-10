@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const positioningAnchorNote = "Open interest and funding restart at the clicked candle: each later sample minus the last sample at or before that candle. A venue with no sample by then is named and left off. Liquidation notional is the running sum from that candle, short up and long down. A print at or before the candle starts the sum at zero. A venue whose first print is later is late, and the line starts at that print. A venue with no prints in the window is named and left off. A missing venue is not zero. Informational only — not financial advice."
+const positioningAnchorNote = "Open interest and funding restart at the clicked candle: each later sample minus the last sample at or before that candle. A venue with no sample by then is named and left off. Liquidation notional is the running sum from that candle, short up and long down. A print at or before the candle starts the sum at zero. A venue whose first print is later is late, and the line starts at that print. A venue with no prints in the window is named and left off. A missing venue is not zero. Hyperliquid is included for open interest and hourly funding when those samples exist. It publishes no liquidation prints, so it is not part of that sum and is not named as a missing liquidation feed. Informational only — not financial advice."
 
 // PositioningAnchorPoint is one rebased sample.
 type PositioningAnchorPoint struct {
@@ -84,7 +84,7 @@ func BuildPositioningAnchor(in PositioningAnchorInput) *PositioningAnchor {
 		LateLiquidations:    []string{},
 		Note:                positioningAnchorNote,
 	}
-	expected := ExpectedFuturesVenues(ex)
+	levels, liquidations := positioningVenues(ex)
 	oi := levelsByVenue(in.OpenInterest, func(row FuturesSnapshot) (float64, bool) {
 		return row.Value, true
 	})
@@ -92,7 +92,7 @@ func BuildPositioningAnchor(in PositioningAnchorInput) *PositioningAnchor {
 		return row.FundingRate * 100, true
 	})
 	liq := liqByVenue(in.Liquidations)
-	for _, venue := range expected {
+	for _, venue := range levels {
 		name := string(venue)
 		if series, ok := anchorLevelSeries(name, oi[venue], anchor, 2); ok {
 			out.OpenInterest = append(out.OpenInterest, series)
@@ -104,6 +104,9 @@ func BuildPositioningAnchor(in PositioningAnchorInput) *PositioningAnchor {
 		} else {
 			out.MissingFunding = append(out.MissingFunding, name)
 		}
+	}
+	for _, venue := range liquidations {
+		name := string(venue)
 		series, kind := anchorLiquidationSeries(name, liq[venue], anchor)
 		switch kind {
 		case "ready":
@@ -116,6 +119,21 @@ func BuildPositioningAnchor(in PositioningAnchorInput) *PositioningAnchor {
 		}
 	}
 	return out
+}
+
+// positioningVenues keeps Hyperliquid on open interest and funding.
+// Liquidation prints stay on the venues that publish them.
+func positioningVenues(exchange string) (levels, liquidations []Exchange) {
+	switch exchange {
+	case "", "all", "combined":
+		return append(FuturesVenues(), MarkOnlyVenues()...), FuturesVenues()
+	default:
+		venue := Exchange(exchange)
+		if IsMarkOnlyVenue(venue) {
+			return []Exchange{venue}, nil
+		}
+		return []Exchange{venue}, []Exchange{venue}
+	}
 }
 
 func levelsByVenue(rows []FuturesSnapshot, value func(FuturesSnapshot) (float64, bool)) map[Exchange][]anchorLevel {

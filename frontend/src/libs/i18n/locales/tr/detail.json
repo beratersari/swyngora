@@ -151,6 +151,8 @@
     "oiLine": "{{exchange}} açık pozisyon",
     "funding": "Fonlama",
     "fundingLine": "{{exchange}} fonlama %",
+    "fundingLineHourly": "{{exchange}} saatlik fonlama %",
+    "hyperliquidLimit": "Hyperliquid yalnızca mark, açık pozisyon ve saatlik fonlamadır. Bu grafikte likidasyon, işlem akışı ve emir defteri yoktur. Açık pozisyon mark çarpı coin büyüklüğüdür. Marjin USDC’dir ve bu USDT adıyla hizalanır.",
     "liqNotional": "Likidasyonlar",
     "liqMap": "Likidasyon haritası",
     "openLevels": "Açık seviyeler",
@@ -517,7 +519,8 @@
       "combined": "Birleşik",
       "binance": "Binance",
       "bybit": "Bybit",
-      "okx": "OKX"
+      "okx": "OKX",
+      "hyperliquid": "Hyperliquid"
     },
     "sides": {
       "totals": "Tümü",

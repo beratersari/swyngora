@@ -214,7 +214,7 @@ export function DerivativesBoard({ exchange, coins, loading }: DerivativesBoardP
       render: (_value, row) => priceText(row),
     },
     {
-      title: t('derivatives:funding'),
+      title: exchange === 'hyperliquid' ? t('derivatives:fundingHourly') : t('derivatives:funding'),
       dataIndex: 'fundingRatePct',
       ...sortable('funding'),
       render: (_value, row) => fundingText(row),

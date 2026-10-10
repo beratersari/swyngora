@@ -1451,9 +1451,12 @@ export function CoinDetailPage() {
             id: `funding-${line.exchange}`,
             pane,
             kind: 'line',
-            title: t('detail:chart.fundingLine', {
-              exchange: t(`detail:liqHeatmap.venues.${line.exchange}`, { defaultValue: line.exchange }),
-            }),
+            title: t(
+              line.exchange === 'hyperliquid' ? 'detail:chart.fundingLineHourly' : 'detail:chart.fundingLine',
+              {
+                exchange: t(`detail:liqHeatmap.venues.${line.exchange}`, { defaultValue: line.exchange }),
+              },
+            ),
             color: futuresPaneColor(line.exchange),
             data: line.data,
           });
@@ -2205,6 +2208,11 @@ export function CoinDetailPage() {
               showOpenLevels) ? (
               <Text variant="caption" color="secondary">
                 {t('detail:chart.tapeHint')}
+              </Text>
+            ) : null}
+            {!isEquity && (showOi || showFunding || showLiqNotional) ? (
+              <Text variant="caption" color="secondary" data-testid="chart-hyperliquid-limit">
+                {t('detail:chart.hyperliquidLimit')}
               </Text>
             ) : null}
             {!isEquity && showCrowd && positioningRead.noTop.length > 0 ? (

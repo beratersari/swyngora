@@ -32,6 +32,7 @@ import (
 	fxrates "gitlab.com/trace-analysis/swyngora/backend/internal/adapter/fx"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/geckoterminal"
 	holderresolve "gitlab.com/trace-analysis/swyngora/backend/internal/adapter/holders"
+	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/hyperliquid"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/importstore"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/okx"
 	"gitlab.com/trace-analysis/swyngora/backend/internal/adapter/optionsstore"
@@ -199,6 +200,10 @@ func main() {
 		HTTPClient:        httpClient,
 		OpenInterestCache: okxOI,
 	})
+	hyperliquidClient := hyperliquid.NewClient(hyperliquid.Options{
+		BaseURL:    cfg.HyperliquidInfoURL,
+		HTTPClient: httpClient,
+	})
 
 	delistStore := deliststore.NewMemory()
 	binanceDelist := cfg.BinanceAPIKey != ""
@@ -221,9 +226,11 @@ func main() {
 		TakerStore: futuresStore,
 		OI: map[domain.Exchange]domain.OpenInterestPort{
 			domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient, domain.ExchangeOKX: okxClient,
+			domain.ExchangeHyperliquid: hyperliquidClient,
 		},
 		Funding: map[domain.Exchange]domain.FundingRatePort{
 			domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient, domain.ExchangeOKX: okxClient,
+			domain.ExchangeHyperliquid: hyperliquidClient,
 		},
 		LS: map[domain.Exchange]domain.LongShortRatioPort{
 			domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient, domain.ExchangeOKX: okxClient,
@@ -296,13 +303,15 @@ func main() {
 		Cache:     holdersCache,
 	})
 	marketSvc = marketSvc.WithHolders(holdersCascade).WithHoldersFallback(cryptoid.New(cryptoid.Options{})).WithAssetProfile(cmcClient).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
-		domain.ExchangeBinance: binanceClient,
-		domain.ExchangeBybit:   bybitClient,
-		domain.ExchangeOKX:     okxClient,
+		domain.ExchangeBinance:     binanceClient,
+		domain.ExchangeBybit:       bybitClient,
+		domain.ExchangeOKX:         okxClient,
+		domain.ExchangeHyperliquid: hyperliquidClient,
 	}).WithFundingRate(map[domain.Exchange]domain.FundingRatePort{
-		domain.ExchangeBinance: binanceClient,
-		domain.ExchangeBybit:   bybitClient,
-		domain.ExchangeOKX:     okxClient,
+		domain.ExchangeBinance:     binanceClient,
+		domain.ExchangeBybit:       bybitClient,
+		domain.ExchangeOKX:         okxClient,
+		domain.ExchangeHyperliquid: hyperliquidClient,
 	}).WithLongShortRatio(map[domain.Exchange]domain.LongShortRatioPort{
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,

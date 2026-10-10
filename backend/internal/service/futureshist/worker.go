@@ -59,8 +59,9 @@ func (w *Worker) RunOnce(ctx context.Context) {
 	now := w.now().UTC()
 	inserted := 0
 	failed := 0
+	venues := append(domain.FuturesVenues(), domain.MarkOnlyVenues()...)
 	for _, sym := range w.Hist.Symbols() {
-		for _, ex := range domain.FuturesVenues() {
+		for _, ex := range venues {
 			if ctx.Err() != nil {
 				return
 			}

@@ -39,6 +39,7 @@
     "coinbase": "Coinbase",
     "bybit": "Bybit",
     "okx": "OKX",
+    "hyperliquid": "Hyperliquid",
     "nasdaq": "Nasdaq",
     "bist": "BIST"
   },
@@ -48,6 +49,7 @@
     "fresh": "fresh",
     "stale": "old",
     "missing": "missing",
+    "unsupported": "not published",
     "age": "{{age}} old"
   },
   "tape": {

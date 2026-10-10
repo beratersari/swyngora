@@ -38,8 +38,8 @@ import type {
 import { semanticColors, withAlpha } from '@/styles/tokens';
 import { parseTapeNumber, unixSeconds } from './chartTape';
 
-/** Pane order for Binance, Bybit, and OKX lines. */
-export const FUTURES_PANE_VENUES = ['binance', 'bybit', 'okx'] as const;
+/** Pane order for Binance, Bybit, OKX, and Hyperliquid lines. */
+export const FUTURES_PANE_VENUES = ['binance', 'bybit', 'okx', 'hyperliquid'] as const;
 
 /** Raw futures-history reads cap here. The chart sends `bucket` instead. */
 export const FUTURES_PANE_LIMIT = 1000;
@@ -123,6 +123,8 @@ export function futuresPaneColor(exchange: string): string {
       return semanticColors.status.warning;
     case 'okx':
       return semanticColors.chart.rsi;
+    case 'hyperliquid':
+      return semanticColors.chart.emaSlow;
     default:
       return semanticColors.accent.default;
   }

@@ -55,6 +55,15 @@ func TestPublicFuturesHistoryLookbackFollowsVenueDocs(t *testing.T) {
 	if got := PublicFuturesHistoryLookback(ExchangeOKX, FuturesMetricFunding, may); got != want {
 		t.Fatalf("okx funding may %v want %v", got, want)
 	}
+	if got := PublicFuturesHistoryLookback(ExchangeHyperliquid, FuturesMetricFunding, now); got != FuturesHistoryMaxLookback {
+		t.Fatalf("hyperliquid funding %v", got)
+	}
+	if got := PublicFuturesHistoryLookback(ExchangeHyperliquid, FuturesMetricOpenInterest, now); got != 0 {
+		t.Fatalf("hyperliquid oi history %v", got)
+	}
+	if got := PublicFuturesHistoryLookback(ExchangeHyperliquid, FuturesMetricLongShort, now); got != 0 {
+		t.Fatalf("hyperliquid long short %v", got)
+	}
 	wideFrom := now.Add(-200 * 24 * time.Hour)
 	clamped := ClampPublicHistoryFrom(ExchangeBinance, FuturesMetricOpenInterest, wideFrom, now)
 	if !clamped.Equal(now.Add(-BinanceOpenInterestHistoryLookback)) {

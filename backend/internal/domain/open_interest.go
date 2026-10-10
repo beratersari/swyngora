@@ -82,9 +82,18 @@ type OpenInterestSnapshot struct {
 	LongShort  *LongShortSnapshot // account long/short ratio when available
 }
 
-// ParseOpenInterestExchange accepts binance, bybit, okx, or all (empty = all).
+// ParseOpenInterestExchange accepts binance, bybit, okx, hyperliquid, or all (empty = all).
+// Hyperliquid is mark, open interest, and funding only. Liquidation routes still reject it.
 func ParseOpenInterestExchange(raw string) (string, error) {
-	return ParseLiquidationExchange(raw)
+	s := strings.ToLower(strings.TrimSpace(raw))
+	if s == "" || s == "all" || s == "combined" {
+		return "all", nil
+	}
+	ex := Exchange(s)
+	if IsFuturesVenue(ex) || IsMarkOnlyVenue(ex) {
+		return s, nil
+	}
+	return "", fmt.Errorf("%w: exchange must be binance, bybit, okx, hyperliquid, or all", ErrInvalidArgument)
 }
 
 // OpenInterestSampleSlack is how far before the target a hist sample may sit.
