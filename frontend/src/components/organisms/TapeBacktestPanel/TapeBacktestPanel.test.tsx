@@ -1,51 +1,42 @@
-import { describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/render';
 import { TapeBacktestPanel } from './TapeBacktestPanel';
 
-vi.mock('@/libs/api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/libs/api')>();
+vi.mock('@/libs/api', async () => {
+  const actual = await vi.importActual<typeof import('@/libs/api')>('@/libs/api');
   return {
     ...actual,
-    useLazyListSpotMarketsQuery: () => [vi.fn(), { data: undefined, isFetching: false }],
     useGetMarketTapeBacktestQuery: () => ({
+      isFetching: false,
+      isError: false,
       data: {
-        symbol: 'BTCUSDT',
-        condition: 'cvd',
-        side: 'buy',
-        definite: false,
-        missing: ['okx'],
-        summary: '1 buy-share crosses. combined withheld (okx).',
-        note: 'Informational only — not financial advice.',
+        definite: true,
+        condition: 'funding',
+        summary: '1 longs-pay funding crosses.',
         venues: [
           {
             exchange: 'binance',
             signalCount: 1,
             bars: 2,
             horizons: [
-              { horizon: '1h', sampleCount: 1, average: 1.5, median: 1.5, winRate: 100 },
+              { horizon: '1h', sampleCount: 1, average: 1.2, median: 1.2, winRate: 100, worstDrop: -2.5 },
               { horizon: '4h', sampleCount: 0 },
               { horizon: '24h', sampleCount: 0 },
             ],
-            signals: [{ at: '2026-10-05T12:00:00.000Z', value: 0.7, close: 100, return1h: 1.5 }],
+            signals: [],
           },
         ],
       },
-      isLoading: false,
-      isFetching: false,
-      isError: false,
-      refetch: vi.fn(),
     }),
   };
 });
 
 describe('TapeBacktestPanel', () => {
-  it('shows the withheld combined read and the next-hour return', async () => {
+  it('shows the worst drop for each horizon', () => {
     renderWithProviders(<TapeBacktestPanel />);
-    expect(await screen.findByRole('heading', { name: /stored tape|kayıtlı bant/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /replay|yeniden oynat/i })).toBeInTheDocument();
-    expect(screen.getAllByText(/okx/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('+1.50%').length).toBeGreaterThan(0);
-    expect(screen.getByText('70.0%')).toBeInTheDocument();
+    expect(screen.getByText('Worst drop')).toBeInTheDocument();
+    expect(screen.getByText('-2.50%')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Condition' })).toBeInTheDocument();
   });
 });

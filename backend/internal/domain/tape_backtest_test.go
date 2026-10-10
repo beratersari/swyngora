@@ -194,6 +194,144 @@ func TestTapeBacktestBookCrossUsesThePreviousBlock(t *testing.T) {
 	}
 }
 
+func TestTapeBacktestWorstDropIsTheLowestCloseOnThePath(t *testing.T) {
+	day := time.Date(2026, 10, 4, 0, 0, 0, 0, time.UTC)
+	hour1 := day.Add(10 * time.Hour)
+	hour2 := day.Add(11 * time.Hour)
+	now := day.Add(48 * time.Hour)
+	signalAt := hour2.Add(time.Hour)
+	buckets := append(fillTapeHour(ExchangeBinance, hour1, 50, 40, 60), fillTapeHour(ExchangeBinance, hour2, 50, 70, 30)...)
+	step := 5 * time.Minute
+	candles := tapeCandles(signalAt, 100, 110, 90, 120)
+	candles = append(candles, Candle{OpenTime: signalAt.Add(30 * time.Minute).Add(-step), Close: "80"})
+	q := tapeQuery(t, "binance", TapeConditionCVD, TapeSideBuy, 0.65, hour1, now, now)
+	got, err := BuildTapeBacktest(TapeBacktestInput{
+		Query: q, Buckets: buckets, Candles: candles, CandleStep: step, PriceExchange: "binance",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig := got.Venues[0].Signals[0]
+	if sig.Return1h == nil || *sig.Return1h != 10 || sig.Drop1h == nil || *sig.Drop1h != -20 {
+		t.Fatalf("path %+v", sig)
+	}
+	if got.Venues[0].Horizons[0].WorstDrop == nil || *got.Venues[0].Horizons[0].WorstDrop != -20 {
+		t.Fatalf("horizon %+v", got.Venues[0].Horizons[0])
+	}
+	if got.Venues[0].Horizons[1].WorstDrop == nil || *got.Venues[0].Horizons[1].WorstDrop != -20 {
+		t.Fatalf("4h drop %+v", got.Venues[0].Horizons[1])
+	}
+}
+
+func TestTapeBacktestFundingCrossUsesSettledPrints(t *testing.T) {
+	day := time.Date(2026, 10, 5, 0, 0, 0, 0, time.UTC)
+	now := day.Add(48 * time.Hour)
+	first := day.Add(8 * time.Hour)
+	second := day.Add(16 * time.Hour)
+	q := tapeQuery(t, "binance", TapeConditionFunding, TapeSideLong, 0.01, day, now, now)
+	rows := []FuturesSnapshot{
+		{Exchange: ExchangeBinance, SampledAt: first, Predicted: true, FundingRate: 0.0003},
+		{Exchange: ExchangeBinance, SampledAt: first, FundingRate: 0.00005},
+		{Exchange: ExchangeBinance, SampledAt: second, FundingRate: 0.0002},
+	}
+	got, err := BuildTapeBacktest(TapeBacktestInput{
+		Query: q, Snapshots: rows, Candles: tapeCandles(second, 100, 101, 102, 103),
+		CandleStep: 5 * time.Minute, PriceExchange: "binance",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Venues[0].SignalCount != 1 || math.Abs(got.Venues[0].Signals[0].Value-0.02) > 0.0001 {
+		t.Fatalf("%+v", got.Venues[0])
+	}
+	if !got.Venues[0].Signals[0].At.Equal(second) {
+		t.Fatalf("at %s", got.Venues[0].Signals[0].At)
+	}
+}
+
+func TestTapeBacktestOpenInterestNeedsBothSamples(t *testing.T) {
+	day := time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC)
+	now := day.Add(72 * time.Hour)
+	base := day.Add(10 * time.Hour)
+	q := tapeQuery(t, "binance", TapeConditionOpenInterest, TapeSideUp, 5, day, now, now)
+	rows := []FuturesSnapshot{
+		{Exchange: ExchangeBinance, SampledAt: base, Value: 100},
+		{Exchange: ExchangeBinance, SampledAt: base.Add(time.Hour), Value: 100},
+		{Exchange: ExchangeBinance, SampledAt: base.Add(24 * time.Hour), Value: 102},
+		{Exchange: ExchangeBinance, SampledAt: base.Add(25 * time.Hour), Value: 110},
+	}
+	got, err := BuildTapeBacktest(TapeBacktestInput{Query: q, Snapshots: rows, CandleStep: 5 * time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Venues[0].SignalCount != 1 || math.Abs(got.Venues[0].Signals[0].Value-10) > 0.01 {
+		t.Fatalf("%+v", got.Venues[0])
+	}
+	if got.Venues[0].Bars < 2 {
+		t.Fatalf("bars %d", got.Venues[0].Bars)
+	}
+}
+
+func TestTapeBacktestGapLeavesBybitOut(t *testing.T) {
+	day := time.Date(2026, 10, 7, 0, 0, 0, 0, time.UTC)
+	now := day.Add(48 * time.Hour)
+	if _, err := ParseTapeBacktestQuery("bybit", "BTCUSDT", TapeConditionGap, "", 0, day, now, now); err == nil {
+		t.Fatal("expected bybit to be rejected")
+	}
+	q := tapeQuery(t, "all", TapeConditionGap, TapeSideTop, 3, day, now, now)
+	if len(q.Expected) != 2 {
+		t.Fatalf("expected binance and okx, got %v", q.Expected)
+	}
+	hour1 := day.Add(10 * time.Hour)
+	hour2 := hour1.Add(time.Hour)
+	rows := []FuturesSnapshot{
+		{Exchange: ExchangeBinance, SampledAt: hour1.Add(30 * time.Minute), LongShare: 0.50, SizeLongShare: 0.52},
+		{Exchange: ExchangeBinance, SampledAt: hour2.Add(30 * time.Minute), LongShare: 0.50, SizeLongShare: 0.56},
+		{Exchange: ExchangeOKX, SampledAt: hour1.Add(20 * time.Minute), LongShare: 0.50, TopAccLongShare: 0.51},
+		{Exchange: ExchangeOKX, SampledAt: hour2.Add(20 * time.Minute), LongShare: 0.50, TopAccLongShare: 0.55},
+		{Exchange: ExchangeBybit, SampledAt: hour2, LongShare: 0.60},
+	}
+	got, err := BuildTapeBacktest(TapeBacktestInput{Query: q, Snapshots: rows, CandleStep: 5 * time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Definite || got.Combined == nil || got.Combined.SignalCount != 1 {
+		t.Fatalf("definite %v combined %+v missing %v", got.Definite, got.Combined, got.Missing)
+	}
+	if math.Abs(got.Combined.Signals[0].Value-5.5) > 0.01 {
+		t.Fatalf("combined gap %v", got.Combined.Signals[0].Value)
+	}
+}
+
+func TestTapeBacktestSizeUsesKnownPrintsOnly(t *testing.T) {
+	day := time.Date(2026, 10, 8, 0, 0, 0, 0, time.UTC)
+	now := day.Add(48 * time.Hour)
+	hour1 := day.Add(10 * time.Hour)
+	hour2 := hour1.Add(time.Hour)
+	q := tapeQuery(t, "binance", TapeConditionSize, TapeSideWhale, 0.40, hour1, now, now)
+	rows := append(fillTapeSizeHour(ExchangeBinance, hour1, 50, 20, 80), fillTapeSizeHour(ExchangeBinance, hour2, 50, 50, 50)...)
+	rows = append(rows, TakerBucket{
+		Exchange: ExchangeBinance, Symbol: "BTCUSDT", Start: hour2.Add(10 * time.Minute),
+		BuyNotional: 1_000_000, SizeKnown: false,
+	})
+	got, err := BuildTapeBacktest(TapeBacktestInput{Query: q, Buckets: rows, CandleStep: 5 * time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Venues[0].SignalCount != 1 || math.Abs(got.Venues[0].Signals[0].Value-0.5) > 0.0001 {
+		t.Fatalf("%+v", got.Venues[0])
+	}
+	shortQ := tapeQuery(t, "binance", TapeConditionSize, TapeSideWhale, 0, hour1, now, now)
+	shortRows := fillTapeSizeHour(ExchangeBinance, hour1, 49, 80, 20)
+	short, err := BuildTapeBacktest(TapeBacktestInput{Query: shortQ, Buckets: shortRows, CandleStep: 5 * time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if short.Venues[0].Bars != 0 || short.Venues[0].SignalCount != 0 {
+		t.Fatalf("short hour %+v", short.Venues[0])
+	}
+}
+
 func TestTapeBacktestRejectsARangePastThirtyDays(t *testing.T) {
 	now := time.Date(2026, 10, 6, 0, 0, 0, 0, time.UTC)
 	if _, err := ParseTapeBacktestQuery("all", "BTCUSDT", TapeConditionCVD, TapeSideBuy, 0, now.Add(-40*24*time.Hour), now, now); err == nil {
@@ -214,6 +352,18 @@ func tapeQuery(t *testing.T, exchange, condition, side string, threshold float64
 		t.Fatal(err)
 	}
 	return q
+}
+
+func fillTapeSizeHour(ex Exchange, start time.Time, minutes int, whale, retail float64) []TakerBucket {
+	out := make([]TakerBucket, 0, minutes)
+	for i := 0; i < minutes; i++ {
+		out = append(out, TakerBucket{
+			Exchange: ex, Symbol: "BTCUSDT", Start: start.Add(time.Duration(i) * time.Minute),
+			BuyNotional: (whale + retail) / float64(minutes), SizeKnown: true,
+			WhaleBuy: whale / float64(minutes), RetailBuy: retail / float64(minutes),
+		})
+	}
+	return out
 }
 
 func fillTapeHour(ex Exchange, start time.Time, minutes int, buy, sell float64) []TakerBucket {

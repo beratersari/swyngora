@@ -265,12 +265,16 @@
   },
   "tape": {
     "title": "Stored tape replay",
-    "hint": "Replays minutes already stored for this coin. A CVD cross is a finished UTC hour. A liquidation burst is measured force-order prints, not an estimated leverage level. A book cross is the spot ladder, not the perpetual book. Combined is shown only when every expected venue has the bar. Informational only — not financial advice.",
+    "hint": "Replays minutes already stored for this coin. A CVD cross is a finished UTC hour. A liquidation burst is measured force-order prints, not an estimated leverage level. A book cross is the spot ladder, not the perpetual book. Funding uses settled prints. Open interest is the change from about 24 hours earlier. Crowd versus top leaves Bybit out. Large prints are the share of an hour from fills of at least $100,000. Worst drop is the lowest close on the way to that horizon. Combined is shown only when every expected venue has the bar. Informational only — not financial advice.",
     "condition": "Condition",
     "conditions": {
       "cvd": "CVD share",
       "liquidation": "Liquidation prints",
-      "book": "Spot book"
+      "book": "Spot book",
+      "funding": "Funding",
+      "oi": "Open interest",
+      "gap": "Crowd vs top",
+      "size": "Large-print share"
     },
     "side": "Side",
     "sides": {
@@ -279,7 +283,13 @@
       "long": "Longs liquidated",
       "short": "Shorts liquidated",
       "bid": "Bid",
-      "ask": "Ask"
+      "ask": "Ask",
+      "up": "Open interest up",
+      "down": "Open interest down",
+      "top": "Top more long",
+      "crowd": "Crowd more long",
+      "whale": "Large prints",
+      "retail": "Small prints"
     },
     "threshold": "Threshold",
     "range": "Window",
@@ -298,6 +308,7 @@
     "avg": "Average",
     "median": "Median",
     "win": "Win rate",
+    "worst": "Worst drop",
     "samples": "Samples",
     "when": "When",
     "value": "Reading",

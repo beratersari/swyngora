@@ -2968,11 +2968,23 @@ paths:
         that was liquidated (`long` or `short`). This is measured prints, not
         estimated leverage levels. `condition=book` fires when the last spot
         ladder in a 15-minute block crosses a bid or ask share. Spot books are
-        Binance, Coinbase, and Bybit. `exchange=all` returns each venue and a
-        combined series only for blocks every expected venue recorded. A missing
-        venue is named and combined is omitted (`definite` false). Forward
-        returns use the spot 5-minute close at the signal, then 1 hour, 4 hours,
-        and 24 hours later. A horizon is omitted until that candle has closed.
+        Binance, Coinbase, and Bybit. `condition=funding` fires when a settled
+        funding print, in percent, crosses the line after the previous settled
+        hour was on the other side. Predicted funding is left out.
+        `condition=oi` fires when the open-interest value is the chosen percent
+        away from a sample about 24 hours earlier. A missing sample is left out
+        and is not zero. `condition=gap` fires when top-trader long share minus
+        the crowd, in percentage points, crosses the line. Bybit has no
+        top-trader ratio, so gap uses Binance and OKX. `condition=size` fires
+        when a finished UTC hour's aggressive notional from prints of at least
+        $100,000 reaches the chosen share. Minutes stored before print size was
+        known are left out. `exchange=all` returns each venue and a combined
+        series only for blocks every expected venue recorded. A missing venue
+        is named and combined is omitted (`definite` false). Forward returns
+        use the spot 5-minute close at the signal, then 1 hour, 4 hours, and
+        24 hours later. `worstDrop` is the lowest close versus the entry on
+        the way to that horizon. Zero means price did not close below the
+        entry. A horizon is omitted until that candle has closed.
         Liquidations are the newest 2,500 prints. Books are the newest 500
         snapshots. Default window is 7 days, maximum 30. Informational only.
       operationId: getMarketTapeBacktest
@@ -2984,19 +2996,19 @@ paths:
           schema: { type: string, example: BTCUSDT }
         - name: exchange
           in: query
-          description: cvd and liquidation use binance, bybit, okx, or all. book uses binance, coinbase, bybit, or all.
+          description: cvd, liquidation, funding, oi, and size use binance, bybit, okx, or all. book uses binance, coinbase, bybit, or all. gap uses binance, okx, or all.
           schema: { type: string, default: all }
         - name: condition
           in: query
-          description: cvd, liquidation, or book
-          schema: { type: string, default: cvd, enum: [cvd, liquidation, book] }
+          description: cvd, liquidation, book, funding, oi, gap, or size
+          schema: { type: string, default: cvd, enum: [cvd, liquidation, book, funding, oi, gap, size] }
         - name: side
           in: query
-          description: buy or sell, long or short, or bid or ask. Empty uses the condition default.
+          description: buy or sell, long or short, bid or ask, up or down, top or crowd, or whale or retail. Empty uses the condition default.
           schema: { type: string }
         - name: threshold
           in: query
-          description: Share from 0.55 to 0.90 (or a percent such as 65), or a liquidation multiple from 2 to 12. Empty uses 0.65 or 4.
+          description: Share 0.55–0.90, liquidation multiple 2–12, funding percent 0.005–0.20, open-interest percent 1–50, crowd gap 1–20 points, or large-print share 0.15–0.80. Empty uses the condition default.
           schema: { type: number }
         - name: from
           in: query
@@ -11569,7 +11581,7 @@ components:
       properties:
         symbol: { type: string }
         exchange: { type: string }
-        condition: { type: string, enum: [cvd, liquidation, book] }
+        condition: { type: string, enum: [cvd, liquidation, book, funding, oi, gap, size] }
         side: { type: string }
         threshold: { type: number }
         from: { type: string, format: date-time }
@@ -11610,17 +11622,21 @@ components:
         average: { type: number }
         median: { type: number }
         winRate: { type: number, description: Share of returns greater than 0, from 0 to 100 }
+        worstDrop: { type: number, description: Lowest spot close versus the entry on the way to this horizon, in percent. Zero means price did not close below the entry. }
     TapeBacktestSignal:
       type: object
       properties:
         at: { type: string, format: date-time }
         barStart: { type: string, format: date-time }
         side: { type: string }
-        value: { type: number, description: Buy/sell or bid/ask share from 0 to 1, or a liquidation multiple }
+        value: { type: number, description: Share from 0 to 1, a liquidation multiple, a funding percent, an open-interest percent, or a crowd gap in percentage points }
         close: { type: number }
         return1h: { type: number }
         return4h: { type: number }
         return24h: { type: number }
+        drop1h: { type: number, description: Lowest close versus the entry on the way to 1 hour, in percent }
+        drop4h: { type: number }
+        drop24h: { type: number }
     MarketPressure:
       type: object
       description: Combined −1…+1 market pressure from book, CVD, and absorption

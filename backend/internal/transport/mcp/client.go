@@ -944,7 +944,8 @@ func (c *APIClient) GetCVD(ctx context.Context, exchange, symbol, rangeID, ancho
 	return c.get(ctx, "/api/v1/market/cvd", q)
 }
 
-// GetTapeBacktest replays stored CVD, liquidation prints, or spot-book share.
+// GetTapeBacktest replays stored CVD, liquidation prints, spot-book share,
+// settled funding, 24h open-interest change, crowd gap, or large-print share.
 func (c *APIClient) GetTapeBacktest(ctx context.Context, exchange, symbol, condition, side string, threshold float64, from, to string) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)

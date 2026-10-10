@@ -265,12 +265,16 @@
   },
   "tape": {
     "title": "Kayıtlı bant tekrarı",
-    "hint": "Bu coin için saklanan dakikaları yeniden oynatır. CVD kesişimi kapanmış bir UTC saatidir. Likidasyon patlaması ölçülmüş emir baskılarıdır, tahmini kaldıraç seviyesi değildir. Defter kesişimi spot merdivendir, sürekli sözleşme defteri değildir. Birleşik sonuç yalnızca beklenen her borsanın çubuğu varken gösterilir. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
+    "hint": "Bu coin için saklanan dakikaları yeniden oynatır. CVD kesişimi kapanmış bir UTC saatidir. Likidasyon patlaması ölçülmüş emir baskılarıdır, tahmini kaldıraç seviyesi değildir. Defter kesişimi spot merdivendir, sürekli sözleşme defteri değildir. Fonlama gerçekleşmiş yazıcıyı kullanır. Açık pozisyon yaklaşık 24 saat önceki örneğe göre değişimdir. Kalabalık ile büyükler karşılaştırması Bybit'i dışarıda bırakır. Büyük işlemler, saatteki agresif tutarın en az 100.000 dolarlık emirlerden gelen payıdır. En kötü düşüş, o vadeye giderken görülen en düşük kapanıştır. Birleşik sonuç yalnızca beklenen her borsanın çubuğu varken gösterilir. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
     "condition": "Koşul",
     "conditions": {
       "cvd": "CVD payı",
       "liquidation": "Likidasyon baskıları",
-      "book": "Spot defter"
+      "book": "Spot defter",
+      "funding": "Fonlama",
+      "oi": "Açık pozisyon",
+      "gap": "Kalabalık ve büyükler",
+      "size": "Büyük işlem payı"
     },
     "side": "Yön",
     "sides": {
@@ -279,7 +283,13 @@
       "long": "Long likidasyonu",
       "short": "Short likidasyonu",
       "bid": "Alış kademesi",
-      "ask": "Satış kademesi"
+      "ask": "Satış kademesi",
+      "up": "Açık pozisyon artışı",
+      "down": "Açık pozisyon düşüşü",
+      "top": "Büyükler daha long",
+      "crowd": "Kalabalık daha long",
+      "whale": "Büyük işlemler",
+      "retail": "Küçük işlemler"
     },
     "threshold": "Eşik",
     "range": "Pencere",
@@ -298,6 +308,7 @@
     "avg": "Ortalama",
     "median": "Medyan",
     "win": "Kazanma oranı",
+    "worst": "En kötü düşüş",
     "samples": "Örnek",
     "when": "Zaman",
     "value": "Okuma",

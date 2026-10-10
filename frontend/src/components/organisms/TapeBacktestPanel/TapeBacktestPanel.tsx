@@ -12,7 +12,7 @@ import {
   type TapeBacktestVenue,
 } from '@/libs/api';
 import { changeTone, formatChangePercent, formatExactDateTime, formatPrice } from '@/libs/utils';
-import { TAPE_DEFAULT_SYMBOL, TAPE_DEFAULTS, TAPE_RANGES } from './constants';
+import { TAPE_CONDITIONS, TAPE_DEFAULT_SYMBOL, TAPE_DEFAULTS, TAPE_RANGES } from './constants';
 import {
   formatTapeReading,
   isTapeCondition,
@@ -20,6 +20,7 @@ import {
   tapeExchanges,
   tapeQueryFromDraft,
   tapeSides,
+  tapeThresholdBounds,
 } from './helpers';
 import { Field, FieldRow, PerfGrid, Stack, VenueBlock } from './TapeBacktestPanel.styles';
 import type { TapeCondition, TapeDraft } from './TapeBacktestPanel.types';
@@ -68,6 +69,11 @@ function VenueResult({
       key: 'win',
       label: t('signals:tape.win'),
       render: (h) => (h.winRate == null ? '—' : `${h.winRate}%`),
+    },
+    {
+      key: 'drop',
+      label: t('signals:tape.worst'),
+      render: (h) => (h.worstDrop == null ? '—' : formatChangePercent(h.worstDrop)),
     },
     {
       key: 'n',
@@ -139,7 +145,11 @@ function VenueResult({
                 key={`${row.key}-${h.horizon}`}
                 variant="caption"
                 mono
-                color={row.key === 'avg' || row.key === 'med' ? changeTone(row.key === 'med' ? h.median : h.average) : 'primary'}
+                color={
+                  row.key === 'avg' || row.key === 'med' || row.key === 'drop'
+                    ? changeTone(row.key === 'med' ? h.median : row.key === 'drop' ? h.worstDrop : h.average)
+                    : 'primary'
+                }
               >
                 {row.render(h)}
               </Text>
@@ -172,6 +182,7 @@ export function TapeBacktestPanel() {
     skip: submitted.draft.symbol.trim() === '',
   });
   const condition = isTapeCondition(draft.condition) ? draft.condition : 'cvd';
+  const bounds = tapeThresholdBounds(condition);
   const suggestExchange = draft.exchange === 'all' || draft.exchange === 'okx' ? 'binance' : draft.exchange;
 
   function setCondition(next: TapeCondition) {
@@ -212,7 +223,7 @@ export function TapeBacktestPanel() {
           <Select
             aria-label={t('signals:tape.condition')}
             value={condition}
-            options={(['cvd', 'liquidation', 'book'] as const).map((id) => ({
+            options={TAPE_CONDITIONS.map((id) => ({
               value: id,
               label: t(`signals:tape.conditions.${id}`),
             }))}
@@ -254,9 +265,9 @@ export function TapeBacktestPanel() {
           <InputNumber
             aria-label={t('signals:tape.threshold')}
             value={draft.threshold}
-            min={condition === 'liquidation' ? 2 : 0.55}
-            max={condition === 'liquidation' ? 12 : 0.9}
-            step={condition === 'liquidation' ? 0.5 : 0.01}
+            min={bounds.min}
+            max={bounds.max}
+            step={bounds.step}
             onChange={(value) => {
               if (typeof value === 'number') setDraft((cur) => ({ ...cur, threshold: value }));
             }}

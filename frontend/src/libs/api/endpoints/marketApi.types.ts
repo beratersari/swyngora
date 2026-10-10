@@ -1061,6 +1061,8 @@ export type TapeBacktestHorizon = {
   average?: number;
   median?: number;
   winRate?: number;
+  /** Lowest close versus the entry on the way to this horizon, in percent. */
+  worstDrop?: number;
 };
 
 export type TapeBacktestSignal = {
@@ -1072,6 +1074,9 @@ export type TapeBacktestSignal = {
   return1h?: number;
   return4h?: number;
   return24h?: number;
+  drop1h?: number;
+  drop4h?: number;
+  drop24h?: number;
 };
 
 export type TapeBacktestVenue = {

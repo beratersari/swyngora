@@ -24,7 +24,7 @@ func (s *Service) GetTapeBacktest(ctx context.Context, exchange, symbol, conditi
 		Query: q, CandleStep: 5 * time.Minute, VenueErrors: map[string]string{},
 	}
 	switch q.Condition {
-	case domain.TapeConditionCVD:
+	case domain.TapeConditionCVD, domain.TapeConditionSize:
 		if err := s.loadTapeCVD(ctx, &in); err != nil {
 			return nil, err
 		}
@@ -34,6 +34,18 @@ func (s *Service) GetTapeBacktest(ctx context.Context, exchange, symbol, conditi
 		}
 	case domain.TapeConditionBook:
 		if err := s.loadTapeBooks(ctx, &in); err != nil {
+			return nil, err
+		}
+	case domain.TapeConditionFunding:
+		if err := s.loadTapeSnapshots(ctx, &in, domain.FuturesMetricFunding, in.Query.From.Add(-24*time.Hour)); err != nil {
+			return nil, err
+		}
+	case domain.TapeConditionOpenInterest:
+		if err := s.loadTapeSnapshots(ctx, &in, domain.FuturesMetricOpenInterest, in.Query.From.Add(-24*time.Hour-domain.TapeOISlack)); err != nil {
+			return nil, err
+		}
+	case domain.TapeConditionGap:
+		if err := s.loadTapeSnapshots(ctx, &in, domain.FuturesMetricLongShort, in.Query.From.Add(-time.Hour)); err != nil {
 			return nil, err
 		}
 	}
@@ -126,6 +138,41 @@ func (s *Service) loadTapeLiquidations(ctx context.Context, in *domain.TapeBackt
 		in.LiquidationCapped = true
 	}
 	in.Liquidations = events
+	return nil
+}
+
+func (s *Service) loadTapeSnapshots(ctx context.Context, in *domain.TapeBacktestInput, metric string, from time.Time) error {
+	if s.futHist == nil {
+		for _, ex := range in.Query.Expected {
+			in.VenueErrors[string(ex)] = "futures history is not stored"
+		}
+		return nil
+	}
+	var all []domain.FuturesSnapshot
+	for _, ex := range in.Query.Expected {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		raw, err := s.futHist.History(ctx, domain.FuturesHistoryQuery{
+			Metric: metric, Exchange: string(ex), Symbol: in.Query.Symbol,
+			From: from, To: in.Query.To, Limit: domain.MaxFuturesHistoryLimit, Bucket: time.Hour,
+		})
+		if err != nil {
+			in.VenueErrors[string(ex)] = err.Error()
+			continue
+		}
+		rows, _ := raw.([]domain.FuturesSnapshot)
+		if len(rows) >= domain.MaxFuturesHistoryLimit {
+			in.FuturesCapped = true
+		}
+		for i := range rows {
+			if rows[i].Exchange == "" {
+				rows[i].Exchange = ex
+			}
+		}
+		all = append(all, rows...)
+	}
+	in.Snapshots = all
 	return nil
 }
 

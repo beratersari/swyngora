@@ -760,19 +760,19 @@ class TapeBacktestInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
         default="all",
-        description="cvd/liquidation: binance|bybit|okx|all. book: binance|coinbase|bybit|all.",
+        description="cvd, liquidation, funding, oi, and size: binance|bybit|okx|all. book: binance|coinbase|bybit|all. gap: binance|okx|all.",
     )
     condition: str = Field(
         default="cvd",
-        description="cvd | liquidation | book",
+        description="cvd | liquidation | book | funding | oi | gap | size",
     )
     side: str = Field(
         default="",
-        description="buy|sell, long|short, or bid|ask. Empty uses the condition default.",
+        description="buy|sell, long|short, bid|ask, up|down, top|crowd, or whale|retail. Empty uses the condition default.",
     )
     threshold: float = Field(
         default=0,
-        description="Share 0.55-0.90 or a percent, or a liquidation multiple 2-12. 0 uses the default.",
+        description="Share 0.55-0.90, liquidation multiple 2-12, funding percent 0.005-0.20, open-interest percent 1-50, crowd gap 1-20 points, or large-print share 0.15-0.80. 0 uses the default.",
     )
     start: str = Field(default="", description="RFC3339 start. Empty is 7 days before end.")
     end: str = Field(default="", description="RFC3339 end. Empty is now.")
@@ -5607,10 +5607,18 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "hour whose buy or sell share crosses the threshold. "
                 "liquidation is a 5-minute force-order burst versus that "
                 "side's own median (not estimated leverage levels). book is "
-                "a 15-minute spot bid or ask share cross. exchange=all "
-                "withholds combined unless every expected venue has the bar. "
-                "Liquidations are the newest 2,500 prints. Books are the "
-                "newest 500 snapshots. Informational only."
+                "a 15-minute spot bid or ask share cross. funding is a settled "
+                "funding print in percent. oi is the open-interest percent "
+                "change from about 24 hours earlier. A missing sample is left "
+                "out. gap is top-trader long share minus the crowd, in "
+                "percentage points, on Binance and OKX. size is the share of "
+                "a finished hour from prints of at least $100,000. Minutes "
+                "stored before print size was known are left out. Each horizon "
+                "includes average, median, win rate, and worst drop. Worst "
+                "drop is the lowest close versus the entry. Zero means price "
+                "did not close below the entry. exchange=all withholds "
+                "combined unless every expected venue has the bar. "
+                "Informational only."
             ),
             args_schema=TapeBacktestInput,
         ),

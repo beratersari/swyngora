@@ -9,16 +9,26 @@ import (
 )
 
 const (
-	TapeConditionCVD         = "cvd"
-	TapeConditionLiquidation = "liquidation"
-	TapeConditionBook        = "book"
+	TapeConditionCVD          = "cvd"
+	TapeConditionLiquidation  = "liquidation"
+	TapeConditionBook         = "book"
+	TapeConditionFunding      = "funding"
+	TapeConditionOpenInterest = "oi"
+	TapeConditionGap          = "gap"
+	TapeConditionSize         = "size"
 
-	TapeSideBuy   = "buy"
-	TapeSideSell  = "sell"
-	TapeSideLong  = "long"
-	TapeSideShort = "short"
-	TapeSideBid   = "bid"
-	TapeSideAsk   = "ask"
+	TapeSideBuy    = "buy"
+	TapeSideSell   = "sell"
+	TapeSideLong   = "long"
+	TapeSideShort  = "short"
+	TapeSideBid    = "bid"
+	TapeSideAsk    = "ask"
+	TapeSideUp     = "up"
+	TapeSideDown   = "down"
+	TapeSideTop    = "top"
+	TapeSideCrowd  = "crowd"
+	TapeSideWhale  = "whale"
+	TapeSideRetail = "retail"
 
 	// TapeCVDMinMinutes is a finished UTC hour. Fewer stored minutes is not a bar.
 	TapeCVDMinMinutes = 50
@@ -37,6 +47,29 @@ const (
 	TapeLiqMinBursts = 5
 
 	TapeBookStep = 15 * time.Minute
+
+	// TapeFundingDefault is the settled funding rate, in percent (0.01 = 0.01%).
+	TapeFundingDefault = 0.01
+	TapeFundingMin     = 0.005
+	TapeFundingMax     = 0.20
+
+	// TapeOIDefault is the 24-hour open-interest change, in percent.
+	TapeOIDefault = 5.0
+	TapeOIMin     = 1.0
+	TapeOIMax     = 50.0
+	// TapeOISlack is how far a stored sample may sit from the hour, or from 24 hours earlier.
+	TapeOISlack = 90 * time.Minute
+
+	// TapeGapDefault is top-trader long share minus the crowd, in percentage points.
+	TapeGapDefault = 3.0
+	TapeGapMin     = 1.0
+	TapeGapMax     = 20.0
+
+	// TapeSizeDefault is the share of an hour's aggressive notional from prints of at least $100,000.
+	TapeSizeDefault    = 0.40
+	TapeSizeMin        = 0.15
+	TapeSizeMax        = 0.80
+	TapeSizeMinMinutes = TapeCVDMinMinutes
 
 	TapeBacktestDefaultLookback = 7 * 24 * time.Hour
 	TapeBacktestMaxLookback     = 30 * 24 * time.Hour
@@ -66,12 +99,14 @@ type TapeBacktestInput struct {
 	Buckets           []TakerBucket
 	Liquidations      []LiquidationEvent
 	Books             []BookHistorySnapshot
+	Snapshots         []FuturesSnapshot
 	Candles           []Candle
 	CandleStep        time.Duration
 	PriceExchange     string
 	VenueErrors       map[string]string
 	LiquidationCapped bool
 	BookCapped        bool
+	FuturesCapped     bool
 }
 
 // TapeBacktestHorizon is one forward-return column.
@@ -81,6 +116,9 @@ type TapeBacktestHorizon struct {
 	Average     *float64 `json:"average,omitempty"`
 	Median      *float64 `json:"median,omitempty"`
 	WinRate     *float64 `json:"winRate,omitempty"`
+	// WorstDrop is the lowest spot close versus the entry on the way to this horizon.
+	// Zero means price did not close below the entry. It stays empty until the horizon candle has closed.
+	WorstDrop *float64 `json:"worstDrop,omitempty"`
 }
 
 // TapeBacktestSignal is one cross. Value is a 0–1 share, or a liquidation multiple.
@@ -93,6 +131,9 @@ type TapeBacktestSignal struct {
 	Return1h  *float64  `json:"return1h,omitempty"`
 	Return4h  *float64  `json:"return4h,omitempty"`
 	Return24h *float64  `json:"return24h,omitempty"`
+	Drop1h    *float64  `json:"drop1h,omitempty"`
+	Drop4h    *float64  `json:"drop4h,omitempty"`
+	Drop24h   *float64  `json:"drop24h,omitempty"`
 }
 
 // TapeBacktestVenue is one exchange, or the combined overlap.
@@ -140,6 +181,16 @@ type liqBar struct {
 	Start    time.Time
 	End      time.Time
 	Notional float64
+}
+
+// levelBar is one finished UTC hour of a signed reading.
+// Now and Then are the open-interest notionals behind Value when the reading is a 24h change.
+type levelBar struct {
+	Start time.Time
+	End   time.Time
+	Value float64
+	Now   float64
+	Then  float64
 }
 
 // ParseTapeBacktestQuery checks the public replay arguments.
@@ -212,11 +263,19 @@ func BuildTapeBacktest(in TapeBacktestInput) (*TapeBacktestReport, error) {
 	}
 	var shareSets map[string][]shareBar
 	var liqSets map[string][]liqBar
+	var levelSets map[string][]levelBar
 	switch q.Condition {
 	case TapeConditionCVD:
 		shareSets = map[string][]shareBar{}
 		for _, ex := range q.Expected {
 			bars, minutes := cvdHourBars(in.Buckets, ex, q.From, until)
+			shareSets[string(ex)] = bars
+			rep.Venues = append(rep.Venues, tapeShareVenue(string(ex), q, bars, minutes, in.VenueErrors[string(ex)], closes, in.CandleStep))
+		}
+	case TapeConditionSize:
+		shareSets = map[string][]shareBar{}
+		for _, ex := range q.Expected {
+			bars, minutes := sizeHourBars(in.Buckets, ex, q.From, until)
 			shareSets[string(ex)] = bars
 			rep.Venues = append(rep.Venues, tapeShareVenue(string(ex), q, bars, minutes, in.VenueErrors[string(ex)], closes, in.CandleStep))
 		}
@@ -234,6 +293,20 @@ func BuildTapeBacktest(in TapeBacktestInput) (*TapeBacktestReport, error) {
 			shareSets[string(ex)] = bars
 			rep.Venues = append(rep.Venues, tapeShareVenue(string(ex), q, bars, samples, in.VenueErrors[string(ex)], closes, in.CandleStep))
 		}
+	case TapeConditionFunding, TapeConditionOpenInterest, TapeConditionGap:
+		levelSets = map[string][]levelBar{}
+		for _, ex := range q.Expected {
+			bars, note := tapeLevelBars(q.Condition, in.Snapshots, ex, q.From, until)
+			errText := in.VenueErrors[string(ex)]
+			if errText == "" {
+				errText = note
+			}
+			if errText != "" {
+				bars = nil
+			}
+			levelSets[string(ex)] = bars
+			rep.Venues = append(rep.Venues, tapeLevelVenue(string(ex), q, bars, errText, closes, in.CandleStep))
+		}
 	default:
 		return nil, fmt.Errorf("%w: unknown tape condition %q", ErrInvalidArgument, q.Condition)
 	}
@@ -247,6 +320,10 @@ func BuildTapeBacktest(in TapeBacktestInput) (*TapeBacktestReport, error) {
 		switch q.Condition {
 		case TapeConditionLiquidation:
 			combined = tapeLiqVenue("all", q, combineLiqBars(liqSets, q.Expected), "", closes, in.CandleStep)
+		case TapeConditionFunding, TapeConditionGap:
+			combined = tapeLevelVenue("all", q, combineLevelBars(levelSets, q.Expected, "avg"), "", closes, in.CandleStep)
+		case TapeConditionOpenInterest:
+			combined = tapeLevelVenue("all", q, combineLevelBars(levelSets, q.Expected, "oi"), "", closes, in.CandleStep)
 		default:
 			combined = tapeShareVenue("all", q, combineShareBars(shareSets, q.Expected), 0, "", closes, in.CandleStep)
 		}
@@ -353,6 +430,278 @@ func tapeLiqVenue(name string, q TapeBacktestQuery, bars []liqBar, errText strin
 	return out
 }
 
+func tapeLevelVenue(name string, q TapeBacktestQuery, bars []levelBar, errText string, closes map[int64]float64, step time.Duration) TapeBacktestVenue {
+	out := TapeBacktestVenue{
+		Exchange: name, Bars: len(bars), Signals: []TapeBacktestSignal{}, Error: errText,
+		Horizons: emptyTapeHorizons(),
+	}
+	if errText != "" {
+		out.Bars = 0
+		out.Note = errText
+		return out
+	}
+	if len(bars) == 0 {
+		return out
+	}
+	out.From = bars[0].Start
+	out.To = bars[len(bars)-1].End
+	sigs := make([]TapeBacktestSignal, 0)
+	for _, hit := range crossLevel(bars, q.Side, q.Threshold, q.Condition == TapeConditionFunding) {
+		if hit.At.Before(q.From) || hit.At.After(q.To) {
+			continue
+		}
+		sig := TapeBacktestSignal{At: hit.At, BarStart: hit.Start, Side: q.Side, Value: roundTo(hit.Value, 4)}
+		attachTapeReturns(&sig, closes, step)
+		sigs = append(sigs, sig)
+	}
+	out.SignalCount = len(sigs)
+	out.Horizons = tapeHorizons(sigs)
+	if len(sigs) > TapeBacktestSignalLimit {
+		sigs = sigs[len(sigs)-TapeBacktestSignalLimit:]
+		out.Note = fmt.Sprintf("Showing the newest %d of %d crosses.", TapeBacktestSignalLimit, out.SignalCount)
+	}
+	out.Signals = sigs
+	return out
+}
+
+func crossLevel(bars []levelBar, side string, threshold float64, consecutive bool) []shareHit {
+	low := side == TapeSideShort || side == TapeSideDown || side == TapeSideCrowd
+	hit := func(prev, b levelBar) (shareHit, bool) {
+		if low {
+			if b.Value <= -threshold && prev.Value > -threshold {
+				return shareHit{Start: b.Start, At: b.End, Value: b.Value}, true
+			}
+			return shareHit{}, false
+		}
+		if b.Value >= threshold && prev.Value < threshold {
+			return shareHit{Start: b.Start, At: b.End, Value: b.Value}, true
+		}
+		return shareHit{}, false
+	}
+	out := make([]shareHit, 0)
+	if consecutive {
+		for i := 1; i < len(bars); i++ {
+			if row, ok := hit(bars[i-1], bars[i]); ok {
+				out = append(out, row)
+			}
+		}
+		return out
+	}
+	byStart := make(map[int64]levelBar, len(bars))
+	for _, b := range bars {
+		byStart[b.Start.UTC().UnixMilli()] = b
+	}
+	for _, b := range bars {
+		prev, ok := byStart[b.Start.Add(-time.Hour).UTC().UnixMilli()]
+		if !ok {
+			continue
+		}
+		if row, ok := hit(prev, b); ok {
+			out = append(out, row)
+		}
+	}
+	return out
+}
+
+func tapeLevelBars(condition string, rows []FuturesSnapshot, ex Exchange, from, until time.Time) ([]levelBar, string) {
+	switch condition {
+	case TapeConditionFunding:
+		return fundingPrintBars(rows, ex, from, until), ""
+	case TapeConditionOpenInterest:
+		return oiChangeBars(rows, ex, from, until), ""
+	default:
+		bars, unsupported := gapHourBars(rows, ex, from, until)
+		if unsupported {
+			return nil, "This venue does not publish a top-trader ratio."
+		}
+		return bars, ""
+	}
+}
+
+func fundingPrintBars(rows []FuturesSnapshot, ex Exchange, from, until time.Time) []levelBar {
+	type last struct {
+		at  time.Time
+		pct float64
+	}
+	// One settled print per UTC hour. Venues often settle 8 hours apart, so the
+	// cross compares consecutive prints rather than the empty hours between them.
+	hours := map[int64]last{}
+	for _, row := range rows {
+		if row.Predicted || row.SampledAt.IsZero() {
+			continue
+		}
+		if row.Exchange != "" && row.Exchange != ex {
+			continue
+		}
+		at := row.SampledAt.UTC()
+		if at.After(until) || at.Before(from.Add(-24*time.Hour)) {
+			continue
+		}
+		start := TruncateToBucket(at, time.Hour)
+		cur, ok := hours[start.UnixMilli()]
+		if ok && !at.After(cur.at) {
+			continue
+		}
+		hours[start.UnixMilli()] = last{at: at, pct: row.FundingRate * 100}
+	}
+	out := make([]levelBar, 0, len(hours))
+	for ms, row := range hours {
+		start := time.UnixMilli(ms).UTC()
+		out = append(out, levelBar{Start: start, End: row.at, Value: row.pct})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].End.Before(out[j].End) })
+	return out
+}
+
+func oiChangeBars(rows []FuturesSnapshot, ex Exchange, from, until time.Time) []levelBar {
+	pts := make([]tapePoint, 0)
+	for _, row := range rows {
+		if row.SampledAt.IsZero() || row.Value <= 0 {
+			continue
+		}
+		if row.Exchange != "" && row.Exchange != ex {
+			continue
+		}
+		pts = append(pts, tapePoint{at: row.SampledAt.UTC(), value: row.Value})
+	}
+	sort.Slice(pts, func(i, j int) bool { return pts[i].at.Before(pts[j].at) })
+	out := make([]levelBar, 0)
+	start := TruncateToBucket(from, time.Hour).Add(-time.Hour)
+	for ; !start.Add(time.Hour).After(until); start = start.Add(time.Hour) {
+		end := start.Add(time.Hour)
+		now, okNow := tapeSampleAt(pts, end)
+		then, okThen := tapeSampleAt(pts, end.Add(-24*time.Hour))
+		if !okNow || !okThen || then <= 0 {
+			continue
+		}
+		out = append(out, levelBar{
+			Start: start, End: end, Now: now, Then: then,
+			Value: (now - then) / then * 100,
+		})
+	}
+	return out
+}
+
+type tapePoint struct {
+	at    time.Time
+	value float64
+}
+
+func tapeSampleAt(pts []tapePoint, target time.Time) (float64, bool) {
+	var value float64
+	found := false
+	for _, p := range pts {
+		if p.at.After(target) {
+			break
+		}
+		if target.Sub(p.at) > TapeOISlack {
+			continue
+		}
+		value = p.value
+		found = true
+	}
+	return value, found
+}
+
+func gapHourBars(rows []FuturesSnapshot, ex Exchange, from, until time.Time) ([]levelBar, bool) {
+	type last struct {
+		at  time.Time
+		gap float64
+	}
+	hours := map[int64]last{}
+	saw := false
+	top := false
+	for _, row := range rows {
+		if row.SampledAt.IsZero() {
+			continue
+		}
+		if row.Exchange != "" && row.Exchange != ex {
+			continue
+		}
+		saw = true
+		crowd := row.LongShare
+		lead := row.SizeLongShare
+		if lead <= 0 {
+			lead = row.TopAccLongShare
+		}
+		if crowd <= 0 || lead <= 0 {
+			continue
+		}
+		top = true
+		at := row.SampledAt.UTC()
+		start := TruncateToBucket(at, time.Hour)
+		end := start.Add(time.Hour)
+		if end.After(until) || start.Before(from.Add(-time.Hour)) {
+			continue
+		}
+		cur, ok := hours[start.UnixMilli()]
+		if ok && !at.After(cur.at) {
+			continue
+		}
+		hours[start.UnixMilli()] = last{at: at, gap: (lead - crowd) * 100}
+	}
+	if saw && !top {
+		return nil, true
+	}
+	out := make([]levelBar, 0, len(hours))
+	for ms, row := range hours {
+		start := time.UnixMilli(ms).UTC()
+		out = append(out, levelBar{Start: start, End: start.Add(time.Hour), Value: row.gap})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Start.Before(out[j].Start) })
+	return out, false
+}
+
+func combineLevelBars(sets map[string][]levelBar, expected []Exchange, mode string) []levelBar {
+	idx := make(map[string]map[int64]levelBar, len(expected))
+	seen := map[int64]struct{}{}
+	starts := make([]int64, 0)
+	for _, ex := range expected {
+		m := make(map[int64]levelBar, len(sets[string(ex)]))
+		for _, b := range sets[string(ex)] {
+			ms := b.Start.UTC().UnixMilli()
+			m[ms] = b
+			if _, ok := seen[ms]; !ok {
+				seen[ms] = struct{}{}
+				starts = append(starts, ms)
+			}
+		}
+		idx[string(ex)] = m
+	}
+	sort.Slice(starts, func(i, j int) bool { return starts[i] < starts[j] })
+	out := make([]levelBar, 0)
+	for _, ms := range starts {
+		var sum, now, then float64
+		var start, end time.Time
+		n := 0
+		ok := true
+		for _, ex := range expected {
+			b, found := idx[string(ex)][ms]
+			if !found {
+				ok = false
+				break
+			}
+			sum += b.Value
+			now += b.Now
+			then += b.Then
+			start, end = b.Start, b.End
+			n++
+		}
+		if !ok || n == 0 {
+			continue
+		}
+		bar := levelBar{Start: start, End: end, Value: sum / float64(n), Now: now, Then: then}
+		if mode == "oi" {
+			if then <= 0 {
+				continue
+			}
+			bar.Value = (now - then) / then * 100
+		}
+		out = append(out, bar)
+	}
+	return out
+}
+
 type shareHit struct {
 	Start time.Time
 	At    time.Time
@@ -384,7 +733,7 @@ func (b shareBar) share(side string) float64 {
 	if tot <= 0 {
 		return 0
 	}
-	if side == TapeSideSell || side == TapeSideAsk {
+	if side == TapeSideSell || side == TapeSideAsk || side == TapeSideRetail {
 		return b.Sell / tot
 	}
 	return b.Buy / tot
@@ -434,6 +783,65 @@ func cvdHourBars(buckets []TakerBucket, ex Exchange, from, until time.Time) ([]s
 		for _, c := range slot {
 			bar.Buy += c.buy
 			bar.Sell += c.sell
+		}
+		if bar.Buy+bar.Sell <= 0 {
+			continue
+		}
+		out = append(out, bar)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Start.Before(out[j].Start) })
+	return out, raw
+}
+
+func sizeHourBars(buckets []TakerBucket, ex Exchange, from, until time.Time) ([]shareBar, int) {
+	type cell struct{ whale, retail float64 }
+	hours := map[int64]map[int64]*cell{}
+	raw := 0
+	for _, b := range buckets {
+		if !b.SizeKnown || b.Start.IsZero() {
+			continue
+		}
+		whale := b.WhaleBuy + b.WhaleSell
+		retail := b.RetailBuy + b.RetailSell
+		if whale+retail <= 0 {
+			continue
+		}
+		if b.Exchange != "" && b.Exchange != ex {
+			continue
+		}
+		start := b.Start.UTC()
+		if start.Before(from) || start.After(until) {
+			continue
+		}
+		hour := TruncateToBucket(start, TapeCVDHour)
+		end := hour.Add(TapeCVDHour)
+		if hour.Before(from) || end.After(until) {
+			continue
+		}
+		raw++
+		minute := TruncateToBucket(start, time.Minute).UnixMilli()
+		slot := hours[hour.UnixMilli()]
+		if slot == nil {
+			slot = map[int64]*cell{}
+			hours[hour.UnixMilli()] = slot
+		}
+		c := slot[minute]
+		if c == nil {
+			c = &cell{}
+			slot[minute] = c
+		}
+		c.whale += whale
+		c.retail += retail
+	}
+	out := make([]shareBar, 0, len(hours))
+	for ms, slot := range hours {
+		if len(slot) < TapeSizeMinMinutes {
+			continue
+		}
+		bar := shareBar{Start: time.UnixMilli(ms).UTC(), End: time.UnixMilli(ms).UTC().Add(TapeCVDHour), Minutes: len(slot)}
+		for _, c := range slot {
+			bar.Buy += c.whale
+			bar.Sell += c.retail
 		}
 		if bar.Buy+bar.Sell <= 0 {
 			continue
@@ -638,6 +1046,43 @@ func attachTapeReturns(sig *TapeBacktestSignal, closes map[int64]float64, step t
 	sig.Return1h = tapeForward(closes, sig.At, time.Hour, step, entry)
 	sig.Return4h = tapeForward(closes, sig.At, 4*time.Hour, step, entry)
 	sig.Return24h = tapeForward(closes, sig.At, 24*time.Hour, step, entry)
+	if sig.Return1h != nil {
+		sig.Drop1h = tapePathDrop(closes, sig.At, time.Hour, step, entry)
+	}
+	if sig.Return4h != nil {
+		sig.Drop4h = tapePathDrop(closes, sig.At, 4*time.Hour, step, entry)
+	}
+	if sig.Return24h != nil {
+		sig.Drop24h = tapePathDrop(closes, sig.At, 24*time.Hour, step, entry)
+	}
+}
+
+func tapePathDrop(closes map[int64]float64, at time.Time, horizon, step time.Duration, entry float64) *float64 {
+	if entry <= 0 || step <= 0 {
+		return nil
+	}
+	end := at.Add(horizon)
+	minPct := 0.0
+	found := false
+	for t := at.Add(step); !t.After(end); t = t.Add(step) {
+		px, ok := tapeCloseAt(closes, t, step)
+		if !ok || px <= 0 {
+			continue
+		}
+		pct := (px - entry) / entry * 100
+		if !found || pct < minPct {
+			minPct = pct
+			found = true
+		}
+	}
+	if !found {
+		return nil
+	}
+	if minPct > 0 {
+		minPct = 0
+	}
+	v := roundTo(minPct, 4)
+	return &v
 }
 
 func tapeCloseAt(closes map[int64]float64, at time.Time, step time.Duration) (float64, bool) {
@@ -667,6 +1112,9 @@ func tapeHorizons(sigs []TapeBacktestSignal) []TapeBacktestHorizon {
 	one := make([]float64, 0, len(sigs))
 	four := make([]float64, 0, len(sigs))
 	day := make([]float64, 0, len(sigs))
+	drop1 := make([]float64, 0, len(sigs))
+	drop4 := make([]float64, 0, len(sigs))
+	drop24 := make([]float64, 0, len(sigs))
 	for _, s := range sigs {
 		if s.Return1h != nil && !math.IsNaN(*s.Return1h) {
 			one = append(one, *s.Return1h)
@@ -677,15 +1125,24 @@ func tapeHorizons(sigs []TapeBacktestSignal) []TapeBacktestHorizon {
 		if s.Return24h != nil && !math.IsNaN(*s.Return24h) {
 			day = append(day, *s.Return24h)
 		}
+		if s.Drop1h != nil && !math.IsNaN(*s.Drop1h) {
+			drop1 = append(drop1, *s.Drop1h)
+		}
+		if s.Drop4h != nil && !math.IsNaN(*s.Drop4h) {
+			drop4 = append(drop4, *s.Drop4h)
+		}
+		if s.Drop24h != nil && !math.IsNaN(*s.Drop24h) {
+			drop24 = append(drop24, *s.Drop24h)
+		}
 	}
 	return []TapeBacktestHorizon{
-		tapeHorizonStats(tapeHorizon1h, one),
-		tapeHorizonStats(tapeHorizon4h, four),
-		tapeHorizonStats(tapeHorizon24h, day),
+		tapeHorizonStats(tapeHorizon1h, one, drop1),
+		tapeHorizonStats(tapeHorizon4h, four, drop4),
+		tapeHorizonStats(tapeHorizon24h, day, drop24),
 	}
 }
 
-func tapeHorizonStats(id string, xs []float64) TapeBacktestHorizon {
+func tapeHorizonStats(id string, xs, drops []float64) TapeBacktestHorizon {
 	out := TapeBacktestHorizon{Horizon: id, SampleCount: len(xs)}
 	if len(xs) == 0 {
 		return out
@@ -704,6 +1161,16 @@ func tapeHorizonStats(id string, xs []float64) TapeBacktestHorizon {
 	out.Average = &avg
 	out.Median = &med
 	out.WinRate = &win
+	if len(drops) > 0 {
+		worst := drops[0]
+		for _, d := range drops[1:] {
+			if d < worst {
+				worst = d
+			}
+		}
+		w := roundTo(worst, 4)
+		out.WorstDrop = &w
+	}
 	return out
 }
 
@@ -746,6 +1213,26 @@ func tapeSideLabel(condition, side string) string {
 			return "ask-share"
 		}
 		return "bid-share"
+	case TapeConditionFunding:
+		if side == TapeSideShort {
+			return "shorts-pay funding"
+		}
+		return "longs-pay funding"
+	case TapeConditionOpenInterest:
+		if side == TapeSideDown {
+			return "open-interest drop"
+		}
+		return "open-interest rise"
+	case TapeConditionGap:
+		if side == TapeSideCrowd {
+			return "crowd-richer gap"
+		}
+		return "top-richer gap"
+	case TapeConditionSize:
+		if side == TapeSideRetail {
+			return "small-print share"
+		}
+		return "large-print share"
 	default:
 		if side == TapeSideSell {
 			return "sell-share"
@@ -756,7 +1243,7 @@ func tapeSideLabel(condition, side string) string {
 
 func tapeBacktestNote(in TapeBacktestInput) string {
 	var b strings.Builder
-	b.WriteString("Replays stored tape. A CVD cross is a finished UTC hour with at least 50 minute buckets whose buy or sell share reaches the threshold after the previous hour finished below it. A liquidation burst is measured force-order prints: one 5-minute bucket at least the chosen multiple of that side's own median printed bucket, after the previous bucket was below. It is not an estimated leverage level. A book cross is the last spot ladder in a 15-minute block (Binance, Coinbase, Bybit; top of the stored book, not the perpetual book) whose bid or ask share reaches the threshold after the previous block was below. Combined uses only blocks every expected venue recorded. Forward returns are the spot 5-minute close at the signal, then 1 hour, 4 hours, and 24 hours later. A horizon stays blank until that candle has closed. ")
+	b.WriteString("Replays stored tape. A CVD cross is a finished UTC hour with at least 50 minute buckets whose buy or sell share reaches the threshold after the previous hour finished below it. A liquidation burst is measured force-order prints: one 5-minute bucket at least the chosen multiple of that side's own median printed bucket, after the previous bucket was below. It is not an estimated leverage level. A book cross is the last spot ladder in a 15-minute block (Binance, Coinbase, Bybit; top of the stored book, not the perpetual book) whose bid or ask share reaches the threshold after the previous block was below. A funding cross is a settled print, in percent, after the previous hour was on the other side of the line. Predicted funding is left out. An open-interest cross is the percent change from a sample about 24 hours earlier. A missing sample is left out and is not zero. A crowd gap is top-trader long share minus account long share, in percentage points. Bybit does not publish a top-trader ratio, so a crowd-gap replay uses Binance and OKX. A large-print cross is a finished UTC hour where prints of at least $100,000 are at least the chosen share of aggressive notional. Minutes stored before print size was known are left out. Identical clip repeats are not stored, so this is the size share, not a count of matching prints. Combined uses only blocks every expected venue recorded. Forward returns are the spot 5-minute close at the signal, then 1 hour, 4 hours, and 24 hours later. Worst drop is the lowest close versus the entry on the way to that horizon. Zero means price did not close below the entry. A horizon stays blank until that candle has closed. ")
 	if in.PriceExchange != "" {
 		fmt.Fprintf(&b, "Prices are %s spot closes. ", in.PriceExchange)
 	}
@@ -773,6 +1260,9 @@ func tapeBacktestNote(in TapeBacktestInput) string {
 	} else if in.Query.Condition == TapeConditionBook {
 		b.WriteString("Book history used here is capped at the newest 500 snapshots. ")
 	}
+	if in.FuturesCapped {
+		b.WriteString("This window hit the stored futures-sample cap, so older funding, open interest, or crowd samples are absent. ")
+	}
 	b.WriteString("Informational only — not financial advice.")
 	return b.String()
 }
@@ -785,8 +1275,16 @@ func parseTapeCondition(raw string) (string, error) {
 		return TapeConditionLiquidation, nil
 	case TapeConditionBook, "imbalance":
 		return TapeConditionBook, nil
+	case TapeConditionFunding, "funding-rate", "funding_rate":
+		return TapeConditionFunding, nil
+	case TapeConditionOpenInterest, "open_interest", "open-interest":
+		return TapeConditionOpenInterest, nil
+	case TapeConditionGap, "crowd":
+		return TapeConditionGap, nil
+	case TapeConditionSize, "print-size", "print_size":
+		return TapeConditionSize, nil
 	default:
-		return "", fmt.Errorf("%w: condition must be cvd, liquidation, or book", ErrInvalidArgument)
+		return "", fmt.Errorf("%w: condition must be cvd, liquidation, book, funding, oi, gap, or size", ErrInvalidArgument)
 	}
 }
 
@@ -809,6 +1307,38 @@ func parseTapeSide(condition, raw string) (string, error) {
 			return TapeSideShort, nil
 		}
 		return "", fmt.Errorf("%w: liquidation side must be long or short", ErrInvalidArgument)
+	case TapeConditionFunding:
+		if s == "" || s == TapeSideLong {
+			return TapeSideLong, nil
+		}
+		if s == TapeSideShort {
+			return TapeSideShort, nil
+		}
+		return "", fmt.Errorf("%w: funding side must be long or short", ErrInvalidArgument)
+	case TapeConditionOpenInterest:
+		if s == "" || s == TapeSideUp {
+			return TapeSideUp, nil
+		}
+		if s == TapeSideDown {
+			return TapeSideDown, nil
+		}
+		return "", fmt.Errorf("%w: open-interest side must be up or down", ErrInvalidArgument)
+	case TapeConditionGap:
+		if s == "" || s == TapeSideTop {
+			return TapeSideTop, nil
+		}
+		if s == TapeSideCrowd {
+			return TapeSideCrowd, nil
+		}
+		return "", fmt.Errorf("%w: crowd-gap side must be top or crowd", ErrInvalidArgument)
+	case TapeConditionSize:
+		if s == "" || s == TapeSideWhale {
+			return TapeSideWhale, nil
+		}
+		if s == TapeSideRetail {
+			return TapeSideRetail, nil
+		}
+		return "", fmt.Errorf("%w: size side must be whale or retail", ErrInvalidArgument)
 	default:
 		if s == "" || s == TapeSideBid {
 			return TapeSideBid, nil
@@ -833,6 +1363,41 @@ func parseTapeThreshold(condition string, raw float64) (float64, error) {
 			return 0, fmt.Errorf("%w: liquidation multiple must be between 2 and 12", ErrInvalidArgument)
 		}
 		return raw, nil
+	case TapeConditionFunding:
+		if raw == 0 {
+			return TapeFundingDefault, nil
+		}
+		if raw < TapeFundingMin || raw > TapeFundingMax {
+			return 0, fmt.Errorf("%w: funding threshold must be between 0.005 and 0.20 percent", ErrInvalidArgument)
+		}
+		return raw, nil
+	case TapeConditionOpenInterest:
+		if raw == 0 {
+			return TapeOIDefault, nil
+		}
+		if raw < TapeOIMin || raw > TapeOIMax {
+			return 0, fmt.Errorf("%w: open-interest threshold must be between 1 and 50 percent", ErrInvalidArgument)
+		}
+		return raw, nil
+	case TapeConditionGap:
+		if raw == 0 {
+			return TapeGapDefault, nil
+		}
+		if raw < TapeGapMin || raw > TapeGapMax {
+			return 0, fmt.Errorf("%w: crowd-gap threshold must be between 1 and 20 percentage points", ErrInvalidArgument)
+		}
+		return raw, nil
+	case TapeConditionSize:
+		if raw == 0 {
+			return TapeSizeDefault, nil
+		}
+		if raw > 1 && raw <= 100 {
+			raw = raw / 100
+		}
+		if raw < TapeSizeMin || raw > TapeSizeMax {
+			return 0, fmt.Errorf("%w: large-print share must be between 0.15 and 0.80", ErrInvalidArgument)
+		}
+		return raw, nil
 	default:
 		if raw == 0 {
 			return TapeShareDefault, nil
@@ -848,6 +1413,18 @@ func parseTapeThreshold(condition string, raw float64) (float64, error) {
 }
 
 func parseTapeExchange(condition, raw string) (string, []Exchange, error) {
+	if condition == TapeConditionGap {
+		s := strings.ToLower(strings.TrimSpace(raw))
+		if s == "" || s == "all" || s == "combined" {
+			return "all", []Exchange{ExchangeBinance, ExchangeOKX}, nil
+		}
+		switch Exchange(s) {
+		case ExchangeBinance, ExchangeOKX:
+			return s, []Exchange{Exchange(s)}, nil
+		default:
+			return "", nil, fmt.Errorf("%w: crowd gap uses binance, okx, or all", ErrInvalidArgument)
+		}
+	}
 	if condition == TapeConditionBook {
 		s := strings.ToLower(strings.TrimSpace(raw))
 		if s == "" || s == "all" || s == "combined" {

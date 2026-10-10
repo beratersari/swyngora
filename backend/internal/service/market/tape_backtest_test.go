@@ -24,10 +24,14 @@ func (t tapeTakerStore) PurgeTakerBuckets(context.Context, time.Time) (int, erro
 
 type tapeFutHist struct {
 	events []domain.LiquidationEvent
+	snaps  []domain.FuturesSnapshot
 }
 
-func (t tapeFutHist) History(context.Context, domain.FuturesHistoryQuery) (any, error) {
-	return t.events, nil
+func (t tapeFutHist) History(_ context.Context, q domain.FuturesHistoryQuery) (any, error) {
+	if q.Metric == "liquidations" || q.Metric == "" {
+		return t.events, nil
+	}
+	return t.snaps, nil
 }
 
 type tapeBookHist struct {
@@ -69,6 +73,25 @@ func TestGetTapeBacktest_CVDFromStoredMinutes(t *testing.T) {
 	}
 	if got.Venues[0].Signals[0].Return1h == nil || *got.Venues[0].Signals[0].Return1h != 10 {
 		t.Fatalf("%+v", got.Venues[0].Signals)
+	}
+}
+
+func TestGetTapeBacktest_FundingFromStoredSnapshots(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Hour)
+	first := now.Add(-48 * time.Hour)
+	second := first.Add(8 * time.Hour)
+	snaps := []domain.FuturesSnapshot{
+		{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", SampledAt: first, FundingRate: 0.00005},
+		{Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", SampledAt: second, FundingRate: 0.0002},
+	}
+	svc := New(&fakeMarket{}, &fakeSupply{})
+	svc.SetFuturesHistory(tapeFutHist{snaps: snaps})
+	got, err := svc.GetTapeBacktest(context.Background(), "binance", "BTCUSDT", "funding", "long", 0.01, first, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Venues) != 1 || got.Venues[0].SignalCount != 1 {
+		t.Fatalf("%+v", got.Venues)
 	}
 }
 
