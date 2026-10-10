@@ -332,3 +332,84 @@ func TestBuildOpenLevels_CombinedSumsOverlapOnly(t *testing.T) {
 		t.Fatalf("missing %+v definite=%v", all.MissingVenues, all.Combined.Definite)
 	}
 }
+
+func TestOpenLevelAnchor_UsesTheLastColumnAtOrBeforeTheClock(t *testing.T) {
+	points := []OpenLevelPoint{
+		{Time: time.Date(2026, 8, 11, 10, 0, 0, 0, time.UTC), LongNotional: 100, ShortNotional: 80, Delta: 20},
+		{Time: time.Date(2026, 8, 11, 12, 30, 0, 0, time.UTC), LongNotional: 60, ShortNotional: 90, Delta: -30},
+	}
+	day := openLevelAnchor(points, OpenLevelAnchorDay, time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC))
+	if day.Complete || day.LongChange != 0 {
+		t.Fatalf("day should stay blank: %+v", day)
+	}
+	block := openLevelAnchor(points, OpenLevelAnchor4h, time.Date(2026, 8, 11, 12, 0, 0, 0, time.UTC))
+	if !block.Complete || block.BaselineLong != 100 || block.OpenLong != 60 {
+		t.Fatalf("baseline %+v", block)
+	}
+	if block.LongChange != -40 || block.ShortChange != 10 || block.DeltaChange != -50 {
+		t.Fatalf("change %+v", block)
+	}
+	click := openLevelAnchor(points, OpenLevelAnchorClick, time.Date(2026, 8, 11, 12, 30, 0, 0, time.UTC))
+	if !click.Complete || click.LongChange != 0 || click.ShortChange != 0 || click.DeltaChange != 0 {
+		t.Fatalf("click %+v", click)
+	}
+}
+
+func TestBuildOpenLevels_HitAfterTheClockChangesStillOpenSize(t *testing.T) {
+	spec, err := ParseHuntHeatmapRange("12h")
+	if err != nil {
+		t.Fatal(err)
+	}
+	to := time.Date(2026, 8, 2, 12, 0, 0, 0, time.UTC)
+	times := HuntHeatmapColumns(spec, to)
+	click := time.Date(2026, 8, 2, 6, 0, 0, 0, time.UTC)
+	flat := BuildOpenLevels(OpenLevelsInput{
+		Symbol: "BTCUSDT",
+		Spec:   spec,
+		To:     to,
+		Click:  click,
+		Venues: []HuntHeatmapVenueSeries{openLevelSeries(ExchangeBinance, times, 100, 1_000_000)},
+	})
+	if len(flat.Binance.Anchors) != 3 {
+		t.Fatalf("anchors %+v", flat.Binance.Anchors)
+	}
+	if flat.Binance.Anchors[0].Anchor != OpenLevelAnchorDay || flat.Binance.Anchors[0].Complete {
+		t.Fatalf("12h book starts after midnight: %+v", flat.Binance.Anchors[0])
+	}
+	if flat.Binance.Anchors[1].Anchor != OpenLevelAnchor4h || !flat.Binance.Anchors[1].Complete || flat.Binance.Anchors[1].DeltaChange != 0 {
+		t.Fatalf("flat 4h %+v", flat.Binance.Anchors[1])
+	}
+	if flat.Binance.Anchors[2].Anchor != OpenLevelAnchorClick || !flat.Binance.Anchors[2].Complete || flat.Binance.Anchors[2].LongChange != 0 {
+		t.Fatalf("flat click %+v", flat.Binance.Anchors[2])
+	}
+	if flat.Combined.Definite || len(flat.Combined.Anchors) != 0 {
+		t.Fatalf("withheld combined grew anchors %+v", flat.Combined.Anchors)
+	}
+
+	t0 := time.Date(2026, 8, 2, 8, 0, 0, 0, time.UTC)
+	step := 15 * time.Minute
+	hitTimes := []time.Time{t0, t0.Add(step)}
+	ser := HuntHeatmapVenueSeries{Exchange: ExchangeBinance}
+	ser.Prices = []HuntHeatmapPricePoint{
+		{Time: hitTimes[0], Price: 100, High: 100, Low: 100},
+		{Time: hitTimes[1], Price: 100, High: 100, Low: 90},
+	}
+	ser.OI = []FuturesSnapshot{
+		{SampledAt: hitTimes[0], Value: 1_000_000},
+		{SampledAt: hitTimes[1], Value: 1_000_000},
+	}
+	walked := walkOpenLevels("binance", ser, hitTimes, step)
+	attachOpenLevelAnchors(&walked.book, t0.Add(30*time.Minute), time.Time{})
+	var block OpenLevelAnchor
+	for _, anchor := range walked.book.Anchors {
+		if anchor.Anchor == OpenLevelAnchor4h {
+			block = anchor
+		}
+		if anchor.Anchor == OpenLevelAnchorDay && anchor.Complete {
+			t.Fatalf("day open is before this book: %+v", anchor)
+		}
+	}
+	if !block.Complete || block.LongChange >= 0 || block.ShortChange != 0 {
+		t.Fatalf("hit should shrink still-open longs only: %+v cum=%+v", block, walked.cum)
+	}
+}

@@ -29,6 +29,21 @@ const report: LiquidationOpenLevels = {
     delta: 250_000,
     hitLots: 3,
     closedLots: 1,
+    anchors: [
+      {
+        anchor: 'day',
+        from: '2026-08-11T00:00:00Z',
+        complete: true,
+        longChange: 40_000,
+        shortChange: -10_000,
+        deltaChange: 50_000,
+      },
+      {
+        anchor: '4h',
+        from: '2026-08-11T08:00:00Z',
+        complete: false,
+      },
+    ],
     segments: [
       {
         exchange: 'binance',
@@ -71,6 +86,10 @@ describe('OpenLiquidationLevels', () => {
     expect(rows[0]).toHaveTextContent(/25×/);
     expect(rows[0]).toHaveTextContent(formatPrice(90_000));
     expect(screen.queryByTestId('open-level-withheld')).not.toBeInTheDocument();
+    expect(screen.getByTestId('open-level-anchor-day')).toHaveTextContent(/\+40\.00K/);
+    expect(screen.getByTestId('open-level-anchor-day')).toHaveTextContent(/-10\.00K/);
+    expect(screen.getByTestId('open-level-anchor-day')).toHaveTextContent(/\+50\.00K/);
+    expect(screen.getByTestId('open-level-anchor-4h')).toHaveTextContent(/4-hour open/);
   });
 
   it('withholds the combined book when a venue is missing', () => {

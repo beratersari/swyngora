@@ -12,7 +12,8 @@ import (
 // the price where that open-interest slice was placed until a later candle
 // trades through them. range matches the liquidation heatmap.
 // exchange=all returns Binance, Bybit, OKX, and combined.
-func (s *Service) GetLiquidationOpenLevels(ctx context.Context, exchange, symbol, rawRange string) (*domain.OpenLevelsReport, error) {
+// rawAnchor, when set, adds a click anchor. It does not change the window.
+func (s *Service) GetLiquidationOpenLevels(ctx context.Context, exchange, symbol, rawRange, rawAnchor string) (*domain.OpenLevelsReport, error) {
 	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
 	if err != nil {
 		return nil, err
@@ -25,11 +26,15 @@ func (s *Service) GetLiquidationOpenLevels(ctx context.Context, exchange, symbol
 	if err != nil {
 		return nil, err
 	}
+	now := time.Now().UTC()
+	click, err := domain.ParseCVDAnchor(rawAnchor, now)
+	if err != nil {
+		return nil, err
+	}
 	s.noteFutures(symbol)
 	if s.liqWatch != nil {
 		s.liqWatch.Watch(symbol)
 	}
-	now := time.Now().UTC()
 	from := now.Add(-spec.Window)
 	want := s.futuresWant(ex)
 	venues := make([]domain.HuntHeatmapVenueSeries, 0, len(want))
@@ -47,7 +52,7 @@ func (s *Service) GetLiquidationOpenLevels(ctx context.Context, exchange, symbol
 	}
 	wg.Wait()
 	got := domain.BuildOpenLevels(domain.OpenLevelsInput{
-		Symbol: symbol, Spec: spec, To: now, Venues: venues,
+		Symbol: symbol, Spec: spec, To: now, Click: click, Venues: venues,
 	})
 	return &got, nil
 }

@@ -6,7 +6,11 @@ import {
 } from '@/components/organisms/LiquidationHeatmap';
 import { formatLeverageMix } from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.helpers';
 import { formatCompactUsd, formatDateTime, formatPrice } from '@/libs/utils';
-import { pickOpenLevelBook, openLevelTableRows } from './OpenLiquidationLevels.helpers';
+import {
+  formatSignedCompactUsd,
+  pickOpenLevelBook,
+  openLevelTableRows,
+} from './OpenLiquidationLevels.helpers';
 import { Panel, Summary, Table, TableWrap, Td, Th } from './OpenLiquidationLevels.styles';
 import type { OpenLiquidationLevelsProps } from './OpenLiquidationLevels.types';
 
@@ -96,6 +100,36 @@ export function OpenLiquidationLevels({
               {t('liquidations:open.closed')}: {book.closedLots ?? 0}
             </Text>
           </Summary>
+          {(['day', '4h'] as const).map((id) => {
+            const row = book.anchors?.find((anchor) => anchor.anchor === id);
+            if (!row) return null;
+            if (!row.complete) {
+              return (
+                <Text
+                  key={id}
+                  variant="caption"
+                  color="secondary"
+                  data-testid={`open-level-anchor-${id}`}
+                >
+                  {t(id === 'day' ? 'detail:openLevels.dayMissing' : 'detail:openLevels.blockMissing')}
+                </Text>
+              );
+            }
+            return (
+              <Text
+                key={id}
+                variant="caption"
+                color="secondary"
+                data-testid={`open-level-anchor-${id}`}
+              >
+                {t(id === 'day' ? 'detail:openLevels.sinceDay' : 'detail:openLevels.since4h', {
+                  long: formatSignedCompactUsd(row.longChange),
+                  short: formatSignedCompactUsd(row.shortChange),
+                  delta: formatSignedCompactUsd(row.deltaChange),
+                })}
+              </Text>
+            );
+          })}
           {rows.length === 0 ? (
             <Text variant="bodySm" color="secondary">
               {t('liquidations:open.empty')}

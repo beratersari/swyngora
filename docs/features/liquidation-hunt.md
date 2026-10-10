@@ -298,15 +298,27 @@ Ranges match the heatmap: 12h, 24h, 3d, 7d, 14d, 30d, 90d. Windows past a
 day read one stored open-interest sample per bucket. A column with no
 sample stays empty. 12h and 24h stay on the newest raw rows.
 
-MCP / AI: `get_liquidation_open_levels`.
+Each definite book includes `anchors`:
+
+- `day` is 00:00 UTC. `4h` is the current block at 00, 04, 08, 12, 16, or 20 UTC.
+- Optional `anchor` (RFC3339) adds `click` from that candle. It does not move the window.
+- `longChange`, `shortChange`, and `deltaChange` are the latest column minus the last column at or before that time.
+- `complete` is false when no column has reached that time. That is not a zero change.
+- A withheld book has no `anchors`.
+
+MCP / AI: `get_liquidation_open_levels`. Optional `anchor` is the clicked candle.
 
 On the coin Overview chart the open bands sit on the candles (solid while
 open, dashed after price trades through). Bands closed because open interest
 fell are not drawn. A line under the candles is still-open long size minus
-still-open short size. The Open levels switch is separate from the dashed
+still-open short size. A second line resets that gap at 00:00 UTC, at the
+current 4-hour open, and at a clicked candle. The numbers next to the chart
+are the change in still-open long size and still-open short size, not only
+the gap. The reset stays off when the stored book starts after that clock.
+The Open levels switch is separate from the dashed
 snapshot lines and from the heatmap. Range and venue are shared with the
 map. The side filter stays on the map. The caption names the mix. When the
-combined book is withheld, the chart says so.
+combined book is withheld, the chart says so and draws no anchor.
 
 `/liquidations?view=open` lists the open bands, the still-open long and short
 size, and how many slices were traded through or closed because open interest

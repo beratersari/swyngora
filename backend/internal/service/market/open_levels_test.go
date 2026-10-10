@@ -33,7 +33,7 @@ func TestGetLiquidationOpenLevels_UsesHeatmapHistory(t *testing.T) {
 		domain.ExchangeOKX: huntCandles{bars: candles},
 	})
 	svc.SetFuturesHistory(huntHeatFut{oi: oi})
-	got, err := svc.GetLiquidationOpenLevels(context.Background(), "all", "BTCUSDT", "24h")
+	got, err := svc.GetLiquidationOpenLevels(context.Background(), "all", "BTCUSDT", "24h", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,13 +52,31 @@ func TestGetLiquidationOpenLevels_UsesHeatmapHistory(t *testing.T) {
 	if !got.Combined.Definite || len(got.MissingVenues) != 0 {
 		t.Fatalf("combined definite=%v missing=%v", got.Combined.Definite, got.MissingVenues)
 	}
+	if len(got.Binance.Anchors) != 2 {
+		t.Fatalf("anchors %+v", got.Binance.Anchors)
+	}
+	for _, anchor := range got.Binance.Anchors {
+		if anchor.Anchor == domain.OpenLevelAnchor4h && !anchor.Complete {
+			t.Fatalf("4h anchor %+v", anchor)
+		}
+	}
 }
 
 func TestGetLiquidationOpenLevels_BadRange(t *testing.T) {
 	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
 		domain.ExchangeBinance: &fakeMarket{},
 	}, &fakeSupply{})
-	_, err := svc.GetLiquidationOpenLevels(context.Background(), "all", "BTCUSDT", "9h")
+	_, err := svc.GetLiquidationOpenLevels(context.Background(), "all", "BTCUSDT", "9h", "")
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("err=%v", err)
+	}
+}
+
+func TestGetLiquidationOpenLevels_BadAnchor(t *testing.T) {
+	svc := NewMulti(map[domain.Exchange]domain.MarketDataPort{
+		domain.ExchangeBinance: &fakeMarket{},
+	}, &fakeSupply{})
+	_, err := svc.GetLiquidationOpenLevels(context.Background(), "all", "BTCUSDT", "24h", "yesterday")
 	if !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("err=%v", err)
 	}

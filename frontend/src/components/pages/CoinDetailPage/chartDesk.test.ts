@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { LiquidationOpenLevels } from '@/libs/api';
 import { heatColor } from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.helpers';
 import {
   bookHeatColumns,
@@ -19,9 +20,12 @@ import {
   formatRecordedSpan,
   liqHeatCells,
   liqHeatNotes,
+  openLevelAnchorLines,
   openLevelDelta,
   openLevelNotes,
+  openLevelPoints,
   openLevelSegments,
+  openLevelSizeSince,
   recordedParts,
   fundingRateLines,
   futuresRecorded,
@@ -424,6 +428,48 @@ describe('chart desk mappers', () => {
       withheld: true,
     });
     expect(openLevelNotes(undefined, 'combined').withheld).toBe(false);
+  });
+
+  it('rebases still-open size at the last column at or before the clock', () => {
+    const report = {
+      binance: {
+        exchange: 'binance',
+        definite: true,
+        cumulative: [
+          { time: '2026-08-11T10:00:00Z', longNotional: 100, shortNotional: 80, delta: 20 },
+          { time: '2026-08-11T12:30:00Z', longNotional: 60, shortNotional: 90, delta: -30 },
+        ],
+        anchors: [
+          { anchor: 'day' as const, from: '2026-08-11T00:00:00Z', complete: false },
+          { anchor: '4h' as const, from: '2026-08-11T12:00:00Z', complete: true },
+        ],
+      },
+      combined: { exchange: 'combined', definite: false, cumulative: [], anchors: [] },
+    } as LiquidationOpenLevels;
+    const points = openLevelPoints(report, 'binance');
+    expect(openLevelSizeSince(points, Date.parse('2026-08-11T12:00:00Z') / 1000)).toEqual({
+      long: -40,
+      short: 10,
+      delta: -50,
+    });
+    expect(openLevelSizeSince(points, Date.parse('2026-08-11T00:00:00Z') / 1000)).toBeNull();
+    const lines = openLevelAnchorLines(
+      report,
+      'binance',
+      Date.parse('2026-08-11T12:30:00Z') / 1000,
+    );
+    expect(lines.missingDay).toBe(true);
+    expect(lines.missingBlock).toBe(false);
+    expect(lines.day).toEqual([]);
+    expect(lines.block.map((point) => point.value)).toEqual([0, -50]);
+    expect(lines.click.map((point) => point.value)).toEqual([0]);
+    expect(openLevelAnchorLines(report, 'combined', null)).toEqual({
+      day: [],
+      block: [],
+      click: [],
+      missingDay: false,
+      missingBlock: false,
+    });
   });
 
   it('keeps the largest liquidation pockets on each side', () => {

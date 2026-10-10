@@ -2763,6 +2763,14 @@ export interface paths {
          *     `segments` are clustered and capped for drawing. `cumulative`,
          *     `openLong`, `openShort`, and `delta` stay uncapped. `hitLots` and
          *     `closedLots` count the raw slices, not the capped drawing.
+         *     Each definite book includes `anchors` for the still-open size since
+         *     00:00 UTC and since the current 4-hour open. `longChange`,
+         *     `shortChange`, and `deltaChange` are the latest column minus the last
+         *     column at or before that clock. `complete` is false when the stored
+         *     book starts later, and that missing baseline is not treated as zero.
+         *     Optional `anchor` (RFC3339) adds the same read from a chosen candle
+         *     and does not move the window. Combined anchors stay off when
+         *     `combined.definite` is false.
          *     `leverageMix` is the assumed share of open interest at each leverage.
          *     Binance public open interest is 30 days, so older columns exist only
          *     when this archive already stored them. Not exchange liquidation-engine
@@ -6637,6 +6645,33 @@ export interface components {
             accountBlend?: "stored" | "even" | "mixed";
             /** @description False for combined when any venue has no price and open interest, or the venues never overlap. */
             definite: boolean;
+            /** @description Still-open size since 00:00 UTC, the current 4-hour open, and an optional candle. Empty when this book is withheld. */
+            anchors?: components["schemas"]["LiquidationOpenLevelAnchor"][];
+        };
+        /** @description Change in still-open liquidation size since a clock or a clicked candle. The baseline is the last cumulative column at or before that time. */
+        LiquidationOpenLevelAnchor: {
+            /** @enum {string} */
+            anchor: "day" | "4h" | "click";
+            /** Format: date-time */
+            from: string;
+            /** @description Still-open long notional now minus the baseline. */
+            longChange?: number;
+            /** @description Still-open short notional now minus the baseline. */
+            shortChange?: number;
+            /** @description Long minus short now, minus that same gap at the baseline. */
+            deltaChange?: number;
+            baselineLong?: number;
+            baselineShort?: number;
+            baselineDelta?: number;
+            /** @description Still-open long notional on the latest column. */
+            openLong?: number;
+            /** @description Still-open short notional on the latest column. */
+            openShort?: number;
+            /** @description Long minus short on the latest column. */
+            delta?: number;
+            /** @description False when no cumulative column is at or before this time. A zero change on a complete anchor is a flat book. */
+            complete: boolean;
+            summary?: string;
         };
         /** @description Estimated liquidation levels that stay until price trades through them */
         LiquidationOpenLevels: {
@@ -13637,6 +13672,8 @@ export interface operations {
                 range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d" | "90d";
                 /** @description binance | bybit | okx | all (default all = Binance, Bybit, OKX, and combined) */
                 exchange?: string;
+                /** @description Optional RFC3339 candle time. Adds the still-open size change since that candle. Empty omits the click anchor. Day and 4-hour anchors are always computed from this range. */
+                anchor?: string;
             };
             header?: never;
             path?: never;
@@ -13644,7 +13681,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Open, hit, and closed liquidation levels plus the cumulative line */
+            /** @description Open, hit, and closed liquidation levels plus the cumulative line and anchored size changes */
             200: {
                 headers: {
                     [name: string]: unknown;

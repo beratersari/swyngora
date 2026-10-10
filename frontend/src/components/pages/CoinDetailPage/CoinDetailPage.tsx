@@ -34,9 +34,12 @@ import {
   recordedParts,
   liqHeatCells,
   liqHeatNotes,
+  openLevelAnchorLines,
   openLevelDelta,
   openLevelNotes,
+  openLevelPoints,
   openLevelSegments,
+  openLevelSizeSince,
   liquidationBucketBars,
   liquidationProfile,
   openInterestLines,
@@ -52,6 +55,10 @@ import type {
   CandleChartPriceLine,
 } from '@/components/molecules/CandleChartHost/CandleChartHost.types';
 import { DetailChartToolbar, type CvdChartRange } from '@/components/organisms/DetailChartToolbar';
+import {
+  formatSignedCompactUsd,
+  pickOpenLevelBook,
+} from '@/components/organisms/OpenLiquidationLevels/OpenLiquidationLevels.helpers';
 import { DetailHeader } from '@/components/organisms/DetailHeader';
 import { DetailStats } from '@/components/organisms/DetailStats';
 import { HolderPanel } from '@/components/organisms/HolderPanel';
@@ -1081,12 +1088,14 @@ export function CoinDetailPage() {
   const barDurationSec = candleIntervalSeconds(interval);
   const onCandleAnchor = useCallback(
     (timeSec: number) => {
-      if (!(showCvd || showOi || showFunding || showLiqNotional) || barDurationSec <= 0) return;
+      if (!(showCvd || showOi || showFunding || showLiqNotional || showOpenLevels) || barDurationSec <= 0) {
+        return;
+      }
       const open = snapCandleOpen(chartData, timeSec, barDurationSec);
       if (open == null) return;
       setCvdClickSec((prev) => (prev === open ? null : open));
     },
-    [showCvd, showOi, showFunding, showLiqNotional, barDurationSec, chartData],
+    [showCvd, showOi, showFunding, showLiqNotional, showOpenLevels, barDurationSec, chartData],
   );
   const activeFootSpan = historySeriesKey === seriesKey ? footSpan : null;
   const candleFootRange = useMemo(() => {
@@ -1494,7 +1503,8 @@ export function CoinDetailPage() {
       }
     }
     if (showOpenLevels) {
-      const delta = openLevelDelta(rtkCurrent(openLevelsQuery), liqMapVenue);
+      const report = rtkCurrent(openLevelsQuery);
+      const delta = openLevelDelta(report, liqMapVenue);
       if (delta.length > 0) {
         series.push({
           id: 'open-liq-delta',
@@ -1504,6 +1514,38 @@ export function CoinDetailPage() {
           color: semanticColors.accent.default,
           data: delta,
         });
+        pane += 1;
+      }
+      const anchored = openLevelAnchorLines(report, liqMapVenue, cvdClickSec);
+      const rows = [
+        anchored.day.length > 0
+          ? {
+              id: 'open-liq-day',
+              title: t('detail:chart.openLevelDay'),
+              color: semanticColors.accent.default,
+              data: anchored.day,
+            }
+          : null,
+        anchored.block.length > 0
+          ? {
+              id: 'open-liq-4h',
+              title: t('detail:chart.openLevel4h'),
+              color: semanticColors.status.warning,
+              data: anchored.block,
+            }
+          : null,
+        anchored.click.length > 0
+          ? {
+              id: 'open-liq-click',
+              title: t('detail:chart.openLevelClick'),
+              color: semanticColors.text.link,
+              data: anchored.click,
+            }
+          : null,
+      ];
+      for (const row of rows) {
+        if (!row) continue;
+        series.push({ pane, kind: 'line', ...row });
       }
     }
     return series;
@@ -1617,6 +1659,38 @@ export function CoinDetailPage() {
     () => (isEquity || !showOpenLevels ? null : openLevelNotes(rtkCurrent(openLevelsQuery), liqMapVenue)),
     [isEquity, showOpenLevels, openLevelsQuery, liqMapVenue],
   );
+  const openAnchorRead = useMemo(() => {
+    if (isEquity || !showOpenLevels) return null;
+    const report = rtkCurrent(openLevelsQuery);
+    const lines = openLevelAnchorLines(report, liqMapVenue, cvdClickSec);
+    const points = openLevelPoints(report, liqMapVenue);
+    const book = pickOpenLevelBook(report, liqMapVenue);
+    const textFor = (id: 'day' | '4h') => {
+      const row = book?.anchors?.find((anchor) => anchor.anchor === id);
+      if (!row?.complete) return null;
+      return {
+        long: formatSignedCompactUsd(row.longChange),
+        short: formatSignedCompactUsd(row.shortChange),
+        delta: formatSignedCompactUsd(row.deltaChange),
+      };
+    };
+    const click = cvdClickSec != null ? openLevelSizeSince(points, cvdClickSec) : null;
+    return {
+      lines,
+      day: textFor('day'),
+      block: textFor('4h'),
+      click:
+        click == null || cvdClickSec == null
+          ? null
+          : {
+              time: formatUtcMinute(cvdClickSec),
+              long: formatSignedCompactUsd(click.long),
+              short: formatSignedCompactUsd(click.short),
+              delta: formatSignedCompactUsd(click.delta),
+            },
+      clickMissing: cvdClickSec != null && click == null && points.length > 0,
+    };
+  }, [isEquity, showOpenLevels, openLevelsQuery, liqMapVenue, cvdClickSec]);
   const chartMix = showLiqMap && liqMapNote?.mix ? liqMapNote.mix : openLevelNote?.mix ?? '';
   const chartMissing =
     showLiqMap && liqMapNote && liqMapNote.missingVenues.length > 0
@@ -2427,6 +2501,51 @@ export function CoinDetailPage() {
                 {t('detail:openLevels.caption')}
               </Text>
             ) : null}
+            {!isEquity && showOpenLevels && openAnchorRead?.day ? (
+              <Text variant="caption" color="secondary" data-testid="chart-open-day">
+                {t('detail:openLevels.sinceDay', openAnchorRead.day)}
+              </Text>
+            ) : null}
+            {!isEquity && showOpenLevels && openAnchorRead?.lines.missingDay ? (
+              <Text variant="caption" color="secondary" data-testid="chart-open-day-missing">
+                {t('detail:openLevels.dayMissing')}
+              </Text>
+            ) : null}
+            {!isEquity && showOpenLevels && openAnchorRead?.block ? (
+              <Text variant="caption" color="secondary" data-testid="chart-open-4h">
+                {t('detail:openLevels.since4h', openAnchorRead.block)}
+              </Text>
+            ) : null}
+            {!isEquity && showOpenLevels && openAnchorRead?.lines.missingBlock ? (
+              <Text variant="caption" color="secondary" data-testid="chart-open-4h-missing">
+                {t('detail:openLevels.blockMissing')}
+              </Text>
+            ) : null}
+            {!isEquity && showOpenLevels && cvdClickSec == null && !showCvd && !positioningClickOn ? (
+              <Text variant="caption" color="secondary" data-testid="chart-open-click-hint">
+                {t('detail:openLevels.clickHint')}
+              </Text>
+            ) : null}
+            {!isEquity && showOpenLevels && openAnchorRead?.click ? (
+              <Text variant="caption" color="secondary" data-testid="chart-open-click">
+                {t('detail:openLevels.sinceClick', openAnchorRead.click)}{' '}
+                {!showCvd && !positioningClickOn ? (
+                  <Button
+                    type="link"
+                    size="small"
+                    onClick={() => setCvdClickSec(null)}
+                    data-testid="chart-open-click-clear"
+                  >
+                    {t('detail:chart.cvdClickClear')}
+                  </Button>
+                ) : null}
+              </Text>
+            ) : null}
+            {!isEquity && showOpenLevels && openAnchorRead?.clickMissing && cvdClickSec != null ? (
+              <Text variant="caption" color="secondary" data-testid="chart-open-click-missing">
+                {t('detail:openLevels.clickMissing', { time: formatUtcMinute(cvdClickSec) })}
+              </Text>
+            ) : null}
             {!isEquity && showOpenLevels && openLevelNote?.withheld ? (
               <Text variant="caption" color="secondary" data-testid="chart-open-withheld">
                 {t('detail:openLevels.withheld')}
@@ -2572,7 +2691,9 @@ export function CoinDetailPage() {
               openLevels={chartOpenLevels}
               onVisibleSpan={isEquity ? undefined : onVisibleSpan}
               onBarTimeClick={
-                isEquity || !(showCvd || showOi || showFunding || showLiqNotional) ? undefined : onCandleAnchor
+                isEquity || !(showCvd || showOi || showFunding || showLiqNotional || showOpenLevels)
+                  ? undefined
+                  : onCandleAnchor
               }
               rightPadding={
                 !isEquity &&
@@ -2653,7 +2774,14 @@ export function CoinDetailPage() {
                 (lowerSeries.some((s) => s.id.startsWith('funding-click-')) ? (isPhone ? 72 : 100) : 0) +
                 (lowerSeries.some((s) => s.id === 'liq-notional') ? (isPhone ? 72 : 120) : 0) +
                 (lowerSeries.some((s) => s.id.startsWith('liq-click-')) ? (isPhone ? 72 : 100) : 0) +
-                (lowerSeries.some((s) => s.id === 'open-liq-delta') ? (isPhone ? 72 : 100) : 0)
+                (lowerSeries.some((s) => s.id === 'open-liq-delta') ? (isPhone ? 72 : 100) : 0) +
+                (lowerSeries.some(
+                  (s) => s.id === 'open-liq-day' || s.id === 'open-liq-4h' || s.id === 'open-liq-click',
+                )
+                  ? isPhone
+                    ? 72
+                    : 100
+                  : 0)
               }
             />
           </>

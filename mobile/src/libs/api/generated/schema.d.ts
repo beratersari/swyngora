@@ -1935,11 +1935,23 @@ export interface paths {
          *     that was liquidated (`long` or `short`). This is measured prints, not
          *     estimated leverage levels. `condition=book` fires when the last spot
          *     ladder in a 15-minute block crosses a bid or ask share. Spot books are
-         *     Binance, Coinbase, and Bybit. `exchange=all` returns each venue and a
-         *     combined series only for blocks every expected venue recorded. A missing
-         *     venue is named and combined is omitted (`definite` false). Forward
-         *     returns use the spot 5-minute close at the signal, then 1 hour, 4 hours,
-         *     and 24 hours later. A horizon is omitted until that candle has closed.
+         *     Binance, Coinbase, and Bybit. `condition=funding` fires when a settled
+         *     funding print, in percent, crosses the line after the previous settled
+         *     hour was on the other side. Predicted funding is left out.
+         *     `condition=oi` fires when the open-interest value is the chosen percent
+         *     away from a sample about 24 hours earlier. A missing sample is left out
+         *     and is not zero. `condition=gap` fires when top-trader long share minus
+         *     the crowd, in percentage points, crosses the line. Bybit has no
+         *     top-trader ratio, so gap uses Binance and OKX. `condition=size` fires
+         *     when a finished UTC hour's aggressive notional from prints of at least
+         *     $100,000 reaches the chosen share. Minutes stored before print size was
+         *     known are left out. `exchange=all` returns each venue and a combined
+         *     series only for blocks every expected venue recorded. A missing venue
+         *     is named and combined is omitted (`definite` false). Forward returns
+         *     use the spot 5-minute close at the signal, then 1 hour, 4 hours, and
+         *     24 hours later. `worstDrop` is the lowest close versus the entry on
+         *     the way to that horizon. Zero means price did not close below the
+         *     entry. A horizon is omitted until that candle has closed.
          *     Liquidations are the newest 2,500 prints. Books are the newest 500
          *     snapshots. Default window is 7 days, maximum 30. Informational only.
          */
@@ -2751,6 +2763,14 @@ export interface paths {
          *     `segments` are clustered and capped for drawing. `cumulative`,
          *     `openLong`, `openShort`, and `delta` stay uncapped. `hitLots` and
          *     `closedLots` count the raw slices, not the capped drawing.
+         *     Each definite book includes `anchors` for the still-open size since
+         *     00:00 UTC and since the current 4-hour open. `longChange`,
+         *     `shortChange`, and `deltaChange` are the latest column minus the last
+         *     column at or before that clock. `complete` is false when the stored
+         *     book starts later, and that missing baseline is not treated as zero.
+         *     Optional `anchor` (RFC3339) adds the same read from a chosen candle
+         *     and does not move the window. Combined anchors stay off when
+         *     `combined.definite` is false.
          *     `leverageMix` is the assumed share of open interest at each leverage.
          *     Binance public open interest is 30 days, so older columns exist only
          *     when this archive already stored them. Not exchange liquidation-engine
@@ -6625,6 +6645,33 @@ export interface components {
             accountBlend?: "stored" | "even" | "mixed";
             /** @description False for combined when any venue has no price and open interest, or the venues never overlap. */
             definite: boolean;
+            /** @description Still-open size since 00:00 UTC, the current 4-hour open, and an optional candle. Empty when this book is withheld. */
+            anchors?: components["schemas"]["LiquidationOpenLevelAnchor"][];
+        };
+        /** @description Change in still-open liquidation size since a clock or a clicked candle. The baseline is the last cumulative column at or before that time. */
+        LiquidationOpenLevelAnchor: {
+            /** @enum {string} */
+            anchor: "day" | "4h" | "click";
+            /** Format: date-time */
+            from: string;
+            /** @description Still-open long notional now minus the baseline. */
+            longChange?: number;
+            /** @description Still-open short notional now minus the baseline. */
+            shortChange?: number;
+            /** @description Long minus short now, minus that same gap at the baseline. */
+            deltaChange?: number;
+            baselineLong?: number;
+            baselineShort?: number;
+            baselineDelta?: number;
+            /** @description Still-open long notional on the latest column. */
+            openLong?: number;
+            /** @description Still-open short notional on the latest column. */
+            openShort?: number;
+            /** @description Long minus short on the latest column. */
+            delta?: number;
+            /** @description False when no cumulative column is at or before this time. A zero change on a complete anchor is a flat book. */
+            complete: boolean;
+            summary?: string;
         };
         /** @description Estimated liquidation levels that stay until price trades through them */
         LiquidationOpenLevels: {
@@ -7435,7 +7482,7 @@ export interface components {
             symbol?: string;
             exchange?: string;
             /** @enum {string} */
-            condition?: "cvd" | "liquidation" | "book";
+            condition?: "cvd" | "liquidation" | "book" | "funding" | "oi" | "gap" | "size";
             side?: string;
             threshold?: number;
             /** Format: date-time */
@@ -7473,6 +7520,8 @@ export interface components {
             median?: number;
             /** @description Share of returns greater than 0 */
             winRate?: number;
+            /** @description Lowest spot close versus the entry on the way to this horizon */
+            worstDrop?: number;
         };
         TapeBacktestSignal: {
             /** Format: date-time */
@@ -7480,12 +7529,16 @@ export interface components {
             /** Format: date-time */
             barStart?: string;
             side?: string;
-            /** @description Buy/sell or bid/ask share from 0 to 1 */
+            /** @description Share from 0 to 1 */
             value?: number;
             close?: number;
             return1h?: number;
             return4h?: number;
             return24h?: number;
+            /** @description Lowest close versus the entry on the way to 1 hour */
+            drop1h?: number;
+            drop4h?: number;
+            drop24h?: number;
         };
         /** @description Combined −1…+1 market pressure from book, CVD, and absorption */
         MarketPressure: {
@@ -12794,13 +12847,13 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description cvd and liquidation use binance, bybit, okx, or all. book uses binance, coinbase, bybit, or all. */
+                /** @description cvd, liquidation, funding, oi, and size use binance, bybit, okx, or all. book uses binance, coinbase, bybit, or all. gap uses binance, okx, or all. */
                 exchange?: string;
-                /** @description cvd, liquidation, or book */
-                condition?: "cvd" | "liquidation" | "book";
-                /** @description buy or sell, long or short, or bid or ask. Empty uses the condition default. */
+                /** @description cvd, liquidation, book, funding, oi, gap, or size */
+                condition?: "cvd" | "liquidation" | "book" | "funding" | "oi" | "gap" | "size";
+                /** @description buy or sell, long or short, bid or ask, up or down, top or crowd, or whale or retail. Empty uses the condition default. */
                 side?: string;
-                /** @description Share from 0.55 to 0.90 (or a percent such as 65), or a liquidation multiple from 2 to 12. Empty uses 0.65 or 4. */
+                /** @description Share 0.55–0.90, liquidation multiple 2–12, funding percent 0.005–0.20, open-interest percent 1–50, crowd gap 1–20 points, or large-print share 0.15–0.80. Empty uses the condition default. */
                 threshold?: number;
                 /** @description Range start (RFC3339 or unix milliseconds). Empty is 7 days before `to`. */
                 from?: string;
@@ -13619,6 +13672,8 @@ export interface operations {
                 range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d" | "90d";
                 /** @description binance | bybit | okx | all (default all = Binance, Bybit, OKX, and combined) */
                 exchange?: string;
+                /** @description Optional RFC3339 candle time. Adds the still-open size change since that candle. Empty omits the click anchor. Day and 4-hour anchors are always computed from this range. */
+                anchor?: string;
             };
             header?: never;
             path?: never;
@@ -13626,7 +13681,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Open, hit, and closed liquidation levels plus the cumulative line */
+            /** @description Open, hit, and closed liquidation levels plus the cumulative line and anchored size changes */
             200: {
                 headers: {
                     [name: string]: unknown;

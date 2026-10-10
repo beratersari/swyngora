@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"math"
 	"sort"
 	"time"
@@ -48,6 +49,34 @@ type OpenLevelPoint struct {
 	Delta         float64   `json:"delta"`
 }
 
+const (
+	// OpenLevelAnchorDay is 00:00 UTC.
+	OpenLevelAnchorDay = "day"
+	// OpenLevelAnchor4h is the current 4-hour block (00/04/08/12/16/20 UTC).
+	OpenLevelAnchor4h = "4h"
+	// OpenLevelAnchorClick is a candle the caller chose.
+	OpenLevelAnchorClick = "click"
+)
+
+// OpenLevelAnchor is how the still-open book changed since a clock or a candle.
+// The baseline is the last cumulative column at or before From. Complete is
+// false when no column has reached that time. A zero change is a flat book.
+type OpenLevelAnchor struct {
+	Anchor        string    `json:"anchor"`
+	From          time.Time `json:"from"`
+	LongChange    float64   `json:"longChange"`
+	ShortChange   float64   `json:"shortChange"`
+	DeltaChange   float64   `json:"deltaChange"`
+	BaselineLong  float64   `json:"baselineLong"`
+	BaselineShort float64   `json:"baselineShort"`
+	BaselineDelta float64   `json:"baselineDelta"`
+	OpenLong      float64   `json:"openLong"`
+	OpenShort     float64   `json:"openShort"`
+	Delta         float64   `json:"delta"`
+	Complete      bool      `json:"complete"`
+	Summary       string    `json:"summary,omitempty"`
+}
+
 // OpenLevelBook is one venue, or the combined book when every venue contributed.
 type OpenLevelBook struct {
 	Exchange      string             `json:"exchange"`
@@ -64,6 +93,8 @@ type OpenLevelBook struct {
 	// Definite is false for combined when any venue has no price and open interest,
 	// or when the venues never overlap on a column.
 	Definite bool `json:"definite"`
+	// Anchors rebase this book's cumulative line. Empty when the book is withheld.
+	Anchors []OpenLevelAnchor `json:"anchors,omitempty"`
 }
 
 // OpenLevelsReport is the persistent liquidation-level read.
@@ -83,14 +114,16 @@ type OpenLevelsReport struct {
 }
 
 // OpenLevelsInput feeds BuildOpenLevels. Venues are the same series the heatmap loads.
+// Click, when set, adds a third anchor from that candle. It does not move the window.
 type OpenLevelsInput struct {
 	Symbol string
 	Spec   HuntHeatmapSpec
 	To     time.Time
+	Click  time.Time
 	Venues []HuntHeatmapVenueSeries
 }
 
-const openLevelsNote = "Estimated liquidation levels that stay at the price where that slice of open interest was placed, until a later candle trades through them. The first column places the whole open interest then on the books, because earlier entries are unknown. Later columns only add an increase in estimated open interest. A level that price has already traded through is not put back. When estimated open interest on a side falls, the oldest open slices on that side are closed; that is an inventory change, not a liquidation. A long level is hit when a later candle low reaches it. A short level is hit when a later candle high reaches it. The candle that placed a level cannot hit it. Binance, Bybit, and OKX each use only their own price and open interest. Combined sums a column only when all three have both, and combined is withheld when any venue has none in this window. The leverage mix is the labeled hunt model with 0.40% maintenance. Not exchange liquidation-engine output. Binance public open interest is 30 days, so older columns exist only when this archive already stored them. Not financial advice."
+const openLevelsNote = "Estimated liquidation levels that stay at the price where that slice of open interest was placed, until a later candle trades through them. The first column places the whole open interest then on the books, because earlier entries are unknown. Later columns only add an increase in estimated open interest. A level that price has already traded through is not put back. When estimated open interest on a side falls, the oldest open slices on that side are closed; that is an inventory change, not a liquidation. A long level is hit when a later candle low reaches it. A short level is hit when a later candle high reaches it. The candle that placed a level cannot hit it. Binance, Bybit, and OKX each use only their own price and open interest. Combined sums a column only when all three have both, and combined is withheld when any venue has none in this window. Each definite book reports how still-open long size, short size, and long minus short changed since 00:00 UTC and since the current 4-hour open. An optional candle adds the same change since that open. The baseline is the last cumulative column at or before that time. When the stored book starts later, that anchor is not complete and is not treated as zero. Combined anchors stay off when combined is withheld. The leverage mix is the labeled hunt model with 0.40% maintenance. Not exchange liquidation-engine output. Binance public open interest is 30 days, so older columns exist only when this archive already stored them. Not financial advice."
 
 type openLot struct {
 	side     string
@@ -145,6 +178,10 @@ func BuildOpenLevels(in OpenLevelsInput) OpenLevelsReport {
 	out.OKX = okx.book
 	out.Combined = combineOpenLevels(times, []openLevelWalk{binance, bybit, okx})
 	out.MissingVenues = missingOpenVenues(out.Binance, out.Bybit, out.OKX)
+	attachOpenLevelAnchors(&out.Binance, to, in.Click)
+	attachOpenLevelAnchors(&out.Bybit, to, in.Click)
+	attachOpenLevelAnchors(&out.OKX, to, in.Click)
+	attachOpenLevelAnchors(&out.Combined, to, in.Click)
 	return out
 }
 
@@ -624,6 +661,93 @@ func capOpenSegments(in []OpenLevelSegment) []OpenLevelSegment {
 		return []OpenLevelSegment{}
 	}
 	return out
+}
+
+// attachOpenLevelAnchors rebases a definite book's cumulative line at the
+// UTC day open, the current 4-hour open, and an optional candle. A withheld
+// book keeps Anchors empty so a missing venue is not read as a flat book.
+func attachOpenLevelAnchors(book *OpenLevelBook, now, click time.Time) {
+	if book == nil || !book.Definite || len(book.Cumulative) == 0 {
+		return
+	}
+	now = now.UTC()
+	starts := []struct {
+		id   string
+		from time.Time
+	}{
+		{OpenLevelAnchorDay, time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)},
+		{OpenLevelAnchor4h, now.Truncate(4 * time.Hour)},
+	}
+	if !click.IsZero() {
+		starts = append(starts, struct {
+			id   string
+			from time.Time
+		}{OpenLevelAnchorClick, click.UTC()})
+	}
+	book.Anchors = make([]OpenLevelAnchor, 0, len(starts))
+	for _, start := range starts {
+		book.Anchors = append(book.Anchors, openLevelAnchor(book.Cumulative, start.id, start.from))
+	}
+}
+
+func openLevelAnchor(points []OpenLevelPoint, id string, from time.Time) OpenLevelAnchor {
+	from = from.UTC()
+	out := OpenLevelAnchor{Anchor: id, From: from}
+	var base, last *OpenLevelPoint
+	for i := range points {
+		point := &points[i]
+		if last == nil || point.Time.After(last.Time) {
+			last = point
+		}
+		if point.Time.After(from) {
+			continue
+		}
+		if base == nil || !point.Time.Before(base.Time) {
+			base = point
+		}
+	}
+	if base == nil || last == nil {
+		out.Summary = "The stored book starts after the " + openLevelAnchorLabel(id) + "."
+		return out
+	}
+	out.Complete = true
+	out.BaselineLong = base.LongNotional
+	out.BaselineShort = base.ShortNotional
+	out.BaselineDelta = base.Delta
+	out.OpenLong = last.LongNotional
+	out.OpenShort = last.ShortNotional
+	out.Delta = last.Delta
+	out.LongChange = last.LongNotional - base.LongNotional
+	out.ShortChange = last.ShortNotional - base.ShortNotional
+	out.DeltaChange = last.Delta - base.Delta
+	out.Summary = explainOpenLevelAnchor(out)
+	return out
+}
+
+func openLevelAnchorLabel(id string) string {
+	switch id {
+	case OpenLevelAnchorDay:
+		return "day open"
+	case OpenLevelAnchorClick:
+		return "chosen candle"
+	default:
+		return "4h open"
+	}
+}
+
+func explainOpenLevelAnchor(a OpenLevelAnchor) string {
+	clock := a.From.UTC().Format("15:04")
+	if a.Anchor == OpenLevelAnchorClick {
+		clock = a.From.UTC().Format("2006-01-02 15:04")
+	}
+	return fmt.Sprintf(
+		"Since the %s (%s UTC), still-open longs changed by %s USDT and shorts by %s USDT. Long minus short changed by %s USDT.",
+		openLevelAnchorLabel(a.Anchor),
+		clock,
+		FormatSignedQty(a.LongChange),
+		FormatSignedQty(a.ShortChange),
+		FormatSignedQty(a.DeltaChange),
+	)
 }
 
 func trimOpenCumulative(in []OpenLevelPoint) []OpenLevelPoint {

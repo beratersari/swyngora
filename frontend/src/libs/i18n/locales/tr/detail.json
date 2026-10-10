@@ -155,6 +155,9 @@
     "liqMap": "Likidasyon haritası",
     "openLevels": "Açık seviyeler",
     "openLevelDelta": "Açık long − short",
+    "openLevelDay": "00:00 UTC’den beri açık long − short",
+    "openLevel4h": "4 saatlik açılıştan beri açık long − short",
+    "openLevelClick": "Bu mumdan beri açık long − short",
     "liqMapPan": "Bu aralığın önceki kısmı için mumları yüklemek üzere sola kaydırın.",
     "bookStored": "Defter gölgesi ekrandaki mumları izler. 30 dakikadan uzun bir görünüm, yaklaşık 30 güne kadar kayıtlı dakika merdivenlerini kullanır.",
     "candleFootprint": "Her mumun içindeki alış ve satış kayıtlı dakikalardan gelir, yaklaşık 30 gün. Açık dakika, canlı bant o dakikayı kapsıyorsa oradan gelir. En yoğun satır işaretlenir. Diğerinin en az 3 katı olan taraf çerçevelenir. Yalnızca bilgilendirme amaçlıdır.",
@@ -173,15 +176,22 @@
       "long": "Long",
       "short": "Short"
     },
-    "tapeHint": "Alış − satış, her mumdaki agresif vadeli akıştır. CVD aralığı 24s 5 dakikalık barlardır. 7g, 30g ve 90g kayıtlı dakikaları 30 dakika, 2 saat ve 4 saatlik barlara katlar ve biriken toplamı çizer. CVD ayrıca 00:00 UTC’de ve geçerli 4 saatlik açılışta sıfırlanır. Defter gölgesi ekrandaki mumların bekleyen büyüklüğüdür. 30 dakikadan uzun bir görünüm kayıtlı dakika merdivenlerini kullanır. Mumların arkasındaki renk, seçilen aralıktaki tahmini likidasyon yoğunluğudur. Birleşik hücre, yalnızca Binance, Bybit ve OKX’in her birinin kendi fiyatı ve açık pozisyonu varken boyanır. Açık seviyeler, fiyat içlerinden geçene kadar durur. Kayıtlı dakikalar mumları doldurduğunda alış ve satış her mumun içinde durur. Aksi halde sağ kenar her fiyattaki alışa karşı satıştır, yanındaki çubuklar tahmini likidasyon cepleridir. Alt şerit kalabalık long yüzdesi ile büyük traderları karşılaştırır. Binance ve OKX ikisini de çizer. Bybit yalnızca hesap kalabalığını çizer. Açık pozisyon, fonlama, kalabalık ve likidasyon büyüklüğü mumları izler: 24 saate kadar 5 dakika, 7 güne kadar 30 dakika, 30 güne kadar 2 saat, sonrasında 4 saat, en fazla 90 gün. Örneği olmayan adım boş bırakılır, sıfır sayılmaz. Açık pozisyon ve büyük − kalabalık farkı 00:00 UTC’de ve geçerli 4 saatlik açılışta da sıfırlanır. Likidasyon çubuğu, aynı adımdaki short notional eksi long notionaldir. Kaldıraç karışımı bir modeldir. Hacim zirvesi ve %70 değer alanı, ekrandaki mumların agresif işlem fiyatlarıdır. Oklar önceki bir tepe veya dibin delinmesini gösterir. Kareler son 5 dakikada tekrarlayan bir işlem boyutudur. Yalnızca bilgi amaçlıdır.",
+    "tapeHint": "Alış − satış, her mumdaki agresif vadeli akıştır. CVD aralığı 24s 5 dakikalık barlardır. 7g, 30g ve 90g kayıtlı dakikaları 30 dakika, 2 saat ve 4 saatlik barlara katlar ve biriken toplamı çizer. CVD ayrıca 00:00 UTC’de ve geçerli 4 saatlik açılışta sıfırlanır. Defter gölgesi ekrandaki mumların bekleyen büyüklüğüdür. 30 dakikadan uzun bir görünüm kayıtlı dakika merdivenlerini kullanır. Mumların arkasındaki renk, seçilen aralıktaki tahmini likidasyon yoğunluğudur. Birleşik hücre, yalnızca Binance, Bybit ve OKX’in her birinin kendi fiyatı ve açık pozisyonu varken boyanır. Açık seviyeler, fiyat içlerinden geçene kadar durur. Açık long eksi short farkı 00:00 UTC’de, geçerli 4 saatlik açılışta ve tıklanan bir mumda da sıfırlanır. Kayıtlı dakikalar mumları doldurduğunda alış ve satış her mumun içinde durur. Aksi halde sağ kenar her fiyattaki alışa karşı satıştır, yanındaki çubuklar tahmini likidasyon cepleridir. Alt şerit kalabalık long yüzdesi ile büyük traderları karşılaştırır. Binance ve OKX ikisini de çizer. Bybit yalnızca hesap kalabalığını çizer. Açık pozisyon, fonlama, kalabalık ve likidasyon büyüklüğü mumları izler: 24 saate kadar 5 dakika, 7 güne kadar 30 dakika, 30 güne kadar 2 saat, sonrasında 4 saat, en fazla 90 gün. Örneği olmayan adım boş bırakılır, sıfır sayılmaz. Açık pozisyon ve büyük − kalabalık farkı 00:00 UTC’de ve geçerli 4 saatlik açılışta da sıfırlanır. Likidasyon çubuğu, aynı adımdaki short notional eksi long notionaldir. Kaldıraç karışımı bir modeldir. Hacim zirvesi ve %70 değer alanı, ekrandaki mumların agresif işlem fiyatlarıdır. Oklar önceki bir tepe veya dibin delinmesini gösterir. Kareler son 5 dakikada tekrarlayan bir işlem boyutudur. Yalnızca bilgi amaçlıdır.",
     "pumpOn": "Açık",
     "pumpOff": "Kapalı",
     "pumpHint": "|getiri| ≥ eşik olduğunda işaret (yalnızca bilgilendirme)",
     "postDelistBanner": "{{date}} sonrası barlar {{source}} — {{exchange}} işlem yok. Yalnızca bilgi amaçlı, yatırım tavsiyesi değildir."
   },
   "openLevels": {
-    "caption": "Seviyeler, sonraki bir mum içlerinden geçene kadar durur. Alttaki çizgi açık long büyüklüğü eksi açık short büyüklüğüdür. İlk örnek, o anda defterde olan açık pozisyonu yerleştirir. Açık pozisyon düştüğü için kapanan bir seviye likide olmamıştır. Fiyatın içinden geçtiği seviye geri konmaz.",
-    "withheld": "Birleşik açık seviyeler, Binance, Bybit ve OKX’in bu pencerede her birinin fiyatı ve açık pozisyonu olana kadar gösterilmez."
+    "caption": "Seviyeler, sonraki bir mum içlerinden geçene kadar durur. Alttaki çizgi açık long büyüklüğü eksi açık short büyüklüğüdür. Bu fark 00:00 UTC’de, geçerli 4 saatlik açılışta ve tıklanan bir mumda da sıfırlanır. İlk örnek, o anda defterde olan açık pozisyonu yerleştirir. Açık pozisyon düştüğü için kapanan bir seviye likide olmamıştır. Fiyatın içinden geçtiği seviye geri konmaz.",
+    "withheld": "Birleşik açık seviyeler, Binance, Bybit ve OKX’in bu pencerede her birinin fiyatı ve açık pozisyonu olana kadar gösterilmez.",
+    "sinceDay": "00:00 UTC’den beri açık long {{long}}, açık short {{short}}. Long eksi short {{delta}}.",
+    "since4h": "4 saatlik açılıştan beri açık long {{long}}, açık short {{short}}. Long eksi short {{delta}}.",
+    "sinceClick": "{{time}} itibarıyla açık long {{long}}, açık short {{short}}. Long eksi short {{delta}}.",
+    "dayMissing": "00:00 UTC’den beri açık büyüklük, kayıtlı defter o açılışa ulaşana kadar çizilmez.",
+    "blockMissing": "4 saatlik açılıştan beri açık büyüklük, kayıtlı defter o açılışa ulaşana kadar çizilmez.",
+    "clickMissing": "Kayıtlı defter {{time}} sonrasında başlıyor.",
+    "clickHint": "Açık defteri o mumdan yeniden başlatmak için bir muma tıklayın."
   },
   "postDelist": {
     "title": "Delist sonrası",

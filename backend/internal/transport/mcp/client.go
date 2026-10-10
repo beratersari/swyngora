@@ -779,7 +779,8 @@ func (c *APIClient) GetLiquidationPrintHeatmap(ctx context.Context, exchange, sy
 }
 
 // GetLiquidationOpenLevels returns levels that stay until price trades through them.
-func (c *APIClient) GetLiquidationOpenLevels(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error) {
+// anchor, when set, is an RFC3339 candle and adds that click to the day and 4h reads.
+func (c *APIClient) GetLiquidationOpenLevels(ctx context.Context, exchange, symbol, rawRange, anchor string) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)
 	if exchange != "" {
@@ -787,6 +788,9 @@ func (c *APIClient) GetLiquidationOpenLevels(ctx context.Context, exchange, symb
 	}
 	if rawRange != "" {
 		q.Set("range", rawRange)
+	}
+	if anchor != "" {
+		q.Set("anchor", anchor)
 	}
 	return c.get(ctx, "/api/v1/market/liquidation-open-levels", q)
 }

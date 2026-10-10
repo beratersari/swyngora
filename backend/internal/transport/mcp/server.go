@@ -77,7 +77,7 @@ type DataPort interface {
 	GetLiquidationHunt(ctx context.Context, exchange, symbol string, weights domain.HuntScoreWeights) (json.RawMessage, error)
 	GetLiquidationHuntHeatmap(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error)
 	GetLiquidationPrintHeatmap(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error)
-	GetLiquidationOpenLevels(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error)
+	GetLiquidationOpenLevels(ctx context.Context, exchange, symbol, rawRange, anchor string) (json.RawMessage, error)
 	GetLiquidationMaxPain(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetSqueezeRisk(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetPositioning(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -1312,16 +1312,17 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_liquidation_open_levels",
-		mcp.WithDescription("Estimated liquidation levels that stay at the price where that slice of open interest was placed, until a later candle trades through them. range=12h|24h|3d|7d|14d|30d|90d. Windows past 24 hours read one stored open-interest sample per bucket from the archive. A column with no sample stays empty. The first column places the whole open interest then on the books. Later columns only add an increase. A traded-through level is not put back. When estimated open interest on a side falls, the oldest open slices close; that is not a liquidation. Longs are hit by a later candle low; shorts by a later candle high. The birth candle cannot hit its own level. Binance, Bybit, and OKX each use only their own price and open interest. Combined sums a column only when all three have both, and combined is withheld (definite=false, empty segments) when any venue has none. Segments are capped for drawing; cumulative, openLong, openShort, and delta stay uncapped. The leverage mix is the labeled hunt model with 0.40% maintenance. Binance public open interest is 30 days. Not exchange liquidation-engine output. Not financial advice."),
+		mcp.WithDescription("Estimated liquidation levels that stay at the price where that slice of open interest was placed, until a later candle trades through them. range=12h|24h|3d|7d|14d|30d|90d. Windows past 24 hours read one stored open-interest sample per bucket from the archive. A column with no sample stays empty. The first column places the whole open interest then on the books. Later columns only add an increase. A traded-through level is not put back. When estimated open interest on a side falls, the oldest open slices close; that is not a liquidation. Longs are hit by a later candle low; shorts by a later candle high. The birth candle cannot hit its own level. Binance, Bybit, and OKX each use only their own price and open interest. Combined sums a column only when all three have both, and combined is withheld (definite=false, empty segments and anchors) when any venue has none. Each definite book reports still-open long, short, and long-minus-short change since 00:00 UTC and since the current 4-hour open. The baseline is the last cumulative column at or before that clock. complete is false when the stored book starts later, and that is not a zero change. Optional anchor (RFC3339) adds the same read from a chosen candle and does not move the window. Segments are capped for drawing; cumulative, openLong, openShort, and delta stay uncapped. The leverage mix is the labeled hunt model with 0.40% maintenance. Binance public open interest is 30 days. Not exchange liquidation-engine output. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("range", mcp.Description("12h | 24h | 3d | 7d | 14d | 30d | 90d (default 24h)")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all = three venues + combined)")),
+		mcp.WithString("anchor", mcp.Description("Optional RFC3339 candle time. Adds the still-open size change since that candle. Empty omits it.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.GetLiquidationOpenLevels(ctx, req.GetString("exchange", "all"), symbol, req.GetString("range", "24h"))
+		raw, err := api.GetLiquidationOpenLevels(ctx, req.GetString("exchange", "all"), symbol, req.GetString("range", "24h"), req.GetString("anchor", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

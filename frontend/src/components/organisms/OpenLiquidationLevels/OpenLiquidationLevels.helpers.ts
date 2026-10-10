@@ -1,5 +1,14 @@
 import type { LiqHeatVenue } from '@/components/organisms/LiquidationHeatmap';
 import type { LiquidationOpenLevelBook, LiquidationOpenLevels } from '@/libs/api';
+import { formatCompactUsd } from '@/libs/utils';
+
+/** Signed compact USD. A positive change keeps the plus. Zero stays 0. */
+export function formatSignedCompactUsd(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  const text = formatCompactUsd(value);
+  if (value > 0 && text !== '0') return `+${text}`;
+  return text;
+}
 
 export type OpenLevelTableRow = {
   exchange: string;

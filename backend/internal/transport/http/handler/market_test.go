@@ -1942,6 +1942,16 @@ func TestGetLiquidationOpenLevels_OK(t *testing.T) {
 	}
 }
 
+func TestGetLiquidationOpenLevels_BadAnchor(t *testing.T) {
+	h := newTestHandler()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-open-levels?symbol=BTCUSDT&anchor=yesterday", nil)
+	rr := httptest.NewRecorder()
+	h.GetLiquidationOpenLevels(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
 func TestGetLiquidationOpenLevels_BadRange(t *testing.T) {
 	h := newTestHandler()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/market/liquidation-open-levels?symbol=BTCUSDT&range=9h", nil)

@@ -695,6 +695,14 @@ class LiquidationOpenLevelsInput(BaseModel):
         default="all",
         description="binance|bybit|okx|all (default all = three venues + combined)",
     )
+    anchor: str = Field(
+        default="",
+        description=(
+            "Optional RFC3339 candle time. Adds the still-open long, short, "
+            "and long-minus-short change since that candle. Empty omits it. "
+            "Day and 4-hour anchors are always included on a definite book."
+        ),
+    )
 
 
 class SqueezeRiskInput(BaseModel):
@@ -2462,11 +2470,13 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"symbol": symbol, "range": range, "exchange": exchange},
         )
 
-    def get_liquidation_open_levels(symbol: str, range: str = "24h", exchange: str = "all") -> str:
-        return http.get(
-            "/api/v1/market/liquidation-open-levels",
-            {"symbol": symbol, "range": range, "exchange": exchange},
-        )
+    def get_liquidation_open_levels(
+        symbol: str, range: str = "24h", exchange: str = "all", anchor: str = ""
+    ) -> str:
+        params: dict[str, Any] = {"symbol": symbol, "range": range, "exchange": exchange}
+        if anchor:
+            params["anchor"] = anchor
+        return http.get("/api/v1/market/liquidation-open-levels", params)
 
     def get_squeeze_risk(symbol: str, exchange: str = "all") -> str:
         return http.get(
@@ -5398,10 +5408,15 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "slices and is not a liquidation. Longs are hit by a later "
                 "low; shorts by a later high. Binance, Bybit, and OKX each "
                 "use only their own price and open interest. Combined is "
-                "withheld (definite=false) when any venue has none. The "
-                "leverage mix is the labeled hunt model with 0.40% "
-                "maintenance. Not exchange liquidation-engine output. Not "
-                "financial advice."
+                "withheld (definite=false, no anchors) when any venue has "
+                "none. Each definite book reports still-open long, short, "
+                "and long-minus-short change since 00:00 UTC and the current "
+                "4-hour open. The baseline is the last column at or before "
+                "that clock. complete is false when the book starts later, "
+                "and that is not zero. Optional anchor adds the same read "
+                "from a chosen candle. The leverage mix is the labeled hunt "
+                "model with 0.40% maintenance. Not exchange liquidation-engine "
+                "output. Not financial advice."
             ),
             args_schema=LiquidationOpenLevelsInput,
         ),

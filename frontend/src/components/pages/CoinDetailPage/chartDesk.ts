@@ -565,6 +565,121 @@ export function openLevelDelta(
   return out;
 }
 
+export type OpenLevelPoint = {
+  time: number;
+  long: number;
+  short: number;
+  delta: number;
+};
+
+/** Cumulative still-open size. Empty when the book is withheld. */
+export function openLevelPoints(
+  data: LiquidationOpenLevels | undefined,
+  venue: LiqHeatVenue,
+): OpenLevelPoint[] {
+  const book = pickOpenLevelBook(data, venue);
+  if (!book || book.definite === false) return [];
+  const out: OpenLevelPoint[] = [];
+  for (const point of book.cumulative ?? []) {
+    const time = unixSeconds(point.time);
+    if (
+      time == null ||
+      point.longNotional == null ||
+      point.shortNotional == null ||
+      point.delta == null ||
+      !Number.isFinite(point.longNotional) ||
+      !Number.isFinite(point.shortNotional) ||
+      !Number.isFinite(point.delta)
+    ) {
+      continue;
+    }
+    out.push({
+      time,
+      long: point.longNotional,
+      short: point.shortNotional,
+      delta: point.delta,
+    });
+  }
+  out.sort((a, b) => a.time - b.time);
+  return out;
+}
+
+export type OpenLevelSizeChange = {
+  long: number;
+  short: number;
+  delta: number;
+};
+
+/**
+ * Still-open size now minus the last column at or before the anchor.
+ * Null when the stored book starts later.
+ */
+export function openLevelSizeSince(
+  points: OpenLevelPoint[],
+  anchorSec: number,
+): OpenLevelSizeChange | null {
+  if (!Number.isFinite(anchorSec) || points.length === 0) return null;
+  let base: OpenLevelPoint | null = null;
+  let last: OpenLevelPoint | null = null;
+  for (const point of points) {
+    if (last == null || point.time > last.time) last = point;
+    if (point.time <= anchorSec && (base == null || point.time >= base.time)) base = point;
+  }
+  if (base == null || last == null) return null;
+  return {
+    long: last.long - base.long,
+    short: last.short - base.short,
+    delta: last.delta - base.delta,
+  };
+}
+
+export type OpenLevelAnchorLines = {
+  day: ChartLinePoint[];
+  block: ChartLinePoint[];
+  click: ChartLinePoint[];
+  missingDay: boolean;
+  missingBlock: boolean;
+};
+
+/**
+ * Long-minus-short reset at the book's day and 4-hour anchors, plus a click.
+ * A withheld book draws nothing. A clock before the first column is missing.
+ */
+export function openLevelAnchorLines(
+  data: LiquidationOpenLevels | undefined,
+  venue: LiqHeatVenue,
+  clickSec: number | null,
+): OpenLevelAnchorLines {
+  const empty: OpenLevelAnchorLines = {
+    day: [],
+    block: [],
+    click: [],
+    missingDay: false,
+    missingBlock: false,
+  };
+  const book = pickOpenLevelBook(data, venue);
+  const delta = openLevelDelta(data, venue);
+  if (!book || book.definite === false || delta.length === 0) return empty;
+  const from = (id: 'day' | '4h') => {
+    const row = book.anchors?.find((anchor) => anchor.anchor === id);
+    return row?.complete ? unixSeconds(row.from) : null;
+  };
+  const dayFrom = from('day');
+  const blockFrom = from('4h');
+  const day = dayFrom == null ? [] : anchoredChange(delta, dayFrom);
+  const block = blockFrom == null ? [] : anchoredChange(delta, blockFrom);
+  const click =
+    clickSec != null && Number.isFinite(clickSec) ? anchoredChange(delta, clickSec) : [];
+  const clockKnown = (book.anchors?.length ?? 0) > 0;
+  return {
+    day,
+    block,
+    click,
+    missingDay: clockKnown && day.length === 0,
+    missingBlock: clockKnown && block.length === 0,
+  };
+}
+
 /** Mix, missing venues, and whether this venue's book was withheld. */
 export function openLevelNotes(
   data: LiquidationOpenLevels | undefined,

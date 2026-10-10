@@ -1326,11 +1326,11 @@ func (b *Backend) GetLiquidationPrintHeatmap(ctx context.Context, exchange, symb
 	return mustJSON(got)
 }
 
-func (b *Backend) GetLiquidationOpenLevels(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error) {
+func (b *Backend) GetLiquidationOpenLevels(ctx context.Context, exchange, symbol, rawRange, anchor string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
 	}
-	got, err := b.Market.GetLiquidationOpenLevels(ctx, exchange, symbol, rawRange)
+	got, err := b.Market.GetLiquidationOpenLevels(ctx, exchange, symbol, rawRange, anchor)
 	if err != nil {
 		return nil, err
 	}
