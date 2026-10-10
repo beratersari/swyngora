@@ -1470,6 +1470,54 @@ paths:
           $ref: '#/components/responses/Error'
         '502':
           $ref: '#/components/responses/Error'
+  /api/v1/market/derivatives-grid:
+    get:
+      summary: Liquid perpetual time grid
+      description: |
+        Coins down the side and stored time across, for the same liquid USDT
+        perpetuals as the derivatives board (default 36, max 100). `range=24h`
+        is one column per clock hour. `range=7d` is one column per UTC day.
+        `metric` is `funding` (latest settled rate in the cell, or the latest
+        predicted rate when that cell has no settlement), `oi` (percent change
+        in open interest from the previous cell), `cvd` (aggressive buy minus
+        sell), or `liquidations` (stored force-order notional). A watched hour
+        with no liquidation print is a real zero. `exchange=all` reads Binance
+        USD-M, Bybit linear, and OKX USDT-swap. A cell is present only when
+        every expected venue has that column. `missing` names a venue that is
+        absent, and that venue is not counted as zero. The open column stays
+        blank when its newest sample is older than five minutes, or when the
+        tape does not reach both edges of the column. `heat` on a liquidation
+        cell is that column versus the coin's own median. Informational only.
+      operationId: getMarketDerivativesGrid
+      tags: [Market]
+      parameters:
+        - name: exchange
+          in: query
+          description: binance | bybit | okx | all (default all)
+          schema: { type: string, default: all }
+        - name: metric
+          in: query
+          description: funding | oi | cvd | liquidations (default funding)
+          schema: { type: string, default: funding }
+        - name: range
+          in: query
+          description: 24h | 7d (default 24h)
+          schema: { type: string, default: 24h }
+        - name: limit
+          in: query
+          description: How many liquid perpetuals to include (default 36, min 5, max 100)
+          schema: { type: integer, default: 36, minimum: 5, maximum: 100, example: 36 }
+      responses:
+        '200':
+          description: Coin-by-time grid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MarketDerivativesGrid'
+        '400':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
   /api/v1/market/options:
     get:
       summary: BTC/ETH options overview (open interest, volume, PCR, IV, expiry)
@@ -12203,6 +12251,47 @@ components:
         definite: { type: boolean }
         summary: { type: string }
         note: { type: string }
+    MarketDerivativesGrid:
+      type: object
+      description: Coins by time. A cell value is omitted when that column is not definite.
+      properties:
+        exchange: { type: string }
+        metric: { type: string, description: funding | oi | cvd | liquidations }
+        range: { type: string, description: 24h | 7d }
+        stepSec: { type: integer }
+        asOf: { type: string, format: date-time }
+        columns:
+          type: array
+          items: { type: string, format: date-time }
+        rows:
+          type: array
+          items: { $ref: '#/components/schemas/MarketDerivativesGridRow' }
+        universe: { type: integer }
+        note: { type: string }
+    MarketDerivativesGridRow:
+      type: object
+      properties:
+        symbol: { type: string }
+        base: { type: string }
+        cells:
+          type: array
+          items: { $ref: '#/components/schemas/MarketDerivativesGridCell' }
+    MarketDerivativesGridCell:
+      type: object
+      properties:
+        time: { type: string, format: date-time }
+        value:
+          type: number
+          description: Omitted when definite is false, so a blank is not a zero.
+        text: { type: string }
+        heat:
+          type: number
+          description: Liquidation notional divided by this coin's median definite cell. Omitted until three definite cells exist.
+        definite: { type: boolean }
+        missing:
+          type: array
+          items: { type: string }
+        weight: { type: string, description: oi | equal, funding cells only }
     MarketDerivativesCoin:
       type: object
       properties:

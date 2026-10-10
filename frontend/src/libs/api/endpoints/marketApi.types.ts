@@ -764,6 +764,37 @@ export type DerivativesBoardQuery = {
   exchange?: string;
   limit?: number;
 };
+export type MarketDerivativesGridCell = {
+  time?: string;
+  value?: number;
+  text?: string;
+  heat?: number;
+  definite?: boolean;
+  missing?: string[];
+  weight?: string;
+};
+export type MarketDerivativesGridRow = {
+  symbol?: string;
+  base?: string;
+  cells?: MarketDerivativesGridCell[];
+};
+export type MarketDerivativesGrid = {
+  exchange?: string;
+  metric?: string;
+  range?: string;
+  stepSec?: number;
+  asOf?: string;
+  columns?: string[];
+  rows?: MarketDerivativesGridRow[];
+  universe?: number;
+  note?: string;
+};
+export type DerivativesGridQuery = {
+  exchange?: string;
+  metric?: string;
+  range?: string;
+  limit?: number;
+};
 export type MarketOrderCountOverview = {
   exchange?: string;
   quote?: string;

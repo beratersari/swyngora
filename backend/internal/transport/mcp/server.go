@@ -54,6 +54,7 @@ type DataPort interface {
 	GetPerpDepthOverview(ctx context.Context, exchange string, rangePct float64, limit int) (json.RawMessage, error)
 	GetPerpBookHistory(ctx context.Context, exchange, symbol string, windowSec int) (json.RawMessage, error)
 	GetDerivativesBoard(ctx context.Context, exchange string, limit int) (json.RawMessage, error)
+	GetDerivativesGrid(ctx context.Context, exchange, metric, rangeID string, limit int) (json.RawMessage, error)
 	GetOptions(ctx context.Context, exchange, asset string) (json.RawMessage, error)
 	GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error)
 	GetFundingArb(ctx context.Context, symbol string, notional, holdHours float64, feeBinancePct, feeBybitPct *float64) (json.RawMessage, error)
@@ -826,6 +827,20 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("limit", mcp.Description("How many liquid perps (default 36, max 100)")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.GetDerivativesBoard(ctx, req.GetString("exchange", "all"), req.GetInt("limit", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_derivatives_grid",
+		mcp.WithDescription("Time grid for the liquid USDT perpetuals. Coins run down the side. 24h is one column per clock hour. 7d is one column per UTC day. metric is funding (latest settled rate in the cell, or the latest predicted rate when that cell has no settlement), oi (percent change from the previous cell), cvd (aggressive buy minus sell), or liquidations (stored force-order notional; a watched hour with no print is a real zero). exchange=all reads Binance USD-M, Bybit linear, and OKX. A cell stays blank until every expected venue has that column. missing names the venue that is absent, and that venue is not counted as zero. The open column also stays blank when its newest sample is older than five minutes, or when the tape does not reach both edges. heat on a liquidation cell is that hour or day versus the coin's own median. limit default 36, max 100. Not financial advice."),
+		mcp.WithString("exchange", mcp.Description("binance | bybit | okx | all (default all)")),
+		mcp.WithString("metric", mcp.Description("funding | oi | cvd | liquidations (default funding)")),
+		mcp.WithString("range", mcp.Description("24h | 7d (default 24h)")),
+		mcp.WithNumber("limit", mcp.Description("How many liquid perps (default 36, max 100)")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		raw, err := api.GetDerivativesGrid(ctx, req.GetString("exchange", "all"), req.GetString("metric", "funding"), req.GetString("range", "24h"), req.GetInt("limit", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -404,6 +404,7 @@ func main() {
 	defer okxTrades.Close()
 	marketSvc.SetOnFuturesSymbol(futuresHist.NoteSymbol)
 	marketSvc.SetFuturesHistory(futuresHist)
+	marketSvc.SetDerivativesGrid(futuresStore)
 	logger.Info("futures history store ready", "driver", "sqlite", "path", futuresStore.Path())
 
 	bookStore, err := bookhiststore.Open(cfg.OrderBookHistoryDBPath)

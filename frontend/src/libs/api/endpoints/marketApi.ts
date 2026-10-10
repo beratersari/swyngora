@@ -111,6 +111,10 @@ import type {
   OrderCountQuery,
   MarketDerivativesBoard,
   DerivativesBoardQuery,
+  MarketDerivativesGrid,
+  MarketDerivativesGridRow,
+  MarketDerivativesGridCell,
+  DerivativesGridQuery,
   ImpactScan,
   ImpactScanHit,
   ImpactScanQuery,
@@ -287,6 +291,10 @@ export type {
   OrderCountOverviewQuery,
   MarketDerivativesBoard,
   DerivativesBoardQuery,
+  MarketDerivativesGrid,
+  MarketDerivativesGridRow,
+  MarketDerivativesGridCell,
+  DerivativesGridQuery,
   ImpactScan,
   ImpactScanHit,
   ImpactScanQuery,
@@ -885,6 +893,12 @@ export const marketApi = baseApi.injectEndpoints({
         params: compactParams({ ...(arg ?? {}) }),
       }),
     }),
+    getMarketDerivativesGrid: build.query<MarketDerivativesGrid, DerivativesGridQuery | void>({
+      query: (arg) => ({
+        url: '/api/v1/market/derivatives-grid',
+        params: compactParams({ ...(arg ?? {}) }),
+      }),
+    }),
     getMarketOrderCountOverview: build.query<MarketOrderCountOverview, OrderCountOverviewQuery | void>({
       query: (arg) => ({
         url: '/api/v1/market/order-count/overview',
@@ -1099,6 +1113,7 @@ export const {
   useGetWideSpreadQuery,
   useScanWideSpreadsQuery,
   useGetMarketDerivativesBoardQuery,
+  useGetMarketDerivativesGridQuery,
   useGetMarketOrderCountOverviewQuery,
   useGetMarketOrderCountQuery,
   useGetMarketPressureQuery,

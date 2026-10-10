@@ -616,6 +616,25 @@ class DerivativesBoardInput(BaseModel):
     )
 
 
+class DerivativesGridInput(BaseModel):
+    exchange: str = Field(
+        default="all",
+        description="binance|bybit|okx|all (default all)",
+    )
+    metric: str = Field(
+        default="funding",
+        description="funding|oi|cvd|liquidations (default funding)",
+    )
+    range: str = Field(
+        default="24h",
+        description="24h (one column per hour) or 7d (one column per UTC day)",
+    )
+    limit: int = Field(
+        default=36,
+        description="How many liquid perpetuals (default 36, max 100)",
+    )
+
+
 class PerpBookHistoryInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
@@ -2433,6 +2452,21 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if limit:
             params["limit"] = limit
         return http.get("/api/v1/market/derivatives-board", params)
+
+    def get_derivatives_grid(
+        exchange: str = "all",
+        metric: str = "funding",
+        range: str = "24h",
+        limit: int = 36,
+    ) -> str:
+        params: dict[str, Any] = {
+            "exchange": exchange,
+            "metric": metric,
+            "range": range,
+        }
+        if limit:
+            params["limit"] = limit
+        return http.get("/api/v1/market/derivatives-grid", params)
 
     def get_perp_book_history(
         symbol: str, exchange: str = "all", window_sec: int = 86400
@@ -5162,6 +5196,25 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "zero. limit default 36, max 100."
             ),
             args_schema=DerivativesBoardInput,
+        ),
+        StructuredTool.from_function(
+            get_derivatives_grid,
+            name="get_derivatives_grid",
+            description=(
+                "Time grid for the liquid USDT perpetuals. Coins run down the "
+                "side. range 24h is one column per clock hour. range 7d is one "
+                "column per UTC day. metric is funding (latest settled rate in "
+                "the cell, or the latest predicted rate when that cell has no "
+                "settlement), oi (percent change from the previous cell), cvd "
+                "(aggressive buy minus sell), or liquidations (stored "
+                "force-order notional; a watched hour with no print is a real "
+                "zero). A cell stays blank until every expected venue has that "
+                "column. missing names the venue that is absent, and that "
+                "venue is not counted as zero. The open column also stays "
+                "blank when its newest sample is older than five minutes. "
+                "limit default 36, max 100."
+            ),
+            args_schema=DerivativesGridInput,
         ),
         StructuredTool.from_function(
             get_perp_book_history,

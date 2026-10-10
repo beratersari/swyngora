@@ -990,6 +990,65 @@ func (b *Backend) GetPerpDepth(ctx context.Context, exchange, symbol string, ran
 	return mustJSON(perpDepthMap(got))
 }
 
+func (b *Backend) GetDerivativesGrid(ctx context.Context, exchange, metric, rangeID string, limit int) (json.RawMessage, error) {
+	if b.Market == nil {
+		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)
+	}
+	got, err := b.Market.GetDerivativesGrid(ctx, exchange, metric, rangeID, limit)
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(derivativesGridMap(got))
+}
+
+func derivativesGridMap(got *domain.DerivativesGrid) map[string]any {
+	if got == nil {
+		return map[string]any{}
+	}
+	rows := make([]map[string]any, 0, len(got.Rows))
+	for _, row := range got.Rows {
+		cells := make([]map[string]any, 0, len(row.Cells))
+		for _, cell := range row.Cells {
+			item := map[string]any{
+				"time":     cell.Time.UTC().Format(time.RFC3339),
+				"definite": cell.Definite,
+			}
+			if len(cell.Missing) > 0 {
+				item["missing"] = cell.Missing
+			}
+			if cell.Definite {
+				item["value"] = cell.Value
+				if cell.Text != "" {
+					item["text"] = cell.Text
+				}
+				if cell.Weight != "" {
+					item["weight"] = cell.Weight
+				}
+				if cell.HasHeat {
+					item["heat"] = cell.Heat
+				}
+			}
+			cells = append(cells, item)
+		}
+		rows = append(rows, map[string]any{
+			"symbol": row.Symbol,
+			"base":   row.Base,
+			"cells":  cells,
+		})
+	}
+	return map[string]any{
+		"exchange": got.Exchange,
+		"metric":   got.Metric,
+		"range":    got.Range,
+		"stepSec":  got.StepSec,
+		"asOf":     got.AsOf,
+		"columns":  got.Columns,
+		"rows":     rows,
+		"universe": got.Universe,
+		"note":     got.Note,
+	}
+}
+
 func (b *Backend) GetDerivativesBoard(ctx context.Context, exchange string, limit int) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

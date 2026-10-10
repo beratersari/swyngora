@@ -503,6 +503,24 @@ func (c *APIClient) GetDerivativesBoard(ctx context.Context, exchange string, li
 	return c.get(ctx, "/api/v1/market/derivatives-board", q)
 }
 
+// GetDerivativesGrid returns the coin-by-time grid of stored funding, open interest, CVD, or liquidations.
+func (c *APIClient) GetDerivativesGrid(ctx context.Context, exchange, metric, rangeID string, limit int) (json.RawMessage, error) {
+	q := url.Values{}
+	if exchange != "" {
+		q.Set("exchange", exchange)
+	}
+	if metric != "" {
+		q.Set("metric", metric)
+	}
+	if rangeID != "" {
+		q.Set("range", rangeID)
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	return c.get(ctx, "/api/v1/market/derivatives-grid", q)
+}
+
 // GetFundingRate returns the predicted next funding rate plus recent settlements.
 func (c *APIClient) GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (json.RawMessage, error) {
 	q := url.Values{}

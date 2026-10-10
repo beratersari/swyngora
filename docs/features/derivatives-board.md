@@ -28,21 +28,23 @@ Each row has:
 
 A combined cell is empty unless every expected venue is fresh for that column. A missing or old venue is named on the row and is not treated as zero. `definite` on the board is true only when every row is complete. The page is `/derivatives`. It opens on 36 names, and the coin menu can ask for 100. Any column sorts, and a blank cell stays at the bottom. Clicking a row opens that coin's chart.
 
+The same page has a time grid. Coins stay down the side. `range=24h` is one column per clock hour. `range=7d` is one column per UTC day. The series is funding, open-interest change, CVD, or liquidation notional, read from the archive rather than the live board. Funding is the latest settled rate in that cell, or the latest predicted rate when the cell has no settlement. Open interest is the percent change from the previous cell. CVD is aggressive buy minus sell, and an hour or day counts only when the stored minutes reach both edges and cover about three quarters of an hour or four fifths of a day. Liquidations are stored force-order notional. A venue that was watched for that cell and printed nothing contributes zero. A cell stays blank until every expected venue has it. `missing` names the venue that does not, and that venue is not counted as zero. The open column also stays blank when its newest sample is older than five minutes.
+
 The same page has a heatmap. Rows are the coins already on the board. One control picks the column that paints the cells: funding, open-interest change, crowd long, taker buy, top minus crowd, day CVD, price versus CVD, print size, order count, unusual distance, liquidation heat, or bid share. The largest distance from that column's neutral is first. A cell with no definite value stays blank and is not drawn as zero. Day CVD color is this coin against the largest day CVD on the screen, because the column is a notional. Price versus CVD uses 60 minutes as full strength: price up while CVD falls is one direction, the reverse is the other, and in line stays neutral. The other columns use a fixed scale, so a quiet hour does not paint every cell at full strength. There is no second route and no new request.
 
 ## Where the code lives
 
 - Domain: `backend/internal/domain/derivatives_board.go`
 - Service: `backend/internal/service/market/derivatives_board.go`
-- HTTP: `GET /api/v1/market/derivatives-board`
-- Web: `frontend/src/components/pages/DerivativesPage` and `frontend/src/components/organisms/DerivativesHeatmap`
-- MCP / AI: `get_derivatives_board`
+- HTTP: `GET /api/v1/market/derivatives-board` and `GET /api/v1/market/derivatives-grid`
+- Web: `frontend/src/components/pages/DerivativesPage`, `frontend/src/components/organisms/DerivativesHeatmap`, and `frontend/src/components/organisms/DerivativesTimeGrid`
+- MCP / AI: `get_derivatives_board`, `get_derivatives_grid`
 
 ## How to verify
 
 `go test` for `domain`, `service/market`, and the derivatives handler. Frontend: `DerivativesBoard/helpers.test.ts`, `DerivativesHeatmap/helpers.test.ts`, and `DerivativesPage.test.tsx`.
 
-Open `/derivatives`. The table lists the liquid perpetuals. A dash in a combined column means that venue set is not complete. Choosing one venue shows that venue's own numbers. Heatmap uses those same rows: pick a column, confirm a withheld cell stays blank, and confirm the strongest reading is first.
+Open `/derivatives`. The table lists the liquid perpetuals. A dash in a combined column means that venue set is not complete. Choosing one venue shows that venue's own numbers. Heatmap uses those same rows: pick a column, confirm a withheld cell stays blank, and confirm the strongest reading is first. Time shows the archive grid: switch the series and the span, confirm a cell with a missing venue stays blank, and confirm a watched quiet liquidation hour shows zero.
 
 ## Limits
 

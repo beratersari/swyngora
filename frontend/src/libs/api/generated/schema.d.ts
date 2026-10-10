@@ -905,6 +905,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/market/derivatives-grid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Liquid perpetual time grid
+         * @description Coins down the side and stored time across, for the same liquid USDT
+         *     perpetuals as the derivatives board (default 36, max 100). `range=24h`
+         *     is one column per clock hour. `range=7d` is one column per UTC day.
+         *     `metric` is `funding` (latest settled rate in the cell, or the latest
+         *     predicted rate when that cell has no settlement), `oi` (percent change
+         *     in open interest from the previous cell), `cvd` (aggressive buy minus
+         *     sell), or `liquidations` (stored force-order notional). A watched hour
+         *     with no liquidation print is a real zero. `exchange=all` reads Binance
+         *     USD-M, Bybit linear, and OKX USDT-swap. A cell is present only when
+         *     every expected venue has that column. `missing` names a venue that is
+         *     absent, and that venue is not counted as zero. The open column stays
+         *     blank when its newest sample is older than five minutes, or when the
+         *     tape does not reach both edges of the column. `heat` on a liquidation
+         *     cell is that column versus the coin's own median. Informational only.
+         */
+        get: operations["getMarketDerivativesGrid"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/market/options": {
         parameters: {
             query?: never;
@@ -8064,6 +8097,39 @@ export interface components {
             summary?: string;
             note?: string;
         };
+        /** @description Coins by time. A cell value is omitted when that column is not definite. */
+        MarketDerivativesGrid: {
+            exchange?: string;
+            /** @description funding | oi | cvd | liquidations */
+            metric?: string;
+            /** @description 24h | 7d */
+            range?: string;
+            stepSec?: number;
+            /** Format: date-time */
+            asOf?: string;
+            columns?: string[];
+            rows?: components["schemas"]["MarketDerivativesGridRow"][];
+            universe?: number;
+            note?: string;
+        };
+        MarketDerivativesGridRow: {
+            symbol?: string;
+            base?: string;
+            cells?: components["schemas"]["MarketDerivativesGridCell"][];
+        };
+        MarketDerivativesGridCell: {
+            /** Format: date-time */
+            time?: string;
+            /** @description Omitted when definite is false, so a blank is not a zero. */
+            value?: number;
+            text?: string;
+            /** @description Liquidation notional divided by this coin's median definite cell. Omitted until three definite cells exist. */
+            heat?: number;
+            definite?: boolean;
+            missing?: string[];
+            /** @description oi | equal */
+            weight?: string;
+        };
         MarketDerivativesCoin: {
             symbol?: string;
             base?: string;
@@ -11724,6 +11790,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketDerivativesBoard"];
+                };
+            };
+            400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
+        };
+    };
+    getMarketDerivativesGrid: {
+        parameters: {
+            query?: {
+                /** @description binance | bybit | okx | all (default all) */
+                exchange?: string;
+                /** @description funding | oi | cvd | liquidations (default funding) */
+                metric?: string;
+                /** @description 24h | 7d (default 24h) */
+                range?: string;
+                /** @description How many liquid perpetuals to include (default 36, min 5, max 100) */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Coin-by-time grid */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketDerivativesGrid"];
                 };
             };
             400: components["responses"]["Error"];

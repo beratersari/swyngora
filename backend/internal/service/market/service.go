@@ -73,6 +73,8 @@ type Service struct {
 	rsiHeatSF      singleflight.Group
 	perpOverview   *cache.TTL[*domain.PerpDepthOverview]
 	boardCache     *cache.TTL[*domain.DerivativesBoard]
+	gridStore      domain.DerivativesGridStore
+	gridCache      *cache.TTL[*domain.DerivativesGrid]
 	unusualScan    *cache.TTL[*domain.UnusualScan]
 	perpHist       domain.PerpDepthHistoryStore
 	options        domain.OptionsChainPort

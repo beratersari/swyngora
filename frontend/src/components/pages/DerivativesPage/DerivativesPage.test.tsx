@@ -9,6 +9,27 @@ vi.mock('@/libs/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/libs/api')>();
   return {
     ...actual,
+    useGetMarketDerivativesGridQuery: () => ({
+      data: {
+        exchange: 'all',
+        metric: 'funding',
+        range: '24h',
+        columns: ['2026-10-10T14:00:00Z', '2026-10-10T15:00:00Z'],
+        rows: [
+          {
+            symbol: 'BTCUSDT',
+            base: 'BTC',
+            cells: [
+              { time: '2026-10-10T14:00:00Z', definite: false, missing: ['okx'] },
+              { time: '2026-10-10T15:00:00Z', definite: true, value: 0.0001, text: '+0.01%' },
+            ],
+          },
+        ],
+      },
+      isSuccess: true,
+      isLoading: false,
+      isError: false,
+    }),
     useGetMarketDerivativesBoardQuery: () => ({
       data: {
         definite: false,
@@ -141,6 +162,27 @@ describe('DerivativesPage', () => {
     expect(colored).toHaveTextContent('+0.40');
 
     await user.click(colored);
+    expect(screen.getByText('coin chart')).toBeInTheDocument();
+  });
+
+  it('shows a time column and leaves a missing venue blank', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(
+      <Routes>
+        <Route path="/derivatives" element={<DerivativesPage />} />
+        <Route path="/markets/binance/BTCUSDT" element={<div>coin chart</div>} />
+      </Routes>,
+      { routerEntries: ['/derivatives'] },
+    );
+
+    await user.click(screen.getByText('Time'));
+    expect(screen.getByRole('table', { name: 'Derivatives time grid' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '14:00' })).toBeInTheDocument();
+    expect(screen.getByText('+0.01%')).toBeInTheDocument();
+    expect(screen.getByTitle(/Missing: okx/)).toBeInTheDocument();
+    expect(screen.queryByTestId('venue-coverage')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('link', { name: 'BTC' }));
     expect(screen.getByText('coin chart')).toBeInTheDocument();
   });
 });
