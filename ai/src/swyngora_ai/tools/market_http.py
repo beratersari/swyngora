@@ -5229,7 +5229,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "window. unusualMetric names the farthest high or low reading "
                 "versus that coin's own samples, and unusualVenue says which "
                 "venue it is. Venues are not averaged. A coin with no standout "
-                "stays blank. "
+                "stays blank. Opening that standout shows the same clauses as "
+                "get_coin_situation for the symbol. "
                 "liqHeat is the hottest 5-minute liquidation grade versus that "
                 "coin's own typical rate and stays blank until the venue has "
                 "been watched for 6 hours. bidPct is resting bid share within "
@@ -6058,7 +6059,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "(Binance and OKX; Bybit has no top-trader ratio). size.kind is whale "
                 "versus retail on the latest sized bar. A clause is omitted and its "
                 "Missing list names the venues that do not cover it. The same read "
-                "is stored on a paper fill."
+                "is stored on a paper fill. An unusual standout on the "
+                "derivatives board and each unusual-scan row open these clauses."
             ),
             args_schema=CoinSituationInput,
         ),
@@ -6178,7 +6180,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "latest hour of average spread is high or low versus that "
                 "coin's own stored samples. Typical readings and readings "
                 "with too few samples are left off. Venues stay separate. "
-                "Print size is not scanned. Informational only, not advice."
+                "Print size is not scanned. Opening a row shows the same "
+                "clauses as get_coin_situation for that symbol. "
+                "Informational only, not advice."
             ),
             args_schema=UnusualScanInput,
         ),

@@ -1,9 +1,10 @@
-import { Table } from 'antd';
+import { Button, Table } from 'antd';
 import type { ColumnsType, TableProps } from 'antd/es/table';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
+import { OutlierSituation } from '@/components/molecules/OutlierSituation';
 import type { DerivativesCoin, DerivativesVenue } from '@/libs/api';
 import type { BoardSort, BoardSortKey } from './DerivativesBoard.types';
 import {
@@ -156,7 +157,13 @@ export function DerivativesBoard({ exchange, coins, loading }: DerivativesBoardP
     return `${grade} · ${venueName(row.liqHeatVenue)}`;
   };
   const [sort, setSort] = useState<BoardSort | null>(null);
+  const [openSymbols, setOpenSymbols] = useState<string[]>([]);
   const rows = sort ? sortBoardCoins(coins, sort) : coins;
+  const toggleSymbol = (symbol: string) => {
+    setOpenSymbols((current) =>
+      current.includes(symbol) ? current.filter((item) => item !== symbol) : [...current, symbol],
+    );
+  };
   const venueLine = (venues: DerivativesVenue[] | undefined): string => {
     if (!venues?.length) return '';
     return venues
@@ -303,11 +310,33 @@ export function DerivativesBoard({ exchange, coins, loading }: DerivativesBoardP
       title: t('derivatives:unusual'),
       dataIndex: 'unusualDistance',
       ...sortable('unusual'),
-      render: (_value, row) => (
-        <Text variant="caption" title={unusualTitle(row)}>
-          {unusualLabel(row)}
-        </Text>
-      ),
+      render: (_value, row) => {
+        const label = unusualLabel(row);
+        const title = unusualTitle(row);
+        if (!row.unusualDefinite || !row.symbol) {
+          return (
+            <Text variant="caption" title={title}>
+              {label}
+            </Text>
+          );
+        }
+        const symbol = row.symbol;
+        return (
+          <Button
+            type="link"
+            size="small"
+            aria-expanded={openSymbols.includes(symbol)}
+            title={title}
+            style={{ height: 'auto', padding: 0, whiteSpace: 'normal', textAlign: 'left' }}
+            onClick={(event) => {
+              event.stopPropagation();
+              toggleSymbol(symbol);
+            }}
+          >
+            {label}
+          </Button>
+        );
+      },
     },
     {
       title: t('derivatives:liqHeat'),
@@ -363,10 +392,16 @@ export function DerivativesBoard({ exchange, coins, loading }: DerivativesBoardP
       scroll={{ x: 2280 }}
       locale={{ emptyText: t('derivatives:empty') }}
       onChange={onChange}
+      expandable={{
+        showExpandColumn: false,
+        expandedRowKeys: openSymbols,
+        rowExpandable: (row) => Boolean(row.symbol && row.unusualDefinite),
+        expandedRowRender: (row) => <OutlierSituation symbol={row.symbol ?? ''} />,
+      }}
       onRow={(row) => ({
         onClick: (event) => {
           const target = event.target;
-          if (target instanceof Element && target.closest('a')) return;
+          if (target instanceof Element && target.closest('a, button')) return;
           if (!row.symbol) return;
           navigate(coinChartPath(exchange, row.symbol));
         },

@@ -1581,7 +1581,8 @@ export interface paths {
          *     A missing clause's `*Missing` list names the venue. A missing venue is
          *     not treated as zero. The same object is stored on a paper fill at the
          *     moment the order is placed. An older fill does not grow a clause it
-         *     never stored.
+         *     never stored. An unusual standout on the derivatives board, and each
+         *     unusual-scan row, open this same read.
          */
         get: operations["getMarketSituation"];
         put?: never;

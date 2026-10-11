@@ -43,7 +43,7 @@ The coin Tape tab shows this card above the rest of the tape. Informational only
 
 The scan scores the liquid USDT list the recorder keeps: the seed pairs first, then the highest-volume names, capped at 100. The page opens on 36. It uses the same per-venue rules as the coin read. A row is kept only when the band is high, low, extremely high, or extremely low. Typical readings and readings with too few samples are left off. `quiet` is how many scanned coins had no such row. `distance` is how far the percentile sits from 50, and the list is ranked by that. Venues stay separate. Print size is not a scan metric.
 
-The page is `/unusual`. A row opens that coin's Tape tab. An OKX row opens the Binance tape, because OKX is not a spot page. The response is cached for about 45 seconds. Informational only — not financial advice.
+The page is `/unusual`. The coin name opens that coin's Tape tab. An OKX row opens the Binance tape, because OKX is not a spot page. The band opens the combined coin situation, the same clauses as the coin page, loaded when the row opens. The scan response is cached for about 45 seconds. Informational only — not financial advice.
 
 The shorter “versus typical” reads stay as they are: spread widen on the order book, liquidation cascade bursts, volume surge, options moves, and print size versus the prior 15 minutes.
 
@@ -69,6 +69,7 @@ The shorter “versus typical” reads stay as they are: spread widen on the ord
 | MCP / AI | `get_unusual_context`, `scan_unusual` |
 | Tape card | `frontend/src/components/organisms/UnusualContext/` |
 | Market page | `frontend/src/components/pages/UnusualPage` |
+| Opened row | `frontend/src/components/molecules/OutlierSituation` |
 
 ## How to test
 

@@ -665,6 +665,8 @@
     "now": "Şimdi",
     "nowLoading": "Şimdiki bant okunuyor…",
     "loading": "Birleşik bant okunuyor…",
+    "deskLead": "Bu coin için birleşik durum.",
+    "deskFailed": "Durum yüklenmedi.",
     "priceCvd": {
       "price_up_cvd_down": "Fiyat yükselirken vadeli CVD düşüyor.",
       "price_down_cvd_up": "Fiyat düşerken vadeli CVD yükseliyor.",

@@ -20,6 +20,8 @@ A clause is omitted when a venue that publishes it does not cover it. The matchi
 
 The coin page shows the same clauses in English and Turkish, above the tabs. Equities skip the read.
 
+`/derivatives` opens this read under a row whose unusual cell is a standout. `/unusual` opens it under each scan row. The standout stays in the cell. A derivatives row with no standout does not open the read. The request is this same combined symbol read, and it runs when the row opens.
+
 A paper market order, limit, stop, bracket, or OCO stores this read at the moment the order is placed. A later fill keeps that read. The portfolio trade history shows it beside the fill. Nasdaq and BIST orders do not call the futures read.
 
 An open crypto position shows two reads. **Entered as** is the read stored on the newest buy that still has remaining quantity. Selling that buy, lifo or fifo, moves the line to the newest buy that remains. A buy that stored no read leaves the line off, even when an older lot has one. **Now** is the live `GET /api/v1/market/situation` for that symbol. The same pair is on the coin Trade tab when the selected book holds the coin. An equity position stays on size and profit.
@@ -32,6 +34,7 @@ An alert of kind `situation` fires when the live read leaves the clauses stored 
 - `backend/internal/service/market/situation.go` loads CVD, open interest, liquidation levels, and the 24-hour print sides.
 - `backend/internal/service/portfolio/service.go` stores it on the order.
 - `frontend/src/components/molecules/CoinSituation` renders the sentences.
+- `frontend/src/components/molecules/OutlierSituation` loads that read under an opened outlier row.
 - MCP `get_coin_situation`. Python `get_coin_situation`.
 
 ## How to test
