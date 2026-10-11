@@ -12,6 +12,7 @@ beforeAll(() => {
 });
 
 const placePaperOrder = vi.fn();
+const marginRows: { current: Array<Record<string, unknown>> } = { current: [] };
 
 vi.mock('@/components/molecules/CandleChartHost', () => ({
   CandleChartHost: () => <div data-testid="candle-chart" />,
@@ -106,6 +107,13 @@ vi.mock('@/libs/api', async (importOriginal) => {
       isLoading: false,
     }),
     useGetPortfolioQuery: () => empty,
+    useListMarginPositionsQuery: () => ({
+      data: { positions: marginRows.current },
+      currentData: { positions: marginRows.current },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+    }),
     useListScannerResultsQuery: () => ({ data: { results: [] }, isLoading: false }),
     useLazyGetCandlesQuery: () => [vi.fn()],
     useLazyGetPumpEventsQuery: () => [vi.fn()],
@@ -129,6 +137,7 @@ describe('CoinDetailPage paper trade without a selected book', () => {
     localStorage.removeItem('swyngora.portfolioBookId');
     placePaperOrder.mockReset();
     placePaperOrder.mockReturnValue({ unwrap: vi.fn().mockResolvedValue({}) });
+    marginRows.current = [];
   });
 
   it('does not place a paper order without portfolioId when 2+ books exist and none is selected', async () => {
@@ -146,5 +155,32 @@ describe('CoinDetailPage paper trade without a selected book', () => {
     await user.click(screen.getByRole('button', { name: /paper buy|kağıt al/i }));
 
     expect(placePaperOrder).not.toHaveBeenCalled();
+  });
+
+  it('shows the margin placement read beside the live tape', async () => {
+    localStorage.setItem('swyngora.portfolioBookId', 'book-a');
+    marginRows.current = [
+      {
+        id: 'm1',
+        exchange: 'binance',
+        symbol: 'BTCUSDT',
+        side: 'short',
+        leverage: 3,
+        quantity: 1,
+        status: 'open',
+        entrySituation: {
+          symbol: 'BTCUSDT',
+          priceCvd: { kind: 'price_down_cvd_up' },
+        },
+      },
+    ];
+    renderWithProviders(
+      <Routes>
+        <Route path="/markets/:exchange/:symbol" element={<CoinDetailPage />} />
+      </Routes>,
+      { routerEntries: ['/markets/binance/BTCUSDT?tab=trade'] },
+    );
+    expect(await screen.findByText('Margin short 3x')).toBeInTheDocument();
+    expect(screen.getByText('Price is falling while futures CVD is rising.')).toBeInTheDocument();
   });
 });

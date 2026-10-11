@@ -662,6 +662,11 @@
     "title": "Situation",
     "compare": "Position read",
     "entered": "Entered as",
+    "marginLead": "Margin {{side}} {{leverage}}x",
+    "marginSide": {
+      "long": "long",
+      "short": "short"
+    },
     "now": "Now",
     "nowLoading": "Reading the tape now…",
     "loading": "Reading the combined tape…",

@@ -26,13 +26,16 @@ A paper market order, limit, stop, bracket, or OCO stores this read at the momen
 
 An open crypto position shows two reads. **Entered as** is the read stored on the newest buy that still has remaining quantity. Selling that buy, lifo or fifo, moves the line to the newest buy that remains. A buy that stored no read leaves the line off, even when an older lot has one. **Now** is the live `GET /api/v1/market/situation` for that symbol. The same pair is on the coin Trade tab when the selected book holds the coin. An equity position stays on size and profit.
 
+An open margin position stores the same read when the margin order is placed. A limit fill keeps the placement read. The portfolio margin table and the coin Trade tab show it next to the live read, labeled with the side and leverage. Equities omit it. The situation alert still follows the newest open spot buy, not the margin position.
+
 An alert of kind `situation` fires when the live read leaves the clauses stored on that entry. A clause the entry did not store is ignored, so an older fill does not alert only because a new clause appeared. A blank live clause counts as a change of a clause that was stored. The prints clause compares `prints.side` only. A change in the dollar amounts with the same side stays quiet. No open crypto position stays quiet. `mode=one_time` fires once. `mode=repeating` re-arms when the live read matches the entry again. The exchange is the paper book venue (`binance`, `coinbase`, or `bybit`), and the symbol is the pair on that book.
 
 ## Where the code lives
 
 - `backend/internal/domain/situation.go` builds the read.
 - `backend/internal/service/market/situation.go` loads CVD, open interest, liquidation levels, and the 24-hour print sides.
-- `backend/internal/service/portfolio/service.go` stores it on the order.
+- `backend/internal/service/portfolio/service.go` stores it on the spot order.
+- `backend/internal/service/portfolio/margin.go` stores it on a margin open.
 - `frontend/src/components/molecules/CoinSituation` renders the sentences.
 - `frontend/src/components/molecules/OutlierSituation` loads that read under an opened outlier row.
 - MCP `get_coin_situation`. Python `get_coin_situation`.

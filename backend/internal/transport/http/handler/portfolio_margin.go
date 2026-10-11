@@ -11,55 +11,57 @@ import (
 )
 
 type marginPositionDTO struct {
-	ID               string   `json:"id"`
-	ClientID         string   `json:"clientId"`
-	Exchange         string   `json:"exchange"`
-	Symbol           string   `json:"symbol"`
-	Side             string   `json:"side"`
-	Mode             string   `json:"mode"`
-	Quantity         float64  `json:"quantity"`
-	EntryPrice       float64  `json:"entryPrice"`
-	Leverage         int      `json:"leverage"`
-	Margin           float64  `json:"margin"`
-	DebtPrincipal    float64  `json:"debtPrincipal"`
-	DebtInterest     float64  `json:"debtInterest"`
-	DebtAsset        string   `json:"debtAsset"`
-	DebtNotional     float64  `json:"debtNotional,omitempty"`
-	LastInterestAt   string   `json:"lastInterestAt,omitempty"`
-	LiquidationPrice float64  `json:"liquidationPrice"`
-	StopLoss         *float64 `json:"stopLoss,omitempty"`
-	TakeProfit       *float64 `json:"takeProfit,omitempty"`
-	Status           string   `json:"status"`
-	MarkPrice        float64  `json:"markPrice,omitempty"`
-	UnrealizedPnL    float64  `json:"unrealizedPnL,omitempty"`
-	RealizedPnL      float64  `json:"realizedPnL"`
-	CloseReason      string   `json:"closeReason,omitempty"`
-	OpenedAt         string   `json:"openedAt"`
-	UpdatedAt        string   `json:"updatedAt"`
-	ClosedAt         *string  `json:"closedAt,omitempty"`
+	ID               string                `json:"id"`
+	ClientID         string                `json:"clientId"`
+	Exchange         string                `json:"exchange"`
+	Symbol           string                `json:"symbol"`
+	Side             string                `json:"side"`
+	Mode             string                `json:"mode"`
+	Quantity         float64               `json:"quantity"`
+	EntryPrice       float64               `json:"entryPrice"`
+	Leverage         int                   `json:"leverage"`
+	Margin           float64               `json:"margin"`
+	DebtPrincipal    float64               `json:"debtPrincipal"`
+	DebtInterest     float64               `json:"debtInterest"`
+	DebtAsset        string                `json:"debtAsset"`
+	DebtNotional     float64               `json:"debtNotional,omitempty"`
+	LastInterestAt   string                `json:"lastInterestAt,omitempty"`
+	LiquidationPrice float64               `json:"liquidationPrice"`
+	StopLoss         *float64              `json:"stopLoss,omitempty"`
+	TakeProfit       *float64              `json:"takeProfit,omitempty"`
+	Status           string                `json:"status"`
+	EntrySituation   *domain.CoinSituation `json:"entrySituation,omitempty"`
+	MarkPrice        float64               `json:"markPrice,omitempty"`
+	UnrealizedPnL    float64               `json:"unrealizedPnL,omitempty"`
+	RealizedPnL      float64               `json:"realizedPnL"`
+	CloseReason      string                `json:"closeReason,omitempty"`
+	OpenedAt         string                `json:"openedAt"`
+	UpdatedAt        string                `json:"updatedAt"`
+	ClosedAt         *string               `json:"closedAt,omitempty"`
 }
 
 type marginOrderDTO struct {
-	ID             string   `json:"id"`
-	ClientID       string   `json:"clientId"`
-	Exchange       string   `json:"exchange"`
-	Symbol         string   `json:"symbol"`
-	Side           string   `json:"side"`
-	Type           string   `json:"type"`
-	Quantity       float64  `json:"quantity"`
-	Leverage       int      `json:"leverage"`
-	LimitPrice     float64  `json:"limitPrice,omitempty"`
-	ReservedMargin float64  `json:"reservedMargin"`
-	StopLoss       *float64 `json:"stopLoss,omitempty"`
-	TakeProfit     *float64 `json:"takeProfit,omitempty"`
-	Status         string   `json:"status"`
-	PositionID     string   `json:"positionId,omitempty"`
-	RejectReason   string   `json:"rejectReason,omitempty"`
-	CancelReason   string   `json:"cancelReason,omitempty"`
-	CreatedAt      string   `json:"createdAt"`
-	UpdatedAt      string   `json:"updatedAt"`
-	FilledAt       *string  `json:"filledAt,omitempty"`
-	CanceledAt     *string  `json:"canceledAt,omitempty"`
+	ID             string                `json:"id"`
+	ClientID       string                `json:"clientId"`
+	Exchange       string                `json:"exchange"`
+	Symbol         string                `json:"symbol"`
+	Side           string                `json:"side"`
+	Type           string                `json:"type"`
+	Quantity       float64               `json:"quantity"`
+	Leverage       int                   `json:"leverage"`
+	LimitPrice     float64               `json:"limitPrice,omitempty"`
+	ReservedMargin float64               `json:"reservedMargin"`
+	StopLoss       *float64              `json:"stopLoss,omitempty"`
+	TakeProfit     *float64              `json:"takeProfit,omitempty"`
+	Status         string                `json:"status"`
+	Situation      *domain.CoinSituation `json:"situation,omitempty"`
+	PositionID     string                `json:"positionId,omitempty"`
+	RejectReason   string                `json:"rejectReason,omitempty"`
+	CancelReason   string                `json:"cancelReason,omitempty"`
+	CreatedAt      string                `json:"createdAt"`
+	UpdatedAt      string                `json:"updatedAt"`
+	FilledAt       *string               `json:"filledAt,omitempty"`
+	CanceledAt     *string               `json:"canceledAt,omitempty"`
 }
 
 type marginTradeDTO struct {
@@ -94,8 +96,9 @@ func marginPosDTO(p *domain.MarginPosition) marginPositionDTO {
 		LiquidationPrice: p.LiquidationPrice, Status: string(p.Status),
 		MarkPrice: p.MarkPrice, UnrealizedPnL: p.UnrealizedPnL, RealizedPnL: p.RealizedPnL,
 		CloseReason: p.CloseReason, StopLoss: p.StopLoss, TakeProfit: p.TakeProfit,
-		OpenedAt: p.OpenedAt.UTC().Format(time.RFC3339Nano),
-		UpdatedAt: p.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		EntrySituation: p.EntrySituation,
+		OpenedAt:       p.OpenedAt.UTC().Format(time.RFC3339Nano),
+		UpdatedAt:      p.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
 	if !p.LastInterestAt.IsZero() {
 		d.LastInterestAt = p.LastInterestAt.UTC().Format(time.RFC3339Nano)
@@ -112,7 +115,7 @@ func marginOrdDTO(o *domain.MarginOrder) marginOrderDTO {
 		ID: o.ID, ClientID: o.ClientID, Exchange: string(o.Exchange), Symbol: o.Symbol,
 		Side: string(o.Side), Type: string(o.Type), Quantity: o.Quantity, Leverage: o.Leverage,
 		LimitPrice: o.LimitPrice, ReservedMargin: o.ReservedMargin, StopLoss: o.StopLoss, TakeProfit: o.TakeProfit,
-		Status: string(o.Status), PositionID: o.PositionID, RejectReason: o.RejectReason, CancelReason: o.CancelReason,
+		Status: string(o.Status), Situation: o.Situation, PositionID: o.PositionID, RejectReason: o.RejectReason, CancelReason: o.CancelReason,
 		CreatedAt: o.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt: o.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
@@ -133,22 +136,22 @@ func marginTradeToDTO(t *domain.MarginTrade) marginTradeDTO {
 		Side: string(t.Side), Action: t.Action, Quantity: t.Quantity, Price: t.Price, Notional: t.Notional,
 		RealizedPnL: t.RealizedPnL, MarginDelta: t.MarginDelta,
 		PrincipalPaid: t.PrincipalPaid, InterestPaid: t.InterestPaid, Leverage: t.Leverage,
-		Fee: t.Fee,
+		Fee:       t.Fee,
 		CreatedAt: t.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 }
 
 type placeMarginBody struct {
-	ClientID    string   `json:"clientId"`
-	PortfolioID string   `json:"portfolioId"`
-	Exchange    string   `json:"exchange"`
-	Symbol     string   `json:"symbol"`
-	Side       string   `json:"side"`
-	Type       string   `json:"type"`
-	Quantity   float64  `json:"quantity"`
-	Leverage   int      `json:"leverage"`
-	LimitPrice float64  `json:"limitPrice"`
-	StopLoss   *float64 `json:"stopLoss"`
+	ClientID       string   `json:"clientId"`
+	PortfolioID    string   `json:"portfolioId"`
+	Exchange       string   `json:"exchange"`
+	Symbol         string   `json:"symbol"`
+	Side           string   `json:"side"`
+	Type           string   `json:"type"`
+	Quantity       float64  `json:"quantity"`
+	Leverage       int      `json:"leverage"`
+	LimitPrice     float64  `json:"limitPrice"`
+	StopLoss       *float64 `json:"stopLoss"`
 	TakeProfit     *float64 `json:"takeProfit"`
 	IdempotencyKey string   `json:"idempotencyKey"`
 }

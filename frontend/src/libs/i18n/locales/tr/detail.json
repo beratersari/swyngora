@@ -662,6 +662,11 @@
     "title": "Durum",
     "compare": "Pozisyon okuması",
     "entered": "Girişte",
+    "marginLead": "{{leverage}}x {{side}} marjin",
+    "marginSide": {
+      "long": "long",
+      "short": "short"
+    },
     "now": "Şimdi",
     "nowLoading": "Şimdiki bant okunuyor…",
     "loading": "Birleşik bant okunuyor…",

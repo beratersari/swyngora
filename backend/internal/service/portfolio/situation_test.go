@@ -94,6 +94,68 @@ func TestPlacePendingOrder_KeepsTheReadFromPlacement(t *testing.T) {
 	}
 }
 
+func TestPlaceMarginOrder_StoresEntrySituation(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
+	src := &fakeSituation{got: &domain.CoinSituation{
+		Symbol:   "BTCUSDT",
+		PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceUp},
+	}}
+	svc.SetSituationSource(src)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "m-sit", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	pos, ord, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "m-sit", Symbol: "BTCUSDT", Side: "long", Type: "market",
+		Quantity: 1, Leverage: 5,
+	})
+	if err != nil || ord != nil || pos == nil || pos.EntrySituation == nil || pos.EntrySituation.PriceCVD == nil || pos.EntrySituation.PriceCVD.Kind != domain.SituationCVDPriceUp {
+		t.Fatalf("pos=%+v ord=%v err=%v", pos, ord, err)
+	}
+	if _, _, err := svc.CloseMarginPosition(ctx, MarginCloseInput{
+		ClientID: "m-sit", PositionID: pos.ID, Quantity: 0.4,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	list, err := svc.ListMarginPositions(ctx, "m-sit")
+	if err != nil || len(list) != 1 || list[0].EntrySituation == nil || list[0].EntrySituation.PriceCVD.Kind != domain.SituationCVDPriceUp {
+		t.Fatalf("partial close dropped the read: %+v %v", list, err)
+	}
+}
+
+func TestPlaceMarginLimit_KeepsPlacementSituation(t *testing.T) {
+	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
+	src := &fakeSituation{got: &domain.CoinSituation{
+		Symbol:   "BTCUSDT",
+		PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceUp},
+	}}
+	svc.SetSituationSource(src)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "m-lim", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	pos, ord, err := svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "m-lim", Symbol: "BTCUSDT", Side: "long", Type: "limit",
+		Quantity: 1, Leverage: 5, LimitPrice: 90,
+	})
+	if err != nil || pos != nil || ord == nil || ord.Situation == nil || ord.Situation.PriceCVD == nil || ord.Situation.PriceCVD.Kind != domain.SituationCVDPriceUp {
+		t.Fatalf("ord=%+v err=%v", ord, err)
+	}
+	src.got = &domain.CoinSituation{Symbol: "BTCUSDT", PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceDown}}
+	svc.market = &fakePx{prices: map[string]string{"binance|BTCUSDT": "90"}}
+	filled, _, _, err := svc.ProcessMarginMaintenance(ctx, time.Now().UTC())
+	if err != nil || filled != 1 {
+		t.Fatalf("filled=%d err=%v", filled, err)
+	}
+	if src.n != 1 {
+		t.Fatalf("fill read the tape again: %d", src.n)
+	}
+	list, err := svc.ListMarginPositions(ctx, "m-lim")
+	if err != nil || len(list) != 1 || list[0].EntrySituation == nil || list[0].EntrySituation.PriceCVD.Kind != domain.SituationCVDPriceUp {
+		t.Fatalf("fill replaced the placement read: %+v %v", list, err)
+	}
+}
+
 func TestEntrySituation_UsesTheNewestOpenBuyAcrossBooks(t *testing.T) {
 	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
 	svc := newSvc(t, px)

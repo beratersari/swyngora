@@ -3,6 +3,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
 import { DeskEmpty } from '@/components/molecules/DeskEmpty';
+import { MarginPositionRead } from './MarginPositionRead';
 import type { MarginPosition } from '@/libs/api';
 import { formatPrice, formatSymbolDisplay } from '@/libs/utils';
 import { semanticColors } from '@/styles/tokens';
@@ -27,14 +28,17 @@ export function PortfolioMarginPositionsTable({
       title: t('portfolio:positions.symbol'),
       key: 'symbol',
       render: (_, row) => (
-        <Button
-          type="link"
-          size="small"
-          disabled={!onOpen || !row.exchange || !row.symbol}
-          onClick={() => row.exchange && row.symbol && onOpen?.(row.exchange, row.symbol)}
-        >
-          {formatSymbolDisplay(row.symbol)}
-        </Button>
+        <div>
+          <Button
+            type="link"
+            size="small"
+            disabled={!onOpen || !row.exchange || !row.symbol}
+            onClick={() => row.exchange && row.symbol && onOpen?.(row.exchange, row.symbol)}
+          >
+            {formatSymbolDisplay(row.symbol)}
+          </Button>
+          <MarginPositionRead row={row} />
+        </div>
       ),
     },
     {

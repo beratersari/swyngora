@@ -254,46 +254,48 @@ type wirePFRecurringRun struct {
 }
 
 type wirePFMarginPos struct {
-	ID               string   `json:"id"`
-	Exchange         string   `json:"exchange"`
-	Symbol           string   `json:"symbol"`
-	Side             string   `json:"side"`
-	Mode             string   `json:"mode"`
-	Quantity         float64  `json:"quantity"`
-	EntryPrice       float64  `json:"entryPrice"`
-	Leverage         int      `json:"leverage"`
-	Margin           float64  `json:"margin"`
-	DebtPrincipal    float64  `json:"debtPrincipal"`
-	DebtInterest     float64  `json:"debtInterest"`
-	DebtAsset        string   `json:"debtAsset"`
-	LastInterestAt   string   `json:"lastInterestAt"`
-	LiquidationPrice float64  `json:"liquidationPrice"`
-	StopLoss         *float64 `json:"stopLoss"`
-	TakeProfit       *float64 `json:"takeProfit"`
-	Status           string   `json:"status"`
-	RealizedPnL      float64  `json:"realizedPnL"`
-	CloseReason      string   `json:"closeReason"`
-	OpenedAt         string   `json:"openedAt"`
-	UpdatedAt        string   `json:"updatedAt"`
-	ClosedAt         *string  `json:"closedAt"`
+	ID               string                `json:"id"`
+	Exchange         string                `json:"exchange"`
+	Symbol           string                `json:"symbol"`
+	Side             string                `json:"side"`
+	Mode             string                `json:"mode"`
+	Quantity         float64               `json:"quantity"`
+	EntryPrice       float64               `json:"entryPrice"`
+	Leverage         int                   `json:"leverage"`
+	Margin           float64               `json:"margin"`
+	DebtPrincipal    float64               `json:"debtPrincipal"`
+	DebtInterest     float64               `json:"debtInterest"`
+	DebtAsset        string                `json:"debtAsset"`
+	LastInterestAt   string                `json:"lastInterestAt"`
+	LiquidationPrice float64               `json:"liquidationPrice"`
+	StopLoss         *float64              `json:"stopLoss"`
+	TakeProfit       *float64              `json:"takeProfit"`
+	Status           string                `json:"status"`
+	RealizedPnL      float64               `json:"realizedPnL"`
+	CloseReason      string                `json:"closeReason"`
+	OpenedAt         string                `json:"openedAt"`
+	UpdatedAt        string                `json:"updatedAt"`
+	ClosedAt         *string               `json:"closedAt"`
+	EntrySituation   *domain.CoinSituation `json:"entrySituation,omitempty"`
 }
 
 type wirePFMarginOrd struct {
-	ID             string   `json:"id"`
-	Exchange       string   `json:"exchange"`
-	Symbol         string   `json:"symbol"`
-	Side           string   `json:"side"`
-	Type           string   `json:"type"`
-	Quantity       float64  `json:"quantity"`
-	Leverage       int      `json:"leverage"`
-	LimitPrice     float64  `json:"limitPrice"`
-	ReservedMargin float64  `json:"reservedMargin"`
-	StopLoss       *float64 `json:"stopLoss"`
-	TakeProfit     *float64 `json:"takeProfit"`
-	Status         string   `json:"status"`
-	PositionID     string   `json:"positionId"`
-	CreatedAt      string   `json:"createdAt"`
-	UpdatedAt      string   `json:"updatedAt"`
+	ID             string                `json:"id"`
+	Exchange       string                `json:"exchange"`
+	Symbol         string                `json:"symbol"`
+	Side           string                `json:"side"`
+	Type           string                `json:"type"`
+	Quantity       float64               `json:"quantity"`
+	Leverage       int                   `json:"leverage"`
+	LimitPrice     float64               `json:"limitPrice"`
+	ReservedMargin float64               `json:"reservedMargin"`
+	StopLoss       *float64              `json:"stopLoss"`
+	TakeProfit     *float64              `json:"takeProfit"`
+	Status         string                `json:"status"`
+	PositionID     string                `json:"positionId"`
+	CreatedAt      string                `json:"createdAt"`
+	UpdatedAt      string                `json:"updatedAt"`
+	Situation      *domain.CoinSituation `json:"situation,omitempty"`
 }
 
 type wirePFMarginTr struct {
@@ -471,6 +473,7 @@ func normalizePortfolioBook(w wirePortfolioBook, fileOwner, importer string) (do
 			StopLoss: m.StopLoss, TakeProfit: m.TakeProfit, Status: domain.MarginPositionStatus(m.Status),
 			RealizedPnL: m.RealizedPnL, CloseReason: m.CloseReason,
 			OpenedAt: parseTimeOrNow(m.OpenedAt), UpdatedAt: parseTimeOrNow(m.UpdatedAt),
+			EntrySituation: m.EntrySituation,
 		}
 		if m.ClosedAt != nil {
 			if tm, err := parseTimeFlexible(*m.ClosedAt); err == nil {
@@ -490,6 +493,7 @@ func normalizePortfolioBook(w wirePortfolioBook, fileOwner, importer string) (do
 			Leverage: o.Leverage, LimitPrice: o.LimitPrice, ReservedMargin: o.ReservedMargin,
 			StopLoss: o.StopLoss, TakeProfit: o.TakeProfit, Status: domain.MarginOrderStatus(o.Status),
 			PositionID: o.PositionID, CreatedAt: parseTimeOrNow(o.CreatedAt), UpdatedAt: parseTimeOrNow(o.UpdatedAt),
+			Situation: o.Situation,
 		})
 	}
 	for _, t := range w.MarginTrades {

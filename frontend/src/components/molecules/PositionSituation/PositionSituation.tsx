@@ -4,13 +4,18 @@ import { situationLines } from '@/components/molecules/CoinSituation';
 import { Stack } from './PositionSituation.styles';
 import type { PositionSituationProps } from './PositionSituation.types';
 
-export function PositionSituation({ entry, now, nowLoading }: PositionSituationProps) {
+export function PositionSituation({ lead, entry, now, nowLoading }: PositionSituationProps) {
   const { t } = useTranslation('detail');
   const entered = situationLines(entry, t);
   const current = situationLines(now, t);
   if (entered.length === 0 && current.length === 0 && !nowLoading) return null;
   return (
-    <Stack role="group" aria-label={t('situation.compare')}>
+    <Stack role="group" aria-label={lead || t('situation.compare')}>
+      {lead ? (
+        <Text variant="caption" color="secondary">
+          {lead}
+        </Text>
+      ) : null}
       {entered.length > 0 ? (
         <>
           <Text variant="caption" color="secondary">

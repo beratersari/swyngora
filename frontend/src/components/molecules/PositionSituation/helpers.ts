@@ -1,4 +1,4 @@
-import type { SpotPosition } from '@/libs/api';
+import type { MarginPosition, SpotPosition } from '@/libs/api';
 
 const CASH_EQUITIES = new Set(['nasdaq', 'bist']);
 
@@ -16,6 +16,21 @@ export function openPositionFor(
     (row) =>
       row.exchange === exchange &&
       row.symbol === symbol &&
+      (row.quantity ?? 0) > 0,
+  );
+}
+
+/** Open margin rows for this coin. A closed row is left out. */
+export function openMarginFor(
+  positions: MarginPosition[] | undefined,
+  exchange: string,
+  symbol: string,
+): MarginPosition[] {
+  return (positions ?? []).filter(
+    (row) =>
+      row.exchange === exchange &&
+      row.symbol === symbol &&
+      row.status !== 'closed' &&
       (row.quantity ?? 0) > 0,
   );
 }

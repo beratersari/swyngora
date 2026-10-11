@@ -35,3 +35,24 @@ func TestPortfolioViewDTO_EntrySituation(t *testing.T) {
 		t.Fatalf("equity %+v", equity.Positions[0])
 	}
 }
+
+func TestMarginPosDTO_EntrySituation(t *testing.T) {
+	now := time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)
+	dto := marginPosDTO(&domain.MarginPosition{
+		Exchange:  domain.ExchangeBinance,
+		Symbol:    "BTCUSDT",
+		Side:      domain.MarginLong,
+		OpenedAt:  now,
+		UpdatedAt: now,
+		EntrySituation: &domain.CoinSituation{
+			PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceDown},
+		},
+	})
+	if dto.EntrySituation == nil || dto.EntrySituation.PriceCVD == nil || dto.EntrySituation.PriceCVD.Kind != domain.SituationCVDPriceDown {
+		t.Fatalf("%+v", dto.EntrySituation)
+	}
+	blank := marginPosDTO(&domain.MarginPosition{OpenedAt: now, UpdatedAt: now})
+	if blank.EntrySituation != nil {
+		t.Fatalf("blank %+v", blank.EntrySituation)
+	}
+}

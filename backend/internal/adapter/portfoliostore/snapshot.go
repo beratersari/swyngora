@@ -433,12 +433,13 @@ func (s *SQLite) txInsertSnapshot(ctx context.Context, tx *sql.Tx, snap domain.P
 		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO margin_positions (`+marginPosInsertCols+`)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`, pos.ID, pos.ClientID, string(pos.Exchange), pos.Symbol, string(pos.Side), string(pos.Mode), pos.Quantity, pos.EntryPrice,
 			pos.Leverage, pos.Margin, pos.DebtPrincipal, pos.DebtInterest, string(pos.DebtAsset), lastInt,
 			pos.LiquidationPrice, nullFloat(pos.StopLoss), nullFloat(pos.TakeProfit),
 			string(pos.Status), pos.RealizedPnL, pos.CloseReason,
-			fmtTime(pos.OpenedAt), fmtTime(pos.UpdatedAt), nullTime(pos.ClosedAt)); err != nil {
+			fmtTime(pos.OpenedAt), fmtTime(pos.UpdatedAt), nullTime(pos.ClosedAt),
+			marshalSituation(pos.EntrySituation)); err != nil {
 			return err
 		}
 	}
@@ -448,10 +449,11 @@ func (s *SQLite) txInsertSnapshot(ctx context.Context, tx *sql.Tx, snap domain.P
 		}
 		if _, err := tx.ExecContext(ctx, `
 			INSERT INTO margin_orders (`+marginOrderCols+`)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`, o.ID, o.ClientID, string(o.Exchange), o.Symbol, string(o.Side), string(o.Type), o.Quantity, o.Leverage, o.LimitPrice,
 			o.ReservedMargin, nullFloat(o.StopLoss), nullFloat(o.TakeProfit), string(o.Status), o.PositionID,
-			o.RejectReason, o.CancelReason, fmtTime(o.CreatedAt), fmtTime(o.UpdatedAt), nullTime(o.FilledAt), nullTime(o.CanceledAt)); err != nil {
+			o.RejectReason, o.CancelReason, fmtTime(o.CreatedAt), fmtTime(o.UpdatedAt), nullTime(o.FilledAt), nullTime(o.CanceledAt),
+			marshalSituation(o.Situation)); err != nil {
 			return err
 		}
 	}

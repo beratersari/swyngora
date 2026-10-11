@@ -7782,6 +7782,7 @@ paths:
   /api/v1/portfolio/margin/positions:
     get:
       summary: List open paper margin positions
+      description: Each open position includes entrySituation, the coin read stored when that margin order was placed. A limit fill keeps the placement read. Equities omit it.
       operationId: listMarginPositions
       tags: [Portfolio]
       parameters:
@@ -14070,6 +14071,9 @@ components:
         marginEquity: { type: number }
     MarginPosition:
       type: object
+      description: |
+        Paper margin position. entrySituation is the coin read stored when the open order was placed.
+        A limit fill keeps that placement read. Equities omit it.
       properties:
         id: { type: string }
         clientId: { type: string }
@@ -14096,6 +14100,8 @@ components:
         stopLoss: { type: number, nullable: true }
         takeProfit: { type: number, nullable: true }
         status: { type: string, enum: [open, closed] }
+        entrySituation:
+          $ref: '#/components/schemas/CoinSituation'
         markPrice: { type: number }
         unrealizedPnL: { type: number }
         realizedPnL: { type: number }

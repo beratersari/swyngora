@@ -4385,7 +4385,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List open paper margin positions */
+        /**
+         * List open paper margin positions
+         * @description Each open position includes entrySituation, the coin read stored when that margin order was placed. A limit fill keeps the placement read. Equities omit it.
+         */
         get: operations["listMarginPositions"];
         put?: never;
         post?: never;
@@ -9789,6 +9792,10 @@ export interface components {
             positionsValue?: number;
             marginEquity?: number;
         };
+        /**
+         * @description Paper margin position. entrySituation is the coin read stored when the open order was placed.
+         *     A limit fill keeps that placement read. Equities omit it.
+         */
         MarginPosition: {
             id?: string;
             clientId?: string;
@@ -9817,6 +9824,7 @@ export interface components {
             takeProfit?: number | null;
             /** @enum {string} */
             status?: "open" | "closed";
+            entrySituation?: components["schemas"]["CoinSituation"];
             markPrice?: number;
             unrealizedPnL?: number;
             realizedPnL?: number;

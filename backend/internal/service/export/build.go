@@ -494,13 +494,14 @@ func buildCSV(pl *payload) ([]byte, error) {
 					b.ID, m.ID, m.Exchange, m.Symbol, m.Side, m.Mode, f64(m.Quantity), f64(m.EntryPrice), i64(m.Leverage),
 					f64(m.Margin), f64(m.DebtPrincipal), f64(m.DebtInterest), m.DebtAsset, m.LastInterestAt,
 					f64(m.LiquidationPrice), derefF64(m.StopLoss), derefF64(m.TakeProfit), m.Status, f64(m.RealizedPnL),
-					m.CloseReason, m.OpenedAt, m.UpdatedAt, derefStr(m.ClosedAt),
+					m.CloseReason, m.OpenedAt, m.UpdatedAt, derefStr(m.ClosedAt), situationCSV(m.EntrySituation),
 				})
 			}
 			for _, o := range b.MarginOrders {
 				mordRows = append(mordRows, []string{
 					b.ID, o.ID, o.Exchange, o.Symbol, o.Side, o.Type, f64(o.Quantity), i64(o.Leverage), f64(o.LimitPrice),
 					f64(o.ReservedMargin), derefF64(o.StopLoss), derefF64(o.TakeProfit), o.Status, o.PositionID, o.CreatedAt, o.UpdatedAt,
+					situationCSV(o.Situation),
 				})
 			}
 			for _, tr := range b.MarginTrades {
@@ -577,11 +578,11 @@ func buildCSV(pl *payload) ([]byte, error) {
 		_ = writeSection("portfolio_margin_positions", []string{
 			"portfolioId", "id", "exchange", "symbol", "side", "mode", "quantity", "entryPrice", "leverage", "margin",
 			"debtPrincipal", "debtInterest", "debtAsset", "lastInterestAt", "liquidationPrice", "stopLoss", "takeProfit",
-			"status", "realizedPnL", "closeReason", "openedAt", "updatedAt", "closedAt",
+			"status", "realizedPnL", "closeReason", "openedAt", "updatedAt", "closedAt", "entrySituation",
 		}, mposRows)
 		_ = writeSection("portfolio_margin_orders", []string{
 			"portfolioId", "id", "exchange", "symbol", "side", "type", "quantity", "leverage", "limitPrice", "reservedMargin",
-			"stopLoss", "takeProfit", "status", "positionId", "createdAt", "updatedAt",
+			"stopLoss", "takeProfit", "status", "positionId", "createdAt", "updatedAt", "situation",
 		}, mordRows)
 		_ = writeSection("portfolio_margin_trades", []string{
 			"portfolioId", "id", "positionId", "exchange", "symbol", "side", "action", "quantity", "price", "notional",

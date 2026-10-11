@@ -140,6 +140,7 @@ import {
   useListIntervalsQuery,
   useListPortfoliosQuery,
   useGetPortfolioQuery,
+  useListMarginPositionsQuery,
   useListScannerResultsQuery,
   usePlacePortfolioOrderMutation,
   useRemoveWatchlistItemMutation,
@@ -247,7 +248,7 @@ import {
   type ChartDeskLayers,
 } from './chartPresets';
 import { CoinSituation } from '@/components/molecules/CoinSituation';
-import { openPositionFor, PositionSituation } from '@/components/molecules/PositionSituation';
+import { openMarginFor, openPositionFor, PositionSituation } from '@/components/molecules/PositionSituation';
 import {
   clickSecFromForensicsAt,
   forensicsKnownUntil,
@@ -475,6 +476,15 @@ export function CoinDetailPage() {
   );
   const heldPosition = openPositionFor(
     rtkCurrent(paperPortfolio)?.positions,
+    exchange ?? '',
+    symbol ?? '',
+  );
+  const marginPosQuery = useListMarginPositionsQuery(
+    { portfolioId: paperBookId || undefined },
+    { skip: !paperBookId || isEquity, refetchOnFocus: true },
+  );
+  const heldMargin = openMarginFor(
+    rtkCurrent(marginPosQuery)?.positions,
     exchange ?? '',
     symbol ?? '',
   );
@@ -3261,6 +3271,20 @@ export function CoinDetailPage() {
                 nowLoading={rtkCurrentPending(situationQuery)}
               />
             ) : null}
+            {!isEquity
+              ? heldMargin.map((row) => (
+                  <PositionSituation
+                    key={row.id ?? `${row.side}-${row.leverage}`}
+                    lead={t('detail:situation.marginLead', {
+                      side: t(`detail:situation.marginSide.${row.side === 'short' ? 'short' : 'long'}`),
+                      leverage: row.leverage ?? '',
+                    })}
+                    entry={row.entrySituation}
+                    now={rtkCurrent(situationQuery)}
+                    nowLoading={rtkCurrentPending(situationQuery)}
+                  />
+                ))
+              : null}
             <PaperTradeForm
               lockedExchange={exchangeArg}
               lockedSymbol={symbol}
