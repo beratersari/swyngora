@@ -198,6 +198,7 @@ export type {
   CoinSituationOpenInterest,
   CoinSituationLiquidation,
   CoinSituationPrints,
+  CoinSituationPrintAnchor,
   CoinSituationFunding,
   CoinSituationCrowd,
   CoinSituationSize,

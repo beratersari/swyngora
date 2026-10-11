@@ -260,6 +260,17 @@ own column is unrecorded. A single-venue view names only that venue.
 empty and `review` has no horizons. A venue with no recorded column is
 named in `missingVenues`.
 
+Each requested book also has `printAnchors`. `day` is measured long and
+short notional since 00:00 UTC. `4h` is the same since the current block
+at 00, 04, 08, 12, 16, or 20 UTC. `side` is `long`, `short`, `even`, or
+`quiet` when that book recorded the whole clock. `complete` false names
+the venue in `missing` and does not publish a partial sum. A quiet
+recorded clock is a real zero. Combined anchors are on `exchange=all`
+only, and they stay blank until Binance, Bybit, and OKX all recorded
+the clock. The heatmap range does not shorten these clocks. `/liquidations`
+and the coin chart show the clocks for the book on screen. The situation
+card shows the combined pair.
+
 Public REST refill is about 7 days. Older cells are prints this process
 already stored. The archive aggregates in SQL, then adds in-memory prints
 newer than the latest stored row for that venue. Binance prints arrive on

@@ -1575,6 +1575,13 @@ export interface paths {
          *       the recorded total is under 1 USDT. `longNotional` and `shortNotional`
          *       are USDT. The window is definite only when Binance, Bybit, and OKX
          *       were watched from the open with no feed gap inside it.
+         *     - `printAnchors`: the same measured prints since 00:00 UTC (`day`) and since
+         *       the current 4-hour open (`4h`, at 00/04/08/12/16/20 UTC). Each anchor has
+         *       `side`, `longNotional`, and `shortNotional` when Binance, Bybit, and OKX
+         *       recorded that clock. `complete` is false and `missing` names the venue when
+         *       the clock was not fully recorded. A quiet recorded clock is a real zero.
+         *       These clocks do not replace the 24-hour total, and a situation alert still
+         *       compares `prints.side` only.
          *     - `funding.payer`, `crowd.lean`, and `size.kind` are the funding payer,
          *       Binance and OKX top-versus-crowd, and whale versus retail.
          *
@@ -2828,6 +2835,11 @@ export interface paths {
          *     `combined` sums a column only when all three were recorded.
          *     `columnsWithOi` and `coverage` count recorded columns, not open interest.
          *     `leverageMix` is empty. `review` has no horizons.
+         *     Each requested book includes `printAnchors` for long and short notional since
+         *     00:00 UTC (`day`) and since the current 4-hour open (`4h`). `complete` is false,
+         *     and `missing` names the venue, when that clock was not fully recorded. A partial
+         *     sum is not shown. A quiet recorded clock is `side=quiet` with zero notionals.
+         *     Combined anchors are present only for `exchange=all`.
          *     Not financial advice.
          */
         get: operations["getMarketLiquidationPrintHeatmap"];
@@ -6684,6 +6696,12 @@ export interface components {
             accountBlend?: "stored" | "even" | "mixed";
             /** @description Per time column. On the model map, whether this venue had its own price and open interest. On the print map, whether a print landed or the column was watched outside a known gap. Combined is true only when all three venues were included. */
             hasData?: boolean[];
+            /**
+             * @description Measured force-order notional since 00:00 UTC and the current 4-hour open.
+             *     Set on a print map for each book that was requested. Combined is present only
+             *     when Binance, Bybit, and OKX are all requested. Empty on the leverage model.
+             */
+            printAnchors?: components["schemas"]["PrintAnchor"][];
         };
         /** @description Price × time liquidation grid. kind=model is the open-interest estimate. kind=prints is stored force-order notional. */
         LiquidationHuntHeatmap: {
@@ -9614,6 +9632,30 @@ export interface components {
             /** Format: date-time */
             createdAt?: string;
         };
+        /**
+         * @description Measured force-order notional since a clock. `day` is 00:00 UTC.
+         *     `4h` is the current block at 00, 04, 08, 12, 16, or 20 UTC.
+         *     Numbers are set only when `complete` is true. Zero on a complete anchor is a quiet clock.
+         */
+        PrintAnchor: {
+            /** @enum {string} */
+            anchor: "day" | "4h";
+            /** Format: date-time */
+            from: string;
+            /**
+             * @description Omitted when the clock was not fully recorded.
+             * @enum {string}
+             */
+            side?: "long" | "short" | "even" | "quiet";
+            /** @description Long-liquidation notional in USDT. Omitted when incomplete or zero. */
+            longNotional?: number;
+            /** @description Short-liquidation notional in USDT. Omitted when incomplete or zero. */
+            shortNotional?: number;
+            /** @description False when a requested venue did not record the whole clock. That is not a zero. */
+            complete: boolean;
+            /** @description Venues that left this clock unrecorded. Empty when complete. */
+            missing?: string[];
+        };
         /** @description Short combined read. A missing clause lists the venues that did not cover it. */
         CoinSituation: {
             symbol?: string;
@@ -9652,6 +9694,12 @@ export interface components {
                 window?: string;
             };
             printsMissing?: string[];
+            /**
+             * @description Measured prints since 00:00 UTC and the current 4-hour open.
+             *     An incomplete anchor names the venues that did not record that clock
+             *     and does not publish a partial sum. A complete quiet anchor is a real zero.
+             */
+            printAnchors?: components["schemas"]["PrintAnchor"][];
             /** @description OI-weighted predicted funding. Set only when Binance, Bybit, and OKX all contribute. */
             funding?: {
                 /** @enum {string} */

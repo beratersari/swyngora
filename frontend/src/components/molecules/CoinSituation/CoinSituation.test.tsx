@@ -42,6 +42,41 @@ describe('CoinSituation', () => {
     ).toBeInTheDocument();
   });
 
+  it('states the day and 4-hour print clocks, and names a clock that was not recorded', () => {
+    renderWithProviders(
+      <CoinSituation
+        report={{
+          symbol: 'BTCUSDT',
+          prints: { side: 'short', longNotional: 3_200, shortNotional: 2_500_000, window: '24h' },
+          printAnchors: [
+            { anchor: 'day', complete: true, side: 'long', longNotional: 8_000, shortNotional: 1_000 },
+            { anchor: '4h', complete: false, missing: ['okx'] },
+          ],
+        }}
+      />,
+    );
+    expect(
+      screen.getByText('Since 00:00 UTC, measured prints are mostly long liquidations (8.00K long, 1.00K short).'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Measured prints since this 4-hour open stay blank until OKX cover that clock.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows a quiet recorded clock as zero', () => {
+    renderWithProviders(
+      <CoinSituation
+        report={{
+          symbol: 'BTCUSDT',
+          printAnchors: [{ anchor: 'day', complete: true, side: 'quiet', longNotional: 0, shortNotional: 0 }],
+        }}
+      />,
+    );
+    expect(
+      screen.getByText('Since 00:00 UTC, measured prints are quiet (0 long, 0 short).'),
+    ).toBeInTheDocument();
+  });
+
   it('names the venues that leave measured prints blank', () => {
     renderWithProviders(
       <CoinSituation

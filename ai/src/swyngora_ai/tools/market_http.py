@@ -5499,7 +5499,13 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "or inside a gap with no print, has hasData false. That flag "
                 "is unrecorded time. Binance, Bybit, and OKX never "
                 "borrow each other's prints. Combined sums a column only when "
-                "all three were recorded. Not financial advice."
+                "all three were recorded. Each requested book includes "
+                "printAnchors for long and short notional since 00:00 UTC "
+                "and since the current 4-hour open. complete is false and "
+                "missing names the venue when that clock was not fully "
+                "recorded. A quiet recorded clock is side quiet with zero "
+                "notionals. Combined anchors are present only for "
+                "exchange=all. Not financial advice."
             ),
             args_schema=LiquidationPrintHeatmapInput,
         ),
@@ -6053,7 +6059,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "prints.side is measured force-orders over the last 24h: long, "
                 "short, even, or quiet, with longNotional and shortNotional in "
                 "USDT. Prints stay blank until Binance, Bybit, and OKX recorded "
-                "that whole window. funding.payer is long, "
+                "that whole window. printAnchors repeat that read since "
+                "00:00 UTC and since the current 4-hour open. An anchor stays "
+                "blank and names the venue when that clock was not fully "
+                "recorded. A quiet recorded clock is a real zero. funding.payer is long, "
                 "short, or none. crowd.lean is top_more_long, top_more_short, or even "
                 "(Binance and OKX; Bybit has no top-trader ratio). size.kind is whale "
                 "versus retail on the latest sized bar. A clause is omitted and its "

@@ -12,7 +12,7 @@ const (
 	HuntHeatmapKindPrints = "prints"
 )
 
-const measuredHeatmapNote = "Measured liquidation prints at each price and time. Longs are positions closed by a sell liquidation. Shorts are positions closed by a buy. These are stored force-order prints, not an open-interest leverage model. A column is recorded when a print landed there, or when that venue was watched and the column is outside a known feed gap. A quiet recorded column is a real zero. A column before the watch, or inside a gap with no print, stays empty. Binance, Bybit, and OKX never borrow each other's prints. Combined sums a column only when all three were recorded. Not financial advice."
+const measuredHeatmapNote = "Measured liquidation prints at each price and time. Longs are positions closed by a sell liquidation. Shorts are positions closed by a buy. These are stored force-order prints, not an open-interest leverage model. A column is recorded when a print landed there, or when that venue was watched and the column is outside a known feed gap. A quiet recorded column is a real zero. A column before the watch, or inside a gap with no print, stays empty. Binance, Bybit, and OKX never borrow each other's prints. Combined sums a column only when all three were recorded. Each returned book also reports long and short notional since 00:00 UTC and since the current 4-hour open. That anchor stays blank and names the venue when the clock was not fully recorded. A quiet recorded clock is a real zero. Not financial advice."
 
 // LiquidationPrintBin is one venue's notional in a time column and price row.
 // TimeIndex 0 is the first heatmap column. PriceIndex 0 is the highest price.

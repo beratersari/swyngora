@@ -131,6 +131,9 @@ type HuntHeatmapGrid struct {
 	// even when the column fell back to 50/50, and mixed when both happened.
 	// OKX uses its stored account ratio. A column with no ratio is even.
 	AccountBlend string `json:"accountBlend,omitempty"`
+	// PrintAnchors is measured long and short notional since 00:00 UTC and
+	// the current 4-hour open. Empty on the leverage model.
+	PrintAnchors []PrintAnchor `json:"printAnchors,omitempty"`
 }
 
 // HuntHeatmapReport is a CoinGlass-style price × time liquidation intensity map.

@@ -71,6 +71,26 @@ export function situationLines(report: CoinSituation | null | undefined, t: Tran
       }),
     );
   }
+  for (const row of report.printAnchors ?? []) {
+    if (row.anchor !== 'day' && row.anchor !== '4h') continue;
+    if (row.complete && row.side) {
+      lines.push(
+        t(`detail:situation.printAnchors.${row.anchor}.${row.side}`, {
+          long: formatCompactUsd(row.longNotional ?? 0),
+          short: formatCompactUsd(row.shortNotional ?? 0),
+          defaultValue: row.side,
+        }),
+      );
+      continue;
+    }
+    if ((row.missing ?? []).length > 0) {
+      lines.push(
+        t(`detail:situation.printAnchors.${row.anchor}.missing`, {
+          venues: situationVenueList(row.missing, t),
+        }),
+      );
+    }
+  }
   if (report.funding?.payer) {
     lines.push(
       t(`detail:situation.funding.${report.funding.payer}`, {
