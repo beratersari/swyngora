@@ -102,6 +102,41 @@ func (s *Service) entrySituation(ctx context.Context, bookID string, ex domain.E
 	return tr.Situation, tr.CreatedAt, nil
 }
 
+// EntrySituation is the read stored on the newest open buy for this client,
+// exchange, and symbol, across every book they own. Equities and a flat book
+// return nil. A missing fill leaves the read blank.
+func (s *Service) EntrySituation(ctx context.Context, clientID, exchange, symbol string) (*domain.CoinSituation, error) {
+	if s == nil || s.store == nil {
+		return nil, nil
+	}
+	ex := domain.ParseExchange(exchange)
+	if ex == "" || domain.IsEquityExchange(ex) {
+		return nil, nil
+	}
+	sym := domain.NormalizeSymbol(ex, symbol)
+	if sym == "" {
+		return nil, nil
+	}
+	books, err := s.store.ListPortfolios(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	var lots []domain.TaxLot
+	for i := range books {
+		rows, err := s.store.ListTaxLots(ctx, books[i].BookID(), ex, sym, true)
+		if err != nil {
+			return nil, err
+		}
+		lots = append(lots, rows...)
+	}
+	lot, ok := domain.LatestOpenLot(lots)
+	if !ok {
+		return nil, nil
+	}
+	got, _, err := s.entrySituation(ctx, lot.ClientID, ex, []domain.TaxLot{lot})
+	return got, err
+}
+
 // captureSituation reads the combined tape at order time.
 // Equities have no futures tape. A failed or slow read leaves the order without one.
 func (s *Service) captureSituation(ctx context.Context, ex domain.Exchange, symbol string) *domain.CoinSituation {

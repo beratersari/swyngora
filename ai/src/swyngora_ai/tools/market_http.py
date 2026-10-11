@@ -1600,6 +1600,16 @@ class AlertListInput(BaseModel):
     client_id: str = Field(description="Opaque client id")
 
 
+class SituationAlertInput(BaseModel):
+    client_id: str
+    symbol: str = Field(description="Pair on the paper book, e.g. BTCUSDT or BTC-USD")
+    exchange: str = Field(default="binance", description="binance | coinbase | bybit")
+    mode: str = Field(
+        default="one_time",
+        description="one_time (default) or repeating (re-arm when the live read matches the entry again)",
+    )
+
+
 class AlertCreateInput(BaseModel):
     client_id: str
     symbol: str
@@ -3693,6 +3703,24 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
 
     def list_price_alerts(client_id: str) -> str:
         return http.get("/api/v1/alerts", {"clientId": client_id})
+
+    def create_situation_alert(
+        client_id: str,
+        symbol: str,
+        exchange: str = "binance",
+        mode: str = "one_time",
+    ) -> str:
+        return http.post(
+            "/api/v1/alerts",
+            {
+                "clientId": client_id,
+                "symbol": symbol,
+                "exchange": exchange,
+                "kind": "situation",
+                "condition": "leaves",
+                "mode": mode,
+            },
+        )
 
     def create_price_alert(
         client_id: str,
@@ -5998,9 +6026,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "priceCvd.kind is price_up_cvd_down, price_down_cvd_up, or agrees. "
                 "openInterest.flow is opened, closed, or flat over the last hour. "
                 "liquidation.side is long when longs below last are closer, short "
-                "when shorts above last are closer, or none. A clause is omitted "
-                "and its Missing list names Binance, Bybit, or OKX when that venue "
-                "does not cover it. The same read is stored on a paper fill."
+                "when shorts above last are closer, or none. funding.payer is long, "
+                "short, or none. crowd.lean is top_more_long, top_more_short, or even "
+                "(Binance and OKX; Bybit has no top-trader ratio). size.kind is whale "
+                "versus retail on the latest sized bar. A clause is omitted and its "
+                "Missing list names the venues that do not cover it. The same read "
+                "is stored on a paper fill."
             ),
             args_schema=CoinSituationInput,
         ),
@@ -6444,6 +6475,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="list_price_alerts",
             description="List one-shot price alerts for a clientId (active and triggered).",
             args_schema=AlertListInput,
+        ),
+        StructuredTool.from_function(
+            create_situation_alert,
+            name="create_situation_alert",
+            description=(
+                "Alert when the live coin read leaves the read stored on the newest "
+                "open paper buy for this exchange and symbol. Only clauses stored at "
+                "entry count. No open crypto position stays quiet. mode=one_time "
+                "(default) or repeating."
+            ),
+            args_schema=SituationAlertInput,
         ),
         StructuredTool.from_function(
             create_price_alert,

@@ -30,6 +30,16 @@ type LiquidationAlertSource interface {
 	GetLiquidationLevels(ctx context.Context, exchange, symbol, rawRange string) (*domain.LiquidationLevelsReport, error)
 }
 
+// SituationReader loads the live combined coin read.
+type SituationReader interface {
+	GetCoinSituation(ctx context.Context, symbol string) (*domain.CoinSituation, error)
+}
+
+// EntryReader loads the coin read stored on the newest open paper buy.
+type EntryReader interface {
+	EntrySituation(ctx context.Context, clientID, exchange, symbol string) (*domain.CoinSituation, error)
+}
+
 // TapeAlertSource reads funding, open interest, taker flow, and fear and greed.
 type TapeAlertSource interface {
 	GetFundingRate(ctx context.Context, exchange, symbol string, limit int) (*domain.FundingSnapshot, error)
@@ -84,8 +94,11 @@ type Checker struct {
 	Radar        SetupRadarSource
 	Tape         TapeAlertSource
 	Accounts     AccountChecker
-	Interval     time.Duration
-	Logger       *slog.Logger
+	// Situation is the live coin read. Entries is the read stored on the open paper buy.
+	Situation SituationReader
+	Entries   EntryReader
+	Interval  time.Duration
+	Logger    *slog.Logger
 	// RadarTTL caches Setup Radar scans. 0 = 3m; < 0 disables (tests that change data).
 	RadarTTL time.Duration
 	// now and sleep are injectable for tests.
@@ -165,6 +178,7 @@ func (c *Checker) RunOnce(ctx context.Context) {
 	oiGroups := map[key][]domain.PriceAlert{}
 	takerGroups := map[key][]domain.PriceAlert{}
 	var fearAlerts []domain.PriceAlert
+	situationGroups := map[key][]domain.PriceAlert{}
 	for _, a := range active {
 		if tenantClosed(ctx, c.Accounts, a.ClientID) {
 			continue
@@ -211,6 +225,9 @@ func (c *Checker) RunOnce(ctx context.Context) {
 		case domain.IsTapeAlert(a.Kind) && domain.EffectiveAlertKind(a) == domain.AlertKindTaker:
 			k := key{ex: string(a.Exchange), sym: a.Symbol}
 			takerGroups[k] = append(takerGroups[k], a)
+		case domain.IsSituationAlert(a.Kind):
+			k := key{ex: string(a.Exchange), sym: a.Symbol}
+			situationGroups[k] = append(situationGroups[k], a)
 		case domain.IsBookAlert(a.Kind):
 			rng := a.RangePct
 			if rng <= 0 {
@@ -242,6 +259,20 @@ func (c *Checker) RunOnce(ctx context.Context) {
 	}
 	c.evalFeedAlerts(ctx, feedAlerts)
 	c.evalFearGreed(ctx, fearAlerts)
+	for k, alerts := range situationGroups {
+		k, alerts := k, alerts
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			select {
+			case <-ctx.Done():
+				return
+			case sem <- struct{}{}:
+			}
+			defer func() { <-sem }()
+			c.evalSituationGroup(ctx, k.ex, k.sym, alerts)
+		}()
+	}
 	for _, groups := range []map[key][]domain.PriceAlert{fundingGroups, oiGroups, takerGroups} {
 		for k, alerts := range groups {
 			k, alerts := k, alerts
@@ -428,6 +459,41 @@ func (c *Checker) finishMetric(ctx context.Context, alerts []domain.PriceAlert, 
 	for _, a := range alerts {
 		if _, _, err := c.Alerts.ProcessPrice(ctx, a, metric, now); err != nil && c.Logger != nil {
 			c.Logger.Debug("tape alert failed", "id", a.ID, "err", err)
+		}
+	}
+}
+
+func (c *Checker) evalSituationGroup(ctx context.Context, exchange, symbol string, alerts []domain.PriceAlert) {
+	if c == nil || c.Situation == nil || c.Entries == nil || c.Alerts == nil {
+		return
+	}
+	live, err := c.Situation.GetCoinSituation(ctx, symbol)
+	if err != nil || live == nil {
+		if c.Logger != nil && err != nil {
+			c.Logger.Debug("situation for alert failed", "symbol", symbol, "err", err)
+		}
+		return
+	}
+	now := time.Now().UTC()
+	if c.now != nil {
+		now = c.now().UTC()
+	}
+	for _, a := range alerts {
+		entry, err := c.Entries.EntrySituation(ctx, a.ClientID, exchange, symbol)
+		if err != nil {
+			if c.Logger != nil {
+				c.Logger.Debug("entry situation failed", "id", a.ID, "err", err)
+			}
+			continue
+		}
+		left, changed := domain.SituationLeft(entry, live)
+		ev := domain.EvaluateAlertState(a, left)
+		var extra map[string]any
+		if len(changed) > 0 {
+			extra = map[string]any{"changed": changed}
+		}
+		if _, _, err := c.Alerts.ProcessObservationExtra(ctx, a, ev, 0, now, extra); err != nil && c.Logger != nil {
+			c.Logger.Debug("situation alert failed", "id", a.ID, "err", err)
 		}
 	}
 }

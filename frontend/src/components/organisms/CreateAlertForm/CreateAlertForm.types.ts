@@ -10,7 +10,8 @@ export type AlertKind =
   | 'funding'
   | 'open_interest'
   | 'taker'
-  | 'fear_greed';
+  | 'fear_greed'
+  | 'situation';
 
 export type CreateAlertFormProps = {
   defaultExchange?: MarketExchange | string;

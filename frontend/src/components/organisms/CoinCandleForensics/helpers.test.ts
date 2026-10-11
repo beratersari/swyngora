@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clickSecFromForensicsAt, coinForensicsHref } from './helpers';
+import { clickSecFromForensicsAt, coinForensicsHref, forensicsKnownUntil } from './helpers';
 
 describe('coinForensicsHref', () => {
   it('keeps the forensics desk defaults for the clicked candle', () => {
@@ -24,5 +24,17 @@ describe('clickSecFromForensicsAt', () => {
 
   it('leaves an unreadable time off the chart', () => {
     expect(clickSecFromForensicsAt('not-a-time')).toBeNull();
+  });
+});
+
+describe('forensicsKnownUntil', () => {
+  it('stops an old candle at the end of the during window', () => {
+    expect(forensicsKnownUntil('2026-08-20T14:00:00.000Z', '15m', Date.parse('2026-08-20T16:00:00.000Z'))).toBe(
+      '2026-08-20T14:15:00.000Z',
+    );
+  });
+
+  it('leaves a window that is still open on the server clock', () => {
+    expect(forensicsKnownUntil('2026-08-20T14:00:00.000Z', '15m', Date.parse('2026-08-20T14:10:00.000Z'))).toBeUndefined();
   });
 });

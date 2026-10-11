@@ -59,6 +59,7 @@ PUT /api/v1/alerts/webhook
 | `open_interest` | Current open-interest notional in USDT | `above` / `below` | Positive USDT | `one_time` unless repeating |
 | `taker` | 5-minute taker buy share, 0–100 | `above` / `below` | 0–100 | `one_time` unless repeating |
 | `fear_greed` | Market-wide fear and greed score. No symbol | `above` / `below` | 0–100 | `one_time` unless repeating |
+| `situation` | Live coin read leaves the clauses stored on the newest open paper buy for this exchange and symbol. No open crypto position stays quiet | `leaves` | unused | `one_time` unless repeating |
 
 Book kinds are evaluated in the background from the same live local books as `GET /api/v1/market/orderbook` (Binance, Coinbase, Bybit). Repeating book alerts fire when the condition **appears**, stay quiet while it remains true, and re-arm after it clears so the next appearance can fire again.
 

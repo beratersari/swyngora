@@ -17,7 +17,7 @@ export function situationVenueList(ids: string[] | undefined, t: Translate): str
   });
 }
 
-/** Three sentences. A missing venue keeps that sentence blank of a number and names who is absent. */
+/** One sentence per clause. A missing venue keeps that sentence blank of a number and names who is absent. */
 export function situationLines(report: CoinSituation | null | undefined, t: Translate): string[] {
   if (!report) return [];
   const lines: string[] = [];
@@ -52,6 +52,43 @@ export function situationLines(report: CoinSituation | null | undefined, t: Tran
     lines.push(
       t('detail:situation.liquidation.missing', {
         venues: situationVenueList(report.liquidationMissing, t),
+      }),
+    );
+  }
+  if (report.funding?.payer) {
+    lines.push(
+      t(`detail:situation.funding.${report.funding.payer}`, {
+        pct: report.funding.ratePct ?? 0,
+        defaultValue: report.funding.payer,
+      }),
+    );
+  } else if ((report.fundingMissing ?? []).length > 0) {
+    lines.push(
+      t('detail:situation.funding.missing', {
+        venues: situationVenueList(report.fundingMissing, t),
+      }),
+    );
+  }
+  if (report.crowd?.lean) {
+    lines.push(
+      t(`detail:situation.crowd.${report.crowd.lean}`, {
+        pct: report.crowd.gapPct ?? 0,
+        defaultValue: report.crowd.lean,
+      }),
+    );
+  } else if ((report.crowdMissing ?? []).length > 0) {
+    lines.push(
+      t('detail:situation.crowd.missing', {
+        venues: situationVenueList(report.crowdMissing, t),
+      }),
+    );
+  }
+  if (report.size?.kind) {
+    lines.push(t(`detail:situation.size.${report.size.kind}`, { defaultValue: report.size.kind }));
+  } else if ((report.sizeMissing ?? []).length > 0) {
+    lines.push(
+      t('detail:situation.size.missing', {
+        venues: situationVenueList(report.sizeMissing, t),
       }),
     );
   }

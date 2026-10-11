@@ -13,7 +13,7 @@ func NormalizeAlertKind(s string) (AlertKind, bool) {
 		return AlertKindPrice, true
 	}
 	switch AlertKind(s) {
-	case AlertKindPrice, AlertKindImbalance, AlertKindWall, AlertKindLiqFeed, AlertKindLiqCascade, AlertKindLiqNotional, AlertKindLiqLevel, AlertKindSetupRadar, AlertKindFunding, AlertKindOpenInterest, AlertKindTaker, AlertKindFearGreed:
+	case AlertKindPrice, AlertKindImbalance, AlertKindWall, AlertKindLiqFeed, AlertKindLiqCascade, AlertKindLiqNotional, AlertKindLiqLevel, AlertKindSetupRadar, AlertKindFunding, AlertKindOpenInterest, AlertKindTaker, AlertKindFearGreed, AlertKindSituation:
 		return AlertKind(s), true
 	default:
 		return "", false
@@ -39,7 +39,7 @@ func EffectiveAlertKind(a PriceAlert) AlertKind {
 func ValidateAlertSpec(kind AlertKind, condition string, target, rangePct float64) error {
 	kind, ok := NormalizeAlertKind(string(kind))
 	if !ok {
-		return fmt.Errorf("%w: kind must be price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional, liquidation_level, setup_radar, funding, open_interest, taker, or fear_greed", ErrInvalidArgument)
+		return fmt.Errorf("%w: kind must be price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional, liquidation_level, setup_radar, funding, open_interest, taker, fear_greed, or situation", ErrInvalidArgument)
 	}
 	cond := strings.ToLower(strings.TrimSpace(condition))
 	if rangePct < 0 || math.IsNaN(rangePct) || math.IsInf(rangePct, 0) {
@@ -73,6 +73,10 @@ func ValidateAlertSpec(kind AlertKind, condition string, target, rangePct float6
 		return validateRadarAlertSpec(cond, target)
 	case AlertKindFunding, AlertKindOpenInterest, AlertKindTaker, AlertKindFearGreed:
 		return validateTapeAlertSpec(kind, cond, target)
+	case AlertKindSituation:
+		if cond != "" && cond != "leaves" {
+			return fmt.Errorf("%w: situation condition must be leaves", ErrInvalidArgument)
+		}
 	}
 	return nil
 }

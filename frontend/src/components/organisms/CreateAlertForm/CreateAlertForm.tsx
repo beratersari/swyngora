@@ -51,7 +51,7 @@ export function CreateAlertForm({
   const [targetPrice, setTargetPrice] = useState<number | null>(defaultKind === 'setup_radar' ? 60 : null);
   const [window, setWindow] = useState('5m');
   const [mode, setMode] = useState<'one_time' | 'repeating'>(
-    defaultKind === 'price' ? 'one_time' : 'repeating',
+    defaultKind === 'price' || defaultKind === 'situation' ? 'one_time' : 'repeating',
   );
   const isFeed = kind === 'liquidation_feed';
   const isCascade = kind === 'liquidation_cascade';
@@ -62,12 +62,14 @@ export function CreateAlertForm({
   const isOI = kind === 'open_interest';
   const isTaker = kind === 'taker';
   const isFear = kind === 'fear_greed';
+  const isSituation = kind === 'situation';
   const isTape = isFunding || isOI || isTaker || isFear;
   const isLiq = isFeed || isCascade || isNotional || isLevel;
   const venueWide = isLiq || isRadar || isTape;
   const lockRepeating = isLiq || isRadar;
   const liqExchanges = ['binance', 'bybit', 'okx', 'all'];
   const spotExchanges = ['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'];
+  const situationExchanges = ['binance', 'coinbase', 'bybit'];
 
   useEffect(() => {
     setExchange(String(defaultExchange || 'binance'));
@@ -103,7 +105,9 @@ export function CreateAlertForm({
                 ? condition || 'any'
                 : isRadar
                   ? condition || 'any'
-                  : condition,
+                  : isSituation
+                    ? 'leaves'
+                    : condition,
         targetPrice: isFeed
           ? targetPrice ?? 300
           : isCascade
@@ -150,10 +154,16 @@ export function CreateAlertForm({
               { value: 'open_interest', label: t('alerts:kinds.open_interest', { defaultValue: 'Open interest' }) },
               { value: 'taker', label: t('alerts:kinds.taker', { defaultValue: 'Taker buy share' }) },
               { value: 'fear_greed', label: t('alerts:kinds.fear_greed', { defaultValue: 'Fear and greed' }) },
+              { value: 'situation', label: t('alerts:kinds.situation', { defaultValue: 'Entry read' }) },
             ]}
             onChange={(v) => {
               setKind(v);
-              if (v === 'funding' || v === 'open_interest' || v === 'taker' || v === 'fear_greed') {
+              if (v === 'situation') {
+                setCondition('leaves');
+                setTargetPrice(null);
+                setMode('one_time');
+                if (!situationExchanges.includes(exchange)) setExchange('binance');
+              } else if (v === 'funding' || v === 'open_interest' || v === 'taker' || v === 'fear_greed') {
                 setCondition('above');
                 setMode('one_time');
                 setTargetPrice(null);
@@ -186,7 +196,10 @@ export function CreateAlertForm({
             value={exchange}
             aria-label={t('alerts:exchange')}
             style={{ minWidth: 120 }}
-            options={(venueWide ? liqExchanges : spotExchanges).map((e) => ({ value: e, label: e }))}
+            options={(isSituation ? situationExchanges : venueWide ? liqExchanges : spotExchanges).map((e) => ({
+              value: e,
+              label: e,
+            }))}
             onChange={setExchange}
           />
         </Field>
@@ -204,7 +217,7 @@ export function CreateAlertForm({
             />
           </Field>
         )}
-        {isFeed ? null : (
+        {isFeed || isSituation ? null : (
           <Field>
             <Text variant="caption" color="secondary">
               {t('alerts:condition')}
@@ -246,7 +259,7 @@ export function CreateAlertForm({
             />
           </Field>
         )}
-        {isCascade ? null : (
+        {isCascade || isSituation ? null : (
           <Field>
             <Text variant="caption" color="secondary">
               {isFeed
@@ -333,6 +346,14 @@ export function CreateAlertForm({
           </Field>
         )}
       </FieldRow>
+      {isSituation ? (
+        <Text variant="caption" color="secondary">
+          {t('alerts:situationHint', {
+            defaultValue:
+              'Fires when the live read leaves the read stored on your newest open buy for this coin. Clauses that were not stored at entry are ignored.',
+          })}
+        </Text>
+      ) : null}
       {isFunding && exchange === 'all' ? (
         <Text variant="caption" color="secondary">
           {t('alerts:fundingAllVenues', {
@@ -360,7 +381,7 @@ export function CreateAlertForm({
             (isNotional && (!symbol.trim() || targetPrice == null || targetPrice <= 0)) ||
             (isRadar && targetPrice != null && (targetPrice < 40 || targetPrice > 100)) ||
             (isTape && targetPrice == null) ||
-            ((isFunding || isOI || isTaker) && !symbol.trim())
+            ((isFunding || isOI || isTaker || isSituation) && !symbol.trim())
           }
           onClick={() => void submit()}
         >

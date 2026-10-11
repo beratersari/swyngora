@@ -89,7 +89,8 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_basis` | Perp vs spot/index premium or discount on Binance, Bybit, and OKX; a missing or unusable quote leaves agreement unknown. `curve` is near vs far dated futures (contango / backwardation) plus `history` / `windows` / `moves` when that spread flipped or got steeper |
 | `get_price_correlation` | How similarly a coin moves with BTC and ETH (1h / 4h / 24h) |
 | `get_market_breadth` | How many followed coins are up vs down (1h / 4h / 24h), plus BTC/ETH vs the pack |
-| `get_coin_situation` | Price versus futures CVD, whether 1h open interest is building, and which liquidation side is closer. A missing Binance, Bybit, or OKX venue is named and that clause stays blank. The same read is stored on a paper fill |
+| `get_coin_situation` | Price versus futures CVD, 1h open interest, the closer liquidation side, OI-weighted funding, Binance and OKX top versus crowd, and whale versus retail. A missing publisher is named and that clause stays blank. The same read is stored on a paper fill |
+| `create_situation_alert` | Fire when the live read leaves the clauses stored on the newest open paper buy |
 | `get_fear_greed` | 0–100 fear and greed from our own tape (breadth, BTC move, volatility, funding, long/short, liquidations, perp book, taker flow), which input moved the score the most, and stored 1h/4h/24h/7d history. Not the Binance or CoinGlass index |
 | `get_price_volatility` | How much a coin moved over 1h / 4h / 24h vs its normal range and vs BTC/ETH |
 | `get_market_snapshot` | Price, volume, mcap, OI, funding, LS, and taker buy/sell together (1h / 4h / 24h) |

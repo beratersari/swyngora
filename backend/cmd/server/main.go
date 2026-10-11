@@ -929,6 +929,8 @@ func main() {
 		Liquidations: marketSvc,
 		Radar:        marketSvc,
 		Tape:         marketSvc,
+		Situation:    marketSvc,
+		Entries:      portfolioSvc,
 		Accounts:     accountSvc,
 		Interval:     cfg.AlertCheckInterval,
 		Logger:       logger,

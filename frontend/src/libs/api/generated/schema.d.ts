@@ -9052,7 +9052,7 @@ export interface components {
             exchange?: string;
             symbol?: string;
             /** @enum {string} */
-            kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional" | "liquidation_level" | "setup_radar" | "funding" | "open_interest" | "taker" | "fear_greed";
+            kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional" | "liquidation_level" | "setup_radar" | "funding" | "open_interest" | "taker" | "fear_greed" | "situation";
             /** @description price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both; setup_radar any|up|down */
             condition?: string;
             targetPrice?: number;
@@ -9594,6 +9594,28 @@ export interface components {
                 distancePct?: number;
             };
             liquidationMissing?: string[];
+            /** @description OI-weighted predicted funding. Set only when Binance, Bybit, and OKX all contribute. */
+            funding?: {
+                /** @enum {string} */
+                payer?: "long" | "short" | "none";
+                /** @description Rate in percent. 0.01 means 0.01%. */
+                ratePct?: number;
+            };
+            fundingMissing?: string[];
+            /** @description Top-trader long share minus the crowd, from Binance and OKX. Bybit does not publish a top-trader ratio. */
+            crowd?: {
+                /** @enum {string} */
+                lean?: "top_more_long" | "top_more_short" | "even";
+                /** @description Signed percentage points. */
+                gapPct?: number;
+            };
+            crowdMissing?: string[];
+            /** @description Whale versus retail on the latest sized combined bar. */
+            size?: {
+                /** @enum {string} */
+                kind?: "whale_buy_retail_sell" | "whale_sell_retail_buy" | "both_buy" | "both_sell" | "whale_buy" | "whale_sell" | "retail_buy" | "retail_sell" | "flat";
+            };
+            sizeMissing?: string[];
             note?: string;
         };
         PaperTradingCost: {
@@ -14857,7 +14879,7 @@ export interface operations {
                      * @default price
                      * @enum {string}
                      */
-                    kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional" | "liquidation_level" | "setup_radar" | "funding" | "open_interest" | "taker" | "fear_greed";
+                    kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional" | "liquidation_level" | "setup_radar" | "funding" | "open_interest" | "taker" | "fear_greed" | "situation";
                     /** @description price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both; liquidation_level any|high|fair; setup_radar any|up|down */
                     condition: string;
                     /** @description Price target, |imbalance| threshold, wall min share, liquidation_feed min down seconds (0 = 300), liquidation_notional USDT amount, liquidation_level min confidence 0–1 (0 = default), or setup_radar min similarity 40–100 (0 = 60) */

@@ -189,6 +189,60 @@ func TestChecker_SkipsClosedAccount(t *testing.T) {
 	}
 }
 
+func TestChecker_SituationLeavesTheEntryReadOnce(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	a, err := svc.Create(ctx, CreateInput{
+		ClientID: "sit-alert", Symbol: "BTCUSDT", Kind: string(domain.AlertKindSituation),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Condition != "leaves" || a.Kind != domain.AlertKindSituation {
+		t.Fatalf("created %+v", a)
+	}
+	entry := &domain.CoinSituation{PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceUp}}
+	live := &domain.CoinSituation{PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceUp}}
+	c := &Checker{
+		Alerts:    svc,
+		Situation: fakeSituation{live: live},
+		Entries:   fakeEntries{got: entry},
+	}
+	c.RunOnce(ctx)
+	got, _ := svc.Get(ctx, "sit-alert", a.ID)
+	if got.Status != domain.AlertStatusActive {
+		t.Fatalf("same read must stay active: %+v", got)
+	}
+	live.PriceCVD.Kind = domain.SituationCVDAgrees
+	c.RunOnce(ctx)
+	got, _ = svc.Get(ctx, "sit-alert", a.ID)
+	if got.Status != domain.AlertStatusTriggered {
+		t.Fatalf("left read should fire: %+v", got)
+	}
+	live.PriceCVD.Kind = domain.SituationCVDPriceDown
+	c.RunOnce(ctx)
+	got2, _ := svc.Get(ctx, "sit-alert", a.ID)
+	if got2.Status != domain.AlertStatusTriggered {
+		t.Fatalf("one-time must not re-fire: %+v", got2)
+	}
+}
+
+type fakeSituation struct {
+	live *domain.CoinSituation
+}
+
+func (f fakeSituation) GetCoinSituation(context.Context, string) (*domain.CoinSituation, error) {
+	return f.live, nil
+}
+
+type fakeEntries struct {
+	got *domain.CoinSituation
+}
+
+func (f fakeEntries) EntrySituation(context.Context, string, string, string) (*domain.CoinSituation, error) {
+	return f.got, nil
+}
+
 func TestChecker_TriggersOnce(t *testing.T) {
 	svc, _ := newSvc(t)
 	ctx := context.Background()

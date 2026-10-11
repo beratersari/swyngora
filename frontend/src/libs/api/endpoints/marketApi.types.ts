@@ -275,6 +275,26 @@ export type CoinSituationLiquidation = {
   side?: 'long' | 'short' | 'none';
   distancePct?: number;
 };
+export type CoinSituationFunding = {
+  payer?: 'long' | 'short' | 'none';
+  ratePct?: number;
+};
+export type CoinSituationCrowd = {
+  lean?: 'top_more_long' | 'top_more_short' | 'even';
+  gapPct?: number;
+};
+export type CoinSituationSize = {
+  kind?:
+    | 'whale_buy_retail_sell'
+    | 'whale_sell_retail_buy'
+    | 'both_buy'
+    | 'both_sell'
+    | 'whale_buy'
+    | 'whale_sell'
+    | 'retail_buy'
+    | 'retail_sell'
+    | 'flat';
+};
 export type CoinSituation = {
   symbol?: string;
   asOf?: string;
@@ -284,6 +304,12 @@ export type CoinSituation = {
   openInterestMissing?: string[];
   liquidation?: CoinSituationLiquidation | null;
   liquidationMissing?: string[];
+  funding?: CoinSituationFunding | null;
+  fundingMissing?: string[];
+  crowd?: CoinSituationCrowd | null;
+  crowdMissing?: string[];
+  size?: CoinSituationSize | null;
+  sizeMissing?: string[];
   note?: string;
 };
 export type CoinSituationQuery = {

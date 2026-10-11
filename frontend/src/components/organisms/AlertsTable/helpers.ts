@@ -25,6 +25,7 @@ export function alertConditionLabel(row: PriceAlert): string {
     const lean = row.condition && row.condition !== '' ? row.condition : 'any';
     return `setup ≥ ${min} (${lean})`;
   }
+  if (kind === 'situation') return 'leaves the entry read';
   if (kind === 'imbalance' || kind === 'wall') {
     return `${kind} ${row.condition ?? ''} ${row.targetPrice ?? ''}`.trim();
   }

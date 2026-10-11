@@ -46,7 +46,7 @@ func TestBuildCoinSituation_CompleteRead(t *testing.T) {
 			{Price: "90", LongNotional: "80"},
 			{Price: "103", ShortNotional: "40"},
 		},
-	})
+	}, nil, nil)
 	if got.Symbol != "BTCUSDT" || got.PriceCVD == nil || got.PriceCVD.Kind != SituationCVDPriceUp {
 		t.Fatalf("cvd %+v", got.PriceCVD)
 	}
@@ -80,7 +80,7 @@ func TestBuildCoinSituation_NamesTheMissingVenueAndLeavesThatClauseBlank(t *test
 		LastPrice: "100",
 		Missing:   []string{"okx"},
 		Levels:    []LiquidationLevelBar{{Price: "99", LongNotional: "10"}},
-	})
+	}, nil, nil)
 	if got.PriceCVD != nil || len(got.PriceCVDMissing) != 1 || got.PriceCVDMissing[0] != "bybit" {
 		t.Fatalf("cvd %+v missing %v", got.PriceCVD, got.PriceCVDMissing)
 	}
@@ -100,12 +100,115 @@ func TestBuildCoinSituation_ShortPocketCloserAndNone(t *testing.T) {
 			{Price: "90", LongNotional: "50"},
 			{Price: "101", ShortNotional: "5"},
 		},
-	})
+	}, nil, nil)
 	if closer.Liquidation == nil || closer.Liquidation.Side != SituationLiqShort || closer.Liquidation.DistancePct != 1 {
 		t.Fatalf("short %+v", closer.Liquidation)
 	}
-	none := BuildCoinSituation("ETHUSDT", now, nil, nil, &LiquidationLevelsReport{LastPrice: "100"})
+	none := BuildCoinSituation("ETHUSDT", now, nil, nil, &LiquidationLevelsReport{LastPrice: "100"}, nil, nil)
 	if none.Liquidation == nil || none.Liquidation.Side != SituationLiqNone || none.Liquidation.DistancePct != 0 {
 		t.Fatalf("none %+v", none.Liquidation)
+	}
+}
+
+func TestBuildCoinSituation_FundingCrowdAndSizeStayBlankUntilCovered(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	partial := BuildCoinSituation("BTCUSDT", now, &CVDReport{
+		Combined: &CVDVenueSeries{Complete: true, Points: []CVDPoint{{Time: now, SizeKnown: false}}},
+		Venues: []CVDVenueSeries{
+			{Exchange: ExchangeBinance, Complete: true, Points: []CVDPoint{{Time: now, SizeKnown: true}}},
+		},
+	}, nil, nil, &FundingSnapshot{
+		Pressure: &FundingPressure{
+			Payer:   "long",
+			RatePct: "0.01",
+			Venues: []FundingPressureVenue{
+				{Exchange: "binance"},
+				{Exchange: "bybit"},
+			},
+		},
+	}, &LongShortSnapshot{
+		Venues: []LongShortVenueSnap{
+			{Exchange: "binance", Gap: &LongShortGap{Lean: LongShortGapLeanTopLong, GapPct: "+8"}},
+		},
+	})
+	if partial.Funding != nil || len(partial.FundingMissing) != 1 || partial.FundingMissing[0] != "okx" {
+		t.Fatalf("funding %+v missing %v", partial.Funding, partial.FundingMissing)
+	}
+	if partial.Crowd != nil || len(partial.CrowdMissing) != 1 || partial.CrowdMissing[0] != "okx" {
+		t.Fatalf("crowd %+v missing %v", partial.Crowd, partial.CrowdMissing)
+	}
+	if partial.Size != nil || len(partial.SizeMissing) != 2 || partial.SizeMissing[0] != "bybit" || partial.SizeMissing[1] != "okx" {
+		t.Fatalf("size %+v missing %v", partial.Size, partial.SizeMissing)
+	}
+}
+
+func TestBuildCoinSituation_FundingCrowdAndSizeWhenEveryPublisherIsIn(t *testing.T) {
+	now := time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
+	bar := now.Add(-5 * time.Minute)
+	point := CVDPoint{Time: bar, SizeKnown: true, WhaleDelta: 2_000_000, RetailDelta: -500_000}
+	venue := func(ex Exchange) CVDVenueSeries {
+		return CVDVenueSeries{Exchange: ex, Complete: true, Points: []CVDPoint{point}}
+	}
+	got := BuildCoinSituation("BTCUSDT", now, &CVDReport{
+		Combined: &CVDVenueSeries{Complete: true, Points: []CVDPoint{point}},
+		Venues:   []CVDVenueSeries{venue(ExchangeBinance), venue(ExchangeBybit), venue(ExchangeOKX)},
+	}, nil, nil, &FundingSnapshot{
+		Pressure: &FundingPressure{
+			Payer:   "short",
+			RatePct: "-0.02",
+			Venues: []FundingPressureVenue{
+				{Exchange: "binance"},
+				{Exchange: "bybit"},
+				{Exchange: "okx"},
+			},
+		},
+	}, &LongShortSnapshot{
+		Venues: []LongShortVenueSnap{
+			{Exchange: "binance", Gap: &LongShortGap{Lean: LongShortGapLeanTopLong, GapPct: "+10"}},
+			{Exchange: "bybit"},
+			{Exchange: "okx", Gap: &LongShortGap{Lean: LongShortGapLeanTopLong, GapPct: "+4"}},
+		},
+	})
+	if got.Funding == nil || got.Funding.Payer != "short" || got.Funding.RatePct >= 0 {
+		t.Fatalf("funding %+v", got.Funding)
+	}
+	if got.Crowd == nil || got.Crowd.Lean != LongShortGapLeanTopLong || got.Crowd.GapPct != 7 {
+		t.Fatalf("crowd %+v", got.Crowd)
+	}
+	if got.Size == nil || got.Size.Kind != SituationSizeWhaleBuyRetailSell {
+		t.Fatalf("size %+v", got.Size)
+	}
+	if len(got.FundingMissing) != 0 || len(got.CrowdMissing) != 0 || len(got.SizeMissing) != 0 {
+		t.Fatalf("missing funding %v crowd %v size %v", got.FundingMissing, got.CrowdMissing, got.SizeMissing)
+	}
+}
+
+func TestSituationLeft_OnlyClausesStoredAtEntry(t *testing.T) {
+	entry := &CoinSituation{
+		PriceCVD: &SituationPriceCVD{Kind: SituationCVDPriceUp},
+		Funding:  &SituationFunding{Payer: "long"},
+	}
+	same := &CoinSituation{
+		PriceCVD: &SituationPriceCVD{Kind: SituationCVDPriceUp},
+		Funding:  &SituationFunding{Payer: "long"},
+		Size:     &SituationSize{Kind: SituationSizeBothBuy},
+	}
+	if left, changed := SituationLeft(entry, same); left || len(changed) != 0 {
+		t.Fatalf("new clause must not count as leaving: %v %v", left, changed)
+	}
+	live := &CoinSituation{
+		PriceCVD: &SituationPriceCVD{Kind: SituationCVDAgrees},
+		Funding:  &SituationFunding{Payer: "short"},
+	}
+	left, changed := SituationLeft(entry, live)
+	if !left || len(changed) != 2 || changed[0] != "priceCvd" || changed[1] != "funding" {
+		t.Fatalf("left %v changed %v", left, changed)
+	}
+	blank, changed := SituationLeft(entry, &CoinSituation{})
+	if !blank || len(changed) != 2 {
+		t.Fatalf("blank live %v %v", blank, changed)
+	}
+	if left, _ := SituationLeft(nil, live); left {
+		t.Fatal("no entry")
 	}
 }

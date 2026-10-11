@@ -3,6 +3,7 @@ package portfolio
 import (
 	"context"
 	"testing"
+	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
@@ -90,6 +91,53 @@ func TestPlacePendingOrder_KeepsTheReadFromPlacement(t *testing.T) {
 	}
 	if len(list) != 1 || list[0].Situation == nil || list[0].Situation.PriceCVD.Kind != domain.SituationCVDAgrees {
 		t.Fatalf("fill kept %+v", list)
+	}
+}
+
+func TestEntrySituation_UsesTheNewestOpenBuyAcrossBooks(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	src := &fakeSituation{got: &domain.CoinSituation{
+		Symbol:   "BTCUSDT",
+		PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceUp},
+	}}
+	svc.SetSituationSource(src)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "sit-entry", Name: "one", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{
+		ClientID: "sit-entry", Symbol: "BTCUSDT", Side: "buy", Quantity: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	src.got = &domain.CoinSituation{
+		Symbol:   "BTCUSDT",
+		PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceDown},
+	}
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "sit-entry", Name: "two", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	books, err := svc.List(ctx, "sit-entry")
+	if err != nil || len(books) != 2 {
+		t.Fatalf("books %+v %v", books, err)
+	}
+	second := books[0].ID
+	if books[0].Name == "one" {
+		second = books[1].ID
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{
+		ClientID: "sit-entry", PortfolioID: second, Symbol: "BTCUSDT", Side: "buy", Quantity: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.EntrySituation(ctx, "sit-entry", "binance", "BTCUSDT")
+	if err != nil || got == nil || got.PriceCVD == nil || got.PriceCVD.Kind != domain.SituationCVDPriceDown {
+		t.Fatalf("newest book %+v %v", got, err)
+	}
+	if eq, err := svc.EntrySituation(ctx, "sit-entry", "nasdaq", "AAPL"); err != nil || eq != nil {
+		t.Fatalf("equity %+v %v", eq, err)
 	}
 }
 

@@ -248,6 +248,7 @@ import { CoinSituation } from '@/components/molecules/CoinSituation';
 import { openPositionFor, PositionSituation } from '@/components/molecules/PositionSituation';
 import {
   clickSecFromForensicsAt,
+  forensicsKnownUntil,
   COIN_FORENSICS_DURING,
   COIN_FORENSICS_EXCHANGE,
   COIN_FORENSICS_WINDOW,
@@ -354,10 +355,14 @@ export function CoinDetailPage() {
   );
   const forensicsAt =
     !isEquity && cvdClickSec != null ? new Date(cvdClickSec * 1000).toISOString() : undefined;
+  const forensicsAsOf = forensicsAt
+    ? forensicsKnownUntil(forensicsAt, COIN_FORENSICS_DURING)
+    : undefined;
   const forensicsQuery = useGetMarketForensicsQuery(
     {
       symbol: symbol ?? '',
       at: forensicsAt ?? '',
+      asOf: forensicsAsOf,
       exchange: COIN_FORENSICS_EXCHANGE,
       window: COIN_FORENSICS_WINDOW,
       during: COIN_FORENSICS_DURING,

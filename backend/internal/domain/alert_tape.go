@@ -12,6 +12,8 @@ const (
 	AlertKindOpenInterest AlertKind = "open_interest"
 	AlertKindTaker        AlertKind = "taker"
 	AlertKindFearGreed    AlertKind = "fear_greed"
+	// AlertKindSituation fires when the live coin read leaves the read stored on the open paper buy.
+	AlertKindSituation AlertKind = "situation"
 )
 
 // IsTapeAlert reports funding, open interest, taker buy share, or fear and greed.
@@ -24,6 +26,12 @@ func IsTapeAlert(k AlertKind) bool {
 func IsFearGreedAlert(k AlertKind) bool {
 	k, ok := NormalizeAlertKind(string(k))
 	return ok && k == AlertKindFearGreed
+}
+
+// IsSituationAlert reports an alert on the open position's stored coin read.
+func IsSituationAlert(k AlertKind) bool {
+	k, ok := NormalizeAlertKind(string(k))
+	return ok && k == AlertKindSituation
 }
 
 func validateTapeAlertSpec(kind AlertKind, condition string, target float64) error {

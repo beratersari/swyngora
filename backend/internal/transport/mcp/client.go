@@ -1905,6 +1905,14 @@ func (c *APIClient) CreatePriceAlert(ctx context.Context, clientID, exchange, sy
 	})
 }
 
+// CreateSituationAlert fires when the live coin read leaves the open paper buy.
+func (c *APIClient) CreateSituationAlert(ctx context.Context, clientID, exchange, symbol, mode string) (json.RawMessage, error) {
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/alerts", map[string]any{
+		"clientId": clientID, "exchange": exchange, "symbol": symbol,
+		"kind": "situation", "condition": "leaves", "mode": mode,
+	})
+}
+
 // CreateTapeAlert alerts when funding, open interest, taker share, or fear and greed crosses a level.
 func (c *APIClient) CreateTapeAlert(ctx context.Context, clientID, exchange, symbol, kind, condition string, target float64, mode string) (json.RawMessage, error) {
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/alerts", map[string]any{

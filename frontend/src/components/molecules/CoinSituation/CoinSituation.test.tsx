@@ -23,4 +23,21 @@ describe('CoinSituation', () => {
     expect(screen.getByText('Long liquidations below price are closer (1.2%).')).toBeInTheDocument();
     expect(screen.queryByText(/building/)).not.toBeInTheDocument();
   });
+
+  it('adds funding, the crowd gap, and whale versus retail when those clauses are set', () => {
+    renderWithProviders(
+      <CoinSituation
+        report={{
+          symbol: 'BTCUSDT',
+          funding: { payer: 'long', ratePct: 0.01 },
+          crowd: { lean: 'top_more_long', gapPct: 7 },
+          size: { kind: 'whale_buy_retail_sell' },
+          sizeMissing: [],
+        }}
+      />,
+    );
+    expect(screen.getByText('Longs pay the combined funding (0.01%).')).toBeInTheDocument();
+    expect(screen.getByText('Top traders are more long than the crowd (7 pp).')).toBeInTheDocument();
+    expect(screen.getByText('Large prints are buying while smaller prints are selling.')).toBeInTheDocument();
+  });
 });

@@ -4228,6 +4228,20 @@ func (b *Backend) CreatePriceAlert(ctx context.Context, clientID, exchange, symb
 	return alertJSON(a)
 }
 
+func (b *Backend) CreateSituationAlert(ctx context.Context, clientID, exchange, symbol, mode string) (json.RawMessage, error) {
+	if b.Alerts == nil {
+		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
+	}
+	a, err := b.Alerts.Create(ctx, pricealert.CreateInput{
+		ClientID: clientID, Exchange: exchange, Symbol: symbol,
+		Kind: string(domain.AlertKindSituation), Condition: "leaves", Mode: mode,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return alertJSON(a)
+}
+
 func (b *Backend) CreateTapeAlert(ctx context.Context, clientID, exchange, symbol, kind, condition string, target float64, mode string) (json.RawMessage, error) {
 	if b.Alerts == nil {
 		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)

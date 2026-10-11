@@ -679,6 +679,30 @@
       "none": "No estimated liquidation pocket sits on either side.",
       "missing": "The closer liquidation side stays blank until {{venues}} have a map."
     },
+    "funding": {
+      "long": "Longs pay the combined funding ({{pct}}%).",
+      "short": "Shorts pay the combined funding ({{pct}}%).",
+      "none": "Combined funding is flat.",
+      "missing": "Funding stays blank until {{venues}} have a rate and open interest."
+    },
+    "crowd": {
+      "top_more_long": "Top traders are more long than the crowd ({{pct}} pp).",
+      "top_more_short": "Top traders are more short than the crowd ({{pct}} pp).",
+      "even": "Top traders and the crowd are about even.",
+      "missing": "Top versus crowd stays blank until {{venues}} publish a top-trader ratio. Bybit does not."
+    },
+    "size": {
+      "whale_buy_retail_sell": "Large prints are buying while smaller prints are selling.",
+      "whale_sell_retail_buy": "Large prints are selling while smaller prints are buying.",
+      "both_buy": "Large and smaller prints are both buying.",
+      "both_sell": "Large and smaller prints are both selling.",
+      "whale_buy": "Large prints are buying. Smaller prints are flat.",
+      "whale_sell": "Large prints are selling. Smaller prints are flat.",
+      "retail_buy": "Smaller prints are buying. Large prints are flat.",
+      "retail_sell": "Smaller prints are selling. Large prints are flat.",
+      "flat": "Large and smaller prints are both quiet.",
+      "missing": "Whale versus retail stays blank until {{venues}} have print size."
+    },
     "venues": {
       "binance": "Binance",
       "bybit": "Bybit",

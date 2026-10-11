@@ -679,6 +679,30 @@
       "none": "İki tarafta da tahmini likidasyon cebi yok.",
       "missing": "Daha yakın likidasyon tarafı, {{venues}} haritayı verene kadar boş kalır."
     },
+    "funding": {
+      "long": "Longlar birleşik fonlamayı ödüyor (%{{pct}}).",
+      "short": "Shortlar birleşik fonlamayı ödüyor (%{{pct}}).",
+      "none": "Birleşik fonlama yatay.",
+      "missing": "Fonlama, {{venues}} oran ve açık pozisyon verene kadar boş kalır."
+    },
+    "crowd": {
+      "top_more_long": "Büyük hesaplar kalabalıktan daha long ({{pct}} puan).",
+      "top_more_short": "Büyük hesaplar kalabalıktan daha short ({{pct}} puan).",
+      "even": "Büyük hesaplar ile kalabalık yaklaşık denk.",
+      "missing": "Büyük hesap ve kalabalık, {{venues}} üst-trader oranı yayınlayana kadar boş kalır. Bybit yayınlamaz."
+    },
+    "size": {
+      "whale_buy_retail_sell": "Büyük emirler alırken küçük emirler satıyor.",
+      "whale_sell_retail_buy": "Büyük emirler satarken küçük emirler alıyor.",
+      "both_buy": "Büyük ve küçük emirler birlikte alıyor.",
+      "both_sell": "Büyük ve küçük emirler birlikte satıyor.",
+      "whale_buy": "Büyük emirler alıyor. Küçük emirler yatay.",
+      "whale_sell": "Büyük emirler satıyor. Küçük emirler yatay.",
+      "retail_buy": "Küçük emirler alıyor. Büyük emirler yatay.",
+      "retail_sell": "Küçük emirler satıyor. Büyük emirler yatay.",
+      "flat": "Büyük ve küçük emirler ikisi de sakin.",
+      "missing": "Balina ve perakende, {{venues}} emir boyunu verene kadar boş kalır."
+    },
     "venues": {
       "binance": "Binance",
       "bybit": "Bybit",

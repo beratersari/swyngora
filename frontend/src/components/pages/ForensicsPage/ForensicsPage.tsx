@@ -11,6 +11,7 @@ import { ForensicsSimilar } from '@/components/organisms/ForensicsSimilar';
 import { ForensicsTape } from '@/components/organisms/ForensicsTape';
 import { ForensicsTimeline } from '@/components/organisms/ForensicsTimeline';
 import { ForensicsWhy } from '@/components/organisms/ForensicsWhy';
+import { forensicsKnownUntil } from '@/components/organisms/CoinCandleForensics';
 import {
   rtkErrorMessage,
   useGetMarketForensicsQuery,
@@ -78,7 +79,7 @@ export function ForensicsPage() {
   };
 
   const query = useGetMarketForensicsQuery(
-    { symbol, at, exchange, window: windowId, during },
+    { symbol, at, asOf: forensicsKnownUntil(at, during), exchange, window: windowId, during },
     { skip: view !== 'event' || !symbol || !at, refetchOnFocus: true },
   );
   const scanQuery = useScanMarketForensicsQuery(

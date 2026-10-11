@@ -19,6 +19,19 @@ describe('CreateAlertForm', () => {
     expect(screen.getByRole('button', { name: /create|oluştur/i })).toBeInTheDocument();
   });
 
+  it('explains that an entry-read alert follows the open paper buy', () => {
+    renderWithProviders(
+      <CreateAlertForm
+        defaultKind="situation"
+        defaultExchange="binance"
+        defaultSymbol="BTCUSDT"
+        onSubmit={async () => undefined}
+      />,
+    );
+    expect(screen.getByText(/leaves the read stored on your newest open buy/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/target price/i)).not.toBeInTheDocument();
+  });
+
   it('explains that all-exchange funding watches every venue', () => {
     renderWithProviders(
       <CreateAlertForm

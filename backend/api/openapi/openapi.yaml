@@ -5554,7 +5554,7 @@ paths:
                 clientId: { type: string }
                 exchange: { type: string, default: binance, description: Spot venues, or binance|bybit|all for liquidation kinds }
                 symbol: { type: string }
-                kind: { type: string, enum: [price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional, liquidation_level, setup_radar, funding, open_interest, taker, fear_greed], default: price }
+                kind: { type: string, enum: [price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional, liquidation_level, setup_radar, funding, open_interest, taker, fear_greed, situation], default: price }
                 condition:
                   type: string
                   description: price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both; liquidation_level any|high|fair; setup_radar any|up|down
@@ -13291,7 +13291,7 @@ components:
         clientId: { type: string }
         exchange: { type: string }
         symbol: { type: string }
-        kind: { type: string, enum: [price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional, liquidation_level, setup_radar, funding, open_interest, taker, fear_greed] }
+        kind: { type: string, enum: [price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional, liquidation_level, setup_radar, funding, open_interest, taker, fear_greed, situation] }
         condition: { type: string, description: price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both; setup_radar any|up|down }
         targetPrice: { type: number }
         rangePct: { type: number, description: Analysis band for imbalance/wall alerts }
@@ -13849,6 +13849,34 @@ components:
             side: { type: string, enum: [long, short, none] }
             distancePct: { type: number }
         liquidationMissing:
+          type: array
+          items: { type: string }
+        funding:
+          type: object
+          description: OI-weighted predicted funding. Set only when Binance, Bybit, and OKX all contribute.
+          properties:
+            payer: { type: string, enum: [long, short, none] }
+            ratePct: { type: number, description: Rate in percent. 0.01 means 0.01%. }
+        fundingMissing:
+          type: array
+          items: { type: string }
+        crowd:
+          type: object
+          description: Top-trader long share minus the crowd, from Binance and OKX. Bybit does not publish a top-trader ratio.
+          properties:
+            lean: { type: string, enum: [top_more_long, top_more_short, even] }
+            gapPct: { type: number, description: Signed percentage points. }
+        crowdMissing:
+          type: array
+          items: { type: string }
+        size:
+          type: object
+          description: Whale versus retail on the latest sized combined bar.
+          properties:
+            kind:
+              type: string
+              enum: [whale_buy_retail_sell, whale_sell_retail_buy, both_buy, both_sell, whale_buy, whale_sell, retail_buy, retail_sell, flat]
+        sizeMissing:
           type: array
           items: { type: string }
         note: { type: string }

@@ -152,6 +152,7 @@ type DataPort interface {
 	ListWatchlistAudit(ctx context.Context, ownerClientID string, limit, offset int) (json.RawMessage, error)
 	ListPriceAlerts(ctx context.Context, clientID string) (json.RawMessage, error)
 	CreatePriceAlert(ctx context.Context, clientID, exchange, symbol, condition string, targetPrice float64, mode string) (json.RawMessage, error)
+	CreateSituationAlert(ctx context.Context, clientID, exchange, symbol, mode string) (json.RawMessage, error)
 	CreateTapeAlert(ctx context.Context, clientID, exchange, symbol, kind, condition string, target float64, mode string) (json.RawMessage, error)
 	CreateOrderBookAlert(ctx context.Context, clientID, exchange, symbol, kind, condition string, threshold, rangePct float64, mode string) (json.RawMessage, error)
 	CreateLiquidationFeedAlert(ctx context.Context, clientID, exchange string, minDownSeconds float64, mode string) (json.RawMessage, error)
@@ -2016,7 +2017,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_coin_situation",
-		mcp.WithDescription("Short read for one coin from data Swyngora already has. priceCvd.kind is price_up_cvd_down, price_down_cvd_up, or agrees. openInterest.flow is opened, closed, or flat over 1h. liquidation.side is long (longs below last are closer), short (shorts above last are closer), or none. A clause is omitted and its *Missing list names Binance, Bybit, or OKX when that venue does not cover it. The same read is stored on a paper fill placed while it is current. Not financial advice."),
+		mcp.WithDescription("Short read for one coin from data Swyngora already has. priceCvd.kind is price_up_cvd_down, price_down_cvd_up, or agrees. openInterest.flow is opened, closed, or flat over 1h. liquidation.side is long (longs below last are closer), short (shorts above last are closer), or none. funding.payer is long, short, or none for the OI-weighted predicted rate. crowd.lean is top_more_long, top_more_short, or even (Binance and OKX only; Bybit has no top-trader ratio). size.kind is whale versus retail on the latest sized bar. A clause is omitted and its *Missing list names the venues that do not cover it. The same read is stored on a paper fill placed while it is current. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")
@@ -2611,6 +2612,28 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.CreatePriceAlert(ctx, clientID, req.GetString("exchange", "binance"), symbol, condition, target, req.GetString("mode", "one_time"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("create_situation_alert",
+		mcp.WithDescription("Alert when the live coin read leaves the read stored on the newest open paper buy for this exchange and symbol. Compares only the clauses that were stored at entry. A clause that appears later does not fire. No open crypto position stays quiet. mode=one_time (default) or repeating, which re-arms when the live read matches the entry again. Not for Nasdaq or BIST."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair on the paper book, e.g. BTCUSDT or BTC-USD")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit (default binance)")),
+		mcp.WithString("mode", mcp.Description("one_time (default) | repeating")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CreateSituationAlert(ctx, clientID, req.GetString("exchange", "binance"), symbol, req.GetString("mode", "one_time"))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

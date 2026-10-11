@@ -81,6 +81,8 @@ When `asOf` is omitted it is **now**. An old event reviewed later keeps
 prints that have already happened (a 14:30 liquidation stays on the
 clock). A 14:00 move checked at 14:10 still hides 14:30.
 
+The coin-chart click and the event view on `/forensics` send `asOf` at the end of the during window once that end is in the past. The minutes of the move stay in the card. Prints after that end stay out. A window that has not finished yet omits `asOf`, so the server clock stays now.
+
 A venue whose candles (or OI / taker bars) are **missing until later**
 does not get a start at that first sample. If Binance moved at 14:05
 and Bybit data only appears at 14:08, the tape does not say Bybit

@@ -39,6 +39,7 @@
     "open_interest": "Açık pozisyon",
     "taker": "Taker alış payı",
     "fear_greed": "Korku ve açgözlülük",
+    "situation": "Giriş okuması",
     "price_above": "Fiyat ≥",
     "price_below": "Fiyat ≤",
     "change_pct_above": "24s değişim % ≥",

@@ -39,6 +39,7 @@
     "open_interest": "Open interest",
     "taker": "Taker buy share",
     "fear_greed": "Fear and greed",
+    "situation": "Entry read",
     "price_above": "Price ≥",
     "price_below": "Price ≤",
     "change_pct_above": "24h change % ≥",

@@ -62,7 +62,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 	}
 	kind, ok := domain.NormalizeAlertKind(in.Kind)
 	if !ok {
-		return nil, fmt.Errorf("%w: kind must be price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional, liquidation_level, setup_radar, funding, open_interest, taker, or fear_greed", domain.ErrInvalidArgument)
+		return nil, fmt.Errorf("%w: kind must be price, imbalance, wall, liquidation_feed, liquidation_cascade, liquidation_notional, liquidation_level, setup_radar, funding, open_interest, taker, fear_greed, or situation", domain.ErrInvalidArgument)
 	}
 	ex, sym, err := normalizeExchangeSymbolForKind(kind, in.Exchange, in.Symbol)
 	if err != nil {
@@ -75,6 +75,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 			return nil, err
 		}
 		in.RangePct = d.Minutes()
+	}
+	if kind == domain.AlertKindSituation && cond == "" {
+		cond = "leaves"
 	}
 	if err := domain.ValidateAlertSpec(kind, cond, in.TargetPrice, in.RangePct); err != nil {
 		return nil, err
@@ -107,7 +110,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 	// Price repeating starts disarmed (avoid firing if already on the target side).
 	// Book, liquidation, and setup-radar repeating start armed so the first appearance can fire.
 	armed := false
-	if mode == domain.AlertModeRepeating && (domain.IsBookAlert(kind) || domain.IsLiquidationAlert(kind) || domain.IsSetupRadarAlert(kind) || domain.IsTapeAlert(kind)) {
+	if mode == domain.AlertModeRepeating && (domain.IsBookAlert(kind) || domain.IsLiquidationAlert(kind) || domain.IsSetupRadarAlert(kind) || domain.IsTapeAlert(kind) || domain.IsSituationAlert(kind)) {
 		armed = true
 	}
 	alert := domain.PriceAlert{
@@ -582,6 +585,8 @@ func buildAlertWebhookPayload(a *domain.PriceAlert, extra map[string]any) (strin
 		typ = "liquidation_level.triggered"
 	case domain.IsSetupRadarAlert(a.Kind):
 		typ = "setup_radar.triggered"
+	case domain.IsSituationAlert(a.Kind):
+		typ = "situation_alert.triggered"
 	}
 	body := map[string]any{
 		"type":        typ,
@@ -625,6 +630,16 @@ func normalizeClientID(id string) (string, error) {
 func normalizeExchangeSymbolForKind(kind domain.AlertKind, exchange, symbol string) (domain.Exchange, string, error) {
 	if domain.IsFearGreedAlert(kind) {
 		return domain.Exchange("all"), domain.LiqAlertSymbolAll, nil
+	}
+	if domain.IsSituationAlert(kind) {
+		ex, sym, err := normalizeExchangeSymbol(exchange, symbol)
+		if err != nil {
+			return "", "", err
+		}
+		if domain.IsEquityExchange(ex) {
+			return "", "", fmt.Errorf("%w: situation alerts follow a crypto position", domain.ErrInvalidArgument)
+		}
+		return ex, sym, nil
 	}
 	if domain.IsTapeAlert(kind) {
 		ex, err := domain.ParseLiquidationExchange(exchange)
