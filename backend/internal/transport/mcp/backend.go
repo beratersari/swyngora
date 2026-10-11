@@ -2059,7 +2059,7 @@ func (b *Backend) GetAroundSimilar(ctx context.Context, exchange, symbol, lookba
 		}
 		when = t
 	}
-	got, err := b.Market.GetAroundSimilar(ctx, exchange, symbol, lookback, interval, direction, minReturnPct, limit, window, during, fields, weights, minCoverage, horizons, when)
+	got, err := b.Market.GetAroundSimilar(ctx, exchange, symbol, lookback, interval, direction, minReturnPct, limit, window, during, fields, weights, minCoverage, horizons, when, time.Time{})
 	if err != nil {
 		return nil, err
 	}

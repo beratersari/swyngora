@@ -1,4 +1,5 @@
 import type { ForensicsSimilarField, ForensicsSimilarHit } from '@/libs/types/forensics.types';
+import { formatForensicsTime } from '@/libs/utils/forensics';
 import { SIMILAR_FIELD_ORDER } from './constants';
 
 export function orderedSimilarFields(fields?: ForensicsSimilarField[]): ForensicsSimilarField[] {
@@ -31,4 +32,14 @@ export function similarMoveAt(hit: ForensicsSimilarHit | undefined): string | nu
   const d = new Date(raw);
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString();
+}
+
+const SIMILAR_ASOF_SLACK_MS = 2 * 60 * 1000;
+
+/** A label when the comparison clock is already in the past. A live read stays quiet. */
+export function similarAsOfLabel(asOf: string | undefined, nowMs: number = Date.now()): string | null {
+  if (!asOf) return null;
+  const ms = Date.parse(asOf);
+  if (!Number.isFinite(ms) || nowMs - ms < SIMILAR_ASOF_SLACK_MS) return null;
+  return formatForensicsTime(asOf);
 }

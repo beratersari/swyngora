@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Similar setups use the candle clock:** a forensics read with `asOf` compares past setups with the tape known by that time. An after-window that had not finished yet stays out. Omit `asOf` and the comparison still uses now. The coin chart and `/forensics` already send `asOf` at the end of a finished move, and the similar list names that clock (`GET /api/v1/market/forensics`, `docs/features/forensics.md`)
 - **OKX liquidation size:** a missing or non-positive contract size is dropped on the live socket and on the history page. It is no longer stored as 1 contract, which made a BTC-USDT-SWAP print about 100 times too large. The history window stays uncovered until the size is known. Prints already stored are left as written.
 
 ### Changed

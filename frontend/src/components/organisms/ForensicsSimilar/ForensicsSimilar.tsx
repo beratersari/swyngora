@@ -3,18 +3,24 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import type { ForensicsSimilarHit } from '@/libs/types/forensics.types';
 import { formatForensicsTime } from '@/libs/utils/forensics';
-import { orderedSimilarFields, similarFieldScore, similarMoveAt } from './helpers';
+import { orderedSimilarFields, similarAsOfLabel, similarFieldScore, similarMoveAt } from './helpers';
 import { FieldScores, Stack, TableWrap, WhyCell } from './ForensicsSimilar.styles';
 import type { ForensicsSimilarProps } from './ForensicsSimilar.types';
 
 export function ForensicsSimilar({ similar, similarError, isLoading, onOpenMove }: ForensicsSimilarProps) {
   const { t } = useTranslation('forensics');
+  const frozenAt = similarAsOfLabel(similar?.asOf);
   if (isLoading) {
     return <Skeleton active paragraph={{ rows: 4 }} />;
   }
   return (
     <Stack>
       <Text variant="bodySm">{t('similarTitle')}</Text>
+      {frozenAt ? (
+        <Text variant="caption" color="secondary" data-testid="similar-asof">
+          {t('similarAsOf', { time: frozenAt })}
+        </Text>
+      ) : null}
       {similarError ? (
         <Text variant="bodySm" color="secondary">
           {t('similarError')} {similarError}

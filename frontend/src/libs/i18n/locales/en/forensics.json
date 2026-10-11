@@ -90,6 +90,7 @@
   "metric": "Metric",
   "path": "Path",
   "similarTitle": "Similar past moves",
+  "similarAsOf": "Compared with the tape known by {{time}}. Prices after that stay out of the after-windows.",
   "similarEmpty": "No similar past setups with enough coverage.",
   "similarOpenHint": "Click a row to open that past move's timeline and before / during / after tape.",
   "similarError": "Similar past moves could not be loaded.",

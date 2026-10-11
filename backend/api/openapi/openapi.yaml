@@ -3664,10 +3664,12 @@ paths:
         (before / during / after plus similar past cases), not a metric
         dump. `timeline` is one clock of those prints in time order
         (OI, takers, venue price, follow-through, liquidations, options,
-        sweeps). The timeline only includes prints known by `asOf`
-        (`timeline.knownUntil`). Omit `asOf` to use now — an old event
-        keeps later prints that have already happened. Pass `asOf` to
-        replay (for example 14:10 on a 14:00 move). A venue whose tape
+        sweeps). The timeline and the similar-setup after-windows only
+        include prints known by `asOf` (`timeline.knownUntil`). Omit
+        `asOf` to use now — an old event keeps later prints that have
+        already happened. Pass `asOf` to replay (for example 14:10 on a
+        14:00 move). An after-window that had not finished by `asOf`
+        stays out of the similar list. A venue whose tape
         is missing until later is not treated as following at that first
         sample. Same `venueTiming` path rule as `/around`: last
         OI/taker print much earlier than price omits continued / faded /
@@ -3687,10 +3689,10 @@ paths:
         - name: asOf
           in: query
           description: >
-            Observer clock (RFC3339 or unix ms). Tape and timeline only include
-            prints at or before this time. Must be at or after `at` and not in
-            the future. Omit to use now (old events keep later prints that
-            have already happened).
+            Observer clock (RFC3339 or unix ms). Tape, timeline, and similar-setup
+            after-windows only include prints at or before this time. Must be at
+            or after `at` and not in the future. Omit to use now (old events keep
+            later prints that have already happened).
           schema: { type: string, example: "2026-08-20T14:10:00Z" }
         - name: exchange
           in: query

@@ -96,7 +96,7 @@ func (h *MarketHandler) GetAroundSimilar(w http.ResponseWriter, r *http.Request)
 		writeError(w, err)
 		return
 	}
-	got, err := h.svc.GetAroundSimilar(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("lookback"), q.Get("interval"), q.Get("direction"), minPct, limit, q.Get("window"), q.Get("during"), q.Get("fields"), q.Get("weights"), q.Get("minCoverage"), q.Get("horizons"), at)
+	got, err := h.svc.GetAroundSimilar(r.Context(), q.Get("exchange"), q.Get("symbol"), q.Get("lookback"), q.Get("interval"), q.Get("direction"), minPct, limit, q.Get("window"), q.Get("during"), q.Get("fields"), q.Get("weights"), q.Get("minCoverage"), q.Get("horizons"), at, time.Time{})
 	if err != nil {
 		writeError(w, err)
 		return

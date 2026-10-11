@@ -342,7 +342,7 @@ func TestGetAroundSimilar_ReturnsReport(t *testing.T) {
 		tape = append(tape, aroundTape(now.Add(-time.Duration(hoursAgo)*time.Hour))...)
 	}
 	svc := New(&fakeMarket{candles: tape, ticker: &domain.Ticker24h{LastPrice: "105"}}, &fakeSupply{})
-	got, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book,oi", "book:3,oi:3,volume:1", "60", "30m,2h", time.Time{})
+	got, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book,oi", "book:3,oi:3,volume:1", "60", "30m,2h", time.Time{}, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -383,13 +383,13 @@ func TestGetAroundSimilar_ReturnsReport(t *testing.T) {
 
 func TestGetAroundSimilar_BadWeights(t *testing.T) {
 	svc := New(&fakeMarket{}, &fakeSupply{})
-	if _, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book", "price:2", "60", "", time.Time{}); !errors.Is(err, domain.ErrInvalidArgument) {
+	if _, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book", "price:2", "60", "", time.Time{}, time.Time{}); !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("%v", err)
 	}
-	if _, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book", "", "101", "", time.Time{}); !errors.Is(err, domain.ErrInvalidArgument) {
+	if _, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book", "", "101", "", time.Time{}, time.Time{}); !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("%v", err)
 	}
-	if _, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book", "", "60", "rsi", time.Time{}); !errors.Is(err, domain.ErrInvalidArgument) {
+	if _, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume,book", "", "60", "rsi", time.Time{}, time.Time{}); !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("%v", err)
 	}
 }
@@ -456,6 +456,9 @@ func TestGetForensics_ExplicitAsOfSetsKnownUntil(t *testing.T) {
 	if !got.Timeline.KnownUntil.Equal(asOf) {
 		t.Fatalf("knownUntil %s want %s", got.Timeline.KnownUntil, asOf)
 	}
+	if got.Similar == nil || !got.Similar.AsOf.Equal(asOf) {
+		t.Fatalf("similar asOf %+v", got.Similar)
+	}
 }
 
 func TestScanForensics_RanksCurrentSetups(t *testing.T) {
@@ -479,11 +482,68 @@ func TestScanForensics_RanksCurrentSetups(t *testing.T) {
 	}
 }
 
+func TestGetAroundSimilar_AsOfDropsUnfinishedHorizons(t *testing.T) {
+	now := time.Now().UTC().Truncate(15 * time.Minute)
+	moveAt := now.Add(-8 * time.Hour)
+	at := now.Add(-5 * time.Hour)
+	asOf := at.Add(15 * time.Minute)
+	later := now.Add(-3 * time.Hour)
+	var tape []domain.Candle
+	for t0 := now.Add(-20 * time.Hour); !t0.After(now); t0 = t0.Add(15 * time.Minute) {
+		openPx, closePx := "100", "100"
+		switch {
+		case t0.Equal(moveAt):
+			openPx, closePx = "100", "110"
+		case t0.After(moveAt) && t0.Before(later):
+			openPx, closePx = "110", "110"
+		case t0.Equal(later):
+			openPx, closePx = "110", "130"
+		case t0.After(later):
+			openPx, closePx = "130", "130"
+		}
+		high, low := closePx, openPx
+		if openPx > closePx {
+			high, low = openPx, closePx
+		}
+		tape = append(tape, aroundCandle(t0, openPx, high, low, closePx, "1000", "500"))
+	}
+	svc := New(&fakeMarket{candles: tape, ticker: &domain.Ticker24h{LastPrice: "130"}}, &fakeSupply{})
+	frozen, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "15m", "15m", "price", "", "0", "15m,4h", at, asOf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !frozen.AsOf.Equal(asOf) {
+		t.Fatalf("asOf %s want %s", frozen.AsOf, asOf)
+	}
+	if horizonSample(frozen.AfterHorizons, "4h") != 0 {
+		t.Fatalf("4h horizon should stop at asOf: %+v", frozen.AfterHorizons)
+	}
+	if horizonSample(frozen.AfterHorizons, "15m") == 0 {
+		t.Fatalf("15m horizon was already known: matches=%d horizons=%+v", len(frozen.Matches), frozen.AfterHorizons)
+	}
+	live, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "15m", "15m", "price", "", "0", "15m,4h", at, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if horizonSample(live.AfterHorizons, "4h") == 0 {
+		t.Fatalf("live 4h horizon missing: %+v", live.AfterHorizons)
+	}
+}
+
+func horizonSample(stats []domain.AroundSimilarHorizonStat, id string) int {
+	for _, h := range stats {
+		if h.Horizon == id {
+			return h.Sample
+		}
+	}
+	return 0
+}
+
 func TestGetAroundSimilar_UsesSelectedAt(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Minute)
 	at := now.Add(-3 * time.Hour)
 	svc := New(&fakeMarket{candles: aroundTape(at), ticker: &domain.Ticker24h{LastPrice: "105"}}, &fakeSupply{})
-	got, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume", "", "0", "", at)
+	got, err := svc.GetAroundSimilar(context.Background(), "binance", "BTCUSDT", "24h", "15m", "both", 1.5, 5, "1h", "15m", "volume", "", "0", "", at, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -249,6 +249,7 @@ export type ForensicsHorizon = {
 
 export type ForensicsSimilar = {
   at?: string;
+  asOf?: string;
   summary?: string;
   matches?: ForensicsSimilarHit[];
   afterHorizons?: ForensicsHorizon[];

@@ -722,10 +722,12 @@ export interface paths {
          * Market-wide futures liquidation overview
          * @description CoinGlass-style **market desk**: long/short liquidation notional for the last
          *     **1 hour, 4 hours, 12 hours, and 24 hours**, plus coins ranked by total
-         *     notional in `window` (default 24h) for a treemap. Fed by the same Binance
-         *     USD-M, Bybit linear, and OKX USDT-swap streams as `/liquidations`. `exchange=all` (default)
-         *     sums all three venues. `complete` uses the all-market Binance live clock when
-         *     `exchange` is `all` or `binance`. Informational only.
+         *     notional in `window` (default 24h) for a treemap. Totals are stored
+         *     force-order prints, plus prints newer than the newest saved row.
+         *     Fed by the same Binance USD-M, Bybit linear, and OKX USDT-swap streams
+         *     as `/liquidations`. `exchange=all` (default) sums all three venues.
+         *     `complete` is the live clock, not whether older prints are stored.
+         *     Informational only.
          */
         get: operations["getMarketLiquidationOverview"];
         put?: never;
@@ -753,7 +755,10 @@ export interface paths {
          *     **Bybit linear perpetual**, and **OKX USDT-swap**.
          *     `contracts` is venue-published size in the base asset; `value` is USDT
          *     notional. `exchange=all` (default) sums those three venues and keeps per-venue
-         *     rows. `exchange=hyperliquid` is that venue alone. Its `value` is the mark
+         *     rows. A failed or missing asked venue blanks the combined current and
+         *     windows and is named in `missing`, and is not counted as zero. A window
+         *     that lacks a sample on any asked venue is blank even if the others have
+         *     it. `exchange=hyperliquid` is that venue alone. Its `value` is the mark
          *     times coin size. The margin is USDC, lined up with the USDT name, and
          *     it is not inside `exchange=all`. `complete` is false
          *     when the historical sample is missing or older than the window slack.
@@ -1004,7 +1009,10 @@ export interface paths {
          *     and is not inside `pressure` or `exchange=all`. `pressure` is **OI-weighted** combined
          *     predicted funding (USDT open-interest share), so an 8B book at +0.01%
          *     outweighs a 1B book at −0.01%. `pressureHistory` / `pressureWindows`
-         *     (1h/4h/24h) / `pressureMoves` show how that blend changed. `limit` is
+         *     (1h/4h/24h) / `pressureMoves` show how that blend changed. Combined
+         *     pressure stays blank until every asked venue is in the blend and is
+         *     named in `pressure.missing`. A venue with no open interest is still
+         *     skipped inside a complete blend. `limit` is
          *     settled history size (default 12, max 30). Cached ~30s. Informational only.
          */
         get: operations["getMarketFundingRate"];
@@ -1716,7 +1724,9 @@ export interface paths {
          *     is `ratio` 0.15 (`ratioPct` 15) — that share of volume is new
          *     positions; `transfer` is the rest. Windows are **15 minutes**,
          *     **1 hour**, and **4 hours**. Binance USD-M and Bybit linear
-         *     separately plus `combined`. Informational only.
+         *     separately plus `combined`. A venue without a complete window blanks
+         *     `combined` and is named in `missing`. It is not counted as zero.
+         *     Informational only.
          */
         get: operations["getMarketParticipation"];
         put?: never;
@@ -1902,7 +1912,9 @@ export interface paths {
          *
          *     Positive means that side grew. Negative means it shrank. The two
          *     numbers add up to the open-interest change. Binance USD-M and Bybit
-         *     linear. This is not the account long/short ratio.
+         *     linear. This is not the account long/short ratio. An incomplete
+         *     window has empty numeric strings and `complete` false. A missing
+         *     venue is named and is not a flat zero.
          */
         get: operations["getMarketNetPosition"];
         put?: never;
@@ -1984,7 +1996,9 @@ export interface paths {
          *     A Coinbase page shows Binance spot CVD and says Binance.
          *     `exchange=all`
          *     (default) returns each futures venue plus combined. Combined uses
-         *     the overlapping **time range** (a missing 5m slot is 0) and is
+         *     the overlapping **time range** (a minute one venue missed is left
+         *     out, not filled from the others; a minute nobody printed is not a
+         *     gap) and is
          *     `complete` only when every venue passed in has reached the window
          *     open. Futures expects Binance, Bybit, and OKX. Spot expects Binance
          *     and Bybit. OKX has no spot CVD.
@@ -2369,10 +2383,12 @@ export interface paths {
          *     (before / during / after plus similar past cases), not a metric
          *     dump. `timeline` is one clock of those prints in time order
          *     (OI, takers, venue price, follow-through, liquidations, options,
-         *     sweeps). The timeline only includes prints known by `asOf`
-         *     (`timeline.knownUntil`). Omit `asOf` to use now — an old event
-         *     keeps later prints that have already happened. Pass `asOf` to
-         *     replay (for example 14:10 on a 14:00 move). A venue whose tape
+         *     sweeps). The timeline and the similar-setup after-windows only
+         *     include prints known by `asOf` (`timeline.knownUntil`). Omit
+         *     `asOf` to use now — an old event keeps later prints that have
+         *     already happened. Pass `asOf` to replay (for example 14:10 on a
+         *     14:00 move). An after-window that had not finished by `asOf`
+         *     stays out of the similar list. A venue whose tape
          *     is missing until later is not treated as following at that first
          *     sample. Same `venueTiming` path rule as `/around`: last
          *     OI/taker print much earlier than price omits continued / faded /
@@ -2623,7 +2639,9 @@ export interface paths {
          *     futures matrix) on Binance USD-M and Bybit linear. Short summary and
          *     reasons use funding and account long/short as corroboration. When
          *     `exchange=all`, also returns a **combined** general market direction
-         *     (OI-weighted). Informational only — not financial advice.
+         *     (OI-weighted). An errored or zero-OI venue withholds that blend
+         *     (`agreement` is `withheld`) and `missing` names the venue.
+         *     Informational only — not financial advice.
          */
         get: operations["getMarketPositioning"];
         put?: never;
@@ -2645,7 +2663,9 @@ export interface paths {
          * Long and short squeeze risk
          * @description Scores **long-squeeze** and **short-squeeze** risk (0–100) for a coin
          *     on **Binance USD-M** and **Bybit linear** separately, and (when
-         *     `exchange=all`) an **OI-weighted combined** view. Drivers: account
+         *     `exchange=all`) an **OI-weighted combined** view. An errored or
+         *     zero-OI venue withholds that blend (`agreement` is `withheld`).
+         *     A zero score is not the blend. Drivers: account
          *     long/short crowding, funding, open-interest build, recent liquidation
          *     heat, and nearby high-leverage pockets. Explains which side is crowded
          *     and why risk is high or low. Model only — not a prediction or financial
@@ -2893,8 +2913,10 @@ export interface paths {
          *       Live bars shrink bands that rarely print. Bands that do print are
          *       also shortened toward the share of the predicted amount that later
          *       showed up (`sizeScale`), and are not grown when prints exceed the model.
-         *     - `symbol=all`: **total** observed liquidations for every tracked coin
-         *       as time bars (last 24h max). `exchange=binance|bybit|okx|all`.
+         *     - `symbol=all`: **total** stored force-order prints for every tracked coin
+         *       as time bars for the requested range (12h through 30d). Prints still
+         *       only in memory are added. A zero bar was quiet or was not recorded.
+         *       `exchange=binance|bybit|okx|all`.
          *
          *     Informational only.
          */
@@ -6897,6 +6919,8 @@ export interface components {
             complete?: boolean;
             /** Format: date-time */
             sampleTime?: string;
+            /** @description Asked venues with no usable sample for this window. Not counted as zero. */
+            missing?: string[];
         };
         OpenInterestVenue: {
             exchange?: string;
@@ -7284,6 +7308,8 @@ export interface components {
             funding?: components["schemas"]["MarketFundingRate"];
             longShort?: components["schemas"]["MarketLongShortRatio"];
             note?: string;
+            /** @description Asked venues left out of the combined current and windows. Not counted as zero. */
+            missing?: string[];
         };
         FundingPrint: {
             /** Format: date-time */
@@ -7346,6 +7372,8 @@ export interface components {
             summary?: string;
             /** Format: date-time */
             time?: string;
+            /** @description Asked venues absent from the combined blend. Not left out of the weight. */
+            missing?: string[];
         };
         FundingPressurePoint: {
             /** Format: date-time */
@@ -7529,6 +7557,8 @@ export interface components {
             divergence?: components["schemas"]["MarketCvdDivergence"];
             points?: components["schemas"]["MarketCvdPoint"][];
             anchors?: components["schemas"]["MarketCvdAnchor"][];
+            /** @description Venues with no points, or that missed a minute another venue printed. Not counted as zero. */
+            missing?: string[];
         };
         /**
          * @description Futures CVD for Binance, Bybit, and OKX, plus combined. `range` `24h`
@@ -7545,7 +7575,9 @@ export interface components {
          *     print of at least 100,000 USD. Retail is every smaller print. A minute
          *     stored before size was known omits both, and that is not zero. Combined
          *     size is set only when every venue's bar at that step was sized. Spot
-         *     points do not carry the split.
+         *     points do not carry the split. A minute inside the overlap that one
+         *     venue missed is left out and is not filled from the others. A minute
+         *     nobody printed is not a gap.
          */
         MarketCvdReport: {
             symbol?: string;
@@ -7971,6 +8003,8 @@ export interface components {
             lean?: "entering" | "exiting" | "transfer";
             complete?: boolean;
             summary?: string;
+            /** @description Asked venues without a complete window. Not counted as zero. */
+            missing?: string[];
         };
         MarketParticipationVenue: {
             exchange?: string;
@@ -9052,7 +9086,7 @@ export interface components {
             exchange?: string;
             symbol?: string;
             /** @enum {string} */
-            kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional" | "liquidation_level" | "setup_radar" | "funding" | "open_interest" | "taker" | "fear_greed";
+            kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional" | "liquidation_level" | "setup_radar" | "funding" | "open_interest" | "taker" | "fear_greed" | "situation";
             /** @description price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both; setup_radar any|up|down */
             condition?: string;
             targetPrice?: number;
@@ -9594,6 +9628,28 @@ export interface components {
                 distancePct?: number;
             };
             liquidationMissing?: string[];
+            /** @description OI-weighted predicted funding. Set only when Binance, Bybit, and OKX all contribute. */
+            funding?: {
+                /** @enum {string} */
+                payer?: "long" | "short" | "none";
+                /** @description Rate in percent. 0.01 means 0.01%. */
+                ratePct?: number;
+            };
+            fundingMissing?: string[];
+            /** @description Top-trader long share minus the crowd, from Binance and OKX. Bybit does not publish a top-trader ratio. */
+            crowd?: {
+                /** @enum {string} */
+                lean?: "top_more_long" | "top_more_short" | "even";
+                /** @description Signed percentage points. */
+                gapPct?: number;
+            };
+            crowdMissing?: string[];
+            /** @description Whale versus retail on the latest sized combined bar. */
+            size?: {
+                /** @enum {string} */
+                kind?: "whale_buy_retail_sell" | "whale_sell_retail_buy" | "both_buy" | "both_sell" | "whale_buy" | "whale_sell" | "retail_buy" | "retail_sell" | "flat";
+            };
+            sizeMissing?: string[];
             note?: string;
         };
         PaperTradingCost: {
@@ -13440,7 +13496,7 @@ export interface operations {
                 symbol: string;
                 /** @description Event time (RFC3339 or unix ms) — start of the during window */
                 at: string;
-                /** @description Observer clock (RFC3339 or unix ms). Tape and timeline only include prints at or before this time. Must be at or after `at` and not in the future. Omit to use now (old events keep later prints that have already happened). */
+                /** @description Observer clock (RFC3339 or unix ms). Tape, timeline, and similar-setup after-windows only include prints at or before this time. Must be at or after `at` and not in the future. Omit to use now (old events keep later prints that have already happened). */
                 asOf?: string;
                 /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
@@ -13926,7 +13982,7 @@ export interface operations {
                 symbol?: string;
                 /** @description binance | bybit | okx | all (default all = combined) */
                 exchange?: string;
-                /** @description Review window 12h | 24h | 3d | 7d | 14d | 30d. The bars stay the live map. symbol=all totals clamp to 24h. */
+                /** @description Review window 12h | 24h | 3d | 7d | 14d | 30d. One-coin bars stay the live map. symbol=all totals use stored prints for that range. */
                 range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d";
             };
             header?: never;
@@ -14857,7 +14913,7 @@ export interface operations {
                      * @default price
                      * @enum {string}
                      */
-                    kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional" | "liquidation_level" | "setup_radar" | "funding" | "open_interest" | "taker" | "fear_greed";
+                    kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional" | "liquidation_level" | "setup_radar" | "funding" | "open_interest" | "taker" | "fear_greed" | "situation";
                     /** @description price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both; liquidation_level any|high|fair; setup_radar any|up|down */
                     condition: string;
                     /** @description Price target, |imbalance| threshold, wall min share, liquidation_feed min down seconds (0 = 300), liquidation_notional USDT amount, liquidation_level min confidence 0–1 (0 = default), or setup_radar min similarity 40–100 (0 = 60) */

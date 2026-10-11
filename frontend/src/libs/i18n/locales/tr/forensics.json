@@ -90,6 +90,7 @@
   "metric": "Ölçüt",
   "path": "Yol",
   "similarTitle": "Benzer geçmiş hareketler",
+  "similarAsOf": "{{time}} anına kadar bilinen bantla karşılaştırıldı. Ondan sonraki fiyatlar sonraki pencerelere girmez.",
   "similarEmpty": "Yeterli kapsama sahip benzer geçmiş kurulum yok.",
   "similarOpenHint": "Bir satıra tıklayınca o geçmiş hareketin zaman çizelgesini ve önce / sırada / sonra bandını açar.",
   "similarError": "Benzer geçmiş hareketler yüklenemedi.",

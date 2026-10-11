@@ -20,7 +20,7 @@ func (s *Service) GetForensics(ctx context.Context, exchange, symbol, window, du
 		AsOfExplicit: !asOf.IsZero(),
 		Tape:         tape, Note: domain.ForensicsDisclaimer,
 	}
-	sim, err := s.GetAroundSimilar(ctx, exchange, symbol, lookback, interval, direction, minReturnPct, limit, window, during, fields, weights, minCoverage, horizons, at)
+	sim, err := s.GetAroundSimilar(ctx, exchange, symbol, lookback, interval, direction, minReturnPct, limit, window, during, fields, weights, minCoverage, horizons, at, asOf)
 	if err != nil {
 		out.SimilarError = err.Error()
 	} else {

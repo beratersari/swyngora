@@ -19,7 +19,9 @@ On a crypto coin chart (`/markets/binance/BTCUSDT`), clicking a candle
 opens this same read under the chart. `at` is that candle's open.
 The window stays the forensics default: one hour before the open, then
 15 minutes. The card shows the why-story, the timeline, and what
-similar setups did next. A row in that table moves the read to that
+similar setups did next. Once those 15 minutes have passed, the similar
+list uses the tape known at that end. Prices after it stay out of the
+after-windows. A row in that table moves the read to that
 past time. Clear, or the same candle, removes it. The link opens
 `/forensics` with the same symbol, time, `exchange=all`, `window=1h`,
 and `during=15m`. Nasdaq and BIST charts do not call it. The click
@@ -72,10 +74,12 @@ from `at` (`offset` / `offsetLabel`), and which venue printed it.
 Missing series are omitted. The clock only includes prints that were
 **already known** at the observer time (`timeline.knownUntil`).
 
-Optional `asOf` (RFC3339 or unix ms) is that observer clock — tape and
-timeline stop there. Example: a 14:00 move checked `asOf=14:10` does
-not show a 14:30 liquidation or a Bybit start at 14:30. Checking again
-later (or passing a later `asOf`) can add those prints.
+Optional `asOf` (RFC3339 or unix ms) is that observer clock — tape,
+timeline, and the similar-setup comparison stop there. Example: a 14:00
+move checked `asOf=14:10` does not show a 14:30 liquidation or a Bybit
+start at 14:30, and an after-window that had not finished by 14:10 is
+left out of the similar list. Checking again later (or passing a later
+`asOf`) can add those prints.
 
 When `asOf` is omitted it is **now**. An old event reviewed later keeps
 prints that have already happened (a 14:30 liquidation stays on the
@@ -213,5 +217,7 @@ window, and during).
 
 On `/markets/binance/BTCUSDT`, click a candle. The card under the chart
 states what changed around that open and what similar setups did next.
+On a finished 15-minute window the similar caption names the clock, and
+later prices stay out of the after-windows.
 Clear, or the same candle, removes it. Open the full forensics desk
 keeps the same symbol and time.

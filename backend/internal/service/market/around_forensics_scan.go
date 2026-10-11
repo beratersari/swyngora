@@ -83,7 +83,7 @@ func (s *Service) ScanForensics(ctx context.Context, exchange, quote, lookback, 
 			case sem <- struct{}{}:
 			}
 			defer func() { <-sem }()
-			rep, err := s.GetAroundSimilar(ctx, exchange, sym, lookback, interval, direction, minReturnPct, domain.DefaultAroundSimilarLimit, window, during, fields, weights, minCoverage, horizons, time.Time{})
+			rep, err := s.GetAroundSimilar(ctx, exchange, sym, lookback, interval, direction, minReturnPct, domain.DefaultAroundSimilarLimit, window, during, fields, weights, minCoverage, horizons, time.Time{}, time.Time{})
 			if err != nil || rep == nil {
 				return
 			}

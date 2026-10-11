@@ -356,7 +356,7 @@ func (s *Service) loadSimilarReport(ctx context.Context, ex domain.Exchange, sym
 		return nil
 	}
 	// Same range as the swing bar: 4h signal → 4h tape + 4h after-path.
-	rep, err := s.market.GetAroundSimilar(ctx, string(ex), symbol, "", q.MoveInterval, "", 0, 0, q.Window, "", "", "", "", q.Horizon, time.Time{})
+	rep, err := s.market.GetAroundSimilar(ctx, string(ex), symbol, "", q.MoveInterval, "", 0, 0, q.Window, "", "", "", "", q.Horizon, time.Time{}, time.Time{})
 	if err != nil {
 		return nil
 	}

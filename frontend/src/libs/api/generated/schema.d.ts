@@ -722,10 +722,12 @@ export interface paths {
          * Market-wide futures liquidation overview
          * @description CoinGlass-style **market desk**: long/short liquidation notional for the last
          *     **1 hour, 4 hours, 12 hours, and 24 hours**, plus coins ranked by total
-         *     notional in `window` (default 24h) for a treemap. Fed by the same Binance
-         *     USD-M, Bybit linear, and OKX USDT-swap streams as `/liquidations`. `exchange=all` (default)
-         *     sums all three venues. `complete` uses the all-market Binance live clock when
-         *     `exchange` is `all` or `binance`. Informational only.
+         *     notional in `window` (default 24h) for a treemap. Totals are stored
+         *     force-order prints, plus prints newer than the newest saved row.
+         *     Fed by the same Binance USD-M, Bybit linear, and OKX USDT-swap streams
+         *     as `/liquidations`. `exchange=all` (default) sums all three venues.
+         *     `complete` is the live clock, not whether older prints are stored.
+         *     Informational only.
          */
         get: operations["getMarketLiquidationOverview"];
         put?: never;
@@ -2381,10 +2383,12 @@ export interface paths {
          *     (before / during / after plus similar past cases), not a metric
          *     dump. `timeline` is one clock of those prints in time order
          *     (OI, takers, venue price, follow-through, liquidations, options,
-         *     sweeps). The timeline only includes prints known by `asOf`
-         *     (`timeline.knownUntil`). Omit `asOf` to use now — an old event
-         *     keeps later prints that have already happened. Pass `asOf` to
-         *     replay (for example 14:10 on a 14:00 move). A venue whose tape
+         *     sweeps). The timeline and the similar-setup after-windows only
+         *     include prints known by `asOf` (`timeline.knownUntil`). Omit
+         *     `asOf` to use now — an old event keeps later prints that have
+         *     already happened. Pass `asOf` to replay (for example 14:10 on a
+         *     14:00 move). An after-window that had not finished by `asOf`
+         *     stays out of the similar list. A venue whose tape
          *     is missing until later is not treated as following at that first
          *     sample. Same `venueTiming` path rule as `/around`: last
          *     OI/taker print much earlier than price omits continued / faded /
@@ -2909,8 +2913,10 @@ export interface paths {
          *       Live bars shrink bands that rarely print. Bands that do print are
          *       also shortened toward the share of the predicted amount that later
          *       showed up (`sizeScale`), and are not grown when prints exceed the model.
-         *     - `symbol=all`: **total** observed liquidations for every tracked coin
-         *       as time bars (last 24h max). `exchange=binance|bybit|okx|all`.
+         *     - `symbol=all`: **total** stored force-order prints for every tracked coin
+         *       as time bars for the requested range (12h through 30d). Prints still
+         *       only in memory are added. A zero bar was quiet or was not recorded.
+         *       `exchange=binance|bybit|okx|all`.
          *
          *     Informational only.
          */
@@ -13490,7 +13496,7 @@ export interface operations {
                 symbol: string;
                 /** @description Event time (RFC3339 or unix ms) — start of the during window */
                 at: string;
-                /** @description Observer clock (RFC3339 or unix ms). Tape and timeline only include prints at or before this time. Must be at or after `at` and not in the future. Omit to use now (old events keep later prints that have already happened). */
+                /** @description Observer clock (RFC3339 or unix ms). Tape, timeline, and similar-setup after-windows only include prints at or before this time. Must be at or after `at` and not in the future. Omit to use now (old events keep later prints that have already happened). */
                 asOf?: string;
                 /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
                 exchange?: string;
@@ -13976,7 +13982,7 @@ export interface operations {
                 symbol?: string;
                 /** @description binance | bybit | okx | all (default all = combined) */
                 exchange?: string;
-                /** @description Review window 12h | 24h | 3d | 7d | 14d | 30d. The bars stay the live map. symbol=all totals clamp to 24h. */
+                /** @description Review window 12h | 24h | 3d | 7d | 14d | 30d. One-coin bars stay the live map. symbol=all totals use stored prints for that range. */
                 range?: "12h" | "24h" | "3d" | "7d" | "14d" | "30d";
             };
             header?: never;

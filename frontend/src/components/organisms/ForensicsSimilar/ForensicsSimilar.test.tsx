@@ -33,6 +33,7 @@ describe('ForensicsSimilar', () => {
       />,
     );
     expect(screen.getByText(/similar past moves|benzer geçmiş hareketler/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('similar-asof')).not.toBeInTheDocument();
     expect(screen.getByText('+3.5')).toBeInTheDocument();
     expect(screen.getByText('+2.1')).toBeInTheDocument();
     expect(screen.getByText(/matched most on open interest/i)).toBeInTheDocument();
@@ -41,5 +42,19 @@ describe('ForensicsSimilar', () => {
     expect(screen.getByText(/click a row to open|satıra tıklayınca/i)).toBeInTheDocument();
     await userEvent.click(screen.getByText('+3.5'));
     expect(onOpen).toHaveBeenCalledWith('2026-08-18T12:00:00.000Z');
+  });
+
+  it('says the comparison stops at a past clock', () => {
+    renderWithProviders(
+      <ForensicsSimilar
+        similar={{
+          asOf: '2020-01-01T14:15:00.000Z',
+          summary: '1 similar past setup',
+          matches: [],
+        }}
+      />,
+    );
+    expect(screen.getByTestId('similar-asof')).toHaveTextContent('2020-01-01 14:15:00 UTC');
+    expect(screen.getByTestId('similar-asof')).toHaveTextContent(/after-windows|sonraki pencerelere/i);
   });
 });
