@@ -30,7 +30,7 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
 - Streams (background, always on):
   - Binance: `wss://fstream.binance.com/market/ws/!forceOrder@arr` (USD-M symbols). At most the **largest** liquidation per symbol per ~1s. Coin-margined events on that merged stream (`st` 2) are left out.
   - Bybit: `wss://stream.bybit.com/v5/public/linear` topic `allLiquidation.{symbol}`. Seed majors + top linear USDT by 24h turnover; querying a symbol also subscribes it.
-  - OKX: `wss://ws.okx.com:8443/ws/v5/public` channel `liquidation-orders` `instType=SWAP` (all USDT-swap). Contract size (`ctVal`) converts `sz` to base quantity.
+  - OKX: `wss://ws.okx.com:8443/ws/v5/public` channel `liquidation-orders` `instType=SWAP` (all USDT-swap). Contract size (`ctVal`) converts `sz` to base quantity. A missing or non-positive `ctVal` drops that print instead of storing it as 1 contract. The history window for that symbol stays uncovered until a later pass has the size. Prints already stored stay as they were written.
 - `feed` on coin, overview, and chart responses:
   - per venue `live`, `lastEventAt` (last print), `lastSeenAt` (last websocket
     payload), `coverageSeconds`, `missingSeconds`, and `gaps` (still-unfilled

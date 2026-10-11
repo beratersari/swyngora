@@ -101,6 +101,41 @@ func TestListLiquidationHistory_EmptyPageUncovered(t *testing.T) {
 	}
 }
 
+func TestListLiquidationHistory_MissingContractDropsThePage(t *testing.T) {
+	from := time.Date(2026, 9, 13, 17, 0, 0, 0, time.UTC)
+	to := from.Add(15 * time.Minute)
+	at := from.Add(time.Minute)
+	var hits int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"code": "0",
+			"data": []map[string]any{{
+				"instId": "BTC-USDT-SWAP",
+				"details": []map[string]any{{
+					"bkPx": "77211.6", "sz": "48.9", "posSide": "long", "side": "sell",
+					"ts": ms(at),
+				}},
+			}},
+		})
+	}))
+	defer srv.Close()
+	c := NewClient(Options{BaseURL: srv.URL, HTTPClient: srv.Client()})
+	c.SetContractValue("BTC-USDT-SWAP", 0)
+	got, err := c.ListLiquidationHistory(context.Background(), domain.LiquidationHistoryQuery{
+		Exchange: domain.ExchangeOKX, Symbols: []string{"BTCUSDT"}, From: from, To: to,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.HasCoveredRange() || len(got.Events) != 0 {
+		t.Fatalf("missing ctVal stored a size: %+v", got)
+	}
+	if hits != 0 {
+		t.Fatalf("liquidation page fetched without a contract size: %d", hits)
+	}
+}
+
 func TestParseLiquidationWS(t *testing.T) {
 	at := time.Date(2026, 9, 13, 18, 0, 0, 0, time.UTC)
 	body, _ := json.Marshal(map[string]any{
@@ -119,5 +154,48 @@ func TestParseLiquidationWS(t *testing.T) {
 	}
 	if got[0].Symbol != "ETHUSDT" || got[0].Side != domain.LiquidationSideShort || got[0].Quantity != 1 {
 		t.Fatalf("%+v", got[0])
+	}
+}
+
+func TestParseLiquidationWS_SkipsUnknownContract(t *testing.T) {
+	at := time.Date(2026, 9, 13, 18, 0, 0, 0, time.UTC)
+	body, _ := json.Marshal(map[string]any{
+		"arg": map[string]string{"channel": "liquidation-orders", "instType": "SWAP"},
+		"data": []map[string]any{
+			{
+				"instId": "BTC-USDT-SWAP",
+				"details": []map[string]any{{
+					"bkPx": "77211.6", "sz": "48.9", "posSide": "long", "side": "sell",
+					"ts": ms(at),
+				}},
+			},
+			{
+				"instId": "ETH-USDT-SWAP",
+				"details": []map[string]any{{
+					"bkPx": "2500", "sz": "10", "posSide": "short", "side": "buy",
+					"ts": ms(at),
+				}},
+			},
+		},
+	})
+	sizes := map[string]float64{"ETH-USDT-SWAP": 0.1}
+	got := ParseLiquidationWS(body, func(inst string) float64 { return sizes[inst] })
+	if len(got) != 1 || got[0].Symbol != "ETHUSDT" || got[0].Quantity != 1 {
+		t.Fatalf("unknown BTC size should drop, ETH should stay: %+v", got)
+	}
+	if len(ParseLiquidationWS(body, nil)) != 0 {
+		t.Fatal("nil contract lookup invented a size")
+	}
+}
+
+func TestLiquidationHub_UnknownContractIsZero(t *testing.T) {
+	c := NewClient(Options{})
+	c.SetContractValue("BTC-USDT-SWAP", 0)
+	h := NewLiquidationHub(LiquidationOptions{Client: c})
+	if h.ctVal("BTC-USDT-SWAP") != 0 {
+		t.Fatal("non-positive ctVal was treated as 1")
+	}
+	if NewLiquidationHub(LiquidationOptions{}).ctVal("BTC-USDT-SWAP") != 0 {
+		t.Fatal("nil client invented a contract size")
 	}
 }

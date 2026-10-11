@@ -174,12 +174,12 @@ func (h *LiquidationHub) listen(ctx context.Context) error {
 }
 
 func (h *LiquidationHub) ctVal(instID string) float64 {
-	if h.client == nil {
-		return 1
+	if h == nil || h.client == nil {
+		return 0
 	}
 	v := h.client.contractValue(context.Background(), instID)
 	if v <= 0 {
-		return 1
+		return 0
 	}
 	return v
 }
@@ -194,7 +194,7 @@ func ParseLiquidationWS(payload []byte, ctVal func(instID string) float64) []dom
 		return nil
 	}
 	if ctVal == nil {
-		ctVal = func(string) float64 { return 1 }
+		ctVal = func(string) float64 { return 0 }
 	}
 	var out []domain.LiquidationEvent
 	for _, fam := range msg.Data {

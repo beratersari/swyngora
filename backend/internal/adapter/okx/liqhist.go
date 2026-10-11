@@ -92,6 +92,11 @@ func (c *Client) fetchRecentLiquidations(ctx context.Context, symbol string) ([]
 	}
 	inst := SwapInstID(symbol)
 	ctVal := c.contractValue(ctx, inst)
+	if ctVal <= 0 {
+		// Leave this symbol uncovered. The next pass can store the page
+		// once the instrument cache has a positive contract size.
+		return nil, nil
+	}
 	q := url.Values{}
 	q.Set("instType", "SWAP")
 	q.Set("uly", uly)
@@ -153,8 +158,11 @@ func detailToEvent(symbol string, d okxLiqPrint, ctVal float64) (domain.Liquidat
 	if !ok || sz <= 0 {
 		return domain.LiquidationEvent{}, false
 	}
+	// A missing contract size is not one contract. BTC-USDT-SWAP is 0.01,
+	// so treating an unknown size as 1 stores about 100× the notional.
+	// The trade tape drops the same print.
 	if ctVal <= 0 {
-		ctVal = 1
+		return domain.LiquidationEvent{}, false
 	}
 	qty := sz * ctVal
 	ts, ok := parseMillis(d.Ts)

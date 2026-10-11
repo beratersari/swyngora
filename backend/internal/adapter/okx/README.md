@@ -35,7 +35,10 @@ No API key. Base `https://www.okx.com`, public WS
 
 Internal symbol stays `BTCUSDT`. OKX instId is `BTC-USDT-SWAP`. Liquidation
 `sz` is contracts; notional is `sz * ctVal * bkPx` (BTC-USDT-SWAP `ctVal` is
-0.01). Side uses `posSide` (long/short closed).
+0.01). A missing or non-positive `ctVal` drops the liquidation print on
+both the websocket and the history page. It is not stored as 1 contract.
+The history window stays uncovered so a later pass can write it once the
+size is known. Side uses `posSide` (long/short closed).
 
 ## How to test
 
