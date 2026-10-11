@@ -14,10 +14,10 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
   - `exchange=all` (default) sums **Binance USD-M**, **Bybit linear perpetual**, and **OKX USDT-swap**
   - `exchange=binance`, `bybit`, or `okx` for one venue
 - `GET /api/v1/market/liquidations/overview`
-  - Market-wide **1h / 4h / 12h / 24h** totals (no symbol)
+  - Market-wide **1h / 4h / 12h / 24h** totals from stored prints (no symbol)
   - `window` (default `24h`) ranks `coins` by total notional for a treemap
   - `limit` default 50, max 100
-  - `coverage` names each venue fresh, old, or missing. `definite` is false when any venue is missing or old, and the page does not present the totals as the market (`docs/features/venue-coverage.md`)
+  - `coverage` names each venue fresh, old, or missing. `definite` is false when any venue is missing or old. The page still shows the stored totals and names that venue; it does not call the partial sum the whole market (`docs/features/venue-coverage.md`)
 - Each window includes:
   - `longNotional` / `shortNotional` / `totalNotional` (USDT)
   - `count`
@@ -55,7 +55,7 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
   per wave). Creating a coin alert subscribes that pair and fills the lookback
   from history. See [`price-alerts.md`](price-alerts.md).
 - Side meaning: **long** = long positions were force-closed; **short** = shorts were force-closed.
-- Live windows are computed from an in-memory 24h book. Every print is written to SQLite (Binance and Bybit in separate rows). On startup the last **24 hours** are reloaded, including live-coverage clocks, so 1h/4h/12h/24h totals stay usable after a restart. A dropped persist queue is written synchronously instead of discarded. Stored rows: `GET /api/v1/market/futures-history?metric=liquidations`. See [`futures-history.md`](futures-history.md).
+- The overview (`/liquidations`) and the all-coin chart read **stored** force-order prints in `futures.db`, then add prints newer than the newest saved row for that venue. The in-memory book is still 24 hours and is what the per-coin 5m/1h/4h/24h route uses. Every print is written to SQLite. On startup the last **24 hours** are reloaded into that book, including live-coverage clocks. A dropped persist queue is written synchronously instead of discarded. Stored rows: `GET /api/v1/market/futures-history?metric=liquidations`. See [`futures-history.md`](futures-history.md).
 - Chart (`GET /liquidation-levels`): CoinGlass-style **horizontal** price bars
   from each venue's own last price, open interest, and a **10x / 25x / 50x / 100x**
   mix. Each bar includes the mass at that price (`byLeverage`) plus the walk
@@ -80,7 +80,7 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
   A quiet window is a miss only when the liquidation feed covers the
   look-ahead; pending / missing tape is not a miss. Combined sums
   independent venues.
-  Market-wide `symbol=all` stays observed time bars.
+  Market-wide `symbol=all` is stored-print time bars for the requested range (12h through 30d). A zero bar was quiet or was not recorded. Prints still only in memory are added on top.
 - Max pain (`GET /liquidation-max-pain`): largest estimated pocket **above**
   (shorts) and **below** (longs) last price. Not the hunt target.
   See [`liquidation-max-pain.md`](liquidation-max-pain.md). Web:
@@ -106,9 +106,9 @@ Show Coinglass-style **long vs short liquidation** totals for a coin over the la
 
 | Layer | Path |
 |---|---|
-| Domain | `backend/internal/domain/liquidation.go`, `liquidation_history.go`, `liquidation_levels.go`, `liquidation_levels_review.go`, `liquidation_cascade.go`, `liquidation_cascade_episode.go` |
-| Adapters | `adapter/binance/liqhub.go`, `adapter/binance/liqhist.go`, `adapter/bybit/liqhub.go`, `adapter/bybit/liqhist.go` |
-| Service | `GetLiquidations`, `GetLiquidationOverview`, `GetLiquidationLevels`, `GetLiquidationCascade`, `ScanLiquidationCascades`; reconnect fill in `service/futureshist/backfill.go` |
+| Domain | `backend/internal/domain/liquidation.go`, `liquidation_desk.go`, `liquidation_history.go`, `liquidation_levels.go`, `liquidation_levels_review.go`, `liquidation_cascade.go`, `liquidation_cascade_episode.go` |
+| Adapters | `adapter/binance/liqhub.go`, `adapter/binance/liqhist.go`, `adapter/bybit/liqhub.go`, `adapter/bybit/liqhist.go`, `adapter/futuresstore/liquidation_desk.go` |
+| Service | `GetLiquidations`, `GetLiquidationOverview`, `GetLiquidationLevels`, `GetLiquidationCascade`, `ScanLiquidationCascades`; stored desk totals in `service/market/liquidation_desk.go` and `service/futureshist/liquidation_desk.go`; reconnect fill in `service/futureshist/backfill.go` |
 | HTTP | `GET /api/v1/market/liquidations`, `/liquidations/overview`, `/liquidation-levels`, `/liquidation-cascade`, `/liquidation-cascade/scan`, `/liquidation-max-pain` |
 | MCP / AI | `get_liquidations`, `get_liquidation_overview`, `get_liquidation_levels`, `get_liquidation_cascade`, `scan_liquidation_cascades`, `get_liquidation_max_pain` |
 | Web | `/liquidations` — cards + treemap; **Chart** tab; **Cascade** tab; **Max pain** tab; Hunt; Heatmap |

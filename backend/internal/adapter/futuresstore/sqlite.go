@@ -199,7 +199,9 @@ CREATE TABLE IF NOT EXISTS liquidation_coverage (
 	// v7 stores whale and retail notional beside the minute total.
 	// size_known defaults to 0 so minutes written before print size was
 	// stored are not read back as zero whale and zero retail.
-	if v < 7 {
+	// The liquidation-desk branch used version 7 for its time index only,
+	// so a database already at 7 can still be missing these columns.
+	if v < 7 || !s.columnExists("taker_buckets", "size_known") {
 		for _, stmt := range []string{
 			`ALTER TABLE taker_buckets ADD COLUMN whale_buy REAL NOT NULL DEFAULT 0`,
 			`ALTER TABLE taker_buckets ADD COLUMN whale_sell REAL NOT NULL DEFAULT 0`,
@@ -211,11 +213,46 @@ CREATE TABLE IF NOT EXISTS liquidation_coverage (
 				return err
 			}
 		}
-		if err := sqliteutil.SetUserVersion(s.db, 7); err != nil {
+		if v < 7 {
+			if err := sqliteutil.SetUserVersion(s.db, 7); err != nil {
+				return err
+			}
+			v = 7
+		}
+	}
+	// v8 serves the liquidation desk, which scans every coin by time.
+	// The index create is idempotent for a database that already built it
+	// when version 7 still meant only that desk change.
+	if v < 8 {
+		if _, err := s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_futures_liq_time ON futures_liquidations(time_ms)`); err != nil {
+			return fmt.Errorf("liquidation time index: %w", err)
+		}
+		if err := sqliteutil.SetUserVersion(s.db, 8); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (s *SQLite) columnExists(table, col string) bool {
+	rows, err := s.db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt any
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return false
+		}
+		if name == col {
+			return true
+		}
+	}
+	return false
 }
 
 // InsertSnapshot stores one sample. Duplicate keys are ignored.

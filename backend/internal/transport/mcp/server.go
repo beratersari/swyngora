@@ -679,7 +679,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_liquidation_overview",
-		mcp.WithDescription("Market-wide futures liquidations: long vs short notional for the last 1 hour, 4 hours, 12 hours, and 24 hours, plus coins ranked by total notional for a treemap. feed lists last print, disconnects, and missingSeconds still unfilled after a same-venue history fill. Combined live/complete require both Binance and Bybit; a missing venue is listed, not replaced. window (1h|4h|12h|24h, default 24h) selects which window ranks coins."),
+		mcp.WithDescription("Market-wide futures liquidations: long vs short notional for the last 1 hour, 4 hours, 12 hours, and 24 hours, plus coins ranked by total notional for a treemap. Totals are stored force-order prints, plus prints newer than the newest saved row. feed lists last print, disconnects, and missingSeconds still unfilled after a same-venue history fill. Combined live/complete require Binance, Bybit, and OKX; a missing venue is listed, not replaced. window (1h|4h|12h|24h, default 24h) selects which window ranks coins."),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all)")),
 		mcp.WithString("window", mcp.Description("1h | 4h | 12h | 24h — ranks coins (default 24h)")),
 		mcp.WithNumber("limit", mcp.Description("Max coins (default 50, max 100)")),
@@ -693,7 +693,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_liquidation_levels",
-		mcp.WithDescription("CoinGlass-style liquidation bar chart. symbol=BTCUSDT returns estimated notional at each price, split by 10x/25x/50x/100x, plus the walk from last to that bar (cumLong/cumShort/cumByLeverage). Live bars shrink bands that rarely printed later (longConfidence/shortConfidence). Bands that did print are also shortened by sizeScale, the share of the predicted amount that later showed up, once that band has enough hits; prints larger than the model do not grow the next map. review rebuilds past maps and scores later same-venue liquidations (1h/4h/12h). Combined lastPrice is the OI-weighted last of venues that have one. symbol=all returns observed time bars. range=12h|24h|3d|7d|14d|30d (totals clamp to 24h)."),
+		mcp.WithDescription("CoinGlass-style liquidation bar chart. symbol=BTCUSDT returns estimated notional at each price, split by 10x/25x/50x/100x, plus the walk from last to that bar (cumLong/cumShort/cumByLeverage). Live bars shrink bands that rarely printed later (longConfidence/shortConfidence). Bands that did print are also shortened by sizeScale, the share of the predicted amount that later showed up, once that band has enough hits; prints larger than the model do not grow the next map. review rebuilds past maps and scores later same-venue liquidations (1h/4h/12h). Combined lastPrice is the OI-weighted last of venues that have one. symbol=all returns stored force-order time bars for the requested range (12h|24h|3d|7d|14d|30d). A zero bar was quiet or was not recorded."),
 		mcp.WithString("symbol", mcp.Description("Pair e.g. BTCUSDT, or all (default all)")),
 		mcp.WithString("exchange", mcp.Description("binance | bybit | all (default all = combined)")),
 		mcp.WithString("range", mcp.Description("12h | 24h | 3d | 7d | 14d | 30d (default 24h)")),

@@ -535,7 +535,7 @@ class LiquidationLevelsInput(BaseModel):
     )
     range: str = Field(
         default="24h",
-        description="12h|24h|3d|7d (totals clamp to 24h)",
+        description="12h|24h|3d|7d|14d|30d. symbol=all uses stored prints for that range",
     )
 
 
@@ -5068,8 +5068,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "Market-wide futures liquidations: long vs short notional for the last "
                 "1 hour, 4 hours, 12 hours, and 24 hours, plus coins ranked by total "
-                "notional for a treemap. Binance USD-M + Bybit linear. exchange=all sums "
-                "both. window (1h|4h|12h|24h, default 24h) ranks coins. Prefer this for "
+                "notional for a treemap. Totals are stored force-order prints plus "
+                "prints newer than the newest saved row. Binance USD-M, Bybit linear, "
+                "and OKX USDT-swap. exchange=all sums all three. window "
+                "(1h|4h|12h|24h, default 24h) ranks coins. Prefer this for "
                 "the overall market liquidation situation."
             ),
             args_schema=LiquidationOverviewInput,
@@ -5083,9 +5085,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "last (cumLong/cumByLeverage). review scores later same-venue "
                 "liquidations against those estimated bands (hit rate, fill, "
                 "reliability by leverage). Combined lastPrice is OI-weighted "
-                "of venues that have a last. symbol=all returns observed time "
-                "bars of total liquidations across every coin. "
-                "exchange=binance|bybit|okx|all. range=12h|24h|3d|7d."
+                "of venues that have a last. symbol=all returns stored force-order "
+                "time bars of total liquidations across every coin for the "
+                "requested range. A zero bar was quiet or was not recorded. "
+                "exchange=binance|bybit|okx|all. range=12h|24h|3d|7d|14d|30d."
             ),
             args_schema=LiquidationLevelsInput,
         ),

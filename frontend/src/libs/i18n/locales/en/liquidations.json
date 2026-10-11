@@ -1,6 +1,6 @@
 {
   "title": "Liquidations",
-  "subtitle": "Futures long vs short liquidations across Binance USD-M and Bybit linear.",
+  "subtitle": "Futures long vs short liquidations across Binance USD-M, Bybit linear, and OKX USDT-swap.",
   "tabs": {
     "overview": "Overview",
     "chart": "Chart",
@@ -28,7 +28,7 @@
   "treemap": {
     "aria": "Liquidation coin map",
     "empty": "No liquidations in this window yet.",
-    "emptyHint": "Totals fill as live force-order feeds arrive.",
+    "emptyHint": "Totals use stored force-order prints. They grow while the liquidation feeds are connected.",
     "legendLong": "More longs liquidated",
     "legendShort": "More shorts liquidated",
     "openHeatmap": "Open heatmap for {{symbol}}"
@@ -202,7 +202,8 @@
     "levelsTitle": "Liquidation levels",
     "totalsTitle": "Total liquidations",
     "levelsHint": "CoinGlass-style map: bar length is liquidations from last price to that level. Shorts above last, longs below. Colors are 100x / 50x / 25x / 10x. 5x uses the 10x color at its own distance, and 75x and 125x use the 100x color. Bands that rarely printed later are shorter and faded. Bands that did print, but for less than we predicted, are shortened toward that amount. The line traces that walk. The range is how far back that later-print check looks. The bars stay the live map.",
-    "totalsHint": "Observed long and short liquidations over time for every tracked coin on the selected venue.",
+    "totalsHint": "Stored force-order prints for every tracked coin on the selected venues, plus prints still waiting to be saved. A zero bar was quiet, or the recorder was not running.",
+    "storedStart": "Stored prints in this range start {{time}} UTC. Earlier bars were not recorded.",
     "lastPrice": "Last",
     "cumLine": "From last",
     "leverage": "{{lev}}x",

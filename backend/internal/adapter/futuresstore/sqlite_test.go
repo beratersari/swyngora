@@ -2,6 +2,7 @@ package futuresstore
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
@@ -128,6 +129,113 @@ func TestMigrateV6_DropsEstimatedBinanceTape(t *testing.T) {
 	if by[0].SizeKnown || by[0].WhaleBuy != 0 || by[0].RetailBuy != 0 {
 		t.Fatalf("old minute stays unsized %+v", by[0])
 	}
+}
+
+func TestMigrateV8_ReconcilesBothVersion7Histories(t *testing.T) {
+	t.Run("tape columns already present", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "futures.db")
+		s, err := Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if v := schemaVersion(t, s); v != 8 {
+			t.Fatalf("fresh version %d", v)
+		}
+		if _, err := s.db.Exec(`DROP INDEX IF EXISTS idx_futures_liq_time`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.db.Exec(`PRAGMA user_version = 7`); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Close(); err != nil {
+			t.Fatal(err)
+		}
+		s2, err := Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer s2.Close()
+		if v := schemaVersion(t, s2); v != 8 {
+			t.Fatalf("upgraded version %d", v)
+		}
+		if !s2.columnExists("taker_buckets", "size_known") || !indexExists(t, s2, "idx_futures_liq_time") {
+			t.Fatal("tape columns or liquidation time index missing")
+		}
+	})
+
+	t.Run("time index already present", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "futures.db")
+		abs, err := filepath.Abs(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(abs))
+		if err != nil {
+			t.Fatal(err)
+		}
+		const desk = `
+CREATE TABLE taker_buckets (
+	exchange      TEXT NOT NULL,
+	symbol        TEXT NOT NULL,
+	start_ms      INTEGER NOT NULL,
+	buy_notional  REAL NOT NULL DEFAULT 0,
+	sell_notional REAL NOT NULL DEFAULT 0,
+	PRIMARY KEY (exchange, symbol, start_ms)
+);
+CREATE TABLE futures_liquidations (
+	exchange    TEXT NOT NULL,
+	symbol      TEXT NOT NULL,
+	side        TEXT NOT NULL,
+	time_ms     INTEGER NOT NULL,
+	price       REAL NOT NULL,
+	quantity    REAL NOT NULL,
+	notional    REAL NOT NULL,
+	PRIMARY KEY (exchange, symbol, side, time_ms, price, quantity)
+);
+CREATE INDEX idx_futures_liq_time ON futures_liquidations(time_ms);
+INSERT INTO taker_buckets (exchange, symbol, start_ms, buy_notional, sell_notional)
+VALUES ('bybit', 'BTCUSDT', 1760000000000, 4, 2);
+PRAGMA user_version = 7;
+`
+		if _, err := db.Exec(desk); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Close(); err != nil {
+			t.Fatal(err)
+		}
+		s, err := Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer s.Close()
+		if v := schemaVersion(t, s); v != 8 {
+			t.Fatalf("upgraded version %d", v)
+		}
+		if !s.columnExists("taker_buckets", "size_known") || !indexExists(t, s, "idx_futures_liq_time") {
+			t.Fatal("tape columns or liquidation time index missing")
+		}
+		from := time.UnixMilli(1760000000000).Add(-time.Minute)
+		got, err := s.ListTakerBuckets(context.Background(), "bybit", "BTCUSDT", from, from.Add(2*time.Minute))
+		if err != nil || len(got) != 1 || got[0].BuyNotional != 4 || got[0].SizeKnown || got[0].WhaleBuy != 0 {
+			t.Fatalf("desk minute %+v %v", got, err)
+		}
+	})
+}
+
+func schemaVersion(t *testing.T, s *SQLite) int {
+	t.Helper()
+	var v int
+	if err := s.db.QueryRow(`PRAGMA user_version`).Scan(&v); err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
+func indexExists(t *testing.T, s *SQLite, name string) bool {
+	t.Helper()
+	var got string
+	err := s.db.QueryRow(`SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?`, name).Scan(&got)
+	return err == nil && got == name
 }
 
 func TestTakerBuckets_SizeSurvivesATotalOnlyUpsert(t *testing.T) {

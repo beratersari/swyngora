@@ -19,7 +19,7 @@ Each expected venue is `fresh`, `stale`, or `missing`.
 - **Old** — the venue answered, and the newest print or book is older than the budget (tape 2 minutes, perp book 45 seconds, liquidation socket 2 minutes). A tape that answered with no prints is fresh, not old.
 - **Fresh** — the sample is inside that budget.
 
-`coverage.complete` and `definite` are true only when every expected venue is fresh. A single-venue request only has to cover that venue. When `definite` is false the summary says which venues are missing and which are old, and the order-count lean, print-size read, and perp bid/ask lean are cleared. Liquidation totals stay in the payload for inspection, and the Liquidations page does not present them as the market.
+`coverage.complete` and `definite` are true only when every expected venue is fresh. A single-venue request only has to cover that venue. When `definite` is false the summary says which venues are missing and which are old, and the order-count lean, print-size read, and perp bid/ask lean are cleared. Liquidation totals stay in the payload. The Liquidations page shows those stored totals and the coverage banner together, and does not call a partial sum the whole market.
 
 Perp depth history stores a minute only when `definite` is true. A missing or old venue is left out of that minute, so the six-hour total and the thicker/thinner windows do not treat the gap as a real change in book size. The skipped minute is kept as a `gaps` row (which venues were missing, which were old) and listed under the chart. A later complete sample for that same minute replaces the gap.
 

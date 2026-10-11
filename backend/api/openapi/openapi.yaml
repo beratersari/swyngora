@@ -1217,10 +1217,12 @@ paths:
       description: |
         CoinGlass-style **market desk**: long/short liquidation notional for the last
         **1 hour, 4 hours, 12 hours, and 24 hours**, plus coins ranked by total
-        notional in `window` (default 24h) for a treemap. Fed by the same Binance
-        USD-M, Bybit linear, and OKX USDT-swap streams as `/liquidations`. `exchange=all` (default)
-        sums all three venues. `complete` uses the all-market Binance live clock when
-        `exchange` is `all` or `binance`. Informational only.
+        notional in `window` (default 24h) for a treemap. Totals are stored
+        force-order prints, plus prints newer than the newest saved row.
+        Fed by the same Binance USD-M, Bybit linear, and OKX USDT-swap streams
+        as `/liquidations`. `exchange=all` (default) sums all three venues.
+        `complete` is the live clock, not whether older prints are stored.
+        Informational only.
       operationId: getMarketLiquidationOverview
       tags: [Market]
       parameters:
@@ -4488,8 +4490,10 @@ paths:
           Live bars shrink bands that rarely print. Bands that do print are
           also shortened toward the share of the predicted amount that later
           showed up (`sizeScale`), and are not grown when prints exceed the model.
-        - `symbol=all`: **total** observed liquidations for every tracked coin
-          as time bars (last 24h max). `exchange=binance|bybit|okx|all`.
+        - `symbol=all`: **total** stored force-order prints for every tracked coin
+          as time bars for the requested range (12h through 30d). Prints still
+          only in memory are added. A zero bar was quiet or was not recorded.
+          `exchange=binance|bybit|okx|all`.
 
         Informational only.
       operationId: getMarketLiquidationLevels
@@ -4505,7 +4509,7 @@ paths:
           schema: { type: string, default: all, example: all }
         - name: range
           in: query
-          description: Review window 12h | 24h | 3d | 7d | 14d | 30d. The bars stay the live map. symbol=all totals clamp to 24h.
+          description: Review window 12h | 24h | 3d | 7d | 14d | 30d. One-coin bars stay the live map. symbol=all totals use stored prints for that range.
           schema: { type: string, default: 24h, enum: [12h, 24h, 3d, 7d, 14d, 30d] }
       responses:
         '200':

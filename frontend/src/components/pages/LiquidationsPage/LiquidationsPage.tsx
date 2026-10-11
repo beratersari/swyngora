@@ -56,6 +56,7 @@ import { useDocumentVisible } from '@/libs/hooks';
 import { rtkCurrent, rtkCurrentPending } from '@/libs/utils';
 import { DEFAULT_LIQ_SYMBOL, LIQ_OVERVIEW_POLL_MS } from './LiquidationsPage.constants';
 import {
+  hasLiquidationTotals,
   parseLiqCascadeSymbol,
   parseLiqChartRange,
   parseLiqChartSymbol,
@@ -348,7 +349,7 @@ export function LiquidationsPage() {
         <VenueCoverage coverage={overview.coverage} />
       ) : null}
 
-      {view === 'overview' && overview?.definite !== false ? (
+      {view === 'overview' && (overview?.definite !== false || hasLiquidationTotals(overview)) ? (
         <OverviewLayout>
           <MapCol>
             <LiquidationTreemap
