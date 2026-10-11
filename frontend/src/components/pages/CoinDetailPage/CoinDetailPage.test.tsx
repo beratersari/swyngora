@@ -599,6 +599,7 @@ describe('CoinDetailPage', () => {
 
     await chooseDesk(user, 'Liquidity');
     expect(screen.getByRole('switch', { name: /^book$/i })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /liq map/i })).toBeChecked();
     expect(screen.getByRole('switch', { name: /footprint/i })).not.toBeChecked();
     expect(screen.getByTestId('chart-preset-bid')).toHaveTextContent(/Bybit/);
     expect(screen.getByTestId('chart-preset-bid')).toHaveTextContent(/OKX/);
@@ -612,6 +613,41 @@ describe('CoinDetailPage', () => {
     await user.click(screen.getByRole('switch', { name: /footprint/i }));
     expect(screen.getByRole('radio', { name: 'Liquidity' })).not.toBeChecked();
     expect(screen.getByRole('radio', { name: 'All' })).not.toBeChecked();
+  });
+
+  it('draws the stored perp book behind the liquidation map', async () => {
+    const book = {
+      stepSec: 60,
+      columns: [
+        {
+          time: '2026-10-09T12:00:00Z',
+          mid: '100',
+          coverBid: '0.15',
+          coverAsk: '0.2',
+          bands: [
+            { rangePct: '0.1', bid: '10', ask: '5' },
+            { rangePct: '0.5', bid: '30', ask: '15' },
+            { rangePct: '1', bid: '40', ask: '20' },
+          ],
+        },
+      ],
+      gaps: [],
+    };
+    mockPerpBook.mockReturnValue({
+      data: book,
+      currentData: book,
+      isError: false,
+      isFetching: false,
+      isLoading: false,
+      refetch: vi.fn(),
+    });
+    renderDetail('/markets/binance/BTCUSDT');
+    expect(await screen.findByRole('radio', { name: 'All' })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /liq map/i })).toBeChecked();
+    expect(screen.getByTestId('chart-perp-book')).toBeInTheDocument();
+    expect(screen.getByTestId('chart-perp-book-reach')).toHaveTextContent('0.15%');
+    expect(screen.getByTestId('chart-perp-book-reach')).toHaveTextContent('0.2%');
+    expect(Number(screen.getByTestId('candle-chart').getAttribute('data-liq'))).toBeGreaterThan(4);
   });
 
   it('paints stored buy and sell inside candles and names a venue that did not record', async () => {

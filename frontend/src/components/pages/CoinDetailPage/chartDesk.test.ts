@@ -3,7 +3,9 @@ import type { LiquidationOpenLevels } from '@/libs/api';
 import { heatColor } from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.helpers';
 import {
   bookHeatColumns,
+  formatBookReachPct,
   perpBookCells,
+  perpBookReach,
   chartBookWindow,
   chartBotMarks,
   chartProfileRead,
@@ -169,6 +171,37 @@ describe('chart desk mappers', () => {
     expect(asks.length).toBe(2);
     expect(bids.some((cell) => cell.priceLo < 99.5)).toBe(true);
     expect(cells.every((cell) => cell.stepSec === 60)).toBe(true);
+  });
+
+  it('stops a perp band where the snapshot runs out', () => {
+    const cells = perpBookCells({
+      stepSec: 60,
+      columns: [
+        {
+          time: '2026-10-09T12:00:00Z',
+          mid: '100',
+          coverBid: '0.15',
+          coverAsk: '0.2',
+          bands: [
+            { rangePct: '0.1', bid: '10', ask: '5' },
+            { rangePct: '0.5', bid: '30', ask: '15' },
+            { rangePct: '1', bid: '40', ask: '20' },
+          ],
+        },
+      ],
+    });
+    const bids = cells.filter((cell) => cell.priceHi <= 100);
+    expect(bids.length).toBeGreaterThan(0);
+    expect(bids.every((cell) => cell.priceLo >= 99.85 - 1e-6)).toBe(true);
+    expect(bids.some((cell) => cell.priceLo < 99.9)).toBe(true);
+    expect(perpBookReach({ columns: [{ coverBid: '0.15', coverAsk: '0.2' }] })).toEqual({
+      bidPct: 0.15,
+      askPct: 0.2,
+    });
+    expect(perpBookReach({ columns: [{ coverBid: '1', coverAsk: '1.4' }] })).toBeNull();
+    expect(perpBookReach({ columns: [{ coverBid: '0', coverAsk: '0' }] })).toBeNull();
+    expect(formatBookReachPct(0.15)).toBe('0.15');
+    expect(formatBookReachPct(1)).toBe('1');
   });
 
   it('reads combined footprint rows', () => {

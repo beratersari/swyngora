@@ -104,7 +104,7 @@ export function chartPresetLayers(preset: ChartPreset): ChartDeskLayers {
         showBots: true,
       };
     case 'liquidity':
-      return { ...ALL_OFF, showBook: true };
+      return { ...ALL_OFF, showBook: true, showLiqMap: true };
     default:
       return { ...ALL_ON };
   }

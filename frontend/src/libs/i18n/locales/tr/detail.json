@@ -39,6 +39,7 @@
     "presetBidUncovered": "Perp bandı defterde tam durmuyor, bu yüzden alış payı gösterilmiyor.",
     "perpBook": "Fiyatın %1 içindeki perp alış ve satış, ekrandaki mumları izler. Gölge, defterin bittiği yerde durur. Bir dakika ancak Binance, Bybit ve OKX taze olduğunda tutulur.",
     "perpBookGap": "Bazı dakikalar boş kalır çünkü {{venues}} eksik ya da eskiydi.",
+    "perpBookReach": "Son kayıt fiyatın {{bid}}% altına ve {{ask}}% üstüne kadar gidiyor. Gölge orada durur.",
     "presetWalls": "Bu borsanın canlı duvarları: {{walls}}.",
     "presetWallsEmpty": "Bu borsanın canlı bandında büyük duvar yok.",
     "presetWall": "{{side}} {{price}} · {{behavior}}",

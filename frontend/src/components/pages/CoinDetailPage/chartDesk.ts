@@ -296,6 +296,30 @@ export function perpBookCells(report?: { stepSec?: number; columns?: PerpBookCol
   }));
 }
 
+export type PerpBookReach = { bidPct: number; askPct: number };
+
+/**
+ * How far the newest stored book reached, when either side stops inside 1%.
+ * A zero cover is an old row that never recorded the edge, so it stays quiet.
+ */
+export function perpBookReach(report?: { columns?: PerpBookColumn[] } | null): PerpBookReach | null {
+  const last = report?.columns?.[report.columns.length - 1];
+  if (!last) return null;
+  const bid = parseTapeNumber(last.coverBid);
+  const ask = parseTapeNumber(last.coverAsk);
+  if (bid == null || ask == null) return null;
+  if (bid <= 0 && ask <= 0) return null;
+  if (bid + 1e-9 >= 1 && ask + 1e-9 >= 1) return null;
+  return { bidPct: bid, askPct: ask };
+}
+
+/** Two decimals, without a trailing zero, for a book edge inside 1%. */
+export function formatBookReachPct(value: number): string {
+  const rounded = Math.round(value * 100) / 100;
+  if (Number.isInteger(rounded)) return String(rounded);
+  return rounded.toFixed(2).replace(/0$/, '');
+}
+
 /** Buy versus sell rows for the footprint on the right of the chart. */
 export function footprintLevels(report: FlowAtPricesReport | undefined): CandleChartFootprintLevel[] {
   const levels = report?.combined?.levels ?? report?.venues?.[0]?.levels ?? [];

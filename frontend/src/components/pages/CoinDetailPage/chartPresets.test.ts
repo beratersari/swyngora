@@ -42,6 +42,7 @@ describe('chart presets', () => {
       showSweeps: false,
       showBots: false,
       showBook: true,
+      showLiqMap: true,
     });
     expect(matchingChartPreset(chartPresetLayers('all'))).toBe('all');
     expect(matchingChartPreset(chartPresetLayers('positioning'))).toBe('positioning');

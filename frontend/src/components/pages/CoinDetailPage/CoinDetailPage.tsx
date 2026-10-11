@@ -7,7 +7,9 @@ import { CandleChartHost } from '@/components/molecules/CandleChartHost';
 import { snapMarkersToCandleTimes } from '@/components/molecules/CandleChartHost/CandleChartHost.markers';
 import {
   bookHeatColumns,
+  formatBookReachPct,
   perpBookCells,
+  perpBookReach,
   CANDLE_FOOTPRINT_DEFAULT_CANDLES,
   CHART_BOOK_LIVE_MAX,
   candleFootprintSpan,
@@ -743,11 +745,12 @@ export function CoinDetailPage() {
       refetchOnFocus: true,
     },
   );
+  const perpBandsOn = !isEquity && (showLiqMap || chartPreset === 'liquidity');
   const perpBookQuery = useGetMarketPerpBookHistoryQuery(
     { symbol: perpSymbol, exchange: 'all', windowSec: bookWindow },
     {
-      skip: skipTape || chartPreset !== 'liquidity',
-      pollingInterval: visible && chartPreset === 'liquidity' ? 60_000 : 0,
+      skip: skipTape || !perpBandsOn,
+      pollingInterval: visible && perpBandsOn ? 60_000 : 0,
       refetchOnFocus: true,
     },
   );
@@ -1687,10 +1690,16 @@ export function CoinDetailPage() {
   );
   const chartLiqHeat = useMemo(() => {
     if (isEquity) return [];
-    if (showLiqMap) return liqHeatCells(rtkCurrent(liqMapQuery), liqMapVenue, liqMapSide);
-    if (chartPreset === 'liquidity') return perpBookCells(rtkCurrent(perpBookQuery));
-    return [];
-  }, [isEquity, showLiqMap, liqMapQuery, liqMapVenue, liqMapSide, chartPreset, perpBookQuery]);
+    // Book bands go down first. Liquidation cells paint over them, so a pocket
+    // stays readable and the resting size still shows beside it.
+    const book = perpBandsOn ? perpBookCells(rtkCurrent(perpBookQuery)) : [];
+    const liq = showLiqMap ? liqHeatCells(rtkCurrent(liqMapQuery), liqMapVenue, liqMapSide) : [];
+    return [...book, ...liq];
+  }, [isEquity, perpBandsOn, showLiqMap, liqMapQuery, liqMapVenue, liqMapSide, perpBookQuery]);
+  const perpReach = useMemo(
+    () => (perpBandsOn ? perpBookReach(rtkCurrent(perpBookQuery)) : null),
+    [perpBandsOn, perpBookQuery],
+  );
   const chartOpenLevels = useMemo(
     () =>
       isEquity || !showOpenLevels
@@ -1945,6 +1954,7 @@ export function CoinDetailPage() {
       void printSizeQuery.refetch();
     }
     if (chartPreset === 'liquidity') void perpDepthQuery.refetch();
+    if (perpBandsOn) void perpBookQuery.refetch();
   };
 
   if (!exchange) {
@@ -2698,7 +2708,7 @@ export function CoinDetailPage() {
                 })}
               </Text>
             ) : null}
-            {!isEquity && chartPreset === 'liquidity' ? (
+            {!isEquity && perpBandsOn ? (
               <Text variant="caption" color="secondary" data-testid="chart-perp-book">
                 {t('detail:chart.perpBook')}
                 {(rtkCurrent(perpBookQuery)?.gaps?.length ?? 0) > 0
@@ -2715,6 +2725,14 @@ export function CoinDetailPage() {
                         .join(', '),
                     })}`
                   : ''}
+              </Text>
+            ) : null}
+            {!isEquity && perpReach ? (
+              <Text variant="caption" color="secondary" data-testid="chart-perp-book-reach">
+                {t('detail:chart.perpBookReach', {
+                  bid: formatBookReachPct(perpReach.bidPct),
+                  ask: formatBookReachPct(perpReach.askPct),
+                })}
               </Text>
             ) : null}
             {!isEquity && chartPreset === 'liquidity' && perpDepthQuery.isError ? (
