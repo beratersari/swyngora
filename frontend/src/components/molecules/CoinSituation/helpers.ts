@@ -1,4 +1,5 @@
 import type { CoinSituation } from '@/libs/api';
+import { formatCompactUsd } from '@/libs/utils/formatMarket';
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
@@ -52,6 +53,21 @@ export function situationLines(report: CoinSituation | null | undefined, t: Tran
     lines.push(
       t('detail:situation.liquidation.missing', {
         venues: situationVenueList(report.liquidationMissing, t),
+      }),
+    );
+  }
+  if (report.prints?.side) {
+    lines.push(
+      t(`detail:situation.prints.${report.prints.side}`, {
+        long: formatCompactUsd(report.prints.longNotional ?? 0),
+        short: formatCompactUsd(report.prints.shortNotional ?? 0),
+        defaultValue: report.prints.side,
+      }),
+    );
+  } else if ((report.printsMissing ?? []).length > 0) {
+    lines.push(
+      t('detail:situation.prints.missing', {
+        venues: situationVenueList(report.printsMissing, t),
       }),
     );
   }

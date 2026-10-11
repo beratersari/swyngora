@@ -17,6 +17,9 @@ import {
   pickSignalHorizon,
   pickMatrix,
   pickReview,
+  printColumnGapVenues,
+  printGapColumnIndexes,
+  printGapVenues,
 } from './LiquidationHeatmap.helpers';
 import type { LiquidationHeatmapData } from './LiquidationHeatmap.types';
 
@@ -129,6 +132,35 @@ describe('LiquidationHeatmap helpers', () => {
     );
     expect(hover?.longs).toBe(80);
     expect(hover?.totals).toBe(80);
+    expect(hover?.unrecorded).toBe(false);
+    expect(hover?.gapVenues).toEqual([]);
+  });
+
+  it('names an unrecorded print column and leaves a quiet recorded column clear', () => {
+    const printed = {
+      ...sample,
+      kind: 'prints' as const,
+      binance: { ...sample.binance, hasData: [true, false] },
+      bybit: { ...sample.bybit, hasData: [true, true] },
+      okx: { exchange: 'okx', hasData: [false, true] },
+      combined: { ...sample.combined, hasData: [false, false] },
+    };
+    expect(printGapColumnIndexes(printed, 'combined')).toEqual([0, 1]);
+    expect(printGapColumnIndexes(printed, 'bybit')).toEqual([]);
+    expect(printColumnGapVenues(printed, 'combined', 0)).toEqual(['okx']);
+    expect(printColumnGapVenues(printed, 'combined', 1)).toEqual(['binance']);
+    expect(printGapVenues(printed, 'combined')).toEqual(['binance', 'okx']);
+    expect(printGapVenues({ ...sample, kind: 'model' }, 'combined')).toEqual([]);
+    const layout = buildLayout(printed, 400, 300);
+    const hover = hitTest(
+      (layout?.plotX ?? 0) + (layout?.cellW ?? 0) * 0.5,
+      (layout?.plotY ?? 0) + 4,
+      printed,
+      layout!,
+      'combined',
+    );
+    expect(hover?.unrecorded).toBe(true);
+    expect(hover?.gapVenues).toEqual(['okx']);
   });
 
   it('picks venue review and formats rates', () => {

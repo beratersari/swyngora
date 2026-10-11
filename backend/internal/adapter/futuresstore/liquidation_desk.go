@@ -108,6 +108,53 @@ ORDER BY start_ms`
 	return scan, err
 }
 
+// SumLiquidationPrintSides rolls one symbol's stored prints in [from, to) by venue.
+// A side other than short counts as a long, matching the live book.
+func (s *SQLite) SumLiquidationPrintSides(ctx context.Context, symbol string, from, to time.Time, exchanges []domain.Exchange) (domain.LiquidationPrintSideScan, error) {
+	if s == nil || s.db == nil {
+		return domain.LiquidationPrintSideScan{}, fmt.Errorf("futures store is nil")
+	}
+	symbol = domain.NormalizeLiquidationSymbol(symbol)
+	if symbol == "" {
+		return domain.LiquidationPrintSideScan{}, fmt.Errorf("%w: liquidation symbol", domain.ErrInvalidArgument)
+	}
+	fromMS, toMS, exSQL, exArgs, err := liquidationDeskWindow(from, to, exchanges)
+	if err != nil {
+		return domain.LiquidationPrintSideScan{}, err
+	}
+	args := []any{symbol, fromMS, toMS}
+	args = append(args, exArgs...)
+	query := `
+SELECT exchange,
+	SUM(CASE WHEN side = 'short' THEN 0 ELSE notional END),
+	SUM(CASE WHEN side = 'short' THEN notional ELSE 0 END),
+	MAX(time_ms)
+FROM futures_liquidations
+WHERE symbol = ? AND time_ms >= ? AND time_ms < ? AND notional > 0` + exSQL + `
+GROUP BY exchange`
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return domain.LiquidationPrintSideScan{}, err
+	}
+	defer rows.Close()
+	scan := domain.LiquidationPrintSideScan{Latest: map[domain.Exchange]time.Time{}}
+	for rows.Next() {
+		var row domain.LiquidationPrintSideRow
+		var ex string
+		var ms int64
+		if err := rows.Scan(&ex, &row.Long, &row.Short, &ms); err != nil {
+			return domain.LiquidationPrintSideScan{}, err
+		}
+		row.Exchange = domain.Exchange(ex)
+		scan.Rows = append(scan.Rows, row)
+		scan.Latest[row.Exchange] = time.UnixMilli(ms).UTC()
+	}
+	return scan, rows.Err()
+}
+
 func liquidationDeskWindow(from, to time.Time, exchanges []domain.Exchange) (fromMS, toMS int64, exSQL string, exArgs []any, err error) {
 	if from.IsZero() || !to.After(from) {
 		return 0, 0, "", nil, fmt.Errorf("%w: liquidation window", domain.ErrInvalidArgument)

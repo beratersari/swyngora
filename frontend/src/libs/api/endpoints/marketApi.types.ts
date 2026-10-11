@@ -277,6 +277,12 @@ export type CoinSituationLiquidation = {
   side?: 'long' | 'short' | 'none';
   distancePct?: number;
 };
+export type CoinSituationPrints = {
+  side?: 'long' | 'short' | 'even' | 'quiet';
+  longNotional?: number;
+  shortNotional?: number;
+  window?: string;
+};
 export type CoinSituationFunding = {
   payer?: 'long' | 'short' | 'none';
   ratePct?: number;
@@ -306,6 +312,8 @@ export type CoinSituation = {
   openInterestMissing?: string[];
   liquidation?: CoinSituationLiquidation | null;
   liquidationMissing?: string[];
+  prints?: CoinSituationPrints | null;
+  printsMissing?: string[];
   funding?: CoinSituationFunding | null;
   fundingMissing?: string[];
   crowd?: CoinSituationCrowd | null;

@@ -49,6 +49,23 @@ func TestSumAndBucketLiquidations_UsesStoredPrints(t *testing.T) {
 	if len(bars.Buckets) != 1 || bars.Buckets[0].Long != 80 || bars.Buckets[0].Short != 20 {
 		t.Fatalf("%+v", bars.Buckets)
 	}
+	sides, err := s.SumLiquidationPrintSides(context.Background(), "BTCUSDT", from, to, domain.FuturesVenues())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sides.Rows) != 1 || sides.Rows[0].Exchange != domain.ExchangeBinance || sides.Rows[0].Long != 80 || sides.Rows[0].Short != 0 {
+		t.Fatalf("btc sides %+v", sides.Rows)
+	}
+	if !sides.Latest[domain.ExchangeBinance].Equal(inside) || !sides.Latest[domain.ExchangeOKX].IsZero() {
+		t.Fatalf("latest %+v", sides.Latest)
+	}
+	atEnd, err := s.SumLiquidationPrintSides(context.Background(), "btcusdt", to, to.Add(time.Hour), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(atEnd.Rows) != 0 {
+		t.Fatalf("window end is exclusive: %+v", atEnd.Rows)
+	}
 	if !bars.Buckets[0].Start.Equal(origin.Add(time.Hour)) {
 		t.Fatalf("bar start %s", bars.Buckets[0].Start)
 	}

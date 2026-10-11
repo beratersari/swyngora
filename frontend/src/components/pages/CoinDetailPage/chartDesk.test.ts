@@ -374,6 +374,57 @@ describe('chart desk mappers', () => {
     expect(notes.mix).toBe('10× 25%');
     expect(notes.missingVenues).toEqual(['okx']);
     expect(notes.evenVenues).toEqual(['okx']);
+    expect(notes.gapVenues).toEqual([]);
+  });
+
+  it('marks an unrecorded print column and leaves a quiet recorded column clear', () => {
+    const cells = liqHeatCells(
+      {
+        kind: 'prints',
+        stepSec: 1800,
+        priceStep: 10,
+        prices: [110, 100],
+        times: ['2026-09-29T12:00:00Z', '2026-09-29T12:30:00Z', '2026-09-29T13:00:00Z'],
+        binance: { hasData: [true, false, true] },
+        bybit: { hasData: [true, true, true] },
+        okx: { hasData: [true, false, true] },
+        combined: {
+          totals: [
+            [4, 0],
+            [0, 0],
+            [0, 0],
+          ],
+          maxIntensity: 4,
+          hasData: [true, false, true],
+        },
+      },
+      'combined',
+      'totals',
+    );
+    expect(cells).toHaveLength(2);
+    expect(cells[0]).toMatchObject({
+      time: Date.parse('2026-09-29T12:00:00Z') / 1000,
+      priceHi: 115,
+      priceLo: 105,
+    });
+    expect(cells[0]?.gap).toBeUndefined();
+    expect(cells[1]).toMatchObject({
+      time: Date.parse('2026-09-29T12:30:00Z') / 1000,
+      priceHi: 115,
+      priceLo: 95,
+      gap: true,
+    });
+    const notes = liqHeatNotes(
+      {
+        kind: 'prints',
+        binance: { hasData: [true, false] },
+        bybit: { hasData: [true, true] },
+        okx: { hasData: [false, false] },
+        combined: { hasData: [false, false] },
+      },
+      'combined',
+    );
+    expect(notes.gapVenues).toEqual(['binance', 'okx']);
   });
 
   it('paints a measured print and skips a quiet recorded column', () => {

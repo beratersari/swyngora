@@ -248,10 +248,14 @@ Shorts are positions closed by a buy.
 
 A column is recorded when a print landed there, or when that venue was
 watched and the column is outside a known feed gap. A quiet recorded
-column is a real zero. A print after the last column's closed edge and
-before now stays on that last column. A column before the watch, or inside a gap with no
-print, stays empty. Binance, Bybit, and OKX never borrow each other's
-prints. `combined` sums a column only when all three were recorded.
+column is a real zero and stays visually empty. A print after the last
+column's closed edge and before now stays on that last column. A column
+before the watch, or inside a gap with no print, has `hasData` false.
+`/liquidations` and the coin chart hatch that column and name the venue.
+The leverage model does not use that mark. Binance, Bybit, and OKX never
+borrow each other's prints. `combined` sums a column only when all three
+were recorded. On a combined column, the named venues are the ones whose
+own column is unrecorded. A single-venue view names only that venue.
 `columnsWithOi` and `coverage` count recorded columns. `leverageMix` is
 empty and `review` has no horizons. A venue with no recorded column is
 named in `missingVenues`.

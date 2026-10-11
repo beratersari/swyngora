@@ -2558,6 +2558,15 @@ export function CoinDetailPage() {
                 })}
               </Text>
             ) : null}
+            {!isEquity && showLiqMap && liqMapSource === 'prints' && liqMapNote && liqMapNote.gapVenues.length > 0 ? (
+              <Text variant="caption" color="secondary" data-testid="chart-liq-gap">
+                {t('detail:liqHeatmap.gap', {
+                  venues: liqMapNote.gapVenues
+                    .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
+                    .join(', '),
+                })}
+              </Text>
+            ) : null}
             {!isEquity && chartMissing.length > 0 ? (
               <Text variant="caption" color="secondary" data-testid="chart-liq-missing">
                 {t(

@@ -70,6 +70,8 @@ export type CandleChartLiqCell = {
   priceHi: number;
   priceLo: number;
   color: string;
+  /** Unrecorded liquidation time. Drawn as a hatch, not as size. */
+  gap?: boolean;
 };
 
 /**

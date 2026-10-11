@@ -46,7 +46,7 @@ func TestBuildCoinSituation_CompleteRead(t *testing.T) {
 			{Price: "90", LongNotional: "80"},
 			{Price: "103", ShortNotional: "40"},
 		},
-	}, nil, nil)
+	}, nil, nil, SituationPrintInput{})
 	if got.Symbol != "BTCUSDT" || got.PriceCVD == nil || got.PriceCVD.Kind != SituationCVDPriceUp {
 		t.Fatalf("cvd %+v", got.PriceCVD)
 	}
@@ -80,7 +80,7 @@ func TestBuildCoinSituation_NamesTheMissingVenueAndLeavesThatClauseBlank(t *test
 		LastPrice: "100",
 		Missing:   []string{"okx"},
 		Levels:    []LiquidationLevelBar{{Price: "99", LongNotional: "10"}},
-	}, nil, nil)
+	}, nil, nil, SituationPrintInput{})
 	if got.PriceCVD != nil || len(got.PriceCVDMissing) != 1 || got.PriceCVDMissing[0] != "bybit" {
 		t.Fatalf("cvd %+v missing %v", got.PriceCVD, got.PriceCVDMissing)
 	}
@@ -100,11 +100,11 @@ func TestBuildCoinSituation_ShortPocketCloserAndNone(t *testing.T) {
 			{Price: "90", LongNotional: "50"},
 			{Price: "101", ShortNotional: "5"},
 		},
-	}, nil, nil)
+	}, nil, nil, SituationPrintInput{})
 	if closer.Liquidation == nil || closer.Liquidation.Side != SituationLiqShort || closer.Liquidation.DistancePct != 1 {
 		t.Fatalf("short %+v", closer.Liquidation)
 	}
-	none := BuildCoinSituation("ETHUSDT", now, nil, nil, &LiquidationLevelsReport{LastPrice: "100"}, nil, nil)
+	none := BuildCoinSituation("ETHUSDT", now, nil, nil, &LiquidationLevelsReport{LastPrice: "100"}, nil, nil, SituationPrintInput{})
 	if none.Liquidation == nil || none.Liquidation.Side != SituationLiqNone || none.Liquidation.DistancePct != 0 {
 		t.Fatalf("none %+v", none.Liquidation)
 	}
@@ -130,7 +130,7 @@ func TestBuildCoinSituation_FundingCrowdAndSizeStayBlankUntilCovered(t *testing.
 		Venues: []LongShortVenueSnap{
 			{Exchange: "binance", Gap: &LongShortGap{Lean: LongShortGapLeanTopLong, GapPct: "+8"}},
 		},
-	})
+	}, SituationPrintInput{})
 	if partial.Funding != nil || len(partial.FundingMissing) != 1 || partial.FundingMissing[0] != "okx" {
 		t.Fatalf("funding %+v missing %v", partial.Funding, partial.FundingMissing)
 	}
@@ -168,7 +168,7 @@ func TestBuildCoinSituation_FundingCrowdAndSizeWhenEveryPublisherIsIn(t *testing
 			{Exchange: "bybit"},
 			{Exchange: "okx", Gap: &LongShortGap{Lean: LongShortGapLeanTopLong, GapPct: "+4"}},
 		},
-	})
+	}, SituationPrintInput{})
 	if got.Funding == nil || got.Funding.Payer != "short" || got.Funding.RatePct >= 0 {
 		t.Fatalf("funding %+v", got.Funding)
 	}
@@ -210,5 +210,133 @@ func TestSituationLeft_OnlyClausesStoredAtEntry(t *testing.T) {
 	}
 	if left, _ := SituationLeft(nil, live); left {
 		t.Fatal("no entry")
+	}
+	withPrints := &CoinSituation{Prints: &SituationPrints{Side: SituationPrintLong, LongNotional: 100}}
+	sameDollars := &CoinSituation{Prints: &SituationPrints{Side: SituationPrintLong, LongNotional: 40, ShortNotional: 10}}
+	if left, changed := SituationLeft(withPrints, sameDollars); left || len(changed) != 0 {
+		t.Fatalf("print dollars must stay quiet: %v %v", left, changed)
+	}
+	leftPrint, changedPrint := SituationLeft(withPrints, &CoinSituation{Prints: &SituationPrints{Side: SituationPrintShort}})
+	if !leftPrint || len(changedPrint) != 1 || changedPrint[0] != "prints" {
+		t.Fatalf("print side %v %v", leftPrint, changedPrint)
+	}
+	liveNew := &CoinSituation{
+		PriceCVD: &SituationPriceCVD{Kind: SituationCVDPriceUp},
+		Funding:  &SituationFunding{Payer: "long"},
+		Prints:   &SituationPrints{Side: SituationPrintLong},
+	}
+	if left, changed := SituationLeft(entry, liveNew); left || len(changed) != 0 {
+		t.Fatalf("a new print clause must stay quiet: %v %v", left, changed)
+	}
+}
+
+func watchedPrints(now time.Time, sides []LiquidationPrintSideRow) SituationPrintInput {
+	start := now.Add(-48 * time.Hour)
+	cov := make([]LiquidationCoverage, 0, 3)
+	for _, ex := range FuturesVenues() {
+		cov = append(cov, LiquidationCoverage{Exchange: ex, Symbol: "BTCUSDT", FirstWatch: start})
+	}
+	return SituationPrintInput{ArchiveOK: true, Coverage: cov, Sides: sides}
+}
+
+func TestBuildCoinSituation_MeasuredPrintsStaySeparateFromTheModel(t *testing.T) {
+	now := time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)
+	got := BuildCoinSituation("BTCUSDT", now, nil, nil, &LiquidationLevelsReport{
+		LastPrice: "100",
+		Levels:    []LiquidationLevelBar{{Price: "99", LongNotional: "10"}},
+	}, nil, nil, watchedPrints(now, []LiquidationPrintSideRow{
+		{Exchange: ExchangeBinance, Long: 90, Short: 10},
+		{Exchange: ExchangeBybit, Long: 20, Short: 5},
+		{Exchange: ExchangeOKX, Short: 5},
+	}))
+	if got.Liquidation == nil || got.Liquidation.Side != SituationLiqLong {
+		t.Fatalf("model %+v", got.Liquidation)
+	}
+	if got.Prints == nil || got.Prints.Side != SituationPrintLong || got.Prints.Window != "24h" {
+		t.Fatalf("prints %+v", got.Prints)
+	}
+	if got.Prints.LongNotional != 110 || got.Prints.ShortNotional != 20 || len(got.PrintsMissing) != 0 {
+		t.Fatalf("notionals %+v missing %v", got.Prints, got.PrintsMissing)
+	}
+
+	even := BuildCoinSituation("BTCUSDT", now, nil, nil, nil, nil, nil, watchedPrints(now, []LiquidationPrintSideRow{
+		{Exchange: ExchangeBinance, Long: 59, Short: 41},
+	}))
+	if even.Prints == nil || even.Prints.Side != SituationPrintEven {
+		t.Fatalf("even %+v", even.Prints)
+	}
+	lead := BuildCoinSituation("BTCUSDT", now, nil, nil, nil, nil, nil, watchedPrints(now, []LiquidationPrintSideRow{
+		{Exchange: ExchangeBinance, Long: 60, Short: 40},
+	}))
+	if lead.Prints == nil || lead.Prints.Side != SituationPrintLong {
+		t.Fatalf("60pct %+v", lead.Prints)
+	}
+	quiet := BuildCoinSituation("BTCUSDT", now, nil, nil, nil, nil, nil, watchedPrints(now, nil))
+	if quiet.Prints == nil || quiet.Prints.Side != SituationPrintQuiet || quiet.Prints.LongNotional != 0 {
+		t.Fatalf("quiet %+v", quiet.Prints)
+	}
+	shortOnly := BuildCoinSituation("BTCUSDT", now, nil, nil, nil, nil, nil, watchedPrints(now, []LiquidationPrintSideRow{
+		{Exchange: ExchangeOKX, Short: 5},
+	}))
+	if shortOnly.Prints == nil || shortOnly.Prints.Side != SituationPrintShort || shortOnly.Prints.ShortNotional != 5 {
+		t.Fatalf("short %+v", shortOnly.Prints)
+	}
+}
+
+func TestBuildCoinSituation_MeasuredPrintsStayBlankWhenTheWindowIsOpen(t *testing.T) {
+	now := time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)
+	from := now.Add(-24 * time.Hour)
+	start := now.Add(-48 * time.Hour)
+	late := from.Add(time.Minute)
+	cov := []LiquidationCoverage{
+		{Exchange: ExchangeBinance, Symbol: "BTCUSDT", FirstWatch: start},
+		{Exchange: ExchangeBybit, Symbol: "BTCUSDT", FirstWatch: late},
+		{Exchange: ExchangeOKX, FirstWatch: start, Gaps: []LiquidationGap{{From: now.Add(-time.Hour)}}},
+	}
+	got := BuildCoinSituation("BTCUSDT", now, nil, nil, nil, nil, nil, SituationPrintInput{
+		ArchiveOK: true,
+		Coverage:  cov,
+		Sides: []LiquidationPrintSideRow{
+			{Exchange: ExchangeBinance, Long: 100},
+			{Exchange: ExchangeBybit, Long: 80},
+			{Exchange: ExchangeOKX, Long: 70},
+		},
+	})
+	if got.Prints != nil || len(got.PrintsMissing) != 2 || got.PrintsMissing[0] != "bybit" || got.PrintsMissing[1] != "okx" {
+		t.Fatalf("prints %+v missing %v", got.Prints, got.PrintsMissing)
+	}
+
+	ended := BuildCoinSituation("BTCUSDT", now, nil, nil, nil, nil, nil, SituationPrintInput{
+		ArchiveOK: true,
+		Coverage: []LiquidationCoverage{
+			{Exchange: ExchangeBinance, Symbol: "BTCUSDT", FirstWatch: start, Gaps: []LiquidationGap{{From: from.Add(-2 * time.Hour), To: from}}},
+			{Exchange: ExchangeBybit, FirstWatch: start},
+			{Exchange: ExchangeOKX, FirstWatch: start},
+		},
+		Sides: []LiquidationPrintSideRow{{Exchange: ExchangeBinance, Long: 3}},
+	})
+	if ended.Prints == nil || ended.Prints.Side != SituationPrintLong {
+		t.Fatalf("gap that ends at the open is recorded: %+v missing %v", ended.Prints, ended.PrintsMissing)
+	}
+
+	offline := BuildCoinSituation("BTCUSDT", now, nil, nil, nil, nil, nil, SituationPrintInput{
+		Coverage: []LiquidationCoverage{{Exchange: ExchangeBinance, FirstWatch: start}},
+		Sides:    []LiquidationPrintSideRow{{Exchange: ExchangeBinance, Long: 100}},
+	})
+	if offline.Prints != nil || len(offline.PrintsMissing) != 3 {
+		t.Fatalf("unread archive %+v missing %v", offline.Prints, offline.PrintsMissing)
+	}
+
+	pairLate := BuildCoinSituation("BTCUSDT", now, nil, nil, nil, nil, nil, SituationPrintInput{
+		ArchiveOK: true,
+		Coverage: []LiquidationCoverage{
+			{Exchange: ExchangeBinance, FirstWatch: start},
+			{Exchange: ExchangeBinance, Symbol: "BTCUSDT", FirstWatch: late},
+			{Exchange: ExchangeBybit, FirstWatch: start},
+			{Exchange: ExchangeOKX, FirstWatch: start},
+		},
+	})
+	if pairLate.Prints != nil || len(pairLate.PrintsMissing) != 1 || pairLate.PrintsMissing[0] != "binance" {
+		t.Fatalf("pair clock %+v missing %v", pairLate.Prints, pairLate.PrintsMissing)
 	}
 }

@@ -28,6 +28,8 @@ import type {
 
 type Rgb = { r: number; g: number; b: number };
 
+const PRINT_VENUES = ['binance', 'bybit', 'okx'] as const;
+
 export function pickGrid(
   data: LiquidationHeatmapData | undefined,
   venue: LiqHeatVenue,
@@ -37,6 +39,73 @@ export function pickGrid(
   if (venue === 'bybit') return data.bybit;
   if (venue === 'okx') return data.okx;
   return data.combined;
+}
+
+/** Columns of measured prints where this book was not recorded. */
+export function printGapColumnIndexes(
+  data: LiquidationHeatmapData | undefined,
+  venue: LiqHeatVenue,
+): number[] {
+  if (data?.kind !== 'prints') return [];
+  const flags = pickGrid(data, venue)?.hasData ?? [];
+  const out: number[] = [];
+  flags.forEach((recorded, index) => {
+    if (recorded === false) out.push(index);
+  });
+  return out;
+}
+
+/** Venues that left this print column unrecorded. */
+export function printColumnGapVenues(
+  data: LiquidationHeatmapData | undefined,
+  venue: LiqHeatVenue,
+  column: number,
+): string[] {
+  if (data?.kind !== 'prints' || column < 0) return [];
+  if (venue !== 'combined') {
+    return pickGrid(data, venue)?.hasData?.[column] === false ? [venue] : [];
+  }
+  return PRINT_VENUES.filter((id) => pickGrid(data, id)?.hasData?.[column] === false);
+}
+
+/** Venues with at least one unrecorded print column on the selected book. */
+export function printGapVenues(
+  data: LiquidationHeatmapData | undefined,
+  venue: LiqHeatVenue,
+): string[] {
+  if (data?.kind !== 'prints') return [];
+  if (venue !== 'combined') {
+    return printGapColumnIndexes(data, venue).length > 0 ? [venue] : [];
+  }
+  return PRINT_VENUES.filter((id) => (pickGrid(data, id)?.hasData ?? []).some((recorded) => recorded === false));
+}
+
+/** Hatch for time nobody recorded. A quiet recorded column stays clear. */
+export function fillPrintGap(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): void {
+  if (w <= 0 || h <= 0) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  ctx.fillStyle = 'rgba(148, 163, 184, 0.16)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(148, 163, 184, 0.72)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([]);
+  const step = 7;
+  for (let d = -h; d < w + h; d += step) {
+    ctx.beginPath();
+    ctx.moveTo(x + d, y);
+    ctx.lineTo(x + d - h, y + h);
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 export function formatLeverageMix(
@@ -278,6 +347,7 @@ export function hitTest(
   const row = Math.floor((py - layout.plotY) / layout.cellH);
   if (col < 0 || col >= layout.nT || row < 0 || row >= layout.nP) return null;
   const grid = pickGrid(data, venue);
+  const gapVenues = printColumnGapVenues(data, venue, col);
   return {
     x: px,
     y: py,
@@ -286,6 +356,8 @@ export function hitTest(
     longs: cellValue(grid?.longs ?? [], col, row),
     shorts: cellValue(grid?.shorts ?? [], col, row),
     totals: cellValue(grid?.totals ?? [], col, row),
+    unrecorded: gapVenues.length > 0,
+    gapVenues,
   };
 }
 
@@ -305,6 +377,12 @@ export function drawHeatmap(
   const grid = pickGrid(data, venue);
   const matrix = pickMatrix(grid, side);
   const peak = grid?.maxIntensity ?? 0;
+
+  if (data?.kind === 'prints') {
+    for (const i of printGapColumnIndexes(data, venue)) {
+      fillPrintGap(ctx, plotX + i * cellW, plotY, Math.max(1, cellW + 0.4), plotH);
+    }
+  }
 
   for (let i = 0; i < nT; i += 1) {
     for (let j = 0; j < nP; j += 1) {

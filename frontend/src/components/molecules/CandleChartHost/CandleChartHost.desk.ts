@@ -99,6 +99,33 @@ function timeToX(scale: TimeScaleX, sec: number, span: SpanX | null): number | n
   return span.xFrom + (sec - span.from) * span.pxPerSec;
 }
 
+function fillChartGap(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+): void {
+  context.save();
+  context.beginPath();
+  context.rect(x, y, w, h);
+  context.clip();
+  context.globalAlpha = 0.9;
+  context.fillStyle = 'rgba(148, 163, 184, 0.16)';
+  context.fillRect(x, y, w, h);
+  context.strokeStyle = 'rgba(148, 163, 184, 0.8)';
+  context.lineWidth = 1;
+  context.setLineDash([]);
+  const step = 7;
+  for (let d = -h; d < w + h; d += step) {
+    context.beginPath();
+    context.moveTo(x + d, y);
+    context.lineTo(x + d - h, y + h);
+    context.stroke();
+  }
+  context.restore();
+}
+
 function heatAlpha(notional: number, max: number): number {
   if (max <= 0 || notional <= 0) return 0;
   return 0.12 + 0.38 * Math.min(1, notional / max);
@@ -136,6 +163,10 @@ class HeatRenderer implements IPrimitivePaneRenderer {
           const top = Math.min(yTop, yBot);
           const height = Math.max(1, Math.abs(yBot - yTop));
           if (top > mediaSize.height || top + height < 0) continue;
+          if (cell.gap) {
+            fillChartGap(context, left, top, width, height);
+            continue;
+          }
           context.fillStyle = cell.color;
           context.fillRect(left, top, width, height);
         }

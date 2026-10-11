@@ -480,6 +480,8 @@
     "evenBlend": "{{venues}} uses an even long/short split because no account ratio is stored for that venue.",
     "missing": "{{venues}} has no price and open interest in this window. Combined leaves those columns empty.",
     "missingPrints": "{{venues}} was not recorded in this window. Combined leaves those columns empty.",
+    "gap": "{{venues}} left time unrecorded in this window. Those columns are marked. A quiet recorded hour stays empty.",
+    "unrecorded": "Not recorded on {{venues}}. This column is a gap, not a quiet hour.",
     "source": "Source",
     "sourceLabel": "Liquidation source",
     "range": "Range",
@@ -680,6 +682,13 @@
       "short": "Short liquidations above price are closer ({{pct}}%).",
       "none": "No estimated liquidation pocket sits on either side.",
       "missing": "The closer liquidation side stays blank until {{venues}} have a map."
+    },
+    "prints": {
+      "long": "Measured prints over the last 24h are mostly long liquidations ({{long}} long, {{short}} short).",
+      "short": "Measured prints over the last 24h are mostly short liquidations ({{long}} long, {{short}} short).",
+      "even": "Measured long and short liquidations over the last 24h are about even ({{long}} long, {{short}} short).",
+      "quiet": "Measured liquidation prints over the last 24h are quiet.",
+      "missing": "Measured liquidation prints stay blank until {{venues}} cover the last 24h."
     },
     "funding": {
       "long": "Longs pay the combined funding ({{pct}}%).",

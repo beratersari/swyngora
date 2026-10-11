@@ -1560,20 +1560,28 @@ export interface paths {
         /**
          * Short coin read from the combined futures tape
          * @description One read for a coin, built from data Swyngora already collects.
-         *     Three clauses:
+         *     Each clause stays blank until every venue that publishes it covers it.
          *
          *     - `priceCvd.kind`: `price_up_cvd_down`, `price_down_cvd_up`, or `agrees`
          *       on the combined futures tape.
          *     - `openInterest.flow`: `opened`, `closed`, or `flat` over the last hour.
-         *     - `liquidation.side`: `long` when the nearest estimated long-liquidation
-         *       pocket below last is closer, `short` when the nearest short pocket
+         *     - `liquidation.side`: the leverage model. `long` when the nearest estimated
+         *       long pocket below last is closer, `short` when the nearest short pocket
          *       above last is closer, `none` when the map has no pocket.
          *       `distancePct` is that distance from last.
+         *     - `prints.side`: measured force-order prints over the last 24 hours.
+         *       `long` or `short` when that side is at least 60% of the notional,
+         *       `even` when both sides printed and neither reaches 60%, `quiet` when
+         *       the recorded total is under 1 USDT. `longNotional` and `shortNotional`
+         *       are USDT. The window is definite only when Binance, Bybit, and OKX
+         *       were watched from the open with no feed gap inside it.
+         *     - `funding.payer`, `crowd.lean`, and `size.kind` are the funding payer,
+         *       Binance and OKX top-versus-crowd, and whale versus retail.
          *
-         *     A clause is omitted, and `priceCvdMissing`, `openInterestMissing`, or
-         *     `liquidationMissing` names Binance, Bybit, or OKX, when that venue does
-         *     not cover it. A missing venue is not treated as zero. The same object
-         *     is stored on a paper fill at the moment the order is placed.
+         *     A missing clause's `*Missing` list names the venue. A missing venue is
+         *     not treated as zero. The same object is stored on a paper fill at the
+         *     moment the order is placed. An older fill does not grow a clause it
+         *     never stored.
          */
         get: operations["getMarketSituation"];
         put?: never;
@@ -9628,6 +9636,22 @@ export interface components {
                 distancePct?: number;
             };
             liquidationMissing?: string[];
+            /**
+             * @description Measured force-order prints over the last 24 hours. Separate from
+             *     liquidation, which is the leverage model. Set only when Binance,
+             *     Bybit, and OKX each recorded the whole window.
+             */
+            prints?: {
+                /** @enum {string} */
+                side?: "long" | "short" | "even" | "quiet";
+                /** @description Long-liquidation notional in USDT. */
+                longNotional?: number;
+                /** @description Short-liquidation notional in USDT. */
+                shortNotional?: number;
+                /** @description Always 24h. */
+                window?: string;
+            };
+            printsMissing?: string[];
             /** @description OI-weighted predicted funding. Set only when Binance, Bybit, and OKX all contribute. */
             funding?: {
                 /** @enum {string} */
@@ -12708,7 +12732,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Combined price-versus-CVD, 1h open interest, and closer liquidation side */
+            /** @description Combined tape, the leverage model, and measured 24h liquidation prints */
             200: {
                 headers: {
                     [name: string]: unknown;

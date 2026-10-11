@@ -388,6 +388,23 @@ func printColumnRecorded(col time.Time, step time.Duration, cov LiquidationCover
 	return !printGapContains(cov.Gaps, col)
 }
 
+// printWindowOverlapsGap reports whether any gap meets [from, until).
+// An open gap (To zero) runs through the window. A gap that ends at from does not meet it.
+func printWindowOverlapsGap(gaps []LiquidationGap, from, until time.Time) bool {
+	if !until.After(from) {
+		return false
+	}
+	for _, g := range gaps {
+		if g.From.IsZero() || !g.From.Before(until) {
+			continue
+		}
+		if g.To.IsZero() || g.To.After(from) {
+			return true
+		}
+	}
+	return false
+}
+
 // printGapContains reports whether at sits in a gap. An open gap (To zero) runs from From onward.
 func printGapContains(gaps []LiquidationGap, at time.Time) bool {
 	for _, g := range gaps {

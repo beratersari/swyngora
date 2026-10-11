@@ -36,12 +36,51 @@ type LiquidationBucketScan struct {
 	Latest  map[Exchange]time.Time
 }
 
+// LiquidationPrintSideRow is stored long and short notional for one venue and one coin.
+type LiquidationPrintSideRow struct {
+	Exchange Exchange
+	Long     float64
+	Short    float64
+}
+
+// LiquidationPrintSideScan is one symbol's print notionals in [from, to).
+// Latest is the newest stored print time per venue inside that window.
+type LiquidationPrintSideScan struct {
+	Rows   []LiquidationPrintSideRow
+	Latest map[Exchange]time.Time
+}
+
 // LiquidationDeskArchive rolls stored force-order prints across coins.
 // The overview and the all-coin chart use it so a 24-hour memory cap, or a
 // restart, does not hide prints SQLite already kept.
 type LiquidationDeskArchive interface {
 	SumLiquidationSymbols(ctx context.Context, from, to time.Time, exchanges []Exchange) (LiquidationSymbolScan, error)
 	BucketLiquidations(ctx context.Context, from, to time.Time, step time.Duration, exchanges []Exchange) (LiquidationBucketScan, error)
+	SumLiquidationPrintSides(ctx context.Context, symbol string, from, to time.Time, exchanges []Exchange) (LiquidationPrintSideScan, error)
+}
+
+// MergeLiquidationPrintSides adds prints newer than the newest stored row for
+// their venue. A print at that same millisecond is already in the sum.
+func MergeLiquidationPrintSides(rows []LiquidationPrintSideRow, latest map[Exchange]time.Time, events []LiquidationEvent, from, to time.Time) []LiquidationPrintSideRow {
+	out := append([]LiquidationPrintSideRow(nil), rows...)
+	idx := make(map[Exchange]int, len(out))
+	for i, row := range out {
+		idx[row.Exchange] = i
+	}
+	for _, e := range events {
+		if !liquidationEventOpen(e, from, to) || !liquidationEventAfterLatest(e, latest) {
+			continue
+		}
+		longN, shortN := liquidationSideNotional(e)
+		if i, ok := idx[e.Exchange]; ok {
+			out[i].Long += longN
+			out[i].Short += shortN
+			continue
+		}
+		idx[e.Exchange] = len(out)
+		out = append(out, LiquidationPrintSideRow{Exchange: e.Exchange, Long: longN, Short: shortN})
+	}
+	return out
 }
 
 // LiquidationBarGrid is the all-coin chart axis. The step is a whole number of

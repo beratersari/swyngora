@@ -1448,7 +1448,7 @@ func (c *APIClient) GetBreadth(ctx context.Context, exchange string, limit int) 
 	return c.get(ctx, "/api/v1/market/breadth", q)
 }
 
-// GetCoinSituation returns the short coin read: price versus CVD, 1h open interest, and the closer liquidation side.
+// GetCoinSituation returns the short coin read: price versus CVD, 1h open interest, the leverage model, and measured 24h liquidation prints.
 func (c *APIClient) GetCoinSituation(ctx context.Context, symbol string) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)

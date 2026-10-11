@@ -17,6 +17,7 @@ import {
   intensityFromNotional,
   pickGrid,
   pickMatrix,
+  printGapVenues,
 } from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.helpers';
 import type { LiqHeatSide, LiqHeatVenue } from '@/components/organisms/LiquidationHeatmap/LiquidationHeatmap.types';
 import type { ChartLinePoint } from '@/libs/utils';
@@ -464,6 +465,8 @@ export type LiqHeatNotes = {
   mix: string;
   evenVenues: Array<'binance' | 'bybit' | 'okx'>;
   missingVenues: string[];
+  /** Venues with at least one unrecorded print column. */
+  gapVenues: string[];
 };
 
 function columnStepSec(times: string[] | undefined, stepSec: number | undefined): number {
@@ -482,10 +485,13 @@ function priceHalfStep(prices: number[] | undefined, priceStep: number | undefin
   return 0;
 }
 
+const LIQ_GAP_COLOR = 'rgba(148, 163, 184, 0.45)';
+
 /**
  * Paint cells for the liquidation heatmap behind the candles.
- * A combined column with hasData false is left empty. Zero cells are skipped
- * so the chart background stays clear outside the hot zones.
+ * On measured prints, an unrecorded column is one full-height gap band.
+ * A model column with hasData false stays empty. Zero cells are skipped
+ * so a quiet recorded hour stays clear.
  */
 export function liqHeatCells(
   data: LiquidationHuntHeatmap | undefined,
@@ -503,14 +509,29 @@ export function liqHeatCells(
       for (const value of col ?? []) peak = Math.max(peak, value);
     }
   }
-  if (!(peak > 0)) return [];
+  const prints = data?.kind === 'prints';
+  const gapSpan = prints && (grid?.hasData ?? []).some((recorded) => recorded === false);
+  if (!(peak > 0) && !gapSpan) return [];
   const half = priceHalfStep(prices, data?.priceStep);
   const stepSec = columnStepSec(times, data?.stepSec);
+  const top = Math.max(...prices.filter((price) => Number.isFinite(price) && price > 0));
+  const bottom = Math.min(...prices.filter((price) => Number.isFinite(price) && price > 0));
   const out: CandleChartLiqCell[] = [];
   for (let i = 0; i < times.length; i += 1) {
-    if (grid?.hasData?.[i] === false) continue;
     const time = unixSeconds(times[i]);
     if (time == null) continue;
+    if (prints && grid?.hasData?.[i] === false && Number.isFinite(top) && Number.isFinite(bottom)) {
+      out.push({
+        time,
+        stepSec,
+        priceHi: top + half,
+        priceLo: Math.max(0, bottom - half),
+        color: LIQ_GAP_COLOR,
+        gap: true,
+      });
+      continue;
+    }
+    if (grid?.hasData?.[i] === false) continue;
     for (let j = 0; j < prices.length; j += 1) {
       const notional = cellValue(matrix, i, j);
       const price = prices[j] ?? 0;
@@ -728,6 +749,7 @@ export function liqHeatNotes(
     mix: formatLeverageMix(data?.leverageMix),
     evenVenues: evenBlendVenueIds(data, venue),
     missingVenues: (data?.missingVenues ?? []).filter((id) => id.length > 0),
+    gapVenues: printGapVenues(data, venue),
   };
 }
 

@@ -22,6 +22,7 @@ import {
   pickGrid,
   pickReview,
   pickSignalHorizon,
+  printGapVenues,
 } from './LiquidationHeatmap.helpers';
 import {
   Chip,
@@ -140,6 +141,9 @@ export function LiquidationHeatmap({
   const evenLabel = evenBlendVenueIds(data, venue)
     .map((id) => t(`liqHeatmap.venues.${id}`))
     .join(', ');
+  const gapLabel = printGapVenues(data, venue)
+    .map((id) => t(`liqHeatmap.venues.${id}`, { defaultValue: id }))
+    .join(', ');
 
   return (
     <Panel data-testid="liquidation-heatmap">
@@ -170,6 +174,11 @@ export function LiquidationHeatmap({
       {missingLabel ? (
         <Text variant="caption" color="secondary" data-testid="liquidation-heatmap-missing">
           {t(prints ? 'liqHeatmap.missingPrints' : 'liqHeatmap.missing', { venues: missingLabel })}
+        </Text>
+      ) : null}
+      {prints && gapLabel ? (
+        <Text variant="caption" color="secondary" data-testid="liquidation-heatmap-gap">
+          {t('liqHeatmap.gap', { venues: gapLabel })}
         </Text>
       ) : null}
       <ChipRow>
@@ -263,15 +272,27 @@ export function LiquidationHeatmap({
                 {formatLiqTime(hover.timeMs, range)} ·{' '}
                 {formatLiqPrice(hover.price, data?.priceStep ?? 0)}
               </Text>
-              <Text variant="caption" color="primary">
-                {t('liqHeatmap.total')}: {formatLiqNotional(hover.totals)}
-              </Text>
-              <Text variant="caption" color="secondary">
-                {t('liqHeatmap.longs')}: {formatLiqNotional(hover.longs)}
-              </Text>
-              <Text variant="caption" color="secondary">
-                {t('liqHeatmap.shorts')}: {formatLiqNotional(hover.shorts)}
-              </Text>
+              {hover.unrecorded ? (
+                <Text variant="caption" color="primary">
+                  {t('liqHeatmap.unrecorded', {
+                    venues: hover.gapVenues
+                      .map((id) => t(`liqHeatmap.venues.${id}`, { defaultValue: id }))
+                      .join(', '),
+                  })}
+                </Text>
+              ) : (
+                <>
+                  <Text variant="caption" color="primary">
+                    {t('liqHeatmap.total')}: {formatLiqNotional(hover.totals)}
+                  </Text>
+                  <Text variant="caption" color="secondary">
+                    {t('liqHeatmap.longs')}: {formatLiqNotional(hover.longs)}
+                  </Text>
+                  <Text variant="caption" color="secondary">
+                    {t('liqHeatmap.shorts')}: {formatLiqNotional(hover.shorts)}
+                  </Text>
+                </>
+              )}
             </HoverCard>
           ) : null}
         </MapFrame>

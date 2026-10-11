@@ -198,11 +198,41 @@ describe('LiquidationHeatmap', () => {
       />,
     );
     expect(screen.getByText(/Stored liquidation prints/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('liquidation-heatmap-gap')).not.toBeInTheDocument();
     expect(screen.getByTestId('liquidation-heatmap-missing')).toHaveTextContent(/was not recorded/i);
     expect(screen.getByTestId('liquidation-heatmap-coverage')).toHaveTextContent(/were recorded/i);
     expect(screen.queryByTestId('liquidation-heatmap-review')).not.toBeInTheDocument();
     expect(screen.queryByTestId('liquidation-heatmap-mix')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Model' }));
     expect(onSourceChange).toHaveBeenCalledWith('model');
+  });
+
+  it('names an unrecorded print column and leaves a quiet recorded hour unmarked', () => {
+    const props = {
+      data: {
+        ...data,
+        kind: 'prints' as const,
+        leverageMix: [],
+        binance: { exchange: 'binance', hasData: [true, false] },
+        bybit: { exchange: 'bybit', hasData: [true, true] },
+        okx: { exchange: 'okx', hasData: [false, true] },
+        combined: { ...data.combined, hasData: [false, false] },
+      },
+      range: '24h' as const,
+      onRangeChange: () => undefined,
+      venue: 'combined' as const,
+      onVenueChange: () => undefined,
+      side: 'totals' as const,
+      onSideChange: () => undefined,
+      source: 'prints' as const,
+    };
+    const { rerender } = renderWithProviders(<LiquidationHeatmap {...props} />);
+    const gap = screen.getByTestId('liquidation-heatmap-gap');
+    expect(gap).toHaveTextContent('Binance');
+    expect(gap).toHaveTextContent('OKX');
+    expect(gap).not.toHaveTextContent('Bybit');
+    expect(gap).toHaveTextContent(/quiet recorded hour stays empty/i);
+    rerender(<LiquidationHeatmap {...props} source="model" />);
+    expect(screen.queryByTestId('liquidation-heatmap-gap')).not.toBeInTheDocument();
   });
 });

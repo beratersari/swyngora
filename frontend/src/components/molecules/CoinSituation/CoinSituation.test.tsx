@@ -24,6 +24,38 @@ describe('CoinSituation', () => {
     expect(screen.queryByText(/building/)).not.toBeInTheDocument();
   });
 
+  it('states the leverage model and the measured prints as two facts', () => {
+    renderWithProviders(
+      <CoinSituation
+        report={{
+          symbol: 'BTCUSDT',
+          liquidation: { side: 'long', distancePct: 1.2 },
+          prints: { side: 'short', longNotional: 3_200, shortNotional: 2_500_000, window: '24h' },
+        }}
+      />,
+    );
+    expect(screen.getByText('Long liquidations below price are closer (1.2%).')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Measured prints over the last 24h are mostly short liquidations (3.20K long, 2.50M short).',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('names the venues that leave measured prints blank', () => {
+    renderWithProviders(
+      <CoinSituation
+        report={{
+          symbol: 'BTCUSDT',
+          printsMissing: ['okx'],
+        }}
+      />,
+    );
+    expect(
+      screen.getByText('Measured liquidation prints stay blank until OKX cover the last 24h.'),
+    ).toBeInTheDocument();
+  });
+
   it('adds funding, the crowd gap, and whale versus retail when those clauses are set', () => {
     renderWithProviders(
       <CoinSituation

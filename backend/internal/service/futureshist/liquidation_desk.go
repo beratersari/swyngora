@@ -2,6 +2,7 @@ package futureshist
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
@@ -18,6 +19,19 @@ func (s *Service) SumLiquidationSymbols(ctx context.Context, from, to time.Time,
 		return domain.LiquidationSymbolScan{}, nil
 	}
 	return arch.SumLiquidationSymbols(ctx, from, to, exchanges)
+}
+
+// SumLiquidationPrintSides reads one symbol's stored long and short notionals.
+// A store that cannot answer returns an error so the caller leaves the clause blank.
+func (s *Service) SumLiquidationPrintSides(ctx context.Context, symbol string, from, to time.Time, exchanges []domain.Exchange) (domain.LiquidationPrintSideScan, error) {
+	if s == nil || s.Store == nil {
+		return domain.LiquidationPrintSideScan{}, fmt.Errorf("futures store is nil")
+	}
+	arch, ok := s.Store.(domain.LiquidationDeskArchive)
+	if !ok {
+		return domain.LiquidationPrintSideScan{}, fmt.Errorf("liquidation print sides are not stored")
+	}
+	return arch.SumLiquidationPrintSides(ctx, symbol, from, to, exchanges)
 }
 
 // BucketLiquidations reads all-coin time bars from the print archive.

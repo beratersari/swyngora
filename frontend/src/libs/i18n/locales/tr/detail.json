@@ -480,6 +480,8 @@
     "evenBlend": "{{venues}} long/short eşit bölünür; bu borsa için kayıtlı hesap oranı yok.",
     "missing": "{{venues}} bu pencerede fiyat ve açık pozisyon taşımıyor. Birleşik harita o sütunları boş bırakır.",
     "missingPrints": "{{venues}} bu pencerede kayıtlı değil. Birleşik harita o sütunları boş bırakır.",
+    "gap": "{{venues}} bu pencerede kayıtsız zaman bıraktı. O sütunlar işaretli. Sessiz kayıtlı bir saat boş kalır.",
+    "unrecorded": "{{venues}} kaydı yok. Bu sütun bir boşluk, sessiz bir saat değil.",
     "source": "Kaynak",
     "sourceLabel": "Likidasyon kaynağı",
     "range": "Aralık",
@@ -680,6 +682,13 @@
       "short": "Fiyatın üstündeki short likidasyonlar daha yakın (%{{pct}}).",
       "none": "İki tarafta da tahmini likidasyon cebi yok.",
       "missing": "Daha yakın likidasyon tarafı, {{venues}} haritayı verene kadar boş kalır."
+    },
+    "prints": {
+      "long": "Son 24 saatte ölçülen baskılar çoğunlukla long likidasyon ({{long}} long, {{short}} short).",
+      "short": "Son 24 saatte ölçülen baskılar çoğunlukla short likidasyon ({{long}} long, {{short}} short).",
+      "even": "Son 24 saatte ölçülen long ve short likidasyonlar yaklaşık denk ({{long}} long, {{short}} short).",
+      "quiet": "Son 24 saatte ölçülen likidasyon baskısı sakin.",
+      "missing": "Ölçülen likidasyon baskıları, {{venues}} son 24 saati kapatana kadar boş kalır."
     },
     "funding": {
       "long": "Longlar birleşik fonlamayı ödüyor (%{{pct}}).",

@@ -24,6 +24,17 @@ const (
 	// SituationLiqNone means the map is complete and neither side has a pocket.
 	SituationLiqNone = "none"
 
+	// Measured force-order prints over the last 24 hours. These are separate
+	// from the estimated pocket above.
+	SituationPrintLong  = "long"
+	SituationPrintShort = "short"
+	SituationPrintQuiet = "quiet"
+	SituationPrintEven  = "even"
+
+	// situationPrintLead is the share the larger side needs before the window
+	// is called long or short. Under this, both sides printed and the read is even.
+	situationPrintLead = 0.6
+
 	// Whale versus retail on the latest sized combined bar.
 	SituationSizeWhaleBuyRetailSell = "whale_buy_retail_sell"
 	SituationSizeWhaleSellRetailBuy = "whale_sell_retail_buy"
@@ -35,7 +46,7 @@ const (
 	SituationSizeRetailSell         = "retail_sell"
 	SituationSizeFlat               = "flat"
 
-	situationNote = "Each clause stays blank until every venue that publishes it covers it. Funding, price versus CVD, open interest, the liquidation side, and whale versus retail need Binance, Bybit, and OKX. Top versus crowd needs Binance and OKX; Bybit does not publish a top-trader ratio. A named venue is missing from that clause and is not treated as zero. Informational only — not financial advice."
+	situationNote = "Each clause stays blank until every venue that publishes it covers it. Funding, price versus CVD, open interest, the liquidation model, measured liquidation prints, and whale versus retail need Binance, Bybit, and OKX. Top versus crowd needs Binance and OKX; Bybit does not publish a top-trader ratio. A named venue is missing from that clause and is not treated as zero. The model names the closer estimated pocket. Measured prints are force-orders over the last 24 hours, and that total is definite only when the window was recorded. Informational only — not financial advice."
 	// situationSizeFlatUSD ignores dust smaller than one USDT on a sized bar.
 	situationSizeFlatUSD = 1.0
 )
@@ -51,6 +62,8 @@ type CoinSituation struct {
 	OpenInterestMissing []string               `json:"openInterestMissing,omitempty"`
 	Liquidation         *SituationLiquidation  `json:"liquidation,omitempty"`
 	LiquidationMissing  []string               `json:"liquidationMissing,omitempty"`
+	Prints              *SituationPrints       `json:"prints,omitempty"`
+	PrintsMissing       []string               `json:"printsMissing,omitempty"`
 	Funding             *SituationFunding      `json:"funding,omitempty"`
 	FundingMissing      []string               `json:"fundingMissing,omitempty"`
 	Crowd               *SituationCrowd        `json:"crowd,omitempty"`
@@ -96,10 +109,28 @@ type SituationLiquidation struct {
 	DistancePct float64 `json:"distancePct,omitempty"`
 }
 
+// SituationPrints is measured force-order notional over the last 24 hours.
+// Side is long, short, even, or quiet. Notionals are USDT.
+type SituationPrints struct {
+	Side          string  `json:"side"`
+	LongNotional  float64 `json:"longNotional,omitempty"`
+	ShortNotional float64 `json:"shortNotional,omitempty"`
+	Window        string  `json:"window"`
+}
+
+// SituationPrintInput is the 24h print archive plus the live coverage clock.
+// ArchiveOK is false when the stored sum could not be read. The clause then
+// stays blank, because the memory book alone is not the whole window.
+type SituationPrintInput struct {
+	ArchiveOK bool
+	Coverage  []LiquidationCoverage
+	Sides     []LiquidationPrintSideRow
+}
+
 // BuildCoinSituation folds an already-loaded tape into one read.
 // A clause is set only when every venue that publishes it covers it.
 // funding and longs may be nil; those clauses then stay blank and name who is absent.
-func BuildCoinSituation(symbol string, now time.Time, cvd *CVDReport, oi *OpenInterestSnapshot, levels *LiquidationLevelsReport, funding *FundingSnapshot, longs *LongShortSnapshot) *CoinSituation {
+func BuildCoinSituation(symbol string, now time.Time, cvd *CVDReport, oi *OpenInterestSnapshot, levels *LiquidationLevelsReport, funding *FundingSnapshot, longs *LongShortSnapshot, prints SituationPrintInput) *CoinSituation {
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
@@ -122,6 +153,11 @@ func BuildCoinSituation(symbol string, now time.Time, cvd *CVDReport, oi *OpenIn
 		out.Liquidation = &SituationLiquidation{Side: side, DistancePct: dist}
 	} else {
 		out.LiquidationMissing = missing
+	}
+	if row, ok, missing := situationPrints(symbol, now, prints); ok {
+		out.Prints = &row
+	} else {
+		out.PrintsMissing = missing
 	}
 	if payer, rate, ok, missing := situationFunding(funding); ok {
 		out.Funding = &SituationFunding{Payer: payer, RatePct: rate}
@@ -175,6 +211,15 @@ func SituationLeft(entry, live *CoinSituation) (bool, []string) {
 		}
 		if got != entry.Liquidation.Side {
 			changed = append(changed, "liquidation")
+		}
+	}
+	if entry.Prints != nil && entry.Prints.Side != "" {
+		got := ""
+		if live != nil && live.Prints != nil {
+			got = live.Prints.Side
+		}
+		if got != entry.Prints.Side {
+			changed = append(changed, "prints")
 		}
 	}
 	if entry.Funding != nil && entry.Funding.Payer != "" {
@@ -472,6 +517,78 @@ func situationLiquidation(report *LiquidationLevelsReport) (side string, distanc
 	}
 }
 
+func situationPrints(symbol string, now time.Time, in SituationPrintInput) (SituationPrints, bool, []string) {
+	if !in.ArchiveOK {
+		return SituationPrints{}, false, situationVenueNames()
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	now = now.UTC()
+	from := now.Add(-24 * time.Hour)
+	byEx := map[Exchange]LiquidationPrintSideRow{}
+	for _, row := range in.Sides {
+		byEx[row.Exchange] = row
+	}
+	var missing []string
+	var longN, shortN float64
+	for _, ex := range FuturesVenues() {
+		cov := printCoverage(ex, symbol, in.Coverage)
+		if !situationPrintWindowRecorded(cov, from, now) {
+			missing = append(missing, string(ex))
+			continue
+		}
+		row := byEx[ex]
+		if row.Long > 0 {
+			longN += row.Long
+		}
+		if row.Short > 0 {
+			shortN += row.Short
+		}
+	}
+	if len(missing) > 0 {
+		return SituationPrints{}, false, missing
+	}
+	return SituationPrints{
+		Side:          situationPrintSide(longN, shortN),
+		LongNotional:  roundSituationUSD(longN),
+		ShortNotional: roundSituationUSD(shortN),
+		Window:        LiquidationWindow24h,
+	}, true, nil
+}
+
+// situationPrintWindowRecorded is true when the watch started at or before
+// the window open and no known gap meets [from, until).
+func situationPrintWindowRecorded(cov LiquidationCoverage, from, until time.Time) bool {
+	if cov.FirstWatch.IsZero() || cov.FirstWatch.After(from) {
+		return false
+	}
+	return !printWindowOverlapsGap(cov.Gaps, from, until)
+}
+
+func situationPrintSide(longN, shortN float64) string {
+	total := longN + shortN
+	if total < situationSizeFlatUSD {
+		return SituationPrintQuiet
+	}
+	if longN > 0 && shortN > 0 {
+		larger := longN
+		if shortN > larger {
+			larger = shortN
+		}
+		if larger/total < situationPrintLead {
+			return SituationPrintEven
+		}
+	}
+	if shortN > longN {
+		return SituationPrintShort
+	}
+	if longN > shortN {
+		return SituationPrintLong
+	}
+	return SituationPrintEven
+}
+
 func situationVenueNames() []string {
 	out := make([]string, 0, 3)
 	for _, ex := range FuturesVenues() {
@@ -485,4 +602,11 @@ func roundSituationPct(v float64) float64 {
 		return 0
 	}
 	return math.Round(v*10) / 10
+}
+
+func roundSituationUSD(v float64) float64 {
+	if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 {
+		return 0
+	}
+	return math.Round(v*100) / 100
 }

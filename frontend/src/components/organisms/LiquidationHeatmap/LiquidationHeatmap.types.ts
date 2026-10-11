@@ -28,6 +28,10 @@ export type LiqHeatHover = {
   longs: number;
   shorts: number;
   totals: number;
+  /** True when this print column was not recorded. A quiet recorded hour stays false. */
+  unrecorded: boolean;
+  /** Venues that lack this column. Combined names each one. */
+  gapVenues: string[];
 };
 
 export type LiqHeatLayout = {

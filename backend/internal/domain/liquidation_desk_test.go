@@ -6,6 +6,29 @@ import (
 	"time"
 )
 
+func TestMergeLiquidationPrintSides_SkipsTheStoredMillisecond(t *testing.T) {
+	storedAt := time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)
+	rows := []LiquidationPrintSideRow{{Exchange: ExchangeBinance, Long: 100}}
+	latest := map[Exchange]time.Time{ExchangeBinance: storedAt}
+	from := storedAt.Add(-time.Hour)
+	to := storedAt.Add(time.Minute)
+	events := []LiquidationEvent{
+		{Exchange: ExchangeBinance, Symbol: "BTCUSDT", Side: LiquidationSideLong, Notional: 50, Time: storedAt},
+		{Exchange: ExchangeBinance, Symbol: "BTCUSDT", Side: LiquidationSideShort, Notional: 7, Time: storedAt.Add(time.Millisecond)},
+		{Exchange: ExchangeBybit, Symbol: "BTCUSDT", Side: LiquidationSideLong, Notional: 4, Time: storedAt},
+	}
+	got := MergeLiquidationPrintSides(rows, latest, events, from, to)
+	if len(got) != 2 {
+		t.Fatalf("%+v", got)
+	}
+	if got[0].Long != 100 || got[0].Short != 7 {
+		t.Fatalf("binance %+v", got[0])
+	}
+	if got[1].Exchange != ExchangeBybit || got[1].Long != 4 {
+		t.Fatalf("bybit %+v", got[1])
+	}
+}
+
 func TestMergeLiquidationSymbolTail_SkipsStoredAndKeepsNewer(t *testing.T) {
 	storedAt := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	rows := []LiquidationSymbolSum{{
