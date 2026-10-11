@@ -19,15 +19,16 @@ func (h *MarketHandler) GetParticipation(w http.ResponseWriter, r *http.Request)
 }
 
 type participationWindowDTO struct {
-	Window   string `json:"window"`
-	Volume   string `json:"volume"`
-	OiDelta  string `json:"oiDelta"`
-	Ratio    string `json:"ratio,omitempty"`
-	RatioPct string `json:"ratioPct,omitempty"`
-	Transfer string `json:"transfer,omitempty"`
-	Lean     string `json:"lean"`
-	Complete bool   `json:"complete"`
-	Summary  string `json:"summary"`
+	Window   string   `json:"window"`
+	Volume   string   `json:"volume"`
+	OiDelta  string   `json:"oiDelta"`
+	Ratio    string   `json:"ratio,omitempty"`
+	RatioPct string   `json:"ratioPct,omitempty"`
+	Transfer string   `json:"transfer,omitempty"`
+	Lean     string   `json:"lean"`
+	Complete bool     `json:"complete"`
+	Summary  string   `json:"summary"`
+	Missing  []string `json:"missing,omitempty"`
 }
 
 type participationVenueDTO struct {
@@ -81,7 +82,7 @@ func participationWindowToDTO(w domain.ParticipationWindow) participationWindowD
 	out := participationWindowDTO{
 		Window: w.Window, Volume: formatHistQty(w.Volume),
 		OiDelta: domain.FormatSignedQty(w.OIDelta), Lean: w.Lean,
-		Complete: w.Complete, Summary: w.Summary,
+		Complete: w.Complete, Summary: w.Summary, Missing: append([]string{}, w.Missing...),
 	}
 	if w.Volume > 0 {
 		out.Ratio = formatHistQty(w.Ratio)

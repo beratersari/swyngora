@@ -1019,19 +1019,20 @@ type openInterestLevelDTO struct {
 }
 
 type openInterestWindowDTO struct {
-	Window            string `json:"window"`
-	OpenInterest      string `json:"openInterest"`
-	OpenInterestValue string `json:"openInterestValue"`
-	Change            string `json:"change"`
-	ChangePct         string `json:"changePct"`
-	ChangeValue       string `json:"changeValue"`
-	ChangeValuePct    string `json:"changeValuePct"`
-	Direction         string `json:"direction"`
-	Flow              string `json:"flow,omitempty"`
-	OpenedValue       string `json:"openedValue,omitempty"`
-	ClosedValue       string `json:"closedValue,omitempty"`
-	Complete          bool   `json:"complete"`
-	SampleTime        string `json:"sampleTime,omitempty"`
+	Window            string   `json:"window"`
+	OpenInterest      string   `json:"openInterest"`
+	OpenInterestValue string   `json:"openInterestValue"`
+	Change            string   `json:"change"`
+	ChangePct         string   `json:"changePct"`
+	ChangeValue       string   `json:"changeValue"`
+	ChangeValuePct    string   `json:"changeValuePct"`
+	Direction         string   `json:"direction"`
+	Flow              string   `json:"flow,omitempty"`
+	OpenedValue       string   `json:"openedValue,omitempty"`
+	ClosedValue       string   `json:"closedValue,omitempty"`
+	Complete          bool     `json:"complete"`
+	SampleTime        string   `json:"sampleTime,omitempty"`
+	Missing           []string `json:"missing,omitempty"`
 }
 
 type openInterestVenueDTO struct {
@@ -1051,6 +1052,7 @@ type openInterestResponse struct {
 	LongShort  *longShortResponse      `json:"longShort,omitempty"`
 	AsOf       string                  `json:"asOf,omitempty"`
 	VenueCount int                     `json:"venueCount"`
+	Missing    []string                `json:"missing,omitempty"`
 	Note       string                  `json:"note"`
 }
 
@@ -1102,6 +1104,7 @@ type fundingPressureDTO struct {
 	IntervalHours     int                       `json:"intervalHours,omitempty"`
 	Summary           string                    `json:"summary,omitempty"`
 	Time              string                    `json:"time,omitempty"`
+	Missing           []string                  `json:"missing,omitempty"`
 }
 
 type fundingPressurePointDTO struct {
@@ -1282,7 +1285,7 @@ func oiWindowsDTO(in []domain.OpenInterestWindow) []openInterestWindowDTO {
 			Window: w.Window, OpenInterest: w.OpenInterest, OpenInterestValue: w.OpenInterestValue,
 			Change: w.Change, ChangePct: w.ChangePct, ChangeValue: w.ChangeValue, ChangeValuePct: w.ChangeValuePct,
 			Direction: w.Direction, Flow: w.Flow, OpenedValue: w.OpenedValue, ClosedValue: w.ClosedValue,
-			Complete: w.Complete,
+			Complete: w.Complete, Missing: append([]string{}, w.Missing...),
 		}
 		if !w.SampleTime.IsZero() {
 			row.SampleTime = w.SampleTime.UTC().Format(time.RFC3339Nano)
@@ -1309,8 +1312,8 @@ func openInterestToDTO(a *domain.OpenInterestSnapshot) openInterestResponse {
 	out := openInterestResponse{
 		Symbol: a.Symbol, Exchange: a.Exchange, Unit: a.Unit,
 		Current: oiLevelDTO(a.Current), Windows: oiWindowsDTO(a.Windows),
-		Venues: venues, AsOf: asOf, VenueCount: a.VenueCount,
-		Note: "Binance USD-M and Bybit linear perpetual open interest. contracts is outstanding size in the base asset (Bybit uses singleOpenInterest — one side — not the 2× both-sides openInterest). value is USDT notional. Windows 1h/4h/24h (and 5m) show how much OI opened or closed vs ~window ago as USDT amount and percent; venues stay separate. funding is the predicted next rate plus recent settlements; funding.pressure is OI-weighted combined predicted funding. longShort is the share of accounts that are long vs short; longShort.gap is top-trader long% minus crowd long%; longShort.divergence is top vs price (more long while price falls). Combined all sums OI across venues. Informational only.",
+		Venues: venues, AsOf: asOf, VenueCount: a.VenueCount, Missing: append([]string{}, a.Missing...),
+		Note: "Binance USD-M and Bybit linear perpetual open interest. contracts is outstanding size in the base asset (Bybit uses singleOpenInterest — one side — not the 2× both-sides openInterest). value is USDT notional. Windows 1h/4h/24h (and 5m) show how much OI opened or closed vs ~window ago as USDT amount and percent; venues stay separate. funding is the predicted next rate plus recent settlements; funding.pressure is OI-weighted combined predicted funding. longShort is the share of accounts that are long vs short; longShort.gap is top-trader long% minus crowd long%; longShort.divergence is top vs price (more long while price falls). Combined sums only when every venue that was asked is in. A missing venue is named in missing and is not counted as zero. A window that lacks a sample on any of those venues is left blank. Informational only.",
 	}
 	if a.Funding != nil {
 		f := fundingToDTO(a.Funding)
@@ -1378,7 +1381,7 @@ func fundingToDTO(a *domain.FundingSnapshot) fundingRateResponse {
 	out := fundingRateResponse{
 		Symbol: a.Symbol, Exchange: a.Exchange, Venues: venues, History: hist,
 		AsOf: asOf, VenueCount: a.VenueCount,
-		Note: "Binance USD-M, Bybit linear, and OKX USDT-swap funding. rate is decimal (0.0001 = 0.01%). ratePct is percent. payer is who pays at settlement (positive rate → longs pay shorts). current is the predicted next payment, not yet settled (hoisted only for a single venue). history is recent settlements, newest first. pressure is OI-weighted combined predicted funding (USDT open interest share); pressureHistory / pressureWindows / pressureMoves show how that blend changed. Informational only.",
+		Note: "Binance USD-M, Bybit linear, and OKX USDT-swap funding. rate is decimal (0.0001 = 0.01%). ratePct is percent. payer is who pays at settlement (positive rate → longs pay shorts). current is the predicted next payment, not yet settled (hoisted only for a single venue). history is recent settlements, newest first. pressure is OI-weighted combined predicted funding (USDT open interest share); pressureHistory / pressureWindows / pressureMoves show how that blend changed. Combined pressure stays blank until every venue that was asked is in the blend. A missing venue is named in pressure.missing and is not left out of the weight. Informational only.",
 	}
 	if a.Current != nil {
 		cur := fundingCurrentDTOFrom(*a.Current)
@@ -1414,7 +1417,8 @@ func fundingPressureDTOFrom(p domain.FundingPressure) fundingPressureDTO {
 		Rate: p.Rate, RatePct: p.RatePct, Payer: p.Payer,
 		OpenInterestValue: p.OpenInterestValue, VenueCount: p.VenueCount,
 		DominantVenue: p.DominantVenue, IntervalHours: p.IntervalHours, Summary: p.Summary,
-		Venues: make([]fundingPressureVenueDTO, 0, len(p.Venues)),
+		Missing: append([]string{}, p.Missing...),
+		Venues:  make([]fundingPressureVenueDTO, 0, len(p.Venues)),
 	}
 	if !p.NextFundingTime.IsZero() {
 		out.NextFundingTime = p.NextFundingTime.UTC().Format(time.RFC3339Nano)

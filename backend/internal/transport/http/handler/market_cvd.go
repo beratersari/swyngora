@@ -127,6 +127,7 @@ type cvdVenueDTO struct {
 	Summary       string            `json:"summary"`
 	Error         string            `json:"error,omitempty"`
 	Complete      bool              `json:"complete"`
+	Missing       []string          `json:"missing,omitempty"`
 }
 
 type cvdResponse struct {
@@ -237,6 +238,7 @@ func cvdVenueToDTO(v domain.CVDVenueSeries) cvdVenueDTO {
 		Divergence:    div,
 		VenueSplit:    cvdVenueSplitToDTO(v.VenueSplit),
 		Summary:       v.Summary, Error: v.Error, Complete: v.Complete,
+		Missing: append([]string{}, v.Missing...),
 	}
 	if v.OverlapFrom != nil && !v.OverlapFrom.IsZero() {
 		t := v.OverlapFrom.UTC()

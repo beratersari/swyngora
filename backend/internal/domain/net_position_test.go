@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -76,5 +77,31 @@ func TestBuildNetPosition_Windows(t *testing.T) {
 	}
 	if got.Summary == "" || got.Note == "" {
 		t.Fatal("missing summary or note")
+	}
+}
+
+func TestBuildNetPosition_MissingVenueBlanksWindow(t *testing.T) {
+	now := time.Date(2026, 9, 22, 12, 0, 0, 0, time.UTC)
+	series := &OpenInterestSeries{
+		Exchange: ExchangeBinance,
+		Current:  OpenInterestPoint{Time: now, Value: 130},
+		History: []OpenInterestPoint{
+			{Time: now.Add(-15 * time.Minute), Value: 120},
+		},
+	}
+	buckets := []TakerBucket{
+		{Start: now.Add(-15 * time.Minute), BuyNotional: 30, SellNotional: 10},
+		{Start: now.Add(-5 * time.Minute), BuyNotional: 20, SellNotional: 10},
+	}
+	got := BuildNetPosition("BTCUSDT", "all", []NetPositionVenueInput{
+		{Exchange: ExchangeBinance, Series: series, Buckets: buckets, Bar: 5 * time.Minute},
+		{Exchange: ExchangeBybit, Error: "oi down"},
+	}, now)
+	m15 := got.Windows[0]
+	if m15.Complete || m15.NetLong != 0 || m15.NetShort != 0 || m15.Buy != 0 {
+		t.Fatalf("%+v", m15)
+	}
+	if len(m15.Missing) != 1 || m15.Missing[0] != "bybit" || !strings.Contains(m15.Summary, "bybit") {
+		t.Fatalf("summary %+v", m15)
 	}
 }

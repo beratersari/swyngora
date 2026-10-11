@@ -59,6 +59,9 @@ type OpenInterestWindow struct {
 	ClosedValue       string // USDT notional closed when OI fell
 	Complete          bool
 	SampleTime        time.Time
+	// Missing names venues that were passed in and lacked a usable sample.
+	// A missing venue is not counted as zero.
+	Missing []string
 }
 
 // OpenInterestVenueSnap is one venue inside a combined snapshot.
@@ -78,8 +81,11 @@ type OpenInterestSnapshot struct {
 	Venues     []OpenInterestVenueSnap
 	AsOf       time.Time
 	VenueCount int
-	Funding    *FundingSnapshot   // current rate + recent settlements when available
-	LongShort  *LongShortSnapshot // account long/short ratio when available
+	// Missing names venues asked for on exchange=all that did not return a series.
+	// Combined current and windows stay blank until they are in.
+	Missing   []string
+	Funding   *FundingSnapshot   // current rate + recent settlements when available
+	LongShort *LongShortSnapshot // account long/short ratio when available
 }
 
 // ParseOpenInterestExchange accepts binance, bybit, okx, hyperliquid, or all (empty = all).
@@ -233,17 +239,19 @@ func venueWindows(s *OpenInterestSeries, now time.Time) []OpenInterestWindow {
 }
 
 func combineOpenInterestWindow(series []*OpenInterestSeries, windowID string, dur time.Duration, now time.Time) OpenInterestWindow {
-	out := OpenInterestWindow{Window: windowID, Complete: true}
 	var pastC, pastV, curC, curV float64
 	used := 0
 	var oldest time.Time
+	var missing []string
 	for _, s := range series {
 		if s == nil {
 			continue
 		}
 		w := SummarizeOpenInterestWindow(s, windowID, dur, now)
-		if w.SampleTime.IsZero() {
-			out.Complete = false
+		// A venue with no sample, or a sample outside the slack, is not zero.
+		// The other venues' change is not published as the combined window.
+		if w.SampleTime.IsZero() || !w.Complete {
+			missing = append(missing, exchangeLabel(s.Exchange))
 			continue
 		}
 		past, _ := FindOpenInterestSample(s.History, now.Add(-dur), OpenInterestSampleSlack(dur))
@@ -255,14 +263,15 @@ func combineOpenInterestWindow(series []*OpenInterestSeries, windowID string, du
 		if oldest.IsZero() || w.SampleTime.Before(oldest) {
 			oldest = w.SampleTime
 		}
-		if !w.Complete {
-			out.Complete = false
+	}
+	if len(missing) > 0 || used == 0 {
+		return OpenInterestWindow{
+			Window:   windowID,
+			Complete: false,
+			Missing:  uniqueSortedStrings(missing),
 		}
 	}
-	if used == 0 {
-		out.Complete = false
-		return out
-	}
+	out := OpenInterestWindow{Window: windowID, Complete: true}
 	dC := curC - pastC
 	dV := curV - pastV
 	pC, okC := oiPctChange(curC, pastC)
@@ -386,6 +395,57 @@ func BuildOpenInterestSnapshot(exchange, symbol string, series []*OpenInterestSe
 	for _, w := range OpenInterestWindows {
 		out.Windows = append(out.Windows, combineOpenInterestWindow(clean, w.ID, w.Dur, now))
 	}
+	return out
+}
+
+// WithholdCombinedOpenInterest blanks the combined current and every combined
+// window when a venue that was asked for did not return. Per-venue rows stay.
+// A missing venue is named and is not counted as zero.
+func WithholdCombinedOpenInterest(snap *OpenInterestSnapshot, missing []string) {
+	if snap == nil || snap.Exchange != "all" || len(missing) == 0 {
+		return
+	}
+	names := uniqueSortedStrings(missing)
+	snap.Missing = names
+	snap.Current = OpenInterestLevel{}
+	for i := range snap.Windows {
+		id := snap.Windows[i].Window
+		snap.Windows[i] = OpenInterestWindow{
+			Window:   id,
+			Complete: false,
+			Missing:  append([]string{}, names...),
+		}
+	}
+}
+
+// exchangeLabel is the venue name used when a combined read names who is missing.
+func exchangeLabel(ex Exchange) string {
+	s := strings.TrimSpace(string(ex))
+	if s == "" {
+		return "venue"
+	}
+	return s
+}
+
+// uniqueSortedStrings returns a sorted copy without blanks or duplicates.
+func uniqueSortedStrings(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		if _, ok := seen[s]; ok {
+			continue
+		}
+		seen[s] = struct{}{}
+		out = append(out, s)
+	}
+	sort.Strings(out)
 	return out
 }
 

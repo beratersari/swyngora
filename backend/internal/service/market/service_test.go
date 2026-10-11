@@ -967,6 +967,52 @@ func TestGetOpenInterest_Combined(t *testing.T) {
 	}
 }
 
+func TestGetOpenInterest_FailedVenueBlanksCombined(t *testing.T) {
+	now := time.Now().UTC()
+	bin := &fakeOI{ser: &domain.OpenInterestSeries{
+		Exchange: domain.ExchangeBinance,
+		Current:  domain.OpenInterestPoint{Time: now, Contracts: 100, Value: 10000},
+		History: []domain.OpenInterestPoint{
+			{Time: now.Add(-time.Hour), Contracts: 80, Value: 8000},
+		},
+	}}
+	byb := &fakeOI{err: errors.New("bybit down")}
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithOpenInterest(map[domain.Exchange]domain.OpenInterestPort{
+		domain.ExchangeBinance: bin,
+		domain.ExchangeBybit:   byb,
+	})
+	got, err := svc.GetOpenInterest(context.Background(), "all", "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.VenueCount != 1 || len(got.Venues) != 1 || got.Venues[0].Exchange != "binance" {
+		t.Fatalf("venue row %+v", got.Venues)
+	}
+	if got.Venues[0].Current.Contracts != "100" {
+		t.Fatalf("binance current %+v", got.Venues[0].Current)
+	}
+	if got.Current.Contracts != "" || got.Current.Value != "" {
+		t.Fatalf("combined current %+v", got.Current)
+	}
+	found := false
+	for _, name := range got.Missing {
+		if name == "bybit" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("missing %+v", got.Missing)
+	}
+	if len(got.Windows) == 0 {
+		t.Fatal("windows")
+	}
+	for _, w := range got.Windows {
+		if w.Complete || w.Change != "" || w.ChangeValue != "" {
+			t.Fatalf("window %+v", w)
+		}
+	}
+}
+
 func TestGetOpenInterest_IncludesOKXWhenWired(t *testing.T) {
 	now := time.Now().UTC()
 	okx := &fakeOI{ser: &domain.OpenInterestSeries{

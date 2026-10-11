@@ -59,7 +59,10 @@ type FundingPressure struct {
 	IntervalHours     int
 	Summary           string
 	Time              time.Time
-	rate              float64
+	// Missing names venues that were asked for and are not in the blend.
+	// Combined pressure stays blank; those venues are not left out of the weight.
+	Missing []string
+	rate    float64
 }
 
 // FundingPressurePoint is combined pressure at one sample time.
@@ -157,6 +160,60 @@ func AttachFundingPressure(snap *FundingSnapshot, fund []*FundingSeries, oi []*O
 	}
 	p.IntervalHours = interval
 	snap.Pressure = &p
+}
+
+// WithholdFundingPressure blanks combined pressure when a venue that was asked
+// for is absent from the blend. Per-venue funding rows and the venues that did
+// blend stay, so a later read can see who was actually in. Call this after
+// history is attached. exchange=all only.
+func WithholdFundingPressure(snap *FundingSnapshot, expected []Exchange) {
+	if snap == nil || snap.Exchange != "all" {
+		return
+	}
+	have := map[string]struct{}{}
+	if snap.Pressure != nil {
+		for _, v := range snap.Pressure.Venues {
+			name := strings.ToLower(strings.TrimSpace(v.Exchange))
+			if name != "" {
+				have[name] = struct{}{}
+			}
+		}
+	}
+	var missing []string
+	for _, ex := range expected {
+		name := strings.ToLower(strings.TrimSpace(string(ex)))
+		if name == "" {
+			continue
+		}
+		if _, ok := have[name]; !ok {
+			missing = append(missing, name)
+		}
+	}
+	missing = uniqueSortedStrings(missing)
+	if len(missing) == 0 {
+		return
+	}
+	if snap.Pressure == nil {
+		snap.Pressure = &FundingPressure{}
+	}
+	p := snap.Pressure
+	p.Rate, p.RatePct, p.Payer = "", "", ""
+	p.OpenInterestValue = ""
+	p.VenueCount = 0
+	p.DominantVenue = ""
+	p.rate = 0
+	p.Missing = missing
+	p.Summary = fmt.Sprintf(
+		"Combined funding pressure is withheld until %s is in. A missing venue is not left out of the weight.",
+		strings.Join(missing, ", "),
+	)
+	for i := range snap.PressureWindows {
+		snap.PressureWindows[i].Complete = false
+		snap.PressureWindows[i].Change = ""
+		snap.PressureWindows[i].ChangePct = ""
+		snap.PressureWindows[i].PastRate = ""
+		snap.PressureWindows[i].PastRatePct = ""
+	}
 }
 
 // AttachFundingPressureHistory fills history, windows, and moves from stored
@@ -514,5 +571,3 @@ func formatSignedFunding(delta float64) (dec, pct string) {
 	}
 	return dec, pct
 }
-
-

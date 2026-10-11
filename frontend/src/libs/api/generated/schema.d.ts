@@ -753,7 +753,10 @@ export interface paths {
          *     **Bybit linear perpetual**, and **OKX USDT-swap**.
          *     `contracts` is venue-published size in the base asset; `value` is USDT
          *     notional. `exchange=all` (default) sums those three venues and keeps per-venue
-         *     rows. `exchange=hyperliquid` is that venue alone. Its `value` is the mark
+         *     rows. A failed or missing asked venue blanks the combined current and
+         *     windows and is named in `missing`, and is not counted as zero. A window
+         *     that lacks a sample on any asked venue is blank even if the others have
+         *     it. `exchange=hyperliquid` is that venue alone. Its `value` is the mark
          *     times coin size. The margin is USDC, lined up with the USDT name, and
          *     it is not inside `exchange=all`. `complete` is false
          *     when the historical sample is missing or older than the window slack.
@@ -1004,7 +1007,10 @@ export interface paths {
          *     and is not inside `pressure` or `exchange=all`. `pressure` is **OI-weighted** combined
          *     predicted funding (USDT open-interest share), so an 8B book at +0.01%
          *     outweighs a 1B book at −0.01%. `pressureHistory` / `pressureWindows`
-         *     (1h/4h/24h) / `pressureMoves` show how that blend changed. `limit` is
+         *     (1h/4h/24h) / `pressureMoves` show how that blend changed. Combined
+         *     pressure stays blank until every asked venue is in the blend and is
+         *     named in `pressure.missing`. A venue with no open interest is still
+         *     skipped inside a complete blend. `limit` is
          *     settled history size (default 12, max 30). Cached ~30s. Informational only.
          */
         get: operations["getMarketFundingRate"];
@@ -1716,7 +1722,9 @@ export interface paths {
          *     is `ratio` 0.15 (`ratioPct` 15) — that share of volume is new
          *     positions; `transfer` is the rest. Windows are **15 minutes**,
          *     **1 hour**, and **4 hours**. Binance USD-M and Bybit linear
-         *     separately plus `combined`. Informational only.
+         *     separately plus `combined`. A venue without a complete window blanks
+         *     `combined` and is named in `missing`. It is not counted as zero.
+         *     Informational only.
          */
         get: operations["getMarketParticipation"];
         put?: never;
@@ -1902,7 +1910,9 @@ export interface paths {
          *
          *     Positive means that side grew. Negative means it shrank. The two
          *     numbers add up to the open-interest change. Binance USD-M and Bybit
-         *     linear. This is not the account long/short ratio.
+         *     linear. This is not the account long/short ratio. An incomplete
+         *     window has empty numeric strings and `complete` false. A missing
+         *     venue is named and is not a flat zero.
          */
         get: operations["getMarketNetPosition"];
         put?: never;
@@ -1984,7 +1994,9 @@ export interface paths {
          *     A Coinbase page shows Binance spot CVD and says Binance.
          *     `exchange=all`
          *     (default) returns each futures venue plus combined. Combined uses
-         *     the overlapping **time range** (a missing 5m slot is 0) and is
+         *     the overlapping **time range** (a minute one venue missed is left
+         *     out, not filled from the others; a minute nobody printed is not a
+         *     gap) and is
          *     `complete` only when every venue passed in has reached the window
          *     open. Futures expects Binance, Bybit, and OKX. Spot expects Binance
          *     and Bybit. OKX has no spot CVD.
@@ -2623,7 +2635,9 @@ export interface paths {
          *     futures matrix) on Binance USD-M and Bybit linear. Short summary and
          *     reasons use funding and account long/short as corroboration. When
          *     `exchange=all`, also returns a **combined** general market direction
-         *     (OI-weighted). Informational only — not financial advice.
+         *     (OI-weighted). An errored or zero-OI venue withholds that blend
+         *     (`agreement` is `withheld`) and `missing` names the venue.
+         *     Informational only — not financial advice.
          */
         get: operations["getMarketPositioning"];
         put?: never;
@@ -2645,7 +2659,9 @@ export interface paths {
          * Long and short squeeze risk
          * @description Scores **long-squeeze** and **short-squeeze** risk (0–100) for a coin
          *     on **Binance USD-M** and **Bybit linear** separately, and (when
-         *     `exchange=all`) an **OI-weighted combined** view. Drivers: account
+         *     `exchange=all`) an **OI-weighted combined** view. An errored or
+         *     zero-OI venue withholds that blend (`agreement` is `withheld`).
+         *     A zero score is not the blend. Drivers: account
          *     long/short crowding, funding, open-interest build, recent liquidation
          *     heat, and nearby high-leverage pockets. Explains which side is crowded
          *     and why risk is high or low. Model only — not a prediction or financial
@@ -6897,6 +6913,8 @@ export interface components {
             complete?: boolean;
             /** Format: date-time */
             sampleTime?: string;
+            /** @description Asked venues with no usable sample for this window. Not counted as zero. */
+            missing?: string[];
         };
         OpenInterestVenue: {
             exchange?: string;
@@ -7284,6 +7302,8 @@ export interface components {
             funding?: components["schemas"]["MarketFundingRate"];
             longShort?: components["schemas"]["MarketLongShortRatio"];
             note?: string;
+            /** @description Asked venues left out of the combined current and windows. Not counted as zero. */
+            missing?: string[];
         };
         FundingPrint: {
             /** Format: date-time */
@@ -7346,6 +7366,8 @@ export interface components {
             summary?: string;
             /** Format: date-time */
             time?: string;
+            /** @description Asked venues absent from the combined blend. Not left out of the weight. */
+            missing?: string[];
         };
         FundingPressurePoint: {
             /** Format: date-time */
@@ -7529,6 +7551,8 @@ export interface components {
             divergence?: components["schemas"]["MarketCvdDivergence"];
             points?: components["schemas"]["MarketCvdPoint"][];
             anchors?: components["schemas"]["MarketCvdAnchor"][];
+            /** @description Venues with no points, or that missed a minute another venue printed. Not counted as zero. */
+            missing?: string[];
         };
         /**
          * @description Futures CVD for Binance, Bybit, and OKX, plus combined. `range` `24h`
@@ -7545,7 +7569,9 @@ export interface components {
          *     print of at least 100,000 USD. Retail is every smaller print. A minute
          *     stored before size was known omits both, and that is not zero. Combined
          *     size is set only when every venue's bar at that step was sized. Spot
-         *     points do not carry the split.
+         *     points do not carry the split. A minute inside the overlap that one
+         *     venue missed is left out and is not filled from the others. A minute
+         *     nobody printed is not a gap.
          */
         MarketCvdReport: {
             symbol?: string;
@@ -7971,6 +7997,8 @@ export interface components {
             lean?: "entering" | "exiting" | "transfer";
             complete?: boolean;
             summary?: string;
+            /** @description Asked venues without a complete window. Not counted as zero. */
+            missing?: string[];
         };
         MarketParticipationVenue: {
             exchange?: string;

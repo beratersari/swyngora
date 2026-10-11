@@ -2,6 +2,7 @@ package domain
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -104,6 +105,31 @@ func TestCombineSqueezeReports_OIWeighted(t *testing.T) {
 	// Binance dominates OI → combined should lean long squeeze
 	if c.LongSqueeze.Score <= c.ShortSqueeze.Score {
 		t.Fatalf("expected long-weighted: L=%.1f S=%.1f", c.LongSqueeze.Score, c.ShortSqueeze.Score)
+	}
+}
+
+func TestCombineSqueezeReports_WithholdsUnusableVenue(t *testing.T) {
+	bin := BuildSqueezeVenue(SqueezeInputs{
+		Exchange: ExchangeBinance, Symbol: "BTCUSDT", OIValue: 9e9,
+		LongShare: 0.7, ShortShare: 0.3, FundingRate: 0.0003, OIChange1hPct: 2,
+	})
+	byb := BuildSqueezeVenue(SqueezeInputs{
+		Exchange: ExchangeBybit, Symbol: "BTCUSDT", OIValue: 1e9,
+		LongShare: 0.35, ShortShare: 0.65, FundingRate: -0.0002, OIChange1hPct: 1,
+	})
+	byb.Error = "oi down"
+	c := CombineSqueezeReports([]SqueezeVenueReport{bin, byb})
+	if c == nil || c.Agreement != "withheld" || c.LongSqueeze.Score != 0 {
+		t.Fatalf("%+v", c)
+	}
+	if !strings.Contains(c.Summary, "bybit") || len(c.Missing) != 1 || c.Missing[0] != "bybit" {
+		t.Fatalf("%+v", c)
+	}
+	byb.Error = ""
+	byb.OpenInterest = 0
+	c = CombineSqueezeReports([]SqueezeVenueReport{bin, byb})
+	if c == nil || c.Agreement != "withheld" || len(c.Missing) != 1 || c.Missing[0] != "bybit" {
+		t.Fatalf("zero oi %+v", c)
 	}
 }
 

@@ -2,6 +2,7 @@ package domain
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -136,6 +137,37 @@ func TestCombineParticipationVenues(t *testing.T) {
 	}
 	if math.Abs(w.Ratio-0.15) > 1e-9 || w.Lean != ParticipationEntering {
 		t.Fatalf("ratio %+v", w)
+	}
+}
+
+func TestCombineParticipationVenues_IncompleteWindowIsBlank(t *testing.T) {
+	t.Parallel()
+	a := ParticipationVenue{
+		Exchange: ExchangeBinance,
+		Windows: []ParticipationWindow{
+			{Window: ParticipationWindow15m, Volume: 1_500_000_000, OIDelta: 200_000_000, Complete: true},
+		},
+	}
+	b := ParticipationVenue{
+		Exchange: ExchangeBybit,
+		Error:    "tape down",
+		Windows: []ParticipationWindow{
+			{Window: ParticipationWindow15m, Volume: 500_000_000, OIDelta: 100_000_000, Complete: true},
+		},
+	}
+	got := CombineParticipationVenues("BTCUSDT", []ParticipationVenue{a, b})
+	if got == nil || len(got.Windows) == 0 {
+		t.Fatal("nil")
+	}
+	w := got.Windows[0]
+	if w.Complete || w.Volume != 0 || w.Ratio != 0 || w.Lean != "" {
+		t.Fatalf("%+v", w)
+	}
+	if len(w.Missing) != 1 || w.Missing[0] != "bybit" || !strings.Contains(w.Summary, "bybit") {
+		t.Fatalf("summary %+v", w)
+	}
+	if !strings.Contains(got.Summary, "bybit") {
+		t.Fatalf("venue summary %s", got.Summary)
 	}
 }
 

@@ -20,8 +20,10 @@ new positions; the rest is transfer between existing books.
   - `transfer` — `volume − |oiDelta|` (floored at 0)
   - `lean` — `entering` (≥ +5%) / `exiting` (≤ −5%) / `transfer` (near 0)
 
-Combined sums volume and OI delta, then recomputes the ratio. OKX is not
-included (no taker-volume series on this path).
+Combined sums volume and OI delta, then recomputes the ratio, only when
+every venue that was asked has a complete window. A venue without that
+window blanks the combined ratio and is named in `missing`. It is not
+counted as zero. OKX is not included (no taker-volume series on this path).
 
 Informational only — not financial advice.
 

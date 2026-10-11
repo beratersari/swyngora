@@ -28,6 +28,8 @@ If open interest moves by more than the taker volume, the extra is
 
 Binance USD-M (5-minute taker bars) and Bybit linear (1-minute prints).
 `exchange=all` sums the venues that have both inputs. OKX is not included.
+An incomplete window is not a flat zero: numeric strings stay empty and
+`complete` is false. A missing venue is named.
 
 This is not the account long/short ratio. Informational only.
 

@@ -18,14 +18,34 @@ import { Block, Panel, StatCard, StatsGrid, TitleRow } from './TapePanel.styles'
 import type { TapePanelProps } from './TapePanel.types';
 
 function formatOIWindow(
-  w: { changeValue?: string; changeValuePct?: string; flow?: string } | undefined,
+  w: { changeValue?: string; changeValuePct?: string; flow?: string; complete?: boolean } | undefined,
   t: (key: string, options?: Record<string, string>) => string,
 ): string {
-  if (!w?.changeValue && !w?.changeValuePct) return '—';
+  if (!w || w.complete === false) return '—';
+  if (!w.changeValue && !w.changeValuePct) return '—';
   const amt = formatSignedTapeNum(w.changeValue);
   const pct = w.changeValuePct ? `(${w.changeValuePct}%)` : '';
   const flow = w.flow === 'opened' ? t('tape.oiOpened') : w.flow === 'closed' ? t('tape.oiClosed') : '';
   return [amt === '—' ? '' : amt, pct, flow].filter(Boolean).join(' ') || '—';
+}
+
+function joinedNames(...groups: (readonly string[] | undefined)[]): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const group of groups) {
+    for (const name of group ?? []) {
+      const trimmed = name.trim();
+      if (!trimmed || seen.has(trimmed)) continue;
+      seen.add(trimmed);
+      out.push(trimmed);
+    }
+  }
+  return out.join(', ');
+}
+
+function partRatio(w: { ratioPct?: string; complete?: boolean } | undefined): string {
+  if (!w || w.complete === false || !w.ratioPct) return '—';
+  return `${w.ratioPct}%`;
 }
 
 function formatAnchoredCvd(
@@ -92,12 +112,16 @@ export function TapePanel({
   const oi1h = windowByName(openInterest?.windows, '1h');
   const oi4h = windowByName(openInterest?.windows, '4h');
   const oi24h = windowByName(openInterest?.windows, '24h');
+  const oiHeld = joinedNames(openInterest?.missing).length > 0;
+  const oiCaption = joinedNames(openInterest?.missing, oi1h?.missing, oi4h?.missing, oi24h?.missing);
+  const oiWindowBlank = [oi1h, oi4h, oi24h].some((w) => w?.complete === false);
   const liq1h = windowByName(liquidations?.windows, '1h');
   const liq24h = windowByName(liquidations?.windows, '24h');
   const fundingPressure = openInterest?.funding?.pressure;
-  const funding = fundingPressure ?? openInterest?.funding?.current;
-  const funding1h = windowByName(openInterest?.funding?.pressureWindows, '1h');
-  const funding24h = windowByName(openInterest?.funding?.pressureWindows, '24h');
+  const fundingHeld = joinedNames(fundingPressure?.missing).length > 0;
+  const funding = fundingHeld ? undefined : (fundingPressure ?? openInterest?.funding?.current);
+  const funding1h = fundingHeld ? undefined : windowByName(openInterest?.funding?.pressureWindows, '1h');
+  const funding24h = fundingHeld ? undefined : windowByName(openInterest?.funding?.pressureWindows, '24h');
   const tapePressure1h = windowByName(pressure?.windows, '1h');
   const nextSettle =
     fundingPressure?.nextFundingTime ??
@@ -118,7 +142,9 @@ export function TapePanel({
   const count5 = windowByName(countVenue?.windows, '5m');
   const count15 = windowByName(countVenue?.windows, '15m');
   const print15 = windowByName(printVenue?.windows, '15m') ?? windowByName(printVenue?.windows, '5m');
+  const cvdHeld = Boolean(cvd?.combined && cvd.combined.complete === false);
   const cvdRow = cvd?.combined ?? cvd?.venues?.[0];
+  const cvdMissing = joinedNames(cvd?.combined?.missing);
   const snap = snapshot?.combined ?? snapshot?.venues?.[0];
   const snap1h = snap?.windows?.find((w) => w.window === '1h');
   const lsVenue =
@@ -151,7 +177,11 @@ export function TapePanel({
           <StatsGrid>
             <Stat
               label={t('tape.oiNow')}
-              value={formatTapeNum(openInterest?.current?.value ?? openInterest?.current?.contracts)}
+              value={
+                oiHeld
+                  ? '—'
+                  : formatTapeNum(openInterest?.current?.value ?? openInterest?.current?.contracts)
+              }
               isLoading={isLoading}
             />
             <Stat
@@ -177,7 +207,11 @@ export function TapePanel({
             {formatOIWindow(windowByName(v.windows, '4h'), t)} · 24h {formatOIWindow(windowByName(v.windows, '24h'), t)}
           </Text>
         ))}
-        {oi1h && oi1h.complete === false ? (
+        {oiCaption ? (
+          <Text variant="caption" color="secondary">
+            {t('tape.withheld', { venues: oiCaption })}
+          </Text>
+        ) : oiWindowBlank ? (
           <Text variant="caption" color="secondary">
             {t('tape.incomplete')}
           </Text>
@@ -193,29 +227,17 @@ export function TapePanel({
           <Alert type="info" showIcon message={t('tape.participation')} description={participationError} />
         ) : (
           <StatsGrid>
-            <Stat
-              label={t('tape.part15m')}
-              value={part15?.ratioPct ? `${part15.ratioPct}%` : '—'}
-              isLoading={isLoading}
-            />
-            <Stat
-              label={t('tape.part1h')}
-              value={part1h?.ratioPct ? `${part1h.ratioPct}%` : '—'}
-              isLoading={isLoading}
-            />
-            <Stat
-              label={t('tape.part4h')}
-              value={part4h?.ratioPct ? `${part4h.ratioPct}%` : '—'}
-              isLoading={isLoading}
-            />
+            <Stat label={t('tape.part15m')} value={partRatio(part15)} isLoading={isLoading} />
+            <Stat label={t('tape.part1h')} value={partRatio(part1h)} isLoading={isLoading} />
+            <Stat label={t('tape.part4h')} value={partRatio(part4h)} isLoading={isLoading} />
             <Stat
               label={t('tape.partVol15m')}
-              value={formatTapeNum(part15?.volume)}
+              value={part15?.complete === false ? '—' : formatTapeNum(part15?.volume)}
               isLoading={isLoading}
             />
           </StatsGrid>
         )}
-        {part15?.oiDelta ? (
+        {part15 && part15.complete !== false && part15.oiDelta ? (
           <Text variant="caption" color="secondary">
             {t('tape.partOi15m', { value: formatSignedTapeNum(part15.oiDelta) })}
           </Text>
@@ -356,6 +378,10 @@ export function TapePanel({
             {fundingPressure?.summary ? (
               <Text variant="caption" color="secondary">
                 {fundingPressure.summary}
+              </Text>
+            ) : fundingHeld ? (
+              <Text variant="caption" color="secondary">
+                {t('tape.withheld', { venues: joinedNames(fundingPressure?.missing) })}
               </Text>
             ) : null}
           </>
@@ -530,15 +556,19 @@ export function TapePanel({
           <Alert type="info" showIcon message={t('tape.cvd')} description={cvdError} />
         ) : (
           <StatsGrid>
-            <Stat label={t('tape.cvdLast')} value={formatTapeNum(cvdRow?.lastCvd)} isLoading={isLoading} />
+            <Stat
+              label={t('tape.cvdLast')}
+              value={cvdHeld ? '—' : formatTapeNum(cvdRow?.lastCvd)}
+              isLoading={isLoading}
+            />
             <Stat
               label={t('tape.cvdDay')}
-              value={formatAnchoredCvd(cvdRow?.anchors, 'day', t('tape.cvdPartial'))}
+              value={cvdHeld ? '—' : formatAnchoredCvd(cvdRow?.anchors, 'day', t('tape.cvdPartial'))}
               isLoading={isLoading}
             />
             <Stat
               label={t('tape.cvd4h')}
-              value={formatAnchoredCvd(cvdRow?.anchors, '4h', t('tape.cvdPartial'))}
+              value={cvdHeld ? '—' : formatAnchoredCvd(cvdRow?.anchors, '4h', t('tape.cvdPartial'))}
               isLoading={isLoading}
             />
             <Stat
@@ -551,13 +581,18 @@ export function TapePanel({
         <Text variant="caption" color="secondary">
           {t('tape.cvdMeasured')}
         </Text>
-        {cvdRow?.anchors?.map((a) =>
+        {cvdHeld ? null : cvdRow?.anchors?.map((a) =>
           a.summary ? (
             <Text key={a.anchor} variant="caption" color="secondary">
               {a.summary}
             </Text>
           ) : null,
         )}
+        {cvdHeld && cvdMissing ? (
+          <Text variant="caption" color="secondary">
+            {t('tape.withheld', { venues: cvdMissing })}
+          </Text>
+        ) : null}
         {cvdRow?.error ? (
           <Text variant="caption" color="secondary">
             {cvdRow.error}

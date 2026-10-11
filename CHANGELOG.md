@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Combined coin reads stay blank until every asked venue is in.** Futures CVD leaves out a minute that one venue missed instead of filling it from the others. A minute nobody printed is not a gap. Combined open interest, funding pressure, participation, net long/short, positioning, and squeeze risk stay blank and name the missing venue. A partial sum is not shown as the combined number (`GET /api/v1/market/cvd`, `open-interest`, `funding-rate`, `participation`, `net-position`, `positioning`, `squeeze-risk`)
+
 ### Added
 - **Full coin situation:** the coin read also says who pays the combined funding, whether top traders are longer or shorter than the crowd, and whether large prints and smaller prints agree. Each clause stays blank until the venues that publish it are in, and names who is missing. Bybit is left out of top versus crowd because it has no top-trader ratio. A paper fill stores the fuller read. An alert of kind `situation` fires when the live read leaves the clauses stored on the newest open buy. Clicking a candle sends `asOf` at the end of the 15-minute move once that end is in the past, so later prints stay out of the card (`GET /api/v1/market/situation`, `POST /api/v1/alerts`, MCP `get_coin_situation` and `create_situation_alert`) (`docs/features/coin-situation.md`, `docs/features/price-alerts.md`)
 - **Open position read:** an open crypto position shows the situation stored on the newest buy still held, next to the live situation. The coin Trade tab shows the same pair when that book holds the coin. An equity position stays on size and profit (`GET /api/v1/portfolio` `entrySituation`, `GET /api/v1/market/situation`) (`docs/features/coin-situation.md`)

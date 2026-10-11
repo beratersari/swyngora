@@ -81,6 +81,51 @@ func TestAttachFundingPressure_UserExample(t *testing.T) {
 	}
 }
 
+func TestWithholdFundingPressure_NamesAbsentVenue(t *testing.T) {
+	snap := &FundingSnapshot{
+		Exchange: "all",
+		Pressure: &FundingPressure{
+			Rate: "0.0001", RatePct: "0.0100%", Payer: "long",
+			OpenInterestValue: "9000000000", VenueCount: 2, DominantVenue: "binance",
+			rate: 0.000078,
+			Venues: []FundingPressureVenue{
+				{Exchange: "binance"},
+				{Exchange: "bybit"},
+			},
+		},
+		PressureWindows: []FundingPressureWindow{
+			{Window: "1h", ChangePct: "+0.01", PastRate: "0.00005", PastRatePct: "0.005%", Complete: true},
+		},
+	}
+	WithholdFundingPressure(snap, []Exchange{ExchangeBinance, ExchangeBybit, ExchangeOKX})
+	p := snap.Pressure
+	if p.Rate != "" || p.RatePct != "" || p.Payer != "" || p.OpenInterestValue != "" || p.VenueCount != 0 || p.DominantVenue != "" || p.rate != 0 {
+		t.Fatalf("blanked %+v", p)
+	}
+	if len(p.Venues) != 2 {
+		t.Fatal("blended venue rows stay")
+	}
+	if len(p.Missing) != 1 || p.Missing[0] != "okx" || !strings.Contains(p.Summary, "okx") {
+		t.Fatalf("%+v", p)
+	}
+	w := snap.PressureWindows[0]
+	if w.Complete || w.ChangePct != "" || w.PastRate != "" || w.PastRatePct != "" {
+		t.Fatalf("window %+v", w)
+	}
+
+	both := &FundingSnapshot{
+		Exchange: "all",
+		Pressure: &FundingPressure{
+			Rate: "0.0001", Payer: "long", VenueCount: 2, DominantVenue: "binance",
+			Venues: []FundingPressureVenue{{Exchange: "binance"}, {Exchange: "bybit"}},
+		},
+	}
+	WithholdFundingPressure(both, []Exchange{ExchangeBinance, ExchangeBybit})
+	if both.Pressure.Rate != "0.0001" || both.Pressure.Payer != "long" || both.Pressure.DominantVenue != "binance" {
+		t.Fatalf("should keep %+v", both.Pressure)
+	}
+}
+
 func TestAttachFundingPressureHistory_WindowsAndFlip(t *testing.T) {
 	now := time.Date(2026, 8, 11, 16, 0, 0, 0, time.UTC)
 	bucket := func(h int) time.Time {

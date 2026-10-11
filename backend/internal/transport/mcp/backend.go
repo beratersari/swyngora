@@ -3053,7 +3053,7 @@ func fundingSnapshotMap(got *domain.FundingSnapshot) map[string]any {
 	out := map[string]any{
 		"symbol": got.Symbol, "exchange": got.Exchange, "venues": venues,
 		"history": fundingPrintsMap(got.History), "asOf": asOf, "venueCount": got.VenueCount,
-		"note": "Predicted next funding plus recent settlements. rate is decimal; ratePct is percent. payer=long means longs pay shorts. Per-venue rows stay separate. pressure is OI-weighted combined predicted funding (USDT open interest share) plus pressureHistory / pressureWindows / pressureMoves.",
+		"note": "Predicted next funding plus recent settlements. rate is decimal; ratePct is percent. payer=long means longs pay shorts. Per-venue rows stay separate. pressure is OI-weighted combined predicted funding (USDT open interest share) plus pressureHistory / pressureWindows / pressureMoves. Combined pressure stays blank until every asked venue is in the blend and is named in pressure.missing. A venue with no open interest is still skipped inside a complete blend.",
 	}
 	if got.Current != nil {
 		out["current"] = fundingCurrentMap(*got.Current)

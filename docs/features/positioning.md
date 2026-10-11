@@ -29,7 +29,7 @@ the reason names that split instead of a single crowding line.
 - Windows: **1h**, **4h** (primary when available), **24h**.
 - Price from 1h candles (ticker 24h as fallback). OI from venue history.
 - `reasons` explain the matrix and any funding / long-short support.
-- `combined`: OI-weighted general market regime, `agreement` = agree|mixed|single.
+- `combined`: OI-weighted general market regime, `agreement` = agree|mixed|single|withheld. An errored venue or a venue with no open interest withholds the blend, and `missing` names that venue.
 
 ## Where the code lives
 

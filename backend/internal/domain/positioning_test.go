@@ -118,6 +118,32 @@ func TestCombinePositioningReports_Agree(t *testing.T) {
 	}
 }
 
+func TestCombinePositioningReports_WithholdsUnusableVenue(t *testing.T) {
+	a := BuildPositioningVenue(PositioningInputs{
+		Exchange: ExchangeBinance, OIValue: 9e9, Price4hPct: 1.2, OI4hPct: 2,
+	})
+	b := BuildPositioningVenue(PositioningInputs{
+		Exchange: ExchangeBybit, OIValue: 1e9, Price4hPct: 1.0, OI4hPct: 1.5,
+	})
+	b.Error = "oi down"
+	c := CombinePositioningReports([]PositioningVenueReport{a, b})
+	if c == nil || c.Agreement != "withheld" || c.Regime != "" {
+		t.Fatalf("%+v", c)
+	}
+	if !strings.Contains(c.Summary, "bybit") {
+		t.Fatalf("summary %s", c.Summary)
+	}
+	if len(c.Missing) != 1 || c.Missing[0] != "bybit" {
+		t.Fatalf("missing %+v", c.Missing)
+	}
+	b.Error = ""
+	b.OpenInterest = 0
+	c = CombinePositioningReports([]PositioningVenueReport{a, b})
+	if c == nil || c.Agreement != "withheld" || len(c.Missing) != 1 || c.Missing[0] != "bybit" {
+		t.Fatalf("zero oi %+v", c)
+	}
+}
+
 func TestCombinePositioningReports_Mixed(t *testing.T) {
 	a := BuildPositioningVenue(PositioningInputs{
 		Exchange: ExchangeBinance, OIValue: 5e9, Price4hPct: 1.2, OI4hPct: 2,

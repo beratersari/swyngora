@@ -5162,6 +5162,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "flow=opened|closed; openedValue/closedValue is the USDT added "
                 "or closed. contracts is base-asset size; value is USDT notional. "
                 "Binance USD-M + Bybit linear + OKX. exchange=all sums those three. "
+                "A failed or missing asked venue blanks the combined current and "
+                "windows and is named in missing, and is not counted as zero. "
+                "A window that lacks a sample on any asked venue is blank even "
+                "if the others have it. "
                 "exchange=hyperliquid is mark times coin size and is not in that sum."
             ),
             args_schema=OpenInterestInput,
@@ -5302,7 +5306,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "exchange=hyperliquid is the hourly rate and is not inside pressure. "
                 "Per-venue rows stay separate. pressure is OI-weighted combined predicted "
                 "funding (USDT open-interest share) so a large book outweighs a small one; "
-                "pressureWindows (1h/4h/24h) and pressureMoves show how that blend changed."
+                "pressureWindows (1h/4h/24h) and pressureMoves show how that blend changed. "
+                "Combined pressure stays blank until every asked venue is in the "
+                "blend and is named in pressure.missing. A venue with no open "
+                "interest is still skipped inside a complete blend."
             ),
             args_schema=FundingRateInput,
         ),
@@ -5527,6 +5534,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "on Binance and Bybit, plus an OI-weighted combined view. "
                 "Explains which side is crowded and why risk is high or low. "
                 "Uses OI change, funding, long/short accounts, liquidations. "
+                "An errored or zero-OI venue withholds the combined blend "
+                "(agreement=withheld). A zero score is not that blend. "
                 "Not a prediction or financial advice."
             ),
             args_schema=SqueezeRiskInput,
@@ -5538,6 +5547,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Price + open interest positioning: long_buildup, short_buildup, "
                 "long_unwinding, or short_covering for Binance and Bybit, plus "
                 "a general market (combined) direction. Short summary and why. "
+                "An errored or zero-OI venue withholds the combined blend "
+                "(agreement=withheld) and missing names that venue, before a "
+                "combined regime is published. "
                 "Not a prediction or financial advice."
             ),
             args_schema=PositioningInput,
@@ -5572,7 +5584,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Share of futures volume that stuck as new (or closed) open "
                 "interest: OI USDT delta divided by taker volume. 2B volume "
                 "and OI +300M is ratio 0.15 (15% new positions). Windows "
-                "15m, 1h, and 4h. Binance + Bybit + combined."
+                "15m, 1h, and 4h. Binance + Bybit + combined. A venue without a "
+                "complete window blanks the combined ratio and is named in "
+                "missing, and is not counted as zero."
             ),
             args_schema=TakerFlowInput,
         ),
@@ -5643,7 +5657,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "from open-interest change plus taker buy and sell. Positive "
                 "means that side grew, negative means it shrank. The two nets "
                 "add up to the open-interest change. Binance and Bybit. Not "
-                "the account long/short ratio."
+                "the account long/short ratio. An incomplete window has empty "
+                "numeric strings and complete false. A missing venue is named "
+                "and is not a flat zero."
             ),
             args_schema=TakerFlowInput,
         ),
@@ -5686,6 +5702,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Bybit, and OKX each cover the range. Spot combined "
                 "(spotVenues / spotCombined) needs Binance and Bybit. OKX has "
                 "no spot CVD. A missing venue keeps combined incomplete. "
+                "A minute inside the overlap that one venue missed is left out "
+                "and is not filled from the other venue. A quiet minute nobody "
+                "printed is not a gap. "
                 "whaleDelta and retailDelta split a futures bar when print size "
                 "was stored: a whale is one aggressive print of at least "
                 "100,000 USD, and retail is every smaller print. A minute "

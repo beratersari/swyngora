@@ -57,6 +57,7 @@ type positioningCombinedDTO struct {
 	DominantVenue string   `json:"dominantVenue"`
 	Summary       string   `json:"summary"`
 	Reasons       []string `json:"reasons"`
+	Missing       []string `json:"missing,omitempty"`
 }
 
 type positioningResponse struct {
@@ -126,6 +127,6 @@ func positioningCombinedToDTO(c domain.PositioningCombined) positioningCombinedD
 	return positioningCombinedDTO{
 		Regime: c.Regime, Label: c.Label, Confidence: c.Confidence,
 		Agreement: c.Agreement, DominantVenue: c.DominantVenue,
-		Summary: c.Summary, Reasons: reasons,
+		Summary: c.Summary, Reasons: reasons, Missing: append([]string{}, c.Missing...),
 	}
 }

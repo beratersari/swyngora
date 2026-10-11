@@ -287,7 +287,7 @@ func TestCombineCVDVenues_MissingVenueIsNotComplete(t *testing.T) {
 	}
 }
 
-func TestCombineCVDVenues_FillsMissingMiddleBucket(t *testing.T) {
+func TestCombineCVDVenues_OmitsMissingMiddleBucket(t *testing.T) {
 	t0 := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
 	now := t0.Add(15 * time.Minute)
 	bin := BuildCVDSeries(ExchangeBinance, "BTCUSDT", []TakerBucket{
@@ -300,11 +300,33 @@ func TestCombineCVDVenues_FillsMissingMiddleBucket(t *testing.T) {
 		{Start: t0.Add(10 * time.Minute), BuyNotional: 5},
 	}, []CVDPrice{{Time: t0, Close: 1}, {Time: t0.Add(5 * time.Minute), Close: 1}, {Time: t0.Add(10 * time.Minute), Close: 1}}, now, t0)
 	got := CombineCVDVenues("BTCUSDT", []CVDVenueSeries{bin, byb}, nil, now)
-	if got == nil || len(got.Points) != 3 {
+	if got == nil || len(got.Points) != 2 {
 		t.Fatalf("points %d", len(got.Points))
 	}
-	if got.Points[1].Delta != 5 {
-		t.Fatalf("middle should keep Bybit-only delta, got %+v", got.Points[1])
+	mid := t0.Add(5 * time.Minute)
+	for _, p := range got.Points {
+		if p.Time.Equal(mid) {
+			t.Fatalf("middle bar published %+v", p)
+		}
+	}
+	if got.LastCVD != 30 {
+		t.Fatalf("last %v", got.LastCVD)
+	}
+	if got.Complete {
+		t.Fatal("a hole inside the overlap must not be complete")
+	}
+	if !strings.Contains(got.Summary, "binance") {
+		t.Fatalf("summary %s", got.Summary)
+	}
+	for _, w := range got.Windows {
+		if w.Complete {
+			t.Fatalf("window %s complete", w.Window)
+		}
+	}
+	for _, a := range got.Anchors {
+		if a.Complete {
+			t.Fatalf("anchor %s complete", a.Anchor)
+		}
 	}
 }
 

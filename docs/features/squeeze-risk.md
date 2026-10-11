@@ -15,7 +15,8 @@ prediction or financial advice.
 `GET /api/v1/market/squeeze-risk?symbol=BTCUSDT`
 
 - `exchange=all` (default): **Binance** and **Bybit** separately, plus
-  `combined` (OI-weighted scores).
+  `combined` (OI-weighted scores). An errored venue or a venue with no
+  open interest withholds that blend.
 - `exchange=binance` or `bybit`: one venue only (no combined block).
 
 Each venue includes:
@@ -42,7 +43,9 @@ Levels: `low` (under 35), `moderate` (35–55), `elevated` (55–70), `high` (70
 ### Combined
 
 OI-weighted average of venue scores. `dominantVenue` is the larger OI book.
-Reasons start with the stronger venue for that side.
+Reasons start with the stronger venue for that side. An errored venue or a
+venue with no open interest withholds the blend. `agreement` is `withheld`
+and `missing` names that venue. A zero score is not the blend.
 
 ### Limits
 

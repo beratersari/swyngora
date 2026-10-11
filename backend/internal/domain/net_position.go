@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -84,6 +85,8 @@ type NetPositionWindow struct {
 	Unexplained float64 `json:"unexplained,omitempty"`
 	Complete    bool    `json:"complete"`
 	Summary     string  `json:"summary"`
+	// Missing names venues that errored or lacked a fresh sample. Their size is not zero.
+	Missing []string `json:"missing,omitempty"`
 }
 
 // NetPositionVenue is one exchange's windows.
@@ -143,34 +146,41 @@ func netPositionWindows(venues []NetPositionVenueInput, now time.Time) []NetPosi
 	out := make([]NetPositionWindow, 0, len(NetPositionWindows))
 	for _, spec := range NetPositionWindows {
 		var buy, sell, oi float64
-		used := 0
-		complete := len(venues) > 0
+		var missing []string
 		for _, v := range venues {
 			if v.Error != "" || v.Series == nil {
-				complete = false
+				missing = append(missing, exchangeLabel(v.Exchange))
 				continue
 			}
 			delta, oiFound, oiFresh := openInterestValueDelta(v.Series, spec.Dur, now)
 			tb, ts, takerOK := TakerNotionalInWindow(v.Buckets, now, spec.Dur, v.Bar)
-			if !oiFound {
-				complete = false
+			if !oiFound || !oiFresh || !takerOK {
+				missing = append(missing, exchangeLabel(v.Exchange))
 				continue
-			}
-			if !oiFresh || !takerOK {
-				complete = false
 			}
 			buy += tb
 			sell += ts
 			oi += delta
-			used++
 		}
-		w := NetPositionWindow{Window: spec.ID, Buy: buy, Sell: sell, OIDelta: oi}
-		if used > 0 {
-			est := EstimateNetPosition(buy, sell, oi)
-			w.NetLong = est.NetLong
-			w.NetShort = est.NetShort
-			w.Unexplained = est.Unexplained
-			w.Complete = complete && est.Complete
+		names := uniqueSortedStrings(missing)
+		if len(names) > 0 || len(venues) == 0 {
+			w := NetPositionWindow{Window: spec.ID, Complete: false, Missing: names}
+			if len(names) > 0 {
+				w.Summary = fmt.Sprintf(
+					"%s: combined net position stays blank until %s is in. A missing venue is not counted as zero.",
+					spec.ID, strings.Join(names, ", "),
+				)
+			} else {
+				w.Summary = explainNetPositionWindow(w)
+			}
+			out = append(out, w)
+			continue
+		}
+		est := EstimateNetPosition(buy, sell, oi)
+		w := NetPositionWindow{
+			Window: spec.ID, Buy: buy, Sell: sell, OIDelta: oi,
+			NetLong: est.NetLong, NetShort: est.NetShort, Unexplained: est.Unexplained,
+			Complete: est.Complete,
 		}
 		w.Summary = explainNetPositionWindow(w)
 		out = append(out, w)

@@ -413,6 +413,7 @@
     "net_sell": "Sell",
     "net_mixed": "Mixed",
     "incomplete": "Window is incomplete — history is still filling.",
+    "withheld": "Combined stays blank until {{venues}} is in.",
     "liqIncomplete": "Liquidation totals only cover time this process has been watching this coin.",
     "unsupported": "No perpetual tape for this venue. Showing Binance + Bybit when the same base is listed.",
     "none": "No perpetual book for this symbol on Binance or Bybit.",

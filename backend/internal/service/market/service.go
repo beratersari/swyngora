@@ -1006,6 +1006,7 @@ func (s *Service) GetOpenInterest(ctx context.Context, exchange, symbol string) 
 		return domain.BuildOpenInterestSnapshot(ex, symbol, nil, time.Now().UTC()), nil
 	}
 	type result struct {
+		ex  domain.Exchange
 		ser *domain.OpenInterestSeries
 		err error
 	}
@@ -1017,25 +1018,34 @@ func (s *Service) GetOpenInterest(ctx context.Context, exchange, symbol string) 
 				ser.Exchange = j.ex
 				ser.Symbol = symbol
 			}
-			ch <- result{ser: ser, err: err}
+			ch <- result{ex: j.ex, ser: ser, err: err}
 		}(j)
 	}
 	var series []*domain.OpenInterestSeries
+	var failed []string
 	var lastErr error
 	for range jobs {
 		r := <-ch
-		if r.err != nil {
-			lastErr = r.err
+		if r.err != nil || r.ser == nil {
+			if r.err != nil {
+				lastErr = r.err
+			}
+			name := string(r.ex)
+			if name == "" {
+				name = "venue"
+			}
+			failed = append(failed, name)
 			continue
 		}
-		if r.ser != nil {
-			series = append(series, r.ser)
-		}
+		series = append(series, r.ser)
 	}
 	if len(series) == 0 && lastErr != nil {
 		return nil, lastErr
 	}
 	snap := domain.BuildOpenInterestSnapshot(ex, symbol, series, time.Now().UTC())
+	if len(failed) > 0 {
+		domain.WithholdCombinedOpenInterest(snap, failed)
+	}
 	var fund *domain.FundingSnapshot
 	var ls *domain.LongShortSnapshot
 	var wg sync.WaitGroup
@@ -1235,19 +1245,21 @@ func (s *Service) attachFundingPressure(ctx context.Context, snap *domain.Fundin
 	}
 	oi := s.collectOpenInterestSeries(ctx, exchange, symbol)
 	domain.AttachFundingPressure(snap, series, oi, now)
-	if s.futHist == nil {
-		return
+	if s.futHist != nil {
+		from := now.Add(-domain.FundingPressureLookback)
+		q := domain.FuturesHistoryQuery{
+			Exchange: exchange, Symbol: symbol, From: from, To: now,
+			Limit: domain.MaxFuturesHistoryLimit,
+		}
+		q.Metric = domain.FuturesMetricFunding
+		fundRaw, _ := s.futHist.History(ctx, q)
+		q.Metric = domain.FuturesMetricOpenInterest
+		oiRaw, _ := s.futHist.History(ctx, q)
+		domain.AttachFundingPressureHistory(snap, futuresSnapshots(fundRaw), futuresSnapshots(oiRaw), now)
 	}
-	from := now.Add(-domain.FundingPressureLookback)
-	q := domain.FuturesHistoryQuery{
-		Exchange: exchange, Symbol: symbol, From: from, To: now,
-		Limit: domain.MaxFuturesHistoryLimit,
+	if exchange == "" || exchange == "all" {
+		domain.WithholdFundingPressure(snap, s.futuresWant(exchange))
 	}
-	q.Metric = domain.FuturesMetricFunding
-	fundRaw, _ := s.futHist.History(ctx, q)
-	q.Metric = domain.FuturesMetricOpenInterest
-	oiRaw, _ := s.futHist.History(ctx, q)
-	domain.AttachFundingPressureHistory(snap, futuresSnapshots(fundRaw), futuresSnapshots(oiRaw), now)
 }
 
 func futuresSnapshots(v any) []domain.FuturesSnapshot {

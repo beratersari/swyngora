@@ -124,6 +124,59 @@ func TestBuildOpenInterestSnapshot_Combined(t *testing.T) {
 	}
 }
 
+func TestBuildOpenInterestSnapshot_MissingWindowBlanksThatWindow(t *testing.T) {
+	now := time.Date(2026, 8, 11, 16, 0, 0, 0, time.UTC)
+	bin := &OpenInterestSeries{
+		Exchange: ExchangeBinance,
+		Symbol:   "BTCUSDT",
+		Current:  OpenInterestPoint{Time: now, Contracts: 100, Value: 10_000},
+		History: []OpenInterestPoint{
+			{Time: now.Add(-5 * time.Minute), Contracts: 90, Value: 9000},
+			{Time: now.Add(-time.Hour), Contracts: 80, Value: 8000},
+			{Time: now.Add(-4 * time.Hour), Contracts: 70, Value: 7000},
+			{Time: now.Add(-24 * time.Hour), Contracts: 50, Value: 5000},
+		},
+	}
+	byb := &OpenInterestSeries{
+		Exchange: ExchangeBybit,
+		Symbol:   "BTCUSDT",
+		Current:  OpenInterestPoint{Time: now, Contracts: 50, Value: 5000},
+		History: []OpenInterestPoint{
+			{Time: now.Add(-5 * time.Minute), Contracts: 40, Value: 4000},
+			{Time: now.Add(-time.Hour), Contracts: 40, Value: 4000},
+			{Time: now.Add(-4 * time.Hour), Contracts: 30, Value: 3000},
+		},
+	}
+	snap := BuildOpenInterestSnapshot("all", "BTCUSDT", []*OpenInterestSeries{bin, byb}, now)
+	if snap.Current.Contracts != "150" || snap.Current.Value != "15000" {
+		t.Fatalf("current stays summed %+v", snap.Current)
+	}
+	var w1, w24 OpenInterestWindow
+	for _, w := range snap.Windows {
+		switch w.Window {
+		case OpenInterestWindow1h:
+			w1 = w
+		case OpenInterestWindow24h:
+			w24 = w
+		}
+	}
+	if !w1.Complete || w1.Change == "" {
+		t.Fatalf("1h %+v", w1)
+	}
+	if w24.Complete || w24.Change != "" || w24.ChangeValue != "" {
+		t.Fatalf("24h should be blank %+v", w24)
+	}
+	found := false
+	for _, name := range w24.Missing {
+		if name == "bybit" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("24h missing %+v", w24.Missing)
+	}
+}
+
 func TestFormatSignedQtyAndPct(t *testing.T) {
 	if FormatSignedQty(12.5) != "+12.5" {
 		t.Fatalf("qty %s", FormatSignedQty(12.5))

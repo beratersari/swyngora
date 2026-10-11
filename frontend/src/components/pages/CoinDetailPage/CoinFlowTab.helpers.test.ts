@@ -24,6 +24,14 @@ describe('CoinFlowTab helpers', () => {
     expect(stats.some((s) => s.label === 'Lean' && s.value === 'bid')).toBe(true);
   });
 
+  it('returns a withheld combined summary', () => {
+    expect(
+      reportSummary({
+        combined: { summary: 'Combined positioning is withheld until bybit is in.' },
+      }),
+    ).toBe('Combined positioning is withheld until bybit is in.');
+  });
+
   it('reads 15m surge ratio', () => {
     const stats = surgeStats({
       venues: [{ windows: [{ window: '15m', ratio: '3.2', grade: 'high' }] }],

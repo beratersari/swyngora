@@ -271,6 +271,14 @@ type CVDVenueSeries struct {
 	Summary       string
 	Error         string
 	Complete      bool
+	// Missing names venues that were asked for and did not cover the overlap:
+	// no bars at all, or at least one minute the others had.
+	Missing []string
+	// Gaps names venues that missed a minute inside the overlap.
+	Gaps []string
+	// Withhold is why a combined series is not a full sum. Click anchors
+	// rebuild Summary and keep this sentence.
+	Withhold string
 }
 
 // CVDReport is the API result.
@@ -453,9 +461,12 @@ func BuildCVDSeriesSpan(ex Exchange, symbol string, buckets []TakerBucket, price
 }
 
 // CombineCVDVenues sums per-bar delta on the overlap the venues share (never averages).
-// Combined is complete only when every venue passed in has points and is itself
-// complete. A missing venue is not treated as zero. A short history on one venue
-// must not make the others' longer tape look finished.
+// Combined is complete only when every venue passed in has points, is itself
+// complete, and has a bar at every minute inside that overlap. A missing venue
+// or a missing minute is not treated as zero and is not filled from the venues
+// that did print. A short history on one venue must not make the others'
+// longer tape look finished. One bar of slack at the start stays outside the
+// overlap, so a first bucket that opens just after the cut can still be complete.
 func CombineCVDVenues(symbol string, venues []CVDVenueSeries, prices []CVDPrice, now time.Time) *CVDVenueSeries {
 	symbol = NormalizeLiquidationSymbol(symbol)
 	now = now.UTC()
@@ -509,14 +520,36 @@ func CombineCVDVenues(symbol string, venues []CVDVenueSeries, prices []CVDPrice,
 
 	venueCvd := make([]float64, len(usable))
 	var cvd, whaleCVD, retailCVD float64
+	gapped := map[string]struct{}{}
 	for at := from; !at.After(to); at = at.Add(bar) {
 		ms := at.UnixMilli()
+		present := 0
+		var absent []string
+		for i, v := range usable {
+			if _, ok := indexes[i][ms]; ok {
+				present++
+				continue
+			}
+			absent = append(absent, cvdVenueName(v.Exchange))
+		}
+		// Nobody printed this minute. Skip it. That is not a venue gap.
+		if present == 0 {
+			continue
+		}
+		// A minute any usable venue missed while another printed is left out.
+		// The other venue's delta is not published as the combined bar, and it is not zero.
+		if len(absent) > 0 {
+			for _, name := range absent {
+				gapped[name] = struct{}{}
+			}
+			continue
+		}
 		pt := CVDPoint{Time: at}
 		shares := make([]CVDShare, 0, len(usable))
 		sizeOK := true
 		var whaleDelta, retailDelta float64
 		for i, v := range usable {
-			src, ok := indexes[i][ms] // missing slot is not a sized zero
+			src := indexes[i][ms]
 			pt.BuyNotional += src.BuyNotional
 			pt.SellNotional += src.SellNotional
 			pt.Delta += src.Delta
@@ -524,7 +557,7 @@ func CombineCVDVenues(symbol string, venues []CVDVenueSeries, prices []CVDPrice,
 			shares = append(shares, CVDShare{
 				Exchange: v.Exchange, Delta: src.Delta, CVD: venueCvd[i],
 			})
-			if !ok || !src.SizeKnown {
+			if !src.SizeKnown {
 				sizeOK = false
 				continue
 			}
@@ -582,26 +615,61 @@ func CombineCVDVenues(symbol string, venues []CVDVenueSeries, prices []CVDPrice,
 	// A venue that was requested and has no bars is not zero. Combined stays
 	// incomplete until every venue passed in reaches the window open.
 	// Venues that do cover the lookback stay complete when the first shared
-	// bar is one bucket later than the cut.
+	// bar is one bucket later than the cut. A hole inside the overlap is not
+	// that slack: the bar is omitted and the series is not complete.
 	missing := cvdVenuesWithoutPoints(venues)
-	out.Complete = !usableIncomplete && len(missing) == 0
+	gapNames := make([]string, 0, len(gapped))
+	for name := range gapped {
+		gapNames = append(gapNames, name)
+	}
+	sort.Strings(gapNames)
+	out.Gaps = gapNames
+	out.Missing = uniqueSortedStrings(append(append([]string{}, missing...), gapNames...))
+	out.Complete = !usableIncomplete && len(missing) == 0 && len(gapNames) == 0
+	if len(gapNames) > 0 {
+		for i := range out.Windows {
+			out.Windows[i].Complete = false
+		}
+		for i := range out.Anchors {
+			out.Anchors[i].Complete = false
+		}
+	}
 	out.Divergence = summarizeCVDDivergence(out.Points, out.Windows)
 	out.VenueSplit = pickCVDVenueSplit(out.Windows)
-	out.Summary = ExplainCVDVenue(*out)
-	if !out.Complete {
-		notes := make([]string, 0, 2)
-		if len(missing) > 0 {
-			notes = append(notes, fmt.Sprintf(
-				"Combined CVD stays incomplete until %s reaches the window open.",
-				strings.Join(missing, ", "),
-			))
-		}
-		if usableIncomplete {
-			notes = append(notes, overlapIncompleteNote(from, now))
-		}
-		out.Summary = strings.TrimSpace(strings.Join(notes, " ") + " " + out.Summary)
+	notes := make([]string, 0, 3)
+	if len(missing) > 0 {
+		notes = append(notes, fmt.Sprintf(
+			"Combined CVD stays incomplete until %s reaches the window open.",
+			strings.Join(missing, ", "),
+		))
 	}
+	if len(gapNames) > 0 {
+		notes = append(notes, fmt.Sprintf(
+			"Combined CVD leaves out minutes %s missed. A missing minute is not filled with the other venue.",
+			strings.Join(gapNames, ", "),
+		))
+	}
+	if usableIncomplete {
+		notes = append(notes, overlapIncompleteNote(from, now))
+	}
+	out.Withhold = strings.TrimSpace(strings.Join(notes, " "))
+	out.Summary = cvdSummaryWithHold(*out)
 	return out
+}
+
+func cvdVenueName(ex Exchange) string {
+	if ex == "" {
+		return "venue"
+	}
+	return string(ex)
+}
+
+func cvdSummaryWithHold(v CVDVenueSeries) string {
+	base := ExplainCVDVenue(v)
+	if strings.TrimSpace(v.Withhold) == "" {
+		return base
+	}
+	return strings.TrimSpace(v.Withhold + " " + base)
 }
 
 // cvdVenuesWithoutPoints names venues that were asked for and did not return bars.
@@ -1308,8 +1376,11 @@ func stampClickAnchor(v *CVDVenueSeries, at time.Time) {
 		started = v.Points[0].Time
 	}
 	v.Anchors = append(v.Anchors, summarizeCVDAnchor(v.Points, CVDAnchorClick, at, started))
+	if len(v.Gaps) > 0 {
+		v.Anchors[len(v.Anchors)-1].Complete = false
+	}
 	if v.Error == "" {
-		v.Summary = ExplainCVDVenue(*v)
+		v.Summary = cvdSummaryWithHold(*v)
 	}
 }
 

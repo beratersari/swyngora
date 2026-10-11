@@ -61,7 +61,9 @@ type squeezeCombinedDTO struct {
 	CrowdedSide   string         `json:"crowdedSide"`
 	HigherRisk    string         `json:"higherRisk"`
 	DominantVenue string         `json:"dominantVenue"`
+	Agreement     string         `json:"agreement,omitempty"`
 	Summary       string         `json:"summary"`
+	Missing       []string       `json:"missing,omitempty"`
 }
 
 type squeezeResponse struct {
@@ -132,7 +134,9 @@ func squeezeCombinedToDTO(c domain.SqueezeCombined) squeezeCombinedDTO {
 		CrowdedSide:   c.CrowdedSide,
 		HigherRisk:    c.HigherRisk,
 		DominantVenue: c.DominantVenue,
+		Agreement:     c.Agreement,
 		Summary:       c.Summary,
+		Missing:       append([]string{}, c.Missing...),
 	}
 }
 

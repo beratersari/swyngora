@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { Alert } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
@@ -22,15 +23,25 @@ export function PositionSidePanel({ data, error, isLoading = false }: PositionSi
       ) : (
         WINDOWS.map((id) => {
           const row = data?.windows?.find((w) => w.window === id);
+          const held = row?.complete === false;
+          const names = (row?.missing ?? []).map((name) => name.trim()).filter(Boolean).join(', ');
+          const note = names ? t('tape.withheld', { venues: names }) : row?.summary || t('tape.incomplete');
           return (
-            <Row key={id}>
-              <Text variant="caption" color="secondary">
-                {id}
-              </Text>
-              <Text variant="numeric" color="primary" isLoading={isLoading} skeletonWidth="70%">
-                {row ? sideLine(row.netLong, row.netShort) : '—'}
-              </Text>
-            </Row>
+            <Fragment key={id}>
+              <Row>
+                <Text variant="caption" color="secondary">
+                  {id}
+                </Text>
+                <Text variant="numeric" color="primary" isLoading={isLoading} skeletonWidth="70%">
+                  {row && !held ? sideLine(row.netLong, row.netShort) : '—'}
+                </Text>
+              </Row>
+              {held ? (
+                <Text variant="caption" color="secondary">
+                  {note}
+                </Text>
+              ) : null}
+            </Fragment>
           );
         })
       )}

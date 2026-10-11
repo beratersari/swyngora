@@ -227,6 +227,8 @@ export type MarketNetPositionWindow = {
   unexplained?: string;
   complete?: boolean;
   summary?: string;
+  /** Asked venues left out of this window. Not a flat zero. */
+  missing?: string[];
 };
 export type MarketNetPosition = {
   symbol?: string;
@@ -1097,6 +1099,8 @@ export type MarketCvdVenue = {
   summary?: string;
   error?: string;
   complete?: boolean;
+  /** Venues with no points, or that missed a minute another venue printed. */
+  missing?: string[];
   /** Current run. A 4-hour window fallback has no since and is not a run. */
   divergence?: MarketCvdDivergence;
   points?: MarketCvdPoint[];

@@ -69,10 +69,13 @@ Useful when:
   Futures expects Binance, Bybit, and OKX. Spot expects Binance and Bybit.
   Otherwise the chart draws the page venue and names who is missing.
   A Coinbase or OKX page uses Binance for spot and says Binance.
-- Combined **adds** each venue’s delta on the overlapping **time range**
-  (a quiet 5m slot on one side is treated as 0, not a hole). Combined
-  `complete` is false when any venue passed in has no points or has not
-  reached the window open. One missing 5m bucket at the start, when every
+- Combined **adds** each venue’s delta on the overlapping **time range**.
+  A minute one venue missed inside that overlap is left out. It is not
+  filled with the other venue, and it is not stored as zero. A minute
+  nobody printed is not a gap and does not change the sum. Combined
+  `complete` is false when any venue passed in has no points, has not
+  reached the window open, or missed a minute another venue printed.
+  One missing 5m bucket at the start, when every
   venue otherwise covers the lookback, does not make a 24h tape look
   unfinished. A short Bybit history still does **not** make combined
   complete. `overlapFrom` / `overlapTo` mark that range.

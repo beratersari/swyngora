@@ -413,6 +413,7 @@
     "net_sell": "Satış",
     "net_mixed": "Karışık",
     "incomplete": "Pencere eksik — geçmiş hâlâ doluyor.",
+    "withheld": "Birleşik sonuç {{venues}} gelene kadar boş.",
     "liqIncomplete": "Likidasyon toplamları yalnızca bu sürecin bu coini izlediği süreyi kapsar.",
     "unsupported": "Bu borsada perpetual bant yok. Aynı baz Binance + Bybit’te varsa o gösterilir.",
     "none": "Bu sembol için Binance veya Bybit’te perpetual defter yok.",

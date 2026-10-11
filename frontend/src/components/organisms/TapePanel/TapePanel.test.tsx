@@ -319,6 +319,98 @@ describe('TapePanel', () => {
     expect(screen.getByText(/bids are absorbing/i)).toBeInTheDocument();
   });
 
+  it('blanks a combined number when a venue is missing', () => {
+    renderWithTheme(
+      <TapePanel
+        openInterest={{
+          missing: ['bybit'],
+          current: { value: '1000000000' },
+          windows: [
+            {
+              window: '1h',
+              changeValue: '+300000000',
+              changeValuePct: '+14.3',
+              flow: 'opened',
+              complete: false,
+              missing: ['bybit'],
+            },
+            {
+              window: '4h',
+              changeValue: '+500000000',
+              changeValuePct: '+25',
+              flow: 'opened',
+              complete: true,
+            },
+          ],
+          venues: [
+            {
+              exchange: 'binance',
+              current: { value: '800000000' },
+              windows: [{ window: '1h', changeValue: '+200000000', changeValuePct: '+12', flow: 'opened' }],
+            },
+          ],
+          funding: {
+            current: { ratePct: '0.05', payer: 'long' },
+            pressure: {
+              ratePct: '0.007778',
+              payer: 'long',
+              missing: ['okx'],
+              summary: 'Combined funding pressure is withheld until okx is in.',
+            },
+            pressureWindows: [
+              { window: '1h', changePct: '+0.001', complete: true },
+              { window: '24h', changePct: '-0.002', complete: true },
+            ],
+          },
+        }}
+        cvd={{
+          venues: [{ exchange: 'bybit', lastCvd: '99' }],
+          combined: {
+            complete: false,
+            lastCvd: '12.5',
+            missing: ['binance'],
+            summary: 'Combined CVD leaves out minutes binance missed.',
+            anchors: [
+              {
+                anchor: 'day',
+                cvd: '+1200000',
+                complete: false,
+                summary: 'Since the day open (00:00 UTC), CVD +1.20M.',
+              },
+            ],
+          },
+        }}
+        participation={{
+          venues: [{ windows: [{ window: '15m', ratioPct: '+40', complete: true }] }],
+          combined: {
+            windows: [{ window: '15m', volume: '2000000000', oiDelta: '+300000000', ratioPct: '+15', complete: false }],
+          },
+        }}
+      />,
+    );
+    expect(screen.queryByText(/1\.00B/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\+300\.00M/)).not.toBeInTheDocument();
+    expect(screen.queryByText('0.0078%')).not.toBeInTheDocument();
+    expect(screen.queryByText('0.0500%')).not.toBeInTheDocument();
+    expect(screen.queryByText('+0.0010%')).not.toBeInTheDocument();
+    expect(screen.queryByText('-0.0020%')).not.toBeInTheDocument();
+    expect(screen.queryByText('Longs pay')).not.toBeInTheDocument();
+    expect(screen.queryByText(/12\.5/)).not.toBeInTheDocument();
+    expect(screen.queryByText('99')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Since the day open/)).not.toBeInTheDocument();
+    expect(screen.queryByText('1.20M')).not.toBeInTheDocument();
+    expect(screen.queryByText(/\(Partial\)/)).not.toBeInTheDocument();
+    expect(screen.queryByText('+15%')).not.toBeInTheDocument();
+    expect(screen.queryByText('+40%')).not.toBeInTheDocument();
+    expect(screen.getByText(/800\.00M/)).toBeInTheDocument();
+    expect(screen.getByText(/\+200\.00M/)).toBeInTheDocument();
+    expect(screen.getByText(/\+500\.00M/)).toBeInTheDocument();
+    expect(screen.getByText(/until bybit is in/i)).toBeInTheDocument();
+    expect(screen.getByText(/until okx is in/i)).toBeInTheDocument();
+    expect(screen.getByText(/until binance is in/i)).toBeInTheDocument();
+    expect(screen.getByText(/leaves out minutes binance/i)).toBeInTheDocument();
+  });
+
   it('explains a missing perp book', () => {
     renderWithTheme(<TapePanel openInterestError="no perpetual on this venue" />);
     expect(screen.getAllByText('no perpetual on this venue').length).toBeGreaterThan(0);

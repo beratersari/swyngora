@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -66,7 +67,11 @@ type SqueezeCombined struct {
 	CrowdedSide   string          `json:"crowdedSide"`
 	HigherRisk    string          `json:"higherRisk"`
 	DominantVenue string          `json:"dominantVenue"` // larger OI venue
-	Summary       string          `json:"summary"`
+	// Agreement is "withheld" when a venue errored or had no open interest.
+	// A score of 0 on that reading is not a low-risk blend.
+	Agreement string   `json:"agreement,omitempty"`
+	Summary   string   `json:"summary"`
+	Missing   []string `json:"missing,omitempty"`
 }
 
 // SqueezeReport is the API result for one symbol.
@@ -467,6 +472,16 @@ func CombineSqueezeReports(venues []SqueezeVenueReport) *SqueezeCombined {
 	if len(venues) == 0 {
 		return nil
 	}
+	if missing := squeezeUnusable(venues); len(missing) > 0 {
+		return &SqueezeCombined{
+			Agreement: "withheld",
+			Missing:   missing,
+			Summary: fmt.Sprintf(
+				"Combined squeeze risk is withheld until %s is in. A missing venue is not weighted as one.",
+				strings.Join(missing, ", "),
+			),
+		}
+	}
 	if len(venues) == 1 {
 		v := venues[0]
 		return &SqueezeCombined{
@@ -562,6 +577,17 @@ func CombineSqueezeReports(venues []SqueezeVenueReport) *SqueezeCombined {
 	}
 	out.Summary = combinedSummary(out, venues)
 	return out
+}
+
+// squeezeUnusable names venues that cannot take part in an OI-weighted blend.
+func squeezeUnusable(venues []SqueezeVenueReport) []string {
+	var missing []string
+	for _, v := range venues {
+		if v.Error != "" || v.OpenInterest <= 0 {
+			missing = append(missing, exchangeLabel(v.Exchange))
+		}
+	}
+	return uniqueSortedStrings(missing)
 }
 
 func weightedFactors(m map[string]*SqueezeFactor, w float64) []SqueezeFactor {

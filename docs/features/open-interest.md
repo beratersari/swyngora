@@ -21,8 +21,11 @@ can ask “how much BTC OI was added in the last hour?”
   `flow` (`opened` / `closed` / `flat`), `openedValue` or `closedValue`
   (USDT notional added or closed), and `complete` (false when the historical
   sample is missing or older than the window slack)
-- Combined `all` sums venues that have a past sample for that window and
-  still returns each venue's current OI plus the same 1h / 4h / 24h windows
+- Combined `all` stays blank until every venue that was asked is in.
+  A venue that failed is named in `missing` and is not counted as zero.
+  A window that lacks a sample on any asked venue is blank even when the
+  others have it. Per-venue rows still return that venue's current OI
+  plus its own 1h / 4h / 24h windows
 - How much of futures volume that OI change represents is
   `GET /api/v1/market/participation` (15m / 1h / 4h). See [`participation.md`](participation.md)
 - `funding` is attached (predicted next rate + recent settlements, plus OI-weighted `pressure`). See [`funding-rate.md`](funding-rate.md)

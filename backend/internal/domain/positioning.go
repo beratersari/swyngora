@@ -5,6 +5,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -61,10 +62,13 @@ type PositioningCombined struct {
 	Regime        string   `json:"regime"`
 	Label         string   `json:"label"`
 	Confidence    float64  `json:"confidence"`
-	Agreement     string   `json:"agreement"` // agree | mixed | single
+	Agreement     string   `json:"agreement"` // agree | mixed | single | withheld
 	DominantVenue string   `json:"dominantVenue"`
 	Summary       string   `json:"summary"`
 	Reasons       []string `json:"reasons"`
+	// Missing names venues that errored or had no open interest. Combined
+	// stays blank; those venues are not given weight 1.
+	Missing []string `json:"missing,omitempty"`
 }
 
 // PositioningReport is the API payload.
@@ -345,6 +349,16 @@ func CombinePositioningReports(venues []PositioningVenueReport) *PositioningComb
 	if len(venues) == 0 {
 		return nil
 	}
+	if missing := positioningUnusable(venues); len(missing) > 0 {
+		return &PositioningCombined{
+			Agreement: "withheld",
+			Missing:   missing,
+			Summary: fmt.Sprintf(
+				"Combined positioning is withheld until %s is in. A missing venue is not weighted as one.",
+				strings.Join(missing, ", "),
+			),
+		}
+	}
 	if len(venues) == 1 {
 		v := venues[0]
 		return &PositioningCombined{
@@ -451,6 +465,18 @@ func CombinePositioningReports(venues []PositioningVenueReport) *PositioningComb
 	out.Summary = fmt.Sprintf("Market: %s (confidence %.0f, %s). Dominant OI: %s.",
 		out.Label, out.Confidence, out.Agreement, out.DominantVenue)
 	return out
+}
+
+// positioningUnusable names venues that cannot take part in an OI-weighted blend.
+// An error or a non-positive open interest is not given weight 1.
+func positioningUnusable(venues []PositioningVenueReport) []string {
+	var missing []string
+	for _, v := range venues {
+		if v.Error != "" || v.OpenInterest <= 0 {
+			missing = append(missing, exchangeLabel(v.Exchange))
+		}
+	}
+	return uniqueSortedStrings(missing)
 }
 
 // PriceChangePctFromCloses is (last-first)/first*100 for chronological closes.

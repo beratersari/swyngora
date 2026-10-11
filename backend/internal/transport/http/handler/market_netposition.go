@@ -23,15 +23,16 @@ func (h *MarketHandler) GetNetPosition(w http.ResponseWriter, r *http.Request) {
 }
 
 type netPositionWindowDTO struct {
-	Window      string `json:"window"`
-	NetLong     string `json:"netLong"`
-	NetShort    string `json:"netShort"`
-	Buy         string `json:"buy"`
-	Sell        string `json:"sell"`
-	OIDelta     string `json:"oiDelta"`
-	Unexplained string `json:"unexplained,omitempty"`
-	Complete    bool   `json:"complete"`
-	Summary     string `json:"summary"`
+	Window      string   `json:"window"`
+	NetLong     string   `json:"netLong"`
+	NetShort    string   `json:"netShort"`
+	Buy         string   `json:"buy"`
+	Sell        string   `json:"sell"`
+	OIDelta     string   `json:"oiDelta"`
+	Unexplained string   `json:"unexplained,omitempty"`
+	Complete    bool     `json:"complete"`
+	Summary     string   `json:"summary"`
+	Missing     []string `json:"missing,omitempty"`
 }
 
 type netPositionVenueDTO struct {
@@ -66,12 +67,18 @@ func netPositionWindowsDTO(rows []domain.NetPositionWindow) []netPositionWindowD
 	out := make([]netPositionWindowDTO, 0, len(rows))
 	for _, w := range rows {
 		row := netPositionWindowDTO{
-			Window: w.Window, NetLong: domain.FormatSignedQty(w.NetLong), NetShort: domain.FormatSignedQty(w.NetShort),
-			Buy: domain.FormatSignedQty(w.Buy), Sell: domain.FormatSignedQty(w.Sell), OIDelta: domain.FormatSignedQty(w.OIDelta),
-			Complete: w.Complete, Summary: w.Summary,
+			Window: w.Window, Complete: w.Complete, Summary: w.Summary,
+			Missing: append([]string{}, w.Missing...),
 		}
-		if w.Unexplained != 0 {
-			row.Unexplained = domain.FormatSignedQty(w.Unexplained)
+		if w.Complete {
+			row.NetLong = domain.FormatSignedQty(w.NetLong)
+			row.NetShort = domain.FormatSignedQty(w.NetShort)
+			row.Buy = domain.FormatSignedQty(w.Buy)
+			row.Sell = domain.FormatSignedQty(w.Sell)
+			row.OIDelta = domain.FormatSignedQty(w.OIDelta)
+			if w.Unexplained != 0 {
+				row.Unexplained = domain.FormatSignedQty(w.Unexplained)
+			}
 		}
 		out = append(out, row)
 	}

@@ -23,7 +23,10 @@ OI-weighted pressure** so an 8B book at +0.01% is not treated the same as a
     (`sum(rate × OI) / sum(OI)`). Venues with no OI are omitted. `weightPct`
     is each venue's share of that combined OI; `dominantVenue` is the largest
     book. Example: Binance 8B at +0.01% and Bybit 1B at −0.01% → combined
-    **+0.0078%** (longs still pay), not zero.
+    **+0.0078%** (longs still pay), not zero. A configured venue that is
+    absent from the blend blanks combined pressure and is named in
+    `pressure.missing`. Venues with no OI stay omitted inside a blend
+    that already includes every asked venue.
   - `pressureWindows` is live pressure vs ~1h / 4h / 24h ago (`flipped` /
     `steeper` / `flatter` / `stable`)
   - `pressureHistory` is 5-minute OI-weighted samples over the last 24h

@@ -15,7 +15,9 @@ import (
 const squeezeDisclaimer = "Squeeze risk is a model, not a prediction or financial advice. Long/short is account count (not position size). Nearby liquidation pockets use an assumed leverage mix. Liquidation heat only includes events this process has seen. Informational only."
 
 // GetSqueezeRisk scores long-squeeze and short-squeeze risk per venue and combined.
-// exchange=all returns Binance + Bybit plus an OI-weighted combined block.
+// exchange=all uses every configured futures venue (Binance, Bybit, and OKX when
+// that port is set) plus an OI-weighted combined block. A venue that errored or
+// has no open interest withholds the combined blend.
 func (s *Service) GetSqueezeRisk(ctx context.Context, exchange, symbol string) (*domain.SqueezeReport, error) {
 	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
 	if err != nil {

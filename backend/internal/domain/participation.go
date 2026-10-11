@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -42,6 +43,8 @@ type ParticipationWindow struct {
 	Lean     string  // entering | exiting | transfer
 	Complete bool
 	Summary  string
+	// Missing names venues that were asked for and did not have a complete window.
+	Missing []string
 }
 
 // ParticipationVenue is one venue's 15m / 1h / 4h participation.
@@ -199,22 +202,37 @@ func CombineParticipationVenues(symbol string, venues []ParticipationVenue) *Par
 	}
 	for _, spec := range ParticipationWindows {
 		var vol, delta float64
-		complete := true
-		any := false
+		var missing []string
 		for _, v := range venues {
-			for _, w := range v.Windows {
-				if w.Window != spec.ID {
-					continue
-				}
-				vol += w.Volume
-				delta += w.OIDelta
-				any = true
-				if !w.Complete {
-					complete = false
+			var found *ParticipationWindow
+			for i := range v.Windows {
+				if v.Windows[i].Window == spec.ID {
+					found = &v.Windows[i]
+					break
 				}
 			}
+			if v.Error != "" || found == nil || !found.Complete {
+				missing = append(missing, exchangeLabel(v.Exchange))
+				continue
+			}
+			vol += found.Volume
+			delta += found.OIDelta
 		}
-		win := ParticipationWindow{Window: spec.ID, Volume: vol, OIDelta: delta, Lean: ParticipationTransfer, Complete: any && complete && vol > 0}
+		names := uniqueSortedStrings(missing)
+		if len(names) > 0 {
+			win := ParticipationWindow{
+				Window:   spec.ID,
+				Complete: false,
+				Missing:  names,
+			}
+			win.Summary = fmt.Sprintf(
+				"%s: combined participation stays blank until %s is in. A missing venue is not counted as zero.",
+				spec.ID, strings.Join(names, ", "),
+			)
+			out.Windows = append(out.Windows, win)
+			continue
+		}
+		win := ParticipationWindow{Window: spec.ID, Volume: vol, OIDelta: delta, Lean: ParticipationTransfer, Complete: vol > 0}
 		if vol > 0 {
 			win.Ratio = delta / vol
 			win.RatioPct = win.Ratio * 100
@@ -230,8 +248,19 @@ func CombineParticipationVenues(symbol string, venues []ParticipationVenue) *Par
 		win.Summary = ExplainParticipationWindow(win)
 		out.Windows = append(out.Windows, win)
 	}
-	out.Summary = ExplainParticipationVenue(*out)
+	out.Summary = explainCombinedParticipation(*out)
 	return out
+}
+
+// explainCombinedParticipation keeps a withhold sentence. ExplainParticipationVenue
+// only reads windows that already have volume, which a withheld window does not.
+func explainCombinedParticipation(v ParticipationVenue) string {
+	for _, w := range v.Windows {
+		if len(w.Missing) > 0 && strings.TrimSpace(w.Summary) != "" {
+			return w.Summary
+		}
+	}
+	return ExplainParticipationVenue(v)
 }
 
 // ExplainParticipationWindow is the desk line for one lookback.
