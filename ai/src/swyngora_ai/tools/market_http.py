@@ -1718,6 +1718,13 @@ class PortfolioGetInput(BaseModel):
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
+class FillPocketInput(BaseModel):
+    client_id: str
+    exchange: str = Field(description="binance | coinbase | bybit | nasdaq | bist")
+    symbol: str = Field(description="Pair, e.g. BTCUSDT")
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+
+
 class ClientIdInput(BaseModel):
     client_id: str
 
@@ -4012,6 +4019,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if portfolio_id:
             q["portfolioId"] = portfolio_id
         return http.get("/api/v1/portfolio", q)
+
+    def get_fill_pocket(client_id: str, exchange: str, symbol: str, portfolio_id: str = "") -> str:
+        q: dict[str, Any] = {"clientId": client_id, "exchange": exchange, "symbol": symbol}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.get("/api/v1/portfolio/fill-pocket", q)
 
     def get_portfolio_performance(
         client_id: str, period: str = "1w", portfolio_id: str = ""
@@ -6675,6 +6688,21 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="list_shared_portfolios",
             description="List paper portfolios shared with you and your role.",
             args_schema=ClientIdInput,
+        ),
+        StructuredTool.from_function(
+            get_fill_pocket,
+            name="get_fill_pocket",
+            description=(
+                "Where an open paper fill sits against the nearer estimated liquidation pocket. "
+                "fillPrice is the newest open spot buy, or the margin entry when that book has no spot lot. "
+                "pocketPrice is that pocket on the combined Binance, Bybit, and OKX map. "
+                "gapPct is the percent from the fill to the pocket. pocketFromFill is above or below. "
+                "marginLiqPrice is the paper liquidation price. marginGapPct is the percent from the pocket "
+                "to that price. A missing venue leaves the pocket blank and is named. It is not zero. "
+                "open is false when the book has no position. Equities set equity and return no prices. "
+                "Not financial advice."
+            ),
+            args_schema=FillPocketInput,
         ),
         StructuredTool.from_function(
             get_portfolio,

@@ -34,6 +34,7 @@ const mockVolumeProfile = vi.fn();
 const mockSweeps = vi.fn();
 const mockBots = vi.fn();
 const mockForensics = vi.fn();
+const mockFillPocket = vi.fn();
 
 vi.mock('@/libs/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/libs/api')>();
@@ -72,6 +73,7 @@ vi.mock('@/libs/api', async (importOriginal) => {
       refetch: vi.fn(),
     }),
     useGetMarketCvdQuery: () => mockCvd(),
+    useGetFillPocketQuery: () => mockFillPocket(),
     useGetMarketSituationQuery: () => ({
       data: undefined,
       currentData: undefined,
@@ -177,6 +179,15 @@ const candle = {
 
 describe('CoinDetailPage', () => {
   beforeEach(() => {
+    mockFillPocket.mockReset();
+    mockFillPocket.mockReturnValue({
+      data: undefined,
+      currentData: undefined,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
     mockForensics.mockReset();
     mockForensics.mockReturnValue({
       data: undefined,
@@ -451,6 +462,37 @@ describe('CoinDetailPage', () => {
     expect(screen.getByTestId('chart-profile-venue')).toHaveTextContent(/OKX/);
     expect(screen.getByTestId('chart-sweeps')).toHaveTextContent(/Binance/);
     expect(screen.getByTestId('chart-bots')).toBeInTheDocument();
+  });
+
+  it('marks the paper fill and the nearer pocket on the chart and the trade tab', async () => {
+    const user = userEvent.setup();
+    const mark = {
+      open: true,
+      fillPrice: 100,
+      pocketSide: 'long' as const,
+      pocketPrice: 99,
+      gapPct: 1,
+      pocketFromFill: 'below' as const,
+      marginLiqPrice: 80.5,
+      marginGapPct: 10.6,
+      marginFromPocket: 'below' as const,
+    };
+    mockFillPocket.mockReturnValue({
+      data: mark,
+      currentData: mark,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    renderDetail('/markets/binance/BTCUSDT');
+    const chart = await screen.findByTestId('candle-chart');
+    expect(chart.getAttribute('data-prices')).toContain('Paper fill');
+    expect(chart.getAttribute('data-prices')).toContain('Long pocket · 1% below');
+    expect(chart.getAttribute('data-prices')).toContain('Paper liquidation');
+    expect(screen.getByText(/Paper fill at 100/)).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Trade' }));
+    expect(screen.getAllByText(/Paper liquidation is 10.6% below that pocket/).length).toBeGreaterThan(0);
   });
 
   it('renders symbol header and chart host', async () => {

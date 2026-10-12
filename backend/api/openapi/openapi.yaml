@@ -2490,7 +2490,7 @@ paths:
         - `liquidation.side`: the leverage model. `long` when the nearest estimated
           long pocket below last is closer, `short` when the nearest short pocket
           above last is closer, `none` when the map has no pocket.
-          `distancePct` is that distance from last.
+          `distancePct` is that distance from last. `price` is that pocket.
         - `prints.side`: measured force-order prints over the last 24 hours.
           `long` or `short` when that side is at least 60% of the notional,
           `even` when both sides printed and neither reaches 60%, `quiet` when
@@ -6432,6 +6432,53 @@ paths:
                   total: { type: integer }
                   limit: { type: integer }
                   offset: { type: integer }
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/fill-pocket:
+    get:
+      summary: Paper fill against the nearer estimated liquidation pocket
+      description: |
+        The newest open spot buy on this book and symbol, or the margin entry
+        when there is no spot lot, and the nearer estimated liquidation pocket
+        on the combined Binance, Bybit, and OKX map.
+
+        `gapPct` is the percent from the fill to that pocket. `pocketFromFill`
+        is `above` or `below`. A zero gap is the same price and is kept.
+
+        `marginLiqPrice` is this book's paper liquidation price when a margin
+        position is open. `marginGapPct` is the percent from the pocket to that
+        price. It is omitted when the pocket is unmarked.
+
+        A missing venue leaves the pocket blank and is named in `missing`.
+        It is not treated as zero. `open` is false when the book has neither
+        a spot lot nor a margin position, and the map is not read. Equities
+        set `equity` and return no prices. Nasdaq and BIST have no map.
+      operationId: getFillPocket
+      tags: [Portfolio]
+      parameters:
+        - name: exchange
+          in: query
+          required: true
+          schema: { type: string, enum: [binance, coinbase, bybit, nasdaq, bist] }
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: portfolioId
+          in: query
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Fill, pocket, and paper liquidation marks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FillPocketMark'
+        '400':
+          $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
   /api/v1/portfolio/performance:
@@ -13918,6 +13965,32 @@ components:
           items:
             $ref: '#/components/schemas/FillMove'
         createdAt: { type: string, format: date-time }
+    FillPocketMark:
+      type: object
+      description: |
+        Open paper fill against the nearer estimated liquidation pocket.
+        gapPct is the percent from fillPrice to pocketPrice. marginGapPct is the
+        percent from pocketPrice to marginLiqPrice. A missing venue leaves the
+        pocket blank. open false means this book has no position, and the map
+        was not read.
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        open: { type: boolean }
+        equity: { type: boolean }
+        fillPrice: { type: number }
+        fillKind: { type: string, enum: [spot, margin] }
+        pocketSide: { type: string, enum: [long, short, none] }
+        pocketPrice: { type: number }
+        gapPct: { type: number, description: Percent from the fill to the pocket. 0 means the same price. }
+        pocketFromFill: { type: string, enum: [above, below] }
+        marginLiqPrice: { type: number, description: Paper liquidation price of the open margin position. }
+        marginGapPct: { type: number, description: Percent from the pocket to the paper liquidation price. }
+        marginFromPocket: { type: string, enum: [above, below] }
+        missing:
+          type: array
+          items: { type: string }
+        note: { type: string }
     CoinSituation:
       type: object
       description: Short combined read. A missing clause lists the venues that did not cover it.
@@ -13946,6 +14019,7 @@ components:
           properties:
             side: { type: string, enum: [long, short, none] }
             distancePct: { type: number }
+            price: { type: number, description: Price of the nearer estimated pocket. Omitted when side is none. }
         liquidationMissing:
           type: array
           items: { type: string }

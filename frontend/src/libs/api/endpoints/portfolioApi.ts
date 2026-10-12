@@ -25,6 +25,9 @@ export type PendingOrder = components['schemas']['PendingOrder'];
 
 export type SpotPosition = components['schemas']['PortfolioPosition'];
 
+/** Open paper fill against the nearer estimated liquidation pocket. */
+export type FillPocketMark = components['schemas']['FillPocketMark'];
+
 export type PortfolioView = components['schemas']['PortfolioView'];
 
 export type PaperOrderType =
@@ -188,6 +191,16 @@ export const portfolioApi = baseApi.injectEndpoints({
       query: (arg) => ({
         url: '/api/v1/portfolio',
         params: bookParams(arg?.portfolioId),
+      }),
+      providesTags: ['Portfolio'],
+    }),
+    getFillPocket: build.query<
+      FillPocketMark,
+      { exchange: string; symbol: string; portfolioId?: string }
+    >({
+      query: ({ exchange, symbol, portfolioId }) => ({
+        url: '/api/v1/portfolio/fill-pocket',
+        params: { exchange, symbol, ...bookParams(portfolioId) },
       }),
       providesTags: ['Portfolio'],
     }),
@@ -571,6 +584,7 @@ export const portfolioApi = baseApi.injectEndpoints({
 export const {
   useListPortfoliosQuery,
   useGetPortfolioQuery,
+  useGetFillPocketQuery,
   useCreatePortfolioMutation,
   useRenamePortfolioMutation,
   useDeletePortfolioMutation,

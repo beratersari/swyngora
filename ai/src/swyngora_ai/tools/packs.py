@@ -149,6 +149,7 @@ PAPER_TOOLS: frozenset[str] = frozenset(
         "revoke_portfolio_share",
         "list_portfolio_shares",
         "list_shared_portfolios",
+        "get_fill_pocket",
         "get_portfolio",
         "get_portfolio_performance",
         "deposit_portfolio_cash",

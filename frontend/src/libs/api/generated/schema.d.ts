@@ -1568,7 +1568,7 @@ export interface paths {
          *     - `liquidation.side`: the leverage model. `long` when the nearest estimated
          *       long pocket below last is closer, `short` when the nearest short pocket
          *       above last is closer, `none` when the map has no pocket.
-         *       `distancePct` is that distance from last.
+         *       `distancePct` is that distance from last. `price` is that pocket.
          *     - `prints.side`: measured force-order prints over the last 24 hours.
          *       `long` or `short` when that side is at least 60% of the notional,
          *       `even` when both sides printed and neither reaches 60%, `quiet` when
@@ -3767,6 +3767,40 @@ export interface paths {
          * @description Newest first. Includes the opening balance row created with the portfolio. Transfer rows include the other book id and name.
          */
         get: operations["listPortfolioCashMovements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/fill-pocket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Paper fill against the nearer estimated liquidation pocket
+         * @description The newest open spot buy on this book and symbol, or the margin entry
+         *     when there is no spot lot, and the nearer estimated liquidation pocket
+         *     on the combined Binance, Bybit, and OKX map.
+         *
+         *     `gapPct` is the percent from the fill to that pocket. `pocketFromFill`
+         *     is `above` or `below`. A zero gap is the same price and is kept.
+         *
+         *     `marginLiqPrice` is this book's paper liquidation price when a margin
+         *     position is open. `marginGapPct` is the percent from the pocket to that
+         *     price. It is omitted when the pocket is unmarked.
+         *
+         *     A missing venue leaves the pocket blank and is named in `missing`.
+         *     It is not treated as zero. `open` is false when the book has neither
+         *     a spot lot nor a margin position, and the map is not read. Equities
+         *     set `equity` and return no prices. Nasdaq and BIST have no map.
+         */
+        get: operations["getFillPocket"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9653,6 +9687,37 @@ export interface components {
             /** Format: date-time */
             createdAt?: string;
         };
+        /**
+         * @description Open paper fill against the nearer estimated liquidation pocket.
+         *     gapPct is the percent from fillPrice to pocketPrice. marginGapPct is the
+         *     percent from pocketPrice to marginLiqPrice. A missing venue leaves the
+         *     pocket blank. open false means this book has no position, and the map
+         *     was not read.
+         */
+        FillPocketMark: {
+            symbol?: string;
+            exchange?: string;
+            open?: boolean;
+            equity?: boolean;
+            fillPrice?: number;
+            /** @enum {string} */
+            fillKind?: "spot" | "margin";
+            /** @enum {string} */
+            pocketSide?: "long" | "short" | "none";
+            pocketPrice?: number;
+            /** @description Percent from the fill to the pocket. 0 means the same price. */
+            gapPct?: number;
+            /** @enum {string} */
+            pocketFromFill?: "above" | "below";
+            /** @description Paper liquidation price of the open margin position. */
+            marginLiqPrice?: number;
+            /** @description Percent from the pocket to the paper liquidation price. */
+            marginGapPct?: number;
+            /** @enum {string} */
+            marginFromPocket?: "above" | "below";
+            missing?: string[];
+            note?: string;
+        };
         /** @description Short combined read. A missing clause lists the venues that did not cover it. */
         CoinSituation: {
             symbol?: string;
@@ -9673,6 +9738,8 @@ export interface components {
                 /** @enum {string} */
                 side?: "long" | "short" | "none";
                 distancePct?: number;
+                /** @description Price of the nearer estimated pocket. Omitted when side is none. */
+                price?: number;
             };
             liquidationMissing?: string[];
             /**
@@ -15820,6 +15887,33 @@ export interface operations {
                     };
                 };
             };
+            404: components["responses"]["Error"];
+        };
+    };
+    getFillPocket: {
+        parameters: {
+            query: {
+                exchange: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
+                symbol: string;
+                portfolioId?: string;
+                clientId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fill, pocket, and paper liquidation marks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FillPocketMark"];
+                };
+            };
+            400: components["responses"]["Error"];
             404: components["responses"]["Error"];
         };
     };

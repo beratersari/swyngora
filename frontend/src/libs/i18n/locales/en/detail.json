@@ -658,6 +658,27 @@
     "failed": "Paper order failed",
     "availableCash": "Available cash {{amount}}"
   },
+  "fillPocket": {
+    "title": "Fill and pocket",
+    "sideLong": "long",
+    "sideShort": "short",
+    "fillBelow": "Paper fill at {{fill}}. The nearer {{side}} pocket is {{pct}}% below it, at {{pocket}}.",
+    "fillAbove": "Paper fill at {{fill}}. The nearer {{side}} pocket is {{pct}}% above it, at {{pocket}}.",
+    "fillSame": "Paper fill at {{fill}}. The nearer {{side}} pocket is at the same price.",
+    "fillNone": "Paper fill at {{fill}}. No estimated liquidation pocket sits on either side.",
+    "fillMissing": "Paper fill at {{fill}}. The estimated pocket stays unmarked until the map includes {{venues}}.",
+    "marginBelow": "Paper liquidation is {{pct}}% below that pocket, at {{price}}.",
+    "marginAbove": "Paper liquidation is {{pct}}% above that pocket, at {{price}}.",
+    "marginSame": "Paper liquidation sits on that pocket, at {{price}}.",
+    "marginUnmarked": "Paper liquidation at {{price}}. The pocket stays unmarked until the map includes {{venues}}.",
+    "lineFill": "Paper fill",
+    "linePocketLong": "Long pocket",
+    "linePocketShort": "Short pocket",
+    "lineAbove": "{{pct}}% above",
+    "lineBelow": "{{pct}}% below",
+    "lineSame": "at the fill",
+    "lineMargin": "Paper liquidation"
+  },
   "situation": {
     "title": "Situation",
     "compare": "Position read",

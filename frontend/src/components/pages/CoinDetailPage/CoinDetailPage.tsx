@@ -139,6 +139,7 @@ import {
   useLazyGetPumpEventsQuery,
   useListIntervalsQuery,
   useListPortfoliosQuery,
+  useGetFillPocketQuery,
   useGetPortfolioQuery,
   useListScannerResultsQuery,
   usePlacePortfolioOrderMutation,
@@ -248,6 +249,7 @@ import {
 } from './chartPresets';
 import { CoinSituation } from '@/components/molecules/CoinSituation';
 import { FillMoves } from '@/components/molecules/FillMoves';
+import { FillPocket, fillPocketPriceLines } from '@/components/molecules/FillPocket';
 import { openPositionFor, PositionSituation } from '@/components/molecules/PositionSituation';
 import {
   clickSecFromForensicsAt,
@@ -474,6 +476,15 @@ export function CoinDetailPage() {
     paperBookId ? { portfolioId: paperBookId } : undefined,
     { skip: !paperBookId, refetchOnFocus: true },
   );
+  const fillPocketQuery = useGetFillPocketQuery(
+    { exchange: exchangeArg, symbol: symbol ?? '', portfolioId: paperBookId || undefined },
+    {
+      skip: skip || isEquity || !paperBookId,
+      pollingInterval: visible ? 60_000 : 0,
+      refetchOnFocus: true,
+    },
+  );
+  const fillPocket = rtkCurrent(fillPocketQuery);
   const heldPosition = openPositionFor(
     rtkCurrent(paperPortfolio)?.positions,
     exchange ?? '',
@@ -1664,8 +1675,26 @@ export function CoinDetailPage() {
         });
       }
     }
+    if (!isEquity && fillPocket?.open) {
+      for (const line of fillPocketPriceLines(fillPocket, t)) {
+        lines.push({
+          id: line.id,
+          price: line.price,
+          lineWidth: 2,
+          title: line.title,
+          color:
+            line.role === 'fill'
+              ? semanticColors.chart.emaFast
+              : line.role === 'margin'
+                ? semanticColors.status.warning
+                : fillPocket.pocketSide === 'long'
+                  ? semanticColors.chart.down
+                  : semanticColors.chart.up,
+        });
+      }
+    }
     return lines;
-  }, [isEquity, showLiqLevels, liqLevelsQuery, cvdExchange, profileRead, t]);
+  }, [isEquity, showLiqLevels, liqLevelsQuery, cvdExchange, profileRead, fillPocket, t]);
 
   const chartBookHeat = useMemo(
     () => (isEquity || !showBook ? [] : bookHeatColumns(rtkCurrent(chartBookQuery))),
@@ -2530,6 +2559,7 @@ export function CoinDetailPage() {
                 {t('detail:chart.candleFootprintTruncated')}
               </Text>
             ) : null}
+            {!isEquity && fillPocket?.open ? <FillPocket mark={fillPocket} /> : null}
             {!isEquity && recordedLine ? (
               <Text variant="caption" color="secondary" data-testid="chart-recorded">
                 {recordedLine}
@@ -3256,6 +3286,7 @@ export function CoinDetailPage() {
               </Text>
             ) : null}
             {heldPosition ? <FillMoves moves={heldPosition.moves} /> : null}
+            {!isEquity ? <FillPocket mark={fillPocket} /> : null}
             {heldPosition && !isEquity ? (
               <PositionSituation
                 entry={heldPosition.entrySituation}

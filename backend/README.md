@@ -141,6 +141,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET`/`PUT`/`DELETE` | `/api/v1/alerts/webhook` | Get / set / clear alert webhook URL |
 | `POST` | `/api/v1/portfolio` | Create named paper book (starting balance, optional name) |
 | `GET` | `/api/v1/portfolio` | Cash, positions, P&L for selected book (`portfolioId`) |
+| `GET` | `/api/v1/portfolio/fill-pocket` | Open paper fill against the nearer estimated liquidation pocket (`exchange`, `symbol`) |
 | `GET` | `/api/v1/portfolios` | List paper books |
 | `GET` | `/api/v1/portfolios/shared` | Books shared with the caller |
 | `PATCH`/`DELETE` | `/api/v1/portfolios/{id}` | Rename or delete a book |

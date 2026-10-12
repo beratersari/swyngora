@@ -658,6 +658,27 @@
     "failed": "Kağıt emir başarısız",
     "availableCash": "Kullanılabilir nakit {{amount}}"
   },
+  "fillPocket": {
+    "title": "İşlem ve cep",
+    "sideLong": "long",
+    "sideShort": "short",
+    "fillBelow": "Kağıt işlem {{fill}}. Daha yakın {{side}} cep onun {{pct}}% altında, {{pocket}}.",
+    "fillAbove": "Kağıt işlem {{fill}}. Daha yakın {{side}} cep onun {{pct}}% üstünde, {{pocket}}.",
+    "fillSame": "Kağıt işlem {{fill}}. Daha yakın {{side}} cep aynı fiyatta.",
+    "fillNone": "Kağıt işlem {{fill}}. İki yanda da tahmini likidasyon cebi yok.",
+    "fillMissing": "Kağıt işlem {{fill}}. Tahmini cep, {{venues}} haritayı verene kadar işaretsiz.",
+    "marginBelow": "Kağıt likidasyon o cebin {{pct}}% altında, {{price}}.",
+    "marginAbove": "Kağıt likidasyon o cebin {{pct}}% üstünde, {{price}}.",
+    "marginSame": "Kağıt likidasyon o cebin üzerinde, {{price}}.",
+    "marginUnmarked": "Kağıt likidasyon {{price}}. Cep, {{venues}} haritayı verene kadar işaretsiz.",
+    "lineFill": "Kağıt işlem",
+    "linePocketLong": "Long cep",
+    "linePocketShort": "Short cep",
+    "lineAbove": "{{pct}}% üstte",
+    "lineBelow": "{{pct}}% altta",
+    "lineSame": "işlemde",
+    "lineMargin": "Kağıt likidasyon"
+  },
   "situation": {
     "title": "Durum",
     "compare": "Pozisyon okuması",

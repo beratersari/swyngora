@@ -166,6 +166,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `revoke_portfolio_share` | Remove a share |
 | `list_portfolio_shares` | Outgoing shares (owner) |
 | `list_shared_portfolios` | Books shared with you |
+| `get_fill_pocket` | Open paper fill against the nearer estimated liquidation pocket. `gapPct` is the percent from the fill to the pocket. `marginLiqPrice` is the paper liquidation price. A missing venue leaves the pocket blank. `exchange` and `symbol` are required |
 | `get_portfolio` | Cash, positions, P&L snapshot. Crypto positions include `entrySituation` from the newest buy still held. Every open spot position includes `moves` (1h/4h/24h price change after the newest open lot, including equities). `pending` has not closed its minute. `missing` is a blank close, not zero. The live read is `get_coin_situation`. Optional `portfolioId`; required when the client has 2+ books |
 | `deposit_portfolio_cash` | Add virtual cash (not trading P&L) |
 | `transfer_portfolio_cash` | Move cash between your own books (owner only; pass `idempotencyKey` so retries do not double-move) |

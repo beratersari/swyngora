@@ -29,6 +29,11 @@ type SituationSource interface {
 	GetCoinSituation(ctx context.Context, symbol string) (*domain.CoinSituation, error)
 }
 
+// PocketSource loads the nearer estimated liquidation pocket on the combined map.
+type PocketSource interface {
+	CloserPocket(ctx context.Context, symbol string) (domain.CloserPocket, error)
+}
+
 // AccountChecker reports whether a tenant account is closed (optional).
 type AccountChecker interface {
 	IsClosed(ctx context.Context, clientID string) (bool, *domain.Account, error)
@@ -42,6 +47,7 @@ type Service struct {
 	account    AccountChecker
 	costFor    func(domain.Exchange) domain.TradingCost
 	situations SituationSource
+	pockets    PocketSource
 	candles    CandleSource
 	moveQuotes *moveQuoteCache
 	// moveClock overrides the clock used only for post-fill price moves. Tests set it.
@@ -83,6 +89,13 @@ func (s *Service) paperCost(ex domain.Exchange) domain.TradingCost {
 func (s *Service) SetSituationSource(src SituationSource) {
 	if s != nil {
 		s.situations = src
+	}
+}
+
+// SetPocketSource loads the estimated liquidation pocket for the fill mark. Optional.
+func (s *Service) SetPocketSource(src PocketSource) {
+	if s != nil {
+		s.pockets = src
 	}
 }
 

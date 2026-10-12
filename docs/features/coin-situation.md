@@ -10,7 +10,7 @@ The coin page already loads price versus CVD, open interest, and liquidation lev
 
 - `priceCvd.kind` is `price_up_cvd_down`, `price_down_cvd_up`, or `agrees`.
 - `openInterest.flow` is `opened`, `closed`, or `flat` over the last hour.
-- `liquidation.side` is the leverage model. It is `long` when the nearest estimated long pocket below last is closer, `short` when the nearest short pocket above last is closer, or `none`. `distancePct` is that distance.
+- `liquidation.side` is the leverage model. It is `long` when the nearest estimated long pocket below last is closer, `short` when the nearest short pocket above last is closer, or `none`. `distancePct` is that distance. `price` is that pocket.
 - `prints.side` is measured force-order notional over the last 24 hours. It is `long` or `short` when that side is at least 60% of the recorded total, `even` when both sides printed and neither reaches 60%, or `quiet` when the recorded total is under 1 USDT. `longNotional` and `shortNotional` are USDT. `window` is `24h`. This fact is set only when Binance, Bybit, and OKX each recorded the whole window: the watch started at or before the open, and no known feed gap meets that window. A gap that ends exactly at the open does not count. The archive sum adds book prints newer than each venue's newest stored row. A missing archive leaves the clause blank and names all three venues. Partial prints are not published as the 24-hour total.
 - `funding.payer` is `long`, `short`, or `none` for the open-interest-weighted predicted rate. `ratePct` is that rate in percent. It is set only when Binance, Bybit, and OKX all contribute.
 - `crowd.lean` is `top_more_long`, `top_more_short`, or `even`. `gapPct` is the average of the Binance and OKX top-minus-crowd gaps, in percentage points. Bybit does not publish a top-trader ratio and is not required.
@@ -22,33 +22,37 @@ The coin page shows the same clauses in English and Turkish, above the tabs. Equ
 
 A paper market order, limit, stop, bracket, or OCO stores this read at the moment the order is placed. A later fill keeps that read. The portfolio trade history shows it beside the fill. Nasdaq and BIST orders do not call the futures read.
 
+`GET /api/v1/portfolio/fill-pocket?exchange=&symbol=` places that open fill on the map. The fill is the newest open spot buy. When the book has no spot lot, the fill is the margin entry. `gapPct` is the percent from the fill to `liquidation.price`. `pocketFromFill` is `above` or `below`. A margin position also returns `marginLiqPrice`, and `marginGapPct` is the percent from the pocket to that paper liquidation price. A missing venue leaves the pocket blank and is named. A flat book returns `open: false` and does not read the map. Equities set `equity` and return no prices. The coin chart draws the fill, the pocket, and the paper liquidation price. The Trade tab shows the same sentences. MCP `get_fill_pocket`. Python `get_fill_pocket`.
+
 An open crypto position shows two reads. **Entered as** is the read stored on the newest buy that still has remaining quantity. Selling that buy, lifo or fifo, moves the line to the newest buy that remains. A buy that stored no read leaves the line off, even when an older lot has one. **Now** is the live `GET /api/v1/market/situation` for that symbol. The same pair is on the coin Trade tab when the selected book holds the coin. An equity position stays on size and profit.
 
 An alert of kind `situation` fires when the live read leaves the clauses stored on that entry. A clause the entry did not store is ignored, so an older fill does not alert only because a new clause appeared. A blank live clause counts as a change of a clause that was stored. The prints clause compares `prints.side` only. A change in the dollar amounts with the same side stays quiet. No open crypto position stays quiet. `mode=one_time` fires once. `mode=repeating` re-arms when the live read matches the entry again. The exchange is the paper book venue (`binance`, `coinbase`, or `bybit`), and the symbol is the pair on that book.
 
 ## Where the code lives
 
-- `backend/internal/domain/situation.go` builds the read.
+- `backend/internal/domain/situation.go` builds the read. `backend/internal/domain/fill_pocket.go` measures the open fill against the pocket.
 - `backend/internal/service/market/situation.go` loads CVD, open interest, liquidation levels, and the 24-hour print sides.
-- `backend/internal/service/portfolio/service.go` stores it on the order.
-- `frontend/src/components/molecules/CoinSituation` renders the sentences.
+- `backend/internal/service/portfolio/fill_pocket.go` joins the open lot or margin position with that pocket.
+- `backend/internal/service/portfolio/service.go` stores the read on the order.
+- `frontend/src/components/molecules/CoinSituation` renders the sentences. `frontend/src/components/molecules/FillPocket` renders the fill and the pocket.
 - MCP `get_coin_situation`. Python `get_coin_situation`.
 
 ## How to test
 
 ```bash
 cd backend
-go test ./internal/domain/ -run 'TestBuildCoinSituation|TestSituationLeft|TestLatestOpenLot|TestMergeLiquidationPrintSides'
+go test ./internal/domain/ -run 'TestBuildCoinSituation|TestBuildFillPocketMark|TestSituationLeft|TestLatestOpenLot|TestMergeLiquidationPrintSides'
+go test ./internal/service/portfolio/ -run 'TestFillPocket_'
 go test ./internal/adapter/futuresstore/ -run 'TestSumAndBucketLiquidations'
 go test ./internal/service/market/ -run 'TestGetCoinSituation_MeasuredPrints'
 go test ./internal/service/portfolio/ -run 'TestPlaceOrder_StoresCoinSituation|TestPlacePendingOrder_Keeps|TestPlaceOrder_Equity|TestView_EntrySituation|TestEntrySituation_'
 go test ./internal/service/pricealert/ -run 'TestChecker_Situation'
 
 cd frontend
-npx vitest run src/components/molecules/CoinSituation/CoinSituation.test.tsx src/components/molecules/PositionSituation/PositionSituation.test.tsx src/components/organisms/PortfolioPositionsTable/PortfolioPositionsTable.test.tsx
+npx vitest run src/components/molecules/CoinSituation/CoinSituation.test.tsx src/components/molecules/FillPocket/FillPocket.test.tsx src/components/molecules/PositionSituation/PositionSituation.test.tsx src/components/organisms/PortfolioPositionsTable/PortfolioPositionsTable.test.tsx
 ```
 
-Open `/markets/binance/BTCUSDT`. The situation card sits under the stats. Place a paper buy, then open the portfolio trade history. The fill shows the same kind of sentences.
+Open `/markets/binance/BTCUSDT`. The situation card sits under the stats. Place a paper buy. The chart marks the fill and the nearer pocket, and the Trade tab states the percent between them. The portfolio trade history shows the situation stored on the fill.
 
 ## Limits
 

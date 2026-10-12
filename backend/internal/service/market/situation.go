@@ -64,6 +64,24 @@ func (s *Service) GetCoinSituation(ctx context.Context, symbol string) (*domain.
 	return domain.BuildCoinSituation(symbol, now, cvd, oi, levels, funding, longs, prints), nil
 }
 
+// CloserPocket is the nearer estimated liquidation level used by the paper-fill mark.
+// exchange is always the combined Binance, Bybit, and OKX map.
+func (s *Service) CloserPocket(ctx context.Context, symbol string) (domain.CloserPocket, error) {
+	symbol, err := domain.ValidateOpenInterestSymbol(symbol)
+	if err != nil {
+		return domain.CloserPocket{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return domain.CloserPocket{}, err
+	}
+	levels, err := s.GetLiquidationLevels(ctx, "all", symbol, "24h")
+	if err != nil {
+		return domain.CloserPocket{}, err
+	}
+	pocket, _ := domain.CloserPocketFromLevels(levels)
+	return pocket, nil
+}
+
 // situationPrintInput loads the 24h stored print sum plus newer book prints.
 // ArchiveOK stays false when that sum cannot be read.
 func (s *Service) situationPrintInput(ctx context.Context, symbol string, now time.Time) domain.SituationPrintInput {

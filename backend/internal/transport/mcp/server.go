@@ -118,6 +118,7 @@ type DataPort interface {
 	GetBreadth(ctx context.Context, exchange string, limit int) (json.RawMessage, error)
 	GetFearGreed(ctx context.Context) (json.RawMessage, error)
 	GetCoinSituation(ctx context.Context, symbol string) (json.RawMessage, error)
+	GetFillPocket(ctx context.Context, clientID, exchange, symbol string) (json.RawMessage, error)
 	GetVolatility(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetSnapshot(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLevels(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -3138,6 +3139,33 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.ListSharedPortfolios(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_fill_pocket",
+		mcp.WithDescription("Where an open paper fill sits against the nearer estimated liquidation pocket. fillPrice is the newest open spot buy, or the margin entry when that book has no spot lot. pocketPrice is that pocket on the combined Binance, Bybit, and OKX map. gapPct is the percent from the fill to the pocket. pocketFromFill is above or below. marginLiqPrice is the paper liquidation price, and marginGapPct is the percent from the pocket to that price. A missing venue leaves the pocket blank and is named. It is not zero. open is false when the book has no position. Equities set equity and return no prices. Not financial advice."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("exchange", mcp.Required(), mcp.Description("binance | coinbase | bybit | nasdaq | bist")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name; required if multiple portfolios exist")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		exchange, err := req.RequireString("exchange")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		raw, err := api.GetFillPocket(ctx, clientID, exchange, symbol)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
