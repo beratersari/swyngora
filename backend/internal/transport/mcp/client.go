@@ -1449,9 +1449,13 @@ func (c *APIClient) GetBreadth(ctx context.Context, exchange string, limit int) 
 }
 
 // GetCoinSituation returns the short coin read: price versus CVD, 1h open interest, the leverage model, and measured 24h liquidation prints.
-func (c *APIClient) GetCoinSituation(ctx context.Context, symbol string) (json.RawMessage, error) {
+// Empty at is the live read. A past at reads the stored minute at that candle close and leaves out the estimated pocket.
+func (c *APIClient) GetCoinSituation(ctx context.Context, symbol, at string) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)
+	if strings.TrimSpace(at) != "" {
+		q.Set("at", strings.TrimSpace(at))
+	}
 	return c.get(ctx, "/api/v1/market/situation", q)
 }
 

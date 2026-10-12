@@ -667,6 +667,13 @@
     "nowLoading": "Reading the tape now…",
     "loading": "Reading the combined tape…",
     "heldSince": "Since {{time}}.",
+    "candle": {
+      "title": "At this candle",
+      "at": "Stored minutes at {{time}}.",
+      "lead": "The estimated liquidation pocket is not part of this read.",
+      "loading": "Reading the stored minutes…",
+      "failed": "The candle read did not load."
+    },
     "deskLead": "Combined situation for this coin.",
     "deskFailed": "The situation did not load.",
     "priceCvd": {

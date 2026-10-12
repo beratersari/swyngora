@@ -667,6 +667,13 @@
     "nowLoading": "Şimdiki bant okunuyor…",
     "loading": "Birleşik bant okunuyor…",
     "heldSince": "{{time}} tarihinden beri.",
+    "candle": {
+      "title": "Bu mumda",
+      "at": "{{time}} anındaki kayıtlı dakikalar.",
+      "lead": "Tahmini tasfiye cebi bu okumada yok.",
+      "loading": "Kayıtlı dakikalar okunuyor…",
+      "failed": "Mum okuması yüklenmedi."
+    },
     "deskLead": "Bu coin için birleşik durum.",
     "deskFailed": "Durum yüklenmedi.",
     "priceCvd": {

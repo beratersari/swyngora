@@ -331,6 +331,8 @@ export type CoinSituation = {
 };
 export type CoinSituationQuery = {
   symbol: string;
+  /** Candle close, RFC3339. Omit for the live read. */
+  at?: string;
 };
 
 export type FearGreedReport = {

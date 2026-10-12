@@ -1584,6 +1584,13 @@ export interface paths {
          *     order and stores a new read on the fill. A failed read at the fill stays
          *     blank. An older fill does not grow a clause it never stored. An unusual standout on the derivatives board, and each
          *     unusual-scan row, open this same read.
+         *
+         *     Optional `at` is a candle close (RFC3339). The read is then the stored
+         *     five-minute minute at or before that time. A minute the archive does
+         *     not have leaves that clause blank and names the venue. `liquidation`
+         *     and `liquidationMissing` stay absent: the estimated pocket is not part
+         *     of a past read. A clock more than about a minute ahead of now is
+         *     rejected. Omit `at` for the live read.
          */
         get: operations["getMarketSituation"];
         put?: never;
@@ -12907,6 +12914,12 @@ export interface operations {
             query: {
                 /** @description Pair such as BTCUSDT */
                 symbol: string;
+                /**
+                 * @description Candle close, RFC3339. Omit for the live read. When set, the
+                 *     estimated liquidation pocket is left off and a missing minute
+                 *     names the venue. A future clock is rejected.
+                 */
+                at?: string;
             };
             header?: never;
             path?: never;

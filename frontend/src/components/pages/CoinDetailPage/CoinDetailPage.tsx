@@ -258,6 +258,7 @@ import {
   coinForensicsHref,
   CoinCandleForensics,
 } from '@/components/organisms/CoinCandleForensics';
+import { CoinCandleSituation, situationCandleCloseMs } from '@/components/organisms/CoinCandleSituation';
 import type { ForensicsReport } from '@/libs/types/forensics.types';
 import { CoinFlowTab } from './CoinFlowTab';
 import { PastOrderBook } from './PastOrderBook';
@@ -1148,6 +1149,16 @@ export function CoinDetailPage() {
   }, [showEma, emaPeriods, overlayPoints, chartData, mergedCandles.length, t]);
 
   const barDurationSec = candleIntervalSeconds(interval);
+  const situationCloseMs =
+    cvdClickSec == null ? null : situationCandleCloseMs(cvdClickSec, barDurationSec, Date.now());
+  const situationAt = situationCloseMs == null ? undefined : new Date(situationCloseMs).toISOString();
+  const situationPastQuery = useGetMarketSituationQuery(
+    { symbol: symbol ?? '', at: situationAt },
+    {
+      skip: skip || isEquity || situationAt == null || !visible,
+      refetchOnFocus: true,
+    },
+  );
   const onCandleAnchor = useCallback(
     (timeSec: number) => {
       if (barDurationSec <= 0) return;
@@ -2887,6 +2898,25 @@ export function CoinDetailPage() {
               }
             />
             {!isEquity && symbol ? (
+              <>
+              {cvdClickSec != null ? (
+                <CoinCandleSituation
+                  timeLabel={
+                    situationAt != null
+                      ? formatUtcMinute(Math.floor(new Date(situationAt).getTime() / 1000))
+                      : null
+                  }
+                  report={rtkCurrent(situationPastQuery)}
+                  isLoading={rtkCurrentPending(situationPastQuery)}
+                  error={
+                    situationPastQuery.isError
+                      ? rtkErrorMessage(situationPastQuery.error, {
+                          resource: t('detail:situation.candle.title'),
+                        })
+                      : null
+                  }
+                />
+              ) : null}
               <CoinCandleForensics
                 timeLabel={cvdClickSec != null ? formatUtcMinute(cvdClickSec) : null}
                 report={rtkCurrent(forensicsQuery) as ForensicsReport | undefined}
@@ -2908,6 +2938,7 @@ export function CoinDetailPage() {
                   setCvdClickSec(sec);
                 }}
               />
+              </>
             ) : null}
           </>
         )}

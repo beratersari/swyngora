@@ -8,14 +8,23 @@ export type SituationLineOptions = {
   locale?: string;
 };
 
+function readableSince(since: string | undefined): string | undefined {
+  if (!since) return undefined;
+  const parsed = new Date(since);
+  // A zero Go time serializes as year 1 and is not a clock.
+  if (Number.isNaN(parsed.getTime()) || parsed.getUTCFullYear() < 2) return undefined;
+  return since;
+}
+
 function withHeld(
   sentence: string,
   since: string | undefined,
   options: SituationLineOptions | undefined,
   t: Translate,
 ): string {
-  if (!options?.since || !since) return sentence;
-  const time = formatDateTime(since, options.locale);
+  const clock = readableSince(since);
+  if (!options?.since || !clock) return sentence;
+  const time = formatDateTime(clock, options.locale);
   if (!time || time === '—') return sentence;
   return `${sentence} ${t('detail:situation.heldSince', { time })}`;
 }

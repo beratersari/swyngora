@@ -117,7 +117,7 @@ type DataPort interface {
 	GetCorrelation(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetBreadth(ctx context.Context, exchange string, limit int) (json.RawMessage, error)
 	GetFearGreed(ctx context.Context) (json.RawMessage, error)
-	GetCoinSituation(ctx context.Context, symbol string) (json.RawMessage, error)
+	GetCoinSituation(ctx context.Context, symbol, at string) (json.RawMessage, error)
 	GetVolatility(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetSnapshot(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLevels(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -2019,14 +2019,15 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_coin_situation",
-		mcp.WithDescription("Short read for one coin from data Swyngora already has. priceCvd.kind is price_up_cvd_down, price_down_cvd_up, or agrees. openInterest.flow is opened, closed, or flat over 1h. liquidation.side is the leverage model: long (longs below last are closer), short (shorts above last are closer), or none. prints.side is measured force-orders over the last 24h: long, short, even, or quiet, with longNotional and shortNotional in USDT. Prints are definite only when Binance, Bybit, and OKX recorded that whole window. funding.payer is long, short, or none for the OI-weighted predicted rate. crowd.lean is top_more_long, top_more_short, or even (Binance and OKX only; Bybit has no top-trader ratio). size.kind is whale versus retail on the latest sized bar. A clause is omitted and its *Missing list names the venues that do not cover it. The same read is stored when a paper order fills. A resting order stores a new read at the fill, not the read from placement. An unusual standout on the derivatives board and each unusual-scan row open these same clauses. A live clause may include since, the time that reading began in the stored minutes. since is absent when the archive does not reach a different reading. The liquidation model has no minute series, so its since stays absent. A stored fill omits since. Not financial advice."),
+		mcp.WithDescription("Short read for one coin from data Swyngora already has. priceCvd.kind is price_up_cvd_down, price_down_cvd_up, or agrees. openInterest.flow is opened, closed, or flat over 1h. liquidation.side is the leverage model: long (longs below last are closer), short (shorts above last are closer), or none. prints.side is measured force-orders over the last 24h: long, short, even, or quiet, with longNotional and shortNotional in USDT. Prints are definite only when Binance, Bybit, and OKX recorded that whole window. funding.payer is long, short, or none for the OI-weighted predicted rate. crowd.lean is top_more_long, top_more_short, or even (Binance and OKX only; Bybit has no top-trader ratio). size.kind is whale versus retail on the latest sized bar. A clause is omitted and its *Missing list names the venues that do not cover it. The same read is stored when a paper order fills. A resting order stores a new read at the fill, not the read from placement. An unusual standout on the derivatives board and each unusual-scan row open these same clauses. A live clause may include since, the time that reading began in the stored minutes. since is absent when the archive does not reach a different reading. The liquidation model has no minute series, so its since stays absent. A stored fill omits since. Omit at for that live read. Pass at as RFC3339 to read the stored five-minute minute at a candle close. That past read leaves liquidation and liquidationMissing absent. A named venue is a minute the archive does not have and is not treated as zero. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("at", mcp.Description("Candle close, RFC3339. Omit for the live read. A past read leaves out the estimated liquidation pocket.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.GetCoinSituation(ctx, symbol)
+		raw, err := api.GetCoinSituation(ctx, symbol, req.GetString("at", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

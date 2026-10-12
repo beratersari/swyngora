@@ -498,6 +498,15 @@ class _Transport(httpx2.BaseTransport):
                     ],
                 },
             )
+        if request.url.path.endswith("/situation"):
+            return httpx2.Response(
+                200,
+                json={
+                    "symbol": request.url.params.get("symbol"),
+                    "at": request.url.params.get("at") or "",
+                    "priceCvd": {"kind": "agrees"},
+                },
+            )
         return httpx2.Response(404, json={"error": "not found"})
 
 
@@ -757,6 +766,19 @@ def test_market_tools_hit_api(monkeypatch):
     )
     assert impact["symbol"] == "BTCUSDT"
     assert impact["averagePrice"] == "100.25"
+
+    assert "get_coin_situation" in by_name
+    assert "Pass at as RFC3339" in by_name["get_coin_situation"].description
+    live = json.loads(by_name["get_coin_situation"].invoke({"symbol": "BTCUSDT"}))
+    assert live["symbol"] == "BTCUSDT"
+    assert live["at"] == ""
+    assert live["priceCvd"]["kind"] == "agrees"
+    past = json.loads(
+        by_name["get_coin_situation"].invoke(
+            {"symbol": "BTCUSDT", "at": "2026-06-01T16:00:00Z"}
+        )
+    )
+    assert past["at"] == "2026-06-01T16:00:00Z"
 
     health = by_name["health"].invoke({})
     assert "ok" in health

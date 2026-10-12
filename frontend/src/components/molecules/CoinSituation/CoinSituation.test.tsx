@@ -104,4 +104,18 @@ describe('CoinSituation', () => {
     ).toBeInTheDocument();
     await i18n.changeLanguage('en');
   });
+
+  it('does not treat a zero clock as a time the clause has held', async () => {
+    await i18n.changeLanguage('en');
+    renderWithProviders(
+      <CoinSituation
+        report={{
+          symbol: 'BTCUSDT',
+          priceCvd: { kind: 'agrees', since: '0001-01-01T00:00:00Z' },
+        }}
+      />,
+    );
+    expect(screen.getByText('Price and futures CVD are moving together.')).toBeInTheDocument();
+    expect(screen.queryByText(/Since/)).not.toBeInTheDocument();
+  });
 });

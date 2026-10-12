@@ -20,6 +20,8 @@ A clause is omitted when a venue that publishes it does not cover it. The matchi
 
 A live clause other than the liquidation model may include `since`. That time is the first stored minute of the current kind. The samples are the five-minute minutes already kept for CVD, open interest, funding, top versus crowd, and measured prints. The clock stays off when the current kind runs back to the oldest loaded minute, when a minute inside the run cannot be read, or when the minutes jump by more than ten minutes. One missed five-minute sample still counts. The estimated liquidation pocket is not stored as its own minute series, so its `since` stays absent. A paper fill stores the clauses without `since`. The coin card and the position **Now** line add the time as a second sentence, in English and Turkish. **Entered as**, trade history, and the line that names what changed do not. A situation alert still compares kinds only.
 
+The same request accepts optional `at`, a candle close in RFC3339. Omit it for the live read. The coin chart sends the close of a clicked candle. A candle that is still forming is read at the current minute, so the request does not change on every render. The clauses are the stored five-minute minute at or before that time: price versus CVD, open interest over the hour ending then, measured prints over the 24 hours ending then, funding, Binance and OKX top versus crowd, and whale versus retail. A CVD bar covers the five minutes that start at its label, so a close that lands on a boundary uses the bar that ended there. A sample older than ten minutes, or a venue the archive does not have, leaves that clause blank and names the venue. That blank is unreadable, not a new opinion. `liquidation` and `liquidationMissing` stay absent, because the estimated pocket is not stored as its own series. A clock more than about a minute ahead of now is rejected. Nasdaq and BIST do not call it. The card under the chart names the time that was read, in English and Turkish. Clear, or the same candle, removes it. The forensics card on that same click still uses the candle open.
+
 The coin page shows the same clauses in English and Turkish, above the tabs. Equities skip the read.
 
 `/derivatives` opens this read under a row whose unusual cell is a standout. `/unusual` opens it under each scan row. The standout stays in the cell. A derivatives row with no standout does not open the read. The request is this same combined symbol read, and it runs when the row opens.
@@ -36,30 +38,35 @@ An alert of kind `situation` fires when the live read leaves the clauses stored 
 
 ## Where the code lives
 
-- `backend/internal/domain/situation.go` builds the read. `situation_held.go` stamps `since` on the live read and clears it on the copy stored with a fill.
-- `backend/internal/service/market/situation.go` loads CVD, open interest, liquidation levels, and the 24-hour print sides. `situation_held.go` reads the stored minutes for the clocks.
+- `backend/internal/domain/situation.go` builds the read. `situation_held.go` stamps `since` on the live read and clears it on the copy stored with a fill. `situation_at.go` builds the same clauses at a candle close and leaves the estimated pocket off.
+- `backend/internal/service/market/situation.go` loads CVD, open interest, liquidation levels, and the 24-hour print sides. `situation_held.go` reads the stored minutes for the clocks. `situation_at.go` loads those stored minutes up to `at`. It does not subscribe to the live tape and does not write buckets.
 - `backend/internal/service/portfolio/service.go` stores the placement read on a resting order and a new read on the fill. That stored copy has no `since`.
 - `backend/internal/domain/situation_record.go` groups closed slices by that stored read. `backend/internal/service/portfolio/situation_record.go` loads the book's sold lots.
 - `frontend/src/components/molecules/CoinSituation` renders the sentences.
+- `frontend/src/components/organisms/CoinCandleSituation` renders the stored read under a clicked candle.
 - `frontend/src/components/molecules/OutlierSituation` loads that read under an opened outlier row.
-- MCP `get_coin_situation`, `get_situation_change`, and `get_situation_record`. Python `get_coin_situation`, `get_situation_change`, and `get_situation_record`.
+- MCP `get_coin_situation` takes optional `at`. Python `get_coin_situation` does the same. MCP `get_situation_change` and `get_situation_record`. Python `get_situation_change` and `get_situation_record`.
 
 ## How to test
 
 ```bash
 cd backend
-go test ./internal/domain/ -run 'TestBuildCoinSituation|TestSituationLeft|TestLatestOpenLot|TestMergeLiquidationPrintSides|TestHeldSince|TestStampSituationHeld|TestWithoutSituationHeld|TestBuildSituationRecord'
+go test ./internal/domain/ -run 'TestBuildCoinSituation|TestBuildSituationAt|TestSituationLeft|TestLatestOpenLot|TestMergeLiquidationPrintSides|TestHeldSince|TestStampSituationHeld|TestWithoutSituationHeld|TestBuildSituationRecord'
 go test ./internal/adapter/futuresstore/ -run 'TestSumAndBucketLiquidations'
 go test ./internal/service/market/ -run 'TestGetCoinSituation'
+go test ./internal/transport/http/handler/ -run 'TestGetCoinSituation'
+go test ./internal/transport/mcp/ -run 'TestAPIClient_GetCoinSituation|TestBackend_GetCoinSituation'
 go test ./internal/service/portfolio/ -run 'TestPlaceOrder_StoresCoinSituation|TestPlacePendingOrder_|TestPlaceOrder_Equity|TestView_EntrySituation|TestEntrySituation_|TestSituationChange_Names|TestSituationRecord_'
 go test ./internal/service/pricealert/ -run 'TestChecker_Situation'
 
 cd frontend
-npx vitest run src/components/molecules/CoinSituation/CoinSituation.test.tsx src/components/molecules/PositionSituation/PositionSituation.test.tsx src/components/organisms/PortfolioPositionsTable/PortfolioPositionsTable.test.tsx src/components/organisms/PortfolioTradesTable/PortfolioTradesTable.test.tsx src/components/organisms/CreateAlertForm/CreateAlertForm.test.tsx
+npx vitest run src/components/molecules/CoinSituation/CoinSituation.test.tsx src/components/organisms/CoinCandleSituation src/components/molecules/PositionSituation/PositionSituation.test.tsx src/components/organisms/PortfolioPositionsTable/PortfolioPositionsTable.test.tsx src/components/organisms/PortfolioTradesTable/PortfolioTradesTable.test.tsx src/components/organisms/CreateAlertForm/CreateAlertForm.test.tsx src/components/pages/CoinDetailPage/CoinDetailPage.test.tsx
 ```
 
-Open `/markets/binance/BTCUSDT`. The situation card sits under the stats. Place a paper limit buy below the market, then let it fill after the situation changes. Trade history and **Entered as** show the market at the fill, with the line "Market when this order filled." The placement read stays on the resting order and is not the position read.
+`TestGetCoinSituation` also matches `TestGetCoinSituationAt`.
+
+Open `/markets/binance/BTCUSDT`. The situation card sits under the stats. Click a candle. The card under the chart reads the stored minutes at that candle's close and says the estimated pocket is not part of the read. Clear removes it. An equity chart does not show it. Place a paper limit buy below the market, then let it fill after the situation changes. Trade history and **Entered as** show the market at the fill, with the line "Market when this order filled." The placement read stays on the resting order and is not the position read.
 
 ## Limits
 
-The read uses the live combined tape. A venue that is still filling history leaves its clause blank. A resting order that fills later stores the market at the fill. Each partial fill stores its own read. The open position shows the newest remaining buy. A `since` time needs the stored minutes to reach a different kind. The estimated liquidation pocket has no clock.
+The read uses the live combined tape. A venue that is still filling history leaves its clause blank. A resting order that fills later stores the market at the fill. Each partial fill stores its own read. The open position shows the newest remaining buy. A `since` time needs the stored minutes to reach a different kind. The estimated liquidation pocket has no clock. A past candle read uses only minutes already stored, leaves that pocket off, and does not run for equities.

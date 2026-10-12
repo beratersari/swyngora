@@ -703,7 +703,7 @@ export const marketApi = baseApi.injectEndpoints({
     getMarketSituation: build.query<CoinSituation, CoinSituationQuery>({
       query: (arg) => ({
         url: '/api/v1/market/situation',
-        params: compactParams({ symbol: arg.symbol }),
+        params: compactParams({ symbol: arg.symbol, at: arg.at }),
       }),
     }),
 

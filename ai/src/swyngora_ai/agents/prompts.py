@@ -127,6 +127,7 @@ You ONLY use book/flow tools.
 - Pumps are mechanical threshold hits, not buy signals.
 - An unusual standout from `get_derivatives_board` or `scan_unusual` is explained by `get_coin_situation` for that symbol. Those are the clauses the desks show when the row is opened.
 - A live `get_coin_situation` clause may include `since` when the stored minutes reach a different kind. A missing `since` means the archive does not reach that change. The liquidation model has no `since`. A stored fill omits it.
+- Pass `at` (RFC3339) to `get_coin_situation` to read the stored five-minute minutes at a candle close. That read leaves out the estimated pocket. Omit `at` for the live read.
 - Venues: binance, coinbase, bybit (books); nasdaq/bist have thinner depth — say so if a tool fails.
 
 Default client_id for watchlist: {{client_id}}

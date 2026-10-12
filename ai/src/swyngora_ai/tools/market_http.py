@@ -1245,6 +1245,13 @@ class BreadthInput(BaseModel):
 
 class CoinSituationInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
+    at: str = Field(
+        default="",
+        description=(
+            "Candle close, RFC3339. Omit for the live read. A past read uses "
+            "the stored five-minute minute and leaves out the estimated pocket."
+        ),
+    )
 
 
 class SituationRecordInput(BaseModel):
@@ -3105,8 +3112,11 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             {"exchange": exchange, "limit": limit},
         )
 
-    def get_coin_situation(symbol: str) -> str:
-        return http.get("/api/v1/market/situation", {"symbol": symbol})
+    def get_coin_situation(symbol: str, at: str = "") -> str:
+        params: dict[str, Any] = {"symbol": symbol}
+        if at:
+            params["at"] = at
+        return http.get("/api/v1/market/situation", params)
 
     def get_fear_greed() -> str:
         return http.get("/api/v1/market/fear-greed", {})
@@ -6112,7 +6122,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "A live clause may include since when the stored minutes reach "
                 "a different kind. since is absent when the archive does not "
                 "reach that change. The liquidation model has no since. A stored "
-                "fill omits it."
+                "fill omits it. Omit at for that live read. Pass at as RFC3339 "
+                "to read the stored five-minute minute at a candle close. That "
+                "past read leaves out the estimated liquidation pocket."
             ),
             args_schema=CoinSituationInput,
         ),

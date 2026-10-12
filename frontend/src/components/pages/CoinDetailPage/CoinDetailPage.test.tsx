@@ -34,6 +34,7 @@ const mockVolumeProfile = vi.fn();
 const mockSweeps = vi.fn();
 const mockBots = vi.fn();
 const mockForensics = vi.fn();
+const mockSituation = vi.fn();
 
 vi.mock('@/libs/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/libs/api')>();
@@ -72,14 +73,7 @@ vi.mock('@/libs/api', async (importOriginal) => {
       refetch: vi.fn(),
     }),
     useGetMarketCvdQuery: () => mockCvd(),
-    useGetMarketSituationQuery: () => ({
-      data: undefined,
-      currentData: undefined,
-      isLoading: false,
-      isError: false,
-      isFetching: false,
-      refetch: vi.fn(),
-    }),
+    useGetMarketSituationQuery: (...args: unknown[]) => mockSituation(...args),
     useGetMarketForensicsQuery: (...args: unknown[]) => mockForensics(...args),
     useGetMarketPositioningAnchorQuery: () => mockPositioningAnchor(),
     useGetMarketFlowAtPricesQuery: () => ({ data: undefined, isError: false, isFetching: false, isLoading: false, isSuccess: false, refetch: vi.fn() }),
@@ -177,6 +171,15 @@ const candle = {
 
 describe('CoinDetailPage', () => {
   beforeEach(() => {
+    mockSituation.mockReset();
+    mockSituation.mockReturnValue({
+      data: undefined,
+      currentData: undefined,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
     mockForensics.mockReset();
     mockForensics.mockReturnValue({
       data: undefined,
@@ -823,6 +826,85 @@ describe('CoinDetailPage', () => {
     await user.click(screen.getByTestId('chart-forensics-clear'));
     expect(screen.queryByTestId('chart-forensics')).not.toBeInTheDocument();
     expect(screen.getByTestId('chart-forensics-hint')).toBeInTheDocument();
+  });
+
+  it('reads the stored minutes at the close of a clicked candle', async () => {
+    const user = userEvent.setup();
+    const open = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    open.setUTCMinutes(0, 0, 0);
+    chartClickAt = Math.floor(open.getTime() / 1000);
+    const closeIso = new Date((chartClickAt + 3600) * 1000).toISOString();
+    const empty = {
+      data: undefined,
+      currentData: undefined,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    };
+    const past = {
+      data: { symbol: 'BTCUSDT', priceCvd: { kind: 'agrees' } },
+      currentData: { symbol: 'BTCUSDT', priceCvd: { kind: 'agrees' } },
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    };
+    mockSituation.mockImplementation((arg: { at?: string }) => (arg?.at ? past : empty));
+    mockCandles.mockReturnValue({
+      data: { candles: [{ ...candle, openTime: open.toISOString() }] },
+      currentData: { candles: [{ ...candle, openTime: open.toISOString() }] },
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    renderDetail('/markets/binance/BTCUSDT');
+    expect(await screen.findByTestId('chart-forensics-hint')).toBeInTheDocument();
+    expect(screen.queryByTestId('chart-candle-situation')).not.toBeInTheDocument();
+    await user.click(screen.getByTestId('chart-bar-click'));
+    const card = await screen.findByTestId('chart-candle-situation');
+    expect(card).toHaveTextContent('At this candle');
+    expect(card).toHaveTextContent('Price and futures CVD are moving together.');
+    expect(card).toHaveTextContent('The estimated liquidation pocket is not part of this read.');
+    expect(screen.queryByText(/No estimated liquidation pocket/)).not.toBeInTheDocument();
+    expect(mockSituation).toHaveBeenCalledWith(
+      expect.objectContaining({ symbol: 'BTCUSDT', at: closeIso }),
+      expect.objectContaining({ skip: false }),
+    );
+    expect(mockForensics).toHaveBeenCalledWith(
+      expect.objectContaining({ at: open.toISOString() }),
+      expect.objectContaining({ skip: false }),
+    );
+    await user.click(screen.getByTestId('chart-forensics-clear'));
+    expect(screen.queryByTestId('chart-candle-situation')).not.toBeInTheDocument();
+    expect(screen.getByTestId('chart-forensics-hint')).toBeInTheDocument();
+  });
+
+  it('does not read a candle situation on an equity', async () => {
+    const user = userEvent.setup();
+    const open = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    open.setUTCMinutes(0, 0, 0);
+    chartClickAt = Math.floor(open.getTime() / 1000);
+    mockCandles.mockReturnValue({
+      data: { candles: [{ ...candle, openTime: open.toISOString() }] },
+      currentData: { candles: [{ ...candle, openTime: open.toISOString() }] },
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    renderDetail('/markets/nasdaq/AAPL');
+    await user.click(await screen.findByTestId('chart-bar-click'));
+    expect(screen.queryByTestId('chart-candle-situation')).not.toBeInTheDocument();
+    const armed = mockSituation.mock.calls.filter((call) => {
+      const arg = call[0] as { at?: string };
+      const opts = call[1] as { skip?: boolean };
+      return Boolean(arg?.at) && opts?.skip === false;
+    });
+    expect(armed).toEqual([]);
   });
 
   it('restarts open interest, funding, and liquidations from a clicked candle', async () => {
