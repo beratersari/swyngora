@@ -18,6 +18,8 @@ The coin page already loads price versus CVD, open interest, and liquidation lev
 
 A clause is omitted when a venue that publishes it does not cover it. The matching `*Missing` list names that venue. A missing venue is not counted as zero.
 
+A live clause other than the liquidation model may include `since`. That time is the first stored minute of the current kind. The samples are the five-minute minutes already kept for CVD, open interest, funding, top versus crowd, and measured prints. The clock stays off when the current kind runs back to the oldest loaded minute, when a minute inside the run cannot be read, or when the minutes jump by more than ten minutes. One missed five-minute sample still counts. The estimated liquidation pocket is not stored as its own minute series, so its `since` stays absent. A paper fill stores the clauses without `since`. The coin card and the position **Now** line add the time as a second sentence, in English and Turkish. **Entered as**, trade history, and the line that names what changed do not. A situation alert still compares kinds only.
+
 The coin page shows the same clauses in English and Turkish, above the tabs. Equities skip the read.
 
 `/derivatives` opens this read under a row whose unusual cell is a standout. `/unusual` opens it under each scan row. The standout stays in the cell. A derivatives row with no standout does not open the read. The request is this same combined symbol read, and it runs when the row opens.
@@ -32,9 +34,9 @@ An alert of kind `situation` fires when the live read leaves the clauses stored 
 
 ## Where the code lives
 
-- `backend/internal/domain/situation.go` builds the read.
-- `backend/internal/service/market/situation.go` loads CVD, open interest, liquidation levels, and the 24-hour print sides.
-- `backend/internal/service/portfolio/service.go` stores the placement read on a resting order and a new read on the fill.
+- `backend/internal/domain/situation.go` builds the read. `situation_held.go` stamps `since` on the live read and clears it on the copy stored with a fill.
+- `backend/internal/service/market/situation.go` loads CVD, open interest, liquidation levels, and the 24-hour print sides. `situation_held.go` reads the stored minutes for the clocks.
+- `backend/internal/service/portfolio/service.go` stores the placement read on a resting order and a new read on the fill. That stored copy has no `since`.
 - `frontend/src/components/molecules/CoinSituation` renders the sentences.
 - `frontend/src/components/molecules/OutlierSituation` loads that read under an opened outlier row.
 - MCP `get_coin_situation` and `get_situation_change`. Python `get_coin_situation` and `get_situation_change`.
@@ -43,9 +45,9 @@ An alert of kind `situation` fires when the live read leaves the clauses stored 
 
 ```bash
 cd backend
-go test ./internal/domain/ -run 'TestBuildCoinSituation|TestSituationLeft|TestLatestOpenLot|TestMergeLiquidationPrintSides'
+go test ./internal/domain/ -run 'TestBuildCoinSituation|TestSituationLeft|TestLatestOpenLot|TestMergeLiquidationPrintSides|TestHeldSince|TestStampSituationHeld|TestWithoutSituationHeld'
 go test ./internal/adapter/futuresstore/ -run 'TestSumAndBucketLiquidations'
-go test ./internal/service/market/ -run 'TestGetCoinSituation_MeasuredPrints'
+go test ./internal/service/market/ -run 'TestGetCoinSituation'
 go test ./internal/service/portfolio/ -run 'TestPlaceOrder_StoresCoinSituation|TestPlacePendingOrder_|TestPlaceOrder_Equity|TestView_EntrySituation|TestEntrySituation_|TestSituationChange_Names'
 go test ./internal/service/pricealert/ -run 'TestChecker_Situation'
 
@@ -57,4 +59,4 @@ Open `/markets/binance/BTCUSDT`. The situation card sits under the stats. Place 
 
 ## Limits
 
-The read uses the live combined tape. A venue that is still filling history leaves its clause blank. A resting order that fills later stores the market at the fill. Each partial fill stores its own read. The open position shows the newest remaining buy.
+The read uses the live combined tape. A venue that is still filling history leaves its clause blank. A resting order that fills later stores the market at the fill. Each partial fill stores its own read. The open position shows the newest remaining buy. A `since` time needs the stored minutes to reach a different kind. The estimated liquidation pocket has no clock.

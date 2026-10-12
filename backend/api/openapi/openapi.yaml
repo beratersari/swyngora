@@ -14005,6 +14005,10 @@ components:
             kind:
               type: string
               enum: [price_up_cvd_down, price_down_cvd_up, agrees]
+            since:
+              type: string
+              format: date-time
+              description: When this kind began in the stored minutes. Absent when the archive does not reach a different kind.
         priceCvdMissing:
           type: array
           items: { type: string }
@@ -14013,6 +14017,10 @@ components:
           properties:
             flow: { type: string, enum: [opened, closed, flat] }
             window: { type: string }
+            since:
+              type: string
+              format: date-time
+              description: When this flow began in the stored minutes. Absent when the archive does not reach a different flow.
         openInterestMissing:
           type: array
           items: { type: string }
@@ -14021,6 +14029,10 @@ components:
           properties:
             side: { type: string, enum: [long, short, none] }
             distancePct: { type: number }
+            since:
+              type: string
+              format: date-time
+              description: Absent. The estimated pocket is not stored as its own minute series.
         liquidationMissing:
           type: array
           items: { type: string }
@@ -14035,6 +14047,10 @@ components:
             longNotional: { type: number, description: Long-liquidation notional in USDT. }
             shortNotional: { type: number, description: Short-liquidation notional in USDT. }
             window: { type: string, description: Always 24h. }
+            since:
+              type: string
+              format: date-time
+              description: When this side began in the stored minutes. Absent when the archive does not reach a different side.
         printsMissing:
           type: array
           items: { type: string }
@@ -14044,6 +14060,10 @@ components:
           properties:
             payer: { type: string, enum: [long, short, none] }
             ratePct: { type: number, description: Rate in percent. 0.01 means 0.01%. }
+            since:
+              type: string
+              format: date-time
+              description: When this payer began in the stored minutes. Absent when the archive does not reach a different payer.
         fundingMissing:
           type: array
           items: { type: string }
@@ -14053,6 +14073,10 @@ components:
           properties:
             lean: { type: string, enum: [top_more_long, top_more_short, even] }
             gapPct: { type: number, description: Signed percentage points. }
+            since:
+              type: string
+              format: date-time
+              description: When this lean began in the stored minutes. Absent when the archive does not reach a different lean.
         crowdMissing:
           type: array
           items: { type: string }
@@ -14063,6 +14087,10 @@ components:
             kind:
               type: string
               enum: [whale_buy_retail_sell, whale_sell_retail_buy, both_buy, both_sell, whale_buy, whale_sell, retail_buy, retail_sell, flat]
+            since:
+              type: string
+              format: date-time
+              description: When this kind began in the stored minutes. Absent when the archive does not reach a different kind.
         sizeMissing:
           type: array
           items: { type: string }

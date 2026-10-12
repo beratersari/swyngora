@@ -5,9 +5,9 @@ import { Stack } from './PositionSituation.styles';
 import type { PositionSituationProps } from './PositionSituation.types';
 
 export function PositionSituation({ entry, now, nowLoading, comparison }: PositionSituationProps) {
-  const { t } = useTranslation('detail');
+  const { t, i18n } = useTranslation('detail');
   const entered = situationLines(entry, t);
-  const current = situationLines(now, t);
+  const current = situationLines(now, t, { since: true, locale: i18n.language });
   const changed = situationChangeLines(entry, now, comparison, 'live', t);
   if (entered.length === 0 && current.length === 0 && !nowLoading) return null;
   return (

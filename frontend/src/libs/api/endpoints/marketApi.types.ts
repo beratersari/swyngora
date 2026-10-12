@@ -268,28 +268,34 @@ export type FearGreedWindow = {
 };
 export type CoinSituationPriceCVD = {
   kind?: 'price_up_cvd_down' | 'price_down_cvd_up' | 'agrees';
+  since?: string;
 };
 export type CoinSituationOpenInterest = {
   flow?: 'opened' | 'closed' | 'flat';
   window?: string;
+  since?: string;
 };
 export type CoinSituationLiquidation = {
   side?: 'long' | 'short' | 'none';
   distancePct?: number;
+  since?: string;
 };
 export type CoinSituationPrints = {
   side?: 'long' | 'short' | 'even' | 'quiet';
   longNotional?: number;
   shortNotional?: number;
   window?: string;
+  since?: string;
 };
 export type CoinSituationFunding = {
   payer?: 'long' | 'short' | 'none';
   ratePct?: number;
+  since?: string;
 };
 export type CoinSituationCrowd = {
   lean?: 'top_more_long' | 'top_more_short' | 'even';
   gapPct?: number;
+  since?: string;
 };
 export type CoinSituationSize = {
   kind?:
@@ -302,6 +308,7 @@ export type CoinSituationSize = {
     | 'retail_buy'
     | 'retail_sell'
     | 'flat';
+  since?: string;
 };
 export type CoinSituation = {
   symbol?: string;

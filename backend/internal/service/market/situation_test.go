@@ -10,12 +10,13 @@ import (
 )
 
 type situationPrintArchive struct {
-	scan domain.LiquidationPrintSideScan
-	err  error
+	scan    domain.LiquidationPrintSideScan
+	err     error
+	history any
 }
 
-func (situationPrintArchive) History(context.Context, domain.FuturesHistoryQuery) (any, error) {
-	return nil, nil
+func (a situationPrintArchive) History(context.Context, domain.FuturesHistoryQuery) (any, error) {
+	return a.history, nil
 }
 
 func (situationPrintArchive) SumLiquidationSymbols(context.Context, time.Time, time.Time, []domain.Exchange) (domain.LiquidationSymbolScan, error) {
@@ -93,5 +94,46 @@ func TestGetCoinSituation_MeasuredPrintsStayBlankWithoutTheArchive(t *testing.T)
 	}
 	if got.Prints != nil || len(got.PrintsMissing) != len(domain.FuturesVenues()) {
 		t.Fatalf("prints %+v missing %v", got.Prints, got.PrintsMissing)
+	}
+}
+
+func TestGetCoinSituation_PrintClockNamesWhenTheSideChanged(t *testing.T) {
+	now := time.Now().UTC()
+	book := domain.NewLiquidationBook()
+	start := now.Add(-72 * time.Hour)
+	for _, ex := range domain.FuturesVenues() {
+		book.RestoreTracking(ex, "", start, 72*time.Hour)
+		book.RestoreTracking(ex, "BTCUSDT", start, 72*time.Hour)
+	}
+	svc := New(&fakeMarket{}, &fakeSupply{}).WithLiquidations(book, nil)
+	svc.SetFuturesHistory(situationPrintArchive{
+		scan: domain.LiquidationPrintSideScan{
+			Rows: []domain.LiquidationPrintSideRow{
+				{Exchange: domain.ExchangeBinance, Long: 200},
+			},
+			Latest: map[domain.Exchange]time.Time{
+				domain.ExchangeBinance: now.Add(-2 * time.Hour),
+			},
+		},
+		history: []domain.LiquidationEvent{
+			{
+				Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT", Side: domain.LiquidationSideShort,
+				Notional: 100, Time: now.Add(-30 * time.Hour),
+			},
+			{
+				Exchange: domain.ExchangeBybit, Symbol: "BTCUSDT", Side: domain.LiquidationSideLong,
+				Notional: 200, Time: now.Add(-2 * time.Hour),
+			},
+		},
+	})
+	got, err := svc.GetCoinSituation(context.Background(), "BTCUSDT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Prints == nil || got.Prints.Side != domain.SituationPrintLong {
+		t.Fatalf("prints %+v", got.Prints)
+	}
+	if got.Prints.Since.IsZero() || got.Prints.Since.After(now) {
+		t.Fatalf("since %s", got.Prints.Since)
 	}
 }

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { screen } from '@testing-library/react';
+import { i18n } from '@/libs/i18n';
+import { formatDateTime } from '@/libs/utils/formatMarket';
 import { renderWithProviders } from '@/test/render';
 import { CoinSituation } from './CoinSituation';
 
@@ -71,5 +73,35 @@ describe('CoinSituation', () => {
     expect(screen.getByText('Longs pay the combined funding (0.01%).')).toBeInTheDocument();
     expect(screen.getByText('Top traders are more long than the crowd (7 pp).')).toBeInTheDocument();
     expect(screen.getByText('Large prints are buying while smaller prints are selling.')).toBeInTheDocument();
+  });
+
+  it('says how long a live clause has held and stays quiet when the clock is blank', async () => {
+    await i18n.changeLanguage('en');
+    const since = '2026-10-12T11:30:00Z';
+    const time = formatDateTime(since, i18n.language);
+    renderWithProviders(
+      <CoinSituation
+        report={{
+          symbol: 'BTCUSDT',
+          priceCvd: { kind: 'price_up_cvd_down', since },
+          openInterestMissing: ['bybit'],
+          liquidation: { side: 'long', distancePct: 1.2 },
+        }}
+      />,
+    );
+    expect(
+      screen.getByText(`Price is rising while futures CVD is falling. Since ${time}.`),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Long liquidations below price are closer (1.2%).')).toBeInTheDocument();
+    expect(screen.queryByText(/closer \(1\.2%\)\. Since/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Open interest stays blank until Bybit have the last hour.'),
+    ).toBeInTheDocument();
+    await i18n.changeLanguage('tr');
+    const trTime = formatDateTime(since, i18n.language);
+    expect(
+      screen.getByText(`Fiyat yükselirken vadeli CVD düşüyor. ${trTime} tarihinden beri.`),
+    ).toBeInTheDocument();
+    await i18n.changeLanguage('en');
   });
 });

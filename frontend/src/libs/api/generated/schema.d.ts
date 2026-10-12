@@ -9718,18 +9718,33 @@ export interface components {
             priceCvd?: {
                 /** @enum {string} */
                 kind?: "price_up_cvd_down" | "price_down_cvd_up" | "agrees";
+                /**
+                 * Format: date-time
+                 * @description When this kind began in the stored minutes. Absent when the archive does not reach a different kind.
+                 */
+                since?: string;
             };
             priceCvdMissing?: string[];
             openInterest?: {
                 /** @enum {string} */
                 flow?: "opened" | "closed" | "flat";
                 window?: string;
+                /**
+                 * Format: date-time
+                 * @description When this flow began in the stored minutes. Absent when the archive does not reach a different flow.
+                 */
+                since?: string;
             };
             openInterestMissing?: string[];
             liquidation?: {
                 /** @enum {string} */
                 side?: "long" | "short" | "none";
                 distancePct?: number;
+                /**
+                 * Format: date-time
+                 * @description Absent. The estimated pocket is not stored as its own minute series.
+                 */
+                since?: string;
             };
             liquidationMissing?: string[];
             /**
@@ -9746,6 +9761,11 @@ export interface components {
                 shortNotional?: number;
                 /** @description Always 24h. */
                 window?: string;
+                /**
+                 * Format: date-time
+                 * @description When this side began in the stored minutes. Absent when the archive does not reach a different side.
+                 */
+                since?: string;
             };
             printsMissing?: string[];
             /** @description OI-weighted predicted funding. Set only when Binance, Bybit, and OKX all contribute. */
@@ -9754,6 +9774,11 @@ export interface components {
                 payer?: "long" | "short" | "none";
                 /** @description Rate in percent. 0.01 means 0.01%. */
                 ratePct?: number;
+                /**
+                 * Format: date-time
+                 * @description When this payer began in the stored minutes. Absent when the archive does not reach a different payer.
+                 */
+                since?: string;
             };
             fundingMissing?: string[];
             /** @description Top-trader long share minus the crowd, from Binance and OKX. Bybit does not publish a top-trader ratio. */
@@ -9762,12 +9787,22 @@ export interface components {
                 lean?: "top_more_long" | "top_more_short" | "even";
                 /** @description Signed percentage points. */
                 gapPct?: number;
+                /**
+                 * Format: date-time
+                 * @description When this lean began in the stored minutes. Absent when the archive does not reach a different lean.
+                 */
+                since?: string;
             };
             crowdMissing?: string[];
             /** @description Whale versus retail on the latest sized combined bar. */
             size?: {
                 /** @enum {string} */
                 kind?: "whale_buy_retail_sell" | "whale_sell_retail_buy" | "both_buy" | "both_sell" | "whale_buy" | "whale_sell" | "retail_buy" | "retail_sell" | "flat";
+                /**
+                 * Format: date-time
+                 * @description When this kind began in the stored minutes. Absent when the archive does not reach a different kind.
+                 */
+                since?: string;
             };
             sizeMissing?: string[];
             note?: string;

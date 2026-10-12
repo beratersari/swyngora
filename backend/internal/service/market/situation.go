@@ -78,7 +78,9 @@ func (s *Service) loadCoinSituation(ctx context.Context, symbol string) (*domain
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	return domain.BuildCoinSituation(symbol, now, cvd, oi, levels, funding, longs, prints), nil
+	out := domain.BuildCoinSituation(symbol, now, cvd, oi, levels, funding, longs, prints)
+	s.attachSituationHeld(ctx, symbol, now, out, cvd, funding, longs, prints)
+	return out, nil
 }
 
 // situationPrintInput loads the 24h stored print sum plus newer book prints.
@@ -105,5 +107,6 @@ func (s *Service) situationPrintInput(ctx context.Context, symbol string, now ti
 		tail = s.liq.Events("all", symbol, from)
 	}
 	in.Sides = domain.MergeLiquidationPrintSides(scan.Rows, scan.Latest, tail, from, now)
+	in.Minutes = s.situationPrintMinutes(ctx, symbol, now, scan.Latest, tail)
 	return in
 }

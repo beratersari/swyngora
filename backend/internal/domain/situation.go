@@ -75,47 +75,62 @@ type CoinSituation struct {
 
 // SituationFunding is who pays the OI-weighted predicted funding rate.
 // Payer is long, short, or none. RatePct is the rate in percent (0.01 = 0.01%).
+// Since is when this payer began in the stored minutes. Zero means the archive
+// does not reach a different payer.
 type SituationFunding struct {
-	Payer   string  `json:"payer"`
-	RatePct float64 `json:"ratePct,omitempty"`
+	Payer   string    `json:"payer"`
+	RatePct float64   `json:"ratePct,omitempty"`
+	Since   time.Time `json:"since,omitempty"`
 }
 
 // SituationCrowd is top-trader long share minus the crowd, in percentage points.
 // Lean is top_more_long, top_more_short, or even. Bybit does not publish this.
+// Since is when this lean began. Zero means the archive does not reach a different lean.
 type SituationCrowd struct {
-	Lean   string  `json:"lean"`
-	GapPct float64 `json:"gapPct,omitempty"`
+	Lean   string    `json:"lean"`
+	GapPct float64   `json:"gapPct,omitempty"`
+	Since  time.Time `json:"since,omitempty"`
 }
 
 // SituationSize says whether whale prints and smaller prints agree on the latest sized bar.
+// Since is when this kind began on the sized bars. Zero means the archive does not reach a different kind.
 type SituationSize struct {
-	Kind string `json:"kind"`
+	Kind  string    `json:"kind"`
+	Since time.Time `json:"since,omitempty"`
 }
 
 // SituationPriceCVD is how price and futures CVD are moving on the combined tape.
+// Since is when this kind began. Zero means the archive does not reach a different kind.
 type SituationPriceCVD struct {
-	Kind string `json:"kind"`
+	Kind  string    `json:"kind"`
+	Since time.Time `json:"since,omitempty"`
 }
 
 // SituationOpenInterest says whether the combined 1h open interest is building.
+// Since is when this flow began. Zero means the archive does not reach a different flow.
 type SituationOpenInterest struct {
-	Flow   string `json:"flow"`
-	Window string `json:"window"`
+	Flow   string    `json:"flow"`
+	Window string    `json:"window"`
+	Since  time.Time `json:"since,omitempty"`
 }
 
 // SituationLiquidation is which estimated liquidation side sits closer to last.
+// The estimated pocket is not stored as its own minute series, so Since stays zero.
 type SituationLiquidation struct {
-	Side        string  `json:"side"`
-	DistancePct float64 `json:"distancePct,omitempty"`
+	Side        string    `json:"side"`
+	DistancePct float64   `json:"distancePct,omitempty"`
+	Since       time.Time `json:"since,omitempty"`
 }
 
 // SituationPrints is measured force-order notional over the last 24 hours.
 // Side is long, short, even, or quiet. Notionals are USDT.
+// Since is when this side began. Zero means the archive does not reach a different side.
 type SituationPrints struct {
-	Side          string  `json:"side"`
-	LongNotional  float64 `json:"longNotional,omitempty"`
-	ShortNotional float64 `json:"shortNotional,omitempty"`
-	Window        string  `json:"window"`
+	Side          string    `json:"side"`
+	LongNotional  float64   `json:"longNotional,omitempty"`
+	ShortNotional float64   `json:"shortNotional,omitempty"`
+	Window        string    `json:"window"`
+	Since         time.Time `json:"since,omitempty"`
 }
 
 // SituationPrintInput is the 24h print archive plus the live coverage clock.
@@ -125,6 +140,9 @@ type SituationPrintInput struct {
 	ArchiveOK bool
 	Coverage  []LiquidationCoverage
 	Sides     []LiquidationPrintSideRow
+	// Minutes are five-minute venue buckets over the last 48 hours.
+	// They are how the print clock finds when the 24h side changed.
+	Minutes []SituationPrintMinute
 }
 
 // BuildCoinSituation folds an already-loaded tape into one read.

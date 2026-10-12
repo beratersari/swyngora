@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { screen } from '@testing-library/react';
 import { i18n } from '@/libs/i18n';
+import { formatDateTime } from '@/libs/utils/formatMarket';
 import { renderWithProviders } from '@/test/render';
 import { isCashEquity, openPositionFor } from './helpers';
 import { PositionSituation } from './PositionSituation';
@@ -91,6 +92,37 @@ describe('PositionSituation', () => {
       screen.getAllByText('Funding stays blank until Binance and OKX have a rate and open interest.'),
     ).toHaveLength(2);
     expect(screen.queryByText(/Was:/)).not.toBeInTheDocument();
+  });
+
+  it('says how long the live clause has held and leaves the entry and the change line without a clock', async () => {
+    await i18n.changeLanguage('en');
+    const since = '2026-10-12T11:30:00Z';
+    const time = formatDateTime(since, i18n.language);
+    renderWithProviders(
+      <PositionSituation
+        entry={{ symbol: 'BTCUSDT', priceCvd: { kind: 'price_up_cvd_down', since } }}
+        now={{ symbol: 'BTCUSDT', priceCvd: { kind: 'agrees', since } }}
+        comparison={{
+          same: false,
+          clauses: [{ clause: 'priceCvd', status: 'changed', entry: 'price_up_cvd_down', live: 'agrees' }],
+        }}
+      />,
+    );
+    expect(screen.getByText('Price is rising while futures CVD is falling.')).toBeInTheDocument();
+    expect(screen.getByText(`Price and futures CVD are moving together. Since ${time}.`)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Was: Price is rising while futures CVD is falling. Now: Price and futures CVD are moving together.',
+      ),
+    ).toBeInTheDocument();
+    await i18n.changeLanguage('tr');
+    const trTime = formatDateTime(since, 'tr');
+    expect(screen.getByText('Fiyat yükselirken vadeli CVD düşüyor.')).toBeInTheDocument();
+    expect(screen.getByText(`Fiyat ile vadeli CVD aynı yönde. ${trTime} tarihinden beri.`)).toBeInTheDocument();
+    expect(
+      screen.getByText('Önce: Fiyat yükselirken vadeli CVD düşüyor. Şimdi: Fiyat ile vadeli CVD aynı yönde.'),
+    ).toBeInTheDocument();
+    await i18n.changeLanguage('en');
   });
 
   it('says the entry read still matches', () => {

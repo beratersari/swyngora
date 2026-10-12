@@ -5,7 +5,7 @@ import type { CoinSituationProps } from './CoinSituation.types';
 import { situationLines } from './helpers';
 
 export function CoinSituation({ report, isLoading, error }: CoinSituationProps) {
-  const { t } = useTranslation('detail');
+  const { t, i18n } = useTranslation('detail');
   if (error) {
     return (
       <Text variant="caption" color="secondary">
@@ -20,7 +20,7 @@ export function CoinSituation({ report, isLoading, error }: CoinSituationProps) 
       </Text>
     );
   }
-  const lines = situationLines(report, t);
+  const lines = situationLines(report, t, { since: true, locale: i18n.language });
   if (lines.length === 0) return null;
   return (
     <Card aria-label={t('situation.title')}>

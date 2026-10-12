@@ -6097,7 +6097,11 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Missing list names the venues that do not cover it. The same read "
                 "is stored when a paper order fills. A resting order stores a new "
                 "read at the fill. An unusual standout on the "
-                "derivatives board and each unusual-scan row open these clauses."
+                "derivatives board and each unusual-scan row open these clauses. "
+                "A live clause may include since when the stored minutes reach "
+                "a different kind. since is absent when the archive does not "
+                "reach that change. The liquidation model has no since. A stored "
+                "fill omits it."
             ),
             args_schema=CoinSituationInput,
         ),

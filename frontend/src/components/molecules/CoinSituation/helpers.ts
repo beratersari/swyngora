@@ -1,7 +1,24 @@
 import type { CoinSituation } from '@/libs/api';
-import { formatCompactUsd } from '@/libs/utils/formatMarket';
+import { formatCompactUsd, formatDateTime } from '@/libs/utils/formatMarket';
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
+
+export type SituationLineOptions = {
+  since?: boolean;
+  locale?: string;
+};
+
+function withHeld(
+  sentence: string,
+  since: string | undefined,
+  options: SituationLineOptions | undefined,
+  t: Translate,
+): string {
+  if (!options?.since || !since) return sentence;
+  const time = formatDateTime(since, options.locale);
+  if (!time || time === '—') return sentence;
+  return `${sentence} ${t('detail:situation.heldSince', { time })}`;
+}
 
 export type SituationClauseChange = {
   clause?: string;
@@ -32,11 +49,22 @@ export function situationVenueList(ids: string[] | undefined, t: Translate): str
 }
 
 /** One sentence per clause. A missing venue keeps that sentence blank of a number and names who is absent. */
-export function situationLines(report: CoinSituation | null | undefined, t: Translate): string[] {
+export function situationLines(
+  report: CoinSituation | null | undefined,
+  t: Translate,
+  options?: SituationLineOptions,
+): string[] {
   if (!report) return [];
   const lines: string[] = [];
   if (report.priceCvd?.kind) {
-    lines.push(t(`detail:situation.priceCvd.${report.priceCvd.kind}`, { defaultValue: report.priceCvd.kind }));
+    lines.push(
+      withHeld(
+        t(`detail:situation.priceCvd.${report.priceCvd.kind}`, { defaultValue: report.priceCvd.kind }),
+        report.priceCvd.since,
+        options,
+        t,
+      ),
+    );
   } else if ((report.priceCvdMissing ?? []).length > 0) {
     lines.push(
       t('detail:situation.priceCvd.missing', { venues: situationVenueList(report.priceCvdMissing, t) }),
@@ -44,9 +72,14 @@ export function situationLines(report: CoinSituation | null | undefined, t: Tran
   }
   if (report.openInterest?.flow) {
     lines.push(
-      t(`detail:situation.openInterest.${report.openInterest.flow}`, {
-        defaultValue: report.openInterest.flow,
-      }),
+      withHeld(
+        t(`detail:situation.openInterest.${report.openInterest.flow}`, {
+          defaultValue: report.openInterest.flow,
+        }),
+        report.openInterest.since,
+        options,
+        t,
+      ),
     );
   } else if ((report.openInterestMissing ?? []).length > 0) {
     lines.push(
@@ -57,10 +90,15 @@ export function situationLines(report: CoinSituation | null | undefined, t: Tran
   }
   if (report.liquidation?.side) {
     lines.push(
-      t(`detail:situation.liquidation.${report.liquidation.side}`, {
-        pct: report.liquidation.distancePct ?? 0,
-        defaultValue: report.liquidation.side,
-      }),
+      withHeld(
+        t(`detail:situation.liquidation.${report.liquidation.side}`, {
+          pct: report.liquidation.distancePct ?? 0,
+          defaultValue: report.liquidation.side,
+        }),
+        report.liquidation.since,
+        options,
+        t,
+      ),
     );
   } else if ((report.liquidationMissing ?? []).length > 0) {
     lines.push(
@@ -71,11 +109,16 @@ export function situationLines(report: CoinSituation | null | undefined, t: Tran
   }
   if (report.prints?.side) {
     lines.push(
-      t(`detail:situation.prints.${report.prints.side}`, {
-        long: formatCompactUsd(report.prints.longNotional ?? 0),
-        short: formatCompactUsd(report.prints.shortNotional ?? 0),
-        defaultValue: report.prints.side,
-      }),
+      withHeld(
+        t(`detail:situation.prints.${report.prints.side}`, {
+          long: formatCompactUsd(report.prints.longNotional ?? 0),
+          short: formatCompactUsd(report.prints.shortNotional ?? 0),
+          defaultValue: report.prints.side,
+        }),
+        report.prints.since,
+        options,
+        t,
+      ),
     );
   } else if ((report.printsMissing ?? []).length > 0) {
     lines.push(
@@ -86,10 +129,15 @@ export function situationLines(report: CoinSituation | null | undefined, t: Tran
   }
   if (report.funding?.payer) {
     lines.push(
-      t(`detail:situation.funding.${report.funding.payer}`, {
-        pct: report.funding.ratePct ?? 0,
-        defaultValue: report.funding.payer,
-      }),
+      withHeld(
+        t(`detail:situation.funding.${report.funding.payer}`, {
+          pct: report.funding.ratePct ?? 0,
+          defaultValue: report.funding.payer,
+        }),
+        report.funding.since,
+        options,
+        t,
+      ),
     );
   } else if ((report.fundingMissing ?? []).length > 0) {
     lines.push(
@@ -100,10 +148,15 @@ export function situationLines(report: CoinSituation | null | undefined, t: Tran
   }
   if (report.crowd?.lean) {
     lines.push(
-      t(`detail:situation.crowd.${report.crowd.lean}`, {
-        pct: report.crowd.gapPct ?? 0,
-        defaultValue: report.crowd.lean,
-      }),
+      withHeld(
+        t(`detail:situation.crowd.${report.crowd.lean}`, {
+          pct: report.crowd.gapPct ?? 0,
+          defaultValue: report.crowd.lean,
+        }),
+        report.crowd.since,
+        options,
+        t,
+      ),
     );
   } else if ((report.crowdMissing ?? []).length > 0) {
     lines.push(
@@ -113,7 +166,14 @@ export function situationLines(report: CoinSituation | null | undefined, t: Tran
     );
   }
   if (report.size?.kind) {
-    lines.push(t(`detail:situation.size.${report.size.kind}`, { defaultValue: report.size.kind }));
+    lines.push(
+      withHeld(
+        t(`detail:situation.size.${report.size.kind}`, { defaultValue: report.size.kind }),
+        report.size.since,
+        options,
+        t,
+      ),
+    );
   } else if ((report.sizeMissing ?? []).length > 0) {
     lines.push(
       t('detail:situation.size.missing', {

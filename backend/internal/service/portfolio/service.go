@@ -153,7 +153,7 @@ func (s *Service) captureSituation(ctx context.Context, ex domain.Exchange, symb
 	if err != nil {
 		return nil
 	}
-	return got
+	return domain.WithoutSituationHeld(got)
 }
 
 // SetChangeSink receives order/position/cash mutations for realtime subscribers.

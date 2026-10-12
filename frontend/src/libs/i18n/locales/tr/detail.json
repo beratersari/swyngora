@@ -666,6 +666,7 @@
     "now": "Şimdi",
     "nowLoading": "Şimdiki bant okunuyor…",
     "loading": "Birleşik bant okunuyor…",
+    "heldSince": "{{time}} tarihinden beri.",
     "deskLead": "Bu coin için birleşik durum.",
     "deskFailed": "Durum yüklenmedi.",
     "priceCvd": {
