@@ -3562,6 +3562,10 @@ export interface paths {
          *     the newest buy that still has remaining quantity. An equity omits it.
          *     A buy that stored no read leaves the field off. The live read is
          *     GET /api/v1/market/situation.
+         *     Every open spot position includes moves: the 1h, 4h, and 24h venue
+         *     price change after the newest open lot, including equities. pending
+         *     means that minute has not closed. missing means the close is absent
+         *     and is not zero. ready pct is the price change, not profit.
          *     When the client has more than one book, pass portfolioId (or X-Portfolio-Id).
          */
         get: operations["getPortfolio"];
@@ -3978,7 +3982,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List paper trade history */
+        /**
+         * List paper trade history
+         * @description Each fill includes the slipped price, the taker fee, and moves:
+         *     the 1h, 4h, and 24h venue price change after that fill.
+         *     pending means that minute has not closed. missing means the close
+         *     is absent and is not zero. ready pct is the price change, not
+         *     realized profit. A sell with a positive pct means price rose after the sell.
+         */
         get: operations["listPortfolioTrades"];
         put?: never;
         post?: never;
@@ -9544,7 +9555,8 @@ export interface components {
         /**
          * @description Open spot holding. entrySituation is the coin read stored on the newest
          *     buy that still has remaining quantity. Equities omit it. The live read
-         *     is GET /api/v1/market/situation.
+         *     is GET /api/v1/market/situation. moves is the venue price change after
+         *     the newest open lot, including equities, and is not profit.
          */
         PortfolioPosition: {
             exchange?: string;
@@ -9564,6 +9576,28 @@ export interface components {
              * @description When the buy that stored entrySituation was placed
              */
             entryAt?: string;
+            /**
+             * @description 1h, 4h, and 24h venue price change after the newest open lot, in that order.
+             *     The lot price and open time are the fill. Average cost is not used.
+             *     A window with no numbers is pending or missing, never a made-up zero.
+             */
+            moves?: components["schemas"]["FillMove"][];
+        };
+        /**
+         * @description Venue price change after a paper fill. Not profit.
+         *     pending: the one-minute bar that contains the horizon has not closed.
+         *     ready: pct is (minute close - fill price) / fill price * 100. 0 is a real unchanged price.
+         *     missing: the window is due and that minute close is absent. A missing window is not zero.
+         */
+        FillMove: {
+            /** @enum {string} */
+            window?: "1h" | "4h" | "24h";
+            /** @enum {string} */
+            status?: "pending" | "ready" | "missing";
+            /** @description Percent change. Present only when status is ready, including 0. */
+            pct?: number;
+            /** @description One-minute close used for pct. Present only when status is ready. */
+            price?: number;
         };
         /** @description One remaining (or closed) buy lot used for FIFO/LIFO realized PnL */
         TaxLot: {
@@ -9611,6 +9645,11 @@ export interface components {
             /** @description Last/mark before slippage (0 if not stored) */
             lastPrice?: number;
             situation?: components["schemas"]["CoinSituation"];
+            /**
+             * @description 1h, 4h, and 24h venue price change after this fill, in that order.
+             *     price on the trade is the slipped fill. The percent is not realized profit.
+             */
+            moves?: components["schemas"]["FillMove"][];
             /** Format: date-time */
             createdAt?: string;
         };

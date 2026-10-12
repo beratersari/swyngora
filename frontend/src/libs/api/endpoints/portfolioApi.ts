@@ -17,6 +17,7 @@ export type TaxLot = components['schemas']['TaxLot'];
 export type PortfolioShare = components['schemas']['PortfolioShare'];
 export type SharedPortfolioSummary = components['schemas']['SharedPortfolioSummary'];
 export type PaperTrade = components['schemas']['PaperTrade'];
+export type FillMove = components['schemas']['FillMove'];
 export type RebalanceResult = components['schemas']['RebalanceResult'];
 export type RebalanceLegOutcome = components['schemas']['RebalanceLegOutcome'];
 export type RebalanceLineSnapshot = components['schemas']['RebalanceLineSnapshot'];

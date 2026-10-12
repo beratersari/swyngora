@@ -531,6 +531,7 @@ func (s *Service) replayRecurringPeriod(ctx context.Context, bookID string, in O
 	if err != nil {
 		return nil, nil, err
 	}
+	tr = s.stampTrade(ctx, tr)
 	view, err := s.View(ctx, in.ClientID, in.PortfolioID)
 	if err != nil {
 		return tr, nil, err

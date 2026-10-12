@@ -42,12 +42,19 @@ type Service struct {
 	account    AccountChecker
 	costFor    func(domain.Exchange) domain.TradingCost
 	situations SituationSource
-	clientMu   sync.Map // clientID → *sync.Mutex; serializes RMW per client
+	candles    CandleSource
+	moveQuotes *moveQuoteCache
+	// moveClock overrides the clock used only for post-fill price moves. Tests set it.
+	moveClock func() time.Time
+	clientMu  sync.Map // clientID → *sync.Mutex; serializes RMW per client
 }
 
 // New constructs a portfolio service.
 func New(store domain.PortfolioPort, market PriceFetcher) *Service {
-	return &Service{store: store, market: market, costFor: domain.TradingCostFor}
+	return &Service{
+		store: store, market: market, costFor: domain.TradingCostFor,
+		moveQuotes: newMoveQuoteCache(),
+	}
 }
 
 // WithPaperCosts overrides per-exchange fee/slippage (tests use domain.ZeroTradingCosts).
@@ -76,6 +83,14 @@ func (s *Service) paperCost(ex domain.Exchange) domain.TradingCost {
 func (s *Service) SetSituationSource(src SituationSource) {
 	if s != nil {
 		s.situations = src
+	}
+}
+
+// SetCandleSource loads the one-minute close used for the price move after a fill.
+// Optional. When unset, a window that is not due stays pending and a due window is missing.
+func (s *Service) SetCandleSource(src CandleSource) {
+	if s != nil {
+		s.candles = src
 	}
 }
 
@@ -395,6 +410,7 @@ func (s *Service) buildView(ctx context.Context, p *domain.Portfolio, role domai
 		lotsByPair[k] = append(lotsByPair[k], l)
 	}
 	views := make([]domain.PositionView, 0, len(positions))
+	anchors := make([]moveAnchor, 0, len(positions))
 	var posValue, spotUnreal float64
 	for _, pos := range positions {
 		mark, merr := s.lastPrice(ctx, string(pos.Exchange), pos.Symbol)
@@ -428,8 +444,15 @@ func (s *Service) buildView(ctx context.Context, p *domain.Portfolio, role domai
 			EntrySituation:    entry,
 			EntryAt:           entryAt,
 		})
+		anchors = append(anchors, openLotAnchor(pos, lots))
 		posValue += mv
 		spotUnreal += u
+	}
+	moved := s.fillMoves(ctx, anchors)
+	for i := range views {
+		if i < len(moved) {
+			views[i].Moves = moved[i]
+		}
 	}
 	marginPositions, err := s.store.ListOpenMarginPositions(ctx, bookID)
 	if err != nil {
@@ -691,6 +714,7 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 		return nil, nil, err
 	}
 	view, err := s.View(ctx, in.ClientID, p.ID)
+	tr = *s.stampTrade(ctx, &tr)
 	if err != nil {
 		return &tr, nil, err
 	}
@@ -779,6 +803,7 @@ func (s *Service) ListTrades(ctx context.Context, clientID string, limit, offset
 			list[i].LotFills = byTrade[list[i].ID]
 		}
 	}
+	s.attachTradeMoves(ctx, list)
 	return list, total, nil
 }
 

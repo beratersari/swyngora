@@ -105,6 +105,9 @@ type Trade struct {
 	// Situation is the coin-page read at the moment the order was placed.
 	// A pending fill keeps the read from placement, not from the later fill.
 	Situation *CoinSituation
+	// Moves is the 1h, 4h, and 24h venue price change after this fill.
+	// It is computed when the trade is read and is not stored.
+	Moves     []FillMove
 	CreatedAt time.Time
 }
 
@@ -254,6 +257,9 @@ type PositionView struct {
 	EntrySituation *CoinSituation
 	// EntryAt is when that buy was placed.
 	EntryAt time.Time
+	// Moves is the 1h, 4h, and 24h venue price change after the newest open lot.
+	// It is computed when the book is read. Equities are included. It is not profit.
+	Moves []FillMove
 }
 
 // PortfolioView is the full paper-trading snapshot for a client.

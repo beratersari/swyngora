@@ -6679,7 +6679,17 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         StructuredTool.from_function(
             get_portfolio,
             name="get_portfolio",
-            description="Get paper portfolio cash, positions, realized/unrealized P&L. Each open crypto position includes entrySituation from the newest buy still held. The live read is get_coin_situation. Pass portfolio_id when the client has more than one book.",
+            description=(
+                "Get paper portfolio cash, positions, realized/unrealized P&L. "
+                "Each open crypto position includes entrySituation from the newest "
+                "buy still held. Equities omit that read. Every open spot position "
+                "includes moves: the 1h, 4h, and 24h venue price change after the "
+                "newest open lot, including equities. pending means that minute has "
+                "not closed. missing means the close is absent and is not zero. "
+                "ready pct is the price change, not profit. The live read is "
+                "get_coin_situation. Pass portfolio_id when the client has more "
+                "than one book."
+            ),
             args_schema=PortfolioGetInput,
         ),
         StructuredTool.from_function(
@@ -6812,7 +6822,13 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         StructuredTool.from_function(
             list_portfolio_trades,
             name="list_portfolio_trades",
-            description="List paper trade history for a clientId.",
+            description=(
+                "List paper trade history for a clientId. Each fill includes moves: "
+                "the 1h, 4h, and 24h venue price change after the fill. pending means "
+                "that minute has not closed. missing means the close is absent and "
+                "is not zero. ready pct is the price change, not realized profit. "
+                "A sell with a positive pct means price rose after the sell."
+            ),
             args_schema=PortfolioGetInput,
         ),
         StructuredTool.from_function(

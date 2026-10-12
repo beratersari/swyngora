@@ -247,6 +247,7 @@ import {
   type ChartDeskLayers,
 } from './chartPresets';
 import { CoinSituation } from '@/components/molecules/CoinSituation';
+import { FillMoves } from '@/components/molecules/FillMoves';
 import { openPositionFor, PositionSituation } from '@/components/molecules/PositionSituation';
 import {
   clickSecFromForensicsAt,
@@ -3254,6 +3255,7 @@ export function CoinDetailPage() {
                 })}
               </Text>
             ) : null}
+            {heldPosition ? <FillMoves moves={heldPosition.moves} /> : null}
             {heldPosition && !isEquity ? (
               <PositionSituation
                 entry={heldPosition.entrySituation}

@@ -66,6 +66,7 @@ type positionDTO struct {
 	Lots              []taxLotDTO           `json:"lots,omitempty"`
 	EntrySituation    *domain.CoinSituation `json:"entrySituation,omitempty"`
 	EntryAt           string                `json:"entryAt,omitempty"`
+	Moves             []domain.FillMove     `json:"moves,omitempty"`
 }
 
 type taxLotDTO struct {
@@ -103,6 +104,7 @@ type tradeDTO struct {
 	Fee            float64               `json:"fee"`
 	LastPrice      float64               `json:"lastPrice,omitempty"`
 	Situation      *domain.CoinSituation `json:"situation,omitempty"`
+	Moves          []domain.FillMove     `json:"moves,omitempty"`
 	CreatedAt      string                `json:"createdAt"`
 }
 
@@ -115,6 +117,7 @@ func portfolioViewDTO(v *domain.PortfolioView) portfolioDTO {
 			AvgCost: p.AvgCost, MarkPrice: p.MarkPrice, MarketValue: p.MarketValue,
 			UnrealizedPnL: p.UnrealizedPnL, CostBasis: p.CostBasis,
 			Lots: taxLotsDTO(p.Lots), EntrySituation: p.EntrySituation,
+			Moves: p.Moves,
 		}
 		if !p.EntryAt.IsZero() {
 			row.EntryAt = p.EntryAt.UTC().Format(time.RFC3339Nano)
@@ -152,6 +155,7 @@ func tradeToDTO(t *domain.Trade) tradeDTO {
 		Quantity: t.Quantity, Price: t.Price, Notional: t.Notional, RealizedPnL: t.RealizedPnL,
 		PendingOrderID: t.PendingOrderID, LotMethod: string(t.LotMethod),
 		Fee: t.Fee, LastPrice: t.LastPrice, Situation: t.Situation,
+		Moves:     t.Moves,
 		CreatedAt: t.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 	if len(fills) > 0 {

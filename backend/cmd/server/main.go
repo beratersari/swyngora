@@ -479,6 +479,7 @@ func main() {
 	}()
 	portfolioSvc := portfolio.New(portfolioStore, marketSvc)
 	portfolioSvc.SetSituationSource(marketSvc)
+	portfolioSvc.SetCandleSource(marketSvc)
 	logger.Info("paper portfolio store ready", "driver", "sqlite", "path", portfolioStore.Path())
 
 	realtimeHub := realtime.NewHub(realtime.Options{

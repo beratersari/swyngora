@@ -418,6 +418,7 @@ export type {
   SharedPortfolioSummary,
   SpotPosition,
   PaperTrade,
+  FillMove,
   RebalanceResult,
   RebalanceLegOutcome,
   RebalanceLineSnapshot,

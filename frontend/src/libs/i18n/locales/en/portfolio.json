@@ -191,6 +191,13 @@
     "time": "Time",
     "situation": "Situation"
   },
+  "moves": {
+    "title": "After fill",
+    "hint": "Venue price change after the fill. A blank window is not zero, and it is not profit.",
+    "pending": "{{window}} pending",
+    "missing": "{{window}} —",
+    "ready": "{{window}} {{pct}}"
+  },
   "movements": {
     "title": "Cash ledger",
     "empty": "No cash movements",

@@ -3145,7 +3145,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_portfolio",
-		mcp.WithDescription("Get paper portfolio cash, positions, realized/unrealized P&L (mark-to-market). Each open crypto position includes entrySituation, the coin read stored on the newest buy still held. Equities omit it. The live read is get_coin_situation. Pass portfolioId when the client has more than one book. Works for shared books if you have access."),
+		mcp.WithDescription("Get paper portfolio cash, positions, realized/unrealized P&L (mark-to-market). Each open crypto position includes entrySituation, the coin read stored on the newest buy still held. Equities omit that read. Every open spot position includes moves: the 1h, 4h, and 24h venue price change after the newest open lot, including equities. pending means that minute has not closed. missing means the close is absent and is not zero. ready pct is the price change, not profit. The live read is get_coin_situation. Pass portfolioId when the client has more than one book. Works for shared books if you have access."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name; required if multiple portfolios exist")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -3427,7 +3427,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("list_portfolio_trades",
-		mcp.WithDescription("List paper trade history. Each fill includes slipped price, lastPrice, and taker fee."),
+		mcp.WithDescription("List paper trade history. Each fill includes slipped price, lastPrice, taker fee, and moves (1h, 4h, 24h venue price change after the fill). pending means that minute has not closed. missing means the close is absent and is not zero. ready pct is the price change, not realized profit. A sell with a positive pct means price rose after the sell."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),
