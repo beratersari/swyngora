@@ -28,6 +28,7 @@ import {
   uniqueToolNames,
 } from './AiChatPage.helpers';
 import type { ChatMessage } from './AiChatPage.types';
+import { ChatSituationList, visibleSituationReads } from './ChatSituation';
 import {
   Bubble,
   BubbleRow,
@@ -157,6 +158,7 @@ export function AiChatPage() {
         tools?: string[];
         thinking?: string[];
         references?: ChatMessage['references'];
+        reads?: ChatMessage['reads'];
       }) => {
         if (res.sessionId && res.sessionId !== sessionId) {
           persistAiSessionId(res.sessionId);
@@ -172,6 +174,7 @@ export function AiChatPage() {
             thinking,
             steps,
             references: sanitizeChatReferences(res.references) ?? m.references,
+            reads: res.reads ?? m.reads,
             streaming: false,
           };
         });
@@ -191,18 +194,22 @@ export function AiChatPage() {
             if (step) {
               patch((m) => ({ ...m, steps: mergeThinkStep(m.steps, step), streaming: true }));
             }
-            if (ev.type === 'final' && (ev.reply || ev.tools || ev.thinking || ev.references)) {
+            if (
+              ev.type === 'final' &&
+              (ev.reply || ev.tools || ev.thinking || ev.references || (ev.reads && ev.reads.length > 0))
+            ) {
               finish({
                 reply: ev.reply,
                 sessionId: ev.sessionId,
                 tools: ev.tools,
                 thinking: ev.thinking,
                 references: ev.references,
+                reads: ev.reads,
               });
             }
           },
         });
-        if (finalEv.reply) {
+        if (finalEv.reply || (finalEv.reads && finalEv.reads.length > 0)) {
           finish(finalEv);
         }
       } catch (streamErr) {
@@ -280,6 +287,7 @@ export function AiChatPage() {
         {messages.map((m) => {
           const steps = m.steps ?? [];
           const tools = uniqueToolNames(m.tools);
+          const situationReads = visibleSituationReads(m.reads);
           const processOpenNow = processPanelOpen(Boolean(m.streaming), processOpen[m.id]);
           const processPreview = processOpenNow ? '' : latestStepPreview(steps);
           return (
@@ -337,6 +345,9 @@ export function AiChatPage() {
                       </ProcessList>
                     ) : null}
                   </ProcessPanel>
+                ) : null}
+                {m.role === 'assistant' && !m.isError && situationReads.length > 0 ? (
+                  <ChatSituationList reads={situationReads} />
                 ) : null}
                 {m.role === 'assistant' && !m.isError ? (
                   m.content ? (

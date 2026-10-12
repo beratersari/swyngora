@@ -59,6 +59,21 @@ func (h *AIHandler) parseChat(r *http.Request) (msg, session, clientID string, o
 // chatOptionsFromRequest maps API key identity to AI tool scope.
 // Master/open identities keep full access. User keys never manage other keys;
 // read-only user keys cannot invoke mutating portfolio/alert tools via AI.
+func aiResultJSON(session string, res aiagent.ChatResult) map[string]any {
+	body := map[string]any{
+		"reply":      res.Reply,
+		"sessionId":  session,
+		"tools":      res.Tools,
+		"thinking":   res.Thinking,
+		"references": res.References,
+		"note":       "Informational only — not financial advice.",
+	}
+	if len(res.Reads) > 0 {
+		body["reads"] = json.RawMessage(res.Reads)
+	}
+	return body
+}
+
 func chatOptionsFromRequest(r *http.Request) *aiagent.ChatOptions {
 	id := middleware.IdentityFrom(r.Context())
 	if id == nil || !id.UserKey {
@@ -81,14 +96,7 @@ func (h *AIHandler) Chat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, fmt.Errorf("%w: %v", domain.ErrUpstream, err))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"reply":      res.Reply,
-		"sessionId":  session,
-		"tools":      res.Tools,
-		"thinking":   res.Thinking,
-		"references": res.References,
-		"note":       "Informational only — not financial advice.",
-	})
+	writeJSON(w, http.StatusOK, aiResultJSON(session, res))
 }
 
 // ChatStream handles POST /api/v1/ai/chat/stream (NDJSON thinking/tool/final events).
@@ -132,15 +140,9 @@ func (h *AIHandler) ChatStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !sawFinal {
-		writeEv(map[string]any{
-			"type":       "final",
-			"reply":      res.Reply,
-			"tools":      res.Tools,
-			"thinking":   res.Thinking,
-			"references": res.References,
-			"sessionId":  session,
-			"note":       "Informational only — not financial advice.",
-		})
+		body := aiResultJSON(session, res)
+		body["type"] = "final"
+		writeEv(body)
 	}
 	writeEv(map[string]string{"type": "done", "sessionId": session})
 }

@@ -9319,7 +9319,10 @@ paths:
       summary: Stream AI chat thinking and tools (NDJSON)
       description: |
         Same request as POST /api/v1/ai/chat. Response is NDJSON lines:
-        `{type:status|thinking|tool|tool_result|final|error|done, text?, reply?, tools?}`.
+        `{type:status|thinking|tool|tool_result|final|error|done, text?, reply?, tools?, reads?}`.
+        `reads` on the final event is the coin situation for each crypto name in the
+        question, the same clauses as GET /api/v1/market/situation. An open paper
+        spot buy for that coin includes the entry read. A blank clause stays blank.
         Informational only — not financial advice.
       operationId: postAiChatStream
       tags: [AI]
@@ -9348,6 +9351,13 @@ paths:
                     items: { type: string }
                   message: { type: string }
                   sessionId: { type: string }
+                  reads:
+                    type: array
+                    description: |
+                      Coin situation reads for crypto names in the question.
+                      Present on the final event. Same shape as AiChatResponse.reads.
+                    items:
+                      $ref: '#/components/schemas/AiSituationRead'
         '400':
           $ref: '#/components/responses/Error'
         '502':
@@ -9451,6 +9461,48 @@ components:
         note:
           type: string
           description: Disclaimer (e.g. not financial advice)
+        reads:
+          type: array
+          description: |
+            Coin situation for each crypto name in the question. The clauses match
+            GET /api/v1/market/situation. Equities are omitted. A missing clause keeps
+            its Missing list and is not filled with a side, a flow, or a number.
+            entries are open paper spot buys for that symbol. The field is omitted
+            when the portfolio could not be read; that is not a claim the caller is flat.
+          items:
+            $ref: '#/components/schemas/AiSituationRead'
+    AiSituationRead:
+      type: object
+      required: [symbol, situation]
+      properties:
+        symbol:
+          type: string
+          example: BTCUSDT
+        situation:
+          $ref: '#/components/schemas/CoinSituation'
+        entries:
+          type: array
+          description: |
+            Open paper spot buys for this symbol across the caller's books, up to
+            eight books. Omitted when none stored a read, or the book could not be read.
+          items:
+            $ref: '#/components/schemas/AiSituationEntry'
+    AiSituationEntry:
+      type: object
+      required: [exchange, entrySituation]
+      properties:
+        exchange:
+          type: string
+          description: Paper book venue of the open spot buy
+        book:
+          type: string
+          description: Paper book name, when the snapshot includes one
+        entryAt:
+          type: string
+          format: date-time
+          description: When the buy that stored entrySituation was placed
+        entrySituation:
+          $ref: '#/components/schemas/CoinSituation'
     AiChatReference:
       type: object
       required: [url]

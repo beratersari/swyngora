@@ -24,6 +24,8 @@ A paper market order, limit, stop, bracket, or OCO stores this read at the momen
 
 An open crypto position shows two reads. **Entered as** is the read stored on the newest buy that still has remaining quantity. Selling that buy, lifo or fifo, moves the line to the newest buy that remains. A buy that stored no read leaves the line off, even when an older lot has one. **Now** is the live `GET /api/v1/market/situation` for that symbol. The same pair is on the coin Trade tab when the selected book holds the coin. An equity position stays on size and profit.
 
+The assistant uses this same read. A crypto name in the question prefetches it before the model writes, and `/ai` shows the same sentences. A spoken name uses the venue pair (`bitcoin` is BTCUSDT). An open paper spot buy for that coin shows **Entered as** beside **Now**. A blank clause stays blank and names the missing venue. A book that cannot be loaded leaves the entry off and does not say the caller is flat. Up to three coins are read, and up to eight paper books are checked. Nasdaq and BIST names do not call this endpoint.
+
 An alert of kind `situation` fires when the live read leaves the clauses stored on that entry. A clause the entry did not store is ignored, so an older fill does not alert only because a new clause appeared. A blank live clause counts as a change of a clause that was stored. The prints clause compares `prints.side` only. A change in the dollar amounts with the same side stays quiet. No open crypto position stays quiet. `mode=one_time` fires once. `mode=repeating` re-arms when the live read matches the entry again. The exchange is the paper book venue (`binance`, `coinbase`, or `bybit`), and the symbol is the pair on that book.
 
 ## Where the code lives
@@ -32,7 +34,8 @@ An alert of kind `situation` fires when the live read leaves the clauses stored 
 - `backend/internal/service/market/situation.go` loads CVD, open interest, liquidation levels, and the 24-hour print sides.
 - `backend/internal/service/portfolio/service.go` stores it on the order.
 - `frontend/src/components/molecules/CoinSituation` renders the sentences.
-- MCP `get_coin_situation`. Python `get_coin_situation`.
+- `frontend/src/components/pages/AiChatPage/ChatSituation` shows that card on `/ai`.
+- MCP `get_coin_situation`. Python `get_coin_situation`. The assistant prefetch is `ai/src/swyngora_ai/graph/situation_fetch.py`.
 
 ## How to test
 
@@ -52,4 +55,4 @@ Open `/markets/binance/BTCUSDT`. The situation card sits under the stats. Place 
 
 ## Limits
 
-The read uses the live combined tape. A venue that is still filling history leaves its clause blank. The stored read is the one at order placement, so a limit that fills later does not replace it with the market at fill time.
+The read uses the live combined tape. A venue that is still filling history leaves its clause blank. The stored read is the one at order placement, so a limit that fills later does not replace it with the market at fill time. The assistant reads at most three crypto names and eight paper books on one question. Margin positions do not store this read, so they are not the entry line.

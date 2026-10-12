@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { i18n } from '@/libs/i18n';
 import { renderWithProviders } from '@/test/render';
 import { AiChatPage } from './AiChatPage';
 
@@ -158,6 +159,152 @@ describe('AiChatPage', () => {
     await user.click(screen.getByRole('button', { name: /send|gönder/i }));
     const link = await screen.findByRole('link', { name: /bitcoin price/i });
     expect(link).toHaveAttribute('href', 'https://coinmarketcap.com/currencies/bitcoin/');
+  });
+
+  const liveRead = {
+    symbol: 'BTCUSDT',
+    priceCvd: { kind: 'agrees' as const },
+    printsMissing: ['binance', 'bybit', 'okx'],
+  };
+  const entryRead = {
+    symbol: 'BTCUSDT',
+    priceCvd: { kind: 'price_up_cvd_down' as const },
+  };
+
+  async function sendBitcoin(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(screen.getByRole('textbox'), 'bitcoin');
+    await user.click(screen.getByRole('button', { name: /send|gönder/i }));
+  }
+
+  it('shows the same situation sentences as the coin card', async () => {
+    const user = userEvent.setup();
+    streamChat.mockImplementation(async (arg: { onEvent: (ev: Record<string, unknown>) => void }) => {
+      const final = {
+        type: 'final',
+        reply: 'Price and futures CVD agree. Measured prints stay blank.',
+        reads: [{ symbol: 'BTCUSDT', situation: liveRead }],
+      };
+      arg.onEvent(final);
+      return final;
+    });
+    renderWithProviders(<AiChatPage />, { routerEntries: ['/ai'] });
+    await sendBitcoin(user);
+
+    expect(await screen.findByText('Situation · BTCUSDT')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Situation' })).toBeInTheDocument();
+    expect(screen.getByText('Price and futures CVD are moving together.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Measured liquidation prints stay blank until Binance, Bybit, and OKX cover the last 24h.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/mostly long|mostly short/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Entered as')).not.toBeInTheDocument();
+  });
+
+  it('shows the open paper buy beside the live read in English and Turkish', async () => {
+    const user = userEvent.setup();
+    const final = {
+      type: 'final',
+      reply: 'The entry and the live read.',
+      reads: [
+        {
+          symbol: 'BTCUSDT',
+          situation: liveRead,
+          entries: [
+            {
+              exchange: 'binance',
+              book: 'Main',
+              entryAt: '2026-10-01T00:00:00Z',
+              entrySituation: entryRead,
+            },
+          ],
+        },
+      ],
+    };
+    streamChat.mockImplementation(async (arg: { onEvent: (ev: Record<string, unknown>) => void }) => {
+      arg.onEvent(final);
+      return final;
+    });
+    renderWithProviders(<AiChatPage />, { routerEntries: ['/ai'] });
+    await sendBitcoin(user);
+
+    expect(await screen.findByText('Situation · BTCUSDT')).toBeInTheDocument();
+    expect(screen.getByText(/Open paper buy · Main · binance/)).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Position read' })).toBeInTheDocument();
+    expect(screen.getByText('Entered as')).toBeInTheDocument();
+    expect(screen.getByText('Price is rising while futures CVD is falling.')).toBeInTheDocument();
+    expect(screen.getByText('Now')).toBeInTheDocument();
+    expect(screen.getAllByText('Price and futures CVD are moving together.')).toHaveLength(1);
+    expect(
+      screen.getByText('Measured liquidation prints stay blank until Binance, Bybit, and OKX cover the last 24h.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Situation' })).not.toBeInTheDocument();
+
+    await i18n.changeLanguage('tr');
+    try {
+      expect(screen.getByText('Durum · BTCUSDT')).toBeInTheDocument();
+      expect(screen.getByText(/Açık kağıt alım · Main · binance/)).toBeInTheDocument();
+      expect(screen.getByText('Girişte')).toBeInTheDocument();
+      expect(screen.getByText('Fiyat yükselirken vadeli CVD düşüyor.')).toBeInTheDocument();
+      expect(screen.getByText('Şimdi')).toBeInTheDocument();
+      expect(screen.getByText('Fiyat ile vadeli CVD aynı yönde.')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'Ölçülen likidasyon baskıları, Binance, Bybit ve OKX son 24 saati kapatana kadar boş kalır.',
+        ),
+      ).toBeInTheDocument();
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
+  it('keeps each open buy and shows the live read once', async () => {
+    const user = userEvent.setup();
+    streamChat.mockImplementation(async (arg: { onEvent: (ev: Record<string, unknown>) => void }) => {
+      const final = {
+        type: 'final',
+        reply: 'Two books.',
+        reads: [
+          {
+            symbol: 'BTCUSDT',
+            situation: { symbol: 'BTCUSDT', priceCvd: { kind: 'agrees' } },
+            entries: [
+              { exchange: 'binance', entrySituation: entryRead },
+              {
+                exchange: 'bybit',
+                entrySituation: { symbol: 'BTCUSDT', priceCvd: { kind: 'price_down_cvd_up' } },
+              },
+            ],
+          },
+        ],
+      };
+      arg.onEvent(final);
+      return final;
+    });
+    renderWithProviders(<AiChatPage />, { routerEntries: ['/ai'] });
+    await sendBitcoin(user);
+
+    expect(await screen.findByText(/Open paper buy · binance/)).toBeInTheDocument();
+    expect(screen.getByText(/Open paper buy · bybit/)).toBeInTheDocument();
+    expect(screen.getAllByText('Entered as')).toHaveLength(2);
+    expect(screen.getAllByText('Now')).toHaveLength(1);
+    expect(screen.getAllByText('Price and futures CVD are moving together.')).toHaveLength(1);
+    expect(screen.getByText('Price is falling while futures CVD is rising.')).toBeInTheDocument();
+  });
+
+  it('shows the situation card from the non-stream fallback', async () => {
+    const user = userEvent.setup();
+    streamChat.mockRejectedValue({ status: 404 });
+    postChat.mockResolvedValue({
+      reply: 'Fallback read.',
+      sessionId: 's',
+      reads: [{ symbol: 'BTCUSDT', situation: liveRead }],
+    });
+    renderWithProviders(<AiChatPage />, { routerEntries: ['/ai'] });
+    await sendBitcoin(user);
+    expect(await screen.findByText('Price and futures CVD are moving together.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Measured liquidation prints stay blank until Binance, Bybit, and OKX cover the last 24h.'),
+    ).toBeInTheDocument();
   });
 
   it('shows error bubble when the API fails', async () => {

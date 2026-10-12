@@ -74,6 +74,48 @@ func TestAIHandler_ChatStream(t *testing.T) {
 	}
 }
 
+func TestAIHandler_ChatForwardsSituationReads(t *testing.T) {
+	reads := `[{"symbol":"BTCUSDT","situation":{"symbol":"BTCUSDT","printsMissing":["okx"]}}]`
+	aiSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/chat/stream" {
+			w.Header().Set("Content-Type", "application/x-ndjson")
+			_, _ = w.Write([]byte(`{"type":"final","reply":"same sentences","reads":` + reads + "}\n"))
+			_, _ = w.Write([]byte("{\"type\":\"done\"}\n"))
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"reply": "same sentences",
+			"reads": json.RawMessage(reads),
+		})
+	}))
+	defer aiSrv.Close()
+
+	h := NewAIHandler(aiagent.New(aiSrv.URL, 5*time.Second), 5*time.Second)
+	body, _ := json.Marshal(map[string]string{"message": "bitcoin", "sessionId": "s"})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/ai/chat", bytes.NewReader(body))
+	req.Header.Set("X-Client-Id", "web-user-1")
+	rr := httptest.NewRecorder()
+	h.Chat(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status=%d %s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), `"printsMissing":["okx"]`) {
+		t.Fatalf("chat body=%s", rr.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/ai/chat/stream", bytes.NewReader(body))
+	req.Header.Set("X-Client-Id", "web-user-1")
+	rr = httptest.NewRecorder()
+	h.ChatStream(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("stream status=%d %s", rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), `"printsMissing":["okx"]`) || !strings.Contains(rr.Body.String(), `"type":"final"`) {
+		t.Fatalf("stream body=%s", rr.Body.String())
+	}
+}
+
 func TestAIHandler_NotConfigured(t *testing.T) {
 	h := NewAIHandler(nil, 0)
 	body, _ := json.Marshal(map[string]string{"message": "hi"})

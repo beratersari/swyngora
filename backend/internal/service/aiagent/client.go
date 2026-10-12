@@ -82,6 +82,9 @@ type ChatResult struct {
 	Tools      []string
 	Thinking   []string
 	References []ChatReference
+	// Reads is the coin-situation JSON prefetched for crypto names in the question.
+	// Nil when the question named no crypto, or the upstream omitted the field.
+	Reads json.RawMessage
 }
 
 // StreamEvent is one NDJSON line from /v1/chat/stream.
@@ -94,6 +97,8 @@ type StreamEvent struct {
 	References []ChatReference `json:"references"`
 	Message    string          `json:"message"`
 	SessionID  string          `json:"sessionId"`
+	// Reads is present on the final event when a crypto situation was prefetched.
+	Reads json.RawMessage `json:"reads,omitempty"`
 }
 
 // Chat sends a user message (non-streaming). opts nil → full tool access (legacy).
@@ -142,6 +147,7 @@ func (c *Client) Chat(ctx context.Context, message, sessionID, clientID string, 
 		Tools      []string        `json:"tools"`
 		Thinking   []string        `json:"thinking"`
 		References []ChatReference `json:"references"`
+		Reads      json.RawMessage `json:"reads"`
 		Error      string          `json:"error"`
 		Message    string          `json:"message"`
 	}
@@ -161,7 +167,13 @@ func (c *Client) Chat(ctx context.Context, message, sessionID, clientID string, 
 	if strings.TrimSpace(out.Reply) == "" {
 		return zero, fmt.Errorf("AI returned empty reply")
 	}
-	return ChatResult{Reply: out.Reply, Tools: out.Tools, Thinking: out.Thinking, References: out.References}, nil
+	return ChatResult{
+		Reply:      out.Reply,
+		Tools:      out.Tools,
+		Thinking:   out.Thinking,
+		References: out.References,
+		Reads:      compactReads(out.Reads),
+	}, nil
 }
 
 // ChatStream streams NDJSON events. onEvent is called for each event (including final).
@@ -223,6 +235,9 @@ func (c *Client) ChatStream(ctx context.Context, message, sessionID, clientID st
 		if err := json.Unmarshal([]byte(line), &ev); err != nil {
 			continue
 		}
+		if ev.Type == "final" {
+			ev.Reads = compactReads(ev.Reads)
+		}
 		if onEvent != nil {
 			onEvent(ev)
 		}
@@ -232,6 +247,7 @@ func (c *Client) ChatStream(ctx context.Context, message, sessionID, clientID st
 			final.Tools = ev.Tools
 			final.Thinking = ev.Thinking
 			final.References = ev.References
+			final.Reads = ev.Reads
 		case "error":
 			msg := ev.Message
 			if msg == "" {
@@ -266,6 +282,15 @@ func (c *Client) Healthy(ctx context.Context) bool {
 	}
 	defer resp.Body.Close()
 	return resp.StatusCode == http.StatusOK
+}
+
+// compactReads drops an empty situation list so clients do not render a blank card.
+func compactReads(raw json.RawMessage) json.RawMessage {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) || bytes.Equal(trimmed, []byte("[]")) {
+		return nil
+	}
+	return json.RawMessage(append([]byte(nil), trimmed...))
 }
 
 func truncate(s string, n int) string {

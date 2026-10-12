@@ -37,6 +37,20 @@ def is_service_authorized(headers: Any, token: str) -> bool:
     return (headers.get("X-AI-Token") or "").strip() == expected
 
 
+def _public_result(result: Any) -> dict[str, Any]:
+    """JSON body for /v1/chat and the stream final event."""
+    body: dict[str, Any] = {
+        "reply": result.reply,
+        "sessionId": result.session_id,
+        "tools": result.tools,
+        "thinking": result.thinking,
+        "references": result.references,
+    }
+    if result.reads:
+        body["reads"] = result.reads
+    return body
+
+
 def get_orch() -> Orchestrator:
     global _orch  # noqa: PLW0603 — process-wide HTTP singleton
     if _orch is None:
@@ -121,16 +135,7 @@ class Handler(BaseHTTPRequestHandler):
                 can_manage_keys=can_manage_keys,
                 surface="serve",
             )
-            self._json(
-                200,
-                {
-                    "reply": result.reply,
-                    "sessionId": result.session_id,
-                    "tools": result.tools,
-                    "thinking": result.thinking,
-                    "references": result.references,
-                },
-            )
+            self._json(200, _public_result(result))
         except Exception as e:  # noqa: BLE001
             traceback.print_exc()
             self._json(502, {"error": "ai_failed", "message": str(e)[:500]})
@@ -160,16 +165,9 @@ class Handler(BaseHTTPRequestHandler):
                     can_manage_keys=can_manage_keys,
                     surface="serve",
                 )
-                q.put(
-                    {
-                        "type": "final",
-                        "reply": result.reply,
-                        "tools": result.tools,
-                        "thinking": result.thinking,
-                        "references": result.references,
-                        "sessionId": result.session_id,
-                    }
-                )
+                final = _public_result(result)
+                final["type"] = "final"
+                q.put(final)
             except Exception as e:  # noqa: BLE001
                 traceback.print_exc()
                 q.put({"type": "error", "message": str(e)[:500]})

@@ -122,6 +122,17 @@ _BIST = frozenset(
 )
 _BIST_REMAP = {"THY": "THYAO"}
 
+# Spoken names are aliases, not venue pair bases. "bitcoin" is BTCUSDT.
+_NAME_TO_BASE = {
+    "BITCOIN": "BTC",
+    "ETHEREUM": "ETH",
+    "SOLANA": "SOL",
+    "RIPPLE": "XRP",
+    "DOGECOIN": "DOGE",
+    "CARDANO": "ADA",
+    "JUVENTUS": "JUV",
+}
+
 # Folded phrases in the user text → alias key.
 _PHRASES: tuple[tuple[str, str], ...] = (
     ("turkish airlines", "THYAO"),
@@ -194,7 +205,7 @@ def resolve_topic(topic: str) -> ResolvedTopic:
         kind = "equity"
         venue = "bist"
     elif key in _WIKI_ALIASES and key not in {"APPLE", "MICROSOFT"}:
-        base = key
+        base = _NAME_TO_BASE.get(key, key)
         kind = "crypto"
         venue = "binance"
     return ResolvedTopic(raw=raw, wiki_title=title, base=base, venue_hint=venue, kind=kind)

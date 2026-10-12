@@ -93,6 +93,69 @@ func TestClient_ChatStream(t *testing.T) {
 	}
 }
 
+func TestClient_ChatKeepsSituationReads(t *testing.T) {
+	want := []byte(`[{"symbol":"BTCUSDT","situation":{"symbol":"BTCUSDT","priceCvd":{"kind":"agrees"},"printsMissing":["okx"]}}]`)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"reply":     "leading with the read",
+			"sessionId": "s1",
+			"reads":     json.RawMessage(want),
+		})
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, 5*time.Second)
+	res, err := c.Chat(context.Background(), "bitcoin", "s1", "client-1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(res.Reads) != string(want) {
+		t.Fatalf("reads=%s", res.Reads)
+	}
+}
+
+func TestClient_ChatStreamKeepsSituationReads(t *testing.T) {
+	line := `{"type":"final","reply":"BTC is up","reads":[{"symbol":"BTCUSDT","situation":{"symbol":"BTCUSDT","printsMissing":["binance","bybit","okx"]},"entries":[{"exchange":"binance","entryAt":"2026-10-01T00:00:00Z","entrySituation":{"priceCvd":{"kind":"agrees"}}}]}]}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		_, _ = w.Write([]byte(line + "\n"))
+		_, _ = w.Write([]byte("{\"type\":\"done\"}\n"))
+	}))
+	defer srv.Close()
+
+	c := New(srv.URL, 5*time.Second)
+	var got json.RawMessage
+	res, err := c.ChatStream(context.Background(), "BTC?", "s1", "client-1", nil, func(ev StreamEvent) {
+		if ev.Type == "final" {
+			got = ev.Reads
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Reply != "BTC is up" {
+		t.Fatalf("reply=%q", res.Reply)
+	}
+	for _, raw := range []json.RawMessage{res.Reads, got} {
+		var reads []map[string]any
+		if err := json.Unmarshal(raw, &reads); err != nil {
+			t.Fatalf("reads=%s err=%v", raw, err)
+		}
+		if len(reads) != 1 || reads[0]["symbol"] != "BTCUSDT" {
+			t.Fatalf("reads=%s", raw)
+		}
+		situation, _ := reads[0]["situation"].(map[string]any)
+		missing, _ := situation["printsMissing"].([]any)
+		if len(missing) != 3 || missing[0] != "binance" {
+			t.Fatalf("situation=%v", situation)
+		}
+		entries, _ := reads[0]["entries"].([]any)
+		if len(entries) != 1 {
+			t.Fatalf("entries=%v", reads[0]["entries"])
+		}
+	}
+}
+
 func TestClient_Unreachable(t *testing.T) {
 	c := New("http://127.0.0.1:1", 200*time.Millisecond)
 	_, err := c.Chat(context.Background(), "x", "s", "c", nil)

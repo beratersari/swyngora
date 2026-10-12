@@ -25,6 +25,10 @@ def test_find_instruments_from_prose():
     assert any(i.symbol == "THYAO" for i in named)
     btc = find_instruments("what is BTC doing")
     assert any(i.symbol == "BTCUSDT" and i.exchange == "binance" for i in btc)
+    spoken = find_instruments("what is going on with bitcoin")
+    assert [i.symbol for i in spoken if i.kind == "crypto"] == ["BTCUSDT"]
+    alts = find_instruments("ethereum, solana, and dogecoin")
+    assert {i.symbol for i in alts if i.kind == "crypto"} == {"ETHUSDT", "SOLUSDT", "DOGEUSDT"}
 
 
 def test_parse_rss_items():
