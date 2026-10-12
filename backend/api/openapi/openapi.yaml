@@ -6973,6 +6973,39 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /api/v1/portfolio/situation-record:
+    get:
+      summary: What this book's closes made, by the read on the buy
+      description: |
+        Each row is one kind stored on a closed crypto buy. count is how many
+        sold slices stored that kind. profitable is how many of those had
+        realized profit above zero. realizedPnL is their sum. The same close
+        can appear on more than one row, so the rows are not one total.
+        counted is each close once. skipped is a crypto close whose buy stored
+        no read. Equities are left out. Open positions are not included.
+      operationId: getPortfolioSituationRecord
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: portfolioId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Closed crypto lots grouped by the entry read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SituationRecord'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /api/v1/portfolio/trades:
     get:
       summary: List paper trade history
@@ -13992,6 +14025,32 @@ components:
         left:
           type: array
           items: { $ref: '#/components/schemas/SituationExit' }
+        note: { type: string }
+    SituationRecordRow:
+      type: object
+      description: |
+        One entry kind across the closed crypto slices that stored it.
+        realizedPnL is the sum of those slices. It is not a share of a book total.
+      properties:
+        clause:
+          type: string
+          enum: [priceCvd, openInterest, liquidation, prints, funding, crowd, size]
+        kind: { type: string, description: The kind token stored on the buy }
+        count: { type: integer, description: Sold slices that stored this kind }
+        profitable: { type: integer, description: Slices in count whose realized profit is above zero }
+        realizedPnL: { type: number }
+    SituationRecord:
+      type: object
+      description: |
+        Closed crypto lots in this paper book, grouped by the read stored on the buy.
+        counted is each close once. skipped is a crypto close with no stored read.
+        A close with several clauses appears once in counted and once on each of those rows.
+      properties:
+        counted: { type: integer }
+        skipped: { type: integer }
+        rows:
+          type: array
+          items: { $ref: '#/components/schemas/SituationRecordRow' }
         note: { type: string }
     CoinSituation:
       type: object

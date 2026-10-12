@@ -1247,6 +1247,11 @@ class CoinSituationInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
 
 
+class SituationRecordInput(BaseModel):
+    client_id: str
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+
+
 class SituationChangeInput(BaseModel):
     client_id: str
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
@@ -4329,6 +4334,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 q["symbol"] = symbol
         return http.get("/api/v1/portfolio/situation-change", q)
 
+    def get_situation_record(client_id: str, portfolio_id: str = "") -> str:
+        q: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.get("/api/v1/portfolio/situation-record", q)
+
     def create_recurring_buy(
         client_id: str,
         symbol: str,
@@ -6878,6 +6889,20 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "trade_id instead to compare a sell with each buy it closed."
             ),
             args_schema=SituationChangeInput,
+        ),
+        StructuredTool.from_function(
+            get_situation_record,
+            name="get_situation_record",
+            description=(
+                "What this paper book's closed crypto lots made, grouped by "
+                "the situation stored on the buy. Each row is one entry kind: "
+                "count, how many of those closes were profitable, and the sum "
+                "of realized profit. The same close can appear on more than "
+                "one row, so the rows are not one total. counted is each close "
+                "once. skipped is a crypto close whose buy stored no read. "
+                "Equities are left out. Open positions are not included."
+            ),
+            args_schema=SituationRecordInput,
         ),
         StructuredTool.from_function(
             list_portfolio_lots,

@@ -171,6 +171,7 @@ PAPER_TOOLS: frozenset[str] = frozenset(
         "cancel_portfolio_order",
         "list_portfolio_trades",
         "get_situation_change",
+        "get_situation_record",
         "list_portfolio_lots",
         "create_recurring_buy",
         "update_recurring_buy",

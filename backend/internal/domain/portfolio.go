@@ -399,6 +399,9 @@ type PortfolioPort interface {
 	ListTaxLotsByIDs(ctx context.Context, clientID string, ids []string) ([]TaxLot, error)
 	// ListTradesByIDs returns fills in this book whose ids are in the set.
 	ListTradesByIDs(ctx context.Context, clientID string, ids []string) ([]Trade, error)
+	// ListSituationCloses returns every sold lot slice in this book.
+	// Situation is the read stored on the buy that opened the lot, or nil when that buy stored none.
+	ListSituationCloses(ctx context.Context, clientID string) ([]SituationClose, error)
 	InsertTaxLot(ctx context.Context, lot TaxLot) error
 
 	// ExecuteTrade applies portfolio cash/realized, position upsert/delete, and trade insert atomically.

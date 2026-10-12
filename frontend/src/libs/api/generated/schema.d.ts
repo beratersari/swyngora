@@ -3999,6 +3999,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portfolio/situation-record": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What this book's closes made, by the read on the buy
+         * @description Each row is one kind stored on a closed crypto buy. count is how many
+         *     sold slices stored that kind. profitable is how many of those had
+         *     realized profit above zero. realizedPnL is their sum. The same close
+         *     can appear on more than one row, so the rows are not one total.
+         *     counted is each close once. skipped is a crypto close whose buy stored
+         *     no read. Equities are left out. Open positions are not included.
+         */
+        get: operations["getPortfolioSituationRecord"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portfolio/trades": {
         parameters: {
             query?: never;
@@ -9708,6 +9733,32 @@ export interface components {
             side?: "buy" | "sell";
             situation?: components["schemas"]["CoinSituation"];
             left?: components["schemas"]["SituationExit"][];
+            note?: string;
+        };
+        /**
+         * @description One entry kind across the closed crypto slices that stored it.
+         *     realizedPnL is the sum of those slices. It is not a share of a book total.
+         */
+        SituationRecordRow: {
+            /** @enum {string} */
+            clause?: "priceCvd" | "openInterest" | "liquidation" | "prints" | "funding" | "crowd" | "size";
+            /** @description The kind token stored on the buy */
+            kind?: string;
+            /** @description Sold slices that stored this kind */
+            count?: number;
+            /** @description Slices in count whose realized profit is above zero */
+            profitable?: number;
+            realizedPnL?: number;
+        };
+        /**
+         * @description Closed crypto lots in this paper book, grouped by the read stored on the buy.
+         *     counted is each close once. skipped is a crypto close with no stored read.
+         *     A close with several clauses appears once in counted and once on each of those rows.
+         */
+        SituationRecord: {
+            counted?: number;
+            skipped?: number;
+            rows?: components["schemas"]["SituationRecordRow"][];
             note?: string;
         };
         /** @description Short combined read. A missing clause lists the venues that did not cover it. */
@@ -16395,6 +16446,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SituationChange"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getPortfolioSituationRecord: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                portfolioId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Closed crypto lots grouped by the entry read */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SituationRecord"];
                 };
             };
             400: components["responses"]["Error"];

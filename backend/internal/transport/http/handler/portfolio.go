@@ -779,6 +779,19 @@ func (h *PortfolioHandler) SituationChange(w http.ResponseWriter, r *http.Reques
 
 const situationChangeNote = "A clause the entry did not store is omitted. A blank later clause is missing, not a new kind. Informational only — not financial advice."
 
+// SituationRecord handles GET /api/v1/portfolio/situation-record.
+func (h *PortfolioHandler) SituationRecord(w http.ResponseWriter, r *http.Request) {
+	got, err := h.svc.SituationRecord(r.Context(), clientIDFrom(r), portfolioIDFrom(r), ownerClientIDFrom(r))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if got.Rows == nil {
+		got.Rows = []domain.SituationRecordRow{}
+	}
+	writeJSON(w, http.StatusOK, got)
+}
+
 // ListTrades handles GET /api/v1/portfolio/trades
 func (h *PortfolioHandler) ListTrades(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()

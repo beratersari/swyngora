@@ -2252,6 +2252,13 @@ func (c *APIClient) GetSituationChange(ctx context.Context, clientID, exchange, 
 	return c.get(ctx, "/api/v1/portfolio/situation-change", q)
 }
 
+// GetSituationRecord loads this book's closed crypto lots grouped by the buy's stored read.
+func (c *APIClient) GetSituationRecord(ctx context.Context, clientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/portfolio/situation-record", q)
+}
+
 func (c *APIClient) GetPaperTradingCosts(ctx context.Context, exchange string) (json.RawMessage, error) {
 	q := url.Values{}
 	if strings.TrimSpace(exchange) != "" {

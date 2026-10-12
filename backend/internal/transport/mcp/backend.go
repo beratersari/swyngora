@@ -4818,6 +4818,20 @@ func (b *Backend) GetSituationChange(ctx context.Context, clientID, exchange, sy
 	return mustJSON(body)
 }
 
+func (b *Backend) GetSituationRecord(ctx context.Context, clientID string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	got, err := b.Portfolio.SituationRecord(ctx, clientID, PortfolioIDFrom(ctx))
+	if err != nil {
+		return nil, err
+	}
+	if got.Rows == nil {
+		got.Rows = []domain.SituationRecordRow{}
+	}
+	return mustJSON(got)
+}
+
 func situationExitsJSON(exits []domain.SituationExit) []map[string]any {
 	out := make([]map[string]any, 0, len(exits))
 	for _, e := range exits {

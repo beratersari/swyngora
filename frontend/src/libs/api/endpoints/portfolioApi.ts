@@ -18,6 +18,7 @@ export type PortfolioShare = components['schemas']['PortfolioShare'];
 export type SharedPortfolioSummary = components['schemas']['SharedPortfolioSummary'];
 export type PaperTrade = components['schemas']['PaperTrade'];
 export type SituationChange = components['schemas']['SituationChange'];
+export type SituationRecord = components['schemas']['SituationRecord'];
 export type SituationComparison = components['schemas']['SituationComparison'];
 export type RebalanceResult = components['schemas']['RebalanceResult'];
 export type RebalanceLegOutcome = components['schemas']['RebalanceLegOutcome'];
@@ -390,6 +391,13 @@ export const portfolioApi = baseApi.injectEndpoints({
       }),
       providesTags: ['Portfolio'],
     }),
+    getPortfolioSituationRecord: build.query<SituationRecord, BookArg | void>({
+      query: (arg) => ({
+        url: '/api/v1/portfolio/situation-record',
+        params: bookParams(arg?.portfolioId),
+      }),
+      providesTags: ['Portfolio'],
+    }),
     listPortfolioTrades: build.query<
       TradesListResponse,
       ({ limit?: number; offset?: number } & BookArg) | void
@@ -611,6 +619,7 @@ export const {
   useCancelPortfolioOrderMutation,
   useListPortfolioTradesQuery,
   useGetPortfolioSituationChangeQuery,
+  useGetPortfolioSituationRecordQuery,
   useListPortfolioRebalancesQuery,
   useGetPortfolioRebalanceQuery,
   useContinuePortfolioRebalanceMutation,

@@ -178,6 +178,7 @@ type DataPort interface {
 	ListSharedPortfolios(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetPortfolio(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetSituationChange(ctx context.Context, clientID, exchange, symbol, tradeID string) (json.RawMessage, error)
+	GetSituationRecord(ctx context.Context, clientID string) (json.RawMessage, error)
 	CreateAPIKey(ctx context.Context, clientID, name, permission string) (json.RawMessage, error)
 	ListAPIKeys(ctx context.Context, clientID string) (json.RawMessage, error)
 	RevokeAPIKey(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -3176,6 +3177,23 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		}
 		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.GetSituationChange(ctx, clientID, req.GetString("exchange", ""), req.GetString("symbol", ""), req.GetString("tradeId", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_situation_record",
+		mcp.WithDescription("What this paper book's closed crypto lots made, grouped by the situation stored on the buy. Each row is one entry kind: count, how many of those closes were profitable, and the sum of realized profit. The same close can appear on more than one row, so the rows are not one total. counted is each close once. skipped is a crypto close whose buy stored no read. Equities are left out. Open positions are not included. Not financial advice."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name; required if multiple portfolios exist")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		raw, err := api.GetSituationRecord(ctx, clientID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

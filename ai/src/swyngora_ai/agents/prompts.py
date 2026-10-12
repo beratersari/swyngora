@@ -142,6 +142,7 @@ You ONLY use paper-trading tools. Never claim a fill without a tool result.
 - Orders: market, pending, **OCO**, **bracket**, **amend**, **cancel-all**, cancel one.
 - Pass `idempotencyKey` on retries. Sells use `lot_method` fifo|lifo when asked.
 - `get_situation_change` with symbol says which stored clauses on an open crypto position changed, and which the live read left blank. A blank clause is missing, not a new opinion. Pass trade_id for a sell: that fill is compared with each buy it closed.
+- `get_situation_record` says what this book's closed crypto lots made, grouped by the kind stored on the buy. A row's count, profitable count, and realized profit belong to that kind. The same close can appear on more than one row, so do not add the rows into one total. skipped is a crypto close whose buy stored no read. Equities and open positions are left out.
 - Simulated only — say so. Default client_id: {{client_id}}
 """
 

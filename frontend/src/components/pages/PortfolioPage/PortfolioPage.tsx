@@ -13,6 +13,7 @@ import { PortfolioRiskLimits } from '@/components/organisms/PortfolioRiskLimits'
 import { PortfolioMarginPositionsTable } from '@/components/organisms/PortfolioMarginPositionsTable';
 import { PortfolioOrdersTable } from '@/components/organisms/PortfolioOrdersTable';
 import { PortfolioPositionsTable } from '@/components/organisms/PortfolioPositionsTable';
+import { PortfolioSituationRecord } from '@/components/organisms/PortfolioSituationRecord';
 import { PortfolioSummaryStrip } from '@/components/organisms/PortfolioSummaryStrip';
 import { PortfolioStressPanel } from '@/components/organisms/PortfolioStressPanel';
 import { PortfolioTradesTable } from '@/components/organisms/PortfolioTradesTable';
@@ -28,6 +29,7 @@ import {
   useListTransferAttemptsQuery,
   useGetPortfolioPerformanceQuery,
   useGetPortfolioQuery,
+  useGetPortfolioSituationRecordQuery,
   useListMarginPositionsQuery,
   useListPortfolioCashMovementsQuery,
   useListPortfolioOrdersQuery,
@@ -111,6 +113,10 @@ export function PortfolioPage() {
   const ordersQuery = useListPortfolioOrdersQuery(
     { status: 'open', portfolioId: bookId },
     { skip: !bookId && books.length !== 1, pollingInterval: visible ? 10_000 : 0, refetchOnFocus: true },
+  );
+  const recordQuery = useGetPortfolioSituationRecordQuery(
+    { portfolioId: bookId },
+    { skip: !bookId && books.length !== 1, refetchOnFocus: true },
   );
   const tradesQuery = useListPortfolioTradesQuery(
     { limit: 50, portfolioId: bookId },
@@ -469,6 +475,18 @@ export function PortfolioPage() {
               height={chartHeight}
             />
           </Section>
+
+          {bookId || books.length === 1 ? (
+            <Section>
+              <PanelCard>
+                <PortfolioSituationRecord
+                  record={rtkCurrent(recordQuery)}
+                  loading={rtkCurrentPending(recordQuery)}
+                  failed={recordQuery.isError}
+                />
+              </PanelCard>
+            </Section>
+          ) : null}
 
           <DeskTabs
             size={isPhone ? 'small' : 'middle'}
