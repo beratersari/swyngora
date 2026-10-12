@@ -149,6 +149,36 @@ func (s *SQLite) ListTaxLotFillsForTrades(ctx context.Context, tradeIDs []string
 	return out, rows.Err()
 }
 
+// ListTaxLotsByIDs returns lots in this book for the given ids.
+func (s *SQLite) ListTaxLotsByIDs(ctx context.Context, clientID string, ids []string) ([]domain.TaxLot, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	ph := strings.Repeat("?,", len(ids))
+	ph = ph[:len(ph)-1]
+	args := make([]any, 0, len(ids)+1)
+	args = append(args, clientID)
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, client_id, exchange, symbol, quantity, original_quantity, price, opened_at, source_trade_id, closed_at
+		FROM tax_lots WHERE client_id = ? AND id IN (`+ph+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]domain.TaxLot, 0)
+	for rows.Next() {
+		l, err := scanTaxLot(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, l)
+	}
+	return out, rows.Err()
+}
+
 // InsertTaxLot inserts one lot (used by tests / rare backfill outside a trade tx).
 func (s *SQLite) InsertTaxLot(ctx context.Context, lot domain.TaxLot) error {
 	s.mu.Lock()

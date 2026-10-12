@@ -717,6 +717,13 @@
       "flat": "Büyük ve küçük emirler ikisi de sakin.",
       "missing": "Balina ve perakende, {{venues}} emir boyunu verene kadar boş kalır."
     },
+    "left": {
+      "still": "Girişteki okuma hâlâ canlı okumayla aynı.",
+      "stillExit": "Girişteki okuma bu satışta hâlâ aynıydı.",
+      "wasNow": "Önce: {{was}} Şimdi: {{now}}",
+      "blank": "Bu madde sonraki okumada boş.",
+      "against": "{{time}} alımına göre"
+    },
     "venues": {
       "binance": "Binance",
       "bybit": "Bybit",

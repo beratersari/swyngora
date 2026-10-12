@@ -177,6 +177,7 @@ type DataPort interface {
 	ListPortfolioShares(ctx context.Context, clientID, portfolioID string) (json.RawMessage, error)
 	ListSharedPortfolios(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetPortfolio(ctx context.Context, clientID string) (json.RawMessage, error)
+	GetSituationChange(ctx context.Context, clientID, exchange, symbol, tradeID string) (json.RawMessage, error)
 	CreateAPIKey(ctx context.Context, clientID, name, permission string) (json.RawMessage, error)
 	ListAPIKeys(ctx context.Context, clientID string) (json.RawMessage, error)
 	RevokeAPIKey(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -3155,6 +3156,26 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		}
 		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.GetPortfolio(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_situation_change",
+		mcp.WithDescription("Compare a stored coin situation with a later one. Pass symbol for an open crypto position: entry is the read on the newest buy still held, live is the current combined read, and comparison names the stored clauses whose kind changed. status missing means the later read left that clause blank and names the venue. A blank clause is not a new opinion. A clause the entry did not store is omitted. same is true when every stored clause still matches. liveOk false means the live read did not load, and comparison is omitted. Pass tradeId instead of symbol to compare a sell with each buy it closed (left). Equities stay empty. Not financial advice."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name; required if multiple portfolios exist")),
+		mcp.WithString("exchange", mcp.Description("binance | coinbase | bybit (default binance). Ignored when tradeId is set.")),
+		mcp.WithString("symbol", mcp.Description("Pair e.g. BTCUSDT. Required unless tradeId is set.")),
+		mcp.WithString("tradeId", mcp.Description("A paper fill id. When set, the sell is compared with each buy it closed.")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		raw, err := api.GetSituationChange(ctx, clientID, req.GetString("exchange", ""), req.GetString("symbol", ""), req.GetString("tradeId", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

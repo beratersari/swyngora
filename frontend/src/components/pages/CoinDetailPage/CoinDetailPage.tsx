@@ -140,6 +140,7 @@ import {
   useListIntervalsQuery,
   useListPortfoliosQuery,
   useGetPortfolioQuery,
+  useGetPortfolioSituationChangeQuery,
   useListScannerResultsQuery,
   usePlacePortfolioOrderMutation,
   useRemoveWatchlistItemMutation,
@@ -477,6 +478,18 @@ export function CoinDetailPage() {
     rtkCurrent(paperPortfolio)?.positions,
     exchange ?? '',
     symbol ?? '',
+  );
+  const situationChange = useGetPortfolioSituationChangeQuery(
+    {
+      symbol: symbol ?? '',
+      exchange: exchangeArg,
+      portfolioId: paperBookId || undefined,
+    },
+    {
+      skip: skip || isEquity || !paperBookId || !heldPosition?.entrySituation,
+      pollingInterval: visible ? 60_000 : 0,
+      refetchOnFocus: true,
+    },
   );
   const [placePaperOrder, placePaperState] = usePlacePortfolioOrderMutation();
   const scannerResultsQuery = useListScannerResultsQuery(
@@ -3257,8 +3270,19 @@ export function CoinDetailPage() {
             {heldPosition && !isEquity ? (
               <PositionSituation
                 entry={heldPosition.entrySituation}
-                now={rtkCurrent(situationQuery)}
-                nowLoading={rtkCurrentPending(situationQuery)}
+                now={
+                  situationChange.data?.liveOk
+                    ? situationChange.data.live
+                    : rtkCurrent(situationQuery)
+                }
+                nowLoading={
+                  situationChange.isLoading && situationChange.data == null
+                    ? true
+                    : rtkCurrentPending(situationQuery) && !situationChange.data?.liveOk
+                }
+                comparison={
+                  situationChange.data?.liveOk ? situationChange.data.comparison : undefined
+                }
               />
             ) : null}
             <PaperTradeForm

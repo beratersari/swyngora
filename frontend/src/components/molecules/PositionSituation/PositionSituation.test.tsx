@@ -44,6 +44,61 @@ describe('PositionSituation', () => {
     renderWithProviders(<PositionSituation />);
     expect(screen.queryByRole('group', { name: 'Position read' })).not.toBeInTheDocument();
   });
+
+  it('names the clause that changed between the entry and the live read', async () => {
+    renderWithProviders(
+      <PositionSituation
+        entry={entry}
+        now={now}
+        comparison={{
+          same: false,
+          clauses: [{ clause: 'priceCvd', status: 'changed', entry: 'price_up_cvd_down', live: 'agrees' }],
+        }}
+      />,
+    );
+    expect(
+      screen.getByText(
+        'Was: Price is rising while futures CVD is falling. Now: Price and futures CVD are moving together.',
+      ),
+    ).toBeInTheDocument();
+    await i18n.changeLanguage('tr');
+    expect(
+      screen.getByText('Önce: Fiyat yükselirken vadeli CVD düşüyor. Şimdi: Fiyat ile vadeli CVD aynı yönde.'),
+    ).toBeInTheDocument();
+    await i18n.changeLanguage('en');
+  });
+
+  it('names a blank live clause as missing and keeps an unchanged read quiet', () => {
+    renderWithProviders(
+      <PositionSituation
+        entry={{
+          symbol: 'BTCUSDT',
+          priceCvd: { kind: 'price_up_cvd_down' },
+          funding: { payer: 'long', ratePct: 0.01 },
+        }}
+        now={{
+          symbol: 'BTCUSDT',
+          priceCvd: { kind: 'price_up_cvd_down' },
+          fundingMissing: ['binance', 'okx'],
+        }}
+        comparison={{
+          same: false,
+          clauses: [{ clause: 'funding', status: 'missing', entry: 'long', missing: ['binance', 'okx'] }],
+        }}
+      />,
+    );
+    expect(
+      screen.getAllByText('Funding stays blank until Binance and OKX have a rate and open interest.'),
+    ).toHaveLength(2);
+    expect(screen.queryByText(/Was:/)).not.toBeInTheDocument();
+  });
+
+  it('says the entry read still matches', () => {
+    renderWithProviders(
+      <PositionSituation entry={entry} now={entry} comparison={{ same: true, clauses: [] }} />,
+    );
+    expect(screen.getByText('The read you entered on is still the live read.')).toBeInTheDocument();
+  });
 });
 
 describe('openPositionFor', () => {

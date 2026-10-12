@@ -22,6 +22,23 @@ func (s *Service) GetCoinSituation(ctx context.Context, symbol string) (*domain.
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if s == nil {
+		return nil, ctx.Err()
+	}
+	v, err, _ := s.situationSF.Do(symbol, func() (any, error) {
+		return s.loadCoinSituation(ctx, symbol)
+	})
+	if err != nil {
+		return nil, err
+	}
+	got, _ := v.(*domain.CoinSituation)
+	return got, nil
+}
+
+func (s *Service) loadCoinSituation(ctx context.Context, symbol string) (*domain.CoinSituation, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	now := time.Now().UTC()
 	var (
 		cvd     *domain.CVDReport

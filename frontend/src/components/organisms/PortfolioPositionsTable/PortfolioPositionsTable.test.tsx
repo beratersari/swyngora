@@ -15,6 +15,18 @@ vi.mock('@/libs/api', async (importOriginal) => {
       isLoading: false,
       isFetching: false,
     }),
+    useGetPortfolioSituationChangeQuery: () => ({
+      data: {
+        liveOk: true,
+        live: { symbol: 'BTCUSDT', priceCvd: { kind: 'agrees' } },
+        comparison: {
+          same: false,
+          clauses: [{ clause: 'priceCvd', status: 'changed', entry: 'price_up_cvd_down', live: 'agrees' }],
+        },
+      },
+      isLoading: false,
+      isFetching: false,
+    }),
   };
 });
 
@@ -56,6 +68,11 @@ describe('PortfolioPositionsTable', () => {
     expect(screen.getByText('Price is rising while futures CVD is falling.')).toBeInTheDocument();
     expect(screen.getByText('Now')).toBeInTheDocument();
     expect(screen.getByText('Price and futures CVD are moving together.')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Was: Price is rising while futures CVD is falling. Now: Price and futures CVD are moving together.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getAllByText('Entered as')).toHaveLength(1);
   });
 });

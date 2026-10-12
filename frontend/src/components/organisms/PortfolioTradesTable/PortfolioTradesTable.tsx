@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
 import { DeskEmpty } from '@/components/molecules/DeskEmpty';
-import { situationLines } from '@/components/molecules/CoinSituation';
+import { situationChangeLines, situationLines } from '@/components/molecules/CoinSituation';
 import type { PaperTrade } from '@/libs/api';
 import { formatDateTime, formatPrice, formatSymbolDisplay } from '@/libs/utils';
 import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
@@ -70,17 +70,41 @@ export function PortfolioTradesTable({ items, loading, onOpen }: PortfolioTrades
       key: 'situation',
       render: (_, row) => {
         const lines = situationLines(row.situation, t);
-        if (lines.length === 0) return '—';
+        const exits = row.side === 'sell' ? (row.left ?? []) : [];
+        const exitLines = exits.flatMap((exit) =>
+          situationChangeLines(exit.entry, row.situation, exit.comparison, 'exit', t),
+        );
+        if (lines.length === 0 && exitLines.length === 0) return '—';
         return (
           <div>
-            <Text variant="caption" color="secondary">
-              {t('detail:situation.atFill')}
-            </Text>
+            {lines.length > 0 ? (
+              <Text variant="caption" color="secondary">
+                {t('detail:situation.atFill')}
+              </Text>
+            ) : null}
             {lines.map((line) => (
               <Text key={line} variant="caption">
                 {line}
               </Text>
             ))}
+            {exits.map((exit) => {
+              const changed = situationChangeLines(exit.entry, row.situation, exit.comparison, 'exit', t);
+              if (changed.length === 0) return null;
+              return (
+                <div key={exit.sourceTradeId ?? changed[0]}>
+                  {exits.length > 1 ? (
+                    <Text variant="caption" color="secondary">
+                      {t('detail:situation.left.against', { time: formatDateTime(exit.entryAt) })}
+                    </Text>
+                  ) : null}
+                  {changed.map((line) => (
+                    <Text key={`${exit.sourceTradeId}-${line}`} variant="caption">
+                      {line}
+                    </Text>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         );
       },

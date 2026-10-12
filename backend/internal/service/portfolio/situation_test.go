@@ -360,6 +360,86 @@ func TestView_EntrySituationFollowsTheNewestOpenBuy(t *testing.T) {
 	}
 }
 
+func TestSituationChange_NamesTheClauseThatLeftAndTheBlankOne(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	src := &fakeSituation{got: &domain.CoinSituation{
+		Symbol:   "BTCUSDT",
+		PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceUp},
+		Funding:  &domain.SituationFunding{Payer: "long"},
+	}}
+	svc.SetSituationSource(src)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "sit-left", StartingBalance: 100000}); err != nil {
+		t.Fatal(err)
+	}
+	buy, _, err := svc.PlaceOrder(ctx, OrderInput{
+		ClientID: "sit-left", Symbol: "BTCUSDT", Side: "buy", Quantity: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	src.got = &domain.CoinSituation{
+		Symbol:         "BTCUSDT",
+		PriceCVD:       &domain.SituationPriceCVD{Kind: domain.SituationCVDAgrees},
+		FundingMissing: []string{"binance", "okx"},
+		Size:           &domain.SituationSize{Kind: domain.SituationSizeBothBuy},
+	}
+	sell, _, err := svc.PlaceOrder(ctx, OrderInput{
+		ClientID: "sit-left", Symbol: "BTCUSDT", Side: "sell", Quantity: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	list, _, err := svc.ListTrades(ctx, "sit-left", 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var closed *domain.Trade
+	for i := range list {
+		if list[i].ID == sell.ID {
+			closed = &list[i]
+		}
+	}
+	if closed == nil || len(closed.Left) != 1 || closed.Left[0].SourceTradeID != buy.ID {
+		t.Fatalf("sell left %+v", closed)
+	}
+	cmp := closed.Left[0].Comparison
+	if cmp.Same || len(cmp.Clauses) != 2 {
+		t.Fatalf("cmp %+v", cmp)
+	}
+	if cmp.Clauses[0].Clause != "priceCvd" || cmp.Clauses[0].Status != domain.SituationLeftChanged || cmp.Clauses[0].Live != domain.SituationCVDAgrees {
+		t.Fatalf("price %+v", cmp.Clauses[0])
+	}
+	if cmp.Clauses[1].Clause != "funding" || cmp.Clauses[1].Status != domain.SituationLeftMissing || len(cmp.Clauses[1].Missing) != 2 {
+		t.Fatalf("funding %+v", cmp.Clauses[1])
+	}
+	open, err := svc.SituationChange(ctx, "sit-left", "binance", "BTCUSDT")
+	if err != nil || !open.LiveOK || open.Entry == nil || open.Entry.PriceCVD.Kind != domain.SituationCVDPriceUp {
+		t.Fatalf("open %+v %v", open, err)
+	}
+	if open.Comparison.Same || len(open.Comparison.Clauses) != 2 || open.Comparison.Clauses[0].Status != domain.SituationLeftChanged {
+		t.Fatalf("open cmp %+v", open.Comparison)
+	}
+	src.got = &domain.CoinSituation{
+		Symbol:   "BTCUSDT",
+		PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceUp},
+		Funding:  &domain.SituationFunding{Payer: "long"},
+	}
+	held, err := svc.SituationChange(ctx, "sit-left", "binance", "BTCUSDT")
+	if err != nil || !held.Comparison.Same {
+		t.Fatalf("still %+v %v", held, err)
+	}
+	eq, err := svc.SituationChange(ctx, "sit-left", "nasdaq", "AAPL")
+	if err != nil || eq.LiveOK || eq.Entry != nil || eq.Comparison.Same {
+		t.Fatalf("equity %+v %v", eq, err)
+	}
+	one, err := svc.TradeSituation(ctx, "sit-left", sell.ID)
+	if err != nil || one == nil || len(one.Left) != 1 {
+		t.Fatalf("one trade %+v %v", one, err)
+	}
+}
+
 func TestPlaceOrder_EquitySkipsTheFuturesRead(t *testing.T) {
 	px := &fakePx{prices: map[string]string{"nasdaq|AAPL": "100"}}
 	svc := newSvc(t, px)

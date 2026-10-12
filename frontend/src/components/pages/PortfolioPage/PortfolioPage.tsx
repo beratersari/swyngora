@@ -480,6 +480,7 @@ export function PortfolioPage() {
                   <PortfolioPositionsTable
                     items={positions}
                     loading={rtkCurrentPending(portfolioQuery)}
+                    portfolioId={bookId}
                     onOpen={openMarket}
                   />
                 ),

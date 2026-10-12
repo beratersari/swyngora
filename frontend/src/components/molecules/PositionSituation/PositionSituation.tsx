@@ -1,13 +1,14 @@
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
-import { situationLines } from '@/components/molecules/CoinSituation';
+import { situationChangeLines, situationLines } from '@/components/molecules/CoinSituation';
 import { Stack } from './PositionSituation.styles';
 import type { PositionSituationProps } from './PositionSituation.types';
 
-export function PositionSituation({ entry, now, nowLoading }: PositionSituationProps) {
+export function PositionSituation({ entry, now, nowLoading, comparison }: PositionSituationProps) {
   const { t } = useTranslation('detail');
   const entered = situationLines(entry, t);
   const current = situationLines(now, t);
+  const changed = situationChangeLines(entry, now, comparison, 'live', t);
   if (entered.length === 0 && current.length === 0 && !nowLoading) return null;
   return (
     <Stack role="group" aria-label={t('situation.compare')}>
@@ -26,6 +27,11 @@ export function PositionSituation({ entry, now, nowLoading }: PositionSituationP
           ))}
         </>
       ) : null}
+      {changed.map((line) => (
+        <Text key={`left-${line}`} variant="caption">
+          {line}
+        </Text>
+      ))}
       {nowLoading && current.length === 0 ? (
         <Text variant="caption" color="secondary">
           {t('situation.nowLoading')}

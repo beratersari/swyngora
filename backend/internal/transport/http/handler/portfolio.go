@@ -103,7 +103,15 @@ type tradeDTO struct {
 	Fee            float64               `json:"fee"`
 	LastPrice      float64               `json:"lastPrice,omitempty"`
 	Situation      *domain.CoinSituation `json:"situation,omitempty"`
+	Left           []situationExitDTO    `json:"left,omitempty"`
 	CreatedAt      string                `json:"createdAt"`
+}
+
+type situationExitDTO struct {
+	SourceTradeID string                     `json:"sourceTradeId"`
+	EntryAt       string                     `json:"entryAt,omitempty"`
+	Entry         *domain.CoinSituation      `json:"entry,omitempty"`
+	Comparison    domain.SituationComparison `json:"comparison"`
 }
 
 func portfolioViewDTO(v *domain.PortfolioView) portfolioDTO {
@@ -157,7 +165,26 @@ func tradeToDTO(t *domain.Trade) tradeDTO {
 	if len(fills) > 0 {
 		d.LotFills = fills
 	}
+	if len(t.Left) > 0 {
+		d.Left = situationExitsDTO(t.Left)
+	}
 	return d
+}
+
+func situationExitsDTO(exits []domain.SituationExit) []situationExitDTO {
+	out := make([]situationExitDTO, 0, len(exits))
+	for _, e := range exits {
+		row := situationExitDTO{
+			SourceTradeID: e.SourceTradeID,
+			Entry:         e.Entry,
+			Comparison:    e.Comparison,
+		}
+		if !e.EntryAt.IsZero() {
+			row.EntryAt = e.EntryAt.UTC().Format(time.RFC3339Nano)
+		}
+		out = append(out, row)
+	}
+	return out
 }
 
 func taxLotsDTO(lots []domain.TaxLot) []taxLotDTO {
@@ -700,6 +727,57 @@ func (h *PortfolioHandler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 		"note":  "Order canceled; unused reservation released; it will not execute.",
 	})
 }
+
+// SituationChange handles GET /api/v1/portfolio/situation-change.
+// symbol compares the open position with the live read. tradeId compares a sell with the buys it closed.
+func (h *PortfolioHandler) SituationChange(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	refs := []string{portfolioIDFrom(r), ownerClientIDFrom(r)}
+	if tradeID := strings.TrimSpace(q.Get("tradeId")); tradeID != "" {
+		tr, err := h.svc.TradeSituation(r.Context(), clientIDFrom(r), tradeID, refs...)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		d := tradeToDTO(tr)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"tradeId":   d.ID,
+			"exchange":  d.Exchange,
+			"symbol":    d.Symbol,
+			"side":      d.Side,
+			"situation": d.Situation,
+			"left":      d.Left,
+			"note":      situationChangeNote,
+		})
+		return
+	}
+	got, err := h.svc.SituationChange(r.Context(), clientIDFrom(r), q.Get("exchange"), q.Get("symbol"), refs...)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	body := map[string]any{
+		"exchange": string(got.Exchange),
+		"symbol":   got.Symbol,
+		"liveOk":   got.LiveOK,
+		"note":     situationChangeNote,
+	}
+	if got.Entry != nil {
+		body["entry"] = got.Entry
+	}
+	if !got.EntryAt.IsZero() {
+		body["entryAt"] = got.EntryAt.UTC().Format(time.RFC3339Nano)
+	}
+	if got.LiveOK {
+		if got.Live != nil {
+			body["live"] = got.Live
+		}
+		body["comparison"] = got.Comparison
+	}
+	writeJSON(w, http.StatusOK, body)
+}
+
+const situationChangeNote = "A clause the entry did not store is omitted. A blank later clause is missing, not a new kind. Informational only — not financial advice."
 
 // ListTrades handles GET /api/v1/portfolio/trades
 func (h *PortfolioHandler) ListTrades(w http.ResponseWriter, r *http.Request) {

@@ -140,6 +140,7 @@ You ONLY use paper-trading tools. Never claim a fill without a tool result.
 - Portfolios, cash, lots, performance, risk limits, recurring buys, baskets, margin, price-diff.
 - Orders: market, pending, **OCO**, **bracket**, **amend**, **cancel-all**, cancel one.
 - Pass `idempotencyKey` on retries. Sells use `lot_method` fifo|lifo when asked.
+- `get_situation_change` with symbol says which stored clauses on an open crypto position changed, and which the live read left blank. A blank clause is missing, not a new opinion. Pass trade_id for a sell: that fill is compared with each buy it closed.
 - Simulated only — say so. Default client_id: {{client_id}}
 """
 

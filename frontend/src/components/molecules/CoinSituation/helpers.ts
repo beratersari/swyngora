@@ -3,6 +3,19 @@ import { formatCompactUsd } from '@/libs/utils/formatMarket';
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
+export type SituationClauseChange = {
+  clause?: string;
+  status?: string;
+  entry?: string;
+  live?: string;
+  missing?: string[];
+};
+
+export type SituationComparison = {
+  same?: boolean;
+  clauses?: SituationClauseChange[];
+};
+
 export function situationVenueList(ids: string[] | undefined, t: Translate): string {
   const names = (ids ?? [])
     .map((id) => id.trim())
@@ -107,6 +120,97 @@ export function situationLines(report: CoinSituation | null | undefined, t: Tran
         venues: situationVenueList(report.sizeMissing, t),
       }),
     );
+  }
+  return lines;
+}
+
+function clauseOnly(report: CoinSituation | null | undefined, clause: string): CoinSituation | undefined {
+  if (!report) return undefined;
+  const out: CoinSituation = { symbol: report.symbol };
+  switch (clause) {
+    case 'priceCvd':
+      out.priceCvd = report.priceCvd;
+      break;
+    case 'openInterest':
+      out.openInterest = report.openInterest;
+      break;
+    case 'liquidation':
+      out.liquidation = report.liquidation;
+      break;
+    case 'prints':
+      out.prints = report.prints;
+      break;
+    case 'funding':
+      out.funding = report.funding;
+      break;
+    case 'crowd':
+      out.crowd = report.crowd;
+      break;
+    case 'size':
+      out.size = report.size;
+      break;
+    default:
+      return undefined;
+  }
+  return out;
+}
+
+function clauseMissing(clause: string, missing: string[] | undefined): CoinSituation | undefined {
+  if (!missing || missing.length === 0) return undefined;
+  const out: CoinSituation = {};
+  switch (clause) {
+    case 'priceCvd':
+      out.priceCvdMissing = missing;
+      break;
+    case 'openInterest':
+      out.openInterestMissing = missing;
+      break;
+    case 'liquidation':
+      out.liquidationMissing = missing;
+      break;
+    case 'prints':
+      out.printsMissing = missing;
+      break;
+    case 'funding':
+      out.fundingMissing = missing;
+      break;
+    case 'crowd':
+      out.crowdMissing = missing;
+      break;
+    case 'size':
+      out.sizeMissing = missing;
+      break;
+    default:
+      return undefined;
+  }
+  return out;
+}
+
+/** Sentences for the clauses that left. A blank later clause uses the missing-venue sentence. */
+export function situationChangeLines(
+  entry: CoinSituation | null | undefined,
+  live: CoinSituation | null | undefined,
+  comparison: SituationComparison | null | undefined,
+  mode: 'live' | 'exit',
+  t: Translate,
+): string[] {
+  if (!comparison) return [];
+  if (comparison.same) {
+    return [t(mode === 'exit' ? 'detail:situation.left.stillExit' : 'detail:situation.left.still')];
+  }
+  const clauses = comparison.clauses ?? [];
+  if (clauses.length === 0) return [];
+  const lines: string[] = [];
+  for (const clause of clauses) {
+    if (!clause.clause) continue;
+    if (clause.status === 'missing') {
+      const named = situationLines(clauseMissing(clause.clause, clause.missing), t);
+      lines.push(named[0] ?? t('detail:situation.left.blank'));
+      continue;
+    }
+    const was = situationLines(clauseOnly(entry, clause.clause), t)[0] ?? clause.entry ?? '';
+    const now = situationLines(clauseOnly(live, clause.clause), t)[0] ?? clause.live ?? '';
+    lines.push(t('detail:situation.left.wasNow', { was, now }));
   }
   return lines;
 }

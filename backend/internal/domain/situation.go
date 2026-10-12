@@ -177,79 +177,219 @@ func BuildCoinSituation(symbol string, now time.Time, cvd *CVDReport, oi *OpenIn
 	return out
 }
 
+const (
+	// SituationLeftChanged means the entry clause still has a live kind, and it differs.
+	SituationLeftChanged = "changed"
+	// SituationLeftMissing means the entry clause is blank on the later read.
+	// That is not a new opinion.
+	SituationLeftMissing = "missing"
+)
+
+// SituationClauseLeft is one stored clause that is no longer the same opinion.
+// Status is changed or missing. Entry and Live are the kind tokens
+// (priceCvd.kind, openInterest.flow, liquidation.side, prints.side, funding.payer, crowd.lean, size.kind).
+// Missing names the venues when the later read says who is absent.
+type SituationClauseLeft struct {
+	Clause  string   `json:"clause"`
+	Status  string   `json:"status"`
+	Entry   string   `json:"entry,omitempty"`
+	Live    string   `json:"live,omitempty"`
+	Missing []string `json:"missing,omitempty"`
+}
+
+// SituationComparison is the entry read against a later read.
+// Same is true only when the entry stored at least one clause and every one of
+// those clauses still has the same kind. A clause the entry did not store is omitted.
+// A blank later clause is missing, not a new kind.
+type SituationComparison struct {
+	Same    bool                  `json:"same"`
+	Clauses []SituationClauseLeft `json:"clauses,omitempty"`
+}
+
+// SituationExit is one buy a sell closed, compared with the read stored on that sell.
+type SituationExit struct {
+	SourceTradeID string
+	EntryAt       time.Time
+	Entry         *CoinSituation
+	Comparison    SituationComparison
+}
+
+// CompareCoinSituation names the stored clauses whose kind changed, and the
+// stored clauses the later read left blank. A clause only the later read has
+// stays quiet. Print dollars can change without a new side.
+func CompareCoinSituation(entry, live *CoinSituation) SituationComparison {
+	var out SituationComparison
+	if entry == nil {
+		return out
+	}
+	stored := 0
+	add := func(set bool, entryKind, liveKind, clause string, missing []string) {
+		if !set || entryKind == "" {
+			return
+		}
+		stored++
+		if liveKind == "" {
+			row := SituationClauseLeft{Clause: clause, Status: SituationLeftMissing, Entry: entryKind}
+			if len(missing) > 0 {
+				row.Missing = append([]string(nil), missing...)
+			}
+			out.Clauses = append(out.Clauses, row)
+			return
+		}
+		if liveKind != entryKind {
+			out.Clauses = append(out.Clauses, SituationClauseLeft{
+				Clause: clause, Status: SituationLeftChanged, Entry: entryKind, Live: liveKind,
+			})
+		}
+	}
+	add(entry.PriceCVD != nil, kindOf(entry.PriceCVD), kindOf(livePrice(live)), "priceCvd", missingOf(live, "priceCvd"))
+	add(entry.OpenInterest != nil, flowOf(entry.OpenInterest), flowOf(liveOI(live)), "openInterest", missingOf(live, "openInterest"))
+	add(entry.Liquidation != nil, sideOfLiq(entry.Liquidation), sideOfLiq(liveLiq(live)), "liquidation", missingOf(live, "liquidation"))
+	add(entry.Prints != nil, sideOfPrints(entry.Prints), sideOfPrints(livePrints(live)), "prints", missingOf(live, "prints"))
+	add(entry.Funding != nil, payerOf(entry.Funding), payerOf(liveFunding(live)), "funding", missingOf(live, "funding"))
+	add(entry.Crowd != nil, leanOf(entry.Crowd), leanOf(liveCrowd(live)), "crowd", missingOf(live, "crowd"))
+	add(entry.Size != nil, sizeKindOf(entry.Size), sizeKindOf(liveSize(live)), "size", missingOf(live, "size"))
+	out.Same = stored > 0 && len(out.Clauses) == 0
+	return out
+}
+
 // SituationLeft reports whether the live read no longer says what the entry read said.
 // Only clauses that were set at entry count. A clause the entry did not store is ignored,
 // so an older fill does not alert just because a new clause appeared.
 // A set entry clause that is now blank or a different kind has left.
+// The names are the same clauses CompareCoinSituation returns, in that order.
 func SituationLeft(entry, live *CoinSituation) (bool, []string) {
-	if entry == nil {
+	cmp := CompareCoinSituation(entry, live)
+	if len(cmp.Clauses) == 0 {
 		return false, nil
 	}
-	var changed []string
-	if entry.PriceCVD != nil && entry.PriceCVD.Kind != "" {
-		got := ""
-		if live != nil && live.PriceCVD != nil {
-			got = live.PriceCVD.Kind
-		}
-		if got != entry.PriceCVD.Kind {
-			changed = append(changed, "priceCvd")
-		}
+	names := make([]string, len(cmp.Clauses))
+	for i := range cmp.Clauses {
+		names[i] = cmp.Clauses[i].Clause
 	}
-	if entry.OpenInterest != nil && entry.OpenInterest.Flow != "" {
-		got := ""
-		if live != nil && live.OpenInterest != nil {
-			got = live.OpenInterest.Flow
-		}
-		if got != entry.OpenInterest.Flow {
-			changed = append(changed, "openInterest")
-		}
+	return true, names
+}
+
+func kindOf(v *SituationPriceCVD) string {
+	if v == nil {
+		return ""
 	}
-	if entry.Liquidation != nil && entry.Liquidation.Side != "" {
-		got := ""
-		if live != nil && live.Liquidation != nil {
-			got = live.Liquidation.Side
-		}
-		if got != entry.Liquidation.Side {
-			changed = append(changed, "liquidation")
-		}
+	return v.Kind
+}
+
+func flowOf(v *SituationOpenInterest) string {
+	if v == nil {
+		return ""
 	}
-	if entry.Prints != nil && entry.Prints.Side != "" {
-		got := ""
-		if live != nil && live.Prints != nil {
-			got = live.Prints.Side
-		}
-		if got != entry.Prints.Side {
-			changed = append(changed, "prints")
-		}
+	return v.Flow
+}
+
+func sideOfLiq(v *SituationLiquidation) string {
+	if v == nil {
+		return ""
 	}
-	if entry.Funding != nil && entry.Funding.Payer != "" {
-		got := ""
-		if live != nil && live.Funding != nil {
-			got = live.Funding.Payer
-		}
-		if got != entry.Funding.Payer {
-			changed = append(changed, "funding")
-		}
+	return v.Side
+}
+
+func sideOfPrints(v *SituationPrints) string {
+	if v == nil {
+		return ""
 	}
-	if entry.Crowd != nil && entry.Crowd.Lean != "" {
-		got := ""
-		if live != nil && live.Crowd != nil {
-			got = live.Crowd.Lean
-		}
-		if got != entry.Crowd.Lean {
-			changed = append(changed, "crowd")
-		}
+	return v.Side
+}
+
+func payerOf(v *SituationFunding) string {
+	if v == nil {
+		return ""
 	}
-	if entry.Size != nil && entry.Size.Kind != "" {
-		got := ""
-		if live != nil && live.Size != nil {
-			got = live.Size.Kind
-		}
-		if got != entry.Size.Kind {
-			changed = append(changed, "size")
-		}
+	return v.Payer
+}
+
+func leanOf(v *SituationCrowd) string {
+	if v == nil {
+		return ""
 	}
-	return len(changed) > 0, changed
+	return v.Lean
+}
+
+func sizeKindOf(v *SituationSize) string {
+	if v == nil {
+		return ""
+	}
+	return v.Kind
+}
+
+func livePrice(live *CoinSituation) *SituationPriceCVD {
+	if live == nil {
+		return nil
+	}
+	return live.PriceCVD
+}
+
+func liveOI(live *CoinSituation) *SituationOpenInterest {
+	if live == nil {
+		return nil
+	}
+	return live.OpenInterest
+}
+
+func liveLiq(live *CoinSituation) *SituationLiquidation {
+	if live == nil {
+		return nil
+	}
+	return live.Liquidation
+}
+
+func livePrints(live *CoinSituation) *SituationPrints {
+	if live == nil {
+		return nil
+	}
+	return live.Prints
+}
+
+func liveFunding(live *CoinSituation) *SituationFunding {
+	if live == nil {
+		return nil
+	}
+	return live.Funding
+}
+
+func liveCrowd(live *CoinSituation) *SituationCrowd {
+	if live == nil {
+		return nil
+	}
+	return live.Crowd
+}
+
+func liveSize(live *CoinSituation) *SituationSize {
+	if live == nil {
+		return nil
+	}
+	return live.Size
+}
+
+func missingOf(live *CoinSituation, clause string) []string {
+	if live == nil {
+		return nil
+	}
+	switch clause {
+	case "priceCvd":
+		return live.PriceCVDMissing
+	case "openInterest":
+		return live.OpenInterestMissing
+	case "liquidation":
+		return live.LiquidationMissing
+	case "prints":
+		return live.PrintsMissing
+	case "funding":
+		return live.FundingMissing
+	case "crowd":
+		return live.CrowdMissing
+	case "size":
+		return live.SizeMissing
+	default:
+		return nil
+	}
 }
 
 func situationFunding(snap *FundingSnapshot) (payer string, ratePct float64, ok bool, missing []string) {

@@ -24,7 +24,9 @@ The coin page shows the same clauses in English and Turkish, above the tabs. Equ
 
 A market order stores this read when it fills. A limit, stop, bracket, or OCO keeps the placement read on the order and stores a new read on the fill. The trade, **Entered as**, and the situation alert use that fill read. A failed read at the fill stays blank and does not keep the placement read. The portfolio trade history shows the fill read beside the fill and says it is the market at the fill. Nasdaq and BIST orders do not call the futures read.
 
-An open crypto position shows two reads. **Entered as** is the read stored when the newest buy that still has remaining quantity filled. Selling that buy, lifo or fifo, moves the line to the newest buy that remains. A buy that stored no read leaves the line off, even when an older lot has one. **Now** is the live `GET /api/v1/market/situation` for that symbol. The same pair is on the coin Trade tab when the selected book holds the coin. An equity position stays on size and profit.
+An open crypto position shows two reads. **Entered as** is the read stored when the newest buy that still has remaining quantity filled. Selling that buy, lifo or fifo, moves the line to the newest buy that remains. A buy that stored no read leaves the line off, even when an older lot has one. **Now** is the live `GET /api/v1/market/situation` for that symbol. Between them, one line names the stored clauses whose kind changed, in the same sentences as the card. A clause the entry did not store stays quiet. A clause the live read left blank is named as missing, with the venue, and is not treated as a new opinion. When every stored clause still matches, the line says the entry read is still the live read. The same pair is on the coin Trade tab when the selected book holds the coin. An equity position stays on size and profit.
+
+A sell stores its own read. Trade history compares that read with each buy the sell closed. A buy that stored no read is left off. The same sentences say what changed, or that the entry read was still true at the sell. `GET /api/v1/portfolio/situation-change` returns the open-position comparison, or pass `tradeId` for one fill. `liveOk` false omits the comparison, so a failed live read is not a missing clause. MCP `get_situation_change`. Python `get_situation_change`.
 
 An alert of kind `situation` fires when the live read leaves the clauses stored on that entry. A clause the entry did not store is ignored, so an older fill does not alert only because a new clause appeared. A blank live clause counts as a change of a clause that was stored. The prints clause compares `prints.side` only. A change in the dollar amounts with the same side stays quiet. No open crypto position stays quiet. `mode=one_time` fires once. `mode=repeating` re-arms when the live read matches the entry again. The exchange is the paper book venue (`binance`, `coinbase`, or `bybit`), and the symbol is the pair on that book.
 
@@ -35,7 +37,7 @@ An alert of kind `situation` fires when the live read leaves the clauses stored 
 - `backend/internal/service/portfolio/service.go` stores the placement read on a resting order and a new read on the fill.
 - `frontend/src/components/molecules/CoinSituation` renders the sentences.
 - `frontend/src/components/molecules/OutlierSituation` loads that read under an opened outlier row.
-- MCP `get_coin_situation`. Python `get_coin_situation`.
+- MCP `get_coin_situation` and `get_situation_change`. Python `get_coin_situation` and `get_situation_change`.
 
 ## How to test
 
@@ -44,7 +46,7 @@ cd backend
 go test ./internal/domain/ -run 'TestBuildCoinSituation|TestSituationLeft|TestLatestOpenLot|TestMergeLiquidationPrintSides'
 go test ./internal/adapter/futuresstore/ -run 'TestSumAndBucketLiquidations'
 go test ./internal/service/market/ -run 'TestGetCoinSituation_MeasuredPrints'
-go test ./internal/service/portfolio/ -run 'TestPlaceOrder_StoresCoinSituation|TestPlacePendingOrder_|TestPlaceOrder_Equity|TestView_EntrySituation|TestEntrySituation_'
+go test ./internal/service/portfolio/ -run 'TestPlaceOrder_StoresCoinSituation|TestPlacePendingOrder_|TestPlaceOrder_Equity|TestView_EntrySituation|TestEntrySituation_|TestSituationChange_Names'
 go test ./internal/service/pricealert/ -run 'TestChecker_Situation'
 
 cd frontend

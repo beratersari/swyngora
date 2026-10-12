@@ -10,7 +10,7 @@ import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
 import { PositionRead } from './PositionRead';
 import type { PortfolioPositionsTableProps } from './PortfolioPositionsTable.types';
 
-export function PortfolioPositionsTable({ items, loading, onOpen }: PortfolioPositionsTableProps) {
+export function PortfolioPositionsTable({ items, loading, onOpen, portfolioId }: PortfolioPositionsTableProps) {
   const { t } = useTranslation(['portfolio', 'common']);
   const columns: ColumnsType<SpotPosition> = [
     {
@@ -21,7 +21,7 @@ export function PortfolioPositionsTable({ items, loading, onOpen }: PortfolioPos
           <Text variant="label" mono color="primary">
             {formatSymbolDisplay(row.symbol)}
           </Text>
-          <PositionRead row={row} />
+          <PositionRead row={row} portfolioId={portfolioId} />
         </div>
       ),
     },

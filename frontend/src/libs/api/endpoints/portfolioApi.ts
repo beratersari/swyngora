@@ -17,6 +17,8 @@ export type TaxLot = components['schemas']['TaxLot'];
 export type PortfolioShare = components['schemas']['PortfolioShare'];
 export type SharedPortfolioSummary = components['schemas']['SharedPortfolioSummary'];
 export type PaperTrade = components['schemas']['PaperTrade'];
+export type SituationChange = components['schemas']['SituationChange'];
+export type SituationComparison = components['schemas']['SituationComparison'];
 export type RebalanceResult = components['schemas']['RebalanceResult'];
 export type RebalanceLegOutcome = components['schemas']['RebalanceLegOutcome'];
 export type RebalanceLineSnapshot = components['schemas']['RebalanceLineSnapshot'];
@@ -373,6 +375,21 @@ export const portfolioApi = baseApi.injectEndpoints({
       }),
       invalidatesTags: ['Portfolio'],
     }),
+    getPortfolioSituationChange: build.query<
+      SituationChange,
+      { symbol?: string; exchange?: string; tradeId?: string; portfolioId?: string }
+    >({
+      query: (arg) => ({
+        url: '/api/v1/portfolio/situation-change',
+        params: {
+          ...bookParams(arg.portfolioId),
+          ...(arg.symbol ? { symbol: arg.symbol } : {}),
+          ...(arg.exchange ? { exchange: arg.exchange } : {}),
+          ...(arg.tradeId ? { tradeId: arg.tradeId } : {}),
+        },
+      }),
+      providesTags: ['Portfolio'],
+    }),
     listPortfolioTrades: build.query<
       TradesListResponse,
       ({ limit?: number; offset?: number } & BookArg) | void
@@ -593,6 +610,7 @@ export const {
   useAmendPortfolioOrderMutation,
   useCancelPortfolioOrderMutation,
   useListPortfolioTradesQuery,
+  useGetPortfolioSituationChangeQuery,
   useListPortfolioRebalancesQuery,
   useGetPortfolioRebalanceQuery,
   useContinuePortfolioRebalanceMutation,

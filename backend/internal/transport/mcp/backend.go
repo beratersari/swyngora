@@ -4767,6 +4767,75 @@ func (b *Backend) GetPortfolio(ctx context.Context, clientID string) (json.RawMe
 	return portfolioViewJSON(v)
 }
 
+func (b *Backend) GetSituationChange(ctx context.Context, clientID, exchange, symbol, tradeID string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	refs := []string{PortfolioIDFrom(ctx)}
+	const note = "A clause the entry did not store is omitted. A blank later clause is missing, not a new kind. Informational only — not financial advice."
+	if strings.TrimSpace(tradeID) != "" {
+		tr, err := b.Portfolio.TradeSituation(ctx, clientID, tradeID, refs...)
+		if err != nil {
+			return nil, err
+		}
+		body := map[string]any{
+			"tradeId":  tr.ID,
+			"exchange": string(tr.Exchange),
+			"symbol":   tr.Symbol,
+			"side":     string(tr.Side),
+			"note":     note,
+		}
+		if tr.Situation != nil {
+			body["situation"] = tr.Situation
+		}
+		if len(tr.Left) > 0 {
+			body["left"] = situationExitsJSON(tr.Left)
+		}
+		return mustJSON(body)
+	}
+	got, err := b.Portfolio.SituationChange(ctx, clientID, exchange, symbol, refs...)
+	if err != nil {
+		return nil, err
+	}
+	body := map[string]any{
+		"exchange": string(got.Exchange),
+		"symbol":   got.Symbol,
+		"liveOk":   got.LiveOK,
+		"note":     note,
+	}
+	if got.Entry != nil {
+		body["entry"] = got.Entry
+	}
+	if !got.EntryAt.IsZero() {
+		body["entryAt"] = got.EntryAt.UTC().Format(time.RFC3339Nano)
+	}
+	if got.LiveOK {
+		if got.Live != nil {
+			body["live"] = got.Live
+		}
+		body["comparison"] = got.Comparison
+	}
+	return mustJSON(body)
+}
+
+func situationExitsJSON(exits []domain.SituationExit) []map[string]any {
+	out := make([]map[string]any, 0, len(exits))
+	for _, e := range exits {
+		row := map[string]any{
+			"sourceTradeId": e.SourceTradeID,
+			"comparison":    e.Comparison,
+		}
+		if e.Entry != nil {
+			row["entry"] = e.Entry
+		}
+		if !e.EntryAt.IsZero() {
+			row["entryAt"] = e.EntryAt.UTC().Format(time.RFC3339Nano)
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
 func (b *Backend) DepositPortfolioCash(ctx context.Context, clientID string, amount float64, note string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)

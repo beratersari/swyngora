@@ -2236,6 +2236,22 @@ func (c *APIClient) GetPortfolio(ctx context.Context, clientID string) (json.Raw
 	return c.get(ctx, "/api/v1/portfolio", q)
 }
 
+// GetSituationChange compares a stored coin read with the live read, or a sell with the buys it closed.
+func (c *APIClient) GetSituationChange(ctx context.Context, clientID, exchange, symbol, tradeID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	if strings.TrimSpace(exchange) != "" {
+		q.Set("exchange", exchange)
+	}
+	if strings.TrimSpace(symbol) != "" {
+		q.Set("symbol", symbol)
+	}
+	if strings.TrimSpace(tradeID) != "" {
+		q.Set("tradeId", tradeID)
+	}
+	return c.get(ctx, "/api/v1/portfolio/situation-change", q)
+}
+
 func (c *APIClient) GetPaperTradingCosts(ctx context.Context, exchange string) (json.RawMessage, error) {
 	q := url.Values{}
 	if strings.TrimSpace(exchange) != "" {

@@ -3973,6 +3973,32 @@ export interface paths {
         patch: operations["amendPortfolioOrder"];
         trace?: never;
     };
+    "/api/v1/portfolio/situation-change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Say which stored situation clauses changed
+         * @description Pass exchange and symbol for an open crypto position. entry is the read
+         *     stored on the newest buy still held. live is the current combined read.
+         *     comparison.same is true when every stored clause still has the same kind.
+         *     A clause the entry did not store is omitted. status missing means the
+         *     later read left that clause blank and names the venue. That is not a new
+         *     opinion. liveOk false omits comparison. Pass tradeId instead to compare
+         *     a sell with each buy it closed. Equities return an empty read.
+         */
+        get: operations["getPortfolioSituationChange"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portfolio/trades": {
         parameters: {
             query?: never;
@@ -9594,6 +9620,7 @@ export interface components {
          * @description Filled paper order leg (market or pending). price is the slipped fill.
          *     situation is the coin read at this fill. A resting order stores a new
          *     read here, not the read from placement. Equities omit it.
+         *     left is set on a sell: each buy that fill closed, compared with this fill's read.
          */
         PaperTrade: {
             id?: string;
@@ -9617,8 +9644,71 @@ export interface components {
             /** @description Last/mark before slippage (0 if not stored) */
             lastPrice?: number;
             situation?: components["schemas"]["CoinSituation"];
+            /**
+             * @description On a sell, one item per buy this fill closed that stored a read.
+             *     comparison is that buy against this fill. A buy with no stored read is omitted.
+             */
+            left?: components["schemas"]["SituationExit"][];
             /** Format: date-time */
             createdAt?: string;
+        };
+        /**
+         * @description One clause the entry stored that the later read does not still say.
+         *     status changed means the kind differs. status missing means the later
+         *     read left the clause blank. Missing names those venues when the later
+         *     read says who is absent. A blank clause is not a new kind.
+         */
+        SituationClauseLeft: {
+            /** @enum {string} */
+            clause?: "priceCvd" | "openInterest" | "liquidation" | "prints" | "funding" | "crowd" | "size";
+            /** @enum {string} */
+            status?: "changed" | "missing";
+            /** @description Kind stored on the entry read */
+            entry?: string;
+            /** @description Kind on the later read */
+            live?: string;
+            missing?: string[];
+        };
+        /**
+         * @description Entry read against a later read. same is true only when the entry stored
+         *     at least one clause and every one of those clauses still has the same kind.
+         *     A clause the entry did not store is omitted. Print dollars can change
+         *     without a new prints.side.
+         */
+        SituationComparison: {
+            same?: boolean;
+            clauses?: components["schemas"]["SituationClauseLeft"][];
+        };
+        /** @description One buy a sell closed, and how its stored read compares with the sell. */
+        SituationExit: {
+            sourceTradeId?: string;
+            /** Format: date-time */
+            entryAt?: string;
+            entry?: components["schemas"]["CoinSituation"];
+            comparison?: components["schemas"]["SituationComparison"];
+        };
+        /**
+         * @description Open crypto position: entry is the read on the newest buy still held,
+         *     live is GET /api/v1/market/situation, and comparison is entry against live.
+         *     liveOk is false when the live read did not load. comparison is omitted
+         *     then, so a failed read is not a missing clause. Pass tradeId instead of
+         *     symbol to compare one sell with the buys it closed. Equities stay empty.
+         */
+        SituationChange: {
+            exchange?: string;
+            symbol?: string;
+            entry?: components["schemas"]["CoinSituation"];
+            /** Format: date-time */
+            entryAt?: string;
+            live?: components["schemas"]["CoinSituation"];
+            liveOk?: boolean;
+            comparison?: components["schemas"]["SituationComparison"];
+            tradeId?: string;
+            /** @enum {string} */
+            side?: "buy" | "sell";
+            situation?: components["schemas"]["CoinSituation"];
+            left?: components["schemas"]["SituationExit"][];
+            note?: string;
         };
         /** @description Short combined read. A missing clause lists the venues that did not cover it. */
         CoinSituation: {
@@ -16244,6 +16334,36 @@ export interface operations {
             400: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+        };
+    };
+    getPortfolioSituationChange: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                portfolioId?: string;
+                exchange?: string;
+                symbol?: string;
+                tradeId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Open-position comparison, or one fill's comparison */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SituationChange"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     listPortfolioTrades: {

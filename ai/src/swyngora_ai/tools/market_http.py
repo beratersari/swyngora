@@ -1247,6 +1247,23 @@ class CoinSituationInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
 
 
+class SituationChangeInput(BaseModel):
+    client_id: str
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+    exchange: str = Field(
+        default="binance",
+        description="binance|coinbase|bybit. Ignored when trade_id is set.",
+    )
+    symbol: str = Field(
+        default="",
+        description="Pair e.g. BTCUSDT. Required unless trade_id is set.",
+    )
+    trade_id: str = Field(
+        default="",
+        description="Paper fill id. Compares that sell with each buy it closed.",
+    )
+
+
 class FearGreedInput(BaseModel):
     """Market-wide index. No symbol."""
 
@@ -4293,6 +4310,25 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             q["portfolioId"] = portfolio_id
         return http.get("/api/v1/portfolio/trades", q)
 
+    def get_situation_change(
+        client_id: str,
+        symbol: str = "",
+        exchange: str = "binance",
+        portfolio_id: str = "",
+        trade_id: str = "",
+    ) -> str:
+        q: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        if trade_id:
+            q["tradeId"] = trade_id
+        else:
+            if exchange:
+                q["exchange"] = exchange
+            if symbol:
+                q["symbol"] = symbol
+        return http.get("/api/v1/portfolio/situation-change", q)
+
     def create_recurring_buy(
         client_id: str,
         symbol: str,
@@ -6817,8 +6853,27 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         StructuredTool.from_function(
             list_portfolio_trades,
             name="list_portfolio_trades",
-            description="List paper trade history for a clientId.",
+            description=(
+                "List paper trade history for a clientId. A sell includes left: "
+                "each buy it closed, compared with the read stored on the sell."
+            ),
             args_schema=PortfolioGetInput,
+        ),
+        StructuredTool.from_function(
+            get_situation_change,
+            name="get_situation_change",
+            description=(
+                "Compare a stored coin situation with a later one. Pass symbol "
+                "for an open crypto position: entry is the read on the newest "
+                "buy still held, live is the current combined read, and "
+                "comparison names stored clauses whose kind changed. status "
+                "missing means the later read left that clause blank and names "
+                "the venue. A blank clause is not a new opinion. A clause the "
+                "entry did not store is omitted. same is true when every stored "
+                "clause still matches. liveOk false omits comparison. Pass "
+                "trade_id instead to compare a sell with each buy it closed."
+            ),
+            args_schema=SituationChangeInput,
         ),
         StructuredTool.from_function(
             list_portfolio_lots,

@@ -717,6 +717,13 @@
       "flat": "Large and smaller prints are both quiet.",
       "missing": "Whale versus retail stays blank until {{venues}} have print size."
     },
+    "left": {
+      "still": "The read you entered on is still the live read.",
+      "stillExit": "The read you entered on was still true at this sell.",
+      "wasNow": "Was: {{was}} Now: {{now}}",
+      "blank": "This clause is blank on the later read.",
+      "against": "Against the buy at {{time}}"
+    },
     "venues": {
       "binance": "Binance",
       "bybit": "Bybit",

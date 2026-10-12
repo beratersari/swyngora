@@ -230,6 +230,41 @@ func TestSituationLeft_OnlyClausesStoredAtEntry(t *testing.T) {
 	}
 }
 
+func TestCompareCoinSituation_BlankIsMissingAndANewKindIsChanged(t *testing.T) {
+	entry := &CoinSituation{
+		PriceCVD: &SituationPriceCVD{Kind: SituationCVDPriceUp},
+		Funding:  &SituationFunding{Payer: "long"},
+		Prints:   &SituationPrints{Side: SituationPrintLong, LongNotional: 80},
+	}
+	live := &CoinSituation{
+		PriceCVD:       &SituationPriceCVD{Kind: SituationCVDAgrees},
+		FundingMissing: []string{"okx"},
+		Prints:         &SituationPrints{Side: SituationPrintLong, LongNotional: 10},
+		Size:           &SituationSize{Kind: SituationSizeBothBuy},
+	}
+	got := CompareCoinSituation(entry, live)
+	if got.Same || len(got.Clauses) != 2 {
+		t.Fatalf("cmp %+v", got)
+	}
+	if got.Clauses[0].Clause != "priceCvd" || got.Clauses[0].Status != SituationLeftChanged || got.Clauses[0].Live != SituationCVDAgrees {
+		t.Fatalf("price %+v", got.Clauses[0])
+	}
+	if got.Clauses[1].Clause != "funding" || got.Clauses[1].Status != SituationLeftMissing || len(got.Clauses[1].Missing) != 1 || got.Clauses[1].Missing[0] != "okx" {
+		t.Fatalf("funding %+v", got.Clauses[1])
+	}
+	same := CompareCoinSituation(entry, &CoinSituation{
+		PriceCVD: &SituationPriceCVD{Kind: SituationCVDPriceUp},
+		Funding:  &SituationFunding{Payer: "long"},
+		Prints:   &SituationPrints{Side: SituationPrintLong},
+	})
+	if !same.Same || len(same.Clauses) != 0 {
+		t.Fatalf("same %+v", same)
+	}
+	if cmp := CompareCoinSituation(nil, live); cmp.Same || len(cmp.Clauses) != 0 {
+		t.Fatalf("no entry %+v", cmp)
+	}
+}
+
 func watchedPrints(now time.Time, sides []LiquidationPrintSideRow) SituationPrintInput {
 	start := now.Add(-48 * time.Hour)
 	cov := make([]LiquidationCoverage, 0, 3)

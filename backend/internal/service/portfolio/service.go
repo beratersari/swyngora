@@ -783,6 +783,9 @@ func (s *Service) ListTrades(ctx context.Context, clientID string, limit, offset
 			list[i].LotFills = byTrade[list[i].ID]
 		}
 	}
+	if err := s.attachSituationLeft(ctx, clientID, list); err != nil {
+		return nil, 0, err
+	}
 	return list, total, nil
 }
 

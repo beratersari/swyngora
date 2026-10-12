@@ -342,6 +342,7 @@ export {
   useAmendPortfolioOrderMutation,
   useCancelPortfolioOrderMutation,
   useListPortfolioTradesQuery,
+  useGetPortfolioSituationChangeQuery,
   useListPortfolioRebalancesQuery,
   useGetPortfolioRebalanceQuery,
   useContinuePortfolioRebalanceMutation,

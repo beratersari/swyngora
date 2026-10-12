@@ -842,6 +842,37 @@ func (s *SQLite) ListTrades(ctx context.Context, clientID string, limit, offset 
 	return out, rows.Err()
 }
 
+// ListTradesByIDs returns fills in this book for the given ids.
+func (s *SQLite) ListTradesByIDs(ctx context.Context, clientID string, ids []string) ([]domain.Trade, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	ph := strings.Repeat("?,", len(ids))
+	ph = ph[:len(ph)-1]
+	args := make([]any, 0, len(ids)+1)
+	args = append(args, clientID)
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, client_id, exchange, symbol, side, quantity, price, notional, realized_pnl, pending_order_id,
+		       COALESCE(lot_method, ''), COALESCE(fee, 0), COALESCE(last_price, 0), COALESCE(situation_json, ''), created_at
+		FROM trades WHERE client_id = ? AND id IN (`+ph+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]domain.Trade, 0)
+	for rows.Next() {
+		t, err := scanTrade(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
 // CountTrades returns trade count for a client.
 func (s *SQLite) CountTrades(ctx context.Context, clientID string) (int, error) {
 	var n int

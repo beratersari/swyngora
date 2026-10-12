@@ -160,7 +160,8 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `PATCH` | `/api/v1/portfolio/orders/{id}` | Amend open GTC limit/stop price and/or remaining size |
 | `POST` | `/api/v1/portfolio/orders/cancel-all` | Cancel all open paper orders, or one market (`symbol`) |
 | `DELETE` | `/api/v1/portfolio/orders/{id}` | Cancel an open pending order |
-| `GET` | `/api/v1/portfolio/trades` | Paper trade history |
+| `GET` | `/api/v1/portfolio/situation-change` | Which stored situation clauses changed on an open crypto position (`symbol`) or on one fill (`tradeId`). A blank later clause is missing, not a new kind |
+| `GET` | `/api/v1/portfolio/trades` | Paper trade history. A sell includes `left`, the buys it closed compared with the read stored on the sell |
 | `GET` | `/api/v1/portfolio/lots` | Tax lots (FIFO/LIFO remaining buys) |
 | `POST`/`GET` | `/api/v1/portfolio/recurring-buys` | Create / list named paper recurring buy (DCA) plans |
 | `GET`/`PATCH`/`DELETE` | `/api/v1/portfolio/recurring-buys/{id}` | Get / update name, schedule, timezone, maxPrice, budget, endDate / delete plan |

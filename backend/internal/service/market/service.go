@@ -84,6 +84,7 @@ type Service struct {
 	flowSeen       map[string]struct{}
 	flowLiquid     []string
 	fearGreedSF    singleflight.Group
+	situationSF    singleflight.Group
 	fearGreedMu    sync.Mutex
 	fearGreedAt    time.Time
 	fearGreedHit   *domain.FearGreedReport

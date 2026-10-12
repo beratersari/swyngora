@@ -105,6 +105,9 @@ type Trade struct {
 	// Situation is the coin-page read at the moment this fill happened.
 	// A resting order stores a new read here. It does not keep the placement read.
 	Situation *CoinSituation
+	// Left is set on a sell when the list is built. Each item is one buy this
+	// fill closed, compared with Situation. It is not stored.
+	Left      []SituationExit
 	CreatedAt time.Time
 }
 
@@ -391,6 +394,11 @@ type PortfolioPort interface {
 	ListOpenTaxLots(ctx context.Context, clientID string, exchange Exchange, symbol string) ([]TaxLot, error)
 	ListTaxLots(ctx context.Context, clientID string, exchange Exchange, symbol string, openOnly bool) ([]TaxLot, error)
 	ListTaxLotFillsForTrades(ctx context.Context, tradeIDs []string) ([]TaxLotFill, error)
+	// ListTaxLotsByIDs returns lots in this book whose ids are in the set.
+	// Unknown ids are omitted. An empty set returns nil.
+	ListTaxLotsByIDs(ctx context.Context, clientID string, ids []string) ([]TaxLot, error)
+	// ListTradesByIDs returns fills in this book whose ids are in the set.
+	ListTradesByIDs(ctx context.Context, clientID string, ids []string) ([]Trade, error)
 	InsertTaxLot(ctx context.Context, lot TaxLot) error
 
 	// ExecuteTrade applies portfolio cash/realized, position upsert/delete, and trade insert atomically.
