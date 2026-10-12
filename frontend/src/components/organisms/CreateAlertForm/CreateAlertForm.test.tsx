@@ -28,7 +28,7 @@ describe('CreateAlertForm', () => {
         onSubmit={async () => undefined}
       />,
     );
-    expect(screen.getByText(/leaves the read stored on your newest open buy/i)).toBeInTheDocument();
+    expect(screen.getByText(/newest open buy filled/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/target price/i)).not.toBeInTheDocument();
   });
 

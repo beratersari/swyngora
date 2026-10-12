@@ -662,6 +662,7 @@
     "title": "Durum",
     "compare": "Pozisyon okuması",
     "entered": "Girişte",
+    "atFill": "Bu emir dolduğundaki piyasa.",
     "now": "Şimdi",
     "nowLoading": "Şimdiki bant okunuyor…",
     "loading": "Birleşik bant okunuyor…",

@@ -662,6 +662,7 @@
     "title": "Situation",
     "compare": "Position read",
     "entered": "Entered as",
+    "atFill": "Market when this order filled.",
     "now": "Now",
     "nowLoading": "Reading the tape now…",
     "loading": "Reading the combined tape…",

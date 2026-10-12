@@ -6059,7 +6059,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "(Binance and OKX; Bybit has no top-trader ratio). size.kind is whale "
                 "versus retail on the latest sized bar. A clause is omitted and its "
                 "Missing list names the venues that do not cover it. The same read "
-                "is stored on a paper fill. An unusual standout on the "
+                "is stored when a paper order fills. A resting order stores a new "
+                "read at the fill. An unusual standout on the "
                 "derivatives board and each unusual-scan row open these clauses."
             ),
             args_schema=CoinSituationInput,
@@ -6513,7 +6514,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "Alert when the live coin read leaves the read stored on the newest "
                 "open paper buy for this exchange and symbol. Only clauses stored at "
-                "entry count. No open crypto position stays quiet. mode=one_time "
+                "the fill count. No open crypto position stays quiet. mode=one_time "
                 "(default) or repeating."
             ),
             args_schema=SituationAlertInput,

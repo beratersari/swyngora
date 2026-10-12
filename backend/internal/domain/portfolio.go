@@ -102,8 +102,8 @@ type Trade struct {
 	LotFills       []TaxLotFill // sell allocations; not required on list
 	Fee            float64      // quote-currency taker fee
 	LastPrice      float64      // last/mark before slippage (0 = not stored)
-	// Situation is the coin-page read at the moment the order was placed.
-	// A pending fill keeps the read from placement, not from the later fill.
+	// Situation is the coin-page read at the moment this fill happened.
+	// A resting order stores a new read here. It does not keep the placement read.
 	Situation *CoinSituation
 	CreatedAt time.Time
 }
@@ -252,7 +252,7 @@ type PositionView struct {
 	// EntrySituation is the coin read stored on the newest buy that still has
 	// remaining quantity. Nil for an equity, and when that fill stored no read.
 	EntrySituation *CoinSituation
-	// EntryAt is when that buy was placed.
+	// EntryAt is when that buy filled.
 	EntryAt time.Time
 }
 

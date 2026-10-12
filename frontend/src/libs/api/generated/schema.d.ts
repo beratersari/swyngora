@@ -1579,9 +1579,10 @@ export interface paths {
          *       Binance and OKX top-versus-crowd, and whale versus retail.
          *
          *     A missing clause's `*Missing` list names the venue. A missing venue is
-         *     not treated as zero. The same object is stored on a paper fill at the
-         *     moment the order is placed. An older fill does not grow a clause it
-         *     never stored. An unusual standout on the derivatives board, and each
+         *     not treated as zero. The same object is stored when a paper order fills.
+         *     A resting limit, stop, bracket, or OCO keeps the placement read on the
+         *     order and stores a new read on the fill. A failed read at the fill stays
+         *     blank. An older fill does not grow a clause it never stored. An unusual standout on the derivatives board, and each
          *     unusual-scan row, open this same read.
          */
         get: operations["getMarketSituation"];
@@ -3559,8 +3560,8 @@ export interface paths {
         /**
          * Get paper portfolio snapshot
          * @description Cash, open positions (mark-to-market), realized and unrealized P&L.
-         *     Each open crypto position includes entrySituation: the coin read stored on
-         *     the newest buy that still has remaining quantity. An equity omits it.
+         *     Each open crypto position includes entrySituation: the coin read stored
+         *     when the newest buy that still has remaining quantity filled. An equity omits it.
          *     A buy that stored no read leaves the field off. The live read is
          *     GET /api/v1/market/situation.
          *     When the client has more than one book, pass portfolioId (or X-Portfolio-Id).
@@ -9543,8 +9544,8 @@ export interface components {
             updatedAt?: string;
         };
         /**
-         * @description Open spot holding. entrySituation is the coin read stored on the newest
-         *     buy that still has remaining quantity. Equities omit it. The live read
+         * @description Open spot holding. entrySituation is the coin read stored when the newest
+         *     buy that still has remaining quantity filled. Equities omit it. The live read
          *     is GET /api/v1/market/situation.
          */
         PortfolioPosition: {
@@ -9562,7 +9563,7 @@ export interface components {
             entrySituation?: components["schemas"]["CoinSituation"];
             /**
              * Format: date-time
-             * @description When the buy that stored entrySituation was placed
+             * @description When the buy that stored entrySituation filled
              */
             entryAt?: string;
         };
@@ -9589,7 +9590,11 @@ export interface components {
             sellPrice?: number;
             realizedPnL?: number;
         };
-        /** @description Filled paper order leg (market or pending). price is the slipped fill. */
+        /**
+         * @description Filled paper order leg (market or pending). price is the slipped fill.
+         *     situation is the coin read at this fill. A resting order stores a new
+         *     read here, not the read from placement. Equities omit it.
+         */
         PaperTrade: {
             id?: string;
             exchange?: string;

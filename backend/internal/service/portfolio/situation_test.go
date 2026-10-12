@@ -2,6 +2,7 @@ package portfolio
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -10,11 +11,15 @@ import (
 
 type fakeSituation struct {
 	got *domain.CoinSituation
+	err error
 	n   int
 }
 
 func (f *fakeSituation) GetCoinSituation(context.Context, string) (*domain.CoinSituation, error) {
 	f.n++
+	if f.err != nil {
+		return nil, f.err
+	}
 	return f.got, nil
 }
 
@@ -48,7 +53,7 @@ func TestPlaceOrder_StoresCoinSituationOnTheFill(t *testing.T) {
 	}
 }
 
-func TestPlacePendingOrder_KeepsTheReadFromPlacement(t *testing.T) {
+func TestPlacePendingOrder_StoresTheReadAtTheFill(t *testing.T) {
 	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
 	svc := newSvc(t, px)
 	src := &fakeSituation{got: &domain.CoinSituation{
@@ -69,7 +74,7 @@ func TestPlacePendingOrder_KeepsTheReadFromPlacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	if src.n != 1 {
-		t.Fatalf("captures %d", src.n)
+		t.Fatalf("placement captures %d", src.n)
 	}
 	reloaded, err := svc.store.GetPendingOrder(ctx, "sit-lim", ord.ID)
 	if err != nil {
@@ -79,18 +84,169 @@ func TestPlacePendingOrder_KeepsTheReadFromPlacement(t *testing.T) {
 		t.Fatalf("pending %+v", reloaded.Situation)
 	}
 	src.got = &domain.CoinSituation{Symbol: "BTCUSDT", PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceDown}}
-	if _, ok, err := svc.TryFillPendingOrder(ctx, *reloaded, 90, 0); err != nil || !ok {
+	filled, ok, err := svc.TryFillPendingOrder(ctx, *reloaded, 90, 0)
+	if err != nil || !ok {
 		t.Fatalf("fill ok=%v err=%v", ok, err)
 	}
-	if src.n != 1 {
-		t.Fatalf("fill must keep the placement read, captures %d", src.n)
+	if src.n != 2 {
+		t.Fatalf("fill captures %d", src.n)
+	}
+	if filled == nil || filled.Situation == nil || filled.Situation.PriceCVD == nil || filled.Situation.PriceCVD.Kind != domain.SituationCVDAgrees {
+		t.Fatalf("order keeps placement %+v", filled)
 	}
 	list, _, err := svc.ListTrades(ctx, "sit-lim", 10, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(list) != 1 || list[0].Situation == nil || list[0].Situation.PriceCVD.Kind != domain.SituationCVDAgrees {
-		t.Fatalf("fill kept %+v", list)
+	if len(list) != 1 || list[0].Situation == nil || list[0].Situation.PriceCVD == nil || list[0].Situation.PriceCVD.Kind != domain.SituationCVDPriceDown {
+		t.Fatalf("fill read %+v", list)
+	}
+	view, err := svc.View(ctx, "sit-lim")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Positions) != 1 || view.Positions[0].EntrySituation == nil || view.Positions[0].EntrySituation.PriceCVD == nil || view.Positions[0].EntrySituation.PriceCVD.Kind != domain.SituationCVDPriceDown {
+		t.Fatalf("entry %+v", view.Positions)
+	}
+}
+
+func TestPlacePendingOrder_EachPartialFillStoresItsOwnRead(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	src := &fakeSituation{got: &domain.CoinSituation{
+		Symbol:   "BTCUSDT",
+		PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDAgrees},
+	}}
+	svc.SetSituationSource(src)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "sit-part", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	ord, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "sit-part", Symbol: "BTCUSDT", Type: "limit_buy",
+		Quantity: 1, TriggerPrice: 90,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := svc.store.GetPendingOrder(ctx, "sit-part", ord.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src.got = &domain.CoinSituation{Symbol: "BTCUSDT", PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceUp}}
+	first, ok, err := svc.TryFillPendingOrder(ctx, *reloaded, 90, 0.4)
+	if err != nil || !ok || first == nil || first.Status != domain.PendingStatusOpen {
+		t.Fatalf("partial %+v ok=%v err=%v", first, ok, err)
+	}
+	src.got = &domain.CoinSituation{Symbol: "BTCUSDT", PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceDown}}
+	if _, ok, err := svc.TryFillPendingOrder(ctx, *first, 90, 0); err != nil || !ok {
+		t.Fatalf("rest ok=%v err=%v", ok, err)
+	}
+	list, _, err := svc.ListTrades(ctx, "sit-part", 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("trades %d", len(list))
+	}
+	got := map[string]bool{}
+	for _, tr := range list {
+		if tr.Situation == nil || tr.Situation.PriceCVD == nil {
+			t.Fatalf("blank fill %+v", tr.Situation)
+		}
+		got[tr.Situation.PriceCVD.Kind] = true
+	}
+	if !got[domain.SituationCVDPriceUp] || !got[domain.SituationCVDPriceDown] {
+		t.Fatalf("partial reads %+v", got)
+	}
+	view, err := svc.View(ctx, "sit-part")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Positions) != 1 || view.Positions[0].EntrySituation == nil || view.Positions[0].EntrySituation.PriceCVD.Kind != domain.SituationCVDPriceDown {
+		t.Fatalf("newest fill %+v", view.Positions[0].EntrySituation)
+	}
+}
+
+func TestPlacePendingOrder_BlankFillReadDoesNotKeepPlacement(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	src := &fakeSituation{got: &domain.CoinSituation{
+		Symbol:   "BTCUSDT",
+		PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDAgrees},
+	}}
+	svc.SetSituationSource(src)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "sit-miss", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	ord, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "sit-miss", Symbol: "BTCUSDT", Type: "limit_buy",
+		Quantity: 1, TriggerPrice: 90,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := svc.store.GetPendingOrder(ctx, "sit-miss", ord.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	src.err = errors.New("tape down")
+	filled, ok, err := svc.TryFillPendingOrder(ctx, *reloaded, 90, 0)
+	if err != nil || !ok {
+		t.Fatalf("fill ok=%v err=%v", ok, err)
+	}
+	if filled == nil || filled.Situation == nil || filled.Situation.PriceCVD == nil || filled.Situation.PriceCVD.Kind != domain.SituationCVDAgrees {
+		t.Fatalf("order %+v", filled)
+	}
+	list, _, err := svc.ListTrades(ctx, "sit-miss", 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].Situation != nil {
+		t.Fatalf("fill kept a read %+v", list)
+	}
+	view, err := svc.View(ctx, "sit-miss")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Positions) != 1 || view.Positions[0].EntrySituation != nil {
+		t.Fatalf("entry %+v", view.Positions)
+	}
+}
+
+func TestPlacePendingOrder_EquityStillSkipsTheRead(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"nasdaq|AAPL": "100"}}
+	svc := newSvc(t, px)
+	src := &fakeSituation{got: &domain.CoinSituation{Symbol: "AAPL"}}
+	svc.SetSituationSource(src)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "sit-eq-lim", StartingBalance: 10000, Currency: "USD"}); err != nil {
+		t.Fatal(err)
+	}
+	ord, err := svc.PlacePendingOrder(ctx, PendingOrderInput{
+		ClientID: "sit-eq-lim", Exchange: "nasdaq", Symbol: "AAPL", Type: "limit_buy",
+		Quantity: 1, TriggerPrice: 90,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := svc.store.GetPendingOrder(ctx, "sit-eq-lim", ord.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := svc.TryFillPendingOrder(ctx, *reloaded, 90, 0); err != nil || !ok {
+		t.Fatalf("fill ok=%v err=%v", ok, err)
+	}
+	if src.n != 0 {
+		t.Fatalf("equity captures %d", src.n)
+	}
+	list, _, err := svc.ListTrades(ctx, "sit-eq-lim", 10, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].Situation != nil {
+		t.Fatalf("equity fill %+v", list)
 	}
 }
 

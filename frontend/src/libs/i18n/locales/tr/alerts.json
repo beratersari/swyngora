@@ -4,6 +4,7 @@
   "subtitle": "Fiyat ve 24s değişim eşikleri. Bu sekme açıkken değerlendirilir. Yalnızca bilgilendirme — yatırım tavsiyesi değildir.",
   "createTitle": "Uyarı oluştur",
   "createHint": "Koşul sağlandığında tetiklenir (kısa bekleme süresi). Masaüstü bildirimleri için tarayıcı izni verin.",
+  "situationHint": "Canlı okuma, en yeni açık alımınız dolduğunda saklanan piyasadan ayrılınca tetiklenir. Dolumda boş olan maddeler sayılmaz.",
   "listTitle": "Uyarılarınız",
   "create": "Uyarı oluştur",
   "createFailed": "Uyarı oluşturulamadı",

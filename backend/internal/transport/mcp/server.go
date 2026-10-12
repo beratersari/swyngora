@@ -2017,7 +2017,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_coin_situation",
-		mcp.WithDescription("Short read for one coin from data Swyngora already has. priceCvd.kind is price_up_cvd_down, price_down_cvd_up, or agrees. openInterest.flow is opened, closed, or flat over 1h. liquidation.side is the leverage model: long (longs below last are closer), short (shorts above last are closer), or none. prints.side is measured force-orders over the last 24h: long, short, even, or quiet, with longNotional and shortNotional in USDT. Prints are definite only when Binance, Bybit, and OKX recorded that whole window. funding.payer is long, short, or none for the OI-weighted predicted rate. crowd.lean is top_more_long, top_more_short, or even (Binance and OKX only; Bybit has no top-trader ratio). size.kind is whale versus retail on the latest sized bar. A clause is omitted and its *Missing list names the venues that do not cover it. The same read is stored on a paper fill placed while it is current. An unusual standout on the derivatives board and each unusual-scan row open these same clauses. Not financial advice."),
+		mcp.WithDescription("Short read for one coin from data Swyngora already has. priceCvd.kind is price_up_cvd_down, price_down_cvd_up, or agrees. openInterest.flow is opened, closed, or flat over 1h. liquidation.side is the leverage model: long (longs below last are closer), short (shorts above last are closer), or none. prints.side is measured force-orders over the last 24h: long, short, even, or quiet, with longNotional and shortNotional in USDT. Prints are definite only when Binance, Bybit, and OKX recorded that whole window. funding.payer is long, short, or none for the OI-weighted predicted rate. crowd.lean is top_more_long, top_more_short, or even (Binance and OKX only; Bybit has no top-trader ratio). size.kind is whale versus retail on the latest sized bar. A clause is omitted and its *Missing list names the venues that do not cover it. The same read is stored when a paper order fills. A resting order stores a new read at the fill, not the read from placement. An unusual standout on the derivatives board and each unusual-scan row open these same clauses. Not financial advice."),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		symbol, err := req.RequireString("symbol")
@@ -2619,7 +2619,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("create_situation_alert",
-		mcp.WithDescription("Alert when the live coin read leaves the read stored on the newest open paper buy for this exchange and symbol. Compares only the clauses that were stored at entry. A clause that appears later does not fire. No open crypto position stays quiet. mode=one_time (default) or repeating, which re-arms when the live read matches the entry again. Not for Nasdaq or BIST."),
+		mcp.WithDescription("Alert when the live coin read leaves the read stored on the newest open paper buy for this exchange and symbol. Compares only the clauses that were stored at the fill. A clause that appears later does not fire. No open crypto position stays quiet. mode=one_time (default) or repeating, which re-arms when the live read matches the entry again. Not for Nasdaq or BIST."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair on the paper book, e.g. BTCUSDT or BTC-USD")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit (default binance)")),
@@ -3145,7 +3145,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_portfolio",
-		mcp.WithDescription("Get paper portfolio cash, positions, realized/unrealized P&L (mark-to-market). Each open crypto position includes entrySituation, the coin read stored on the newest buy still held. Equities omit it. The live read is get_coin_situation. Pass portfolioId when the client has more than one book. Works for shared books if you have access."),
+		mcp.WithDescription("Get paper portfolio cash, positions, realized/unrealized P&L (mark-to-market). Each open crypto position includes entrySituation, the coin read stored when the newest buy still held filled. Equities omit it. The live read is get_coin_situation. Pass portfolioId when the client has more than one book. Works for shared books if you have access."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name; required if multiple portfolios exist")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

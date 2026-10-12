@@ -4,6 +4,7 @@
   "subtitle": "Server-side price, liquidation-feed, and cascade alerts. Informational only — not financial advice.",
   "createTitle": "Create alert",
   "createHint": "Fires when the condition is true (with a short cooldown). Enable browser notifications for desktop pop-ups.",
+  "situationHint": "Fires when the live read leaves the market stored when your newest open buy filled. Clauses that were missing at the fill are ignored.",
   "listTitle": "Your alerts",
   "create": "Create alert",
   "createFailed": "Could not create alert",

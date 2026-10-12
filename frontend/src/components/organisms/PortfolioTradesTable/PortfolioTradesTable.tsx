@@ -73,6 +73,9 @@ export function PortfolioTradesTable({ items, loading, onOpen }: PortfolioTrades
         if (lines.length === 0) return '—';
         return (
           <div>
+            <Text variant="caption" color="secondary">
+              {t('detail:situation.atFill')}
+            </Text>
             {lines.map((line) => (
               <Text key={line} variant="caption">
                 {line}

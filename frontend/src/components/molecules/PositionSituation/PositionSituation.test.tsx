@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { screen } from '@testing-library/react';
+import { i18n } from '@/libs/i18n';
 import { renderWithProviders } from '@/test/render';
 import { isCashEquity, openPositionFor } from './helpers';
 import { PositionSituation } from './PositionSituation';
@@ -19,9 +20,17 @@ describe('PositionSituation', () => {
     renderWithProviders(<PositionSituation entry={entry} now={now} />);
     expect(screen.getByRole('group', { name: 'Position read' })).toBeInTheDocument();
     expect(screen.getByText('Entered as')).toBeInTheDocument();
+    expect(screen.getByText('Market when this order filled.')).toBeInTheDocument();
     expect(screen.getByText('Price is rising while futures CVD is falling.')).toBeInTheDocument();
     expect(screen.getByText('Now')).toBeInTheDocument();
     expect(screen.getByText('Price and futures CVD are moving together.')).toBeInTheDocument();
+  });
+
+  it('uses the Turkish fill label', async () => {
+    await i18n.changeLanguage('tr');
+    renderWithProviders(<PositionSituation entry={entry} now={now} />);
+    expect(screen.getByText('Bu emir dolduğundaki piyasa.')).toBeInTheDocument();
+    await i18n.changeLanguage('en');
   });
 
   it('keeps the entry line when the live read is still loading', () => {

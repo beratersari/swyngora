@@ -22,9 +22,9 @@ The coin page shows the same clauses in English and Turkish, above the tabs. Equ
 
 `/derivatives` opens this read under a row whose unusual cell is a standout. `/unusual` opens it under each scan row. The standout stays in the cell. A derivatives row with no standout does not open the read. The request is this same combined symbol read, and it runs when the row opens.
 
-A paper market order, limit, stop, bracket, or OCO stores this read at the moment the order is placed. A later fill keeps that read. The portfolio trade history shows it beside the fill. Nasdaq and BIST orders do not call the futures read.
+A market order stores this read when it fills. A limit, stop, bracket, or OCO keeps the placement read on the order and stores a new read on the fill. The trade, **Entered as**, and the situation alert use that fill read. A failed read at the fill stays blank and does not keep the placement read. The portfolio trade history shows the fill read beside the fill and says it is the market at the fill. Nasdaq and BIST orders do not call the futures read.
 
-An open crypto position shows two reads. **Entered as** is the read stored on the newest buy that still has remaining quantity. Selling that buy, lifo or fifo, moves the line to the newest buy that remains. A buy that stored no read leaves the line off, even when an older lot has one. **Now** is the live `GET /api/v1/market/situation` for that symbol. The same pair is on the coin Trade tab when the selected book holds the coin. An equity position stays on size and profit.
+An open crypto position shows two reads. **Entered as** is the read stored when the newest buy that still has remaining quantity filled. Selling that buy, lifo or fifo, moves the line to the newest buy that remains. A buy that stored no read leaves the line off, even when an older lot has one. **Now** is the live `GET /api/v1/market/situation` for that symbol. The same pair is on the coin Trade tab when the selected book holds the coin. An equity position stays on size and profit.
 
 An alert of kind `situation` fires when the live read leaves the clauses stored on that entry. A clause the entry did not store is ignored, so an older fill does not alert only because a new clause appeared. A blank live clause counts as a change of a clause that was stored. The prints clause compares `prints.side` only. A change in the dollar amounts with the same side stays quiet. No open crypto position stays quiet. `mode=one_time` fires once. `mode=repeating` re-arms when the live read matches the entry again. The exchange is the paper book venue (`binance`, `coinbase`, or `bybit`), and the symbol is the pair on that book.
 
@@ -32,7 +32,7 @@ An alert of kind `situation` fires when the live read leaves the clauses stored 
 
 - `backend/internal/domain/situation.go` builds the read.
 - `backend/internal/service/market/situation.go` loads CVD, open interest, liquidation levels, and the 24-hour print sides.
-- `backend/internal/service/portfolio/service.go` stores it on the order.
+- `backend/internal/service/portfolio/service.go` stores the placement read on a resting order and a new read on the fill.
 - `frontend/src/components/molecules/CoinSituation` renders the sentences.
 - `frontend/src/components/molecules/OutlierSituation` loads that read under an opened outlier row.
 - MCP `get_coin_situation`. Python `get_coin_situation`.
@@ -44,15 +44,15 @@ cd backend
 go test ./internal/domain/ -run 'TestBuildCoinSituation|TestSituationLeft|TestLatestOpenLot|TestMergeLiquidationPrintSides'
 go test ./internal/adapter/futuresstore/ -run 'TestSumAndBucketLiquidations'
 go test ./internal/service/market/ -run 'TestGetCoinSituation_MeasuredPrints'
-go test ./internal/service/portfolio/ -run 'TestPlaceOrder_StoresCoinSituation|TestPlacePendingOrder_Keeps|TestPlaceOrder_Equity|TestView_EntrySituation|TestEntrySituation_'
+go test ./internal/service/portfolio/ -run 'TestPlaceOrder_StoresCoinSituation|TestPlacePendingOrder_|TestPlaceOrder_Equity|TestView_EntrySituation|TestEntrySituation_'
 go test ./internal/service/pricealert/ -run 'TestChecker_Situation'
 
 cd frontend
-npx vitest run src/components/molecules/CoinSituation/CoinSituation.test.tsx src/components/molecules/PositionSituation/PositionSituation.test.tsx src/components/organisms/PortfolioPositionsTable/PortfolioPositionsTable.test.tsx
+npx vitest run src/components/molecules/CoinSituation/CoinSituation.test.tsx src/components/molecules/PositionSituation/PositionSituation.test.tsx src/components/organisms/PortfolioPositionsTable/PortfolioPositionsTable.test.tsx src/components/organisms/PortfolioTradesTable/PortfolioTradesTable.test.tsx src/components/organisms/CreateAlertForm/CreateAlertForm.test.tsx
 ```
 
-Open `/markets/binance/BTCUSDT`. The situation card sits under the stats. Place a paper buy, then open the portfolio trade history. The fill shows the same kind of sentences.
+Open `/markets/binance/BTCUSDT`. The situation card sits under the stats. Place a paper limit buy below the market, then let it fill after the situation changes. Trade history and **Entered as** show the market at the fill, with the line "Market when this order filled." The placement read stays on the resting order and is not the position read.
 
 ## Limits
 
-The read uses the live combined tape. A venue that is still filling history leaves its clause blank. The stored read is the one at order placement, so a limit that fills later does not replace it with the market at fill time.
+The read uses the live combined tape. A venue that is still filling history leaves its clause blank. A resting order that fills later stores the market at the fill. Each partial fill stores its own read. The open position shows the newest remaining buy.

@@ -16,6 +16,9 @@ export function PositionSituation({ entry, now, nowLoading }: PositionSituationP
           <Text variant="caption" color="secondary">
             {t('situation.entered')}
           </Text>
+          <Text variant="caption" color="secondary">
+            {t('situation.atFill')}
+          </Text>
           {entered.map((line) => (
             <Text key={`entered-${line}`} variant="caption">
               {line}

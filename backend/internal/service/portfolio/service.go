@@ -137,8 +137,12 @@ func (s *Service) EntrySituation(ctx context.Context, clientID, exchange, symbol
 	return got, err
 }
 
-// captureSituation reads the combined tape at order time.
-// Equities have no futures tape. A failed or slow read leaves the order without one.
+// captureSituation reads the combined tape now.
+// A market order calls it when the order fills. A resting order calls it at
+// placement, and that copy stays on the order. The fill calls it again and
+// stores that later read on the trade. Equities have no futures tape. A failed
+// or slow read leaves the caller without one, and a fill does not keep the
+// placement read in its place.
 func (s *Service) captureSituation(ctx context.Context, ex domain.Exchange, symbol string) *domain.CoinSituation {
 	if s == nil || s.situations == nil || domain.IsEquityExchange(ex) {
 		return nil
@@ -1972,7 +1976,7 @@ func (s *Service) tryFillPendingOrderLocked(ctx context.Context, o domain.Pendin
 		ID: tradeID, ClientID: o.ClientID, Exchange: o.Exchange, Symbol: o.Symbol,
 		Side: o.Side, Quantity: fillQty, Price: fillPrice, Notional: fillQty * fillPrice,
 		RealizedPnL: realized, PendingOrderID: o.ID, LotMethod: lotMethod,
-		Fee: fee, LastPrice: lastPrice, Situation: o.Situation, CreatedAt: now,
+		Fee: fee, LastPrice: lastPrice, Situation: s.captureSituation(ctx, o.Exchange, o.Symbol), CreatedAt: now,
 	}
 	if lotOps != nil {
 		tr.LotFills = lotOps.Fills

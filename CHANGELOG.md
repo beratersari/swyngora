@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OKX liquidation size:** a missing or non-positive contract size is dropped on the live socket and on the history page. It is no longer stored as 1 contract, which made a BTC-USDT-SWAP print about 100 times too large. The history window stays uncovered until the size is known. Prints already stored are left as written.
 
 ### Changed
+- **Resting paper fills store the situation at the fill.** A limit, stop, bracket, or OCO keeps the read from placement on the order and writes a new read on the fill. The trade, the open position, and a situation alert use that fill read. A failed read at the fill stays blank. Each partial fill stores its own read. A market order still stores the read when it fills. Equities still skip it (`docs/features/coin-situation.md`, `docs/features/paper-trading.md`)
 - **Combined coin reads stay blank until every asked venue is in.** Futures CVD leaves out a minute that one venue missed instead of filling it from the others. A minute nobody printed is not a gap. Combined open interest, funding pressure, participation, net long/short, positioning, and squeeze risk stay blank and name the missing venue. A partial sum is not shown as the combined number (`GET /api/v1/market/cvd`, `open-interest`, `funding-rate`, `participation`, `net-position`, `positioning`, `squeeze-risk`)
 
 ### Added

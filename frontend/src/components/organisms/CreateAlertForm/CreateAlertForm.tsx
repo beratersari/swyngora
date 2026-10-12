@@ -350,7 +350,7 @@ export function CreateAlertForm({
         <Text variant="caption" color="secondary">
           {t('alerts:situationHint', {
             defaultValue:
-              'Fires when the live read leaves the read stored on your newest open buy for this coin. Clauses that were not stored at entry are ignored.',
+              'Fires when the live read leaves the market stored when your newest open buy filled. Clauses that were missing at the fill are ignored.',
           })}
         </Text>
       ) : null}
