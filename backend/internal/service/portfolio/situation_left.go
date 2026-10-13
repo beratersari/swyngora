@@ -13,6 +13,7 @@ import (
 // SituationChange is the open-position read: the newest remaining buy against the live tape.
 // LiveOK is false when the live read could not be loaded. Comparison is then empty,
 // so a failed read is not treated as a missing clause.
+// OpenReads lists every remaining buy. Each comparison is set only when LiveOK is true.
 type SituationChange struct {
 	Exchange   domain.Exchange
 	Symbol     string
@@ -21,6 +22,7 @@ type SituationChange struct {
 	Live       *domain.CoinSituation
 	LiveOK     bool
 	Comparison domain.SituationComparison
+	OpenReads  []domain.OpenLotChange
 }
 
 // SituationChange loads the entry read on the selected book and the live coin read.
@@ -50,12 +52,14 @@ func (s *Service) SituationChange(ctx context.Context, clientID, exchange, symbo
 	if err != nil {
 		return nil, err
 	}
-	entry, at, err := s.entrySituation(ctx, p.BookID(), ex, lots)
+	reads, err := s.loadOpenLotReads(ctx, p.BookID(), ex, lots)
 	if err != nil {
 		return nil, err
 	}
+	entry, at := domain.EntryFromOpenReads(reads)
 	out.Entry = entry
 	out.EntryAt = at
+	out.OpenReads = domain.OpenLotChanges(reads)
 	if s.situations == nil {
 		return out, nil
 	}
@@ -70,8 +74,44 @@ func (s *Service) SituationChange(ctx context.Context, clientID, exchange, symbo
 	out.LiveOK = live != nil
 	if out.LiveOK {
 		out.Comparison = domain.CompareCoinSituation(entry, live)
+		out.OpenReads = domain.WithOpenLotComparisons(reads, live)
 	}
 	return out, nil
+}
+
+// loadOpenLotReads attaches the stored fill read to every remaining buy.
+// Equities and a book with no open lot return nil. The newest buy stays first.
+func (s *Service) loadOpenLotReads(ctx context.Context, bookID string, ex domain.Exchange, lots []domain.TaxLot) ([]domain.OpenLotRead, error) {
+	if s == nil || s.store == nil || domain.IsEquityExchange(ex) {
+		return nil, nil
+	}
+	ids := make([]string, 0, len(lots))
+	seen := map[string]struct{}{}
+	for _, lot := range lots {
+		if !lot.Open() {
+			continue
+		}
+		id := strings.TrimSpace(lot.SourceTradeID)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	byTrade := map[string]domain.Trade{}
+	if len(ids) > 0 {
+		rows, err := s.store.ListTradesByIDs(ctx, bookID, ids)
+		if err != nil {
+			return nil, err
+		}
+		for _, tr := range rows {
+			byTrade[tr.ID] = tr
+		}
+	}
+	return domain.OpenLotReads(ex, lots, byTrade), nil
 }
 
 // TradeSituation returns one fill plus, on a sell, the comparison with each buy it closed.

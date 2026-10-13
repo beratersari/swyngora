@@ -5998,9 +5998,12 @@ paths:
       description: |
         Cash, open positions (mark-to-market), realized and unrealized P&L.
         Each open crypto position includes entrySituation: the coin read stored
-        when the newest buy that still has remaining quantity filled. An equity omits it.
-        A buy that stored no read leaves the field off. The live read is
-        GET /api/v1/market/situation.
+        when the newest buy that still has remaining quantity filled. openReads
+        lists every remaining buy, newest first, with its size, fill time, and
+        the read stored on that fill. A buy that stored no read stays in the
+        list with its size and time. The live comparison for each buy is
+        GET /api/v1/portfolio/situation-change. An equity omits both.
+        The live read is GET /api/v1/market/situation.
         When the client has more than one book, pass portfolioId (or X-Portfolio-Id).
       operationId: getPortfolio
       tags: [Portfolio]
@@ -6951,11 +6954,16 @@ paths:
       description: |
         Pass exchange and symbol for an open crypto position. entry is the read
         stored on the newest buy still held. live is the current combined read.
-        comparison.same is true when every stored clause still has the same kind.
-        A clause the entry did not store is omitted. status missing means the
-        later read left that clause blank and names the venue. That is not a new
-        opinion. liveOk false omits comparison. Pass tradeId instead to compare
-        a sell with each buy it closed. Equities return an empty read.
+        openReads lists every remaining buy, newest first, with its size, fill
+        time, stored read, and that buy's comparison when liveOk is true. A buy
+        that stored no read keeps its size and time and has no clauses. entry
+        and comparison stay on the newest buy. A situation alert still follows
+        that buy. comparison.same is true when every stored clause still has the
+        same kind. A clause the entry did not store is omitted. status missing
+        means the later read left that clause blank and names the venue. That is
+        not a new opinion. liveOk false omits comparison on the headline and on
+        each buy. Pass tradeId instead to compare a sell with each buy it closed.
+        Equities return an empty read.
       operationId: getPortfolioSituationChange
       tags: [Portfolio]
       parameters:
@@ -13899,8 +13907,10 @@ components:
       type: object
       description: |
         Open spot holding. entrySituation is the coin read stored when the newest
-        buy that still has remaining quantity filled. Equities omit it. The live read
-        is GET /api/v1/market/situation.
+        buy that still has remaining quantity filled. openReads lists every
+        remaining buy. Equities omit both. The live read is
+        GET /api/v1/market/situation. The per-buy comparison is
+        GET /api/v1/portfolio/situation-change.
       properties:
         exchange: { type: string }
         symbol: { type: string }
@@ -13922,6 +13932,31 @@ components:
           type: string
           format: date-time
           description: When the buy that stored entrySituation filled
+        openReads:
+          type: array
+          description: |
+            Remaining buys, newest first. quantity is what is still held.
+            situation is omitted when that fill stored no read. The live
+            comparison is on SituationChange. Equities omit this list.
+          items:
+            $ref: '#/components/schemas/OpenLotRead'
+    OpenLotRead:
+      type: object
+      description: |
+        One remaining buy. newest marks the buy that entrySituation and a
+        situation alert still follow. comparison is set on
+        GET /api/v1/portfolio/situation-change when liveOk is true. It is omitted
+        on GET /api/v1/portfolio. A buy with no stored situation has no clauses.
+      properties:
+        id: { type: string }
+        quantity: { type: number, description: Remaining quantity }
+        openedAt: { type: string, format: date-time, description: When this buy filled }
+        sourceTradeId: { type: string }
+        situation:
+          $ref: '#/components/schemas/CoinSituation'
+        newest: { type: boolean }
+        comparison:
+          $ref: '#/components/schemas/SituationComparison'
     TaxLot:
       type: object
       description: One remaining (or closed) buy lot used for FIFO/LIFO realized PnL
@@ -14019,9 +14054,14 @@ components:
       description: |
         Open crypto position: entry is the read on the newest buy still held,
         live is GET /api/v1/market/situation, and comparison is entry against live.
+        openReads lists every remaining buy, newest first. Each comparison is
+        that buy against live when liveOk is true. A buy that stored no read
+        keeps its size and time and has no clauses. entry and comparison stay
+        on the newest buy. A situation alert still follows that buy.
         liveOk is false when the live read did not load. comparison is omitted
-        then, so a failed read is not a missing clause. Pass tradeId instead of
-        symbol to compare one sell with the buys it closed. Equities stay empty.
+        then, on the headline and on each buy, so a failed read is not a missing
+        clause. Pass tradeId instead of symbol to compare one sell with the buys
+        it closed. Equities stay empty.
       properties:
         exchange: { type: string }
         symbol: { type: string }
@@ -14033,6 +14073,14 @@ components:
         liveOk: { type: boolean }
         comparison:
           $ref: '#/components/schemas/SituationComparison'
+        openReads:
+          type: array
+          description: |
+            Every remaining buy, newest first. comparison on each item is present
+            when liveOk is true. The portfolio snapshot lists the same buys
+            without that comparison.
+          items:
+            $ref: '#/components/schemas/OpenLotRead'
         tradeId: { type: string }
         side: { type: string, enum: [buy, sell] }
         situation:

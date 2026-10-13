@@ -4829,7 +4829,44 @@ func (b *Backend) GetSituationChange(ctx context.Context, clientID, exchange, sy
 		}
 		body["comparison"] = got.Comparison
 	}
+	if rows := openLotChangesJSON(got.OpenReads); len(rows) > 0 {
+		body["openReads"] = rows
+	}
 	return mustJSON(body)
+}
+
+func openLotReadJSON(r domain.OpenLotRead, cmp *domain.SituationComparison) map[string]any {
+	m := map[string]any{
+		"id":       r.ID,
+		"quantity": r.Quantity,
+	}
+	if !r.OpenedAt.IsZero() {
+		m["openedAt"] = r.OpenedAt.UTC().Format(time.RFC3339Nano)
+	}
+	if r.SourceTradeID != "" {
+		m["sourceTradeId"] = r.SourceTradeID
+	}
+	if r.Situation != nil {
+		m["situation"] = r.Situation
+	}
+	if r.Newest {
+		m["newest"] = true
+	}
+	if cmp != nil {
+		m["comparison"] = cmp
+	}
+	return m
+}
+
+func openLotChangesJSON(reads []domain.OpenLotChange) []map[string]any {
+	if len(reads) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(reads))
+	for i := range reads {
+		out = append(out, openLotReadJSON(reads[i].OpenLotRead, reads[i].Comparison))
+	}
+	return out
 }
 
 func (b *Backend) GetSituationRecord(ctx context.Context, clientID string) (json.RawMessage, error) {
@@ -6052,12 +6089,26 @@ func pendingOrderMap(o *domain.PendingOrder) map[string]any {
 func portfolioViewJSON(v *domain.PortfolioView) (json.RawMessage, error) {
 	pos := make([]map[string]any, 0, len(v.Positions))
 	for _, p := range v.Positions {
-		pos = append(pos, map[string]any{
+		row := map[string]any{
 			"exchange": string(p.Exchange), "symbol": p.Symbol, "quantity": p.Quantity,
 			"reservedQuantity": p.ReservedQuantity, "availableQuantity": p.AvailableQuantity,
 			"avgCost": p.AvgCost, "markPrice": p.MarkPrice, "marketValue": p.MarketValue,
 			"unrealizedPnL": p.UnrealizedPnL, "costBasis": p.CostBasis,
-		})
+		}
+		if p.EntrySituation != nil {
+			row["entrySituation"] = p.EntrySituation
+		}
+		if !p.EntryAt.IsZero() {
+			row["entryAt"] = p.EntryAt.UTC().Format(time.RFC3339Nano)
+		}
+		if len(p.OpenReads) > 0 {
+			reads := make([]map[string]any, 0, len(p.OpenReads))
+			for i := range p.OpenReads {
+				reads = append(reads, openLotReadJSON(p.OpenReads[i], nil))
+			}
+			row["openReads"] = reads
+		}
+		pos = append(pos, row)
 	}
 	mpos := make([]map[string]any, 0, len(v.MarginPositions))
 	for i := range v.MarginPositions {

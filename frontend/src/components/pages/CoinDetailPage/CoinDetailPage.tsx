@@ -248,7 +248,7 @@ import {
   type ChartDeskLayers,
 } from './chartPresets';
 import { CoinSituation } from '@/components/molecules/CoinSituation';
-import { openPositionFor, PositionSituation } from '@/components/molecules/PositionSituation';
+import { openPositionFor, positionLotReads, PositionSituation } from '@/components/molecules/PositionSituation';
 import {
   clickSecFromForensicsAt,
   forensicsKnownUntil,
@@ -487,7 +487,12 @@ export function CoinDetailPage() {
       portfolioId: paperBookId || undefined,
     },
     {
-      skip: skip || isEquity || !paperBookId || !heldPosition?.entrySituation,
+      skip:
+        skip ||
+        isEquity ||
+        !paperBookId ||
+        !heldPosition ||
+        (!heldPosition.entrySituation && (heldPosition.openReads?.length ?? 0) === 0),
       pollingInterval: visible ? 60_000 : 0,
       refetchOnFocus: true,
     },
@@ -3301,6 +3306,7 @@ export function CoinDetailPage() {
             {heldPosition && !isEquity ? (
               <PositionSituation
                 entry={heldPosition.entrySituation}
+                lots={positionLotReads(heldPosition, situationChange.data)}
                 now={
                   situationChange.data?.liveOk
                     ? situationChange.data.live

@@ -257,6 +257,9 @@ type PositionView struct {
 	EntrySituation *CoinSituation
 	// EntryAt is when that buy filled.
 	EntryAt time.Time
+	// OpenReads lists every remaining buy, newest first. Equities leave it nil.
+	// A buy that stored no read is still listed, with Situation nil.
+	OpenReads []OpenLotRead
 }
 
 // PortfolioView is the full paper-trading snapshot for a client.

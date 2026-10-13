@@ -3148,7 +3148,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_portfolio",
-		mcp.WithDescription("Get paper portfolio cash, positions, realized/unrealized P&L (mark-to-market). Each open crypto position includes entrySituation, the coin read stored when the newest buy still held filled. Equities omit it. The live read is get_coin_situation. Pass portfolioId when the client has more than one book. Works for shared books if you have access."),
+		mcp.WithDescription("Get paper portfolio cash, positions, realized/unrealized P&L (mark-to-market). Each open crypto position includes entrySituation, the coin read stored when the newest buy still held filled, and openReads for every remaining buy (size, fill time, and that fill's stored read). Equities omit both. The live read is get_coin_situation. What changed on each buy is get_situation_change. Pass portfolioId when the client has more than one book. Works for shared books if you have access."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name; required if multiple portfolios exist")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -3165,7 +3165,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_situation_change",
-		mcp.WithDescription("Compare a stored coin situation with a later one. Pass symbol for an open crypto position: entry is the read on the newest buy still held, live is the current combined read, and comparison names the stored clauses whose kind changed. status missing means the later read left that clause blank and names the venue. A blank clause is not a new opinion. A clause the entry did not store is omitted. same is true when every stored clause still matches. liveOk false means the live read did not load, and comparison is omitted. Pass tradeId instead of symbol to compare a sell with each buy it closed (left). Equities stay empty. Not financial advice."),
+		mcp.WithDescription("Compare a stored coin situation with a later one. Pass symbol for an open crypto position: entry is the read on the newest buy still held, live is the current combined read, and comparison names the stored clauses whose kind changed. openReads lists every remaining buy, newest first, with its size, fill time, stored read, and that buy's comparison when liveOk is true. A buy that stored no read keeps its size and time and has no clauses. entry and the top-level comparison stay on the newest buy. A situation alert still follows that buy. status missing means the later read left that clause blank and names the venue. A blank clause is not a new opinion. A clause the entry did not store is omitted. same is true when every stored clause still matches. liveOk false means the live read did not load, and comparison is omitted on the headline and on each buy. Pass tradeId instead of symbol to compare a sell with each buy it closed (left). Equities stay empty. Not financial advice."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name; required if multiple portfolios exist")),
 		mcp.WithString("exchange", mcp.Description("binance | coinbase | bybit (default binance). Ignored when tradeId is set.")),

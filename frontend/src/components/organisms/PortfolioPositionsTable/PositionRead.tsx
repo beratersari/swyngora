@@ -1,4 +1,8 @@
-import { PositionSituation, isCashEquity } from '@/components/molecules/PositionSituation';
+import {
+  PositionSituation,
+  isCashEquity,
+  positionLotReads,
+} from '@/components/molecules/PositionSituation';
 import {
   useGetMarketSituationQuery,
   useGetPortfolioSituationChangeQuery,
@@ -8,7 +12,7 @@ import { POSITION_SITUATION_POLL_MS } from './constants';
 
 export function PositionRead({ row, portfolioId }: { row: SpotPosition; portfolioId?: string }) {
   const equity = isCashEquity(row.exchange);
-  const hasEntry = Boolean(row.entrySituation);
+  const hasEntry = Boolean(row.entrySituation) || (row.openReads?.length ?? 0) > 0;
   const change = useGetPortfolioSituationChangeQuery(
     { symbol: row.symbol ?? '', exchange: row.exchange, portfolioId },
     {
@@ -35,6 +39,7 @@ export function PositionRead({ row, portfolioId }: { row: SpotPosition; portfoli
   return (
     <PositionSituation
       entry={row.entrySituation}
+      lots={positionLotReads(row, change.data)}
       now={now}
       nowLoading={nowLoading}
       comparison={change.data?.liveOk ? change.data.comparison : undefined}

@@ -333,6 +333,13 @@ func TestView_EntrySituationFollowsTheNewestOpenBuy(t *testing.T) {
 	if view.Positions[0].EntryAt.IsZero() {
 		t.Fatal("entry time")
 	}
+	reads := view.Positions[0].OpenReads
+	if len(reads) != 2 || !reads[0].Newest || reads[0].Situation == nil || reads[0].Situation.PriceCVD.Kind != domain.SituationCVDPriceDown {
+		t.Fatalf("newest lot %+v", reads)
+	}
+	if reads[1].Newest || reads[1].Situation == nil || reads[1].Situation.PriceCVD.Kind != domain.SituationCVDPriceUp || reads[0].Quantity != 1 || reads[1].Quantity != 1 {
+		t.Fatalf("older lot %+v", reads)
+	}
 	if _, _, err := svc.PlaceOrder(ctx, OrderInput{
 		ClientID: "sit-open", Symbol: "BTCUSDT", Side: "sell", Quantity: 1, LotMethod: "lifo",
 	}); err != nil {
@@ -357,6 +364,70 @@ func TestView_EntrySituationFollowsTheNewestOpenBuy(t *testing.T) {
 	}
 	if len(view.Positions) != 1 || view.Positions[0].EntrySituation != nil || !view.Positions[0].EntryAt.IsZero() {
 		t.Fatalf("blank newest buy %+v at %v", view.Positions[0].EntrySituation, view.Positions[0].EntryAt)
+	}
+	reads = view.Positions[0].OpenReads
+	if len(reads) != 2 || reads[0].Situation != nil || !reads[0].Newest {
+		t.Fatalf("blank newest lot %+v", reads)
+	}
+	if reads[1].Situation == nil || reads[1].Situation.PriceCVD.Kind != domain.SituationCVDPriceUp {
+		t.Fatalf("older lot stayed %+v", reads[1])
+	}
+}
+
+func TestSituationChange_ListsEveryRemainingBuy(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100", "nasdaq|AAPL": "100"}}
+	svc := newSvc(t, px)
+	src := &fakeSituation{got: &domain.CoinSituation{
+		Symbol:   "BTCUSDT",
+		PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceUp},
+	}}
+	svc.SetSituationSource(src)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "sit-lots", StartingBalance: 100000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{
+		ClientID: "sit-lots", Symbol: "BTCUSDT", Side: "buy", Quantity: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	src.got = &domain.CoinSituation{
+		Symbol:   "BTCUSDT",
+		PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceDown},
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{
+		ClientID: "sit-lots", Symbol: "BTCUSDT", Side: "buy", Quantity: 0.4,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	src.got = &domain.CoinSituation{
+		Symbol:   "BTCUSDT",
+		PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDAgrees},
+	}
+	got, err := svc.SituationChange(ctx, "sit-lots", "binance", "BTCUSDT")
+	if err != nil || !got.LiveOK || got.Entry == nil || got.Entry.PriceCVD.Kind != domain.SituationCVDPriceDown {
+		t.Fatalf("entry %+v %v", got, err)
+	}
+	if len(got.OpenReads) != 2 || got.OpenReads[0].Quantity != 0.4 || !got.OpenReads[0].Newest {
+		t.Fatalf("lots %+v", got.OpenReads)
+	}
+	if got.OpenReads[0].Comparison == nil || got.OpenReads[0].Comparison.Same || got.OpenReads[0].Comparison.Clauses[0].Entry != domain.SituationCVDPriceDown {
+		t.Fatalf("newest cmp %+v", got.OpenReads[0].Comparison)
+	}
+	if got.OpenReads[1].Quantity != 1 || got.OpenReads[1].Comparison == nil || got.OpenReads[1].Comparison.Clauses[0].Entry != domain.SituationCVDPriceUp {
+		t.Fatalf("older cmp %+v", got.OpenReads[1])
+	}
+	if got.Comparison.Clauses[0].Entry != domain.SituationCVDPriceDown {
+		t.Fatalf("headline still newest %+v", got.Comparison)
+	}
+	src.err = errors.New("tape down")
+	quiet, err := svc.SituationChange(ctx, "sit-lots", "binance", "BTCUSDT")
+	if err != nil || quiet.LiveOK || len(quiet.OpenReads) != 2 || quiet.OpenReads[0].Comparison != nil || quiet.OpenReads[0].Situation == nil {
+		t.Fatalf("live failed %+v %v", quiet, err)
+	}
+	eq, err := svc.SituationChange(ctx, "sit-lots", "nasdaq", "AAPL")
+	if err != nil || eq.Entry != nil || len(eq.OpenReads) != 0 {
+		t.Fatalf("equity %+v %v", eq, err)
 	}
 }
 

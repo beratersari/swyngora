@@ -28,7 +28,7 @@ The coin page shows the same clauses in English and Turkish, above the tabs. Equ
 
 A market order stores this read when it fills. A limit, stop, bracket, or OCO keeps the placement read on the order and stores a new read on the fill. The trade, **Entered as**, and the situation alert use that fill read. A failed read at the fill stays blank and does not keep the placement read. The portfolio trade history shows the fill read beside the fill and says it is the market at the fill. Nasdaq and BIST orders do not call the futures read.
 
-An open crypto position shows two reads. **Entered as** is the read stored when the newest buy that still has remaining quantity filled. Selling that buy, lifo or fifo, moves the line to the newest buy that remains. A buy that stored no read leaves the line off, even when an older lot has one. **Now** is the live `GET /api/v1/market/situation` for that symbol. Between them, one line names the stored clauses whose kind changed, in the same sentences as the card. A clause the entry did not store stays quiet. A clause the live read left blank is named as missing, with the venue, and is not treated as a new opinion. When every stored clause still matches, the line says the entry read is still the live read. The same pair is on the coin Trade tab when the selected book holds the coin. An equity position stays on size and profit.
+An open crypto position shows the live read once, under **Now**. Every remaining buy is listed above it, newest first. Each line has the remaining size, the fill time, and the clauses stored on that buy. Under those clauses, the same sentences name which stored clauses the live read has left. A clause the buy did not store stays quiet. A clause the live read left blank is named as missing, with the venue, and is not treated as a new opinion. When every stored clause still matches, the line says the entry read is still the live read. A buy that stored no read shows its size and time and says so. **Entered as** is the newest buy. `entrySituation`, the top-level comparison, and a situation alert follow that buy. An older buy stays on the list when a newer buy stored nothing. Selling the newest buy, lifo or fifo, moves **Entered as** to the newest buy that remains. The same list is on the coin Trade tab when the selected book holds the coin. An equity position stays on size and profit. `GET /api/v1/portfolio` returns `openReads` without the live comparison. `GET /api/v1/portfolio/situation-change` adds that comparison when `liveOk` is true.
 
 The paper desk also adds those closed slices up. `GET /api/v1/portfolio/situation-record` groups them by the kind stored on the buy. Each row has the number of closes, how many of those had realized profit above zero, and the sum of that profit. A close with several stored clauses is counted once and appears on each of those rows, so the rows are not one total. A crypto close whose buy stored no read is `skipped`. An equity close is left out. An open position is not included. The same sentences are on the portfolio page, in English and Turkish. MCP `get_situation_record`. Python `get_situation_record`.
 
@@ -40,9 +40,11 @@ An alert of kind `situation` fires when the live read leaves the clauses stored 
 
 - `backend/internal/domain/situation.go` builds the read. `situation_held.go` stamps `since` on the live read and clears it on the copy stored with a fill. `situation_at.go` builds the same clauses at a candle close and leaves the estimated pocket off.
 - `backend/internal/service/market/situation.go` loads CVD, open interest, liquidation levels, and the 24-hour print sides. `situation_held.go` reads the stored minutes for the clocks. `situation_at.go` loads those stored minutes up to `at`. It does not subscribe to the live tape and does not write buckets.
+- `backend/internal/domain/situation_lots.go` lists every remaining buy, newest first. `backend/internal/service/portfolio/situation_left.go` compares each of those buys with the live read. The situation alert still uses the newest buy.
 - `backend/internal/service/portfolio/service.go` stores the placement read on a resting order and a new read on the fill. That stored copy has no `since`.
 - `backend/internal/domain/situation_record.go` groups closed slices by that stored read. `backend/internal/service/portfolio/situation_record.go` loads the book's sold lots.
 - `frontend/src/components/molecules/CoinSituation` renders the sentences.
+- `frontend/src/components/molecules/PositionSituation` lists every remaining buy, then the live read, on the portfolio position and the coin Trade tab.
 - `frontend/src/components/organisms/CoinCandleSituation` renders the stored read under a clicked candle.
 - `frontend/src/components/molecules/OutlierSituation` loads that read under an opened outlier row.
 - MCP `get_coin_situation` takes optional `at`. Python `get_coin_situation` does the same. MCP `get_situation_change` and `get_situation_record`. Python `get_situation_change` and `get_situation_record`.
@@ -51,12 +53,12 @@ An alert of kind `situation` fires when the live read leaves the clauses stored 
 
 ```bash
 cd backend
-go test ./internal/domain/ -run 'TestBuildCoinSituation|TestBuildSituationAt|TestSituationLeft|TestLatestOpenLot|TestMergeLiquidationPrintSides|TestHeldSince|TestStampSituationHeld|TestWithoutSituationHeld|TestBuildSituationRecord'
+go test ./internal/domain/ -run 'TestBuildCoinSituation|TestBuildSituationAt|TestSituationLeft|TestLatestOpenLot|TestOpenLotReads|TestWithOpenLotComparisons|TestMergeLiquidationPrintSides|TestHeldSince|TestStampSituationHeld|TestWithoutSituationHeld|TestBuildSituationRecord'
 go test ./internal/adapter/futuresstore/ -run 'TestSumAndBucketLiquidations'
 go test ./internal/service/market/ -run 'TestGetCoinSituation'
 go test ./internal/transport/http/handler/ -run 'TestGetCoinSituation'
 go test ./internal/transport/mcp/ -run 'TestAPIClient_GetCoinSituation|TestBackend_GetCoinSituation'
-go test ./internal/service/portfolio/ -run 'TestPlaceOrder_StoresCoinSituation|TestPlacePendingOrder_|TestPlaceOrder_Equity|TestView_EntrySituation|TestEntrySituation_|TestSituationChange_Names|TestSituationRecord_'
+go test ./internal/service/portfolio/ -run 'TestPlaceOrder_StoresCoinSituation|TestPlacePendingOrder_|TestPlaceOrder_Equity|TestView_EntrySituation|TestEntrySituation_|TestSituationChange_Names|TestSituationChange_ListsEvery|TestSituationRecord_'
 go test ./internal/service/pricealert/ -run 'TestChecker_Situation'
 
 cd frontend
@@ -65,8 +67,8 @@ npx vitest run src/components/molecules/CoinSituation/CoinSituation.test.tsx src
 
 `TestGetCoinSituation` also matches `TestGetCoinSituationAt`.
 
-Open `/markets/binance/BTCUSDT`. The situation card sits under the stats. Click a candle. The card under the chart reads the stored minutes at that candle's close and says the estimated pocket is not part of the read. Clear removes it. An equity chart does not show it. Place a paper limit buy below the market, then let it fill after the situation changes. Trade history and **Entered as** show the market at the fill, with the line "Market when this order filled." The placement read stays on the resting order and is not the position read.
+Open `/markets/binance/BTCUSDT`. The situation card sits under the stats. Click a candle. The card under the chart reads the stored minutes at that candle's close and says the estimated pocket is not part of the read. Clear removes it. An equity chart does not show it. Place a paper limit buy below the market, then let it fill after the situation changes. Trade history and **Entered as** show the market at the fill, with the line "Market when this order filled." The placement read stays on the resting order and is not the position read. Place a second paper buy. The Trade tab and the portfolio position list both buys, newest first, each with its size, fill time, and stored read. The situation alert still follows the newest buy.
 
 ## Limits
 
-The read uses the live combined tape. A venue that is still filling history leaves its clause blank. A resting order that fills later stores the market at the fill. Each partial fill stores its own read. The open position shows the newest remaining buy. A `since` time needs the stored minutes to reach a different kind. The estimated liquidation pocket has no clock. A past candle read uses only minutes already stored, leaves that pocket off, and does not run for equities.
+The read uses the live combined tape. A venue that is still filling history leaves its clause blank. A resting order that fills later stores the market at the fill. Each partial fill stores its own read. The open position lists every remaining buy. Entered as and the situation alert stay on the newest one. A `since` time needs the stored minutes to reach a different kind. The estimated liquidation pocket has no clock. A past candle read uses only minutes already stored, leaves that pocket off, and does not run for equities.

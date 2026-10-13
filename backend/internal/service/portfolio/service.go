@@ -413,10 +413,11 @@ func (s *Service) buildView(ctx context.Context, p *domain.Portfolio, role domai
 		mv := pos.Quantity * mark
 		u := domain.UnrealizedPnL(pos.Quantity, pos.AvgCost, mark)
 		lots := lotsByPair[string(pos.Exchange)+":"+pos.Symbol]
-		entry, entryAt, eerr := s.entrySituation(ctx, bookID, pos.Exchange, lots)
-		if eerr != nil {
-			return nil, eerr
+		reads, rerr := s.loadOpenLotReads(ctx, bookID, pos.Exchange, lots)
+		if rerr != nil {
+			return nil, rerr
 		}
+		entry, entryAt := domain.EntryFromOpenReads(reads)
 		views = append(views, domain.PositionView{
 			Exchange:          pos.Exchange,
 			Symbol:            pos.Symbol,
@@ -431,6 +432,7 @@ func (s *Service) buildView(ctx context.Context, p *domain.Portfolio, role domai
 			Lots:              lots,
 			EntrySituation:    entry,
 			EntryAt:           entryAt,
+			OpenReads:         reads,
 		})
 		posValue += mv
 		spotUnreal += u

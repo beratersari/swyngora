@@ -166,9 +166,9 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `revoke_portfolio_share` | Remove a share |
 | `list_portfolio_shares` | Outgoing shares (owner) |
 | `list_shared_portfolios` | Books shared with you |
-| `get_situation_change` | Which stored clauses changed. `symbol` compares the newest open buy with the live read. `tradeId` compares a sell with each buy it closed. A blank later clause is missing, not a new kind. `liveOk` false omits the comparison |
+| `get_situation_change` | Which stored clauses changed. `symbol` compares the newest open buy with the live read. `openReads` lists every remaining buy, newest first, with its size, fill time, stored read, and that buy's comparison when `liveOk` is true. A buy with no stored read keeps its size and time. The situation alert still follows the newest buy. `tradeId` compares a sell with each buy it closed. A blank later clause is missing, not a new kind. `liveOk` false omits the comparison |
 | `get_situation_record` | What this book's closed crypto lots made, by the read stored on the buy. Each row is one entry kind. The same close can appear on more than one row. `skipped` is a crypto close with no stored read. Equities and open positions are left out |
-| `get_portfolio` | Cash, positions, P&L snapshot. Crypto positions include `entrySituation` from the newest buy still held. The live read is `get_coin_situation`. What changed is `get_situation_change`. Optional `portfolioId`; required when the client has 2+ books |
+| `get_portfolio` | Cash, positions, P&L snapshot. Crypto positions include `entrySituation` from the newest buy still held and `openReads` for every remaining buy. The live read is `get_coin_situation`. What changed on each buy is `get_situation_change`. Optional `portfolioId`; required when the client has 2+ books |
 | `deposit_portfolio_cash` | Add virtual cash (not trading P&L) |
 | `transfer_portfolio_cash` | Move cash between your own books (owner only; pass `idempotencyKey` so retries do not double-move) |
 | `list_transfer_attempts` | Transfer request tries: completed, replayed, or conflict |

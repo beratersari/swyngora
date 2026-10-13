@@ -66,6 +66,17 @@ type positionDTO struct {
 	Lots              []taxLotDTO           `json:"lots,omitempty"`
 	EntrySituation    *domain.CoinSituation `json:"entrySituation,omitempty"`
 	EntryAt           string                `json:"entryAt,omitempty"`
+	OpenReads         []openLotReadDTO      `json:"openReads,omitempty"`
+}
+
+type openLotReadDTO struct {
+	ID            string                      `json:"id,omitempty"`
+	Quantity      float64                     `json:"quantity"`
+	OpenedAt      string                      `json:"openedAt,omitempty"`
+	SourceTradeID string                      `json:"sourceTradeId,omitempty"`
+	Situation     *domain.CoinSituation       `json:"situation,omitempty"`
+	Newest        bool                        `json:"newest,omitempty"`
+	Comparison    *domain.SituationComparison `json:"comparison,omitempty"`
 }
 
 type taxLotDTO struct {
@@ -123,6 +134,7 @@ func portfolioViewDTO(v *domain.PortfolioView) portfolioDTO {
 			AvgCost: p.AvgCost, MarkPrice: p.MarkPrice, MarketValue: p.MarketValue,
 			UnrealizedPnL: p.UnrealizedPnL, CostBasis: p.CostBasis,
 			Lots: taxLotsDTO(p.Lots), EntrySituation: p.EntrySituation,
+			OpenReads: openReadsDTO(p.OpenReads),
 		}
 		if !p.EntryAt.IsZero() {
 			row.EntryAt = p.EntryAt.UTC().Format(time.RFC3339Nano)
@@ -774,7 +786,43 @@ func (h *PortfolioHandler) SituationChange(w http.ResponseWriter, r *http.Reques
 		}
 		body["comparison"] = got.Comparison
 	}
+	if rows := openChangesDTO(got.OpenReads); len(rows) > 0 {
+		body["openReads"] = rows
+	}
 	writeJSON(w, http.StatusOK, body)
+}
+
+func openLotReadToDTO(r domain.OpenLotRead, cmp *domain.SituationComparison) openLotReadDTO {
+	d := openLotReadDTO{
+		ID: r.ID, Quantity: r.Quantity, SourceTradeID: r.SourceTradeID,
+		Situation: r.Situation, Newest: r.Newest, Comparison: cmp,
+	}
+	if !r.OpenedAt.IsZero() {
+		d.OpenedAt = r.OpenedAt.UTC().Format(time.RFC3339Nano)
+	}
+	return d
+}
+
+func openReadsDTO(reads []domain.OpenLotRead) []openLotReadDTO {
+	if len(reads) == 0 {
+		return nil
+	}
+	out := make([]openLotReadDTO, len(reads))
+	for i := range reads {
+		out[i] = openLotReadToDTO(reads[i], nil)
+	}
+	return out
+}
+
+func openChangesDTO(reads []domain.OpenLotChange) []openLotReadDTO {
+	if len(reads) == 0 {
+		return nil
+	}
+	out := make([]openLotReadDTO, len(reads))
+	for i := range reads {
+		out[i] = openLotReadToDTO(reads[i].OpenLotRead, reads[i].Comparison)
+	}
+	return out
 }
 
 const situationChangeNote = "A clause the entry did not store is omitted. A blank later clause is missing, not a new kind. Informational only — not financial advice."

@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { screen } from '@testing-library/react';
 import { i18n } from '@/libs/i18n';
 import { formatDateTime } from '@/libs/utils/formatMarket';
+import { formatPrice } from '@/libs/utils/formatPrice';
 import { renderWithProviders } from '@/test/render';
-import { isCashEquity, openPositionFor } from './helpers';
+import { isCashEquity, openPositionFor, positionLotReads } from './helpers';
 import { PositionSituation } from './PositionSituation';
 
 const entry = {
@@ -53,7 +54,9 @@ describe('PositionSituation', () => {
         now={now}
         comparison={{
           same: false,
-          clauses: [{ clause: 'priceCvd', status: 'changed', entry: 'price_up_cvd_down', live: 'agrees' }],
+          clauses: [
+            { clause: 'priceCvd', status: 'changed', entry: 'price_up_cvd_down', live: 'agrees' },
+          ],
         }}
       />,
     );
@@ -64,7 +67,9 @@ describe('PositionSituation', () => {
     ).toBeInTheDocument();
     await i18n.changeLanguage('tr');
     expect(
-      screen.getByText('Önce: Fiyat yükselirken vadeli CVD düşüyor. Şimdi: Fiyat ile vadeli CVD aynı yönde.'),
+      screen.getByText(
+        'Önce: Fiyat yükselirken vadeli CVD düşüyor. Şimdi: Fiyat ile vadeli CVD aynı yönde.',
+      ),
     ).toBeInTheDocument();
     await i18n.changeLanguage('en');
   });
@@ -84,12 +89,16 @@ describe('PositionSituation', () => {
         }}
         comparison={{
           same: false,
-          clauses: [{ clause: 'funding', status: 'missing', entry: 'long', missing: ['binance', 'okx'] }],
+          clauses: [
+            { clause: 'funding', status: 'missing', entry: 'long', missing: ['binance', 'okx'] },
+          ],
         }}
       />,
     );
     expect(
-      screen.getAllByText('Funding stays blank until Binance and OKX have a rate and open interest.'),
+      screen.getAllByText(
+        'Funding stays blank until Binance and OKX have a rate and open interest.',
+      ),
     ).toHaveLength(2);
     expect(screen.queryByText(/Was:/)).not.toBeInTheDocument();
   });
@@ -104,12 +113,16 @@ describe('PositionSituation', () => {
         now={{ symbol: 'BTCUSDT', priceCvd: { kind: 'agrees', since } }}
         comparison={{
           same: false,
-          clauses: [{ clause: 'priceCvd', status: 'changed', entry: 'price_up_cvd_down', live: 'agrees' }],
+          clauses: [
+            { clause: 'priceCvd', status: 'changed', entry: 'price_up_cvd_down', live: 'agrees' },
+          ],
         }}
       />,
     );
     expect(screen.getByText('Price is rising while futures CVD is falling.')).toBeInTheDocument();
-    expect(screen.getByText(`Price and futures CVD are moving together. Since ${time}.`)).toBeInTheDocument();
+    expect(
+      screen.getByText(`Price and futures CVD are moving together. Since ${time}.`),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(
         'Was: Price is rising while futures CVD is falling. Now: Price and futures CVD are moving together.',
@@ -118,9 +131,13 @@ describe('PositionSituation', () => {
     await i18n.changeLanguage('tr');
     const trTime = formatDateTime(since, 'tr');
     expect(screen.getByText('Fiyat yükselirken vadeli CVD düşüyor.')).toBeInTheDocument();
-    expect(screen.getByText(`Fiyat ile vadeli CVD aynı yönde. ${trTime} tarihinden beri.`)).toBeInTheDocument();
     expect(
-      screen.getByText('Önce: Fiyat yükselirken vadeli CVD düşüyor. Şimdi: Fiyat ile vadeli CVD aynı yönde.'),
+      screen.getByText(`Fiyat ile vadeli CVD aynı yönde. ${trTime} tarihinden beri.`),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Önce: Fiyat yükselirken vadeli CVD düşüyor. Şimdi: Fiyat ile vadeli CVD aynı yönde.',
+      ),
     ).toBeInTheDocument();
     await i18n.changeLanguage('en');
   });
@@ -130,6 +147,105 @@ describe('PositionSituation', () => {
       <PositionSituation entry={entry} now={entry} comparison={{ same: true, clauses: [] }} />,
     );
     expect(screen.getByText('The read you entered on is still the live read.')).toBeInTheDocument();
+  });
+
+  it('lists every remaining buy with its size, time, and what the live read left', async () => {
+    await i18n.changeLanguage('en');
+    const newer = '2026-10-12T12:00:00Z';
+    const older = '2026-10-12T10:00:00Z';
+    renderWithProviders(
+      <PositionSituation
+        now={now}
+        lots={[
+          {
+            id: 'new',
+            quantity: 0.4,
+            openedAt: newer,
+            newest: true,
+            situation: { symbol: 'BTCUSDT', priceCvd: { kind: 'price_down_cvd_up' } },
+            comparison: {
+              same: false,
+              clauses: [
+                {
+                  clause: 'priceCvd',
+                  status: 'changed',
+                  entry: 'price_down_cvd_up',
+                  live: 'agrees',
+                },
+              ],
+            },
+          },
+          {
+            id: 'old',
+            quantity: 1,
+            openedAt: older,
+            situation: entry,
+            comparison: {
+              same: false,
+              clauses: [
+                {
+                  clause: 'priceCvd',
+                  status: 'changed',
+                  entry: 'price_up_cvd_down',
+                  live: 'agrees',
+                },
+              ],
+            },
+          },
+          {
+            id: 'blank',
+            quantity: 0.2,
+            openedAt: '2026-10-12T09:00:00Z',
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText('Entered as')).toBeInTheDocument();
+    expect(screen.getByText('The situation alert follows this buy.')).toBeInTheDocument();
+    expect(
+      screen.getByText(`${formatPrice(0.4)} remaining, filled ${formatDateTime(newer, 'en')}`),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Earlier buy')).toHaveLength(2);
+    expect(
+      screen.getByText(`${formatPrice(1)} remaining, filled ${formatDateTime(older, 'en')}`),
+    ).toBeInTheDocument();
+    expect(screen.getByText('This buy stored no read.')).toBeInTheDocument();
+    expect(screen.getByText('Price is falling while futures CVD is rising.')).toBeInTheDocument();
+    expect(screen.getByText('Price is rising while futures CVD is falling.')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Was: Price is falling while futures CVD is rising. Now: Price and futures CVD are moving together.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Now')).toBeInTheDocument();
+    await i18n.changeLanguage('tr');
+    expect(screen.getByText('Girişte')).toBeInTheDocument();
+    expect(screen.getByText('Durum uyarısı bu alımı izler.')).toBeInTheDocument();
+    expect(screen.getAllByText('Önceki alım')).toHaveLength(2);
+    expect(screen.getByText('Bu alım okuma saklamadı.')).toBeInTheDocument();
+    expect(
+      screen.getByText(`Kalan ${formatPrice(0.4)}, dolum ${formatDateTime(newer, 'tr')}`),
+    ).toBeInTheDocument();
+    await i18n.changeLanguage('en');
+  });
+});
+
+describe('positionLotReads', () => {
+  it('prefers the live comparisons and drops them when the live read failed', () => {
+    const stored = [{ id: 'old', quantity: 1, situation: entry }];
+    const live = [
+      { id: 'old', quantity: 1, situation: entry, comparison: { same: true, clauses: [] } },
+    ];
+    expect(positionLotReads({ openReads: stored }, { liveOk: true, openReads: live })).toEqual(
+      live,
+    );
+    expect(
+      positionLotReads({ openReads: stored }, { liveOk: false, openReads: live })?.[0].comparison,
+    ).toBeUndefined();
+    expect(positionLotReads({ openReads: stored }, undefined)).toEqual(stored);
+    expect(
+      positionLotReads({ openReads: [{ id: 'flat', quantity: 0 }] }, undefined),
+    ).toBeUndefined();
   });
 });
 
@@ -145,7 +261,9 @@ describe('openPositionFor', () => {
       'BTCUSDT',
     );
     expect(row?.quantity).toBe(1);
-    expect(openPositionFor([{ exchange: 'nasdaq', symbol: 'AAPL', quantity: 1 }], 'binance', 'AAPL')).toBeUndefined();
+    expect(
+      openPositionFor([{ exchange: 'nasdaq', symbol: 'AAPL', quantity: 1 }], 'binance', 'AAPL'),
+    ).toBeUndefined();
     expect(isCashEquity('nasdaq')).toBe(true);
     expect(isCashEquity('binance')).toBe(false);
   });

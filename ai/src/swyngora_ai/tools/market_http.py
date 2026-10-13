@@ -6747,7 +6747,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         StructuredTool.from_function(
             get_portfolio,
             name="get_portfolio",
-            description="Get paper portfolio cash, positions, realized/unrealized P&L. Each open crypto position includes entrySituation from the newest buy still held. The live read is get_coin_situation. Pass portfolio_id when the client has more than one book.",
+            description="Get paper portfolio cash, positions, realized/unrealized P&L. Each open crypto position includes entrySituation from the newest buy still held, and openReads for every remaining buy with its size, fill time, and stored read. Equities omit both. The live read is get_coin_situation. What changed on each buy is get_situation_change. Pass portfolio_id when the client has more than one book.",
             args_schema=PortfolioGetInput,
         ),
         StructuredTool.from_function(
@@ -6893,12 +6893,19 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Compare a stored coin situation with a later one. Pass symbol "
                 "for an open crypto position: entry is the read on the newest "
                 "buy still held, live is the current combined read, and "
-                "comparison names stored clauses whose kind changed. status "
-                "missing means the later read left that clause blank and names "
-                "the venue. A blank clause is not a new opinion. A clause the "
-                "entry did not store is omitted. same is true when every stored "
-                "clause still matches. liveOk false omits comparison. Pass "
-                "trade_id instead to compare a sell with each buy it closed."
+                "comparison names stored clauses whose kind changed. openReads "
+                "lists every remaining buy, newest first, with quantity, "
+                "openedAt, the situation stored on that fill, and that buy's "
+                "comparison when liveOk is true. A buy with no stored read "
+                "keeps its size and time and has no clauses. entry and the "
+                "top-level comparison stay on the newest buy. A situation "
+                "alert still follows that buy. status missing means the later "
+                "read left that clause blank and names the venue. A blank "
+                "clause is not a new opinion. A clause the entry did not store "
+                "is omitted. same is true when every stored clause still "
+                "matches. liveOk false omits comparison on the headline and on "
+                "each buy. Pass trade_id instead to compare a sell with each "
+                "buy it closed."
             ),
             args_schema=SituationChangeInput,
         ),
