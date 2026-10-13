@@ -4046,6 +4046,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portfolio/situation-leave": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether closes kept the entry kind or sold after it left
+         * @description Each row is one kind stored on a closed crypto buy. still is the sold
+         *     slices whose sell read kept that kind. left is the slices whose sell
+         *     read changed that kind or left that clause blank. A change in print
+         *     dollars with the same side stays in still. Each group has count,
+         *     profitable, realizedPnL, and closes, newest first. The same close can
+         *     appear on more than one row, so the rows are not one total. counted is
+         *     each comparable close once. skipped is a crypto close whose buy stored
+         *     no read. unreadable is a close whose buy stored a read and whose sell
+         *     stored none. Those stay out of both groups. Equities are left out.
+         *     Open positions are not included.
+         */
+        get: operations["getPortfolioSituationLeave"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portfolio/trades": {
         parameters: {
             query?: never;
@@ -9853,6 +9882,44 @@ export interface components {
             counted?: number;
             skipped?: number;
             rows?: components["schemas"]["SituationRecordRow"][];
+            note?: string;
+        };
+        /**
+         * @description One side of an entry kind. still keeps the closes whose sell read
+         *     matched. left keeps the closes whose sell read changed or went blank.
+         *     closes lists those slices, newest first. A zero count is a real empty group.
+         */
+        SituationLeaveBucket: {
+            count?: number;
+            /** @description Slices in count whose realized profit is above zero */
+            profitable?: number;
+            realizedPnL?: number;
+            closes?: components["schemas"]["SituationRecordClose"][];
+        };
+        /**
+         * @description One entry kind stored on the buy, split by the sell. The two groups
+         *     are not a share of a book total.
+         */
+        SituationLeaveRow: {
+            /** @enum {string} */
+            clause?: "priceCvd" | "openInterest" | "liquidation" | "prints" | "funding" | "crowd" | "size";
+            /** @description The kind token stored on the buy */
+            kind?: string;
+            still?: components["schemas"]["SituationLeaveBucket"];
+            left?: components["schemas"]["SituationLeaveBucket"];
+        };
+        /**
+         * @description Closed crypto lots split by whether the sell still said each kind stored
+         *     on the buy. counted is each comparable close once. skipped is a crypto
+         *     close whose buy stored no read. unreadable is a close whose buy stored
+         *     a read and whose sell stored none. A close with several clauses appears
+         *     once in counted and once on each of those rows.
+         */
+        SituationLeave: {
+            counted?: number;
+            skipped?: number;
+            unreadable?: number;
+            rows?: components["schemas"]["SituationLeaveRow"][];
             note?: string;
         };
         /** @description Short combined read. A missing clause lists the venues that did not cover it. */
@@ -16573,6 +16640,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SituationRecord"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getPortfolioSituationLeave: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                portfolioId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Closed crypto lots split by whether the sell still matched */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SituationLeave"];
                 };
             };
             400: components["responses"]["Error"];

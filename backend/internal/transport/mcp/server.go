@@ -179,6 +179,7 @@ type DataPort interface {
 	GetPortfolio(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetSituationChange(ctx context.Context, clientID, exchange, symbol, tradeID string) (json.RawMessage, error)
 	GetSituationRecord(ctx context.Context, clientID string) (json.RawMessage, error)
+	GetSituationLeave(ctx context.Context, clientID string) (json.RawMessage, error)
 	CreateAPIKey(ctx context.Context, clientID, name, permission string) (json.RawMessage, error)
 	ListAPIKeys(ctx context.Context, clientID string) (json.RawMessage, error)
 	RevokeAPIKey(ctx context.Context, clientID, id string) (json.RawMessage, error)
@@ -3195,6 +3196,23 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		}
 		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.GetSituationRecord(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_situation_leave",
+		mcp.WithDescription("Whether this paper book's closed crypto lots kept the kind stored on the buy or sold after it left. Each row is one entry kind. still is the closes whose sell read kept that kind. left is the closes whose sell read changed that kind or left it blank. A change in print dollars with the same side stays in still. Each group has count, how many were profitable, the sum of realized profit, and closes, newest first, with symbol, sell time, and that slice's realized profit. The same close can appear on more than one row, so the rows are not one total. counted is each comparable close once. skipped is a crypto close whose buy stored no read. unreadable is a close whose buy stored a read and whose sell stored none, and it stays out of both groups. Equities are left out. Open positions are not included. Not financial advice."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name; required if multiple portfolios exist")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		raw, err := api.GetSituationLeave(ctx, clientID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

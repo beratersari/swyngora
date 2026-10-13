@@ -2263,6 +2263,13 @@ func (c *APIClient) GetSituationRecord(ctx context.Context, clientID string) (js
 	return c.get(ctx, "/api/v1/portfolio/situation-record", q)
 }
 
+// GetSituationLeave loads this book's closes split by whether the sell still matched the buy.
+func (c *APIClient) GetSituationLeave(ctx context.Context, clientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/portfolio/situation-leave", q)
+}
+
 func (c *APIClient) GetPaperTradingCosts(ctx context.Context, exchange string) (json.RawMessage, error) {
 	q := url.Values{}
 	if strings.TrimSpace(exchange) != "" {

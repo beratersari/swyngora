@@ -840,6 +840,19 @@ func (h *PortfolioHandler) SituationRecord(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, got)
 }
 
+// SituationLeave handles GET /api/v1/portfolio/situation-leave.
+func (h *PortfolioHandler) SituationLeave(w http.ResponseWriter, r *http.Request) {
+	got, err := h.svc.SituationLeave(r.Context(), clientIDFrom(r), portfolioIDFrom(r), ownerClientIDFrom(r))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if got.Rows == nil {
+		got.Rows = []domain.SituationLeaveRow{}
+	}
+	writeJSON(w, http.StatusOK, got)
+}
+
 // ListTrades handles GET /api/v1/portfolio/trades
 func (h *PortfolioHandler) ListTrades(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()

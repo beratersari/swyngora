@@ -47,6 +47,24 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetPortfolioPerformanceQuery: () => ({ data: { points: [] }, isLoading: false, isError: false }),
     useListPortfolioOrdersQuery: () => ({ data: { orders: [] }, isLoading: false }),
     useListPortfolioTradesQuery: () => ({ data: { trades: [] }, isLoading: false }),
+    useGetPortfolioSituationLeaveQuery: () => ({
+      currentData: {
+        counted: 1,
+        skipped: 0,
+        unreadable: 0,
+        rows: [
+          {
+            clause: 'priceCvd',
+            kind: 'price_up_cvd_down',
+            still: { count: 1, profitable: 1, realizedPnL: 4, closes: [] },
+            left: { count: 0, profitable: 0, realizedPnL: 0, closes: [] },
+          },
+        ],
+      },
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+    }),
     useGetPortfolioSituationRecordQuery: () => ({
       currentData: {
         counted: 1,
@@ -96,6 +114,7 @@ describe('PortfolioPage', () => {
     renderWithProviders(<PortfolioPage />, { routerEntries: ['/portfolio'] });
     expect(await screen.findByRole('button', { name: /new book|yeni defter/i })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: /what your closes made|kapanışların ne getirdiği/i })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: /did leaving pay|ayrılınca ne oldu/i })).toBeInTheDocument();
     // Summary strip + market form (buy control is segmented or primary submit)
     expect(screen.getAllByText(/equity|özkaynak/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/spot order ticket|spot emir fişi|order ticket|emir fişi/i)).toBeInTheDocument();

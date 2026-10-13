@@ -223,6 +223,21 @@
       "size_flat": "Büyük ve küçük işlemler sakin"
     }
   },
+  "situationLeave": {
+    "title": "Ayrılınca ne oldu",
+    "lead": "Her satır, alışta kayıtlı bir türdür. Aynı kaldı, satıştaki okumanın o türü koruduğu kapanışlardır. Ayrıldı, türün değiştiği ya da satış okumasının o maddeyi boş bıraktığı kapanışlardır. Satışta kayıtlı okuma yoksa kapanış iki grubun da dışında kalır. Aynı kapanış birden fazla satırda görünebilir, bu yüzden satırlar tek bir toplam değildir. Açık pozisyonlar pozisyonlar sekmesinde kalır. Hisseler dışarıdadır.",
+    "empty": "Bu defterde karşılaştırılabilecek bir kripto kapanışı henüz yok.",
+    "loading": "Kapanan lotlar karşılaştırılıyor…",
+    "failed": "Ayrılma kaydı yüklenemedi.",
+    "still_one": "Aynı kaldı: 1 kapanış, {{profitable}} kârlı, {{pnl}}.",
+    "still_other": "Aynı kaldı: {{count}} kapanış, {{profitable}} kârlı, {{pnl}}.",
+    "left_one": "Ayrıldı: 1 kapanış, {{profitable}} kârlı, {{pnl}}.",
+    "left_other": "Ayrıldı: {{count}} kapanış, {{profitable}} kârlı, {{pnl}}.",
+    "skipped_one": "1 kripto kapanışının alışında kayıtlı bir okuma yoktu ve dışarıda bırakıldı.",
+    "skipped_other": "{{count}} kripto kapanışının alışında kayıtlı bir okuma yoktu ve dışarıda bırakıldı.",
+    "unreadable_one": "1 kripto kapanışında alış okuması vardı, satış okuması yoktu ve iki grubun dışında bırakıldı.",
+    "unreadable_other": "{{count}} kripto kapanışında alış okuması vardı, satış okuması yoktu ve iki grubun dışında bırakıldı."
+  },
   "trades": {
     "title": "İşlem geçmişi",
     "empty": "Henüz işlem yok",

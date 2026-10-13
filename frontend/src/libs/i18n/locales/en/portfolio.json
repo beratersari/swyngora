@@ -223,6 +223,21 @@
       "size_flat": "Large and smaller prints quiet"
     }
   },
+  "situationLeave": {
+    "title": "Did leaving pay",
+    "lead": "Each row is one kind stored on the buy. Still the same means the sell's read kept that kind. After it left means the kind changed, or the sell's read left that clause blank. A sell with no stored read stays out of both. The same close can appear on more than one row, so these rows are not one total. Open positions stay on the positions tab. Equities are left out.",
+    "empty": "No crypto close in this book can be compared yet.",
+    "loading": "Comparing closed lots…",
+    "failed": "The leave record did not load.",
+    "still_one": "Still the same: 1 close, {{profitable}} profitable, {{pnl}}.",
+    "still_other": "Still the same: {{count}} closes, {{profitable}} profitable, {{pnl}}.",
+    "left_one": "After it left: 1 close, {{profitable}} profitable, {{pnl}}.",
+    "left_other": "After it left: {{count}} closes, {{profitable}} profitable, {{pnl}}.",
+    "skipped_one": "1 crypto close had no stored read on the buy and is left out.",
+    "skipped_other": "{{count}} crypto closes had no stored read on the buy and are left out.",
+    "unreadable_one": "1 crypto close had a stored buy read and no sell read, so it stays out of both groups.",
+    "unreadable_other": "{{count}} crypto closes had a stored buy read and no sell read, so they stay out of both groups."
+  },
   "trades": {
     "title": "Trade history",
     "empty": "No trades yet",

@@ -46,11 +46,11 @@ func marshalSituation(s *domain.CoinSituation) string {
 	return string(raw)
 }
 
-// ListSituationCloses returns every sold slice in the book with the buy's stored read.
-// A lot whose source trade is missing has a nil situation.
+// ListSituationCloses returns every sold slice in the book with the buy's stored read
+// and the sell's stored read. A missing trade has a nil situation.
 func (s *SQLite) ListSituationCloses(ctx context.Context, clientID string) ([]domain.SituationClose, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT l.exchange, l.symbol, f.realized_pnl, COALESCE(sell.created_at, ''), COALESCE(t.situation_json, '')
+		SELECT l.exchange, l.symbol, f.realized_pnl, COALESCE(sell.created_at, ''), COALESCE(t.situation_json, ''), COALESCE(sell.situation_json, '')
 		FROM tax_lot_fills f
 		JOIN tax_lots l ON l.id = f.lot_id
 		LEFT JOIN trades sell ON sell.client_id = l.client_id AND sell.id = f.trade_id
@@ -63,9 +63,9 @@ func (s *SQLite) ListSituationCloses(ctx context.Context, clientID string) ([]do
 	defer rows.Close()
 	out := make([]domain.SituationClose, 0)
 	for rows.Next() {
-		var ex, symbol, closedAt, situation string
+		var ex, symbol, closedAt, situation, exitSituation string
 		var pnl float64
-		if err := rows.Scan(&ex, &symbol, &pnl, &closedAt, &situation); err != nil {
+		if err := rows.Scan(&ex, &symbol, &pnl, &closedAt, &situation, &exitSituation); err != nil {
 			return nil, err
 		}
 		out = append(out, domain.SituationClose{
@@ -74,6 +74,7 @@ func (s *SQLite) ListSituationCloses(ctx context.Context, clientID string) ([]do
 			ClosedAt:    parseTime(closedAt),
 			RealizedPnL: pnl,
 			Situation:   unmarshalSituation(situation),
+			Exit:        unmarshalSituation(exitSituation),
 		})
 	}
 	return out, rows.Err()

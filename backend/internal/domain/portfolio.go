@@ -404,6 +404,7 @@ type PortfolioPort interface {
 	ListTradesByIDs(ctx context.Context, clientID string, ids []string) ([]Trade, error)
 	// ListSituationCloses returns every sold lot slice in this book.
 	// Situation is the read stored on the buy that opened the lot, or nil when that buy stored none.
+	// Exit is the read stored on the sell, or nil when that sell stored none.
 	// Symbol is the lot's pair. ClosedAt is the sell fill time.
 	ListSituationCloses(ctx context.Context, clientID string) ([]SituationClose, error)
 	InsertTaxLot(ctx context.Context, lot TaxLot) error

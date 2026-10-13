@@ -13,6 +13,7 @@ import { PortfolioRiskLimits } from '@/components/organisms/PortfolioRiskLimits'
 import { PortfolioMarginPositionsTable } from '@/components/organisms/PortfolioMarginPositionsTable';
 import { PortfolioOrdersTable } from '@/components/organisms/PortfolioOrdersTable';
 import { PortfolioPositionsTable } from '@/components/organisms/PortfolioPositionsTable';
+import { PortfolioSituationLeave } from '@/components/organisms/PortfolioSituationLeave';
 import { PortfolioSituationRecord } from '@/components/organisms/PortfolioSituationRecord';
 import { PortfolioSummaryStrip } from '@/components/organisms/PortfolioSummaryStrip';
 import { PortfolioStressPanel } from '@/components/organisms/PortfolioStressPanel';
@@ -29,6 +30,7 @@ import {
   useListTransferAttemptsQuery,
   useGetPortfolioPerformanceQuery,
   useGetPortfolioQuery,
+  useGetPortfolioSituationLeaveQuery,
   useGetPortfolioSituationRecordQuery,
   useListMarginPositionsQuery,
   useListPortfolioCashMovementsQuery,
@@ -115,6 +117,10 @@ export function PortfolioPage() {
     { skip: !bookId && books.length !== 1, pollingInterval: visible ? 10_000 : 0, refetchOnFocus: true },
   );
   const recordQuery = useGetPortfolioSituationRecordQuery(
+    { portfolioId: bookId },
+    { skip: !bookId && books.length !== 1, refetchOnFocus: true },
+  );
+  const leaveQuery = useGetPortfolioSituationLeaveQuery(
     { portfolioId: bookId },
     { skip: !bookId && books.length !== 1, refetchOnFocus: true },
   );
@@ -483,6 +489,18 @@ export function PortfolioPage() {
                   record={rtkCurrent(recordQuery)}
                   loading={rtkCurrentPending(recordQuery)}
                   failed={recordQuery.isError}
+                />
+              </PanelCard>
+            </Section>
+          ) : null}
+
+          {bookId || books.length === 1 ? (
+            <Section>
+              <PanelCard>
+                <PortfolioSituationLeave
+                  record={rtkCurrent(leaveQuery)}
+                  loading={rtkCurrentPending(leaveQuery)}
+                  failed={leaveQuery.isError}
                 />
               </PanelCard>
             </Section>

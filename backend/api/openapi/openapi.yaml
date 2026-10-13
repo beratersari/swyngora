@@ -7036,6 +7036,43 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /api/v1/portfolio/situation-leave:
+    get:
+      summary: Whether closes kept the entry kind or sold after it left
+      description: |
+        Each row is one kind stored on a closed crypto buy. still is the sold
+        slices whose sell read kept that kind. left is the slices whose sell
+        read changed that kind or left that clause blank. A change in print
+        dollars with the same side stays in still. Each group has count,
+        profitable, realizedPnL, and closes, newest first. The same close can
+        appear on more than one row, so the rows are not one total. counted is
+        each comparable close once. skipped is a crypto close whose buy stored
+        no read. unreadable is a close whose buy stored a read and whose sell
+        stored none. Those stay out of both groups. Equities are left out.
+        Open positions are not included.
+      operationId: getPortfolioSituationLeave
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: portfolioId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Closed crypto lots split by whether the sell still matched
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SituationLeave'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /api/v1/portfolio/trades:
     get:
       summary: List paper trade history
@@ -14159,6 +14196,49 @@ components:
         rows:
           type: array
           items: { $ref: '#/components/schemas/SituationRecordRow' }
+        note: { type: string }
+    SituationLeaveBucket:
+      type: object
+      description: |
+        One side of an entry kind. still keeps the closes whose sell read
+        matched. left keeps the closes whose sell read changed or went blank.
+        closes lists those slices, newest first. A zero count is a real empty group.
+      properties:
+        count: { type: integer }
+        profitable: { type: integer, description: Slices in count whose realized profit is above zero }
+        realizedPnL: { type: number }
+        closes:
+          type: array
+          items: { $ref: '#/components/schemas/SituationRecordClose' }
+    SituationLeaveRow:
+      type: object
+      description: |
+        One entry kind stored on the buy, split by the sell. The two groups
+        are not a share of a book total.
+      properties:
+        clause:
+          type: string
+          enum: [priceCvd, openInterest, liquidation, prints, funding, crowd, size]
+        kind: { type: string, description: The kind token stored on the buy }
+        still:
+          $ref: '#/components/schemas/SituationLeaveBucket'
+        left:
+          $ref: '#/components/schemas/SituationLeaveBucket'
+    SituationLeave:
+      type: object
+      description: |
+        Closed crypto lots split by whether the sell still said each kind stored
+        on the buy. counted is each comparable close once. skipped is a crypto
+        close whose buy stored no read. unreadable is a close whose buy stored
+        a read and whose sell stored none. A close with several clauses appears
+        once in counted and once on each of those rows.
+      properties:
+        counted: { type: integer }
+        skipped: { type: integer }
+        unreadable: { type: integer }
+        rows:
+          type: array
+          items: { $ref: '#/components/schemas/SituationLeaveRow' }
         note: { type: string }
     CoinSituation:
       type: object

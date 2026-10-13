@@ -1259,6 +1259,11 @@ class SituationRecordInput(BaseModel):
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
+class SituationLeaveInput(BaseModel):
+    client_id: str
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+
+
 class SituationChangeInput(BaseModel):
     client_id: str
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
@@ -4350,6 +4355,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             q["portfolioId"] = portfolio_id
         return http.get("/api/v1/portfolio/situation-record", q)
 
+    def get_situation_leave(client_id: str, portfolio_id: str = "") -> str:
+        q: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.get("/api/v1/portfolio/situation-leave", q)
+
     def create_recurring_buy(
         client_id: str,
         symbol: str,
@@ -6933,6 +6944,26 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Open positions are not included."
             ),
             args_schema=SituationRecordInput,
+        ),
+        StructuredTool.from_function(
+            get_situation_leave,
+            name="get_situation_leave",
+            description=(
+                "Whether this paper book's closed crypto lots kept the kind "
+                "stored on the buy or sold after it left. Each row is one "
+                "entry kind. still is the closes whose sell read kept that "
+                "kind. left is the closes whose sell read changed that kind "
+                "or left it blank. A change in print dollars with the same "
+                "side stays in still. Each group has count, how many were "
+                "profitable, the sum of realized profit, and closes, newest "
+                "first. The same close can appear on more than one row, so "
+                "the rows are not one total. counted is each comparable close "
+                "once. skipped is a crypto close whose buy stored no read. "
+                "unreadable is a close whose buy stored a read and whose sell "
+                "stored none, and it stays out of both groups. Equities are "
+                "left out. Open positions are not included."
+            ),
+            args_schema=SituationLeaveInput,
         ),
         StructuredTool.from_function(
             list_portfolio_lots,

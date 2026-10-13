@@ -36,6 +36,12 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetPortfolioPerformanceQuery: () => ({ data: { points: [] }, isLoading: false, isError: false }),
     useListPortfolioOrdersQuery: () => ({ data: { orders: [] }, isLoading: false }),
     useListPortfolioTradesQuery: () => ({ data: { trades: [] }, isLoading: false }),
+    useGetPortfolioSituationLeaveQuery: () => ({
+      currentData: undefined,
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+    }),
     useGetPortfolioSituationRecordQuery: () => ({
       currentData: undefined,
       isLoading: false,

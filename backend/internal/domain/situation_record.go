@@ -12,14 +12,17 @@ import (
 // The same close can appear under several clauses, so the row sums are not one total.
 const SituationRecordNote = "Each close is counted once inside a clause. The same close can appear under several clauses, so the rows are not a single total. Each row lists the closes that stored that kind, newest first, with symbol, time, and realized profit. A crypto buy with no stored read is skipped. Equities are left out. Open positions are not included. A profitable close has realized profit above zero. Informational only — not financial advice."
 
-// SituationClose is one sold slice of a lot, with the read stored on the buy that opened it.
-// Situation is nil when that buy stored no read. ClosedAt is the sell fill time.
+// SituationClose is one sold slice of a lot.
+// Situation is the read stored on the buy that opened it, or nil when that buy stored none.
+// Exit is the read stored on the sell, or nil when that sell stored none.
+// ClosedAt is the sell fill time.
 type SituationClose struct {
 	Exchange    Exchange
 	Symbol      string
 	ClosedAt    time.Time
 	RealizedPnL float64
 	Situation   *CoinSituation
+	Exit        *CoinSituation
 }
 
 // SituationRecordClose is one sold slice named on a record row.
