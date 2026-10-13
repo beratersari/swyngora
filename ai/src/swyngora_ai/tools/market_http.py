@@ -6773,7 +6773,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         StructuredTool.from_function(
             get_portfolio_performance,
             name="get_portfolio_performance",
-            description="Paper portfolio equity history for 1d/1w/1m/3m plus P&L amount and percent from the start of that window.",
+            description="Paper portfolio equity history for 1d/1w/1m/3m plus trading P&L amount and percent. Deposits, withdrawals, and transfers are netFlow, not profit or loss. maxDrawdown ignores that cash.",
             args_schema=PortfolioPerformanceInput,
         ),
         StructuredTool.from_function(
@@ -6809,13 +6809,13 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         StructuredTool.from_function(
             get_portfolio_risk_limits,
             name="get_portfolio_risk_limits",
-            description="Get optional paper risk limits and live daily-loss / concentration status.",
+            description="Get optional paper risk limits and live daily trading-loss / concentration status. Deposits and withdrawals are not daily profit or loss.",
             args_schema=PortfolioGetInput,
         ),
         StructuredTool.from_function(
             set_portfolio_risk_limits,
             name="set_portfolio_risk_limits",
-            description="Set optional risk limits (daily loss %, max one-coin weight %, and/or max total exposure %). Does not close positions.",
+            description="Set optional risk limits (daily trading loss %, max one-coin weight %, and/or max total exposure %). Deposits and withdrawals are not part of the daily loss. Does not close positions.",
             args_schema=RiskLimitsSetInput,
         ),
         StructuredTool.from_function(

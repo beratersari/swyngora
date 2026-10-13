@@ -19,9 +19,11 @@ import {
   formatEquityCrosshairTime,
   formatEquityTickMark,
   drawdownLine,
+  periodChangeLine,
+  performanceTone,
   toEquityLineData,
 } from './PortfolioEquityChart.helpers';
-import { ChartBox, ChartShell, ChartToolbar } from './PortfolioEquityChart.styles';
+import { ChartBox, ChartShell, ChartTitleBlock, ChartToolbar } from './PortfolioEquityChart.styles';
 import type { PortfolioEquityChartProps } from './PortfolioEquityChart.types';
 
 const PERIODS: PortfolioPerformancePeriod[] = ['1d', '1w', '1m', '3m'];
@@ -39,6 +41,9 @@ export function PortfolioEquityChart({
   maxDrawdownPct,
   drawdownFrom,
   drawdownTo,
+  changeAmount,
+  changePct,
+  currency,
   period,
   onPeriodChange,
   isLoading,
@@ -62,6 +67,10 @@ export function PortfolioEquityChart({
   const dropLine = useMemo(
     () => drawdownLine({ maxDrawdown, maxDrawdownPct, drawdownFrom, drawdownTo }, i18n.language),
     [maxDrawdown, maxDrawdownPct, drawdownFrom, drawdownTo, i18n.language],
+  );
+  const changeLine = useMemo(
+    () => periodChangeLine(changeAmount, changePct, currency),
+    [changeAmount, changePct, currency],
   );
   const ready = lineData.length > 0;
 
@@ -174,9 +183,16 @@ export function PortfolioEquityChart({
   return (
     <ChartShell>
       <ChartToolbar>
-        <Text variant="h4" color="primary">
-          {t('equityChart.title')}
-        </Text>
+        <ChartTitleBlock>
+          <Text variant="h4" color="primary">
+            {t('equityChart.title')}
+          </Text>
+          {changeLine ? (
+            <Text variant="caption" color={performanceTone(changeAmount)} mono>
+              {t('equityChart.change', { line: changeLine })}
+            </Text>
+          ) : null}
+        </ChartTitleBlock>
         <Segmented
           size="small"
           value={period}
@@ -184,6 +200,9 @@ export function PortfolioEquityChart({
           onChange={(v) => onPeriodChange(v as PortfolioPerformancePeriod)}
         />
       </ChartToolbar>
+      <Text variant="caption" color="secondary">
+        {t('equityChart.hint')}
+      </Text>
       {dropLine ? (
         <Text variant="caption" color="secondary">
           {t('equityChart.drawdown', { line: dropLine })}

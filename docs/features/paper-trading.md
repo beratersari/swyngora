@@ -6,7 +6,7 @@ Simulated portfolios with starting cash, market buy/sell at last price, **pendin
 
 ### Product web UI
 
-The React app exposes paper trading at **`/portfolio`** (`PortfolioPage`): multi-book select/create, cash deposit/withdraw, market orders, positions, open pending orders (cancel), trade history, cash ledger, and equity performance chart. Coin detail (`/markets/:exchange/:symbol`) includes a **Paper trade** panel that places market orders against the selected book. A crypto market order stores the coin situation when it fills. A resting order keeps the placement read on the order and stores a new read on the fill. Trade history shows that fill read and says it is the market at the fill. An open crypto position lists every remaining buy with its size, fill time, and stored read, and names which of those clauses the live read has left. Entered as and the situation alert stay on the newest buy. On `/alerts`, that alert names its last fire, and says when the newest buy stored no read or no open buy is left. The live situation sits under that list. The live Now line also says how long a clause has held when the archive reaches a different kind. The stored entry does not. A sell names the same difference against each buy it closed. Above the tabs, the desk groups closed crypto lots by the kind stored on the buy: how many closes, how many were profitable, and the sum of realized profit. The same close can appear on more than one row. A crypto buy with no stored read is counted as skipped. Under that record, each entry kind splits into the closes that sold while the sell read still matched and the closes that sold after it left. A sell with no stored read stays out of both groups. Nasdaq and BIST orders skip the read and stay out of both records. See [`coin-situation.md`](coin-situation.md). With **more than one book**, snapshot queries skip and trade/cash/margin submits stay disabled until a book is selected (the API returns 400 without `portfolioId`). Realtime portfolio WS updates are subscribed when a book is selected.
+The React app exposes paper trading at **`/portfolio`** (`PortfolioPage`): multi-book select/create, cash deposit/withdraw, market orders, positions, open pending orders (cancel), trade history, cash ledger, and a performance chart. Cash you add or remove is not part of that line. Coin detail (`/markets/:exchange/:symbol`) includes a **Paper trade** panel that places market orders against the selected book. A crypto market order stores the coin situation when it fills. A resting order keeps the placement read on the order and stores a new read on the fill. Trade history shows that fill read and says it is the market at the fill. An open crypto position lists every remaining buy with its size, fill time, and stored read, and names which of those clauses the live read has left. Entered as and the situation alert stay on the newest buy. On `/alerts`, that alert names its last fire, and says when the newest buy stored no read or no open buy is left. The live situation sits under that list. The live Now line also says how long a clause has held when the archive reaches a different kind. The stored entry does not. A sell names the same difference against each buy it closed. Above the tabs, the desk groups closed crypto lots by the kind stored on the buy: how many closes, how many were profitable, and the sum of realized profit. The same close can appear on more than one row. A crypto buy with no stored read is counted as skipped. Under that record, each entry kind splits into the closes that sold while the sell read still matched and the closes that sold after it left. A sell with no stored read stays out of both groups. Nasdaq and BIST orders skip the read and stay out of both records. See [`coin-situation.md`](coin-situation.md). With **more than one book**, snapshot queries skip and trade/cash/margin submits stay disabled until a book is selected (the API returns 400 without `portfolioId`). Realtime portfolio WS updates are subscribed when a book is selected.
 
 Spot, pending, margin, and recurring-buy symbols must use the **same quote asset as the portfolio currency** (default `USDT`). `ETHBTC` on a USDT book is rejected. When a live mark cannot be fetched, margin positions are **not** marked at entry (liquidation is skipped until a real last price exists).
 
@@ -132,19 +132,22 @@ MCP: `deposit_portfolio_cash`, `withdraw_portfolio_cash`, `transfer_portfolio_ca
 
 ### Performance history
 
-`GET /api/v1/portfolio/performance?period=1w` returns how total equity moved over the lookback, for a chart and for “since start of window” P&L.
+`GET /api/v1/portfolio/performance?period=1w` returns account equity over the lookback, plus trading P&L since the start of that window. Deposits, withdrawals, and transfers between your books are external cash. They move equity and they are not profit or loss. The opening balance is the starting capital, not a later deposit.
 
 | Field | Meaning |
 |-------|---------|
 | `period` | `1d` (24h), `1w` (7d, default), `1m` (30d), `3m` (90d) |
-| `startEquity` / `endEquity` | Mark-to-market equity at window start (carry-forward last sample) and now |
-| `changeAmount` | `endEquity - startEquity` (portfolio currency; equity jumps if you deposit/withdraw) |
-| `changePct` | Percent vs `startEquity`; `null` if start is ~0 |
-| `maxDrawdown` | Largest peak-to-trough drop in the window (portfolio currency, 0 when equity never fell) |
-| `maxDrawdownPct` | That drop as a percent of the peak; `null` when the peak is ~0 |
-| `drawdownFrom` / `drawdownTo` | When the peak was printed and when equity reached the trough |
+| `startEquity` / `endEquity` | Mark-to-market account equity at the baseline and now. A deposit still raises `endEquity` |
+| `netFlow` | External cash added during the window (deposits + transfers in − withdrawals − transfers out) |
+| `changeAmount` | Trading P&L: `(endEquity − startEquity) − netFlow` |
+| `changePct` | Modified Dietz percent of that trading P&L. Cash added or removed counts in the base only for the share of the window it was in the book. `null` when that base is ~0 or negative |
+| `maxDrawdown` | Largest peak-to-trough drop of the performance line (account equity with external cash removed). A withdrawal is not a drawdown. 0 when that line never fell |
+| `maxDrawdownPct` | That drop as a percent of the performance peak; `null` when the peak is ~0 |
+| `drawdownFrom` / `drawdownTo` | When the performance peak was printed and when the line reached the trough |
 | `partial` | Portfolio created after the requested window start |
-| `points[]` | `{ t, equity, cashBalance, positionsValue, marginEquity }` time series (includes live last point) |
+| `points[]` | `{ t, equity, cashBalance, positionsValue, marginEquity, externalFlow }`. `equity` is account value. The performance level is `equity − externalFlow` |
+
+The portfolio chart plots `equity − externalFlow` and shows `changeAmount`. Account equity on the summary strip still includes cash you added.
 
 **How it is stored:** a background `SnapshotWorker` writes one SQLite row per client per 15-minute UTC bucket (`PORTFOLIO_SNAPSHOT_INTERVAL`, default `15m`). Creating a portfolio records the starting equity immediately. Samples older than `PORTFOLIO_SNAPSHOT_RETENTION` (default 100 days) are pruned. History only exists while the server is running — gaps stay as missing buckets; the API still carry-forwards the last known equity.
 

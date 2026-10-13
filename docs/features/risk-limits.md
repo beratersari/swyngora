@@ -8,7 +8,7 @@ Emotional trading — especially leveraged margin — can blow up an account. Us
 
 | Rule | Default | When it fires | What is blocked | What is never touched |
 |------|---------|---------------|-----------------|------------------------|
-| `maxDailyLossPct` | off | Today’s MTM P&L ≤ −cap vs **UTC day baseline** (first `GET`/`PUT`/`guard` of that `YYYY-MM-DD`, not a midnight snapshot) | New spot **buys**, new pending **limit_buy** / **bracket** entries, new **margin long/short** (market or limit). Resting `limit_buy` fills are **not** re-checked. | Sells, stops, OCO exits, closes, cancels, existing size |
+| `maxDailyLossPct` | off | Today’s trading P&L ≤ −cap vs **UTC day baseline** (first `GET`/`PUT`/`guard` of that `YYYY-MM-DD`, not a midnight snapshot). Deposits, withdrawals, and transfers are not part of that P&L | New spot **buys**, new pending **limit_buy** / **bracket** entries, new **margin long/short** (market or limit). Resting `limit_buy` fills are **not** re-checked. | Sells, stops, OCO exits, closes, cancels, existing size |
 | `maxAssetWeightPct` | off | A new buy/open would make that coin **> cap** of current equity (spot value + open margin notional) | New buys/opens **of that coin only** | Other coins, sells, existing overweight (drift is allowed) |
 | `maxExposurePct` | off | A new buy/open would make **all coins together** more than the cap as a percent of equity (spot value + open margin notional). Above 100 allows margin gross, up to 1000 | Any new spot buy or margin open | Sells, closes, existing size that already drifted over the cap |
 

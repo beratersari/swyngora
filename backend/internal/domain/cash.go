@@ -117,6 +117,23 @@ func PortfolioTotalPnL(equity, startingBalance, netDeposits float64) float64 {
 	return equity - ContributedCapital(startingBalance, netDeposits)
 }
 
+// TradingPnLChange is how much trading P&L moved between two marks.
+// Starting balance cancels. Net deposits at each mark are external cash, so a
+// deposit or withdrawal between the marks is not profit or loss.
+func TradingPnLChange(startEquity, endEquity, startNet, endNet float64) float64 {
+	return (endEquity - startEquity) - (endNet - startNet)
+}
+
+// EquityExcludingFlows is equity with external cash since a baseline removed.
+// baselineKnown false means that baseline did not record its net deposits, so
+// equity is returned unchanged.
+func EquityExcludingFlows(equity, baselineNet, currentNet float64, baselineKnown bool) float64 {
+	if !baselineKnown {
+		return equity
+	}
+	return equity - (currentNet - baselineNet)
+}
+
 // ValidateCashMovementAmount checks a deposit/withdraw size.
 func ValidateCashMovementAmount(amount float64) error {
 	if math.IsNaN(amount) || math.IsInf(amount, 0) || amount < MinCashMovement || amount > MaxCashMovement {

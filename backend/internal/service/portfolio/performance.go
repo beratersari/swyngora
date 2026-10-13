@@ -39,6 +39,14 @@ func (s *Service) GetPerformance(ctx context.Context, clientID, periodRaw string
 	if err != nil {
 		return nil, err
 	}
+	moves, err := s.store.ListCashMovementsChronological(ctx, bookID)
+	if err != nil {
+		return nil, err
+	}
+	flows := make([]domain.ExternalFlow, 0, len(moves))
+	for _, m := range moves {
+		flows = append(flows, domain.ExternalFlow{At: m.CreatedAt, NetAfter: m.NetDepositsAfter})
+	}
 	live := domain.EquityPoint{
 		Time:           now,
 		Equity:         view.Equity,
@@ -49,7 +57,7 @@ func (s *Service) GetPerformance(ctx context.Context, clientID, periodRaw string
 	out := domain.AssemblePerformance(
 		period, requestedStart, now, view.CreatedAt,
 		view.StartingBalance, view.Currency, view.ClientID,
-		carry, snaps, live, paperNote,
+		carry, snaps, live, flows, view.NetDeposits, paperNote,
 	)
 	return &out, nil
 }

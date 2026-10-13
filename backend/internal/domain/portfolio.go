@@ -516,6 +516,8 @@ type PortfolioPort interface {
 	// ApplyInternalTransfer moves cash between two books the same owner controls, atomically.
 	ApplyInternalTransfer(ctx context.Context, from, to *Portfolio, out, in CashMovement) (fromMov, toMov *CashMovement, err error)
 	ListCashMovements(ctx context.Context, clientID string, limit, offset int) ([]CashMovement, error)
+	// ListCashMovementsChronological returns every ledger row, oldest first.
+	ListCashMovementsChronological(ctx context.Context, clientID string) ([]CashMovement, error)
 	CountCashMovements(ctx context.Context, clientID string) (int, error)
 
 	// Equity history for performance charts (one row per client + time bucket).

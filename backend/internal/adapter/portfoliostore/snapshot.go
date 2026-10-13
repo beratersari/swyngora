@@ -591,11 +591,17 @@ func (s *SQLite) txInsertSnapshot(ctx context.Context, tx *sql.Tx, snap domain.P
 		if err := domain.ValidateOptionalExposurePct(lim.MaxExposurePct); err != nil {
 			return nil
 		}
+		known := 0
+		if lim.DayStartFlowKnown {
+			known = 1
+		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO risk_limits (client_id, max_daily_loss_pct, max_asset_weight_pct, max_exposure_pct, day_key, day_start_equity, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
+			INSERT INTO risk_limits (
+				client_id, max_daily_loss_pct, max_asset_weight_pct, max_exposure_pct, day_key, day_start_equity,
+				day_start_net_deposits, day_start_flow_known, updated_at
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`, lim.ClientID, nullFloatPtr(lim.MaxDailyLossPct), nullFloatPtr(lim.MaxAssetWeightPct), nullFloatPtr(lim.MaxExposurePct),
-			lim.DayKey, lim.DayStartEquity, fmtTime(lim.UpdatedAt)); err != nil {
+			lim.DayKey, lim.DayStartEquity, lim.DayStartNetDeposits, known, fmtTime(lim.UpdatedAt)); err != nil {
 			return err
 		}
 	}

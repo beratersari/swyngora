@@ -71,7 +71,9 @@ func (s *Service) SetRiskLimits(ctx context.Context, in RiskLimitsInput) (*RiskL
 	saved, err := s.store.UpsertRiskLimits(ctx, domain.RiskLimits{
 		ClientID: bookID, MaxDailyLossPct: in.MaxDailyLossPct, MaxAssetWeightPct: in.MaxAssetWeightPct,
 		MaxExposurePct: in.MaxExposurePct,
-		DayKey: snap.DayKey, DayStartEquity: snap.DayStartEquity, UpdatedAt: now,
+		DayKey:         snap.DayKey, DayStartEquity: snap.DayStartEquity,
+		DayStartNetDeposits: snap.DayStartNetDeposits, DayStartFlowKnown: snap.DayStartFlowKnown,
+		UpdatedAt: now,
 	})
 	if err != nil {
 		return nil, err
@@ -125,7 +127,8 @@ func (s *Service) guardNewRisk(ctx context.Context, clientID, asset string, addi
 			break
 		}
 	}
-	reasons := domain.RiskLimitMessages(lim, st.StartOfDayEquity, st.Equity, asset, assetVal, st.ExposureValue, additionalNotional)
+	dailyMark := st.StartOfDayEquity + st.DailyPnL
+	reasons := domain.RiskLimitMessages(lim, st.StartOfDayEquity, dailyMark, st.Equity, asset, assetVal, st.ExposureValue, additionalNotional)
 	if len(reasons) == 0 {
 		return nil
 	}
@@ -148,19 +151,30 @@ func (s *Service) loadRiskWithDaySnapshot(ctx context.Context, p *domain.Portfol
 		return domain.RiskLimits{}, domain.RiskLimits{}, err
 	}
 	today := domain.UTCDayKey(time.Now().UTC())
-	if lim.DayKey != today || lim.DayStartEquity <= 0 {
+	now := time.Now().UTC()
+	switch {
+	case lim.DayKey != today || lim.DayStartEquity <= 0:
 		lim.DayKey = today
 		lim.DayStartEquity = view.Equity
-		now := time.Now().UTC()
+		lim.DayStartNetDeposits = view.NetDeposits
+		lim.DayStartFlowKnown = true
 		lim.UpdatedAt = now
-		// Persist snapshot even when no rules yet so the day baseline is stable.
-		saved, uerr := s.store.UpsertRiskLimits(ctx, *lim)
-		if uerr != nil {
-			return domain.RiskLimits{}, domain.RiskLimits{}, uerr
-		}
-		lim = saved
+	case !lim.DayStartFlowKnown:
+		// Legacy row: record today's contributed capital so later cash moves
+		// are not treated as profit or loss. Cash already moved today stays
+		// inside the equity gap until the next UTC day.
+		lim.DayStartNetDeposits = view.NetDeposits
+		lim.DayStartFlowKnown = true
+		lim.UpdatedAt = now
+	default:
+		return *lim, *lim, nil
 	}
-	return *lim, *lim, nil
+	// Persist snapshot even when no rules yet so the day baseline is stable.
+	saved, uerr := s.store.UpsertRiskLimits(ctx, *lim)
+	if uerr != nil {
+		return domain.RiskLimits{}, domain.RiskLimits{}, uerr
+	}
+	return *saved, *saved, nil
 }
 
 func (s *Service) buildRiskStatus(ctx context.Context, p *domain.Portfolio, lim, snap domain.RiskLimits) (domain.RiskStatus, error) {
@@ -169,16 +183,17 @@ func (s *Service) buildRiskStatus(ctx context.Context, p *domain.Portfolio, lim,
 		return domain.RiskStatus{}, err
 	}
 	weights := s.assetExposureWeights(view)
+	mark := domain.EquityExcludingFlows(view.Equity, snap.DayStartNetDeposits, view.NetDeposits, snap.DayStartFlowKnown)
 	st := domain.RiskStatus{
 		DayKey:           snap.DayKey,
 		StartOfDayEquity: snap.DayStartEquity,
 		Equity:           view.Equity,
-		DailyPnL:         view.Equity - snap.DayStartEquity,
-		DailyPnLPct:      domain.DailyPnLPct(snap.DayStartEquity, view.Equity),
+		DailyPnL:         mark - snap.DayStartEquity,
+		DailyPnLPct:      domain.DailyPnLPct(snap.DayStartEquity, mark),
 		CanOpenSpotBuy:   true,
 		CanOpenMargin:    true,
 	}
-	if lim.MaxDailyLossPct != nil && domain.DailyLossLimitHit(snap.DayStartEquity, view.Equity, *lim.MaxDailyLossPct) {
+	if lim.MaxDailyLossPct != nil && domain.DailyLossLimitHit(snap.DayStartEquity, mark, *lim.MaxDailyLossPct) {
 		st.DailyLossLimitHit = true
 		st.CanOpenSpotBuy = false
 		st.CanOpenMargin = false

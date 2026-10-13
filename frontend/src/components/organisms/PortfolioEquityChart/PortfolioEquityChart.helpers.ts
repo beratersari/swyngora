@@ -1,10 +1,38 @@
 import type { PortfolioEquityPoint, PortfolioPerformancePeriod } from '@/libs/api';
-import { formatCompactAmount } from '@/libs/utils';
+import { formatCompactAmount, formatPrice } from '@/libs/utils';
 import { TickMarkType, type Time } from 'lightweight-charts';
 
 export type EquityLinePoint = { time: Time; value: number };
 
-/** Map API equity samples to chart series; guarantee ≥2 points when possible for a visible line. */
+/** Account equity with external cash since the window baseline removed. */
+export function performanceEquity(point: Pick<PortfolioEquityPoint, 'equity' | 'externalFlow'>): number | null {
+  const eq = point.equity;
+  if (eq == null || !Number.isFinite(eq)) return null;
+  const flow = point.externalFlow;
+  if (flow == null || !Number.isFinite(flow)) return eq;
+  return eq - flow;
+}
+
+/** Signed period trading P&L for the chart caption. Empty when the amount is missing. */
+export function periodChangeLine(
+  amount?: number | null,
+  pct?: number | null,
+  currency?: string,
+): string {
+  if (amount == null || !Number.isFinite(amount)) return '';
+  const signed = `${amount > 0 ? '+' : ''}${formatPrice(amount)}`;
+  const unit = currency ? ` ${currency}` : '';
+  if (pct == null || !Number.isFinite(pct)) return `${signed}${unit}`;
+  const p = `${pct > 0 ? '+' : ''}${trimPct(pct)}%`;
+  return `${signed}${unit} (${p})`;
+}
+
+export function performanceTone(amount?: number | null): 'primary' | 'success' | 'error' {
+  if (amount == null || !Number.isFinite(amount) || Math.abs(amount) < 1e-12) return 'primary';
+  return amount > 0 ? 'success' : 'error';
+}
+
+/** Map API samples to the performance line; guarantee ≥2 points when possible. */
 export function toEquityLineData(
   points: PortfolioEquityPoint[],
   opts?: { startEquity?: number; startAt?: string },
@@ -12,7 +40,7 @@ export function toEquityLineData(
   const data = points
     .map((p) => {
       const ts = p.t ? Math.floor(Date.parse(p.t) / 1000) : NaN;
-      const eq = p.equity;
+      const eq = performanceEquity(p);
       if (!Number.isFinite(ts) || eq == null || !Number.isFinite(eq)) return null;
       return { time: ts as Time, value: eq };
     })

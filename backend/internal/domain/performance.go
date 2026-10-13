@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 )
@@ -63,37 +64,64 @@ type EquitySnapshot struct {
 }
 
 // EquityPoint is one chart/sample point.
+// Equity is mark-to-market account value and still rises when cash is added.
+// ExternalFlow is the net external cash inside that equity relative to the
+// baseline embedded in start equity. The performance level is Equity − ExternalFlow.
 type EquityPoint struct {
 	Time           time.Time
 	Equity         float64
 	CashBalance    float64
 	PositionsValue float64
 	MarginEquity   float64
+	ExternalFlow   float64
 }
 
-// PortfolioPerformance is period P&L plus the equity series for a chart.
+// ExternalFlow is contributed capital after one deposit, withdrawal, or transfer.
+// The opening balance is stored with NetAfter 0 and is not external cash.
+type ExternalFlow struct {
+	At       time.Time
+	NetAfter float64
+}
+
+// FlowDelta is external cash that entered the book at At.
+// Amount is negative when cash left.
+type FlowDelta struct {
+	At     time.Time
+	Amount float64
+}
+
+// PortfolioPerformance is period trading P&L plus the equity series for a chart.
 type PortfolioPerformance struct {
-	ClientID     string
-	Currency     string
-	Period       PerformancePeriod
-	StartAt      time.Time
-	EndAt        time.Time
-	StartEquity  float64
-	EndEquity    float64
+	ClientID    string
+	Currency    string
+	Period      PerformancePeriod
+	StartAt     time.Time
+	EndAt       time.Time
+	StartEquity float64
+	EndEquity   float64
+	// ChangeAmount is trading P&L over the window (portfolio currency).
+	// Equity change minus net external cash. Deposits, withdrawals, and
+	// transfers are not profit or loss.
 	ChangeAmount float64
-	// ChangePct is percent vs startEquity; nil when start is ~0.
+	// ChangePct is the Modified Dietz percent for that trading P&L.
+	// Nil when the capital base is ~0 or negative.
 	ChangePct *float64
+	// NetFlow is external cash added between the baseline and the live mark
+	// (deposits + transfers in − withdrawals − transfers out).
+	// The opening balance is not included.
+	NetFlow float64
 	// Partial is true when the portfolio is younger than the requested period.
 	Partial    bool
 	PointCount int
 	Points     []EquityPoint
-	// MaxDrawdown is the largest peak-to-trough drop in the window (portfolio currency, ≥ 0).
+	// MaxDrawdown is the largest peak-to-trough drop of the performance line
+	// (equity with external cash removed). A withdrawal is not a drawdown.
 	MaxDrawdown float64
-	// MaxDrawdownPct is that drop as a percent of the peak; nil when the peak is ~0.
+	// MaxDrawdownPct is that drop as a percent of the performance peak; nil when the peak is ~0.
 	MaxDrawdownPct *float64
 	// DrawdownFrom is when the peak before that drop was printed.
 	DrawdownFrom time.Time
-	// DrawdownTo is when equity reached the trough.
+	// DrawdownTo is when the performance line reached the trough.
 	DrawdownTo time.Time
 	Note       string
 }
@@ -110,8 +138,99 @@ func PerformanceChangePct(start, end float64) *float64 {
 	return &v
 }
 
-// AssemblePerformance builds period P&L + series from stored snapshots and live equity.
+// NetDepositsAsOf is contributed capital at at, from flows sorted by time.
+// A flow at exactly at counts. No flow yet means 0 (opening balance is not net deposits).
+func NetDepositsAsOf(flows []ExternalFlow, at time.Time) float64 {
+	at = at.UTC()
+	net := 0.0
+	for _, f := range flows {
+		if f.At.UTC().After(at) {
+			break
+		}
+		net = f.NetAfter
+	}
+	return net
+}
+
+// FlowDeltasAfter lists external cash strictly after `after` and at or before `until`.
+// flows must be sorted by time. Each amount is the change in contributed capital.
+func FlowDeltasAfter(flows []ExternalFlow, after, until time.Time) []FlowDelta {
+	after = after.UTC()
+	until = until.UTC()
+	prev := NetDepositsAsOf(flows, after)
+	var out []FlowDelta
+	for _, f := range flows {
+		at := f.At.UTC()
+		if !at.After(after) {
+			continue
+		}
+		if at.After(until) {
+			break
+		}
+		delta := f.NetAfter - prev
+		prev = f.NetAfter
+		if math.Abs(delta) < perfPctEpsilon {
+			continue
+		}
+		out = append(out, FlowDelta{At: at, Amount: delta})
+	}
+	return out
+}
+
+// ModifiedDietzPct is trading P&L divided by starting equity plus time-weighted external cash.
+// Cash added near the end of the window barely enters the base. Cash added at the start does.
+// Nil when the base is ~0 or negative, or when an input is not a finite number.
+func ModifiedDietzPct(startEquity, pnl float64, start, end time.Time, deltas []FlowDelta) *float64 {
+	if math.IsNaN(startEquity) || math.IsNaN(pnl) || math.IsInf(startEquity, 0) || math.IsInf(pnl, 0) {
+		return nil
+	}
+	denom := startEquity
+	span := end.Sub(start).Seconds()
+	if span > 0 {
+		for _, d := range deltas {
+			if math.IsNaN(d.Amount) || math.IsInf(d.Amount, 0) {
+				return nil
+			}
+			w := end.Sub(d.At).Seconds() / span
+			if w < 0 {
+				w = 0
+			} else if w > 1 {
+				w = 1
+			}
+			denom += w * d.Amount
+		}
+	}
+	if denom < perfPctEpsilon {
+		return nil
+	}
+	v := pnl / denom * 100
+	return &v
+}
+
+func sortExternalFlows(flows []ExternalFlow) []ExternalFlow {
+	if len(flows) < 2 {
+		return flows
+	}
+	ordered := make([]ExternalFlow, len(flows))
+	copy(ordered, flows)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		return ordered[i].At.Before(ordered[j].At)
+	})
+	return ordered
+}
+
+func flowAsOf(t time.Time) time.Time {
+	if t.IsZero() {
+		return time.Time{}
+	}
+	return t.UTC()
+}
+
+// AssemblePerformance builds period trading P&L and the equity series.
 // requestedStart is now-minus-period. carry is the last snapshot strictly before the window start.
+// flows are cash-ledger marks (opening balance included, with NetAfter 0). endNetDeposits is the
+// live book's contributed capital. Start net deposits follow the equity figure used as the baseline,
+// which can be older than the window when the last snapshot is stale.
 func AssemblePerformance(
 	period PerformancePeriod,
 	requestedStart, endAt, createdAt time.Time,
@@ -121,11 +240,14 @@ func AssemblePerformance(
 	carry *EquitySnapshot,
 	snaps []EquitySnapshot,
 	live EquityPoint,
+	flows []ExternalFlow,
+	endNetDeposits float64,
 	note string,
 ) PortfolioPerformance {
 	requestedStart = requestedStart.UTC()
 	endAt = endAt.UTC()
 	createdAt = createdAt.UTC()
+	flows = sortExternalFlows(flows)
 	windowStart := requestedStart
 	partial := false
 	if !createdAt.IsZero() && createdAt.After(requestedStart) {
@@ -133,11 +255,26 @@ func AssemblePerformance(
 		partial = true
 	}
 
+	// startEquity and startNet must describe the same moment. Using net deposits
+	// at the window clock against a stale carry would treat the cash added after
+	// that carry as trading profit.
 	startEquity := startingBalance
+	baselineAt := windowStart
+	startNet := 0.0
 	if !partial && carry != nil {
 		startEquity = carry.Equity
+		baselineAt = flowAsOf(carry.TakenAt)
+		if baselineAt.IsZero() {
+			baselineAt = flowAsOf(carry.BucketAt)
+		}
+		startNet = NetDepositsAsOf(flows, baselineAt)
 	} else if !partial && len(snaps) > 0 && !snaps[0].BucketAt.After(windowStart) {
 		startEquity = snaps[0].Equity
+		baselineAt = flowAsOf(snaps[0].TakenAt)
+		if baselineAt.IsZero() {
+			baselineAt = flowAsOf(snaps[0].BucketAt)
+		}
+		startNet = NetDepositsAsOf(flows, baselineAt)
 	}
 
 	points := make([]EquityPoint, 0, len(snaps)+2)
@@ -168,14 +305,25 @@ func AssemblePerformance(
 		if s.BucketAt.Before(windowStart) {
 			continue
 		}
+		asOf := flowAsOf(s.TakenAt)
+		if asOf.IsZero() {
+			asOf = flowAsOf(s.BucketAt)
+		}
 		points = append(points, EquityPoint{
 			Time:           s.TakenAt,
 			Equity:         s.Equity,
 			CashBalance:    s.CashBalance,
 			PositionsValue: s.PositionsValue,
 			MarginEquity:   s.MarginEquity,
+			ExternalFlow:   NetDepositsAsOf(flows, asOf) - startNet,
 		})
 	}
+	endEquity := live.Equity
+	if live.Time.IsZero() && len(points) > 0 {
+		endEquity = points[len(points)-1].Equity
+	}
+	liveFlow := endNetDeposits - startNet
+	live.ExternalFlow = liveFlow
 	// Always close with live mark so the chart reaches "now".
 	if len(points) == 0 || live.Time.After(points[len(points)-1].Time) ||
 		math.Abs(live.Equity-points[len(points)-1].Equity) > perfPctEpsilon {
@@ -183,14 +331,18 @@ func AssemblePerformance(
 			live.Time = endAt
 		}
 		points = append(points, live)
+	} else if len(points) > 0 {
+		points[len(points)-1].ExternalFlow = liveFlow
 	}
 
-	endEquity := live.Equity
-	if live.Time.IsZero() && len(points) > 0 {
-		endEquity = points[len(points)-1].Equity
+	chg := TradingPnLChange(startEquity, endEquity, startNet, endNetDeposits)
+	deltas := FlowDeltasAfter(flows, baselineAt, endAt)
+	adjusted := make([]EquityPoint, len(points))
+	for i, p := range points {
+		adjusted[i] = p
+		adjusted[i].Equity = p.Equity - p.ExternalFlow
 	}
-	chg := endEquity - startEquity
-	ddAmt, ddPct, ddFrom, ddTo := MaxDrawdown(points)
+	ddAmt, ddPct, ddFrom, ddTo := MaxDrawdown(adjusted)
 	return PortfolioPerformance{
 		ClientID:       clientID,
 		Currency:       currency,
@@ -200,7 +352,8 @@ func AssemblePerformance(
 		StartEquity:    startEquity,
 		EndEquity:      endEquity,
 		ChangeAmount:   chg,
-		ChangePct:      PerformanceChangePct(startEquity, endEquity),
+		ChangePct:      ModifiedDietzPct(startEquity, chg, baselineAt, endAt, deltas),
+		NetFlow:        endNetDeposits - startNet,
 		Partial:        partial,
 		PointCount:     len(points),
 		Points:         points,

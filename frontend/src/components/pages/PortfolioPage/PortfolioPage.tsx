@@ -474,6 +474,9 @@ export function PortfolioPage() {
               maxDrawdownPct={rtkCurrent(perfQuery)?.maxDrawdownPct}
               drawdownFrom={rtkCurrent(perfQuery)?.drawdownFrom}
               drawdownTo={rtkCurrent(perfQuery)?.drawdownTo}
+              changeAmount={rtkCurrent(perfQuery)?.changeAmount}
+              changePct={rtkCurrent(perfQuery)?.changePct}
+              currency={currency}
               period={period}
               onPeriodChange={setPeriod}
               isLoading={rtkCurrentPending(perfQuery) || perfQuery.isFetching}

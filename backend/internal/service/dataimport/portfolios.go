@@ -138,12 +138,14 @@ type wirePFRebalanceAtt struct {
 }
 
 type wirePFRisk struct {
-	MaxDailyLossPct   *float64 `json:"maxDailyLossPct"`
-	MaxAssetWeightPct *float64 `json:"maxAssetWeightPct"`
-	MaxExposurePct    *float64 `json:"maxExposurePct"`
-	DayKey            string   `json:"dayKey"`
-	DayStartEquity    float64  `json:"dayStartEquity"`
-	UpdatedAt         string   `json:"updatedAt"`
+	MaxDailyLossPct     *float64 `json:"maxDailyLossPct"`
+	MaxAssetWeightPct   *float64 `json:"maxAssetWeightPct"`
+	MaxExposurePct      *float64 `json:"maxExposurePct"`
+	DayKey              string   `json:"dayKey"`
+	DayStartEquity      float64  `json:"dayStartEquity"`
+	DayStartNetDeposits float64  `json:"dayStartNetDeposits"`
+	DayStartFlowKnown   bool     `json:"dayStartFlowKnown"`
+	UpdatedAt           string   `json:"updatedAt"`
 }
 
 type wirePFPos struct {
@@ -671,6 +673,7 @@ func normalizeImportedRisk(w wirePFRisk, bookID string) (domain.RiskLimits, bool
 		ClientID: bookID, MaxDailyLossPct: w.MaxDailyLossPct, MaxAssetWeightPct: w.MaxAssetWeightPct,
 		MaxExposurePct: w.MaxExposurePct,
 		DayKey:         strings.TrimSpace(w.DayKey), DayStartEquity: w.DayStartEquity,
+		DayStartNetDeposits: w.DayStartNetDeposits, DayStartFlowKnown: w.DayStartFlowKnown,
 		UpdatedAt: parseTimeOrNow(w.UpdatedAt),
 	}, true
 }

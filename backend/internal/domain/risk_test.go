@@ -55,17 +55,22 @@ func TestValidateOptionalRiskPct(t *testing.T) {
 func TestRiskLimitMessages(t *testing.T) {
 	d, w := 5.0, 30.0
 	lim := RiskLimits{MaxDailyLossPct: &d, MaxAssetWeightPct: &w}
-	rs := RiskLimitMessages(lim, 10000, 9400, "BTC", 2000, 2000, 100)
+	rs := RiskLimitMessages(lim, 10000, 9400, 9400, "BTC", 2000, 2000, 100)
 	if len(rs) != 1 {
 		t.Fatalf("%v", rs)
 	}
-	rs = RiskLimitMessages(lim, 10000, 10000, "BTC", 2000, 2000, 2000)
+	rs = RiskLimitMessages(lim, 10000, 10000, 10000, "BTC", 2000, 2000, 2000)
 	if len(rs) != 1 || rs[0] == "" {
 		t.Fatalf("%v", rs)
 	}
+	// A deposit lifts account equity. The daily mark still shows the trading loss.
+	rs = RiskLimitMessages(lim, 10000, 9400, 11400, "BTC", 2000, 2000, 100)
+	if len(rs) != 1 || rs[0] == "" {
+		t.Fatalf("deposit must not hide the daily loss: %v", rs)
+	}
 	exp := 40.0
 	lim.MaxExposurePct = &exp
-	rs = RiskLimitMessages(lim, 10000, 10000, "SOL", 0, 3500, 1000)
+	rs = RiskLimitMessages(lim, 10000, 10000, 10000, "SOL", 0, 3500, 1000)
 	if len(rs) != 1 || rs[0] == "" {
 		t.Fatalf("exposure %v", rs)
 	}

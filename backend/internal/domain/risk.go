@@ -17,38 +17,44 @@ const (
 // RiskLimits are per-client optional brakes on new risk (buys / new margin opens).
 // Nil percents mean that rule is off. Existing positions are never closed.
 type RiskLimits struct {
-	ClientID           string
-	MaxDailyLossPct    *float64 // e.g. 5 = block new risk if today is down >= 5%
-	MaxAssetWeightPct  *float64 // e.g. 30 = block new buys that push one coin over 30%
-	MaxExposurePct     *float64 // e.g. 60 = block new buys once all coins together exceed 60% of equity
-	DayKey             string   // UTC date YYYY-MM-DD for start-of-day equity snapshot
-	DayStartEquity     float64
-	UpdatedAt          time.Time
+	ClientID          string
+	MaxDailyLossPct   *float64 // e.g. 5 = block new risk if today is down >= 5%
+	MaxAssetWeightPct *float64 // e.g. 30 = block new buys that push one coin over 30%
+	MaxExposurePct    *float64 // e.g. 60 = block new buys once all coins together exceed 60% of equity
+	DayKey            string   // UTC date YYYY-MM-DD for start-of-day equity snapshot
+	DayStartEquity    float64
+	// DayStartNetDeposits is contributed capital at the moment DayStartEquity was taken.
+	DayStartNetDeposits float64
+	// DayStartFlowKnown is false on rows saved before that net was recorded.
+	// Daily P&L then stays on raw equity until the next baseline.
+	DayStartFlowKnown bool
+	UpdatedAt         time.Time
 }
 
 // RiskAssetWeight is one coin's live share of portfolio equity (spot + margin notional).
 type RiskAssetWeight struct {
-	Asset       string
-	Value       float64
-	WeightPct   float64
+	Asset         string
+	Value         float64
+	WeightPct     float64
 	AtOrOverLimit bool
 }
 
 // RiskStatus is live telemetry for the settings / block UI.
 type RiskStatus struct {
-	DayKey             string
-	StartOfDayEquity   float64
-	Equity             float64
-	DailyPnL           float64
-	DailyPnLPct        float64
-	DailyLossLimitHit  bool
-	ExposureValue      float64
-	ExposurePct        float64
-	ExposureLimitHit   bool
-	Assets             []RiskAssetWeight
-	CanOpenSpotBuy     bool
-	CanOpenMargin      bool
-	BlockReasons       []string
+	DayKey           string
+	StartOfDayEquity float64
+	Equity           float64
+	// DailyPnL is trading P&L since the day baseline. External cash is removed when the baseline net is known.
+	DailyPnL          float64
+	DailyPnLPct       float64
+	DailyLossLimitHit bool
+	ExposureValue     float64
+	ExposurePct       float64
+	ExposureLimitHit  bool
+	Assets            []RiskAssetWeight
+	CanOpenSpotBuy    bool
+	CanOpenMargin     bool
+	BlockReasons      []string
 }
 
 // UTCDayKey is the UTC calendar day used for daily-loss windows.
@@ -132,11 +138,13 @@ func ExposureLimitHit(equity, currentExposure, additionalNotional, maxExposurePc
 }
 
 // RiskLimitMessages formats user-facing block reasons (empty if none fire).
-func RiskLimitMessages(limits RiskLimits, startEquity, equityNow float64, asset string, assetValue, exposureValue, additionalNotional float64) []string {
+// dailyMark is equity with external cash since the day baseline removed.
+// equityNow is the live account value and is what coin weights use.
+func RiskLimitMessages(limits RiskLimits, startEquity, dailyMark, equityNow float64, asset string, assetValue, exposureValue, additionalNotional float64) []string {
 	var reasons []string
-	if limits.MaxDailyLossPct != nil && DailyLossLimitHit(startEquity, equityNow, *limits.MaxDailyLossPct) {
+	if limits.MaxDailyLossPct != nil && DailyLossLimitHit(startEquity, dailyMark, *limits.MaxDailyLossPct) {
 		reasons = append(reasons, fmt.Sprintf("daily loss limit reached (%.2f%% loss >= %.2f%%)",
-			math.Abs(DailyPnLPct(startEquity, equityNow)), *limits.MaxDailyLossPct))
+			math.Abs(DailyPnLPct(startEquity, dailyMark)), *limits.MaxDailyLossPct))
 	}
 	if limits.MaxAssetWeightPct != nil && asset != "" &&
 		AssetWeightLimitHit(equityNow, assetValue, additionalNotional, *limits.MaxAssetWeightPct) {

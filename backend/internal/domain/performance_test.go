@@ -54,7 +54,7 @@ func TestAssemblePerformance_CarryForwardAndLive(t *testing.T) {
 	live := EquityPoint{Time: end, Equity: 11200, CashBalance: 4200, PositionsValue: 7000}
 	got := AssemblePerformance(
 		PerformancePeriod1W, start, end, start.Add(-30*24*time.Hour),
-		10000, "USDT", "c1", carry, []EquitySnapshot{mid}, live, "note",
+		10000, "USDT", "c1", carry, []EquitySnapshot{mid}, live, nil, 0, "note",
 	)
 	if got.StartEquity != 10000 || got.EndEquity != 11200 {
 		t.Fatalf("start/end %v %v", got.StartEquity, got.EndEquity)
@@ -116,7 +116,7 @@ func TestAssemblePerformance_YoungPortfolio(t *testing.T) {
 	live := EquityPoint{Time: end, Equity: 10100, CashBalance: 10100}
 	got := AssemblePerformance(
 		PerformancePeriod1W, requested, end, created,
-		10000, "USDT", "c2", nil, nil, live, "",
+		10000, "USDT", "c2", nil, nil, live, nil, 0, "",
 	)
 	if !got.Partial {
 		t.Fatal("want partial")
@@ -142,7 +142,7 @@ func TestAssemblePerformance_SnapBeforeWindowStillSyntheticsStart(t *testing.T) 
 	live := EquityPoint{Time: end, Equity: 9992, CashBalance: 3019, PositionsValue: 6973}
 	got := AssemblePerformance(
 		PerformancePeriod1W, requested, end, created,
-		10000, "USDT", "c3", nil, []EquitySnapshot{pre}, live, "",
+		10000, "USDT", "c3", nil, []EquitySnapshot{pre}, live, nil, 0, "",
 	)
 	if got.PointCount < 2 {
 		t.Fatalf("points=%d %+v", got.PointCount, got.Points)
@@ -152,5 +152,110 @@ func TestAssemblePerformance_SnapBeforeWindowStillSyntheticsStart(t *testing.T) 
 	}
 	if got.Points[len(got.Points)-1].Equity != 9992 {
 		t.Fatalf("live last=%v", got.Points[len(got.Points)-1].Equity)
+	}
+}
+
+func TestAssemblePerformance_DepositAndWithdrawalAreNotPnL(t *testing.T) {
+	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	end := start.Add(7 * 24 * time.Hour)
+	created := start.Add(-30 * 24 * time.Hour)
+	depositAt := start.Add(24 * time.Hour)
+	withdrawAt := start.Add(48 * time.Hour)
+	flows := []ExternalFlow{
+		{At: depositAt, NetAfter: 5000},
+		{At: withdrawAt, NetAfter: 3000},
+	}
+	snaps := []EquitySnapshot{
+		{BucketAt: start, TakenAt: start, Equity: 10000, CashBalance: 10000},
+		{BucketAt: depositAt, TakenAt: depositAt, Equity: 15000, CashBalance: 15000},
+		{BucketAt: withdrawAt, TakenAt: withdrawAt, Equity: 13000, CashBalance: 13000},
+	}
+	live := EquityPoint{Time: end, Equity: 13100, CashBalance: 13100}
+	got := AssemblePerformance(
+		PerformancePeriod1W, start, end, created,
+		10000, "USDT", "c4", nil, snaps, live, flows, 3000, "",
+	)
+	// +100 of trading after the cash moves. 5000 in and 2000 out are not P&L.
+	if math.Abs(got.ChangeAmount-100) > 1e-9 {
+		t.Fatalf("change=%v", got.ChangeAmount)
+	}
+	if math.Abs(got.NetFlow-3000) > 1e-9 {
+		t.Fatalf("netFlow=%v", got.NetFlow)
+	}
+	if got.ChangePct == nil || *got.ChangePct <= 0 {
+		t.Fatalf("pct=%v", got.ChangePct)
+	}
+	last := got.Points[len(got.Points)-1]
+	if math.Abs((last.Equity-last.ExternalFlow)-10100) > 1e-6 {
+		t.Fatalf("performance end=%v flow=%v", last.Equity, last.ExternalFlow)
+	}
+	// Raw equity falls 2000 on the withdrawal. The performance line does not.
+	if got.MaxDrawdown > 1e-6 {
+		t.Fatalf("drawdown=%v from external cash", got.MaxDrawdown)
+	}
+}
+
+func TestAssemblePerformance_LossAfterDepositIsDrawdown(t *testing.T) {
+	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	end := start.Add(48 * time.Hour)
+	depositAt := start.Add(time.Hour)
+	lossAt := start.Add(24 * time.Hour)
+	flows := []ExternalFlow{{At: depositAt, NetAfter: 5000}}
+	snaps := []EquitySnapshot{
+		{BucketAt: start, TakenAt: start, Equity: 10000},
+		{BucketAt: depositAt, TakenAt: depositAt, Equity: 15000},
+		{BucketAt: lossAt, TakenAt: lossAt, Equity: 14000},
+	}
+	live := EquityPoint{Time: end, Equity: 14000}
+	got := AssemblePerformance(
+		PerformancePeriod1W, start, end, start.Add(-24*time.Hour),
+		10000, "USDT", "c5", nil, snaps, live, flows, 5000, "",
+	)
+	if math.Abs(got.ChangeAmount-(-1000)) > 1e-9 {
+		t.Fatalf("change=%v", got.ChangeAmount)
+	}
+	if math.Abs(got.MaxDrawdown-1000) > 1e-6 {
+		t.Fatalf("drawdown=%v", got.MaxDrawdown)
+	}
+	// Deposit at 1h of a 48h window keeps most of its weight.
+	// Base ≈ 10000 + 5000*(47/48). Profit -1000 → about -6.8%, not -10% and not +40%.
+	if got.ChangePct == nil || *got.ChangePct > -6 || *got.ChangePct < -8 {
+		t.Fatalf("pct=%v", got.ChangePct)
+	}
+}
+
+func TestAssemblePerformance_StaleCarryDoesNotCountLaterDeposit(t *testing.T) {
+	start := time.Date(2026, 8, 8, 0, 0, 0, 0, time.UTC)
+	end := start.Add(time.Hour)
+	carryAt := start.Add(-2 * time.Hour)
+	depositAt := start.Add(-time.Hour)
+	carry := &EquitySnapshot{Equity: 10000, CashBalance: 10000, TakenAt: carryAt, BucketAt: carryAt}
+	flows := []ExternalFlow{{At: depositAt, NetAfter: 5000}}
+	live := EquityPoint{Time: end, Equity: 15000, CashBalance: 15000}
+	got := AssemblePerformance(
+		PerformancePeriod1D, start, end, start.Add(-30*24*time.Hour),
+		10000, "USDT", "c6", carry, nil, live, flows, 5000, "",
+	)
+	if math.Abs(got.ChangeAmount) > 1e-9 {
+		t.Fatalf("stale carry counted deposit as profit: %v", got.ChangeAmount)
+	}
+	if math.Abs(got.NetFlow-5000) > 1e-9 {
+		t.Fatalf("netFlow=%v", got.NetFlow)
+	}
+	if got.MaxDrawdown > 1e-6 {
+		t.Fatalf("drawdown=%v", got.MaxDrawdown)
+	}
+}
+
+func TestModifiedDietz_WithdrawalKeepsZeroReturn(t *testing.T) {
+	start := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	end := start.Add(48 * time.Hour)
+	mid := start.Add(24 * time.Hour)
+	pct := ModifiedDietzPct(10000, 0, start, end, []FlowDelta{{At: mid, Amount: -5000}})
+	if pct == nil || math.Abs(*pct) > 1e-9 {
+		t.Fatalf("pct=%v", pct)
+	}
+	if ModifiedDietzPct(0, 100, start, end, nil) != nil {
+		t.Fatal("zero base should be nil")
 	}
 }

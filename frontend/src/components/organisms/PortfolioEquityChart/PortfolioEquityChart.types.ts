@@ -9,6 +9,9 @@ export type PortfolioEquityChartProps = {
   maxDrawdownPct?: number | null;
   drawdownFrom?: string;
   drawdownTo?: string;
+  changeAmount?: number | null;
+  changePct?: number | null;
+  currency?: string;
   period: PortfolioPerformancePeriod;
   onPeriodChange: (p: PortfolioPerformancePeriod) => void;
   isLoading?: boolean;

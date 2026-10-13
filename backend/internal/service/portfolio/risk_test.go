@@ -78,6 +78,51 @@ func TestRiskLimits_TotalExposureBlocksAnotherCoin(t *testing.T) {
 	}
 }
 
+func TestRiskLimits_CashMovesAreNotDailyPnL(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "risk-cash", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	d := 5.0
+	if _, err := svc.SetRiskLimits(ctx, RiskLimitsInput{ClientID: "risk-cash", MaxDailyLossPct: &d}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.Withdraw(ctx, CashMoveInput{ClientID: "risk-cash", Amount: 2000}); err != nil {
+		t.Fatal(err)
+	}
+	view, err := svc.GetRiskLimitsView(ctx, "risk-cash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Status.DailyPnL > 1e-6 || view.Status.DailyPnL < -1e-6 || view.Status.DailyLossLimitHit {
+		t.Fatalf("withdrawal counted as daily loss: %+v", view.Status)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "risk-cash", Symbol: "BTCUSDT", Side: "buy", Quantity: 1}); err != nil {
+		t.Fatalf("buy after withdrawal: %v", err)
+	}
+
+	// A deposit must not hide a real trading loss.
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "risk-cash", Symbol: "BTCUSDT", Side: "buy", Quantity: 50}); err != nil {
+		t.Fatal(err)
+	}
+	px.prices["binance|BTCUSDT"] = "80"
+	if _, _, err := svc.Deposit(ctx, CashMoveInput{ClientID: "risk-cash", Amount: 3000}); err != nil {
+		t.Fatal(err)
+	}
+	view, err = svc.GetRiskLimitsView(ctx, "risk-cash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Status.DailyPnL >= 0 || !view.Status.DailyLossLimitHit {
+		t.Fatalf("deposit hid the trading loss: %+v", view.Status)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "risk-cash", Symbol: "BTCUSDT", Side: "buy", Quantity: 1}); !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("want daily loss block after deposit, got %v", err)
+	}
+}
+
 func TestRiskLimits_DailyLossBlocksBuyAndMargin(t *testing.T) {
 	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
 	svc := newSvc(t, px)

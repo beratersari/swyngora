@@ -3782,10 +3782,13 @@ export interface paths {
         };
         /**
          * Get paper portfolio performance history
-         * @description Equity samples over 1d / 1w / 1m / 3m for a chart, plus P&L from the start of
-         *     that window as amount and percent, and the largest peak-to-trough drop
-         *     (maxDrawdown, drawdownFrom, drawdownTo). Background worker stores mark-to-market
-         *     buckets (default 15m). Live equity is always the last point.
+         * @description Equity samples over 1d / 1w / 1m / 3m, plus trading P&L from the start of
+         *     that window as amount and percent. Deposits, withdrawals, and transfers
+         *     between books are external cash (netFlow), not profit or loss.
+         *     maxDrawdown is the largest drop of that performance line (equity minus
+         *     externalFlow on each point). points[].equity stays the account value.
+         *     Background worker stores mark-to-market buckets (default 15m).
+         *     Live equity is always the last point.
          *     Paper trading only — not real money.
          */
         get: operations["getPortfolioPerformance"];
@@ -9875,7 +9878,7 @@ export interface components {
             /** Format: date-time */
             createdAt?: string;
         };
-        /** @description Period P&L plus equity time series for a paper portfolio chart */
+        /** @description Period trading P&L plus equity time series. External cash is not profit or loss. */
         PortfolioPerformance: {
             clientId?: string;
             currency?: string;
@@ -9887,15 +9890,17 @@ export interface components {
             endAt?: string;
             startEquity?: number;
             endEquity?: number;
-            /** @description endEquity minus startEquity (portfolio currency) */
+            /** @description Trading P&L over the window. Equity change minus net external cash (deposits, withdrawals, transfers). Opening balance is not included. */
             changeAmount?: number;
-            /** @description Percent change vs startEquity; null when startEquity is ~0 */
+            /** @description Modified Dietz percent for that trading P&L. Cash added or removed counts only for the share of the window it was in the book. Null when the capital base is ~0 or negative. */
             changePct?: number | null;
+            /** @description External cash added during the window (deposits + transfers in, minus withdrawals and transfers out). Opening balance is not included. */
+            netFlow?: number;
             /** @description True when the portfolio is younger than the requested period */
             partial?: boolean;
-            /** @description Largest peak-to-trough equity drop in the window (portfolio currency, 0 when equity never fell) */
+            /** @description Largest peak-to-trough drop of the performance line (equity with external cash removed). A withdrawal is not a drawdown. 0 when that line never fell. */
             maxDrawdown?: number;
-            /** @description That drop as a percent of the peak; null when the peak is ~0 or there was no drop */
+            /** @description That drop as a percent of the performance peak; null when the peak is ~0 or there was no drop */
             maxDrawdownPct?: number | null;
             /**
              * Format: date-time
@@ -9914,10 +9919,13 @@ export interface components {
         PortfolioEquityPoint: {
             /** Format: date-time */
             t?: string;
+            /** @description Mark-to-market account value. A deposit raises this. */
             equity?: number;
             cashBalance?: number;
             positionsValue?: number;
             marginEquity?: number;
+            /** @description Net external cash inside this equity relative to the baseline in startEquity. Performance level is equity minus externalFlow. */
+            externalFlow?: number;
         };
         MarginPosition: {
             id?: string;
@@ -10258,7 +10266,9 @@ export interface components {
                 timezone?: string;
                 startOfDayEquity?: number;
                 equity?: number;
+                /** @description Trading P&L since the UTC day baseline. Deposits, withdrawals, and transfers are not profit or loss. */
                 dailyPnl?: number;
+                /** @description dailyPnl as a percent of start-of-day equity. */
                 dailyPnlPct?: number;
                 dailyLossLimitHit?: boolean;
                 /** @description Spot market value plus open margin notional across coins */

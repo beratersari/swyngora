@@ -8,6 +8,13 @@ export const ChartShell = styled.div`
   max-width: 100%;
 `;
 
+export const ChartTitleBlock = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${({ theme }) => theme.spacing[1]}px;
+  min-width: 0;
+`;
+
 export const ChartToolbar = styled.div`
   display: flex;
   flex-wrap: wrap;

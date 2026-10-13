@@ -5053,6 +5053,7 @@ func (b *Backend) GetPortfolioPerformance(ctx context.Context, clientID, period 
 			"t":      pt.Time.UTC().Format(time.RFC3339Nano),
 			"equity": pt.Equity, "cashBalance": pt.CashBalance,
 			"positionsValue": pt.PositionsValue, "marginEquity": pt.MarginEquity,
+			"externalFlow": pt.ExternalFlow,
 		})
 	}
 	m := map[string]any{
@@ -5060,8 +5061,15 @@ func (b *Backend) GetPortfolioPerformance(ctx context.Context, clientID, period 
 		"startAt":     p.StartAt.UTC().Format(time.RFC3339Nano),
 		"endAt":       p.EndAt.UTC().Format(time.RFC3339Nano),
 		"startEquity": p.StartEquity, "endEquity": p.EndEquity,
-		"changeAmount": p.ChangeAmount, "changePct": p.ChangePct,
+		"changeAmount": p.ChangeAmount, "changePct": p.ChangePct, "netFlow": p.NetFlow,
 		"partial": p.Partial, "pointCount": p.PointCount, "points": pts, "note": p.Note,
+		"maxDrawdown": p.MaxDrawdown, "maxDrawdownPct": p.MaxDrawdownPct,
+	}
+	if !p.DrawdownFrom.IsZero() {
+		m["drawdownFrom"] = p.DrawdownFrom.UTC().Format(time.RFC3339Nano)
+	}
+	if !p.DrawdownTo.IsZero() {
+		m["drawdownTo"] = p.DrawdownTo.UTC().Format(time.RFC3339Nano)
 	}
 	return mustJSON(m)
 }

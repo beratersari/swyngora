@@ -3333,7 +3333,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_portfolio_performance",
-		mcp.WithDescription("Paper portfolio equity over 1d/1w/1m/3m plus P&L amount and percent from the start of that window, and the largest peak-to-trough drop (maxDrawdown) with drawdownFrom and drawdownTo. Use for history/charts. Simulated only."),
+		mcp.WithDescription("Paper portfolio equity over 1d/1w/1m/3m plus trading P&L amount and percent from the start of that window. Deposits, withdrawals, and transfers are netFlow, not profit or loss. maxDrawdown is the largest drop of that performance line. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("period", mcp.Description("Lookback: 1d, 1w (default), 1m, or 3m")),
@@ -3373,7 +3373,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_portfolio_risk_limits",
-		mcp.WithDescription("Get optional paper risk limits and live status (daily loss %, per-coin weights, whether new buys/margin opens are blocked). Limits never close positions."),
+		mcp.WithDescription("Get optional paper risk limits and live status (daily trading loss %, per-coin weights, whether new buys/margin opens are blocked). Deposits and withdrawals are not daily profit or loss. Limits never close positions."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -3390,7 +3390,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("set_portfolio_risk_limits",
-		mcp.WithDescription("Set optional paper risk limits. maxDailyLossPct e.g. 5 blocks new buys/margin when today's MTM loss hits 5%. maxAssetWeightPct e.g. 30 blocks new buys that would push one coin over 30%. maxExposurePct e.g. 60 blocks new buys once all coins together would exceed 60% of equity. Omit a value to disable that rule. Does not close positions."),
+		mcp.WithDescription("Set optional paper risk limits. maxDailyLossPct e.g. 5 blocks new buys/margin when today's trading loss hits 5%. Deposits and withdrawals do not count toward that loss. maxAssetWeightPct e.g. 30 blocks new buys that would push one coin over 30%. maxExposurePct e.g. 60 blocks new buys once all coins together would exceed 60% of equity. Omit a value to disable that rule. Does not close positions."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithNumber("maxDailyLossPct", mcp.Description("0 or omit to disable; else 0.01-100")),

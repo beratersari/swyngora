@@ -3,6 +3,8 @@ import { TickMarkType } from 'lightweight-charts';
 import {
   drawdownLine,
   formatEquityTickMark,
+  periodChangeLine,
+  performanceEquity,
   toEquityLineData,
 } from './PortfolioEquityChart.helpers';
 
@@ -27,6 +29,24 @@ describe('toEquityLineData', () => {
     expect(data[0].value).toBe(10000);
     expect(data[1].value).toBe(9990);
     expect(Number(data[0].time)).toBeLessThan(Number(data[1].time));
+  });
+
+  it('removes deposits and withdrawals from the line', () => {
+    const data = toEquityLineData([
+      { t: '2026-08-12T12:00:00.000Z', equity: 10000, externalFlow: 0 },
+      { t: '2026-08-12T13:00:00.000Z', equity: 15000, externalFlow: 5000 },
+      { t: '2026-08-12T14:00:00.000Z', equity: 12000, externalFlow: 3000 },
+    ]);
+    expect(data.map((p) => p.value)).toEqual([10000, 10000, 9000]);
+    expect(performanceEquity({ equity: 8000, externalFlow: -2000 })).toBe(10000);
+  });
+});
+
+describe('periodChangeLine', () => {
+  it('signs the trading P&L and percent', () => {
+    expect(periodChangeLine(20, 0.2, 'USDT')).toBe('+20 USDT (+0.2%)');
+    expect(periodChangeLine(0, 0, 'USDT')).toBe('0 USDT (0%)');
+    expect(periodChangeLine(-15, null, 'USDT')).toBe('-15 USDT');
   });
 });
 

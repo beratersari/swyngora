@@ -51,7 +51,9 @@
     "save": "Kaydet"
   },
   "equityChart": {
-    "title": "Özkaynak",
+    "title": "Performans",
+    "hint": "Eklediğiniz veya çektiğiniz nakit bu çizgide yok.",
+    "change": "Dönem kâr/zarar {{line}}",
     "drawdown": "En büyük düşüş {{line}}",
     "empty": "Henüz örnek yok — işlem yapın veya sonraki anlık görüntüyü bekleyin.",
     "loadFailed": "Performans yüklenemedi"

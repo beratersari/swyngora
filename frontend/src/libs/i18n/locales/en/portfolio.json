@@ -51,7 +51,9 @@
     "save": "Save"
   },
   "equityChart": {
-    "title": "Equity",
+    "title": "Performance",
+    "hint": "Cash you add or take out is not part of this line.",
+    "change": "Period P&L {{line}}",
     "drawdown": "Max drawdown {{line}}",
     "empty": "No equity samples yet — trade or wait for the next snapshot.",
     "loadFailed": "Could not load performance"

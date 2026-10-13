@@ -135,12 +135,14 @@ type portfolioRebalanceAttemptPayload struct {
 }
 
 type portfolioRiskPayload struct {
-	MaxDailyLossPct   *float64 `json:"maxDailyLossPct,omitempty"`
-	MaxAssetWeightPct *float64 `json:"maxAssetWeightPct,omitempty"`
-	MaxExposurePct    *float64 `json:"maxExposurePct,omitempty"`
-	DayKey            string   `json:"dayKey,omitempty"`
-	DayStartEquity    float64  `json:"dayStartEquity,omitempty"`
-	UpdatedAt         string   `json:"updatedAt"`
+	MaxDailyLossPct     *float64 `json:"maxDailyLossPct,omitempty"`
+	MaxAssetWeightPct   *float64 `json:"maxAssetWeightPct,omitempty"`
+	MaxExposurePct      *float64 `json:"maxExposurePct,omitempty"`
+	DayKey              string   `json:"dayKey,omitempty"`
+	DayStartEquity      float64  `json:"dayStartEquity,omitempty"`
+	DayStartNetDeposits float64  `json:"dayStartNetDeposits,omitempty"`
+	DayStartFlowKnown   bool     `json:"dayStartFlowKnown,omitempty"`
+	UpdatedAt           string   `json:"updatedAt"`
 }
 
 type portfolioPosPayload struct {
@@ -448,6 +450,7 @@ func snapshotToPayload(snap domain.PortfolioSnapshot) portfolioBookPayload {
 			MaxDailyLossPct: snap.RiskLimits.MaxDailyLossPct, MaxAssetWeightPct: snap.RiskLimits.MaxAssetWeightPct,
 			MaxExposurePct: snap.RiskLimits.MaxExposurePct,
 			DayKey:         snap.RiskLimits.DayKey, DayStartEquity: snap.RiskLimits.DayStartEquity,
+			DayStartNetDeposits: snap.RiskLimits.DayStartNetDeposits, DayStartFlowKnown: snap.RiskLimits.DayStartFlowKnown,
 			UpdatedAt: rfcNano(snap.RiskLimits.UpdatedAt),
 		}
 	}

@@ -150,7 +150,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `POST` | `/api/v1/portfolio/transfers` | Move cash between own books (owner only; optional Idempotency-Key) |
 | `GET` | `/api/v1/portfolio/transfers/attempts` | Transfer request tries (completed / replayed / conflict) |
 | `GET` | `/api/v1/portfolio/cash-movements` | Deposit / withdraw / transfer history |
-| `GET` | `/api/v1/portfolio/performance` | Equity history + period P&L (`1d`/`1w`/`1m`/`3m`) plus the largest peak-to-trough drop and when it ran |
+| `GET` | `/api/v1/portfolio/performance` | Equity history + period trading P&L (`1d`/`1w`/`1m`/`3m`). Deposits, withdrawals, and transfers are not profit or loss. Includes the largest performance drop and when it ran |
 | `POST` | `/api/v1/portfolio/stress` | What-if: equity, total P&L, and margin after asset percent moves (e.g. BTC −10, ETH −15) |
 | `GET`/`PUT`/`DELETE` | `/api/v1/portfolio/risk-limits` | Optional risk brakes (daily loss %, max coin weight, max total exposure); block new buys/margin only |
 | `GET` | `/api/v1/portfolio/trading-costs` | Per-exchange paper taker fee and slippage |

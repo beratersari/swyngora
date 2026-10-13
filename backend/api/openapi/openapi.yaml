@@ -6460,10 +6460,13 @@ paths:
     get:
       summary: Get paper portfolio performance history
       description: |
-        Equity samples over 1d / 1w / 1m / 3m for a chart, plus P&L from the start of
-        that window as amount and percent, and the largest peak-to-trough drop
-        (maxDrawdown, drawdownFrom, drawdownTo). Background worker stores mark-to-market
-        buckets (default 15m). Live equity is always the last point.
+        Equity samples over 1d / 1w / 1m / 3m, plus trading P&L from the start of
+        that window as amount and percent. Deposits, withdrawals, and transfers
+        between books are external cash (netFlow), not profit or loss.
+        maxDrawdown is the largest drop of that performance line (equity minus
+        externalFlow on each point). points[].equity stays the account value.
+        Background worker stores mark-to-market buckets (default 15m).
+        Live equity is always the last point.
         Paper trading only — not real money.
       operationId: getPortfolioPerformance
       tags: [Portfolio]
@@ -14415,7 +14418,7 @@ components:
         createdAt: { type: string, format: date-time }
     PortfolioPerformance:
       type: object
-      description: Period P&L plus equity time series for a paper portfolio chart
+      description: Period trading P&L plus equity time series. External cash is not profit or loss.
       properties:
         clientId: { type: string }
         currency: { type: string }
@@ -14426,21 +14429,24 @@ components:
         endEquity: { type: number }
         changeAmount:
           type: number
-          description: endEquity minus startEquity (portfolio currency)
+          description: Trading P&L over the window. Equity change minus net external cash (deposits, withdrawals, transfers). Opening balance is not included.
         changePct:
           type: number
           nullable: true
-          description: Percent change vs startEquity; null when startEquity is ~0
+          description: Modified Dietz percent for that trading P&L. Cash added or removed counts only for the share of the window it was in the book. Null when the capital base is ~0 or negative.
+        netFlow:
+          type: number
+          description: External cash added during the window (deposits + transfers in, minus withdrawals and transfers out). Opening balance is not included.
         partial:
           type: boolean
           description: True when the portfolio is younger than the requested period
         maxDrawdown:
           type: number
-          description: Largest peak-to-trough equity drop in the window (portfolio currency, 0 when equity never fell)
+          description: Largest peak-to-trough drop of the performance line (equity with external cash removed). A withdrawal is not a drawdown. 0 when that line never fell.
         maxDrawdownPct:
           type: number
           nullable: true
-          description: That drop as a percent of the peak; null when the peak is ~0 or there was no drop
+          description: That drop as a percent of the performance peak; null when the peak is ~0 or there was no drop
         drawdownFrom:
           type: string
           format: date-time
@@ -14459,10 +14465,13 @@ components:
       type: object
       properties:
         t: { type: string, format: date-time }
-        equity: { type: number }
+        equity: { type: number, description: Mark-to-market account value. A deposit raises this. }
         cashBalance: { type: number }
         positionsValue: { type: number }
         marginEquity: { type: number }
+        externalFlow:
+          type: number
+          description: Net external cash inside this equity relative to the baseline in startEquity. Performance level is equity minus externalFlow.
     MarginPosition:
       type: object
       properties:
@@ -14800,8 +14809,12 @@ components:
             timezone: { type: string, example: UTC }
             startOfDayEquity: { type: number }
             equity: { type: number }
-            dailyPnl: { type: number }
-            dailyPnlPct: { type: number }
+            dailyPnl:
+              type: number
+              description: Trading P&L since the UTC day baseline. Deposits, withdrawals, and transfers are not profit or loss.
+            dailyPnlPct:
+              type: number
+              description: dailyPnl as a percent of start-of-day equity.
             dailyLossLimitHit: { type: boolean }
             exposureValue: { type: number, description: Spot market value plus open margin notional across coins }
             exposurePct: { type: number, description: exposureValue as a percent of equity }

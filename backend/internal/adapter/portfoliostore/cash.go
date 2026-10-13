@@ -133,15 +133,18 @@ func (s *SQLite) ApplyInternalTransfer(ctx context.Context, from, to *domain.Por
 	return &out, &in, nil
 }
 
+const cashMovementSelect = `
+	SELECT id, client_id, kind, amount, cash_after, net_deposits_after, note,
+		COALESCE(counterparty_portfolio_id, ''), COALESCE(counterparty_portfolio_name, ''),
+		COALESCE(peer_movement_id, ''), created_at
+	FROM cash_movements
+`
+
 // ListCashMovements returns newest-first ledger rows.
 func (s *SQLite) ListCashMovements(ctx context.Context, clientID string, limit, offset int) ([]domain.CashMovement, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, client_id, kind, amount, cash_after, net_deposits_after, note,
-			COALESCE(counterparty_portfolio_id, ''), COALESCE(counterparty_portfolio_name, ''),
-			COALESCE(peer_movement_id, ''), created_at
-		FROM cash_movements
+	rows, err := s.db.QueryContext(ctx, cashMovementSelect+`
 		WHERE client_id = ?
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?
@@ -149,6 +152,32 @@ func (s *SQLite) ListCashMovements(ctx context.Context, clientID string, limit, 
 	if err != nil {
 		return nil, fmt.Errorf("list cash movements: %w", err)
 	}
+	out, err := scanCashMovements(rows)
+	if err != nil {
+		return nil, fmt.Errorf("list cash movements: %w", err)
+	}
+	return out, nil
+}
+
+// ListCashMovementsChronological returns every ledger row, oldest first.
+func (s *SQLite) ListCashMovementsChronological(ctx context.Context, clientID string) ([]domain.CashMovement, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows, err := s.db.QueryContext(ctx, cashMovementSelect+`
+		WHERE client_id = ?
+		ORDER BY created_at ASC, rowid ASC
+	`, clientID)
+	if err != nil {
+		return nil, fmt.Errorf("list cash movements: %w", err)
+	}
+	out, err := scanCashMovements(rows)
+	if err != nil {
+		return nil, fmt.Errorf("list cash movements: %w", err)
+	}
+	return out, nil
+}
+
+func scanCashMovements(rows *sql.Rows) ([]domain.CashMovement, error) {
 	defer rows.Close()
 	var out []domain.CashMovement
 	for rows.Next() {

@@ -579,7 +579,9 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 				b.RiskLimits = &wirePFRisk{
 					MaxDailyLossPct: csvOptF64(row, "maxDailyLossPct"), MaxAssetWeightPct: csvOptF64(row, "maxAssetWeightPct"),
 					MaxExposurePct: csvOptF64(row, "maxExposurePct"),
-					DayKey:         row["dayKey"], DayStartEquity: csvF64(row, "dayStartEquity"), UpdatedAt: row["updatedAt"],
+					DayKey:         row["dayKey"], DayStartEquity: csvF64(row, "dayStartEquity"),
+					DayStartNetDeposits: csvF64(row, "dayStartNetDeposits"), DayStartFlowKnown: parseCSVBool(row["dayStartFlowKnown"]),
+					UpdatedAt: row["updatedAt"],
 				}
 			}
 		case "customSignals":
