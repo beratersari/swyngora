@@ -3,6 +3,7 @@ package alertstore
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -79,7 +80,8 @@ CREATE TABLE IF NOT EXISTS price_alerts (
 	triggered_price REAL NOT NULL DEFAULT 0,
 	kind            TEXT NOT NULL DEFAULT 'price',
 	range_pct       REAL NOT NULL DEFAULT 0,
-	triggered_venue TEXT NOT NULL DEFAULT ''
+	triggered_venue TEXT NOT NULL DEFAULT '',
+	situation_fire_json TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_price_alerts_client ON price_alerts(client_id);
 CREATE INDEX IF NOT EXISTS idx_price_alerts_active ON price_alerts(status) WHERE status = 'active';
@@ -160,6 +162,7 @@ CREATE INDEX IF NOT EXISTS idx_alert_notifications_alert
 		`ALTER TABLE price_alerts ADD COLUMN kind TEXT NOT NULL DEFAULT 'price'`,
 		`ALTER TABLE price_alerts ADD COLUMN range_pct REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE price_alerts ADD COLUMN triggered_venue TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE price_alerts ADD COLUMN situation_fire_json TEXT NOT NULL DEFAULT ''`,
 	} {
 		if err := sqliteutil.ExecAllowExists(s.db, stmt); err != nil {
 			return err
@@ -245,7 +248,7 @@ func (s *SQLite) Close() error {
 const alertSelectCols = `
 	id, client_id, exchange, symbol, condition, target_price,
 	mode, armed, status, created_at, triggered_at, triggered_price,
-	kind, range_pct, triggered_venue
+	kind, range_pct, triggered_venue, situation_fire_json
 `
 
 // Create inserts a new alert. Caller supplies a unique ID and Active status.
@@ -369,6 +372,31 @@ func (s *SQLite) RecordRepeatingTrigger(ctx context.Context, id string, price fl
 		id, string(domain.AlertStatusActive), string(domain.AlertModeRepeating))
 	if err != nil {
 		return nil, fmt.Errorf("alerts sqlite record repeating: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return nil, err
+	}
+	if n == 0 {
+		return nil, domain.ErrNotFound
+	}
+	return s.getByIDUnlocked(ctx, id)
+}
+
+// SetSituationFire stores the comparison from the latest situation-alert fire.
+// The next fire replaces it. Re-arming does not call this.
+func (s *SQLite) SetSituationFire(ctx context.Context, id string, fire domain.SituationFire) (*domain.PriceAlert, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	raw, err := json.Marshal(fire)
+	if err != nil {
+		return nil, fmt.Errorf("alerts sqlite situation fire: %w", err)
+	}
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE price_alerts SET situation_fire_json = ? WHERE id = ?
+	`, string(raw), id)
+	if err != nil {
+		return nil, fmt.Errorf("alerts sqlite set situation fire: %w", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -805,15 +833,16 @@ func (s *SQLite) scanOne(ctx context.Context, q rowScanner, query string, args .
 		armed                          int
 		trigRaw                        sql.NullString
 	)
-	var kind string
+	var kind, situationFire string
 	err := q.QueryRowContext(ctx, query, args...).Scan(
 		&a.ID, &a.ClientID, &ex, &a.Symbol, &cond, &a.TargetPrice,
 		&mode, &armed, &st, &createdRaw, &trigRaw, &a.TriggeredPrice,
-		&kind, &a.RangePct, &a.TriggeredVenue,
+		&kind, &a.RangePct, &a.TriggeredVenue, &situationFire,
 	)
 	if err != nil {
 		return nil, err
 	}
+	applySituationFire(&a, situationFire)
 	a.Exchange = domain.Exchange(ex)
 	a.Condition = domain.AlertCondition(cond)
 	a.Mode = domain.AlertMode(mode)
@@ -843,14 +872,15 @@ func scanAll(rows *sql.Rows) ([]domain.PriceAlert, error) {
 			armed                          int
 			trigRaw                        sql.NullString
 		)
-		var kind string
+		var kind, situationFire string
 		if err := rows.Scan(
 			&a.ID, &a.ClientID, &ex, &a.Symbol, &cond, &a.TargetPrice,
 			&mode, &armed, &st, &createdRaw, &trigRaw, &a.TriggeredPrice,
-			&kind, &a.RangePct, &a.TriggeredVenue,
+			&kind, &a.RangePct, &a.TriggeredVenue, &situationFire,
 		); err != nil {
 			return nil, fmt.Errorf("alerts sqlite scan: %w", err)
 		}
+		applySituationFire(&a, situationFire)
 		a.Exchange = domain.Exchange(ex)
 		a.Condition = domain.AlertCondition(cond)
 		a.Mode = domain.AlertMode(mode)
@@ -874,6 +904,21 @@ func scanAll(rows *sql.Rows) ([]domain.PriceAlert, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+func applySituationFire(a *domain.PriceAlert, raw string) {
+	raw = strings.TrimSpace(raw)
+	if a == nil || raw == "" {
+		return
+	}
+	var fire domain.SituationFire
+	if err := json.Unmarshal([]byte(raw), &fire); err != nil {
+		return
+	}
+	if len(fire.Comparison.Clauses) == 0 {
+		return
+	}
+	a.SituationFire = &fire
 }
 
 func parseTime(raw string) time.Time {

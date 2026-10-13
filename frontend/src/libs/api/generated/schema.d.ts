@@ -3441,6 +3441,12 @@ export interface paths {
          *     condition=any (default) | up | down (after-path lean). symbol=BTCUSDT or all (any
          *     scanned coin). exchange=binance|bybit|okx|all. Repeating by default: one fire when the
          *     match appears, quiet while still similar, re-arm when it clears. Informational only.
+         *     kind=situation: the live coin read leaves the clauses stored on the newest open paper
+         *     buy. condition=leaves. A newest buy with no stored read does not fire. No open crypto
+         *     position stays quiet. One-time fires once. Repeating re-arms when the live read matches
+         *     again. The last fire keeps situationFire (the clauses that left, what they were, and
+         *     what they became). Re-arming leaves that fire in place until the next one replaces it.
+         *     Listing the alert adds situationWatch: stored, blank, or flat. Equities are rejected.
          */
         post: operations["createPriceAlert"];
         delete?: never;
@@ -9182,6 +9188,26 @@ export interface components {
             triggeredPrice?: number;
             /** @description Exchange that crossed a multi-venue funding alert (binance, bybit, or okx when exchange is all) */
             triggeredVenue?: string;
+            /**
+             * @description Filled when a situation alert is read. stored means the newest open buy has a coin read.
+             *     blank means that buy stored none, so this alert does not fire.
+             *     flat means no open crypto buy is left, so this alert stays quiet.
+             *     Omitted for other kinds, and when the book could not be read.
+             * @enum {string}
+             */
+            situationWatch?: "stored" | "blank" | "flat";
+            situationFire?: components["schemas"]["SituationFire"];
+        };
+        /**
+         * @description The last time a situation alert fired. comparison names the stored clauses that had left,
+         *     with the entry kind, the later kind, and any missing venues. entry and live are those two
+         *     reads with the held-since clock cleared. A repeating alert keeps this until the next fire
+         *     replaces it. Re-arming does not clear it. Omitted until the first fire.
+         */
+        SituationFire: {
+            comparison?: components["schemas"]["SituationComparison"];
+            entry?: components["schemas"]["CoinSituation"];
+            live?: components["schemas"]["CoinSituation"];
         };
         AlertWebhook: {
             clientId?: string;

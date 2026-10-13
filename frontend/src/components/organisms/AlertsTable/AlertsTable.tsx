@@ -7,7 +7,7 @@ import { Text } from '@/components/atoms/Text';
 import type { PriceAlert } from '@/libs/api/endpoints/alertsApi';
 import { formatSymbolDisplay } from '@/libs/utils';
 import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
-import { alertConditionLabel, alertSymbolLabel } from './helpers';
+import { alertConditionLabel, alertSymbolLabel, situationAlertNotes } from './helpers';
 import type { AlertsTableProps } from './AlertsTable.types';
 
 export function AlertsTable({
@@ -17,7 +17,7 @@ export function AlertsTable({
   onOpen,
   deleteLoading,
 }: AlertsTableProps) {
-  const { t } = useTranslation(['alerts', 'common']);
+  const { t, i18n } = useTranslation(['alerts', 'common', 'detail']);
 
   const columns: ColumnsType<PriceAlert> = [
     {
@@ -52,23 +52,37 @@ export function AlertsTable({
       title: t('alerts:status', { defaultValue: 'Status' }),
       dataIndex: 'status',
       key: 'status',
-      render: (status: string | undefined, row) => (
-        <Space direction="vertical" size={0}>
-          {status ? (
-            <BrandTag variant={status === 'triggered' ? 'live' : 'status'}>{status}</BrandTag>
-          ) : (
-            <Text variant="caption">—</Text>
-          )}
-          {row.triggeredVenue ? (
-            <Text variant="caption" color="secondary">
-              {t('alerts:triggeredOn', {
-                venue: row.triggeredVenue,
-                price: row.triggeredPrice ?? '',
-              })}
-            </Text>
-          ) : null}
-        </Space>
-      ),
+      onCell: () => ({ style: { whiteSpace: 'normal', verticalAlign: 'top' } }),
+      render: (status: string | undefined, row) => {
+        const notes = situationAlertNotes(row, t, i18n.language);
+        return (
+          <Space direction="vertical" size={0}>
+            {status ? (
+              <BrandTag variant={status === 'triggered' ? 'live' : 'status'}>{status}</BrandTag>
+            ) : (
+              <Text variant="caption">—</Text>
+            )}
+            {row.triggeredVenue ? (
+              <Text variant="caption" color="secondary">
+                {t('alerts:triggeredOn', {
+                  venue: row.triggeredVenue,
+                  price: row.triggeredPrice ?? '',
+                })}
+              </Text>
+            ) : null}
+            {notes.map((line, index) => (
+              <Text
+                key={`${row.id ?? 'alert'}-${index}`}
+                variant="caption"
+                color="secondary"
+                style={{ whiteSpace: 'normal', display: 'block', maxWidth: 420 }}
+              >
+                {line}
+              </Text>
+            ))}
+          </Space>
+        );
+      },
     },
     {
       title: t('alerts:actions'),

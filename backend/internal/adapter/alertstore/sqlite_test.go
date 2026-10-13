@@ -96,6 +96,58 @@ func TestSQLite_PersistsAcrossReopen(t *testing.T) {
 	}
 }
 
+func TestSQLite_SituationFireSurvivesRearmAndReplaces(t *testing.T) {
+	s := openTemp(t)
+	ctx := context.Background()
+	if _, err := s.Create(ctx, sample("fire", "c")); err != nil {
+		t.Fatal(err)
+	}
+	first := domain.SituationFire{
+		Comparison: domain.SituationComparison{
+			Clauses: []domain.SituationClauseLeft{{
+				Clause: "priceCvd", Status: domain.SituationLeftChanged,
+				Entry: domain.SituationCVDPriceUp, Live: domain.SituationCVDAgrees,
+			}},
+		},
+		Entry: &domain.CoinSituation{PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceUp}},
+		Live:  &domain.CoinSituation{PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDAgrees}},
+	}
+	if _, err := s.SetSituationFire(ctx, "fire", first); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetArmed(ctx, "fire", true); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Get(ctx, "c", "fire")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Armed || got.SituationFire == nil || len(got.SituationFire.Comparison.Clauses) != 1 || got.SituationFire.Comparison.Clauses[0].Live != domain.SituationCVDAgrees {
+		t.Fatalf("re-arm cleared the fire: %+v", got.SituationFire)
+	}
+	second := first
+	second.Comparison.Clauses = []domain.SituationClauseLeft{{
+		Clause: "funding", Status: domain.SituationLeftMissing, Entry: "long", Missing: []string{"okx"},
+	}}
+	if _, err := s.SetSituationFire(ctx, "fire", second); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.Get(ctx, "c", "fire")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SituationFire == nil || len(got.SituationFire.Comparison.Clauses) != 1 || got.SituationFire.Comparison.Clauses[0].Clause != "funding" || len(got.SituationFire.Comparison.Clauses[0].Missing) != 1 {
+		t.Fatalf("replaced fire: %+v", got.SituationFire)
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE price_alerts SET situation_fire_json = ? WHERE id = ?`, "{", "fire"); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.Get(ctx, "c", "fire")
+	if err != nil || got.SituationFire != nil {
+		t.Fatalf("bad json should leave the fire off: %+v %v", got, err)
+	}
+}
+
 func TestSQLite_MarkTriggeredOnce(t *testing.T) {
 	s := openTemp(t)
 	ctx := context.Background()

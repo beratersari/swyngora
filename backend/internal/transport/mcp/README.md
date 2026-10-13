@@ -90,7 +90,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_price_correlation` | How similarly a coin moves with BTC and ETH (1h / 4h / 24h) |
 | `get_market_breadth` | How many followed coins are up vs down (1h / 4h / 24h), plus BTC/ETH vs the pack |
 | `get_coin_situation` | Price versus futures CVD, 1h open interest, the closer estimated liquidation pocket, measured 24h force-order prints, OI-weighted funding, Binance and OKX top versus crowd, and whale versus retail. A missing publisher is named and that clause stays blank. A live clause may include `since` when the stored minutes reach a different kind. The liquidation model leaves `since` off. A stored fill omits it. A resting order stores a new read at the fill. Optional `at` (RFC3339) reads the stored five-minute minute at a candle close and leaves the estimated pocket off. Omit `at` for the live read. `/derivatives` and `/unusual` open these clauses under an outlier row |
-| `create_situation_alert` | Fire when the live read leaves the clauses stored when the newest open paper buy filled |
+| `create_situation_alert` | Fire when the live read leaves the clauses stored when the newest open paper buy filled. A blank newest buy does not fire. Repeating re-arm keeps the last fire. The alert still follows the newest open buy |
 | `get_fear_greed` | 0–100 fear and greed from our own tape (breadth, BTC move, volatility, funding, long/short, liquidations, perp book, taker flow), which input moved the score the most, and stored 1h/4h/24h/7d history. Not the Binance or CoinGlass index |
 | `get_price_volatility` | How much a coin moved over 1h / 4h / 24h vs its normal range and vs BTC/ETH |
 | `get_market_snapshot` | Price, volume, mcap, OI, funding, LS, and taker buy/sell together (1h / 4h / 24h) |
@@ -141,7 +141,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `list_watchlist_shares` | List outgoing shares |
 | `list_shared_watchlists` | Lists shared with this client |
 | `list_watchlist_audit` | Who changed the list and when |
-| `list_price_alerts` | List price alerts for a client |
+| `list_price_alerts` | List price alerts for a client. A situation alert includes `situationWatch` (`stored`, `blank`, or `flat`) and, after a fire, `situationFire` (clauses that left, entry kind, later kind, missing venues). Repeating re-arm does not clear that fire |
 | `create_price_alert` | Create one-shot above/below price alert |
 | `create_orderbook_alert` | Live imbalance or wall alert (edge re-arm, no re-fire while still true) |
 | `create_liquidation_feed_alert` | Fire when Binance/Bybit liquidation feed stays down; no re-fire until it recovers |

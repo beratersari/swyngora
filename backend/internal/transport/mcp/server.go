@@ -2575,7 +2575,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("list_price_alerts",
-		mcp.WithDescription("List price alerts for a clientId (active and triggered)."),
+		mcp.WithDescription("List price alerts for a clientId (active and triggered). A situation alert includes situationWatch (stored, blank, or flat) and, after it fires, situationFire: the clauses that left, the entry kind, the later kind, and any missing venue. That fire stays until the next fire replaces it. Repeating re-arm does not clear it. The alert still follows the newest open buy."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
@@ -2622,7 +2622,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("create_situation_alert",
-		mcp.WithDescription("Alert when the live coin read leaves the read stored on the newest open paper buy for this exchange and symbol. Compares only the clauses that were stored at the fill. A clause that appears later does not fire. No open crypto position stays quiet. mode=one_time (default) or repeating, which re-arms when the live read matches the entry again. Not for Nasdaq or BIST."),
+		mcp.WithDescription("Alert when the live coin read leaves the read stored on the newest open paper buy for this exchange and symbol. Compares only the clauses that were stored at the fill. A clause that appears later does not fire. No open crypto position stays quiet. A newest buy with no stored read does not fire. mode=one_time (default) fires once. mode=repeating re-arms when the live read matches the entry again. The last fire is kept on the alert, including which clauses left and what they became, until the next fire replaces it. Not for Nasdaq or BIST."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair on the paper book, e.g. BTCUSDT or BTC-USD")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit (default binance)")),

@@ -36,14 +36,28 @@ type LiquidationTape interface {
 	Prepare(ctx context.Context, exchange, symbol string, lookback time.Duration)
 }
 
+// SituationWatchSource reports whether a situation alert has a stored entry to follow.
+type SituationWatchSource interface {
+	SituationAlertWatch(ctx context.Context, clientID, exchange, symbol string) (domain.SituationWatch, error)
+}
+
 // Service orchestrates price-alert use cases.
 type Service struct {
 	store domain.PriceAlertPort
 	// Tape watches and backfills liquidation prints for new coin alerts.
 	Tape LiquidationTape
+	// Watch fills situationWatch when a situation alert is read. Optional.
+	watch SituationWatchSource
 	// AllowPrivateWebhooks permits loopback/RFC1918 webhook targets (local tests only).
 	// Production must leave this false to prevent SSRF.
 	AllowPrivateWebhooks bool
+}
+
+// SetSituationWatch attaches the paper book used to say whether a situation alert is watching.
+func (s *Service) SetSituationWatch(src SituationWatchSource) {
+	if s != nil {
+		s.watch = src
+	}
 }
 
 // New constructs a price-alert service.
@@ -132,6 +146,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 		return nil, err
 	}
 	s.prepareLiquidationTape(ctx, out)
+	s.decorateOne(ctx, out)
 	return out, nil
 }
 
@@ -171,7 +186,21 @@ func (s *Service) Get(ctx context.Context, clientID, id string) (*domain.PriceAl
 	if id == "" {
 		return nil, fmt.Errorf("%w: alert id is required", domain.ErrInvalidArgument)
 	}
-	return s.store.Get(ctx, clientID, id)
+	got, err := s.store.Get(ctx, clientID, id)
+	if err != nil || got == nil {
+		return got, err
+	}
+	s.decorateOne(ctx, got)
+	return got, nil
+}
+
+func (s *Service) decorateOne(ctx context.Context, a *domain.PriceAlert) {
+	if a == nil {
+		return
+	}
+	rows := []domain.PriceAlert{*a}
+	s.decorateSituation(ctx, rows)
+	*a = rows[0]
 }
 
 // List returns all alerts for a client.
@@ -183,7 +212,35 @@ func (s *Service) List(ctx context.Context, clientID string) ([]domain.PriceAler
 	if err != nil {
 		return nil, err
 	}
-	return s.store.ListByClient(ctx, clientID)
+	list, err := s.store.ListByClient(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	s.decorateSituation(ctx, list)
+	return list, nil
+}
+
+func (s *Service) decorateSituation(ctx context.Context, list []domain.PriceAlert) {
+	if s == nil || s.watch == nil || len(list) == 0 {
+		return
+	}
+	seen := map[string]domain.SituationWatchStatus{}
+	for i := range list {
+		if !domain.IsSituationAlert(list[i].Kind) {
+			continue
+		}
+		key := list[i].ClientID + "\x00" + string(list[i].Exchange) + "\x00" + list[i].Symbol
+		status, ok := seen[key]
+		if !ok {
+			w, err := s.watch.SituationAlertWatch(ctx, list[i].ClientID, string(list[i].Exchange), list[i].Symbol)
+			if err != nil {
+				continue
+			}
+			status = w.Status
+			seen[key] = status
+		}
+		list[i].SituationWatch = status
+	}
 }
 
 // Delete removes an alert owned by the client.
@@ -274,6 +331,7 @@ func (s *Service) processObservation(ctx context.Context, a domain.PriceAlert, e
 			return nil, false, err
 		}
 		out = s.noteTriggeredVenue(ctx, out, extra)
+		out = s.noteSituationFire(ctx, out, extra)
 		if err := s.enqueueWebhookNotificationExtra(ctx, out, extra); err != nil {
 			slog.Error("enqueue webhook after alert trigger", "alertId", out.ID, "clientId", out.ClientID, "err", err)
 		}
@@ -284,6 +342,7 @@ func (s *Service) processObservation(ctx context.Context, a domain.PriceAlert, e
 			return nil, false, err
 		}
 		out = s.noteTriggeredVenue(ctx, out, extra)
+		out = s.noteSituationFire(ctx, out, extra)
 		if err := s.enqueueWebhookNotificationExtra(ctx, out, extra); err != nil {
 			slog.Error("enqueue webhook after repeating trigger", "alertId", out.ID, "clientId", out.ClientID, "err", err)
 		}
@@ -492,6 +551,33 @@ func (s *Service) NotifyClient(ctx context.Context, clientID, sourceID, payloadJ
 
 type triggeredVenueStore interface {
 	SetTriggeredVenue(ctx context.Context, id, venue string) (*domain.PriceAlert, error)
+}
+
+type situationFireStore interface {
+	SetSituationFire(ctx context.Context, id string, fire domain.SituationFire) (*domain.PriceAlert, error)
+}
+
+func (s *Service) noteSituationFire(ctx context.Context, a *domain.PriceAlert, extra map[string]any) *domain.PriceAlert {
+	if s == nil || a == nil || extra == nil {
+		return a
+	}
+	fire, ok := extra["situationFire"].(domain.SituationFire)
+	if !ok || len(fire.Comparison.Clauses) == 0 {
+		return a
+	}
+	setter, ok := s.store.(situationFireStore)
+	if !ok {
+		cp := fire
+		a.SituationFire = &cp
+		return a
+	}
+	updated, err := setter.SetSituationFire(ctx, a.ID, fire)
+	if err != nil || updated == nil {
+		cp := fire
+		a.SituationFire = &cp
+		return a
+	}
+	return updated
 }
 
 func (s *Service) noteTriggeredVenue(ctx context.Context, a *domain.PriceAlert, extra map[string]any) *domain.PriceAlert {

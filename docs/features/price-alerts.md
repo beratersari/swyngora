@@ -59,7 +59,9 @@ PUT /api/v1/alerts/webhook
 | `open_interest` | Current open-interest notional in USDT | `above` / `below` | Positive USDT | `one_time` unless repeating |
 | `taker` | 5-minute taker buy share, 0–100 | `above` / `below` | 0–100 | `one_time` unless repeating |
 | `fear_greed` | Market-wide fear and greed score. No symbol | `above` / `below` | 0–100 | `one_time` unless repeating |
-| `situation` | Live coin read leaves the clauses stored when the newest open paper buy filled. No open crypto position stays quiet | `leaves` | unused | `one_time` unless repeating |
+| `situation` | Live coin read leaves the clauses stored when the newest open paper buy filled. A blank newest buy and a flat book stay quiet and are named on the row | `leaves` | unused | `one_time` unless repeating |
+
+A situation alert's last fire is `situationFire` on `GET /api/v1/alerts` and on the webhook `situation_alert.triggered`, beside `changed` (the clause names). It names the entry kind, the later kind, and any missing venue. The alerts table shows that in English and Turkish with the fire time. Repeating re-arm keeps it until the next fire replaces it. The list does not load a live tape. `situationWatch` is `stored`, `blank`, or `flat` when the alert is read.
 
 Book kinds are evaluated in the background from the same live local books as `GET /api/v1/market/orderbook` (Binance, Coinbase, Bybit). Repeating book alerts fire when the condition **appears**, stay quiet while it remains true, and re-arm after it clears so the next appearance can fire again.
 

@@ -1,4 +1,26 @@
+import { situationChangeLines } from '@/components/molecules/CoinSituation';
 import type { PriceAlert } from '@/libs/api/endpoints/alertsApi';
+import { formatDateTime } from '@/libs/utils/formatMarket';
+
+type Translate = (key: string, options?: Record<string, unknown>) => string;
+
+/** Watch sentence and the last fire. A past fire does not say the live read still matches. */
+export function situationAlertNotes(row: PriceAlert, t: Translate, locale?: string): string[] {
+  if ((row.kind ?? 'price') !== 'situation') return [];
+  const lines: string[] = [];
+  if (row.situationWatch === 'blank') {
+    lines.push(t('alerts:situationWatchBlank'));
+  } else if (row.situationWatch === 'flat') {
+    lines.push(t('alerts:situationWatchFlat'));
+  }
+  const comparison = row.situationFire?.comparison;
+  if (!comparison || comparison.same === true) return lines;
+  lines.push(t('alerts:situationFireAt', { time: formatDateTime(row.triggeredAt, locale) }));
+  lines.push(
+    ...situationChangeLines(row.situationFire?.entry, row.situationFire?.live, comparison, 'live', t),
+  );
+  return lines;
+}
 
 export function alertConditionLabel(row: PriceAlert): string {
   const kind = row.kind ?? 'price';

@@ -6568,7 +6568,14 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         StructuredTool.from_function(
             list_price_alerts,
             name="list_price_alerts",
-            description="List one-shot price alerts for a clientId (active and triggered).",
+            description=(
+                "List price alerts for a clientId (active and triggered). A situation alert "
+                "includes situationWatch: stored when the newest open buy has a read, blank "
+                "when that buy stored none, or flat when no open crypto buy is left. After it "
+                "fires, situationFire names the clauses that left, what they were, what they "
+                "became, and any missing venue. Repeating re-arm keeps that fire until the "
+                "next one replaces it. The alert still follows the newest open buy."
+            ),
             args_schema=AlertListInput,
         ),
         StructuredTool.from_function(
@@ -6577,8 +6584,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "Alert when the live coin read leaves the read stored on the newest "
                 "open paper buy for this exchange and symbol. Only clauses stored at "
-                "the fill count. No open crypto position stays quiet. mode=one_time "
-                "(default) or repeating."
+                "the fill count. No open crypto position stays quiet. A newest buy with "
+                "no stored read does not fire. mode=one_time (default) or repeating, "
+                "which re-arms when the live read matches again. list_price_alerts keeps "
+                "the last fire and says when the alert is not watching."
             ),
             args_schema=SituationAlertInput,
         ),

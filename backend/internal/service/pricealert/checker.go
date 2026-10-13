@@ -486,11 +486,22 @@ func (c *Checker) evalSituationGroup(ctx context.Context, exchange, symbol strin
 			}
 			continue
 		}
-		left, changed := domain.SituationLeft(entry, live)
-		ev := domain.EvaluateAlertState(a, left)
+		cmp := domain.CompareCoinSituation(entry, live)
+		ev := domain.EvaluateAlertState(a, len(cmp.Clauses) > 0)
 		var extra map[string]any
-		if len(changed) > 0 {
-			extra = map[string]any{"changed": changed}
+		if len(cmp.Clauses) > 0 {
+			names := make([]string, len(cmp.Clauses))
+			for i := range cmp.Clauses {
+				names[i] = cmp.Clauses[i].Clause
+			}
+			extra = map[string]any{
+				"changed": names,
+				"situationFire": domain.SituationFire{
+					Comparison: cmp,
+					Entry:      domain.WithoutSituationHeld(entry),
+					Live:       domain.WithoutSituationHeld(live),
+				},
+			}
 		}
 		if _, _, err := c.Alerts.ProcessObservationExtra(ctx, a, ev, 0, now, extra); err != nil && c.Logger != nil {
 			c.Logger.Debug("situation alert failed", "id", a.ID, "err", err)

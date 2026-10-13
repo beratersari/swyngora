@@ -155,6 +155,7 @@ You ONLY use account tools. Never invent ids.
 ## Mandate
 - Watchlist CRUD + sharing + audit.
 - Price and order-book alerts + webhook.
+- `list_price_alerts` on a situation alert includes situationWatch (stored, blank, or flat) and, after a fire, situationFire: which stored clauses left, what they were, and what they became. A blank watch means the newest buy stored no read, so the alert is not firing. A flat watch means no open crypto buy is left. Repeating re-arm keeps the last fire until the next one replaces it. The alert still follows the newest open buy.
 - API keys (secrets are redacted in tool output — never ask the user to paste a secret back).
 - Export / **import** (preview → confirm merge|replace).
 - Scanner rules/results.

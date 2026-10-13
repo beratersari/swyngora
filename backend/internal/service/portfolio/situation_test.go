@@ -23,6 +23,58 @@ func (f *fakeSituation) GetCoinSituation(context.Context, string) (*domain.CoinS
 	return f.got, nil
 }
 
+func TestSituationAlertWatch_NamesABlankBuyAndAFlatBook(t *testing.T) {
+	svc := newSvc(t, nil)
+	ctx := context.Background()
+	flat, err := svc.SituationAlertWatch(ctx, "watch-flat", "binance", "BTCUSDT")
+	if err != nil || flat.Status != domain.SituationWatchFlat {
+		t.Fatalf("flat %+v %v", flat, err)
+	}
+	eq, err := svc.SituationAlertWatch(ctx, "watch-flat", "nasdaq", "AAPL")
+	if err != nil || eq.Status != domain.SituationWatchFlat {
+		t.Fatalf("equity %+v %v", eq, err)
+	}
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "watch-blank", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{
+		ClientID: "watch-blank", Symbol: "BTCUSDT", Side: "buy", Quantity: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	blank, err := svc.SituationAlertWatch(ctx, "watch-blank", "binance", "BTCUSDT")
+	if err != nil || blank.Status != domain.SituationWatchBlank {
+		t.Fatalf("blank %+v %v", blank, err)
+	}
+	src := &fakeSituation{got: &domain.CoinSituation{
+		Symbol:   "BTCUSDT",
+		PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceUp},
+	}}
+	svc.SetSituationSource(src)
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "watch-stored", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{
+		ClientID: "watch-stored", Symbol: "BTCUSDT", Side: "buy", Quantity: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := svc.SituationAlertWatch(ctx, "watch-stored", "binance", "BTCUSDT")
+	if err != nil || stored.Status != domain.SituationWatchStored {
+		t.Fatalf("stored %+v %v", stored, err)
+	}
+	src.got = nil
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{
+		ClientID: "watch-stored", Symbol: "BTCUSDT", Side: "buy", Quantity: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	newer, err := svc.SituationAlertWatch(ctx, "watch-stored", "binance", "BTCUSDT")
+	if err != nil || newer.Status != domain.SituationWatchBlank {
+		t.Fatalf("newest blank %+v %v", newer, err)
+	}
+}
+
 func TestPlaceOrder_StoresCoinSituationOnTheFill(t *testing.T) {
 	svc := newSvc(t, nil)
 	src := &fakeSituation{got: &domain.CoinSituation{

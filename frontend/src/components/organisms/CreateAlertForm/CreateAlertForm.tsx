@@ -350,7 +350,7 @@ export function CreateAlertForm({
         <Text variant="caption" color="secondary">
           {t('alerts:situationHint', {
             defaultValue:
-              'Fires when the live read leaves the market stored when your newest open buy filled. Clauses that were missing at the fill are ignored.',
+              'Fires when the live read leaves the market stored when your newest open buy filled. Clauses that were missing at the fill are ignored. After it fires, the row names which clauses left and what they became. A newest buy with no stored read is named.',
           })}
         </Text>
       ) : null}

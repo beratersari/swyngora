@@ -22,21 +22,23 @@ func NewAlertHandler(svc *pricealert.Service) *AlertHandler {
 }
 
 type alertDTO struct {
-	ID             string  `json:"id"`
-	ClientID       string  `json:"clientId"`
-	Exchange       string  `json:"exchange"`
-	Symbol         string  `json:"symbol"`
-	Kind           string  `json:"kind"`
-	Condition      string  `json:"condition"`
-	TargetPrice    float64 `json:"targetPrice"`
-	RangePct       float64 `json:"rangePct,omitempty"`
-	Mode           string  `json:"mode"`
-	Armed          bool    `json:"armed,omitempty"`
-	Status         string  `json:"status"`
-	CreatedAt      string  `json:"createdAt"`
-	TriggeredAt    *string `json:"triggeredAt,omitempty"`
-	TriggeredPrice float64 `json:"triggeredPrice,omitempty"`
-	TriggeredVenue string  `json:"triggeredVenue,omitempty"`
+	ID             string                `json:"id"`
+	ClientID       string                `json:"clientId"`
+	Exchange       string                `json:"exchange"`
+	Symbol         string                `json:"symbol"`
+	Kind           string                `json:"kind"`
+	Condition      string                `json:"condition"`
+	TargetPrice    float64               `json:"targetPrice"`
+	RangePct       float64               `json:"rangePct,omitempty"`
+	Mode           string                `json:"mode"`
+	Armed          bool                  `json:"armed,omitempty"`
+	Status         string                `json:"status"`
+	CreatedAt      string                `json:"createdAt"`
+	TriggeredAt    *string               `json:"triggeredAt,omitempty"`
+	TriggeredPrice float64               `json:"triggeredPrice,omitempty"`
+	TriggeredVenue string                `json:"triggeredVenue,omitempty"`
+	SituationWatch string                `json:"situationWatch,omitempty"`
+	SituationFire  *domain.SituationFire `json:"situationFire,omitempty"`
 }
 
 func alertToDTO(a *domain.PriceAlert) alertDTO {
@@ -71,6 +73,12 @@ func alertToDTO(a *domain.PriceAlert) alertDTO {
 		dto.TriggeredPrice = a.TriggeredPrice
 	}
 	dto.TriggeredVenue = strings.TrimSpace(a.TriggeredVenue)
+	if a.SituationWatch != "" {
+		dto.SituationWatch = string(a.SituationWatch)
+	}
+	if a.SituationFire != nil && len(a.SituationFire.Comparison.Clauses) > 0 {
+		dto.SituationFire = a.SituationFire
+	}
 	return dto
 }
 

@@ -87,6 +87,37 @@ type PriceAlert struct {
 	TriggeredPrice float64    // last metric at most recent fire; 0 if never fired
 	// TriggeredVenue is the exchange that crossed a multi-venue tape alert (funding on exchange=all).
 	TriggeredVenue string
+	// SituationFire is the comparison from the last time a situation alert fired.
+	// Nil until that fire. Re-arming leaves it in place. The next fire replaces it.
+	SituationFire *SituationFire
+	// SituationWatch is filled when a situation alert is read. It is not stored.
+	// Empty for other kinds, and when the book could not be read.
+	SituationWatch SituationWatchStatus
+}
+
+// SituationWatchStatus says whether a situation alert has an entry read to follow.
+type SituationWatchStatus string
+
+const (
+	// SituationWatchStored means the newest open buy has a coin read.
+	SituationWatchStored SituationWatchStatus = "stored"
+	// SituationWatchBlank means that buy stored no read, so the alert does not fire.
+	SituationWatchBlank SituationWatchStatus = "blank"
+	// SituationWatchFlat means no open crypto buy is left, so the alert stays quiet.
+	SituationWatchFlat SituationWatchStatus = "flat"
+)
+
+// SituationFire is the entry read and the live read from the last situation fire.
+// The clocks are cleared. comparison names the stored clauses that had left.
+type SituationFire struct {
+	Comparison SituationComparison `json:"comparison"`
+	Entry      *CoinSituation      `json:"entry,omitempty"`
+	Live       *CoinSituation      `json:"live,omitempty"`
+}
+
+// SituationWatch is the read-time answer for one situation alert.
+type SituationWatch struct {
+	Status SituationWatchStatus
 }
 
 // AlertEvalResult is the outcome of evaluating a price tick against an alert.

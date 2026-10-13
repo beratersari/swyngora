@@ -106,35 +106,60 @@ func (s *Service) entrySituation(ctx context.Context, bookID string, ex domain.E
 // exchange, and symbol, across every book they own. Equities and a flat book
 // return nil. A missing fill leaves the read blank.
 func (s *Service) EntrySituation(ctx context.Context, clientID, exchange, symbol string) (*domain.CoinSituation, error) {
+	_, got, err := s.findLatestEntry(ctx, clientID, exchange, symbol)
+	return got, err
+}
+
+// SituationAlertWatch says whether the newest open buy has a read for a situation alert.
+// flat means no open crypto buy. blank means that buy stored no read. stored means it has one.
+// Equities are flat. The situation alert still follows this newest buy.
+func (s *Service) SituationAlertWatch(ctx context.Context, clientID, exchange, symbol string) (domain.SituationWatch, error) {
+	lot, got, err := s.findLatestEntry(ctx, clientID, exchange, symbol)
+	if err != nil {
+		return domain.SituationWatch{}, err
+	}
+	if lot == nil {
+		return domain.SituationWatch{Status: domain.SituationWatchFlat}, nil
+	}
+	if got == nil {
+		return domain.SituationWatch{Status: domain.SituationWatchBlank}, nil
+	}
+	return domain.SituationWatch{Status: domain.SituationWatchStored}, nil
+}
+
+func (s *Service) findLatestEntry(ctx context.Context, clientID, exchange, symbol string) (*domain.TaxLot, *domain.CoinSituation, error) {
 	if s == nil || s.store == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 	ex := domain.ParseExchange(exchange)
 	if ex == "" || domain.IsEquityExchange(ex) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	sym := domain.NormalizeSymbol(ex, symbol)
 	if sym == "" {
-		return nil, nil
+		return nil, nil, nil
 	}
 	books, err := s.store.ListPortfolios(ctx, clientID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var lots []domain.TaxLot
 	for i := range books {
 		rows, err := s.store.ListTaxLots(ctx, books[i].BookID(), ex, sym, true)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		lots = append(lots, rows...)
 	}
 	lot, ok := domain.LatestOpenLot(lots)
 	if !ok {
-		return nil, nil
+		return nil, nil, nil
 	}
 	got, _, err := s.entrySituation(ctx, lot.ClientID, ex, []domain.TaxLot{lot})
-	return got, err
+	if err != nil {
+		return nil, nil, err
+	}
+	return &lot, got, nil
 }
 
 // captureSituation reads the combined tape now.

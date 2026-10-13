@@ -6203,6 +6203,12 @@ func alertJSON(a *domain.PriceAlert) (json.RawMessage, error) {
 	if a.TriggeredPrice > 0 {
 		m["triggeredPrice"] = a.TriggeredPrice
 	}
+	if a.SituationWatch != "" {
+		m["situationWatch"] = string(a.SituationWatch)
+	}
+	if a.SituationFire != nil && len(a.SituationFire.Comparison.Clauses) > 0 {
+		m["situationFire"] = a.SituationFire
+	}
 	return mustJSON(m)
 }
 
