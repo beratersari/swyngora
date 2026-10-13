@@ -50,9 +50,10 @@ func marshalSituation(s *domain.CoinSituation) string {
 // A lot whose source trade is missing has a nil situation.
 func (s *SQLite) ListSituationCloses(ctx context.Context, clientID string) ([]domain.SituationClose, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT l.exchange, f.realized_pnl, COALESCE(t.situation_json, '')
+		SELECT l.exchange, l.symbol, f.realized_pnl, COALESCE(sell.created_at, ''), COALESCE(t.situation_json, '')
 		FROM tax_lot_fills f
 		JOIN tax_lots l ON l.id = f.lot_id
+		LEFT JOIN trades sell ON sell.client_id = l.client_id AND sell.id = f.trade_id
 		LEFT JOIN trades t ON t.client_id = l.client_id AND t.id = l.source_trade_id
 		WHERE l.client_id = ?
 	`, clientID)
@@ -62,13 +63,15 @@ func (s *SQLite) ListSituationCloses(ctx context.Context, clientID string) ([]do
 	defer rows.Close()
 	out := make([]domain.SituationClose, 0)
 	for rows.Next() {
-		var ex, situation string
+		var ex, symbol, closedAt, situation string
 		var pnl float64
-		if err := rows.Scan(&ex, &pnl, &situation); err != nil {
+		if err := rows.Scan(&ex, &symbol, &pnl, &closedAt, &situation); err != nil {
 			return nil, err
 		}
 		out = append(out, domain.SituationClose{
 			Exchange:    domain.Exchange(ex),
+			Symbol:      symbol,
+			ClosedAt:    parseTime(closedAt),
 			RealizedPnL: pnl,
 			Situation:   unmarshalSituation(situation),
 		})

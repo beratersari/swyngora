@@ -3,6 +3,7 @@ package domain
 import (
 	"math"
 	"testing"
+	"time"
 )
 
 func TestBuildSituationRecord_CountsACloseUnderEveryStoredKind(t *testing.T) {
@@ -10,13 +11,15 @@ func TestBuildSituationRecord_CountsACloseUnderEveryStoredKind(t *testing.T) {
 		PriceCVD: &SituationPriceCVD{Kind: SituationCVDPriceUp},
 		Funding:  &SituationFunding{Payer: "long"},
 	}
+	early := time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC)
+	later := early.Add(time.Minute)
 	got := BuildSituationRecord([]SituationClose{
-		{Exchange: ExchangeBinance, RealizedPnL: 20, Situation: read},
-		{Exchange: ExchangeBinance, RealizedPnL: -10, Situation: read},
-		{Exchange: ExchangeBinance, RealizedPnL: 0, Situation: read},
-		{Exchange: ExchangeBybit, RealizedPnL: 4},
-		{Exchange: ExchangeNasdaq, RealizedPnL: 50, Situation: read},
-		{Exchange: ExchangeBinance, RealizedPnL: math.NaN(), Situation: read},
+		{Exchange: ExchangeBinance, Symbol: "BTCUSDT", ClosedAt: early, RealizedPnL: 20, Situation: read},
+		{Exchange: ExchangeBinance, Symbol: "ETHUSDT", ClosedAt: later, RealizedPnL: -10, Situation: read},
+		{Exchange: ExchangeBybit, Symbol: "SOLUSDT", RealizedPnL: 0, Situation: read},
+		{Exchange: ExchangeBybit, Symbol: "XRPUSDT", RealizedPnL: 4},
+		{Exchange: ExchangeNasdaq, Symbol: "AAPL", ClosedAt: later, RealizedPnL: 50, Situation: read},
+		{Exchange: ExchangeBinance, Symbol: "BTCUSDT", ClosedAt: later, RealizedPnL: math.NaN(), Situation: read},
 	})
 	if got.Counted != 3 || got.Skipped != 1 {
 		t.Fatalf("counted=%d skipped=%d", got.Counted, got.Skipped)
@@ -34,6 +37,21 @@ func TestBuildSituationRecord_CountsACloseUnderEveryStoredKind(t *testing.T) {
 		if row.Count != 3 || row.Profitable != 1 || row.RealizedPnL != 10 {
 			t.Fatalf("row %+v", row)
 		}
+		if len(row.Closes) != 3 {
+			t.Fatalf("closes %+v", row.Closes)
+		}
+		if row.Closes[0].Symbol != "ETHUSDT" || !row.Closes[0].ClosedAt.Equal(later) || row.Closes[0].RealizedPnL != -10 {
+			t.Fatalf("newest %+v", row.Closes[0])
+		}
+		if row.Closes[1].Symbol != "BTCUSDT" || !row.Closes[1].ClosedAt.Equal(early) || row.Closes[1].RealizedPnL != 20 {
+			t.Fatalf("older %+v", row.Closes[1])
+		}
+		if row.Closes[2].Symbol != "SOLUSDT" || !row.Closes[2].ClosedAt.IsZero() || row.Closes[2].Exchange != ExchangeBybit {
+			t.Fatalf("untimed %+v", row.Closes[2])
+		}
+	}
+	if got.Rows[0].Closes[0].Symbol != got.Rows[1].Closes[0].Symbol || got.Rows[0].Closes[1].RealizedPnL != got.Rows[1].Closes[1].RealizedPnL {
+		t.Fatalf("rows should name the same sells: %+v %+v", got.Rows[0].Closes, got.Rows[1].Closes)
 	}
 	if got.Note == "" {
 		t.Fatal("note")

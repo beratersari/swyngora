@@ -69,6 +69,23 @@ func TestSituationRecord_CountsClosedSlicesAndSkipsABlankBuy(t *testing.T) {
 	if got.Rows[0].Clause != "priceCvd" || got.Rows[1].Clause != "funding" {
 		t.Fatalf("order %+v", got.Rows)
 	}
+	for _, row := range got.Rows {
+		if len(row.Closes) != 2 {
+			t.Fatalf("closes %+v", row.Closes)
+		}
+		if row.Closes[0].Symbol != "BTCUSDT" || row.Closes[0].Exchange != domain.ExchangeBinance || row.Closes[0].ClosedAt.IsZero() {
+			t.Fatalf("newest %+v", row.Closes[0])
+		}
+		if row.Closes[1].Symbol != "BTCUSDT" || !row.Closes[0].ClosedAt.After(row.Closes[1].ClosedAt) {
+			t.Fatalf("order %+v", row.Closes)
+		}
+		if math.Abs(row.Closes[0].RealizedPnL-(-10)) > 1e-9 || math.Abs(row.Closes[1].RealizedPnL-20) > 1e-9 {
+			t.Fatalf("pnl %+v", row.Closes)
+		}
+	}
+	if !got.Rows[0].Closes[0].ClosedAt.Equal(got.Rows[1].Closes[0].ClosedAt) || got.Rows[0].Closes[1].RealizedPnL != got.Rows[1].Closes[1].RealizedPnL {
+		t.Fatalf("same sells %+v %+v", got.Rows[0].Closes, got.Rows[1].Closes)
+	}
 
 	if _, err := svc.Create(ctx, CreateInput{ClientID: "sit-rec-eq", StartingBalance: 10000, Currency: "USD"}); err != nil {
 		t.Fatal(err)

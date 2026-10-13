@@ -161,7 +161,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `POST` | `/api/v1/portfolio/orders/cancel-all` | Cancel all open paper orders, or one market (`symbol`) |
 | `DELETE` | `/api/v1/portfolio/orders/{id}` | Cancel an open pending order |
 | `GET` | `/api/v1/portfolio/situation-change` | Which stored situation clauses changed on an open crypto position (`symbol`) or on one fill (`tradeId`). `openReads` lists every remaining buy, newest first, with that buy's comparison when the live read loaded. A blank later clause is missing, not a new kind. The situation alert still follows the newest buy |
-| `GET` | `/api/v1/portfolio/situation-record` | Closed crypto lots grouped by the situation stored on the buy. Each row is one entry kind. The same close can appear on more than one row. A crypto buy with no stored read is skipped. Equities and open positions are left out |
+| `GET` | `/api/v1/portfolio/situation-record` | Closed crypto lots grouped by the situation stored on the buy. Each row is one entry kind and lists the closes that stored it, newest first. The same close can appear on more than one row. A crypto buy with no stored read is skipped. Equities and open positions are left out |
 | `GET` | `/api/v1/portfolio/trades` | Paper trade history. A sell includes `left`, the buys it closed compared with the read stored on the sell |
 | `GET` | `/api/v1/portfolio/lots` | Tax lots (FIFO/LIFO remaining buys) |
 | `POST`/`GET` | `/api/v1/portfolio/recurring-buys` | Create / list named paper recurring buy (DCA) plans |

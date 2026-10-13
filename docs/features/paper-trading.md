@@ -43,7 +43,7 @@ Transfer tries are stored so you can see which request **completed** and which *
 | `POST` | `/api/v1/portfolio/orders/cancel-all` | Cancel all open orders, or one market (`symbol` + optional `exchange`) |
 | `DELETE` | `/api/v1/portfolio/orders/{id}` | Cancel open pending order (releases unused reservation) |
 | `GET` | `/api/v1/portfolio/trades` | Trade history (`limit`, `offset`); pending fills include `pendingOrderId`; `price` is slipped fill, `fee` is quote taker fee, `lastPrice` is pre-slip last |
-| `GET` | `/api/v1/portfolio/situation-record` | Closed crypto lots grouped by the situation stored on the buy. Each row is one entry kind. The same close can appear on more than one row. A crypto buy with no stored read is skipped. Equities and open positions are left out |
+| `GET` | `/api/v1/portfolio/situation-record` | Closed crypto lots grouped by the situation stored on the buy. Each row is one entry kind and lists the closes that stored it, newest first. The same close can appear on more than one row. A crypto buy with no stored read is skipped. Equities and open positions are left out |
 | `GET` | `/api/v1/portfolio/trading-costs` | Per-exchange paper taker fee and slippage (`?exchange=` optional) |
 | `GET` | `/api/v1/portfolio/lots` | Tax lots (`status=open\|closed\|all`, optional `exchange`/`symbol`) |
 | `POST` | `/api/v1/portfolio/recurring-buys` | Create named recurring buy (DCA) plan |

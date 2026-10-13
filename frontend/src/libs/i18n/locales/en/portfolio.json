@@ -182,7 +182,9 @@
   },
   "situationRecord": {
     "title": "What your closes made",
-    "lead": "Each row is one kind stored on the buy. The same close can appear on more than one row, so these rows are not one total. Open positions stay on the positions tab. Equities are left out.",
+    "lead": "Each row is one kind stored on the buy. Open a row to list those closes, newest first. The same close can appear on more than one row, so these rows are not one total. Open positions stay on the positions tab. Equities are left out.",
+    "close": "{{symbol}} on {{exchange}}, {{time}}, {{pnl}}",
+    "closeNoVenue": "{{symbol}}, {{time}}, {{pnl}}",
     "empty": "No crypto close in this book has a stored read yet.",
     "loading": "Reading closed lots…",
     "failed": "The close record did not load.",

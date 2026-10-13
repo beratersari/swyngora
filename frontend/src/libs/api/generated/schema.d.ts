@@ -4025,10 +4025,11 @@ export interface paths {
          * What this book's closes made, by the read on the buy
          * @description Each row is one kind stored on a closed crypto buy. count is how many
          *     sold slices stored that kind. profitable is how many of those had
-         *     realized profit above zero. realizedPnL is their sum. The same close
-         *     can appear on more than one row, so the rows are not one total.
-         *     counted is each close once. skipped is a crypto close whose buy stored
-         *     no read. Equities are left out. Open positions are not included.
+         *     realized profit above zero. realizedPnL is their sum. closes lists
+         *     those slices, newest first, with symbol, sell time, and realized profit.
+         *     The same close can appear on more than one row, so the rows are not one
+         *     total. counted is each close once. skipped is a crypto close whose buy
+         *     stored no read. Equities are left out. Open positions are not included.
          */
         get: operations["getPortfolioSituationRecord"];
         put?: never;
@@ -9790,8 +9791,20 @@ export interface components {
             note?: string;
         };
         /**
+         * @description One sold slice that stored this row's kind. The same slice is repeated
+         *     on every clause row its buy stored. closedAt is the sell fill time.
+         */
+        SituationRecordClose: {
+            exchange?: string;
+            symbol?: string;
+            /** Format: date-time */
+            closedAt?: string;
+            realizedPnL?: number;
+        };
+        /**
          * @description One entry kind across the closed crypto slices that stored it.
          *     realizedPnL is the sum of those slices. It is not a share of a book total.
+         *     closes lists those slices, newest first.
          */
         SituationRecordRow: {
             /** @enum {string} */
@@ -9803,6 +9816,7 @@ export interface components {
             /** @description Slices in count whose realized profit is above zero */
             profitable?: number;
             realizedPnL?: number;
+            closes?: components["schemas"]["SituationRecordClose"][];
         };
         /**
          * @description Closed crypto lots in this paper book, grouped by the read stored on the buy.

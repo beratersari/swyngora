@@ -7002,10 +7002,11 @@ paths:
       description: |
         Each row is one kind stored on a closed crypto buy. count is how many
         sold slices stored that kind. profitable is how many of those had
-        realized profit above zero. realizedPnL is their sum. The same close
-        can appear on more than one row, so the rows are not one total.
-        counted is each close once. skipped is a crypto close whose buy stored
-        no read. Equities are left out. Open positions are not included.
+        realized profit above zero. realizedPnL is their sum. closes lists
+        those slices, newest first, with symbol, sell time, and realized profit.
+        The same close can appear on more than one row, so the rows are not one
+        total. counted is each close once. skipped is a crypto close whose buy
+        stored no read. Equities are left out. Open positions are not included.
       operationId: getPortfolioSituationRecord
       tags: [Portfolio]
       parameters:
@@ -14089,11 +14090,22 @@ components:
           type: array
           items: { $ref: '#/components/schemas/SituationExit' }
         note: { type: string }
+    SituationRecordClose:
+      type: object
+      description: |
+        One sold slice that stored this row's kind. The same slice is repeated
+        on every clause row its buy stored. closedAt is the sell fill time.
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        closedAt: { type: string, format: date-time }
+        realizedPnL: { type: number }
     SituationRecordRow:
       type: object
       description: |
         One entry kind across the closed crypto slices that stored it.
         realizedPnL is the sum of those slices. It is not a share of a book total.
+        closes lists those slices, newest first.
       properties:
         clause:
           type: string
@@ -14102,6 +14114,9 @@ components:
         count: { type: integer, description: Sold slices that stored this kind }
         profitable: { type: integer, description: Slices in count whose realized profit is above zero }
         realizedPnL: { type: number }
+        closes:
+          type: array
+          items: { $ref: '#/components/schemas/SituationRecordClose' }
     SituationRecord:
       type: object
       description: |

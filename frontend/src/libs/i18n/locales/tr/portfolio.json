@@ -182,7 +182,9 @@
   },
   "situationRecord": {
     "title": "Kapanışların ne getirdiği",
-    "lead": "Her satır, alışta kayıtlı bir türdür. Aynı kapanış birden fazla satırda görünebilir, bu yüzden satırlar tek bir toplam değildir. Açık pozisyonlar pozisyonlar sekmesinde kalır. Hisseler dışarıdadır.",
+    "lead": "Her satır, alışta kayıtlı bir türdür. Bir satırı açınca o kapanışlar en yeniden eskiye listelenir. Aynı kapanış birden fazla satırda görünebilir, bu yüzden satırlar tek bir toplam değildir. Açık pozisyonlar pozisyonlar sekmesinde kalır. Hisseler dışarıdadır.",
+    "close": "{{symbol}}, {{exchange}}, {{time}}, {{pnl}}",
+    "closeNoVenue": "{{symbol}}, {{time}}, {{pnl}}",
     "empty": "Bu defterde kayıtlı okuması olan bir kripto kapanışı henüz yok.",
     "loading": "Kapanan lotlar okunuyor…",
     "failed": "Kapanış kaydı yüklenemedi.",

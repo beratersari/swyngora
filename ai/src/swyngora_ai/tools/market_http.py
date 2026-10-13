@@ -6916,10 +6916,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "What this paper book's closed crypto lots made, grouped by "
                 "the situation stored on the buy. Each row is one entry kind: "
                 "count, how many of those closes were profitable, and the sum "
-                "of realized profit. The same close can appear on more than "
-                "one row, so the rows are not one total. counted is each close "
-                "once. skipped is a crypto close whose buy stored no read. "
-                "Equities are left out. Open positions are not included."
+                "of realized profit. closes lists those slices, newest first, "
+                "with symbol, sell time, and that slice's realized profit. "
+                "The same close can appear on more than one row, so the rows "
+                "are not one total. counted is each close once. skipped is a "
+                "crypto close whose buy stored no read. Equities are left out. "
+                "Open positions are not included."
             ),
             args_schema=SituationRecordInput,
         ),

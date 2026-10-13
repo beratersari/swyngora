@@ -3185,7 +3185,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_situation_record",
-		mcp.WithDescription("What this paper book's closed crypto lots made, grouped by the situation stored on the buy. Each row is one entry kind: count, how many of those closes were profitable, and the sum of realized profit. The same close can appear on more than one row, so the rows are not one total. counted is each close once. skipped is a crypto close whose buy stored no read. Equities are left out. Open positions are not included. Not financial advice."),
+		mcp.WithDescription("What this paper book's closed crypto lots made, grouped by the situation stored on the buy. Each row is one entry kind: count, how many of those closes were profitable, and the sum of realized profit. closes lists those slices, newest first, with symbol, sell time, and that slice's realized profit. The same close can appear on more than one row, so the rows are not one total. counted is each close once. skipped is a crypto close whose buy stored no read. Equities are left out. Open positions are not included. Not financial advice."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name; required if multiple portfolios exist")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

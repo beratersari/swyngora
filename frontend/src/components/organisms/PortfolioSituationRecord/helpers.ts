@@ -1,4 +1,4 @@
-import { formatPrice } from '@/libs/utils';
+import { formatDateTime, formatPrice } from '@/libs/utils';
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
@@ -51,6 +51,31 @@ export function situationRecordKindLabel(clause: string, kind: string, t: Transl
   const key = KIND_KEYS[clause]?.[kind];
   if (!key) return kind;
   return t(key);
+}
+
+export function situationRecordRowKey(clause: string, kind: string): string {
+  return `${clause}:${kind}`;
+}
+
+export type RecordClose = {
+  exchange?: string;
+  symbol?: string;
+  closedAt?: string;
+  realizedPnL?: number;
+};
+
+/** One sold slice on an opened row: symbol, venue, sell time, and that slice's profit. */
+export function situationRecordCloseLine(
+  close: RecordClose,
+  t: Translate,
+  locale?: string,
+): string {
+  const symbol = close.symbol?.trim() || '—';
+  const exchange = close.exchange?.trim() || '';
+  const time = formatDateTime(close.closedAt, locale);
+  const pnl = formatRecordPnl(close.realizedPnL);
+  if (!exchange) return t('situationRecord.closeNoVenue', { symbol, time, pnl });
+  return t('situationRecord.close', { symbol, exchange, time, pnl });
 }
 
 /** Signed price text. A gain keeps the plus so a loss and a gain do not look the same. */

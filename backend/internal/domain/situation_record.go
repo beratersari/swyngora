@@ -4,29 +4,43 @@ import (
 	"math"
 	"slices"
 	"sort"
+	"strings"
+	"time"
 )
 
 // SituationRecordNote tells a caller how to read the rows.
 // The same close can appear under several clauses, so the row sums are not one total.
-const SituationRecordNote = "Each close is counted once inside a clause. The same close can appear under several clauses, so the rows are not a single total. A crypto buy with no stored read is skipped. Equities are left out. Open positions are not included. A profitable close has realized profit above zero. Informational only — not financial advice."
+const SituationRecordNote = "Each close is counted once inside a clause. The same close can appear under several clauses, so the rows are not a single total. Each row lists the closes that stored that kind, newest first, with symbol, time, and realized profit. A crypto buy with no stored read is skipped. Equities are left out. Open positions are not included. A profitable close has realized profit above zero. Informational only — not financial advice."
 
 // SituationClose is one sold slice of a lot, with the read stored on the buy that opened it.
-// Situation is nil when that buy stored no read.
+// Situation is nil when that buy stored no read. ClosedAt is the sell fill time.
 type SituationClose struct {
 	Exchange    Exchange
+	Symbol      string
+	ClosedAt    time.Time
 	RealizedPnL float64
 	Situation   *CoinSituation
+}
+
+// SituationRecordClose is one sold slice named on a record row.
+// The same slice is repeated on every clause row its buy stored.
+type SituationRecordClose struct {
+	Exchange    Exchange  `json:"exchange"`
+	Symbol      string    `json:"symbol"`
+	ClosedAt    time.Time `json:"closedAt,omitempty"`
+	RealizedPnL float64   `json:"realizedPnL"`
 }
 
 // SituationRecordRow is one entry kind that appeared on at least one counted close.
 // Count is the number of closes that stored this kind. Profitable is how many of
 // those had realized profit above zero. RealizedPnL is their sum.
 type SituationRecordRow struct {
-	Clause      string  `json:"clause"`
-	Kind        string  `json:"kind"`
-	Count       int     `json:"count"`
-	Profitable  int     `json:"profitable"`
-	RealizedPnL float64 `json:"realizedPnL"`
+	Clause      string                 `json:"clause"`
+	Kind        string                 `json:"kind"`
+	Count       int                    `json:"count"`
+	Profitable  int                    `json:"profitable"`
+	RealizedPnL float64                `json:"realizedPnL"`
+	Closes      []SituationRecordClose `json:"closes"`
 }
 
 // SituationRecord is this paper book's closed crypto lots, grouped by the read on the buy.
@@ -73,7 +87,7 @@ func BuildSituationRecord(closes []SituationClose) SituationRecord {
 			key := situationKindKey{clause: kind.Clause, kind: kind.Kind}
 			row := rows[key]
 			if row == nil {
-				row = &SituationRecordRow{Clause: kind.Clause, Kind: kind.Kind}
+				row = &SituationRecordRow{Clause: kind.Clause, Kind: kind.Kind, Closes: []SituationRecordClose{}}
 				rows[key] = row
 			}
 			row.Count++
@@ -81,10 +95,12 @@ func BuildSituationRecord(closes []SituationClose) SituationRecord {
 			if win {
 				row.Profitable++
 			}
+			row.Closes = append(row.Closes, situationRecordClose(close))
 		}
 	}
 	out.Rows = make([]SituationRecordRow, 0, len(rows))
 	for _, row := range rows {
+		sortRecordCloses(row.Closes)
 		out.Rows = append(out.Rows, *row)
 	}
 	sort.Slice(out.Rows, func(i, j int) bool {
@@ -125,6 +141,39 @@ func situationStoredKinds(s *CoinSituation) []situationStoredKind {
 	add("crowd", leanOf(s.Crowd))
 	add("size", sizeKindOf(s.Size))
 	return out
+}
+
+func situationRecordClose(close SituationClose) SituationRecordClose {
+	at := close.ClosedAt
+	if !at.IsZero() {
+		at = at.UTC()
+	}
+	return SituationRecordClose{
+		Exchange:    close.Exchange,
+		Symbol:      strings.TrimSpace(close.Symbol),
+		ClosedAt:    at,
+		RealizedPnL: close.RealizedPnL,
+	}
+}
+
+// sortRecordCloses orders a row newest first. A missing sell time stays last.
+func sortRecordCloses(closes []SituationRecordClose) {
+	sort.SliceStable(closes, func(i, j int) bool {
+		a, b := closes[i].ClosedAt, closes[j].ClosedAt
+		if a.IsZero() != b.IsZero() {
+			return !a.IsZero()
+		}
+		if !a.Equal(b) {
+			return a.After(b)
+		}
+		if closes[i].Symbol != closes[j].Symbol {
+			return closes[i].Symbol < closes[j].Symbol
+		}
+		if closes[i].Exchange != closes[j].Exchange {
+			return closes[i].Exchange < closes[j].Exchange
+		}
+		return closes[i].RealizedPnL > closes[j].RealizedPnL
+	})
 }
 
 func situationPnLFinite(v float64) bool {
