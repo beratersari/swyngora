@@ -15,7 +15,8 @@ Emotional trading — especially leveraged margin — can blow up an account. Us
 - Limits are stored **per paper book**. `GET`/`PUT`/`DELETE` and order-time guards pass the book id into `View` so they keep working after a second book exists. Extra books can have their own rules.
 - No background worker. Rules are checked at order time.
 - Recurring DCA buys go through `PlaceOrder`. A risk 403 is stored on the run as generic **`order failed`** (not the full forbidden text); the plan stays active and that period is not retried.
-- Basket rebalance sells still run; buys that violate a rule are skipped (same gate). Preview does not simulate risk blocks.
+- Basket rebalance sells still run; buys that violate a rule are skipped (same gate). The basket preview does not simulate risk blocks.
+- `POST /api/v1/portfolio/orders/preview` does report whether this one order would be blocked. It does not place the order. A sell still shows today's trading loss when the daily limit is already hit, and it is not blocked.
 - `PUT` **replaces all three fields** — omit/`null` a field to disable that rule (not a patch merge).
 - Clearing limits (`DELETE`) then `PUT` the same UTC day **rebases** start-of-day equity to current equity.
 
@@ -60,7 +61,7 @@ Blocked trades return **403** `forbidden` with a human `message` (e.g. `BTC woul
 | Store | `risk_limits` table in `portfoliostore` |
 | Service | `backend/internal/service/portfolio/risk.go` (`guardNewRisk` on buy / margin open) |
 | HTTP | `backend/internal/transport/http/handler/portfolio_risk.go` |
-| MCP | `get_portfolio_risk_limits`, `set_portfolio_risk_limits`, `clear_portfolio_risk_limits` |
+| MCP | `get_portfolio_risk_limits`, `set_portfolio_risk_limits`, `clear_portfolio_risk_limits`, `preview_portfolio_order` |
 
 ## Tests
 

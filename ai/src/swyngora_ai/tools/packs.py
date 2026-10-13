@@ -160,6 +160,7 @@ PAPER_TOOLS: frozenset[str] = frozenset(
         "set_portfolio_risk_limits",
         "clear_portfolio_risk_limits",
         "get_paper_trading_costs",
+        "preview_portfolio_order",
         "place_portfolio_order",
         "place_portfolio_pending_order",
         "place_portfolio_oco_order",

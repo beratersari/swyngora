@@ -189,6 +189,12 @@ See `docs/features/paper-margin.md`. Modes: `isolated` (default) vs `cross`; mod
 | `oco` | `quantity`, `takeProfitPrice`, `stopLossPrice` | TP: last ≥ TP; SL: last ≤ SL | sell + sell | Reserves **once** for the pair |
 | `bracket` | `quantity`, `triggerPrice` (entry), `takeProfitPrice`, `stopLossPrice` | Entry limit_buy; exits as OCO after fill | buy + sell pair | Entry reserves cash; exits reserve position only when active |
 
+### Order preview (`POST /api/v1/portfolio/orders/preview`)
+
+Prices the same spot body, or a margin open (`product=margin`, `side=long|short`, `type=market|limit`, `leverage` 1–10, `limitPrice` on a limit). The response is the slipped fill, taker fee, cash in or out, cash or quantity a resting order would lock, estimated sell profit from the open lots, and whether a risk limit or the borrow cap would block it.
+
+Nothing is written: no trade, no reservation, no margin position. A draft that cannot be priced (bad quantity, missing trigger, bad bracket prices) is **400**. Not enough cash, a risk block, or the borrow cap is **200** with a flag. A sell is not blocked. The daily-loss figure is trading P&L since the UTC day baseline. Deposits, withdrawals, and transfers are not part of it. MCP `preview_portfolio_order`. A read-only assistant session can call that tool. It still cannot place the order.
+
 ### Bracket orders (entry + TP/SL)
 
 Place take-profit and stop-loss **with** a limit-buy entry. Exit legs start as `status=pending` (not marketable) until the entry fills.
@@ -302,24 +308,24 @@ Releases unused cash/position reservations in one store transaction. `canceled: 
 
 | Surface | Notes |
 |---------|--------|
-| `/portfolio` spot ticket | Market, limit, stop, trailing stop, OCO, bracket; TIF GTC/IOC/FOK; lot FIFO/LIFO on sells |
+| `/portfolio` spot ticket | Market, limit, stop, trailing stop, OCO, bracket; TIF GTC/IOC/FOK; lot FIFO/LIFO on sells. The ticket shows fee, cash, and risk before the order is placed |
 | Open orders table | Cancel + **amend** (standalone GTC limit/stop: trigger and remaining qty) |
-| `/portfolio` margin ticket | Isolated/cross mode, long/short 1–10x, market or limit, optional SL/TP |
+| `/portfolio` margin ticket | Isolated/cross mode, long/short 1–10x, market or limit, optional SL/TP. Same preview: margin, liquidation, borrow cap |
 | Margin positions tab | Mark, liq, debt, uPnL, market close |
-| Coin detail compact ticket | Market + limit + stop (no OCO/bracket) |
+| Coin detail compact ticket | Market + limit + stop (no OCO/bracket), with the same preview |
 
 ## Code
 
 | Layer | Path |
 |-------|------|
-| Domain | `backend/internal/domain/portfolio.go`, `recurring_buy.go`, `allocation.go`, `risk.go` |
+| Domain | `backend/internal/domain/portfolio.go`, `order_preview.go`, `recurring_buy.go`, `allocation.go`, `risk.go` |
 | Store | `backend/internal/adapter/portfoliostore` |
 | Service | `backend/internal/service/portfolio` |
 | Filler | `backend/internal/service/portfolio/filler.go` |
 | Recurring worker | `backend/internal/service/portfolio/recurring_worker.go` |
-| HTTP | `backend/internal/transport/http/handler/portfolio.go`, `portfolio_recurring.go`, `portfolio_allocation.go`, `portfolio_margin.go` |
-| Web | `frontend/src/components/organisms/PaperTradeForm`, `PaperMarginForm`, `PortfolioOrdersTable`, `PortfolioMarginPositionsTable`, `pages/PortfolioPage` |
-| MCP | portfolio tools + `get_portfolio_order`, `amend_portfolio_order`, `cancel_all_portfolio_orders` + recurring buy tools + allocation basket / rebalance tools + `place_margin_order`, `list_margin_positions`, `close_margin_position`, `set_margin_brackets`, `list_margin_orders`, `cancel_margin_order`, `list_margin_trades` |
+| HTTP | `backend/internal/transport/http/handler/portfolio.go`, `portfolio_preview.go`, `portfolio_recurring.go`, `portfolio_allocation.go`, `portfolio_margin.go` |
+| Web | `frontend/src/components/organisms/PaperTradeForm`, `PaperMarginForm`, `molecules/OrderPreview`, `PortfolioOrdersTable`, `PortfolioMarginPositionsTable`, `pages/PortfolioPage`, `pages/CoinDetailPage` |
+| MCP | `preview_portfolio_order` + portfolio tools + `get_portfolio_order`, `amend_portfolio_order`, `cancel_all_portfolio_orders` + recurring buy tools + allocation basket / rebalance tools + `place_margin_order`, `list_margin_positions`, `close_margin_position`, `set_margin_brackets`, `list_margin_orders`, `cancel_margin_order`, `list_margin_trades` |
 
 ## Config
 
@@ -333,5 +339,5 @@ Releases unused cash/position reservations in one store transaction. `canceled: 
 
 ```bash
 cd backend
-go test ./internal/domain/ ./internal/service/portfolio/ ./internal/adapter/portfoliostore/ ./internal/transport/http/handler/ -run 'Portfolio|Recurring|Allocation' -count=1
+go test ./internal/domain/ ./internal/service/portfolio/ ./internal/adapter/portfoliostore/ ./internal/transport/http/handler/ -run 'Portfolio|Recurring|Allocation|Preview|QuoteFill' -count=1
 ```

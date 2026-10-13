@@ -8,6 +8,7 @@ Examples (init / markets epics):
 | -------------------- | ----------------------------- |
 | `useDocumentVisible` | Pause polling when tab hidden |
 | `useDebouncedValue`  | Debounce search `q`           |
+| `useOrderPreview`    | Debounced paper order cost and risk. The page ticket host owns the query so a keystroke does not render the rest of the desk. The form stays presentational. |
 | `useMediaQuery`      | Match CSS breakpoints (chart height, etc.) |
 | `useDisplayCurrency` | Header FX preference + convert/format helpers |
 | `useDeskPriceTape` | Sticky header tape source + live last prices (current venue only; previous RTK list is not relabeled) |

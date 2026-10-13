@@ -1,4 +1,5 @@
-import type { MarketExchange, PaperOrderType } from '@/libs/api';
+import type { MarketExchange, OrderPreview, PaperOrderType } from '@/libs/api';
+import type { SpotOrderPreviewDraft } from '@/libs/hooks/orderPreview';
 
 export type PaperTradeFormValues = {
   exchange: MarketExchange;
@@ -32,5 +33,11 @@ export type PaperTradeFormProps = {
   disabled?: boolean;
   submitError?: unknown;
   compact?: boolean;
+  /** Latest cost and risk for this ticket. The page owns the request. */
+  preview?: OrderPreview | null;
+  previewLoading?: boolean;
+  previewFailed?: boolean;
+  /** Fires when the draft changes so the page can price it. */
+  onDraftChange?: (draft: SpotOrderPreviewDraft) => void;
   onSubmit: (values: PaperTradeFormValues) => Promise<void>;
 };

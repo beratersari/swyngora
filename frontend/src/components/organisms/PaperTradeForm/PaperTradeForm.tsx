@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, InputNumber, Select, Segmented } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
+import { OrderPreview } from '@/components/molecules/OrderPreview';
 import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
 import { rtkErrorMessage, type MarketExchange } from '@/libs/api';
 import { Actions, Field, FieldRow, FormStack } from './PaperTradeForm.styles';
@@ -33,6 +34,10 @@ export function PaperTradeForm({
   disabled = false,
   submitError,
   compact = false,
+  preview,
+  previewLoading = false,
+  previewFailed = false,
+  onDraftChange,
   onSubmit,
 }: PaperTradeFormProps) {
   const { t } = useTranslation(['portfolio', 'common']);
@@ -86,6 +91,41 @@ export function PaperTradeForm({
     showLotMethod &&
     (kind === 'market' ? side === 'sell' : kind !== 'limit' || side === 'sell') &&
     kind !== 'bracket';
+
+  useEffect(() => {
+    if (!onDraftChange) return;
+    onDraftChange({
+      product: 'spot',
+      exchange,
+      symbol: symbol.trim().toUpperCase(),
+      type: toApiOrderType(kind, side),
+      side,
+      quantity: quantity ?? 0,
+      triggerPrice: showTrigger && triggerPrice != null ? triggerPrice : undefined,
+      takeProfitPrice: showTpSl && takeProfitPrice != null ? takeProfitPrice : undefined,
+      stopLossPrice: showTpSl && stopLossPrice != null ? stopLossPrice : undefined,
+      trailType: showTrail ? trailType : undefined,
+      trailValue: showTrail && trailValue != null ? trailValue : undefined,
+      lotMethod: showLot ? lotMethod : undefined,
+    });
+  }, [
+    onDraftChange,
+    exchange,
+    symbol,
+    kind,
+    side,
+    quantity,
+    triggerPrice,
+    takeProfitPrice,
+    stopLossPrice,
+    trailType,
+    trailValue,
+    lotMethod,
+    showTrigger,
+    showTpSl,
+    showTrail,
+    showLot,
+  ]);
 
   const submit = async (forcedSide?: 'buy' | 'sell') => {
     if (disabled || inFlightRef.current || isSubmitting) return;
@@ -323,6 +363,8 @@ export function PaperTradeForm({
         ) : null}
       </FieldRow>
 
+      <OrderPreview preview={preview} loading={previewLoading} failed={previewFailed} />
+
       <Actions>
         {compact && (kind === 'market' || kind === 'limit') ? (
           <>
@@ -330,6 +372,7 @@ export function PaperTradeForm({
               type="primary"
               loading={busy}
               disabled={disabled || busy}
+              onPointerDown={() => setSide('buy')}
               onClick={() => void submit('buy')}
             >
               {t('portfolio:trade.submitBuy')}
@@ -338,6 +381,7 @@ export function PaperTradeForm({
               danger
               loading={busy}
               disabled={disabled || busy}
+              onPointerDown={() => setSide('sell')}
               onClick={() => void submit('sell')}
             >
               {t('portfolio:trade.submitSell')}

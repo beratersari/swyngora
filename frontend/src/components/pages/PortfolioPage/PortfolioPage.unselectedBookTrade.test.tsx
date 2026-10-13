@@ -87,7 +87,7 @@ describe('PortfolioPage unselected book mutations', () => {
   });
 
   it('does not place a spot order without portfolioId when 2+ books exist and none is selected', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderWithProviders(<PortfolioPage />, { routerEntries: ['/portfolio'] });
 
     const symbol = screen.getAllByRole('combobox', { name: /symbol/i })[0];
@@ -104,7 +104,7 @@ describe('PortfolioPage unselected book mutations', () => {
   });
 
   it('does not deposit cash without portfolioId when 2+ books exist and none is selected', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ delay: null });
     renderWithProviders(<PortfolioPage />, { routerEntries: ['/portfolio'] });
 
     const amount = screen.getByRole('spinbutton', { name: /amount|tutar/i });

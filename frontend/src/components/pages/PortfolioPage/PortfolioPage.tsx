@@ -4,8 +4,16 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { PageHeader } from '@/components/molecules/PageHeader';
-import { PaperMarginForm, type PaperMarginFormValues } from '@/components/organisms/PaperMarginForm';
-import { PaperTradeForm, type PaperTradeFormValues } from '@/components/organisms/PaperTradeForm';
+import {
+  PaperMarginForm,
+  type PaperMarginFormProps,
+  type PaperMarginFormValues,
+} from '@/components/organisms/PaperMarginForm';
+import {
+  PaperTradeForm,
+  type PaperTradeFormProps,
+  type PaperTradeFormValues,
+} from '@/components/organisms/PaperTradeForm';
 import { PortfolioBookSelect } from '@/components/organisms/PortfolioBookSelect';
 import { PortfolioCashPanel } from '@/components/organisms/PortfolioCashPanel';
 import { PortfolioEquityChart } from '@/components/organisms/PortfolioEquityChart';
@@ -48,7 +56,8 @@ import {
   useWithdrawPortfolioCashMutation,
   type PortfolioPerformancePeriod,
 } from '@/libs/api';
-import { useDocumentVisible, useMediaQuery } from '@/libs/hooks';
+import { useDocumentVisible, useMediaQuery, useOrderPreview } from '@/libs/hooks';
+import type { MarginOrderPreviewDraft, SpotOrderPreviewDraft } from '@/libs/hooks/orderPreview';
 import { usePortfolioSubscription } from '@/libs/realtime';
 import { formatDateTime, formatPrice, newPaperIdempotencyKey, rtkCurrent, rtkCurrentPending } from '@/libs/utils';
 import { mediaQueries } from '@/styles/tokens';
@@ -161,6 +170,7 @@ export function PortfolioPage() {
   const [setMarginMode, marginModeState] = useSetMarginModeMutation();
   const [stressBook, stressState] = useStressPortfolioMutation();
   const [placeMargin, placeMarginState] = usePlaceMarginOrderMutation();
+  const previewOn = !needBook && (books.length === 1 || Boolean(bookId));
   const [closeMargin, closeMarginState] = useCloseMarginPositionMutation();
   const [continueRebalance, continueRebalanceState] = useContinuePortfolioRebalanceMutation();
 
@@ -366,7 +376,10 @@ export function PortfolioPage() {
 
           <Split>
             <PanelCard>
-              <PaperTradeForm
+              <SpotOrderTicket
+                portfolioId={bookId}
+                previewEnabled={previewOn}
+                visible={visible}
                 isSubmitting={placeState.isLoading}
                 disabled={needBook}
                 submitError={placeState.isError ? placeState.error : undefined}
@@ -426,7 +439,10 @@ export function PortfolioPage() {
 
           <Section>
             <PanelCard>
-              <PaperMarginForm
+              <MarginOrderTicket
+                portfolioId={bookId}
+                previewEnabled={previewOn}
+                visible={visible}
                 marginMode={view?.marginMode}
                 modeLoading={marginModeState.isLoading}
                 isSubmitting={placeMarginState.isLoading}
@@ -658,5 +674,55 @@ export function PortfolioPage() {
         </>
       )}
     </PageStack>
+  );
+}
+
+type TicketPreviewProps = {
+  portfolioId?: string;
+  previewEnabled: boolean;
+  visible: boolean;
+};
+
+/**
+ * Owns the draft so each keystroke reprices this ticket only.
+ * The rest of the desk does not render again until the book changes.
+ */
+function SpotOrderTicket({
+  portfolioId,
+  previewEnabled,
+  visible,
+  ...form
+}: Omit<PaperTradeFormProps, 'preview' | 'previewLoading' | 'previewFailed' | 'onDraftChange'> &
+  TicketPreviewProps) {
+  const [draft, setDraft] = useState<SpotOrderPreviewDraft | null>(null);
+  const priced = useOrderPreview(draft, { portfolioId, enabled: previewEnabled, visible });
+  return (
+    <PaperTradeForm
+      {...form}
+      preview={priced.preview}
+      previewLoading={priced.loading}
+      previewFailed={priced.failed}
+      onDraftChange={setDraft}
+    />
+  );
+}
+
+function MarginOrderTicket({
+  portfolioId,
+  previewEnabled,
+  visible,
+  ...form
+}: Omit<PaperMarginFormProps, 'preview' | 'previewLoading' | 'previewFailed' | 'onDraftChange'> &
+  TicketPreviewProps) {
+  const [draft, setDraft] = useState<MarginOrderPreviewDraft | null>(null);
+  const priced = useOrderPreview(draft, { portfolioId, enabled: previewEnabled, visible });
+  return (
+    <PaperMarginForm
+      {...form}
+      preview={priced.preview}
+      previewLoading={priced.loading}
+      previewFailed={priced.failed}
+      onDraftChange={setDraft}
+    />
   );
 }

@@ -330,8 +330,8 @@ class _HTTP:
             headers=self._headers(),
         )
 
-    def post(self, path: str, body: dict[str, Any]) -> str:
-        if err := self._gate(path, mutating=True):
+    def post(self, path: str, body: dict[str, Any], *, mutating: bool = True) -> str:
+        if err := self._gate(path, mutating=mutating):
             return err
         body = dict(body or {})
         self._apply_client_id(None, body)
@@ -1837,6 +1837,31 @@ class RiskLimitsSetInput(BaseModel):
     max_exposure_pct: float = Field(
         default=0, description="e.g. 60 = max all coins together as % of equity; 0 disables"
     )
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+
+
+class OrderPreviewInput(BaseModel):
+    client_id: str
+    symbol: str
+    quantity: float = Field(gt=0)
+    side: str = Field(default="", description="Spot market: buy|sell. Margin: long|short")
+    order_type: str = Field(
+        default="market",
+        description=(
+            "Spot: market|limit_buy|limit_sell|stop_loss|trailing_stop|oco|bracket. "
+            "Margin: market|limit"
+        ),
+    )
+    product: str = Field(default="spot", description="spot or margin")
+    exchange: str = "binance"
+    trigger_price: float = Field(default=0, description="Limit, stop, or bracket entry")
+    take_profit_price: float = Field(default=0, description="OCO, bracket, or margin take-profit")
+    stop_loss_price: float = Field(default=0, description="OCO, bracket, or margin stop")
+    trail_type: str = Field(default="", description="trailing_stop: percent|offset")
+    trail_value: float = Field(default=0, description="trailing_stop distance")
+    lot_method: str = Field(default="", description="fifo (default) or lifo")
+    limit_price: float = Field(default=0, description="Margin limit price")
+    leverage: int = Field(default=0, description="Margin leverage 1-10")
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
@@ -4118,6 +4143,55 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if portfolio_id:
             q["portfolioId"] = portfolio_id
         return http.get("/api/v1/portfolio/cash-movements", q)
+
+    def preview_portfolio_order(
+        client_id: str,
+        symbol: str,
+        quantity: float,
+        side: str = "",
+        order_type: str = "market",
+        product: str = "spot",
+        exchange: str = "binance",
+        trigger_price: float = 0,
+        take_profit_price: float = 0,
+        stop_loss_price: float = 0,
+        trail_type: str = "",
+        trail_value: float = 0,
+        lot_method: str = "",
+        limit_price: float = 0,
+        leverage: int = 0,
+        portfolio_id: str = "",
+    ) -> str:
+        body: dict[str, Any] = {
+            "clientId": client_id,
+            "symbol": symbol,
+            "quantity": quantity,
+            "exchange": exchange,
+            "product": product or "spot",
+            "type": order_type or "market",
+        }
+        if side:
+            body["side"] = side
+        if trigger_price:
+            body["triggerPrice"] = trigger_price
+        if take_profit_price:
+            body["takeProfitPrice"] = take_profit_price
+        if stop_loss_price:
+            body["stopLossPrice"] = stop_loss_price
+        if trail_type:
+            body["trailType"] = trail_type
+        if trail_value:
+            body["trailValue"] = trail_value
+        if lot_method:
+            body["lotMethod"] = lot_method
+        if limit_price:
+            body["limitPrice"] = limit_price
+        if leverage:
+            body["leverage"] = leverage
+        if portfolio_id:
+            body["portfolioId"] = portfolio_id
+        # A preview does not place, reserve, or open. Read-only sessions may call it.
+        return http.post("/api/v1/portfolio/orders/preview", body, mutating=False)
 
     def place_portfolio_order(
         client_id: str,
@@ -6832,6 +6906,18 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "buy cash/lot cost include the fee; sell PnL is after the fee."
             ),
             args_schema=PaperTradingCostsInput,
+        ),
+        StructuredTool.from_function(
+            preview_portfolio_order,
+            name="preview_portfolio_order",
+            description=(
+                "Preview a paper spot or margin order before placing it. "
+                "Returns the slipped fill, taker fee, cash in or out, reserved cash or quantity, "
+                "estimated sell profit, and whether a risk limit or the borrow cap would block it. "
+                "Nothing is written. Call this before place_portfolio_order, a pending order, "
+                "OCO, bracket, or place_margin_order. Not real money."
+            ),
+            args_schema=OrderPreviewInput,
         ),
         StructuredTool.from_function(
             place_portfolio_order,

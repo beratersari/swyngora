@@ -104,6 +104,40 @@
       "trailValue": "İz değeri gerekli"
     }
   },
+  "preview": {
+    "title": "Göndermeden önce",
+    "pricing": "Bu emir fiyatlanıyor…",
+    "failed": "Bu emir fiyatlanamadı.",
+    "fillsNow": "Bu emir şimdi dolardı.",
+    "rests": "Fiyat gelene kadar beklerdi.",
+    "fill": "Dolum",
+    "fee": "Komisyon",
+    "debit": "Çıkacak nakit",
+    "credit": "Girecek nakit",
+    "reservedCash": "Kilitlenecek nakit",
+    "reservedQty": "Kilitlenecek miktar",
+    "cashAfter": "Sonraki nakit",
+    "availableAfter": "Sonraki kullanılabilir",
+    "pnl": "Tahmini kâr",
+    "initialMargin": "Başlangıç teminatı",
+    "liquidation": "Likidasyon",
+    "borrowed": "Borç",
+    "leverage": "{{lev}}x",
+    "weight": "{{asset}} defterin {{pct}} kadarı olurdu",
+    "exposure": "Coinler birlikte defterin {{pct}} kadarı olurdu",
+    "legTakeProfit": "Kâr al",
+    "legStopLoss": "Zarar kes",
+    "note": "Yalnızca önizleme — hiçbir emir gönderilmedi. Komisyon ve kayma kağıt dolumla aynıdır. Risk limitleri yeni alışları ve yeni marjin açılışlarını durdurur. Satışlar durmaz. Gerçek para değildir.",
+    "warnings": {
+      "blocked": "Risk limitleri bu emri durdururdu.",
+      "dailyLoss": "Bugünkü zarar limiti zaten dolu. Yatırma ve çekme bu zararın parçası değildir.",
+      "weight": "Bu coin ağırlık limitini aşardı.",
+      "exposure": "Toplam açık limitin üstüne çıkardı.",
+      "cash": "Kullanılabilir nakit yetmiyor.",
+      "quantity": "Kullanılabilir miktar yetmiyor.",
+      "borrow": "Bu emir borç limitini aşardı."
+    }
+  },
   "margin": {
     "title": "Marjin fişi",
     "hint": "Kağıt long/short 1–10x. İzole veya çapraz. Gerçek para değildir.",

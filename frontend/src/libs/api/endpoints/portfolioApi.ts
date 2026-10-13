@@ -70,6 +70,29 @@ export type PlacePortfolioOrderResponse = {
   note?: string;
 };
 
+export type OrderPreview = components['schemas']['OrderPreview'];
+export type OrderPreviewLeg = components['schemas']['OrderPreviewLeg'];
+export type OrderPreviewRisk = components['schemas']['OrderPreviewRisk'];
+
+/** Read-only price of a spot or margin ticket. Nothing is placed. */
+export type PreviewPortfolioOrderArg = {
+  portfolioId?: string;
+  exchange?: string;
+  symbol: string;
+  product?: 'spot' | 'margin';
+  type?: string;
+  side?: string;
+  quantity: number;
+  triggerPrice?: number;
+  takeProfitPrice?: number;
+  stopLossPrice?: number;
+  trailType?: 'percent' | 'offset';
+  trailValue?: number;
+  lotMethod?: 'fifo' | 'lifo';
+  limitPrice?: number;
+  leverage?: number;
+};
+
 export type AmendPortfolioOrderArg = {
   id: string;
   portfolioId?: string;
@@ -338,6 +361,30 @@ export const portfolioApi = baseApi.injectEndpoints({
         headers: body.idempotencyKey ? { 'Idempotency-Key': body.idempotencyKey } : undefined,
       }),
       invalidatesTags: ['Portfolio'],
+    }),
+    previewPortfolioOrder: build.query<OrderPreview, PreviewPortfolioOrderArg>({
+      query: (body) => ({
+        url: '/api/v1/portfolio/orders/preview',
+        method: 'POST',
+        body: {
+          portfolioId: body.portfolioId,
+          exchange: body.exchange ?? 'binance',
+          symbol: body.symbol,
+          product: body.product ?? 'spot',
+          type: body.type ?? 'market',
+          side: body.side,
+          quantity: body.quantity,
+          triggerPrice: body.triggerPrice,
+          takeProfitPrice: body.takeProfitPrice,
+          stopLossPrice: body.stopLossPrice,
+          trailType: body.trailType,
+          trailValue: body.trailValue,
+          lotMethod: body.lotMethod,
+          limitPrice: body.limitPrice,
+          leverage: body.leverage,
+        },
+      }),
+      providesTags: ['Portfolio'],
     }),
     listPortfolioOrders: build.query<
       OrdersListResponse,
@@ -622,6 +669,7 @@ export const {
   useUpdatePortfolioShareMutation,
   useRevokePortfolioShareMutation,
   usePlacePortfolioOrderMutation,
+  usePreviewPortfolioOrderQuery,
   useListPortfolioOrdersQuery,
   useAmendPortfolioOrderMutation,
   useCancelPortfolioOrderMutation,

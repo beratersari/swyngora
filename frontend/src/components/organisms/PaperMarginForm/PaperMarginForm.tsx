@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, InputNumber, Select, Segmented } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
+import { OrderPreview } from '@/components/molecules/OrderPreview';
 import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
 import { rtkErrorMessage, type MarketExchange, type MarginMode } from '@/libs/api';
 import { Actions, Field, FieldRow, FormStack, ModeRow } from './PaperMarginForm.styles';
@@ -13,6 +14,10 @@ export function PaperMarginForm({
   isSubmitting,
   disabled = false,
   submitError,
+  preview,
+  previewLoading = false,
+  previewFailed = false,
+  onDraftChange,
   onModeChange,
   onSubmit,
 }: PaperMarginFormProps) {
@@ -30,6 +35,22 @@ export function PaperMarginForm({
   const inFlight = useRef(false);
   const [busy, setBusy] = useState(false);
   const loading = Boolean(isSubmitting || busy);
+
+  useEffect(() => {
+    if (!onDraftChange) return;
+    onDraftChange({
+      product: 'margin',
+      exchange,
+      symbol: symbol.trim().toUpperCase(),
+      type: orderType,
+      side,
+      quantity: quantity ?? 0,
+      leverage,
+      limitPrice: orderType === 'limit' && limitPrice != null ? limitPrice : undefined,
+      stopLossPrice: stopLoss != null && stopLoss > 0 ? stopLoss : undefined,
+      takeProfitPrice: takeProfit != null && takeProfit > 0 ? takeProfit : undefined,
+    });
+  }, [onDraftChange, exchange, symbol, orderType, side, quantity, leverage, limitPrice, stopLoss, takeProfit]);
 
   const submit = async () => {
     if (disabled || inFlight.current || isSubmitting) return;
@@ -205,6 +226,8 @@ export function PaperMarginForm({
           />
         </Field>
       </FieldRow>
+
+      <OrderPreview preview={preview} loading={previewLoading} failed={previewFailed} />
 
       <Actions>
         <Button type="primary" loading={loading} disabled={disabled || loading} onClick={() => void submit()}>

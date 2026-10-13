@@ -359,6 +359,9 @@ type orderBody struct {
 	ExpiresAt       string  `json:"expiresAt"`       // RFC3339; GTC only
 	LotMethod       string  `json:"lotMethod"`       // fifo | lifo (sells)
 	IdempotencyKey  string  `json:"idempotencyKey"`
+	Product         string  `json:"product"`    // spot (default) or margin — preview only
+	Leverage        int     `json:"leverage"`   // margin preview, 1–10
+	LimitPrice      float64 `json:"limitPrice"` // margin limit preview
 }
 
 type pendingOrderDTO struct {

@@ -2342,6 +2342,39 @@ func (c *APIClient) DeletePortfolioRiskLimits(ctx context.Context, clientID stri
 	return c.sendJSON(ctx, http.MethodDelete, "/api/v1/portfolio/risk-limits?"+q.Encode(), nil)
 }
 
+// PreviewPortfolioOrder prices a paper order without placing it.
+func (c *APIClient) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int) (json.RawMessage, error) {
+	body := map[string]any{
+		"clientId": clientID, "exchange": exchange, "symbol": symbol, "side": side,
+		"type": orderType, "product": product, "quantity": quantity,
+	}
+	if triggerPrice > 0 {
+		body["triggerPrice"] = triggerPrice
+	}
+	if takeProfitPrice > 0 {
+		body["takeProfitPrice"] = takeProfitPrice
+	}
+	if stopLossPrice > 0 {
+		body["stopLossPrice"] = stopLossPrice
+	}
+	if trailType != "" {
+		body["trailType"] = trailType
+	}
+	if trailValue > 0 {
+		body["trailValue"] = trailValue
+	}
+	if lotMethod != "" {
+		body["lotMethod"] = lotMethod
+	}
+	if limitPrice > 0 {
+		body["limitPrice"] = limitPrice
+	}
+	if leverage > 0 {
+		body["leverage"] = leverage
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders/preview", body)
+}
+
 // PlacePortfolioOrder places a paper market order.
 func (c *APIClient) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string) (json.RawMessage, error) {
 	body := map[string]any{

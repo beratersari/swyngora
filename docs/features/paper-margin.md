@@ -80,6 +80,7 @@ Cash/position read-modify-write is **serialized per `clientId`** in the portfoli
 | Method | Path | Description |
 |--------|------|-------------|
 | `PUT` | `/api/v1/portfolio/margin/mode` | Set `isolated` or `cross` |
+| `POST` | `/api/v1/portfolio/orders/preview` | Price a margin open (`product=margin`) before it is placed. Nothing is written |
 | `POST` | `/api/v1/portfolio/margin/orders` | Market open or limit rest |
 | `GET` | `/api/v1/portfolio/margin/orders` | List orders |
 | `DELETE` | `/api/v1/portfolio/margin/orders/{id}` | Cancel limit (releases reserve) |
@@ -98,7 +99,7 @@ Snapshot: `marginMode`, `reservedMargin`, `marginLocked`, `marginUnrealizedPnL`,
 Paper margin desk on `/portfolio`:
 
 - Mode toggle (isolated / cross) on the margin ticket
-- Open market/limit long/short with leverage and optional SL/TP
+- Open market/limit long/short with leverage and optional SL/TP. The ticket shows margin, liquidation, fee, and whether risk or the borrow cap would block the open
 - Summary strip shows margin mode, locked margin, margin uPnL
 - **Margin positions** tab: entry, mark, liq, debt, close
 

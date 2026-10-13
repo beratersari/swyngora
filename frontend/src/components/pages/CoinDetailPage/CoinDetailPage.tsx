@@ -89,7 +89,11 @@ import {
   ORDER_HEATMAP_POLL_MS,
   OrderHeatmap,
 } from '@/components/organisms/OrderHeatmap';
-import { PaperTradeForm, type PaperTradeFormValues } from '@/components/organisms/PaperTradeForm';
+import {
+  PaperTradeForm,
+  type PaperTradeFormProps,
+  type PaperTradeFormValues,
+} from '@/components/organisms/PaperTradeForm';
 import {
   rtkErrorMessage,
   useAddWatchlistItemMutation,
@@ -148,7 +152,8 @@ import {
   type PumpEventDto,
   type IndicatorsResponse,
 } from '@/libs/api';
-import { useDisplayCurrency, useDocumentVisible, useMediaQuery } from '@/libs/hooks';
+import { useDisplayCurrency, useDocumentVisible, useMediaQuery, useOrderPreview } from '@/libs/hooks';
+import type { SpotOrderPreviewDraft } from '@/libs/hooks/orderPreview';
 import { usePriceSubscription, usePortfolioSubscription } from '@/libs/realtime';
 import {
   formatDelistDay,
@@ -498,6 +503,7 @@ export function CoinDetailPage() {
     },
   );
   const [placePaperOrder, placePaperState] = usePlacePortfolioOrderMutation();
+  const paperPreviewOn = books.length > 0 && !(books.length > 1 && !paperBookId);
   const scannerResultsQuery = useListScannerResultsQuery(
     { limit: 100, offset: 0 },
     { skip, pollingInterval: visible ? DEFAULT_DETAIL_SERIES_POLL_MS : 0, refetchOnFocus: true },
@@ -3322,7 +3328,10 @@ export function CoinDetailPage() {
                 }
               />
             ) : null}
-            <PaperTradeForm
+            <CoinPaperTicket
+              portfolioId={paperBookId || undefined}
+              previewEnabled={paperPreviewOn}
+              visible={visible}
               lockedExchange={exchangeArg}
               lockedSymbol={symbol}
               compact
@@ -3370,5 +3379,29 @@ export function CoinDetailPage() {
         </Text>
       ) : null}
     </PageStack>
+  );
+}
+
+/** Keeps order-preview state on the ticket so the chart does not render on each keystroke. */
+function CoinPaperTicket({
+  portfolioId,
+  previewEnabled,
+  visible,
+  ...form
+}: Omit<PaperTradeFormProps, 'preview' | 'previewLoading' | 'previewFailed' | 'onDraftChange'> & {
+  portfolioId?: string;
+  previewEnabled: boolean;
+  visible: boolean;
+}) {
+  const [draft, setDraft] = useState<SpotOrderPreviewDraft | null>(null);
+  const priced = useOrderPreview(draft, { portfolioId, enabled: previewEnabled, visible });
+  return (
+    <PaperTradeForm
+      {...form}
+      preview={priced.preview}
+      previewLoading={priced.loading}
+      previewFailed={priced.failed}
+      onDraftChange={setDraft}
+    />
   );
 }

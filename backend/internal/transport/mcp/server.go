@@ -194,6 +194,7 @@ type DataPort interface {
 	PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct, maxExposurePct *float64) (json.RawMessage, error)
 	DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetPaperTradingCosts(ctx context.Context, exchange string) (json.RawMessage, error)
+	PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int) (json.RawMessage, error)
 	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string) (json.RawMessage, error)
 	PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt, trailType string, trailValue float64, lotMethod string) (json.RawMessage, error)
 	ListPortfolioLots(ctx context.Context, clientID, exchange, symbol, status string) (json.RawMessage, error)
@@ -3442,6 +3443,49 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("exchange", mcp.Description("Optional venue; omit to list all")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		raw, err := api.GetPaperTradingCosts(ctx, req.GetString("exchange", ""))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("preview_portfolio_order",
+		mcp.WithDescription("Preview a paper order before it is placed. Returns the slipped fill, taker fee, cash in or out, reserved cash or quantity, estimated sell profit, and whether a risk limit or the borrow cap would block it. product=spot (default) or margin. Nothing is written. Not real money."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base asset quantity")),
+		mcp.WithString("side", mcp.Description("Spot market: buy|sell. Margin: long|short")),
+		mcp.WithString("type", mcp.Description("Spot: market|limit_buy|limit_sell|stop_loss|trailing_stop|oco|bracket. Margin: market|limit")),
+		mcp.WithString("product", mcp.Description("spot (default) or margin")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
+		mcp.WithNumber("triggerPrice", mcp.Description("Limit, stop, or bracket entry price")),
+		mcp.WithNumber("takeProfitPrice", mcp.Description("OCO, bracket, or margin take-profit")),
+		mcp.WithNumber("stopLossPrice", mcp.Description("OCO, bracket, or margin stop-loss")),
+		mcp.WithString("trailType", mcp.Description("trailing_stop: percent|offset")),
+		mcp.WithNumber("trailValue", mcp.Description("trailing_stop distance")),
+		mcp.WithString("lotMethod", mcp.Description("fifo (default) or lifo")),
+		mcp.WithNumber("limitPrice", mcp.Description("Margin limit price")),
+		mcp.WithNumber("leverage", mcp.Description("Margin leverage 1-10")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		qty, err := req.RequireFloat("quantity")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		raw, err := api.PreviewPortfolioOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol,
+			req.GetString("side", ""), req.GetString("type", ""), req.GetString("product", ""),
+			req.GetString("trailType", ""), req.GetString("lotMethod", ""),
+			qty, req.GetFloat("triggerPrice", 0), req.GetFloat("takeProfitPrice", 0), req.GetFloat("stopLossPrice", 0),
+			req.GetFloat("trailValue", 0), req.GetFloat("limitPrice", 0), int(req.GetFloat("leverage", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

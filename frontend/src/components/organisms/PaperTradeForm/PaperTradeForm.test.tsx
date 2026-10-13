@@ -66,4 +66,31 @@ describe('PaperTradeForm', () => {
     const spin = screen.getByRole('spinbutton') as HTMLInputElement;
     expect(spin.value === '' || spin.value === '0').toBe(true);
   });
+
+  it('reports the draft so the page can price it', async () => {
+    const onDraftChange = vi.fn();
+    renderWithTheme(
+      <PaperTradeForm
+        lockedExchange="binance"
+        lockedSymbol="BTCUSDT"
+        compact
+        onSubmit={async () => undefined}
+        onDraftChange={onDraftChange}
+      />,
+    );
+    const spin = screen.getByRole('spinbutton');
+    fireEvent.change(spin, { target: { value: '2' } });
+    fireEvent.blur(spin);
+    await waitFor(() => {
+      const last = onDraftChange.mock.calls.at(-1)?.[0] as { quantity: number; side: string; type: string };
+      expect(last.quantity).toBe(2);
+      expect(last.side).toBe('buy');
+      expect(last.type).toBe('market');
+    });
+    fireEvent.pointerDown(screen.getByRole('button', { name: /paper sell|kağıt sat/i }));
+    await waitFor(() => {
+      const last = onDraftChange.mock.calls.at(-1)?.[0] as { side: string };
+      expect(last.side).toBe('sell');
+    });
+  });
 });

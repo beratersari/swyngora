@@ -104,6 +104,40 @@
       "trailValue": "Trail value is required"
     }
   },
+  "preview": {
+    "title": "Before you place it",
+    "pricing": "Pricing this order…",
+    "failed": "Could not price this order.",
+    "fillsNow": "This would fill now.",
+    "rests": "This would rest until the price is touched.",
+    "fill": "Fill",
+    "fee": "Fee",
+    "debit": "Cash out",
+    "credit": "Cash in",
+    "reservedCash": "Cash locked",
+    "reservedQty": "Quantity locked",
+    "cashAfter": "Cash after",
+    "availableAfter": "Available after",
+    "pnl": "Estimated profit",
+    "initialMargin": "Initial margin",
+    "liquidation": "Liquidation",
+    "borrowed": "Borrowed",
+    "leverage": "{{lev}}x",
+    "weight": "{{asset}} would be {{pct}} of the book",
+    "exposure": "Coins together would be {{pct}} of the book",
+    "legTakeProfit": "Take profit",
+    "legStopLoss": "Stop loss",
+    "note": "Preview only — nothing was placed. Fee and slippage match a paper fill. Risk limits block new buys and new margin opens. Sells are not blocked. Not real money.",
+    "warnings": {
+      "blocked": "Risk limits would block this order.",
+      "dailyLoss": "Today's loss limit is already hit. Deposits and withdrawals are not part of that loss.",
+      "weight": "This coin would be over its weight limit.",
+      "exposure": "Total exposure would be over the limit.",
+      "cash": "Not enough available cash.",
+      "quantity": "Not enough available quantity.",
+      "borrow": "This would pass the borrow limit."
+    }
+  },
   "margin": {
     "title": "Margin ticket",
     "hint": "Paper long/short 1–10x. Isolated or cross mode. Not real money.",

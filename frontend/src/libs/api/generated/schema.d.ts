@@ -3891,6 +3891,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portfolio/orders/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview paper order cost and risk
+         * @description Prices a spot or margin paper order the way a fill would, and reports whether a risk
+         *     limit would block it. Nothing is written: no trade, no reservation, no margin position.
+         *     Spot uses the same body as POST /orders (market, limit, stop, trailing stop, OCO, bracket).
+         *     Margin sets product=margin, side=long|short, type=market|limit, leverage 1-10, and limitPrice
+         *     for a limit. Fee and slippage match the venue. A market order shows the fill now. A resting
+         *     order shows the cash or quantity it would lock, and the fill if it triggers at that price.
+         *     A sell estimates realized profit from the open lots. Deposits and withdrawals are not part
+         *     of the daily loss. Not real money.
+         */
+        post: operations["previewPortfolioOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portfolio/orders": {
         parameters: {
             query?: never;
@@ -10041,6 +10068,127 @@ export interface components {
             feePct?: number;
             slippagePct?: number;
             items?: components["schemas"]["PaperTradingCost"][];
+            note?: string;
+        };
+        OrderPreviewRequest: {
+            clientId?: string;
+            portfolioId?: string;
+            /**
+             * @default binance
+             * @enum {string}
+             */
+            exchange: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
+            symbol: string;
+            /**
+             * @description spot uses the paper order types. margin prices a long or short open.
+             * @default spot
+             * @enum {string}
+             */
+            product: "spot" | "margin";
+            /**
+             * @description Spot: market, limit_buy, limit_sell, stop_loss, trailing_stop, oco, or bracket.
+             *     Margin: market or limit.
+             * @default market
+             */
+            type: string;
+            /** @description buy or sell for a spot market order. long or short for margin. */
+            side?: string;
+            quantity: number;
+            triggerPrice?: number;
+            takeProfitPrice?: number;
+            stopLossPrice?: number;
+            /** @enum {string} */
+            trailType?: "percent" | "offset";
+            trailValue?: number;
+            /**
+             * @default fifo
+             * @enum {string}
+             */
+            lotMethod: "fifo" | "lifo";
+            /** @description Required when product is margin. */
+            leverage?: number;
+            /** @description Margin limit price. */
+            limitPrice?: number;
+        };
+        OrderPreviewLeg: {
+            /** @enum {string} */
+            role?: "take_profit" | "stop_loss";
+            side?: string;
+            referencePrice?: number;
+            fillPrice?: number;
+            notional?: number;
+            fee?: number;
+            cashDebit?: number;
+            cashCredit?: number;
+            /** @description After-fee profit if this leg filled against the open lots. Omitted when the size is not available. */
+            estimatedRealizedPnl?: number;
+        };
+        OrderPreviewRisk: {
+            /** @description True when this order is a new spot buy or a new margin open. */
+            applies?: boolean;
+            blocked?: boolean;
+            reasons?: string[];
+            asset?: string;
+            assetValue?: number;
+            /** @description Coin share of equity after this order. A sell shows the smaller share. */
+            projectedWeightPct?: number;
+            weightLimitPct?: number;
+            weightLimitHit?: boolean;
+            projectedExposurePct?: number;
+            exposureLimitPct?: number;
+            exposureLimitHit?: boolean;
+            /** @description Trading P&L since the UTC day baseline. Deposits, withdrawals, and transfers are not profit or loss. */
+            dailyPnl?: number;
+            dailyPnlPct?: number;
+            dailyLossLimitHit?: boolean;
+            dailyLossLimitPct?: number;
+        };
+        OrderPreview: {
+            /** @enum {string} */
+            product?: "spot" | "margin";
+            type?: string;
+            side?: string;
+            exchange?: string;
+            symbol?: string;
+            quantity?: number;
+            lastPrice?: number;
+            /** @description Taker fee as a fraction */
+            feeRate?: number;
+            /** @description Adverse slippage as a fraction */
+            slippageRate?: number;
+            /** @description Last price for a market order, or the trigger the resting order uses. */
+            referencePrice?: number;
+            /** @description Reference price after adverse slippage. */
+            fillPrice?: number;
+            notional?: number;
+            /** @description Quote-currency taker fee */
+            fee?: number;
+            /** @description Cash the buy would spend, including the fee. For margin, initial margin plus the open fee. */
+            cashDebit?: number;
+            /** @description Cash a sell would receive after the fee. */
+            cashCredit?: number;
+            /** @description Cash a resting buy or margin limit would lock. The cash balance does not fall until it fills. */
+            reservedCash?: number;
+            reservedQuantity?: number;
+            /** @description After-fee profit of a sell against open lots. */
+            estimatedRealizedPnl?: number;
+            availableCash?: number;
+            availableQuantity?: number;
+            cashAfter?: number;
+            availableAfter?: number;
+            insufficientCash?: boolean;
+            insufficientQuantity?: boolean;
+            borrowLimitHit?: boolean;
+            /** @description True for a market order. A resting order shows the fill if the trigger is touched. */
+            fillsNow?: boolean;
+            leverage?: number;
+            initialMargin?: number;
+            liquidationPrice?: number;
+            borrowedPrincipal?: number;
+            borrowedAsset?: string;
+            risk?: components["schemas"]["OrderPreviewRisk"];
+            /** @description Take-profit and stop-loss outcomes for an OCO or a bracket. */
+            legs?: components["schemas"]["OrderPreviewLeg"][];
             note?: string;
         };
         PortfolioCashMovement: {
@@ -16321,6 +16469,32 @@ export interface operations {
                     "application/json": components["schemas"]["PaperTradingCostsResponse"];
                 };
             };
+        };
+    };
+    previewPortfolioOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Cost and risk of the order. The book is unchanged. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderPreview"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     listPortfolioOrders: {
