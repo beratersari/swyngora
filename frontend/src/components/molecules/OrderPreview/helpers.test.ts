@@ -33,6 +33,21 @@ describe('previewRows', () => {
     expect(rows.find((row) => row.id === 'debit')?.value).toBe('101');
     expect(rows.find((row) => row.id === 'cashAfter')?.value).toBe('899');
   });
+
+  it('lists the risk budget when the stop sized the order', () => {
+    const rows = previewRows({
+      ...buy,
+      sizing: {
+        riskPercent: 1,
+        riskBudget: 100,
+        estimatedLoss: 100,
+        quantity: 10,
+        stopAttached: false,
+      },
+    });
+    expect(rows.find((row) => row.id === 'riskBudget')?.value).toBe('100');
+    expect(rows.find((row) => row.id === 'lossAtStop')?.value).toBe('100');
+  });
 });
 
 describe('previewWarnings', () => {
@@ -49,6 +64,16 @@ describe('previewWarnings', () => {
       risk: { applies: false, blocked: false, dailyLossLimitHit: true, reasons: [] },
     };
     expect(previewWarnings(sell)).toEqual(['dailyLoss']);
+  });
+
+  it('flags a margin stop past liquidation', () => {
+    expect(
+      previewWarnings({
+        ...buy,
+        product: 'margin',
+        sizing: { stopBeyondLiquidation: true, riskPercent: 1, quantity: 1 },
+      }),
+    ).toContain('stopBeyondLiquidation');
   });
 });
 

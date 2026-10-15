@@ -154,7 +154,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `POST` | `/api/v1/portfolio/stress` | What-if: equity, total P&L, and margin after asset percent moves (e.g. BTC −10, ETH −15) |
 | `GET`/`PUT`/`DELETE` | `/api/v1/portfolio/risk-limits` | Optional risk brakes (daily loss %, max coin weight, max total exposure); block new buys/margin only |
 | `GET` | `/api/v1/portfolio/trading-costs` | Per-exchange paper taker fee and slippage |
-| `POST` | `/api/v1/portfolio/orders/preview` | Price a spot or margin order and check risk. Nothing is written |
+| `POST` | `/api/v1/portfolio/orders/preview` | Price a spot or margin order and check risk. `riskPercent` plus a stop sizes the order. Nothing is written |
 | `POST` | `/api/v1/portfolio/orders` | Paper market or pending (`limit_buy` / `limit_sell` / `stop_loss`); optional `Idempotency-Key` |
 | `GET` | `/api/v1/portfolio/orders` | List pending orders (default: open) |
 | `GET` | `/api/v1/portfolio/orders/{id}` | One pending order + last price + amend hints |

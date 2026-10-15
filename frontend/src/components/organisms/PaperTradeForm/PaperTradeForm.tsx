@@ -5,9 +5,11 @@ import { Text } from '@/components/atoms/Text';
 import { OrderPreview } from '@/components/molecules/OrderPreview';
 import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
 import { rtkErrorMessage, type MarketExchange } from '@/libs/api';
+import { sizedQuantity } from '@/libs/hooks/orderPreview';
 import { Actions, Field, FieldRow, FormStack } from './PaperTradeForm.styles';
 import type { PaperTradeFormProps, PaperTradeFormValues } from './PaperTradeForm.types';
 import {
+  canSizeByRisk,
   needsSide,
   needsTif,
   needsTpSl,
@@ -15,7 +17,6 @@ import {
   needsTrigger,
   toApiOrderType,
   type SpotOrderKind,
-
 } from './helpers';
 
 /**
@@ -50,6 +51,7 @@ export function PaperTradeForm({
   const [triggerPrice, setTriggerPrice] = useState<number | null>(null);
   const [takeProfitPrice, setTakeProfitPrice] = useState<number | null>(null);
   const [stopLossPrice, setStopLossPrice] = useState<number | null>(null);
+  const [riskPercent, setRiskPercent] = useState<number | null>(null);
   const [trailType, setTrailType] = useState<'percent' | 'offset'>('percent');
   const [trailValue, setTrailValue] = useState<number | null>(null);
   const [lotMethod, setLotMethod] = useState<'fifo' | 'lifo'>('fifo');
@@ -91,6 +93,15 @@ export function PaperTradeForm({
     showLotMethod &&
     (kind === 'market' ? side === 'sell' : kind !== 'limit' || side === 'sell') &&
     kind !== 'bracket';
+  const canSize = canSizeByRisk(kind, side);
+  const riskActive = canSize && riskPercent != null && riskPercent > 0;
+  const stopForSize = stopLossPrice != null && stopLossPrice > 0;
+
+  useEffect(() => {
+    const next = sizedQuantity(riskPercent, preview?.sizing);
+    if (next == null) return;
+    setQuantity((prev) => (prev === next ? prev : next));
+  }, [preview, riskPercent]);
 
   useEffect(() => {
     if (!onDraftChange) return;
@@ -103,7 +114,8 @@ export function PaperTradeForm({
       quantity: quantity ?? 0,
       triggerPrice: showTrigger && triggerPrice != null ? triggerPrice : undefined,
       takeProfitPrice: showTpSl && takeProfitPrice != null ? takeProfitPrice : undefined,
-      stopLossPrice: showTpSl && stopLossPrice != null ? stopLossPrice : undefined,
+      stopLossPrice: (showTpSl || riskActive) && stopLossPrice != null ? stopLossPrice : undefined,
+      riskPercent: riskActive ? (riskPercent ?? undefined) : undefined,
       trailType: showTrail ? trailType : undefined,
       trailValue: showTrail && trailValue != null ? trailValue : undefined,
       lotMethod: showLot ? lotMethod : undefined,
@@ -125,11 +137,17 @@ export function PaperTradeForm({
     showTpSl,
     showTrail,
     showLot,
+    riskActive,
+    riskPercent,
   ]);
 
   const submit = async (forcedSide?: 'buy' | 'sell') => {
     if (disabled || inFlightRef.current || isSubmitting) return;
     const s = forcedSide ?? side;
+    if (!(quantity != null && quantity > 0)) {
+      setLocalError(t('portfolio:trade.validation.quantity'));
+      return;
+    }
     const sym = symbol.trim().toUpperCase();
     const orderType = toApiOrderType(kind, s);
     const values: PaperTradeFormValues = {
@@ -143,9 +161,11 @@ export function PaperTradeForm({
       stopLossPrice: showTpSl ? (stopLossPrice ?? undefined) : undefined,
       trailType: showTrail ? trailType : undefined,
       trailValue: showTrail ? (trailValue ?? undefined) : undefined,
-      lotMethod: showLot && (s === 'sell' || kind === 'oco' || kind === 'stop_loss' || kind === 'trailing_stop')
-        ? lotMethod
-        : undefined,
+      lotMethod:
+        showLot &&
+        (s === 'sell' || kind === 'oco' || kind === 'stop_loss' || kind === 'trailing_stop')
+          ? lotMethod
+          : undefined,
       timeInForce: showTif ? tif : undefined,
     };
     setLocalError(null);
@@ -154,6 +174,7 @@ export function PaperTradeForm({
     try {
       await onSubmit(values);
       setQuantity(null);
+      setRiskPercent(null);
       if (showTrigger) setTriggerPrice(null);
       if (showTpSl) {
         setTakeProfitPrice(null);
@@ -191,7 +212,10 @@ export function PaperTradeForm({
               <Select
                 value={exchange}
                 aria-label={t('portfolio:trade.exchange')}
-                options={['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'].map((e) => ({ value: e, label: e }))}
+                options={['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'].map((e) => ({
+                  value: e,
+                  label: e,
+                }))}
                 onChange={setExchange}
               />
             </Field>
@@ -246,16 +270,58 @@ export function PaperTradeForm({
             min={0}
             step={0.001}
             value={quantity}
-            onChange={(v) => setQuantity(typeof v === 'number' ? v : null)}
+            disabled={riskActive}
+            onChange={(v) => {
+              const next = typeof v === 'number' ? v : null;
+              const sized = sizedQuantity(riskPercent, preview?.sizing);
+              if (sized != null && next === sized) return;
+              if (riskActive) setRiskPercent(null);
+              setQuantity(next);
+            }}
             style={{ minWidth: 120 }}
             aria-label={t('portfolio:trade.quantity')}
           />
         </Field>
 
+        {canSize ? (
+          <Field>
+            <Text variant="caption" color="secondary">
+              {t('portfolio:trade.riskPercent')}
+            </Text>
+            <InputNumber
+              min={0}
+              max={100}
+              step={0.1}
+              value={riskPercent}
+              onChange={(v) => setRiskPercent(typeof v === 'number' ? v : null)}
+              style={{ minWidth: 90 }}
+              aria-label={t('portfolio:trade.riskPercent')}
+            />
+          </Field>
+        ) : null}
+
+        {canSize && !showTpSl ? (
+          <Field>
+            <Text variant="caption" color="secondary">
+              {t('portfolio:trade.stopLoss')}
+            </Text>
+            <InputNumber
+              min={0}
+              step={0.01}
+              value={stopLossPrice}
+              onChange={(v) => setStopLossPrice(typeof v === 'number' ? v : null)}
+              style={{ minWidth: 120 }}
+              aria-label={t('portfolio:trade.stopLoss')}
+            />
+          </Field>
+        ) : null}
+
         {showTrigger ? (
           <Field>
             <Text variant="caption" color="secondary">
-              {kind === 'bracket' ? t('portfolio:trade.entryPrice') : t('portfolio:trade.triggerPrice')}
+              {kind === 'bracket'
+                ? t('portfolio:trade.entryPrice')
+                : t('portfolio:trade.triggerPrice')}
             </Text>
             <InputNumber
               min={0}
@@ -362,6 +428,18 @@ export function PaperTradeForm({
           </Field>
         ) : null}
       </FieldRow>
+
+      {riskActive ? (
+        <Text variant="caption" color="secondary">
+          {stopForSize
+            ? t(
+                kind === 'bracket'
+                  ? 'portfolio:trade.riskSizesBracket'
+                  : 'portfolio:trade.riskSizesBuy',
+              )
+            : t('portfolio:trade.riskNeedStop')}
+        </Text>
+      ) : null}
 
       <OrderPreview preview={preview} loading={previewLoading} failed={previewFailed} />
 

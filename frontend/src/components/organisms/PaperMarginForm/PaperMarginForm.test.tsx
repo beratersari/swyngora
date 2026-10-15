@@ -16,11 +16,7 @@ describe('PaperMarginForm', () => {
 
   it('submits when fields are valid', async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
-    renderWithProviders(
-      <PaperMarginForm
-        onSubmit={onSubmit}
-      />,
-    );
+    renderWithProviders(<PaperMarginForm onSubmit={onSubmit} />);
     // Ant Select exchange is fine; type symbol via free text if combobox allows
     const inputs = document.querySelectorAll('input');
     // Find quantity spin
@@ -39,6 +35,29 @@ describe('PaperMarginForm', () => {
     await waitFor(() => {
       // Either submitted or showed validation — component is interactive
       expect(true).toBe(true);
+    });
+  });
+
+  it('reports a risk percent and a stop for a margin open', async () => {
+    const onDraftChange = vi.fn();
+    renderWithProviders(
+      <PaperMarginForm onSubmit={async () => undefined} onDraftChange={onDraftChange} />,
+    );
+    fireEvent.change(screen.getByRole('spinbutton', { name: /risk/i }), { target: { value: '1' } });
+    fireEvent.blur(screen.getByRole('spinbutton', { name: /risk/i }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: /stop loss|zarar kes/i }), {
+      target: { value: '90' },
+    });
+    fireEvent.blur(screen.getByRole('spinbutton', { name: /stop loss|zarar kes/i }));
+    await waitFor(() => {
+      const last = onDraftChange.mock.calls.at(-1)?.[0] as {
+        product: string;
+        riskPercent?: number;
+        stopLossPrice?: number;
+      };
+      expect(last.product).toBe('margin');
+      expect(last.riskPercent).toBe(1);
+      expect(last.stopLossPrice).toBe(90);
     });
   });
 });

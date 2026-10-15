@@ -1,12 +1,6 @@
 import type { PaperOrderType } from '@/libs/api';
 
-export type SpotOrderKind =
-  | 'market'
-  | 'limit'
-  | 'stop_loss'
-  | 'trailing_stop'
-  | 'oco'
-  | 'bracket';
+export type SpotOrderKind = 'market' | 'limit' | 'stop_loss' | 'trailing_stop' | 'oco' | 'bracket';
 
 export function kindFromOrderType(type: PaperOrderType | undefined): SpotOrderKind {
   switch (type) {
@@ -55,4 +49,8 @@ export function needsTif(kind: SpotOrderKind): boolean {
   return kind === 'limit' || kind === 'stop_loss';
 }
 
-
+/** A spot buy or a bracket can be sized from a stop. Sells and exits cannot. */
+export function canSizeByRisk(kind: SpotOrderKind, side: 'buy' | 'sell'): boolean {
+  if (kind === 'bracket') return true;
+  return (kind === 'market' || kind === 'limit') && side === 'buy';
+}

@@ -31,13 +31,7 @@ export type SpotPosition = components['schemas']['PortfolioPosition'];
 export type PortfolioView = components['schemas']['PortfolioView'];
 
 export type PaperOrderType =
-  | 'market'
-  | 'limit_buy'
-  | 'limit_sell'
-  | 'stop_loss'
-  | 'trailing_stop'
-  | 'oco'
-  | 'bracket';
+  'market' | 'limit_buy' | 'limit_sell' | 'stop_loss' | 'trailing_stop' | 'oco' | 'bracket';
 
 export type PlacePortfolioOrderArg = {
   portfolioId?: string;
@@ -82,7 +76,10 @@ export type PreviewPortfolioOrderArg = {
   product?: 'spot' | 'margin';
   type?: string;
   side?: string;
-  quantity: number;
+  /** Omitted when riskPercent sizes the order. */
+  quantity?: number;
+  /** Percent of portfolio equity to lose if the stop fills. */
+  riskPercent?: number;
   triggerPrice?: number;
   takeProfitPrice?: number;
   stopLossPrice?: number;
@@ -217,12 +214,19 @@ export const portfolioApi = baseApi.injectEndpoints({
       }),
       providesTags: ['Portfolio'],
     }),
-    createPortfolio: build.mutation<PortfolioView, { startingBalance: number; currency?: string; name?: string }>({
+    createPortfolio: build.mutation<
+      PortfolioView,
+      { startingBalance: number; currency?: string; name?: string }
+    >({
       query: (body) => ({ url: '/api/v1/portfolio', method: 'POST', body }),
       invalidatesTags: ['Portfolio'],
     }),
     renamePortfolio: build.mutation<PortfolioSummary, { id: string; name: string }>({
-      query: ({ id, name }) => ({ url: `/api/v1/portfolios/${id}`, method: 'PATCH', body: { name } }),
+      query: ({ id, name }) => ({
+        url: `/api/v1/portfolios/${id}`,
+        method: 'PATCH',
+        body: { name },
+      }),
       invalidatesTags: ['Portfolio'],
     }),
     deletePortfolio: build.mutation<{ deleted?: boolean; id?: string }, string>({
@@ -245,7 +249,11 @@ export const portfolioApi = baseApi.injectEndpoints({
     >({
       query: (arg) => ({
         url: '/api/v1/portfolio/cash-movements',
-        params: { limit: arg?.limit ?? 50, offset: arg?.offset ?? 0, ...bookParams(arg?.portfolioId) },
+        params: {
+          limit: arg?.limit ?? 50,
+          offset: arg?.offset ?? 0,
+          ...bookParams(arg?.portfolioId),
+        },
       }),
       providesTags: ['Portfolio'],
     }),
@@ -276,7 +284,11 @@ export const portfolioApi = baseApi.injectEndpoints({
     >({
       query: (arg) => ({
         url: '/api/v1/portfolio/transfers/attempts',
-        params: { limit: arg?.limit ?? 50, offset: arg?.offset ?? 0, ...bookParams(arg?.portfolioId) },
+        params: {
+          limit: arg?.limit ?? 50,
+          offset: arg?.offset ?? 0,
+          ...bookParams(arg?.portfolioId),
+        },
       }),
       providesTags: ['Portfolio'],
     }),
@@ -374,6 +386,7 @@ export const portfolioApi = baseApi.injectEndpoints({
           type: body.type ?? 'market',
           side: body.side,
           quantity: body.quantity,
+          riskPercent: body.riskPercent,
           triggerPrice: body.triggerPrice,
           takeProfitPrice: body.takeProfitPrice,
           stopLossPrice: body.stopLossPrice,

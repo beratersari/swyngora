@@ -30,6 +30,7 @@ type OrderPreviewInput struct {
 	LotMethod       string
 	Leverage        int
 	LimitPrice      float64
+	RiskPercent     float64 // when > 0, quantity is sized from equity and the stop
 }
 
 // riskSnap is the live book used to price one preview. It is not saved as an order.
@@ -79,7 +80,12 @@ func (s *Service) PreviewOrder(ctx context.Context, in OrderPreviewInput) (*doma
 	if product != "spot" && product != "margin" {
 		return nil, fmt.Errorf("%w: product must be spot or margin", domain.ErrInvalidArgument)
 	}
-	if in.Quantity < domain.MinTradeQuantity || in.Quantity > domain.MaxTradeQuantity ||
+	sizingOn := in.RiskPercent != 0
+	if sizingOn {
+		if err := domain.ValidateRiskPercent(in.RiskPercent); err != nil {
+			return nil, err
+		}
+	} else if in.Quantity < domain.MinTradeQuantity || in.Quantity > domain.MaxTradeQuantity ||
 		math.IsNaN(in.Quantity) || math.IsInf(in.Quantity, 0) {
 		return nil, fmt.Errorf("%w: quantity out of range", domain.ErrInvalidArgument)
 	}
@@ -132,12 +138,22 @@ func (s *Service) PreviewOrder(ctx context.Context, in OrderPreviewInput) (*doma
 	if err != nil {
 		return nil, err
 	}
+	var sizing *domain.OrderPreviewSizing
+	if sizingOn {
+		sized, serr := sizePreview(in, product, last, cost, snap.equity)
+		if serr != nil {
+			return nil, serr
+		}
+		in.Quantity = sized.Quantity
+		sizing = &sized
+	}
 
 	out := &domain.OrderPreview{
 		Product:           product,
 		Exchange:          ex,
 		Symbol:            sym,
 		Quantity:          in.Quantity,
+		Sizing:            sizing,
 		LastPrice:         last,
 		FeeRate:           cost.FeeRate,
 		SlippageRate:      cost.SlippageRate,
@@ -431,6 +447,9 @@ func (s *Service) previewMargin(
 	}
 	out.InsufficientCash = avail+1e-9 < need
 	out.Risk = snap.build(riskNotional, true)
+	if out.Sizing != nil {
+		out.Sizing.MarkStopVsLiquidation(side == domain.MarginLong, liq)
+	}
 	if out.BorrowLimitHit {
 		out.Risk.Blocked = true
 		out.Risk.Reasons = append(out.Risk.Reasons, "borrow limit would be exceeded")
@@ -460,4 +479,75 @@ func sellPnL(lots []domain.TaxLot, bookID string, ex domain.Exchange, sym string
 
 func badPrice(p float64) bool {
 	return p < domain.MinTriggerPrice || p > domain.MaxTriggerPrice || math.IsNaN(p) || math.IsInf(p, 0)
+}
+
+// sizePreview turns a risk percent and a stop into the quantity the rest of the
+// preview prices. A sent quantity is ignored. Spot sells and exits are rejected.
+func sizePreview(in OrderPreviewInput, product string, last float64, cost domain.TradingCost, equity float64) (domain.OrderPreviewSizing, error) {
+	if badPrice(in.StopLossPrice) {
+		return domain.OrderPreviewSizing{}, fmt.Errorf("%w: stopLossPrice is required to size by risk", domain.ErrInvalidArgument)
+	}
+	entry, long, attached, err := riskEntry(in, product, last)
+	if err != nil {
+		return domain.OrderPreviewSizing{}, err
+	}
+	sized, err := domain.SizeByStopRisk(domain.RiskSizeInput{
+		Equity: equity, RiskPercent: in.RiskPercent, Entry: entry, Stop: in.StopLossPrice, Long: long, Cost: cost,
+	})
+	if err != nil {
+		return domain.OrderPreviewSizing{}, err
+	}
+	sized.StopAttached = attached
+	return sized, nil
+}
+
+// riskEntry is the price the order would use before slippage, and whether the
+// stop is placed with that order.
+func riskEntry(in OrderPreviewInput, product string, last float64) (entry float64, long, attached bool, err error) {
+	if product == "margin" {
+		side := domain.MarginSide(strings.ToLower(strings.TrimSpace(in.Side)))
+		if side != domain.MarginLong && side != domain.MarginShort {
+			return 0, false, false, fmt.Errorf("%w: side must be long or short", domain.ErrInvalidArgument)
+		}
+		typ := strings.ToLower(strings.TrimSpace(in.Type))
+		if typ == "" {
+			typ = "market"
+		}
+		switch typ {
+		case "market":
+			entry = last
+		case "limit":
+			if badPrice(in.LimitPrice) {
+				return 0, false, false, fmt.Errorf("%w: limitPrice out of range", domain.ErrInvalidArgument)
+			}
+			entry = in.LimitPrice
+		default:
+			return 0, false, false, fmt.Errorf("%w: margin type must be market or limit", domain.ErrInvalidArgument)
+		}
+		return entry, side == domain.MarginLong, true, nil
+	}
+	typ := strings.ToLower(strings.TrimSpace(in.Type))
+	if typ == "" {
+		typ = "market"
+	}
+	switch typ {
+	case "market":
+		side := domain.TradeSide(strings.ToLower(strings.TrimSpace(in.Side)))
+		if side != domain.TradeSideBuy {
+			return 0, false, false, fmt.Errorf("%w: risk percent sizes a buy or a margin open", domain.ErrInvalidArgument)
+		}
+		return last, true, false, nil
+	case "limit_buy":
+		if badPrice(in.TriggerPrice) {
+			return 0, false, false, fmt.Errorf("%w: triggerPrice out of range", domain.ErrInvalidArgument)
+		}
+		return in.TriggerPrice, true, false, nil
+	case "bracket":
+		if badPrice(in.TriggerPrice) {
+			return 0, false, false, fmt.Errorf("%w: triggerPrice out of range", domain.ErrInvalidArgument)
+		}
+		return in.TriggerPrice, true, true, nil
+	default:
+		return 0, false, false, fmt.Errorf("%w: risk percent sizes a spot buy, a bracket, or a margin open", domain.ErrInvalidArgument)
+	}
 }

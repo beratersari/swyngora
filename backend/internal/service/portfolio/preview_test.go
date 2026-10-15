@@ -156,6 +156,136 @@ func TestPreviewOrder_MarginShowsLiquidationAndDoesNotOpen(t *testing.T) {
 	}
 }
 
+func TestPreviewOrder_RiskPercentSizesSpotBuyAndDoesNotPlace(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "prev-risk", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.PreviewOrder(ctx, OrderPreviewInput{
+		ClientID: "prev-risk", Symbol: "BTCUSDT", Side: "buy", RiskPercent: 1, StopLossPrice: 90,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Sizing == nil || math.Abs(got.Quantity-10) > 1e-9 || math.Abs(got.CashDebit-1000) > 1e-6 {
+		t.Fatalf("sized %+v debit=%v", got.Sizing, got.CashDebit)
+	}
+	if got.Sizing.StopAttached || got.Sizing.StopBeyondLiquidation {
+		t.Fatalf("spot market stop is not an order: %+v", got.Sizing)
+	}
+	if math.Abs(got.Sizing.EstimatedLoss-100) > 1e-6 || math.Abs(got.Sizing.Equity-10000) > 1e-6 {
+		t.Fatalf("sizing %+v", got.Sizing)
+	}
+	view, err := svc.View(ctx, "prev-risk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(view.CashBalance-10000) > 1e-9 || len(view.Positions) != 0 {
+		t.Fatalf("preview wrote the book: cash=%v positions=%d", view.CashBalance, len(view.Positions))
+	}
+}
+
+func TestPreviewOrder_RiskPercentUsesLimitAndIgnoresSentQuantity(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "prev-risk-lim", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.PreviewOrder(ctx, OrderPreviewInput{
+		ClientID: "prev-risk-lim", Symbol: "BTCUSDT", Type: "limit_buy",
+		Quantity: 1, TriggerPrice: 80, StopLossPrice: 70, RiskPercent: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 1% of 10000 is 100. The stop is 10 under the limit, so the size is 10, not the sent 1.
+	if math.Abs(got.Quantity-10) > 1e-9 || math.Abs(got.ReservedCash-800) > 1e-6 || got.FillsNow {
+		t.Fatalf("%+v", got)
+	}
+	if got.Sizing == nil || got.Sizing.StopAttached {
+		t.Fatalf("limit buy does not place the stop: %+v", got.Sizing)
+	}
+}
+
+func TestPreviewOrder_RiskPercentSizesBracketAndAttachesStop(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "prev-risk-br", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.PreviewOrder(ctx, OrderPreviewInput{
+		ClientID: "prev-risk-br", Symbol: "BTCUSDT", Type: "bracket",
+		TriggerPrice: 90, TakeProfitPrice: 120, StopLossPrice: 80, RiskPercent: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Sizing == nil || !got.Sizing.StopAttached || math.Abs(got.Quantity-10) > 1e-9 {
+		t.Fatalf("%+v qty=%v", got.Sizing, got.Quantity)
+	}
+	if len(got.Legs) != 2 {
+		t.Fatalf("legs=%d", len(got.Legs))
+	}
+}
+
+func TestPreviewOrder_RiskPercentSizesMarginAndFlagsLiquidation(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "prev-risk-m", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	safe, err := svc.PreviewOrder(ctx, OrderPreviewInput{
+		ClientID: "prev-risk-m", Product: "margin", Symbol: "BTCUSDT", Side: "long",
+		Leverage: 2, RiskPercent: 1, StopLossPrice: 90,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if safe.Sizing == nil || !safe.Sizing.StopAttached || safe.Sizing.StopBeyondLiquidation {
+		t.Fatalf("stop should be the exit: %+v liq=%v", safe.Sizing, safe.LiquidationPrice)
+	}
+	if math.Abs(safe.Quantity-10) > 1e-9 || math.Abs(safe.InitialMargin-500) > 1e-6 {
+		t.Fatalf("qty=%v margin=%v", safe.Quantity, safe.InitialMargin)
+	}
+	wide, err := svc.PreviewOrder(ctx, OrderPreviewInput{
+		ClientID: "prev-risk-m", Product: "margin", Symbol: "BTCUSDT", Side: "long",
+		Leverage: 10, RiskPercent: 1, StopLossPrice: 80,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wide.Sizing == nil || !wide.Sizing.StopBeyondLiquidation || wide.LiquidationPrice <= 80 {
+		t.Fatalf("liq=%v sizing=%+v", wide.LiquidationPrice, wide.Sizing)
+	}
+	list, err := svc.ListMarginPositions(ctx, "prev-risk-m")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 0 {
+		t.Fatalf("preview opened %d positions", len(list))
+	}
+}
+
+func TestPreviewOrder_RiskPercentRejectsSpotSell(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "prev-risk-sell", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := svc.PreviewOrder(ctx, OrderPreviewInput{
+		ClientID: "prev-risk-sell", Symbol: "BTCUSDT", Side: "sell", RiskPercent: 1, StopLossPrice: 110,
+	})
+	if err == nil {
+		t.Fatal("expected a sell to be rejected")
+	}
+}
+
 func TestPreviewOrder_InsufficientCashIsAWarning(t *testing.T) {
 	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
 	svc := newSvc(t, px)

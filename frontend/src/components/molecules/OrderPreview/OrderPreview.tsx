@@ -73,10 +73,25 @@ export function OrderPreview({ preview, loading, failed }: OrderPreviewProps) {
               {t('preview.exposure', { pct: formatPreviewPct(exposure) })}
             </Text>
           ) : null}
+          {preview.sizing ? (
+            <Text variant="caption" color="secondary">
+              {t('preview.sized', {
+                pct: formatPreviewPct(preview.sizing.riskPercent),
+                budget: formatPrice(preview.sizing.riskBudget),
+              })}
+            </Text>
+          ) : null}
+          {preview.sizing && preview.sizing.stopAttached === false ? (
+            <Text variant="caption" color="secondary">
+              {t('preview.stopNotAttached')}
+            </Text>
+          ) : null}
           {(preview.legs ?? []).map((leg, index) => (
             <Text key={`${leg.role ?? 'leg'}-${index}`} variant="caption" color="secondary">
               {leg.role === 'take_profit' ? t('preview.legTakeProfit') : t('preview.legStopLoss')}
-              {leg.estimatedRealizedPnl != null ? ` · ${t('preview.pnl')} ${formatPrice(leg.estimatedRealizedPnl)}` : ''}
+              {leg.estimatedRealizedPnl != null
+                ? ` · ${t('preview.pnl')} ${formatPrice(leg.estimatedRealizedPnl)}`
+                : ''}
             </Text>
           ))}
           {warnings.map((id) => (

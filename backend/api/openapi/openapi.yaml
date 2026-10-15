@@ -6665,7 +6665,12 @@ paths:
         for a limit. Fee and slippage match the venue. A market order shows the fill now. A resting
         order shows the cash or quantity it would lock, and the fill if it triggers at that price.
         A sell estimates realized profit from the open lots. Deposits and withdrawals are not part
-        of the daily loss. Not real money.
+        of the daily loss.
+        riskPercent with stopLossPrice sizes the order instead of using quantity. The size is the
+        base amount that loses that percent of portfolio equity if the stop fills, after the taker
+        fee and adverse slippage. It applies to a spot buy (market, limit_buy, bracket) and to a
+        margin long or short. A spot sell or exit is rejected. The stop is placed only with a
+        bracket or a margin open. Not real money.
       operationId: previewPortfolioOrder
       tags: [Portfolio]
       requestBody:
@@ -14398,7 +14403,7 @@ components:
         note: { type: string }
     OrderPreviewRequest:
       type: object
-      required: [symbol, quantity]
+      required: [symbol]
       properties:
         clientId: { type: string }
         portfolioId: { type: string }
@@ -14418,10 +14423,23 @@ components:
         side:
           type: string
           description: buy or sell for a spot market order. long or short for margin.
-        quantity: { type: number, exclusiveMinimum: 0 }
+        quantity:
+          type: number
+          exclusiveMinimum: 0
+          description: Required unless riskPercent is set. Ignored when riskPercent is set.
+        riskPercent:
+          type: number
+          exclusiveMinimum: 0
+          maximum: 100
+          description: |
+            Percent of portfolio equity to lose if the stop fills. Sizes the order from
+            stopLossPrice. Spot market buy, limit_buy, and bracket, or a margin long or short.
         triggerPrice: { type: number, exclusiveMinimum: 0 }
         takeProfitPrice: { type: number, exclusiveMinimum: 0 }
-        stopLossPrice: { type: number, exclusiveMinimum: 0 }
+        stopLossPrice:
+          type: number
+          exclusiveMinimum: 0
+          description: Required when riskPercent is set. Also the OCO, bracket, or margin stop.
         trailType: { type: string, enum: [percent, offset] }
         trailValue: { type: number, exclusiveMinimum: 0 }
         lotMethod: { type: string, enum: [fifo, lifo], default: fifo }
@@ -14474,6 +14492,36 @@ components:
         dailyPnlPct: { type: number }
         dailyLossLimitHit: { type: boolean }
         dailyLossLimitPct: { type: number }
+    OrderPreviewSizing:
+      type: object
+      description: Present when riskPercent sized the order. The preview quantity is this size.
+      properties:
+        riskPercent: { type: number }
+        equity:
+          type: number
+          description: Portfolio equity the percent is applied to.
+        riskBudget:
+          type: number
+          description: Equity times riskPercent / 100.
+        quantity:
+          type: number
+          description: Base size that loses about the budget if the stop fills.
+        entryPrice:
+          type: number
+          description: Last price, limit, or bracket entry before slippage.
+        stopPrice: { type: number }
+        lossPerUnit:
+          type: number
+          description: Loss of one unit after the fee and adverse slippage on the entry and the stop.
+        estimatedLoss:
+          type: number
+          description: Quantity times lossPerUnit.
+        stopAttached:
+          type: boolean
+          description: True when this order would place the stop (margin open or bracket).
+        stopBeyondLiquidation:
+          type: boolean
+          description: True when a margin stop is at or past liquidation, so the stop would not be the exit.
     OrderPreview:
       type: object
       properties:
@@ -14524,6 +14572,8 @@ components:
         borrowedAsset: { type: string }
         risk:
           $ref: '#/components/schemas/OrderPreviewRisk'
+        sizing:
+          $ref: '#/components/schemas/OrderPreviewSizing'
         legs:
           type: array
           items: { $ref: '#/components/schemas/OrderPreviewLeg' }

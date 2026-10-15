@@ -5074,7 +5074,7 @@ func (b *Backend) GetPortfolioPerformance(ctx context.Context, clientID, period 
 	return mustJSON(m)
 }
 
-func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int) (json.RawMessage, error) {
+func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
@@ -5082,7 +5082,7 @@ func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange,
 		ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol,
 		Side: side, Type: orderType, Product: product, TrailType: trailType, LotMethod: lotMethod,
 		Quantity: quantity, TriggerPrice: triggerPrice, TakeProfitPrice: takeProfitPrice, StopLossPrice: stopLossPrice,
-		TrailValue: trailValue, LimitPrice: limitPrice, Leverage: leverage,
+		TrailValue: trailValue, LimitPrice: limitPrice, Leverage: leverage, RiskPercent: riskPercent,
 	})
 	if err != nil {
 		return nil, err

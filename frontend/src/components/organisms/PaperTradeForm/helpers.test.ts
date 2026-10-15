@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { kindFromOrderType, toApiOrderType } from './helpers';
+import { canSizeByRisk, kindFromOrderType, toApiOrderType } from './helpers';
 
 describe('PaperTradeForm helpers', () => {
   it('maps kind to API order type', () => {
@@ -14,4 +14,12 @@ describe('PaperTradeForm helpers', () => {
     expect(kindFromOrderType('stop_loss')).toBe('stop_loss');
   });
 
+  it('sizes a buy or a bracket, not a sell', () => {
+    expect(canSizeByRisk('market', 'buy')).toBe(true);
+    expect(canSizeByRisk('limit', 'buy')).toBe(true);
+    expect(canSizeByRisk('bracket', 'sell')).toBe(true);
+    expect(canSizeByRisk('market', 'sell')).toBe(false);
+    expect(canSizeByRisk('oco', 'sell')).toBe(false);
+    expect(canSizeByRisk('stop_loss', 'sell')).toBe(false);
+  });
 });

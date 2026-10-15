@@ -35,10 +35,29 @@ describe('OrderPreview', () => {
     expect(
       screen.getByText(/risk limits would block this order|risk limitleri bu emri durdururdu/i),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/over its weight limit|ağırlık limitini aşardı/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/over its weight limit|ağırlık limitini aşardı/i)).toBeInTheDocument();
     expect(screen.queryByText(/40\.00% of the portfolio/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the size that loses the risk budget at the stop', () => {
+    renderWithTheme(
+      <OrderPreview
+        preview={{
+          ...blockedBuy,
+          sizing: {
+            riskPercent: 1,
+            riskBudget: 100,
+            estimatedLoss: 100,
+            quantity: 10,
+            stopAttached: false,
+            stopBeyondLiquidation: false,
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText(/1% of the book|defterin 1%/i)).toBeInTheDocument();
+    expect(screen.getByText(/does not place it|onu göndermez/i)).toBeInTheDocument();
+    expect(screen.getByText(/risk budget|risk bütçesi/i)).toBeInTheDocument();
   });
 
   it('says nothing was placed', () => {

@@ -1584,6 +1584,13 @@ export interface paths {
          *     order and stores a new read on the fill. A failed read at the fill stays
          *     blank. An older fill does not grow a clause it never stored. An unusual standout on the derivatives board, and each
          *     unusual-scan row, open this same read.
+         *
+         *     Optional `at` is a candle close (RFC3339). The read is then the stored
+         *     five-minute minute at or before that time. A minute the archive does
+         *     not have leaves that clause blank and names the venue. `liquidation`
+         *     and `liquidationMissing` stay absent: the estimated pocket is not part
+         *     of a past read. A clock more than about a minute ahead of now is
+         *     rejected. Omit `at` for the live read.
          */
         get: operations["getMarketSituation"];
         put?: never;
@@ -3434,6 +3441,12 @@ export interface paths {
          *     condition=any (default) | up | down (after-path lean). symbol=BTCUSDT or all (any
          *     scanned coin). exchange=binance|bybit|okx|all. Repeating by default: one fire when the
          *     match appears, quiet while still similar, re-arm when it clears. Informational only.
+         *     kind=situation: the live coin read leaves the clauses stored on the newest open paper
+         *     buy. condition=leaves. A newest buy with no stored read does not fire. No open crypto
+         *     position stays quiet. One-time fires once. Repeating re-arms when the live read matches
+         *     again. The last fire keeps situationFire (the clauses that left, what they were, and
+         *     what they became). Re-arming leaves that fire in place until the next one replaces it.
+         *     Listing the alert adds situationWatch: stored, blank, or flat. Equities are rejected.
          */
         post: operations["createPriceAlert"];
         delete?: never;
@@ -3561,9 +3574,12 @@ export interface paths {
          * Get paper portfolio snapshot
          * @description Cash, open positions (mark-to-market), realized and unrealized P&L.
          *     Each open crypto position includes entrySituation: the coin read stored
-         *     when the newest buy that still has remaining quantity filled. An equity omits it.
-         *     A buy that stored no read leaves the field off. The live read is
-         *     GET /api/v1/market/situation.
+         *     when the newest buy that still has remaining quantity filled. openReads
+         *     lists every remaining buy, newest first, with its size, fill time, and
+         *     the read stored on that fill. A buy that stored no read stays in the
+         *     list with its size and time. The live comparison for each buy is
+         *     GET /api/v1/portfolio/situation-change. An equity omits both.
+         *     The live read is GET /api/v1/market/situation.
          *     When the client has more than one book, pass portfolioId (or X-Portfolio-Id).
          */
         get: operations["getPortfolio"];
@@ -3893,7 +3909,12 @@ export interface paths {
          *     for a limit. Fee and slippage match the venue. A market order shows the fill now. A resting
          *     order shows the cash or quantity it would lock, and the fill if it triggers at that price.
          *     A sell estimates realized profit from the open lots. Deposits and withdrawals are not part
-         *     of the daily loss. Not real money.
+         *     of the daily loss.
+         *     riskPercent with stopLossPrice sizes the order instead of using quantity. The size is the
+         *     base amount that loses that percent of portfolio equity if the stop fills, after the taker
+         *     fee and adverse slippage. It applies to a spot buy (market, limit_buy, bracket) and to a
+         *     margin long or short. A spot sell or exit is rejected. The stop is placed only with a
+         *     bracket or a margin open. Not real money.
          */
         post: operations["previewPortfolioOrder"];
         delete?: never;
@@ -4014,13 +4035,73 @@ export interface paths {
          * Say which stored situation clauses changed
          * @description Pass exchange and symbol for an open crypto position. entry is the read
          *     stored on the newest buy still held. live is the current combined read.
-         *     comparison.same is true when every stored clause still has the same kind.
-         *     A clause the entry did not store is omitted. status missing means the
-         *     later read left that clause blank and names the venue. That is not a new
-         *     opinion. liveOk false omits comparison. Pass tradeId instead to compare
-         *     a sell with each buy it closed. Equities return an empty read.
+         *     openReads lists every remaining buy, newest first, with its size, fill
+         *     time, stored read, and that buy's comparison when liveOk is true. A buy
+         *     that stored no read keeps its size and time and has no clauses. entry
+         *     and comparison stay on the newest buy. A situation alert still follows
+         *     that buy. comparison.same is true when every stored clause still has the
+         *     same kind. A clause the entry did not store is omitted. status missing
+         *     means the later read left that clause blank and names the venue. That is
+         *     not a new opinion. liveOk false omits comparison on the headline and on
+         *     each buy. Pass tradeId instead to compare a sell with each buy it closed.
+         *     Equities return an empty read.
          */
         get: operations["getPortfolioSituationChange"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/situation-record": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What this book's closes made, by the read on the buy
+         * @description Each row is one kind stored on a closed crypto buy. count is how many
+         *     sold slices stored that kind. profitable is how many of those had
+         *     realized profit above zero. realizedPnL is their sum. closes lists
+         *     those slices, newest first, with symbol, sell time, and realized profit.
+         *     The same close can appear on more than one row, so the rows are not one
+         *     total. counted is each close once. skipped is a crypto close whose buy
+         *     stored no read. Equities are left out. Open positions are not included.
+         */
+        get: operations["getPortfolioSituationRecord"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/situation-leave": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether closes kept the entry kind or sold after it left
+         * @description Each row is one kind stored on a closed crypto buy. still is the sold
+         *     slices whose sell read kept that kind. left is the slices whose sell
+         *     read changed that kind or left that clause blank. A change in print
+         *     dollars with the same side stays in still. Each group has count,
+         *     profitable, realizedPnL, and closes, newest first. The same close can
+         *     appear on more than one row, so the rows are not one total. counted is
+         *     each comparable close once. skipped is a crypto close whose buy stored
+         *     no read. unreadable is a close whose buy stored a read and whose sell
+         *     stored none. Those stay out of both groups. Equities are left out.
+         *     Open positions are not included.
+         */
+        get: operations["getPortfolioSituationLeave"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9171,6 +9252,26 @@ export interface components {
             triggeredPrice?: number;
             /** @description Exchange that crossed a multi-venue funding alert (binance, bybit, or okx when exchange is all) */
             triggeredVenue?: string;
+            /**
+             * @description Filled when a situation alert is read. stored means the newest open buy has a coin read.
+             *     blank means that buy stored none, so this alert does not fire.
+             *     flat means no open crypto buy is left, so this alert stays quiet.
+             *     Omitted for other kinds, and when the book could not be read.
+             * @enum {string}
+             */
+            situationWatch?: "stored" | "blank" | "flat";
+            situationFire?: components["schemas"]["SituationFire"];
+        };
+        /**
+         * @description The last time a situation alert fired. comparison names the stored clauses that had left,
+         *     with the entry kind, the later kind, and any missing venues. entry and live are those two
+         *     reads with the held-since clock cleared. A repeating alert keeps this until the next fire
+         *     replaces it. Re-arming does not clear it. Omitted until the first fire.
+         */
+        SituationFire: {
+            comparison?: components["schemas"]["SituationComparison"];
+            entry?: components["schemas"]["CoinSituation"];
+            live?: components["schemas"]["CoinSituation"];
         };
         AlertWebhook: {
             clientId?: string;
@@ -9601,8 +9702,10 @@ export interface components {
         };
         /**
          * @description Open spot holding. entrySituation is the coin read stored when the newest
-         *     buy that still has remaining quantity filled. Equities omit it. The live read
-         *     is GET /api/v1/market/situation.
+         *     buy that still has remaining quantity filled. openReads lists every
+         *     remaining buy. Equities omit both. The live read is
+         *     GET /api/v1/market/situation. The per-buy comparison is
+         *     GET /api/v1/portfolio/situation-change.
          */
         PortfolioPosition: {
             exchange?: string;
@@ -9622,6 +9725,32 @@ export interface components {
              * @description When the buy that stored entrySituation filled
              */
             entryAt?: string;
+            /**
+             * @description Remaining buys, newest first. quantity is what is still held.
+             *     situation is omitted when that fill stored no read. The live
+             *     comparison is on SituationChange. Equities omit this list.
+             */
+            openReads?: components["schemas"]["OpenLotRead"][];
+        };
+        /**
+         * @description One remaining buy. newest marks the buy that entrySituation and a
+         *     situation alert still follow. comparison is set on
+         *     GET /api/v1/portfolio/situation-change when liveOk is true. It is omitted
+         *     on GET /api/v1/portfolio. A buy with no stored situation has no clauses.
+         */
+        OpenLotRead: {
+            id?: string;
+            /** @description Remaining quantity */
+            quantity?: number;
+            /**
+             * Format: date-time
+             * @description When this buy filled
+             */
+            openedAt?: string;
+            sourceTradeId?: string;
+            situation?: components["schemas"]["CoinSituation"];
+            newest?: boolean;
+            comparison?: components["schemas"]["SituationComparison"];
         };
         /** @description One remaining (or closed) buy lot used for FIFO/LIFO realized PnL */
         TaxLot: {
@@ -9720,9 +9849,14 @@ export interface components {
         /**
          * @description Open crypto position: entry is the read on the newest buy still held,
          *     live is GET /api/v1/market/situation, and comparison is entry against live.
+         *     openReads lists every remaining buy, newest first. Each comparison is
+         *     that buy against live when liveOk is true. A buy that stored no read
+         *     keeps its size and time and has no clauses. entry and comparison stay
+         *     on the newest buy. A situation alert still follows that buy.
          *     liveOk is false when the live read did not load. comparison is omitted
-         *     then, so a failed read is not a missing clause. Pass tradeId instead of
-         *     symbol to compare one sell with the buys it closed. Equities stay empty.
+         *     then, on the headline and on each buy, so a failed read is not a missing
+         *     clause. Pass tradeId instead of symbol to compare one sell with the buys
+         *     it closed. Equities stay empty.
          */
         SituationChange: {
             exchange?: string;
@@ -9733,11 +9867,94 @@ export interface components {
             live?: components["schemas"]["CoinSituation"];
             liveOk?: boolean;
             comparison?: components["schemas"]["SituationComparison"];
+            /**
+             * @description Every remaining buy, newest first. comparison on each item is present
+             *     when liveOk is true. The portfolio snapshot lists the same buys
+             *     without that comparison.
+             */
+            openReads?: components["schemas"]["OpenLotRead"][];
             tradeId?: string;
             /** @enum {string} */
             side?: "buy" | "sell";
             situation?: components["schemas"]["CoinSituation"];
             left?: components["schemas"]["SituationExit"][];
+            note?: string;
+        };
+        /**
+         * @description One sold slice that stored this row's kind. The same slice is repeated
+         *     on every clause row its buy stored. closedAt is the sell fill time.
+         */
+        SituationRecordClose: {
+            exchange?: string;
+            symbol?: string;
+            /** Format: date-time */
+            closedAt?: string;
+            realizedPnL?: number;
+        };
+        /**
+         * @description One entry kind across the closed crypto slices that stored it.
+         *     realizedPnL is the sum of those slices. It is not a share of a book total.
+         *     closes lists those slices, newest first.
+         */
+        SituationRecordRow: {
+            /** @enum {string} */
+            clause?: "priceCvd" | "openInterest" | "liquidation" | "prints" | "funding" | "crowd" | "size";
+            /** @description The kind token stored on the buy */
+            kind?: string;
+            /** @description Sold slices that stored this kind */
+            count?: number;
+            /** @description Slices in count whose realized profit is above zero */
+            profitable?: number;
+            realizedPnL?: number;
+            closes?: components["schemas"]["SituationRecordClose"][];
+        };
+        /**
+         * @description Closed crypto lots in this paper book, grouped by the read stored on the buy.
+         *     counted is each close once. skipped is a crypto close with no stored read.
+         *     A close with several clauses appears once in counted and once on each of those rows.
+         */
+        SituationRecord: {
+            counted?: number;
+            skipped?: number;
+            rows?: components["schemas"]["SituationRecordRow"][];
+            note?: string;
+        };
+        /**
+         * @description One side of an entry kind. still keeps the closes whose sell read
+         *     matched. left keeps the closes whose sell read changed or went blank.
+         *     closes lists those slices, newest first. A zero count is a real empty group.
+         */
+        SituationLeaveBucket: {
+            count?: number;
+            /** @description Slices in count whose realized profit is above zero */
+            profitable?: number;
+            realizedPnL?: number;
+            closes?: components["schemas"]["SituationRecordClose"][];
+        };
+        /**
+         * @description One entry kind stored on the buy, split by the sell. The two groups
+         *     are not a share of a book total.
+         */
+        SituationLeaveRow: {
+            /** @enum {string} */
+            clause?: "priceCvd" | "openInterest" | "liquidation" | "prints" | "funding" | "crowd" | "size";
+            /** @description The kind token stored on the buy */
+            kind?: string;
+            still?: components["schemas"]["SituationLeaveBucket"];
+            left?: components["schemas"]["SituationLeaveBucket"];
+        };
+        /**
+         * @description Closed crypto lots split by whether the sell still said each kind stored
+         *     on the buy. counted is each comparable close once. skipped is a crypto
+         *     close whose buy stored no read. unreadable is a close whose buy stored
+         *     a read and whose sell stored none. A close with several clauses appears
+         *     once in counted and once on each of those rows.
+         */
+        SituationLeave: {
+            counted?: number;
+            skipped?: number;
+            unreadable?: number;
+            rows?: components["schemas"]["SituationLeaveRow"][];
             note?: string;
         };
         /** @description Short combined read. A missing clause lists the venues that did not cover it. */
@@ -9881,9 +10098,16 @@ export interface components {
             type: string;
             /** @description buy or sell for a spot market order. long or short for margin. */
             side?: string;
-            quantity: number;
+            /** @description Required unless riskPercent is set. Ignored when riskPercent is set. */
+            quantity?: number;
+            /**
+             * @description Percent of portfolio equity to lose if the stop fills. Sizes the order from
+             *     stopLossPrice. Spot market buy, limit_buy, and bracket, or a margin long or short.
+             */
+            riskPercent?: number;
             triggerPrice?: number;
             takeProfitPrice?: number;
+            /** @description Required when riskPercent is set. Also the OCO, bracket, or margin stop. */
             stopLossPrice?: number;
             /** @enum {string} */
             trailType?: "percent" | "offset";
@@ -9931,6 +10155,27 @@ export interface components {
             dailyLossLimitHit?: boolean;
             dailyLossLimitPct?: number;
         };
+        /** @description Present when riskPercent sized the order. The preview quantity is this size. */
+        OrderPreviewSizing: {
+            riskPercent?: number;
+            /** @description Portfolio equity the percent is applied to. */
+            equity?: number;
+            /** @description Equity times riskPercent / 100. */
+            riskBudget?: number;
+            /** @description Base size that loses about the budget if the stop fills. */
+            quantity?: number;
+            /** @description Last price, limit, or bracket entry before slippage. */
+            entryPrice?: number;
+            stopPrice?: number;
+            /** @description Loss of one unit after the fee and adverse slippage on the entry and the stop. */
+            lossPerUnit?: number;
+            /** @description Quantity times lossPerUnit. */
+            estimatedLoss?: number;
+            /** @description True when this order would place the stop (margin open or bracket). */
+            stopAttached?: boolean;
+            /** @description True when a margin stop is at or past liquidation, so the stop would not be the exit. */
+            stopBeyondLiquidation?: boolean;
+        };
         OrderPreview: {
             /** @enum {string} */
             product?: "spot" | "margin";
@@ -9975,6 +10220,7 @@ export interface components {
             borrowedPrincipal?: number;
             borrowedAsset?: string;
             risk?: components["schemas"]["OrderPreviewRisk"];
+            sizing?: components["schemas"]["OrderPreviewSizing"];
             /** @description Take-profit and stop-loss outcomes for an OCO or a bracket. */
             legs?: components["schemas"]["OrderPreviewLeg"][];
             note?: string;
@@ -13014,6 +13260,12 @@ export interface operations {
             query: {
                 /** @description Pair such as BTCUSDT */
                 symbol: string;
+                /**
+                 * @description Candle close, RFC3339. Omit for the live read. When set, the
+                 *     estimated liquidation pocket is left off and a missing minute
+                 *     names the venue. A future clock is rejected.
+                 */
+                at?: string;
             };
             header?: never;
             path?: never;
@@ -16579,6 +16831,60 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SituationChange"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getPortfolioSituationRecord: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                portfolioId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Closed crypto lots grouped by the entry read */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SituationRecord"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getPortfolioSituationLeave: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                portfolioId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Closed crypto lots split by whether the sell still matched */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SituationLeave"];
                 };
             };
             400: components["responses"]["Error"];

@@ -8,14 +8,14 @@ const OrderPreviewNote = "Preview only — nothing was placed. Fee and slippage 
 // OrderPreviewLeg is one fill the ticket is about to rest or send.
 // Role is fill, take_profit, or stop_loss.
 type OrderPreviewLeg struct {
-	Role                  string
-	Side                  TradeSide
-	ReferencePrice        float64
-	FillPrice             float64
-	Notional              float64
-	Fee                   float64
-	CashDebit             float64
-	CashCredit            float64
+	Role                 string
+	Side                 TradeSide
+	ReferencePrice       float64
+	FillPrice            float64
+	Notional             float64
+	Fee                  float64
+	CashDebit            float64
+	CashCredit           float64
 	EstimatedRealizedPnL *float64
 }
 
@@ -75,6 +75,7 @@ type OrderPreview struct {
 	BorrowedAsset        string
 	Risk                 OrderPreviewRisk
 	Legs                 []OrderPreviewLeg
+	Sizing               *OrderPreviewSizing
 	Note                 string
 }
 

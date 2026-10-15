@@ -2343,10 +2343,16 @@ func (c *APIClient) DeletePortfolioRiskLimits(ctx context.Context, clientID stri
 }
 
 // PreviewPortfolioOrder prices a paper order without placing it.
-func (c *APIClient) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int) (json.RawMessage, error) {
+func (c *APIClient) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64) (json.RawMessage, error) {
 	body := map[string]any{
 		"clientId": clientID, "exchange": exchange, "symbol": symbol, "side": side,
-		"type": orderType, "product": product, "quantity": quantity,
+		"type": orderType, "product": product,
+	}
+	if quantity > 0 {
+		body["quantity"] = quantity
+	}
+	if riskPercent > 0 {
+		body["riskPercent"] = riskPercent
 	}
 	if triggerPrice > 0 {
 		body["triggerPrice"] = triggerPrice

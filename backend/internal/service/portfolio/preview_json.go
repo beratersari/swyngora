@@ -46,6 +46,9 @@ func OrderPreviewPayload(p *domain.OrderPreview) map[string]any {
 		"legs":                 legs,
 		"note":                 p.Note,
 	}
+	if p.Sizing != nil {
+		out["sizing"] = previewSizingPayload(*p.Sizing)
+	}
 	if p.EstimatedRealizedPnL != nil {
 		out["estimatedRealizedPnl"] = *p.EstimatedRealizedPnL
 	}
@@ -67,6 +70,21 @@ func previewLegPayload(leg domain.OrderPreviewLeg) map[string]any {
 		out["estimatedRealizedPnl"] = *leg.EstimatedRealizedPnL
 	}
 	return out
+}
+
+func previewSizingPayload(z domain.OrderPreviewSizing) map[string]any {
+	return map[string]any{
+		"riskPercent":           z.RiskPercent,
+		"equity":                z.Equity,
+		"riskBudget":            z.RiskBudget,
+		"quantity":              z.Quantity,
+		"entryPrice":            z.EntryPrice,
+		"stopPrice":             z.StopPrice,
+		"lossPerUnit":           z.LossPerUnit,
+		"estimatedLoss":         z.EstimatedLoss,
+		"stopAttached":          z.StopAttached,
+		"stopBeyondLiquidation": z.StopBeyondLiquidation,
+	}
 }
 
 func previewRiskPayload(r domain.OrderPreviewRisk) map[string]any {

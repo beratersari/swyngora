@@ -195,6 +195,18 @@ Prices the same spot body, or a margin open (`product=margin`, `side=long|short`
 
 Nothing is written: no trade, no reservation, no margin position. A draft that cannot be priced (bad quantity, missing trigger, bad bracket prices) is **400**. Not enough cash, a risk block, or the borrow cap is **200** with a flag. A sell is not blocked. The daily-loss figure is trading P&L since the UTC day baseline. Deposits, withdrawals, and transfers are not part of it. MCP `preview_portfolio_order`. A read-only assistant session can call that tool. It still cannot place the order.
 
+**Size from a risk percent.** Send `riskPercent` (greater than 0 and at most 100) and `stopLossPrice`. `quantity` is ignored. The size is the base amount that loses that percent of **portfolio equity** if the stop fills. The loss of one unit includes the taker fee and adverse slippage on the entry and on the stop, the same loss a paper fill would book. Leverage does not change that loss. It changes the margin and the liquidation price.
+
+| Order | Entry used | Stop is placed |
+|-------|------------|----------------|
+| Spot market buy | Last price | No. The stop only sizes the buy |
+| Spot `limit_buy` | Trigger | No |
+| Spot `bracket` | Entry trigger | Yes, with the bracket |
+| Margin long or short, market | Last price | Yes, on the open |
+| Margin long or short, limit | Limit price | Yes, on the open |
+
+A spot sell, stop, trailing stop, or OCO is **400**. A missing stop is **400**. If the sized quantity is below `1e-8` or above `1e9`, the preview is **400**. The response `quantity` is the size, and `sizing` repeats the budget, the loss at the stop, `stopAttached`, and `stopBeyondLiquidation`. The last flag is true when a margin stop is at or past the liquidation price shown on the same preview, so the stop would not be the exit. Not enough cash for that size is still **200** with `insufficientCash`.
+
 ### Bracket orders (entry + TP/SL)
 
 Place take-profit and stop-loss **with** a limit-buy entry. Exit legs start as `status=pending` (not marketable) until the entry fills.
@@ -308,17 +320,17 @@ Releases unused cash/position reservations in one store transaction. `canceled: 
 
 | Surface | Notes |
 |---------|--------|
-| `/portfolio` spot ticket | Market, limit, stop, trailing stop, OCO, bracket; TIF GTC/IOC/FOK; lot FIFO/LIFO on sells. The ticket shows fee, cash, and risk before the order is placed |
+| `/portfolio` spot ticket | Market, limit, stop, trailing stop, OCO, bracket; TIF GTC/IOC/FOK; lot FIFO/LIFO on sells. The ticket shows fee, cash, and risk before the order is placed. A buy or a bracket can take a risk % and a stop; the preview fills the quantity |
 | Open orders table | Cancel + **amend** (standalone GTC limit/stop: trigger and remaining qty) |
-| `/portfolio` margin ticket | Isolated/cross mode, long/short 1–10x, market or limit, optional SL/TP. Same preview: margin, liquidation, borrow cap |
+| `/portfolio` margin ticket | Isolated/cross mode, long/short 1–10x, market or limit, optional SL/TP. Same preview: margin, liquidation, borrow cap. A risk % and a stop size the open |
 | Margin positions tab | Mark, liq, debt, uPnL, market close |
-| Coin detail compact ticket | Market + limit + stop (no OCO/bracket), with the same preview |
+| Coin detail compact ticket | Market + limit + stop (no OCO/bracket), with the same preview. A buy can be sized from a risk % and a stop |
 
 ## Code
 
 | Layer | Path |
 |-------|------|
-| Domain | `backend/internal/domain/portfolio.go`, `order_preview.go`, `recurring_buy.go`, `allocation.go`, `risk.go` |
+| Domain | `backend/internal/domain/portfolio.go`, `order_preview.go`, `risk_size.go`, `recurring_buy.go`, `allocation.go`, `risk.go` |
 | Store | `backend/internal/adapter/portfoliostore` |
 | Service | `backend/internal/service/portfolio` |
 | Filler | `backend/internal/service/portfolio/filler.go` |

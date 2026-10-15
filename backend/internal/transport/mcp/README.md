@@ -181,7 +181,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `set_portfolio_risk_limits` | Set daily-loss %, max coin weight %, and/or max total exposure % |
 | `clear_portfolio_risk_limits` | Remove all risk limits |
 | `get_paper_trading_costs` | Per-exchange paper fee and slippage rates |
-| `preview_portfolio_order` | Price a spot or margin order: fee, slippage, cash, and whether risk or the borrow cap would block it. Nothing is written |
+| `preview_portfolio_order` | Price a spot or margin order: fee, slippage, cash, and whether risk or the borrow cap would block it. `riskPercent` and `stopLossPrice` size a spot buy, bracket, or margin open from portfolio equity. Nothing is written |
 | `place_portfolio_order` | Paper market buy/sell (slipped fill + taker fee; optional idempotencyKey) |
 | `place_portfolio_pending_order` | Paper limit_buy / limit_sell / stop_loss / trailing_stop (optional idempotencyKey) |
 | `place_portfolio_oco_order` | Paper OCO take-profit + stop-loss (linked; optional idempotencyKey) |

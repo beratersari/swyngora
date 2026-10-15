@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { previewDraftReady, toPreviewArg, type OrderPreviewDraft } from './orderPreview';
+import {
+  previewDraftReady,
+  riskSizingActive,
+  sizedQuantity,
+  toPreviewArg,
+  type OrderPreviewDraft,
+} from './orderPreview';
 
 const spot: OrderPreviewDraft = {
   product: 'spot',
@@ -22,7 +28,13 @@ describe('previewDraftReady', () => {
     expect(previewDraftReady({ ...spot, type: 'limit_buy', triggerPrice: 90 })).toBe(true);
     expect(previewDraftReady({ ...spot, type: 'oco', side: 'sell' })).toBe(false);
     expect(
-      previewDraftReady({ ...spot, type: 'oco', side: 'sell', takeProfitPrice: 110, stopLossPrice: 80 }),
+      previewDraftReady({
+        ...spot,
+        type: 'oco',
+        side: 'sell',
+        takeProfitPrice: 110,
+        stopLossPrice: 80,
+      }),
     ).toBe(true);
   });
 
@@ -41,6 +53,18 @@ describe('previewDraftReady', () => {
     expect(previewDraftReady({ ...margin, type: 'limit' })).toBe(false);
     expect(previewDraftReady({ ...margin, type: 'limit', limitPrice: 100 })).toBe(true);
   });
+
+  it('sizes from a risk percent and a stop without a typed quantity', () => {
+    expect(previewDraftReady({ ...spot, quantity: 0, riskPercent: 1 })).toBe(false);
+    expect(previewDraftReady({ ...spot, quantity: 0, riskPercent: 1, stopLossPrice: 90 })).toBe(
+      true,
+    );
+    expect(previewDraftReady({ ...spot, quantity: 0, riskPercent: 101, stopLossPrice: 90 })).toBe(
+      false,
+    );
+    expect(riskSizingActive(1)).toBe(true);
+    expect(riskSizingActive(0)).toBe(false);
+  });
 });
 
 describe('toPreviewArg', () => {
@@ -51,5 +75,15 @@ describe('toPreviewArg', () => {
     expect(arg.product).toBe('spot');
     expect(arg.triggerPrice).toBeUndefined();
     expect(arg.limitPrice).toBeUndefined();
+    expect(arg.riskPercent).toBeUndefined();
+  });
+
+  it('sends the risk percent and leaves quantity off the request', () => {
+    const arg = toPreviewArg({ ...spot, quantity: 2, riskPercent: 1, stopLossPrice: 90 });
+    expect(arg.riskPercent).toBe(1);
+    expect(arg.stopLossPrice).toBe(90);
+    expect(arg.quantity).toBeUndefined();
+    expect(sizedQuantity(1, { riskPercent: 1, quantity: 0.25 })).toBe(0.25);
+    expect(sizedQuantity(2, { riskPercent: 1, quantity: 0.25 })).toBeNull();
   });
 });

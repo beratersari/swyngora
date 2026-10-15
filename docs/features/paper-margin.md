@@ -99,7 +99,7 @@ Snapshot: `marginMode`, `reservedMargin`, `marginLocked`, `marginUnrealizedPnL`,
 Paper margin desk on `/portfolio`:
 
 - Mode toggle (isolated / cross) on the margin ticket
-- Open market/limit long/short with leverage and optional SL/TP. The ticket shows margin, liquidation, fee, and whether risk or the borrow cap would block the open
+- Open market/limit long/short with leverage and optional SL/TP. The ticket shows margin, liquidation, fee, and whether risk or the borrow cap would block the open. A risk % and a stop fill the quantity: the size loses that percent of equity if the stop fills. If the stop is past liquidation, the preview says so
 - Summary strip shows margin mode, locked margin, margin uPnL
 - **Margin positions** tab: entry, mark, liq, debt, close
 

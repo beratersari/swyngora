@@ -1843,7 +1843,18 @@ class RiskLimitsSetInput(BaseModel):
 class OrderPreviewInput(BaseModel):
     client_id: str
     symbol: str
-    quantity: float = Field(gt=0)
+    quantity: float = Field(
+        default=0,
+        description="Base quantity. Required unless risk_percent is set. Ignored when risk_percent is set.",
+    )
+    risk_percent: float = Field(
+        default=0,
+        description=(
+            "Percent of portfolio equity to lose if the stop fills, for example 1. "
+            "Sizes a spot buy, bracket, or margin open from stop_loss_price. "
+            "Greater than 0 and at most 100."
+        ),
+    )
     side: str = Field(default="", description="Spot market: buy|sell. Margin: long|short")
     order_type: str = Field(
         default="market",
@@ -1856,7 +1867,10 @@ class OrderPreviewInput(BaseModel):
     exchange: str = "binance"
     trigger_price: float = Field(default=0, description="Limit, stop, or bracket entry")
     take_profit_price: float = Field(default=0, description="OCO, bracket, or margin take-profit")
-    stop_loss_price: float = Field(default=0, description="OCO, bracket, or margin stop")
+    stop_loss_price: float = Field(
+        default=0,
+        description="Stop used to size the order. Also the OCO, bracket, or margin stop.",
+    )
     trail_type: str = Field(default="", description="trailing_stop: percent|offset")
     trail_value: float = Field(default=0, description="trailing_stop distance")
     lot_method: str = Field(default="", description="fifo (default) or lifo")
@@ -4147,7 +4161,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
     def preview_portfolio_order(
         client_id: str,
         symbol: str,
-        quantity: float,
+        quantity: float = 0,
         side: str = "",
         order_type: str = "market",
         product: str = "spot",
@@ -4161,15 +4175,19 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         limit_price: float = 0,
         leverage: int = 0,
         portfolio_id: str = "",
+        risk_percent: float = 0,
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
             "symbol": symbol,
-            "quantity": quantity,
             "exchange": exchange,
             "product": product or "spot",
             "type": order_type or "market",
         }
+        if quantity:
+            body["quantity"] = quantity
+        if risk_percent:
+            body["riskPercent"] = risk_percent
         if side:
             body["side"] = side
         if trigger_price:
@@ -6914,6 +6932,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Preview a paper spot or margin order before placing it. "
                 "Returns the slipped fill, taker fee, cash in or out, reserved cash or quantity, "
                 "estimated sell profit, and whether a risk limit or the borrow cap would block it. "
+                "Pass risk_percent and stop_loss_price to size a spot buy, bracket, or margin open "
+                "from portfolio equity; quantity is then ignored. "
                 "Nothing is written. Call this before place_portfolio_order, a pending order, "
                 "OCO, bracket, or place_margin_order. Not real money."
             ),

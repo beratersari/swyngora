@@ -14,7 +14,13 @@ function push(rows: PreviewRow[], id: string, labelKey: string, value: string) {
   rows.push({ id, labelKey, value });
 }
 
-function pushPrice(rows: PreviewRow[], id: string, labelKey: string, value: number | null | undefined, when = true) {
+function pushPrice(
+  rows: PreviewRow[],
+  id: string,
+  labelKey: string,
+  value: number | null | undefined,
+  when = true,
+) {
   if (!when || value == null || !Number.isFinite(value)) return;
   push(rows, id, labelKey, formatPrice(value));
 }
@@ -27,15 +33,43 @@ export function previewRows(preview: OrderPreview): PreviewRow[] {
   pushPrice(rows, 'fee', 'fee', preview.fee ?? 0);
   pushPrice(rows, 'debit', 'debit', preview.cashDebit, (preview.cashDebit ?? 0) > 0);
   pushPrice(rows, 'credit', 'credit', preview.cashCredit, (preview.cashCredit ?? 0) > 0);
-  pushPrice(rows, 'reservedCash', 'reservedCash', preview.reservedCash, (preview.reservedCash ?? 0) > 0);
-  pushPrice(rows, 'reservedQty', 'reservedQty', preview.reservedQuantity, (preview.reservedQuantity ?? 0) > 0);
+  pushPrice(
+    rows,
+    'reservedCash',
+    'reservedCash',
+    preview.reservedCash,
+    (preview.reservedCash ?? 0) > 0,
+  );
+  pushPrice(
+    rows,
+    'reservedQty',
+    'reservedQty',
+    preview.reservedQuantity,
+    (preview.reservedQuantity ?? 0) > 0,
+  );
   if (margin) {
-    pushPrice(rows, 'initialMargin', 'initialMargin', preview.initialMargin, (preview.initialMargin ?? 0) > 0);
-    pushPrice(rows, 'liquidation', 'liquidation', preview.liquidationPrice, (preview.liquidationPrice ?? 0) > 0);
+    pushPrice(
+      rows,
+      'initialMargin',
+      'initialMargin',
+      preview.initialMargin,
+      (preview.initialMargin ?? 0) > 0,
+    );
+    pushPrice(
+      rows,
+      'liquidation',
+      'liquidation',
+      preview.liquidationPrice,
+      (preview.liquidationPrice ?? 0) > 0,
+    );
   }
   if ((preview.borrowedPrincipal ?? 0) > 0) {
     const asset = preview.borrowedAsset ? ` ${preview.borrowedAsset}` : '';
     push(rows, 'borrowed', 'borrowed', `${formatPrice(preview.borrowedPrincipal)}${asset}`);
+  }
+  if (preview.sizing) {
+    pushPrice(rows, 'riskBudget', 'riskBudget', preview.sizing.riskBudget);
+    pushPrice(rows, 'lossAtStop', 'lossAtStop', preview.sizing.estimatedLoss);
   }
   if (preview.estimatedRealizedPnl != null && Number.isFinite(preview.estimatedRealizedPnl)) {
     push(rows, 'pnl', 'pnl', formatPrice(preview.estimatedRealizedPnl));
@@ -56,6 +90,7 @@ export function previewWarnings(preview: OrderPreview): PreviewWarningId[] {
     cash: Boolean(preview.insufficientCash),
     quantity: Boolean(preview.insufficientQuantity),
     borrow: Boolean(preview.borrowLimitHit),
+    stopBeyondLiquidation: Boolean(preview.sizing?.stopBeyondLiquidation),
   };
   return PREVIEW_WARNING_IDS.filter((id) => hit[id]);
 }

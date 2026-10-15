@@ -72,6 +72,11 @@
     "entryPrice": "Entry limit",
     "takeProfit": "Take profit",
     "stopLoss": "Stop loss",
+    "riskPercent": "Risk %",
+    "riskNeedStop": "Enter a stop. The size is this percent of the book, divided by the loss down to that stop.",
+    "riskSizesBuy": "Sizes the buy from this stop. A market or limit order does not place the stop. Clear the percent to type a size.",
+    "riskSizesBracket": "Sizes the entry from this stop. The stop is placed with it. Clear the percent to type a size.",
+    "riskSizesMargin": "Sizes the position from this stop. The stop is placed with the open. Clear the percent to type a size.",
     "trailType": "Trail mode",
     "trailPercent": "Percent",
     "trailOffset": "Offset",
@@ -127,6 +132,10 @@
     "exposure": "Coins together would be {{pct}} of the book",
     "legTakeProfit": "Take profit",
     "legStopLoss": "Stop loss",
+    "riskBudget": "Risk budget",
+    "lossAtStop": "Loss at stop",
+    "sized": "{{pct}} of the book. The size loses about {{budget}} if the stop fills.",
+    "stopNotAttached": "This stop only sizes the buy. A market or limit order does not place it.",
     "note": "Preview only — nothing was placed. Fee and slippage match a paper fill. Risk limits block new buys and new margin opens. Sells are not blocked. Not real money.",
     "warnings": {
       "blocked": "Risk limits would block this order.",
@@ -135,7 +144,8 @@
       "exposure": "Total exposure would be over the limit.",
       "cash": "Not enough available cash.",
       "quantity": "Not enough available quantity.",
-      "borrow": "This would pass the borrow limit."
+      "borrow": "This would pass the borrow limit.",
+      "stopBeyondLiquidation": "The stop is past liquidation, so the position would close there first. The loss would not be the stop distance."
     }
   },
   "margin": {

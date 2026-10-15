@@ -3909,7 +3909,12 @@ export interface paths {
          *     for a limit. Fee and slippage match the venue. A market order shows the fill now. A resting
          *     order shows the cash or quantity it would lock, and the fill if it triggers at that price.
          *     A sell estimates realized profit from the open lots. Deposits and withdrawals are not part
-         *     of the daily loss. Not real money.
+         *     of the daily loss.
+         *     riskPercent with stopLossPrice sizes the order instead of using quantity. The size is the
+         *     base amount that loses that percent of portfolio equity if the stop fills, after the taker
+         *     fee and adverse slippage. It applies to a spot buy (market, limit_buy, bracket) and to a
+         *     margin long or short. A spot sell or exit is rejected. The stop is placed only with a
+         *     bracket or a margin open. Not real money.
          */
         post: operations["previewPortfolioOrder"];
         delete?: never;
@@ -10093,9 +10098,16 @@ export interface components {
             type: string;
             /** @description buy or sell for a spot market order. long or short for margin. */
             side?: string;
-            quantity: number;
+            /** @description Required unless riskPercent is set. Ignored when riskPercent is set. */
+            quantity?: number;
+            /**
+             * @description Percent of portfolio equity to lose if the stop fills. Sizes the order from
+             *     stopLossPrice. Spot market buy, limit_buy, and bracket, or a margin long or short.
+             */
+            riskPercent?: number;
             triggerPrice?: number;
             takeProfitPrice?: number;
+            /** @description Required when riskPercent is set. Also the OCO, bracket, or margin stop. */
             stopLossPrice?: number;
             /** @enum {string} */
             trailType?: "percent" | "offset";
@@ -10143,6 +10155,27 @@ export interface components {
             dailyLossLimitHit?: boolean;
             dailyLossLimitPct?: number;
         };
+        /** @description Present when riskPercent sized the order. The preview quantity is this size. */
+        OrderPreviewSizing: {
+            riskPercent?: number;
+            /** @description Portfolio equity the percent is applied to. */
+            equity?: number;
+            /** @description Equity times riskPercent / 100. */
+            riskBudget?: number;
+            /** @description Base size that loses about the budget if the stop fills. */
+            quantity?: number;
+            /** @description Last price, limit, or bracket entry before slippage. */
+            entryPrice?: number;
+            stopPrice?: number;
+            /** @description Loss of one unit after the fee and adverse slippage on the entry and the stop. */
+            lossPerUnit?: number;
+            /** @description Quantity times lossPerUnit. */
+            estimatedLoss?: number;
+            /** @description True when this order would place the stop (margin open or bracket). */
+            stopAttached?: boolean;
+            /** @description True when a margin stop is at or past liquidation, so the stop would not be the exit. */
+            stopBeyondLiquidation?: boolean;
+        };
         OrderPreview: {
             /** @enum {string} */
             product?: "spot" | "margin";
@@ -10187,6 +10220,7 @@ export interface components {
             borrowedPrincipal?: number;
             borrowedAsset?: string;
             risk?: components["schemas"]["OrderPreviewRisk"];
+            sizing?: components["schemas"]["OrderPreviewSizing"];
             /** @description Take-profit and stop-loss outcomes for an OCO or a bracket. */
             legs?: components["schemas"]["OrderPreviewLeg"][];
             note?: string;

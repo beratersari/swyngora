@@ -16,7 +16,7 @@ Emotional trading — especially leveraged margin — can blow up an account. Us
 - No background worker. Rules are checked at order time.
 - Recurring DCA buys go through `PlaceOrder`. A risk 403 is stored on the run as generic **`order failed`** (not the full forbidden text); the plan stays active and that period is not retried.
 - Basket rebalance sells still run; buys that violate a rule are skipped (same gate). The basket preview does not simulate risk blocks.
-- `POST /api/v1/portfolio/orders/preview` does report whether this one order would be blocked. It does not place the order. A sell still shows today's trading loss when the daily limit is already hit, and it is not blocked.
+- `POST /api/v1/portfolio/orders/preview` does report whether this one order would be blocked. It does not place the order. A sell still shows today's trading loss when the daily limit is already hit, and it is not blocked. A `riskPercent` sizes the order from the stop. That percent is how much of the book the stop may lose. It is not the daily-loss limit.
 - `PUT` **replaces all three fields** — omit/`null` a field to disable that rule (not a patch merge).
 - Clearing limits (`DELETE`) then `PUT` the same UTC day **rebases** start-of-day equity to current equity.
 

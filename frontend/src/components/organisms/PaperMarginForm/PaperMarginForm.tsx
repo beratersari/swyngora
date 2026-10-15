@@ -5,6 +5,7 @@ import { Text } from '@/components/atoms/Text';
 import { OrderPreview } from '@/components/molecules/OrderPreview';
 import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
 import { rtkErrorMessage, type MarketExchange, type MarginMode } from '@/libs/api';
+import { sizedQuantity } from '@/libs/hooks/orderPreview';
 import { Actions, Field, FieldRow, FormStack, ModeRow } from './PaperMarginForm.styles';
 import type { PaperMarginFormProps, PaperMarginFormValues } from './PaperMarginForm.types';
 
@@ -31,10 +32,19 @@ export function PaperMarginForm({
   const [limitPrice, setLimitPrice] = useState<number | null>(null);
   const [stopLoss, setStopLoss] = useState<number | null>(null);
   const [takeProfit, setTakeProfit] = useState<number | null>(null);
+  const [riskPercent, setRiskPercent] = useState<number | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const inFlight = useRef(false);
   const [busy, setBusy] = useState(false);
   const loading = Boolean(isSubmitting || busy);
+  const riskActive = riskPercent != null && riskPercent > 0;
+  const stopForSize = stopLoss != null && stopLoss > 0;
+
+  useEffect(() => {
+    const next = sizedQuantity(riskPercent, preview?.sizing);
+    if (next == null) return;
+    setQuantity((prev) => (prev === next ? prev : next));
+  }, [preview, riskPercent]);
 
   useEffect(() => {
     if (!onDraftChange) return;
@@ -49,8 +59,22 @@ export function PaperMarginForm({
       limitPrice: orderType === 'limit' && limitPrice != null ? limitPrice : undefined,
       stopLossPrice: stopLoss != null && stopLoss > 0 ? stopLoss : undefined,
       takeProfitPrice: takeProfit != null && takeProfit > 0 ? takeProfit : undefined,
+      riskPercent: riskActive ? (riskPercent ?? undefined) : undefined,
     });
-  }, [onDraftChange, exchange, symbol, orderType, side, quantity, leverage, limitPrice, stopLoss, takeProfit]);
+  }, [
+    onDraftChange,
+    exchange,
+    symbol,
+    orderType,
+    side,
+    quantity,
+    leverage,
+    limitPrice,
+    stopLoss,
+    takeProfit,
+    riskActive,
+    riskPercent,
+  ]);
 
   const submit = async () => {
     if (disabled || inFlight.current || isSubmitting) return;
@@ -80,6 +104,7 @@ export function PaperMarginForm({
     try {
       await onSubmit(values);
       setQuantity(null);
+      setRiskPercent(null);
       setLimitPrice(null);
     } catch {
       /* parent */
@@ -123,7 +148,10 @@ export function PaperMarginForm({
           <Select
             value={exchange}
             style={{ minWidth: 120 }}
-            options={['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'].map((e) => ({ value: e, label: e }))}
+            options={['binance', 'coinbase', 'bybit', 'nasdaq', 'bist'].map((e) => ({
+              value: e,
+              label: e,
+            }))}
             onChange={setExchange}
           />
         </Field>
@@ -168,8 +196,16 @@ export function PaperMarginForm({
             min={0}
             step={0.001}
             value={quantity}
-            onChange={(v) => setQuantity(typeof v === 'number' ? v : null)}
+            disabled={riskActive}
+            onChange={(v) => {
+              const next = typeof v === 'number' ? v : null;
+              const sized = sizedQuantity(riskPercent, preview?.sizing);
+              if (sized != null && next === sized) return;
+              if (riskActive) setRiskPercent(null);
+              setQuantity(next);
+            }}
             style={{ minWidth: 110 }}
+            aria-label={t('portfolio:trade.quantity')}
           />
         </Field>
         <Field>
@@ -210,6 +246,21 @@ export function PaperMarginForm({
             onChange={(v) => setStopLoss(typeof v === 'number' ? v : null)}
             style={{ minWidth: 100 }}
             placeholder="—"
+            aria-label={t('portfolio:trade.stopLoss')}
+          />
+        </Field>
+        <Field>
+          <Text variant="caption" color="secondary">
+            {t('portfolio:trade.riskPercent')}
+          </Text>
+          <InputNumber
+            min={0}
+            max={100}
+            step={0.1}
+            value={riskPercent}
+            onChange={(v) => setRiskPercent(typeof v === 'number' ? v : null)}
+            style={{ minWidth: 90 }}
+            aria-label={t('portfolio:trade.riskPercent')}
           />
         </Field>
         <Field>
@@ -227,10 +278,21 @@ export function PaperMarginForm({
         </Field>
       </FieldRow>
 
+      {riskActive ? (
+        <Text variant="caption" color="secondary">
+          {stopForSize ? t('portfolio:trade.riskSizesMargin') : t('portfolio:trade.riskNeedStop')}
+        </Text>
+      ) : null}
+
       <OrderPreview preview={preview} loading={previewLoading} failed={previewFailed} />
 
       <Actions>
-        <Button type="primary" loading={loading} disabled={disabled || loading} onClick={() => void submit()}>
+        <Button
+          type="primary"
+          loading={loading}
+          disabled={disabled || loading}
+          onClick={() => void submit()}
+        >
           {t('portfolio:margin.submit')}
         </Button>
       </Actions>

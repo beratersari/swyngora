@@ -53,3 +53,38 @@ func TestPortfolioHTTP_OrderPreviewDoesNotFill(t *testing.T) {
 		t.Fatalf("cash changed: %+v", view["cashBalance"])
 	}
 }
+
+func TestPortfolioHTTP_OrderPreviewSizesFromRiskPercent(t *testing.T) {
+	h := newPortfolioHandler(t)
+	body, _ := json.Marshal(map[string]any{"clientId": "http-risk", "startingBalance": 10000})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/portfolio", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	h.Create(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("create %d %s", rr.Code, rr.Body.String())
+	}
+
+	body, _ = json.Marshal(map[string]any{
+		"clientId": "http-risk", "symbol": "BTCUSDT", "side": "buy",
+		"riskPercent": 1, "stopLossPrice": 90,
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/portfolio/orders/preview", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr = httptest.NewRecorder()
+	h.PreviewOrder(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("preview %d %s", rr.Code, rr.Body.String())
+	}
+	var prev map[string]any
+	if err := json.Unmarshal(rr.Body.Bytes(), &prev); err != nil {
+		t.Fatal(err)
+	}
+	if prev["quantity"].(float64) != 10 || prev["cashDebit"].(float64) != 1000 {
+		t.Fatalf("body %+v", prev)
+	}
+	sizing, _ := prev["sizing"].(map[string]any)
+	if sizing["riskBudget"].(float64) != 100 || sizing["stopAttached"] != false {
+		t.Fatalf("sizing %+v", sizing)
+	}
+}

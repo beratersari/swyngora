@@ -23,7 +23,7 @@ describe('PaperTradeForm double-submit guard', () => {
       />,
     );
 
-    const spin = screen.getByRole('spinbutton');
+    const spin = screen.getByRole('spinbutton', { name: /quantity|miktar/i });
     fireEvent.change(spin, { target: { value: '0.01' } });
     fireEvent.blur(spin);
 

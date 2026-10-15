@@ -15,7 +15,7 @@ describe('PaperTradeForm', () => {
         onSubmit={onSubmit}
       />,
     );
-    const spin = screen.getByRole('spinbutton');
+    const spin = screen.getByRole('spinbutton', { name: /quantity|miktar/i });
     fireEvent.change(spin, { target: { value: '0.01' } });
     // Ant Design InputNumber may need blur to commit
     fireEvent.blur(spin);
@@ -61,9 +61,14 @@ describe('PaperTradeForm', () => {
 
   it('finding 8: does not prefill a converted last into the ticket', () => {
     renderWithTheme(
-      <PaperTradeForm lockedExchange="binance" lockedSymbol="BTCUSDT" compact onSubmit={async () => undefined} />,
+      <PaperTradeForm
+        lockedExchange="binance"
+        lockedSymbol="BTCUSDT"
+        compact
+        onSubmit={async () => undefined}
+      />,
     );
-    const spin = screen.getByRole('spinbutton') as HTMLInputElement;
+    const spin = screen.getByRole('spinbutton', { name: /quantity|miktar/i }) as HTMLInputElement;
     expect(spin.value === '' || spin.value === '0').toBe(true);
   });
 
@@ -78,11 +83,15 @@ describe('PaperTradeForm', () => {
         onDraftChange={onDraftChange}
       />,
     );
-    const spin = screen.getByRole('spinbutton');
+    const spin = screen.getByRole('spinbutton', { name: /quantity|miktar/i });
     fireEvent.change(spin, { target: { value: '2' } });
     fireEvent.blur(spin);
     await waitFor(() => {
-      const last = onDraftChange.mock.calls.at(-1)?.[0] as { quantity: number; side: string; type: string };
+      const last = onDraftChange.mock.calls.at(-1)?.[0] as {
+        quantity: number;
+        side: string;
+        type: string;
+      };
       expect(last.quantity).toBe(2);
       expect(last.side).toBe('buy');
       expect(last.type).toBe('market');
@@ -91,6 +100,69 @@ describe('PaperTradeForm', () => {
     await waitFor(() => {
       const last = onDraftChange.mock.calls.at(-1)?.[0] as { side: string };
       expect(last.side).toBe('sell');
+    });
+  });
+
+  it('sizes the buy from a risk percent and the stop', async () => {
+    const onDraftChange = vi.fn();
+    const { rerender } = renderWithTheme(
+      <PaperTradeForm
+        lockedExchange="binance"
+        lockedSymbol="BTCUSDT"
+        compact
+        onSubmit={async () => undefined}
+        onDraftChange={onDraftChange}
+      />,
+    );
+    fireEvent.change(screen.getByRole('spinbutton', { name: /risk/i }), { target: { value: '1' } });
+    fireEvent.blur(screen.getByRole('spinbutton', { name: /risk/i }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: /stop loss|zarar kes/i }), {
+      target: { value: '90' },
+    });
+    fireEvent.blur(screen.getByRole('spinbutton', { name: /stop loss|zarar kes/i }));
+    await waitFor(() => {
+      const last = onDraftChange.mock.calls.at(-1)?.[0] as {
+        riskPercent?: number;
+        stopLossPrice?: number;
+      };
+      expect(last.riskPercent).toBe(1);
+      expect(last.stopLossPrice).toBe(90);
+    });
+    rerender(
+      <PaperTradeForm
+        lockedExchange="binance"
+        lockedSymbol="BTCUSDT"
+        compact
+        onSubmit={async () => undefined}
+        onDraftChange={onDraftChange}
+        preview={{
+          product: 'spot',
+          type: 'market',
+          side: 'buy',
+          symbol: 'BTCUSDT',
+          quantity: 0.25,
+          fillsNow: true,
+          sizing: {
+            riskPercent: 1,
+            riskBudget: 100,
+            estimatedLoss: 100,
+            quantity: 0.25,
+            stopAttached: false,
+          },
+        }}
+      />,
+    );
+    await waitFor(() => {
+      const qty = screen.getByRole('spinbutton', { name: /quantity|miktar/i }) as HTMLInputElement;
+      expect(Number(qty.value)).toBe(0.25);
+    });
+    await waitFor(() => {
+      const last = onDraftChange.mock.calls.at(-1)?.[0] as {
+        quantity: number;
+        riskPercent?: number;
+      };
+      expect(last.quantity).toBe(0.25);
+      expect(last.riskPercent).toBe(1);
     });
   });
 });
