@@ -936,7 +936,9 @@ export interface paths {
          *     with no liquidation print is a real zero. `exchange=all` reads Binance
          *     USD-M, Bybit linear, and OKX USDT-swap. A cell is present only when
          *     every expected venue has that column. `missing` names a venue that is
-         *     absent, and that venue is not counted as zero.
+         *     absent, and that venue is not counted as zero. `venues` lists each
+         *     expected exchange and that exchange's own number when it has the
+         *     column. A missing exchange omits `value` and is not a zero.
          *     `exchange=hyperliquid` publishes mark, open interest, and hourly funding
          *     only. It is not folded into `exchange=all`. CVD and liquidation cells
          *     stay blank and name Hyperliquid. They are not zeros. The open column stays
@@ -8364,6 +8366,15 @@ export interface components {
             missing?: string[];
             /** @description oi | equal */
             weight?: string;
+            /** @description Each expected exchange. An exchange that has the column includes its own number, even when the combined cell is blank. A missing exchange has definite false and omits value. That is not a zero. A watched liquidation hour with no print is 0. */
+            venues?: components["schemas"]["MarketDerivativesGridVenue"][];
+        };
+        MarketDerivativesGridVenue: {
+            exchange?: string;
+            /** @description Omitted when this exchange does not have the column. A watched quiet liquidation hour is 0. */
+            value?: number;
+            text?: string;
+            definite?: boolean;
         };
         MarketDerivativesCoin: {
             symbol?: string;

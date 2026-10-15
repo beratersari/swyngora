@@ -130,17 +130,32 @@ type DerivativesGridStore interface {
 	ListLiquidationCoverage(ctx context.Context) ([]LiquidationCoverage, error)
 }
 
+// GridVenue is one exchange inside a time-grid cell. Value is set only when
+// that exchange has the column (HasValue). A missing exchange is not a zero.
+// A watched liquidation hour with no print is a zero, so HasValue stays true.
+// Value uses omitempty; HTTP and MCP maps send a pointer when HasValue is set
+// so a real zero is not dropped.
+type GridVenue struct {
+	Exchange string  `json:"exchange"`
+	Value    float64 `json:"value,omitempty"`
+	Text     string  `json:"text,omitempty"`
+	Definite bool    `json:"definite"`
+	HasValue bool    `json:"-"`
+}
+
 // GridCell is one coin at one bucket. Value is omitted from JSON when the
-// cell is not definite, so a blank is not a zero.
+// cell is not definite, so a blank is not a zero. Venues still lists each
+// expected exchange, including the ones that made the combined cell blank.
 type GridCell struct {
-	Time     time.Time `json:"time"`
-	Value    float64   `json:"value,omitempty"`
-	Text     string    `json:"text,omitempty"`
-	Heat     float64   `json:"heat,omitempty"`
-	HasHeat  bool      `json:"-"`
-	Definite bool      `json:"definite"`
-	Missing  []string  `json:"missing,omitempty"`
-	Weight   string    `json:"weight,omitempty"`
+	Time     time.Time   `json:"time"`
+	Value    float64     `json:"value,omitempty"`
+	Text     string      `json:"text,omitempty"`
+	Heat     float64     `json:"heat,omitempty"`
+	HasHeat  bool        `json:"-"`
+	Definite bool        `json:"definite"`
+	Missing  []string    `json:"missing,omitempty"`
+	Weight   string      `json:"weight,omitempty"`
+	Venues   []GridVenue `json:"venues,omitempty"`
 }
 
 // GridRow is one coin across the columns.
@@ -163,7 +178,7 @@ type DerivativesGrid struct {
 	Note     string      `json:"note,omitempty"`
 }
 
-const derivativesGridNote = "Coins down the side, time across, from stored samples. 24h is one column per clock hour. 7d is one column per UTC day. Funding is the latest settled rate in the cell, or the latest predicted rate when that hour or day has no settlement. Open interest is the percent change from the previous cell. CVD is aggressive buy minus sell. Liquidations are stored force-order notional; a watched hour with no print is a real zero. A cell stays blank until every expected venue has a sample for that column. A missing venue is named and is not counted as zero. The open column also stays blank when its newest sample is older than five minutes, or when the tape does not reach both edges of the column. Not financial advice."
+const derivativesGridNote = "Coins down the side, time across, from stored samples. 24h is one column per clock hour. 7d is one column per UTC day. Funding is the latest settled rate in the cell, or the latest predicted rate when that hour or day has no settlement. Open interest is the percent change from the previous cell. CVD is aggressive buy minus sell. Liquidations are stored force-order notional; a watched hour with no print is a real zero. A cell stays blank until every expected venue has a sample for that column. A missing venue is named and is not counted as zero. Each cell lists every expected exchange and that exchange's own number when it has the column. The open column also stays blank when its newest sample is older than five minutes, or when the tape does not reach both edges of the column. Not financial advice."
 
 // GridBuildInput is everything the pure builder needs.
 type GridBuildInput struct {
@@ -250,13 +265,21 @@ func gridFundingCell(cell *GridCell, symbol string, col time.Time, step time.Dur
 	var rates, weights []float64
 	var weightName string
 	allOI := true
+	cell.Venues = make([]GridVenue, 0, len(expected))
 	for _, ex := range expected {
 		pt := gridPickSnapshot(rows, symbol, ex, col, GridMetricFunding)
+		venue := GridVenue{Exchange: string(ex)}
 		if !gridSampleFresh(pt, col, step, now) {
 			cell.Missing = append(cell.Missing, string(ex))
 			allOI = false
+			cell.Venues = append(cell.Venues, venue)
 			continue
 		}
+		venue.Definite = true
+		venue.HasValue = true
+		venue.Value = pt.rate
+		venue.Text = formatGridFunding(pt.rate)
+		cell.Venues = append(cell.Venues, venue)
 		oi := gridPickSnapshot(rows, symbol, ex, col, GridMetricOI)
 		if !gridSampleFresh(oi, col, step, now) || oi.value <= 0 {
 			allOI = false
@@ -296,13 +319,22 @@ func gridFundingCell(cell *GridCell, symbol string, col time.Time, step time.Dur
 func gridOICell(cell *GridCell, symbol string, col time.Time, step time.Duration, expected []Exchange, rows []GridSnapshot, now time.Time) {
 	prevCol := col.Add(-step)
 	var nowSum, prevSum float64
+	cell.Venues = make([]GridVenue, 0, len(expected))
 	for _, ex := range expected {
 		cur := gridPickSnapshot(rows, symbol, ex, col, GridMetricOI)
 		prev := gridPickSnapshot(rows, symbol, ex, prevCol, GridMetricOI)
+		venue := GridVenue{Exchange: string(ex)}
 		if !gridSampleFresh(cur, col, step, now) || !gridSampleFresh(prev, prevCol, step, now) || prev.value <= 0 {
 			cell.Missing = append(cell.Missing, string(ex))
+			cell.Venues = append(cell.Venues, venue)
 			continue
 		}
+		pct := (cur.value - prev.value) / prev.value * 100
+		venue.Definite = true
+		venue.HasValue = true
+		venue.Value = pct
+		venue.Text = signedPct(pct)
+		cell.Venues = append(cell.Venues, venue)
 		nowSum += cur.value
 		prevSum += prev.value
 	}
@@ -318,13 +350,22 @@ func gridOICell(cell *GridCell, symbol string, col time.Time, step time.Duration
 
 func gridCVDCell(cell *GridCell, symbol string, col time.Time, step time.Duration, expected []Exchange, rows []GridTakerSum, now time.Time) {
 	var delta float64
+	cell.Venues = make([]GridVenue, 0, len(expected))
 	for _, ex := range expected {
 		sum, ok := gridTaker(rows, symbol, ex, col)
+		venue := GridVenue{Exchange: string(ex)}
 		if !ok || !takerBucketReady(sum, col, step, now) {
 			cell.Missing = append(cell.Missing, string(ex))
+			cell.Venues = append(cell.Venues, venue)
 			continue
 		}
-		delta += sum.Buy - sum.Sell
+		part := sum.Buy - sum.Sell
+		venue.Definite = true
+		venue.HasValue = true
+		venue.Value = part
+		venue.Text = signedGridUSD(part)
+		cell.Venues = append(cell.Venues, venue)
+		delta += part
 	}
 	if len(cell.Missing) > 0 {
 		return
@@ -337,12 +378,21 @@ func gridCVDCell(cell *GridCell, symbol string, col time.Time, step time.Duratio
 
 func gridLiqCell(cell *GridCell, symbol string, col time.Time, step time.Duration, expected []Exchange, in GridBuildInput, now time.Time) {
 	var total float64
+	cell.Venues = make([]GridVenue, 0, len(expected))
 	for _, ex := range expected {
+		venue := GridVenue{Exchange: string(ex)}
 		if !gridLiqWatched(in.Coverage, ex, symbol, col, step, now) {
 			cell.Missing = append(cell.Missing, string(ex))
+			cell.Venues = append(cell.Venues, venue)
 			continue
 		}
-		total += gridLiqNotional(in.Liquidations, symbol, ex, col)
+		n := gridLiqNotional(in.Liquidations, symbol, ex, col)
+		venue.Definite = true
+		venue.HasValue = true
+		venue.Value = n
+		venue.Text = compactUSD(n)
+		cell.Venues = append(cell.Venues, venue)
+		total += n
 	}
 	if len(cell.Missing) > 0 {
 		return

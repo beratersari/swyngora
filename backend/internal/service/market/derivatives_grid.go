@@ -21,6 +21,7 @@ func (s *Service) SetDerivativesGrid(store domain.DerivativesGridStore) {
 
 // GetDerivativesGrid returns coins down the side and stored hours or days across.
 // A cell stays blank until every expected venue has that column.
+// Venues lists each expected exchange and its own number when that exchange has the column.
 func (s *Service) GetDerivativesGrid(ctx context.Context, exchange, metric, rangeID string, limit int) (*domain.DerivativesGrid, error) {
 	ex, err := domain.ParseOpenInterestExchange(exchange)
 	if err != nil {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route, Routes } from 'react-router-dom';
 import { renderWithProviders } from '@/test/render';
@@ -20,8 +20,24 @@ vi.mock('@/libs/api', async (importOriginal) => {
             symbol: 'BTCUSDT',
             base: 'BTC',
             cells: [
-              { time: '2026-10-10T14:00:00Z', definite: false, missing: ['okx'] },
-              { time: '2026-10-10T15:00:00Z', definite: true, value: 0.0001, text: '+0.01%' },
+              {
+                time: '2026-10-10T14:00:00Z',
+                definite: false,
+                missing: ['okx'],
+                venues: [
+                  { exchange: 'binance', definite: true, value: 0.0001, text: '+0.0100%' },
+                  { exchange: 'bybit', definite: true, value: 0.0003, text: '+0.0300%' },
+                  { exchange: 'okx', definite: false },
+                ],
+              },
+              {
+                time: '2026-10-10T15:00:00Z',
+                definite: true,
+                value: 0.0001,
+                text: '+0.01%',
+                weight: 'equal',
+                venues: [{ exchange: 'binance', definite: true, value: 0, text: '0.00%' }],
+              },
             ],
           },
         ],
@@ -181,6 +197,26 @@ describe('DerivativesPage', () => {
     expect(screen.getByText('+0.01%')).toBeInTheDocument();
     expect(screen.getByTitle(/Missing: okx/)).toBeInTheDocument();
     expect(screen.queryByTestId('venue-coverage')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /BTC at 14:00/ }));
+    const missing = await screen.findByRole('dialog', { name: /BTC · 14:00/ });
+    expect(within(missing).getByText('Binance')).toBeInTheDocument();
+    expect(within(missing).getByText('+0.0100%')).toBeInTheDocument();
+    expect(within(missing).getByText('Bybit')).toBeInTheDocument();
+    expect(within(missing).getByText('+0.0300%')).toBeInTheDocument();
+    expect(within(missing).getByText('OKX')).toBeInTheDocument();
+    expect(within(missing).getByText('Missing. Not counted as zero.')).toBeInTheDocument();
+    expect(within(missing).queryByText('Combined')).not.toBeInTheDocument();
+    expect(screen.queryByText('coin chart')).not.toBeInTheDocument();
+
+    await user.click(within(missing).getByRole('button', { name: /close/i }));
+
+    await user.click(screen.getByRole('button', { name: /BTC at 15:00/ }));
+    const filled = await screen.findByRole('dialog', { name: /BTC · 15:00/ });
+    expect(within(filled).getByText('Combined')).toBeInTheDocument();
+    expect(within(filled).getByText('+0.01%')).toBeInTheDocument();
+    expect(within(filled).getByText('0.00%')).toBeInTheDocument();
+    await user.click(within(filled).getByRole('button', { name: /close/i }));
 
     await user.click(screen.getByRole('link', { name: 'BTC' }));
     expect(screen.getByText('coin chart')).toBeInTheDocument();

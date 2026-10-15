@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cvdScale, gridColumnLabel, paintGridCell } from './helpers';
+import { cvdScale, gridColumnLabel, gridDetailVenues, paintGridCell } from './helpers';
 
 describe('paintGridCell', () => {
   it('keeps a missing venue blank and does not paint zero', () => {
@@ -57,6 +57,33 @@ describe('paintGridCell', () => {
     );
     expect(painted.tone).toBe('down');
     expect(painted.strength).toBe(1);
+  });
+});
+
+describe('gridDetailVenues', () => {
+  it('keeps each exchange number and does not turn a missing venue into zero', () => {
+    expect(
+      gridDetailVenues({
+        definite: false,
+        missing: ['okx'],
+        venues: [
+          { exchange: 'binance', definite: true, value: 0.0001, text: '+0.0100%' },
+          { exchange: 'bybit', definite: true, value: 0, text: '0' },
+          { exchange: 'okx', definite: false, value: 5, text: 'leak' },
+        ],
+      }),
+    ).toEqual([
+      { exchange: 'binance', text: '+0.0100%', definite: true },
+      { exchange: 'bybit', text: '0', definite: true },
+      { exchange: 'okx', text: '', definite: false },
+    ]);
+  });
+
+  it('lists missing venues when the payload has no breakdown', () => {
+    expect(gridDetailVenues({ definite: false, missing: ['okx'] })).toEqual([
+      { exchange: 'okx', text: '', definite: false },
+    ]);
+    expect(gridDetailVenues({ definite: true, value: 1, text: '+1' })).toEqual([]);
   });
 });
 

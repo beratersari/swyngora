@@ -48,9 +48,44 @@ export const CoinLink = styled(Link)`
 
 export const Cell = styled.td<{ $fill: string }>`
   min-width: 72px;
-  padding: ${({ theme }) => theme.spacing[2]}px;
+  padding: 0;
   text-align: right;
   background: ${({ $fill }) => $fill};
   border-top: 1px solid ${({ theme }) => theme.semantic.border.subtle};
   color: ${({ theme }) => theme.semantic.text.primary};
+
+  &:hover {
+    filter: brightness(1.06);
+  }
+`;
+
+export const CellButton = styled.button`
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: ${({ theme }) => theme.spacing[2]}px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: right;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid ${({ theme }) => theme.semantic.border.focus};
+    outline-offset: -2px;
+  }
+`;
+
+export const DetailList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: ${({ theme }) => theme.spacing[3]}px;
+`;
+
+export const DetailRow = styled.div`
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: ${({ theme }) => theme.spacing[3]}px;
 `;

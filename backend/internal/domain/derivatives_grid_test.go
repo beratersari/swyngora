@@ -53,6 +53,18 @@ func TestBuildDerivativesGrid_FundingWithholdsMissingVenue(t *testing.T) {
 	if cell.Definite || cell.Text != "" || len(cell.Missing) != 1 || cell.Missing[0] != "okx" {
 		t.Fatalf("cell %+v", cell)
 	}
+	if len(cell.Venues) != 3 {
+		t.Fatalf("venues %+v", cell.Venues)
+	}
+	binance := requireGridVenue(t, cell, "binance", true, 0.0001)
+	if binance.Text != "+0.01%" {
+		t.Fatalf("binance text %s", binance.Text)
+	}
+	bybit := requireGridVenue(t, cell, "bybit", true, 0.0003)
+	if bybit.Text != "+0.03%" {
+		t.Fatalf("bybit text %s", bybit.Text)
+	}
+	requireGridVenue(t, cell, "okx", false, 0)
 }
 
 func TestBuildDerivativesGrid_FundingUsesSettlementAndOIWeight(t *testing.T) {
@@ -81,6 +93,12 @@ func TestBuildDerivativesGrid_FundingUsesSettlementAndOIWeight(t *testing.T) {
 	if !cell.Definite || cell.Weight != "oi" || math.Abs(cell.Value-want) > 1e-12 {
 		t.Fatalf("cell %+v want %v", cell, want)
 	}
+	for _, ex := range []string{"binance", "bybit", "okx"} {
+		venue := requireGridVenue(t, cell, ex, true, 0.0002)
+		if venue.Text != "+0.02%" {
+			t.Fatalf("%s text %s", ex, venue.Text)
+		}
+	}
 }
 
 func TestBuildDerivativesGrid_OpenFundingSampleGoesStale(t *testing.T) {
@@ -98,6 +116,7 @@ func TestBuildDerivativesGrid_OpenFundingSampleGoesStale(t *testing.T) {
 	if cell.Definite || len(cell.Missing) != 1 {
 		t.Fatalf("stale open cell %+v", cell)
 	}
+	requireGridVenue(t, cell, "binance", false, 0)
 }
 
 func TestBuildDerivativesGrid_OIChangeBlanksWithoutPrevious(t *testing.T) {
@@ -121,6 +140,15 @@ func TestBuildDerivativesGrid_OIChangeBlanksWithoutPrevious(t *testing.T) {
 	if cell.Definite || cell.Text != "" || len(cell.Missing) != 1 || cell.Missing[0] != "okx" {
 		t.Fatalf("cell %+v", cell)
 	}
+	binance := requireGridVenue(t, cell, "binance", true, 10)
+	if binance.Text != "+10.00%" {
+		t.Fatalf("binance %+v", binance)
+	}
+	bybit := requireGridVenue(t, cell, "bybit", true, 0)
+	if bybit.Text != "0.00%" {
+		t.Fatalf("bybit %+v", bybit)
+	}
+	requireGridVenue(t, cell, "okx", false, 0)
 
 	rows = append(rows, GridSnapshot{Metric: GridMetricOI, Exchange: ExchangeOKX, Symbol: "BTCUSDT", Bucket: col, SampledAt: at, Value: 40})
 	got = BuildDerivativesGrid(GridBuildInput{
@@ -132,6 +160,10 @@ func TestBuildDerivativesGrid_OIChangeBlanksWithoutPrevious(t *testing.T) {
 	// (200-200)/200 = 0
 	if !cell.Definite || cell.Text != "0.00%" || cell.Value != 0 {
 		t.Fatalf("combined %+v", cell)
+	}
+	okx := requireGridVenue(t, cell, "okx", true, -20)
+	if okx.Text != "-20.00%" {
+		t.Fatalf("okx %+v", okx)
 	}
 }
 
@@ -154,6 +186,15 @@ func TestBuildDerivativesGrid_CVDDoesNotZeroFill(t *testing.T) {
 	if cell.Definite || cell.Value != 0 {
 		t.Fatalf("missing okx must stay blank: %+v", cell)
 	}
+	binance := requireGridVenue(t, cell, "binance", true, 30)
+	if binance.Text != "+30" {
+		t.Fatalf("binance %+v", binance)
+	}
+	bybit := requireGridVenue(t, cell, "bybit", true, 10)
+	if bybit.Text != "+10" {
+		t.Fatalf("bybit %+v", bybit)
+	}
+	requireGridVenue(t, cell, "okx", false, 0)
 	got = BuildDerivativesGrid(GridBuildInput{
 		Exchange: "all", Now: now, Symbols: []string{"BTCUSDT"},
 		Spec: GridSpec{Metric: GridMetricCVD, Range: GridRange24h, Step: time.Hour},
@@ -165,6 +206,10 @@ func TestBuildDerivativesGrid_CVDDoesNotZeroFill(t *testing.T) {
 	// (40-10)+(20-10)+(10-10) = 40
 	if !cell.Definite || cell.Value != 40 || cell.Text != "+40" {
 		t.Fatalf("sum %+v", cell)
+	}
+	okx := requireGridVenue(t, cell, "okx", true, 0)
+	if okx.Text != "0" {
+		t.Fatalf("okx %+v", okx)
 	}
 }
 
@@ -184,6 +229,7 @@ func TestBuildDerivativesGrid_ShortTapeIsNotADay(t *testing.T) {
 	if cell.Definite {
 		t.Fatalf("partial day counted: %+v", cell)
 	}
+	requireGridVenue(t, cell, "binance", false, 0)
 }
 
 func TestBuildDerivativesGrid_QuietWatchedHourIsZero(t *testing.T) {
@@ -206,6 +252,16 @@ func TestBuildDerivativesGrid_QuietWatchedHourIsZero(t *testing.T) {
 	if !cell.Definite || cell.Value != 1000 {
 		t.Fatalf("quiet venues should add zero: %+v", cell)
 	}
+	binance := requireGridVenue(t, cell, "binance", true, 1000)
+	if binance.Text != "1.0K" {
+		t.Fatalf("binance %+v", binance)
+	}
+	for _, ex := range []string{"bybit", "okx"} {
+		venue := requireGridVenue(t, cell, ex, true, 0)
+		if venue.Text != "0" {
+			t.Fatalf("%s %+v", ex, venue)
+		}
+	}
 
 	cover[2].FirstWatch = col.Add(time.Hour)
 	got = BuildDerivativesGrid(GridBuildInput{
@@ -220,6 +276,9 @@ func TestBuildDerivativesGrid_QuietWatchedHourIsZero(t *testing.T) {
 	if cell.Definite || len(cell.Missing) != 1 || cell.Missing[0] != "okx" {
 		t.Fatalf("unwatched %+v", cell)
 	}
+	requireGridVenue(t, cell, "binance", true, 1000)
+	requireGridVenue(t, cell, "bybit", true, 0)
+	requireGridVenue(t, cell, "okx", false, 0)
 }
 
 func TestBuildDerivativesGrid_HyperliquidIsFundingAndOpenInterestOnly(t *testing.T) {
@@ -246,6 +305,10 @@ func TestBuildDerivativesGrid_HyperliquidIsFundingAndOpenInterestOnly(t *testing
 	if !cell.Definite || math.Abs(cell.Value-0.0000125) > 1e-12 || len(cell.Missing) != 0 {
 		t.Fatalf("funding %+v", cell)
 	}
+	fundingVenue := requireGridVenue(t, cell, "hyperliquid", true, 0.0000125)
+	if fundingVenue.Text != cell.Text || len(cell.Venues) != 1 {
+		t.Fatalf("funding venues %+v", cell.Venues)
+	}
 	oi := BuildDerivativesGrid(GridBuildInput{
 		Exchange: "hyperliquid", Now: now, Symbols: []string{"BTCUSDT"},
 		Spec: spec(GridMetricOI), Snapshots: snaps,
@@ -253,6 +316,10 @@ func TestBuildDerivativesGrid_HyperliquidIsFundingAndOpenInterestOnly(t *testing
 	cell = gridTestCell(t, oi, "BTCUSDT", col)
 	if !cell.Definite || math.Abs(cell.Value-10) > 1e-9 {
 		t.Fatalf("oi %+v", cell)
+	}
+	oiVenue := requireGridVenue(t, cell, "hyperliquid", true, 10)
+	if oiVenue.Text != "+10.00%" || len(cell.Venues) != 1 {
+		t.Fatalf("oi venue %+v", oiVenue)
 	}
 	for _, metric := range []string{GridMetricCVD, GridMetricLiquidations} {
 		got := BuildDerivativesGrid(GridBuildInput{
@@ -262,6 +329,10 @@ func TestBuildDerivativesGrid_HyperliquidIsFundingAndOpenInterestOnly(t *testing
 		cell = gridTestCell(t, got, "BTCUSDT", col)
 		if cell.Definite || cell.Text != "" || cell.Value != 0 || len(cell.Missing) != 1 || cell.Missing[0] != "hyperliquid" {
 			t.Fatalf("%s %+v", metric, cell)
+		}
+		requireGridVenue(t, cell, "hyperliquid", false, 0)
+		if len(cell.Venues) != 1 {
+			t.Fatalf("%s venues %+v", metric, cell.Venues)
 		}
 	}
 
@@ -279,6 +350,35 @@ func TestBuildDerivativesGrid_HyperliquidIsFundingAndOpenInterestOnly(t *testing
 	if !cell.Definite || math.Abs(cell.Value-0.0001) > 1e-12 || len(cell.Missing) != 0 {
 		t.Fatalf("combined must ignore hyperliquid %+v", cell)
 	}
+	for _, ex := range []string{"binance", "bybit", "okx"} {
+		requireGridVenue(t, cell, ex, true, 0.0001)
+	}
+	for _, venue := range cell.Venues {
+		if venue.Exchange == "hyperliquid" {
+			t.Fatalf("hyperliquid folded in %+v", cell.Venues)
+		}
+	}
+}
+
+func requireGridVenue(t *testing.T, cell GridCell, exchange string, definite bool, value float64) GridVenue {
+	t.Helper()
+	for _, venue := range cell.Venues {
+		if venue.Exchange != exchange {
+			continue
+		}
+		if definite {
+			if !venue.Definite || !venue.HasValue || venue.Text == "" || math.Abs(venue.Value-value) > 1e-9 {
+				t.Fatalf("%s venue %+v want %v", exchange, venue, value)
+			}
+			return venue
+		}
+		if venue.Definite || venue.HasValue || venue.Text != "" || venue.Value != 0 {
+			t.Fatalf("%s should be missing %+v", exchange, venue)
+		}
+		return venue
+	}
+	t.Fatalf("no %s venue in %+v", exchange, cell.Venues)
+	return GridVenue{}
 }
 
 func gridTestCell(t *testing.T, grid *DerivativesGrid, symbol string, at time.Time) GridCell {

@@ -304,6 +304,7 @@ export type {
   MarketDerivativesGrid,
   MarketDerivativesGridRow,
   MarketDerivativesGridCell,
+  MarketDerivativesGridVenue,
   DerivativesGridQuery,
   ImpactScan,
   ImpactScanHit,

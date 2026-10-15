@@ -24,7 +24,13 @@ func TestGetDerivativesGrid_OmitsWithheldValue(t *testing.T) {
 			Symbol: "BTCUSDT",
 			Base:   "BTC",
 			Cells: []domain.GridCell{
-				{Time: at, Definite: false, Missing: []string{"okx"}, Value: 99, Text: "nope"},
+				{
+					Time: at, Definite: false, Missing: []string{"okx"}, Value: 99, Text: "nope",
+					Venues: []domain.GridVenue{
+						{Exchange: "binance", Definite: true, HasValue: true, Value: 0, Text: "0"},
+						{Exchange: "okx", Definite: false, Value: 7, Text: "leak"},
+					},
+				},
 				{Time: at.Add(time.Hour), Definite: true, Value: 0, Text: "0%", Weight: "equal"},
 			},
 		}},
@@ -41,6 +47,12 @@ func TestGetDerivativesGrid_OmitsWithheldValue(t *testing.T) {
 				Text     string   `json:"text"`
 				Definite bool     `json:"definite"`
 				Missing  []string `json:"missing"`
+				Venues   []struct {
+					Exchange string   `json:"exchange"`
+					Value    *float64 `json:"value"`
+					Text     string   `json:"text"`
+					Definite bool     `json:"definite"`
+				} `json:"venues"`
 			} `json:"cells"`
 		} `json:"rows"`
 	}
@@ -52,6 +64,16 @@ func TestGetDerivativesGrid_OmitsWithheldValue(t *testing.T) {
 	}
 	if body.Rows[0].Cells[1].Value == nil || *body.Rows[0].Cells[1].Value != 0 || body.Rows[0].Cells[1].Text != "0%" {
 		t.Fatalf("zero kept %+v", body.Rows[0].Cells[1])
+	}
+	venues := body.Rows[0].Cells[0].Venues
+	if len(venues) != 2 || venues[0].Exchange != "binance" || !venues[0].Definite || venues[0].Value == nil || *venues[0].Value != 0 || venues[0].Text != "0" {
+		t.Fatalf("venue zero dropped %+v", venues)
+	}
+	if venues[1].Exchange != "okx" || venues[1].Definite || venues[1].Value != nil || venues[1].Text != "" {
+		t.Fatalf("missing venue leaked %+v", venues[1])
+	}
+	if len(body.Rows[0].Cells[1].Venues) != 0 {
+		t.Fatalf("empty venues %+v", body.Rows[0].Cells[1].Venues)
 	}
 }
 

@@ -29,14 +29,22 @@ func (h *MarketHandler) GetDerivativesGrid(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, derivativesGridToDTO(got))
 }
 
-type derivativesGridCellDTO struct {
-	Time     string   `json:"time"`
+type derivativesGridVenueDTO struct {
+	Exchange string   `json:"exchange"`
 	Value    *float64 `json:"value,omitempty"`
 	Text     string   `json:"text,omitempty"`
-	Heat     *float64 `json:"heat,omitempty"`
 	Definite bool     `json:"definite"`
-	Missing  []string `json:"missing,omitempty"`
-	Weight   string   `json:"weight,omitempty"`
+}
+
+type derivativesGridCellDTO struct {
+	Time     string                    `json:"time"`
+	Value    *float64                  `json:"value,omitempty"`
+	Text     string                    `json:"text,omitempty"`
+	Heat     *float64                  `json:"heat,omitempty"`
+	Definite bool                      `json:"definite"`
+	Missing  []string                  `json:"missing,omitempty"`
+	Weight   string                    `json:"weight,omitempty"`
+	Venues   []derivativesGridVenueDTO `json:"venues,omitempty"`
 }
 
 type derivativesGridRowDTO struct {
@@ -95,6 +103,18 @@ func derivativesGridToDTO(got *domain.DerivativesGrid) derivativesGridDTO {
 			} else {
 				item.Text = ""
 				item.Weight = ""
+			}
+			if len(cell.Venues) > 0 {
+				item.Venues = make([]derivativesGridVenueDTO, 0, len(cell.Venues))
+				for _, venue := range cell.Venues {
+					row := derivativesGridVenueDTO{Exchange: venue.Exchange, Definite: venue.Definite}
+					if venue.Definite && venue.HasValue {
+						value := venue.Value
+						row.Value = &value
+						row.Text = venue.Text
+					}
+					item.Venues = append(item.Venues, row)
+				}
 			}
 			dto.Cells = append(dto.Cells, item)
 		}

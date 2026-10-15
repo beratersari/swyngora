@@ -1028,6 +1028,23 @@ func derivativesGridMap(got *domain.DerivativesGrid) map[string]any {
 					item["heat"] = cell.Heat
 				}
 			}
+			if len(cell.Venues) > 0 {
+				venues := make([]map[string]any, 0, len(cell.Venues))
+				for _, venue := range cell.Venues {
+					row := map[string]any{
+						"exchange": venue.Exchange,
+						"definite": venue.Definite,
+					}
+					if venue.Definite && venue.HasValue {
+						row["value"] = venue.Value
+						if venue.Text != "" {
+							row["text"] = venue.Text
+						}
+					}
+					venues = append(venues, row)
+				}
+				item["venues"] = venues
+			}
 			cells = append(cells, item)
 		}
 		rows = append(rows, map[string]any{

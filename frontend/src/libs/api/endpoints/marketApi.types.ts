@@ -835,6 +835,12 @@ export type DerivativesBoardQuery = {
   exchange?: string;
   limit?: number;
 };
+export type MarketDerivativesGridVenue = {
+  exchange?: string;
+  value?: number;
+  text?: string;
+  definite?: boolean;
+};
 export type MarketDerivativesGridCell = {
   time?: string;
   value?: number;
@@ -843,6 +849,7 @@ export type MarketDerivativesGridCell = {
   definite?: boolean;
   missing?: string[];
   weight?: string;
+  venues?: MarketDerivativesGridVenue[];
 };
 export type MarketDerivativesGridRow = {
   symbol?: string;

@@ -78,3 +78,26 @@ function toneFromSign(value: number, strength: number): GridTone {
   if (strength <= 0 || value === 0) return 'flat';
   return value > 0 ? 'up' : 'down';
 }
+
+export type GridDetailVenue = {
+  exchange: string;
+  text: string;
+  definite: boolean;
+};
+
+/** Per-exchange rows for a cell click. A missing exchange is not a zero. */
+export function gridDetailVenues(cell: MarketDerivativesGridCell | undefined): GridDetailVenue[] {
+  const listed = cell?.venues?.filter((venue) => venue.exchange) ?? [];
+  if (listed.length > 0) {
+    return listed.map((venue) => {
+      const definite = Boolean(venue.definite && venue.value != null && venue.text);
+      return {
+        exchange: venue.exchange ?? '',
+        text: definite ? (venue.text ?? '') : '',
+        definite,
+      };
+    });
+  }
+  const missing = cell?.missing?.filter(Boolean) ?? [];
+  return missing.map((exchange) => ({ exchange, text: '', definite: false }));
+}
