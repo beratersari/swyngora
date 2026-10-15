@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { marginBracketChange } from './PortfolioMarginPositionsTable.helpers';
+import { marginBracketChange, marginCloseQuantity } from './PortfolioMarginPositionsTable.helpers';
 
 const long = {
   side: 'long' as const,
@@ -65,6 +65,20 @@ describe('marginBracketChange', () => {
     expect(marginBracketChange({ ...long, stopLoss: 0, takeProfit: 120 })).toEqual({
       issue: 'stop',
     });
+  });
+
+  it('closes part of a 10 BTC position and keeps the rest', () => {
+    expect(marginCloseQuantity(10, 4)).toEqual({ full: false, quantity: 4, remain: 6 });
+  });
+
+  it('treats the full open size as a full close', () => {
+    expect(marginCloseQuantity(10, 10)).toEqual({ full: true });
+  });
+
+  it('rejects a close above the open size or a remainder too small to keep', () => {
+    expect(marginCloseQuantity(10, 11)).toEqual({ issue: 'quantity' });
+    expect(marginCloseQuantity(10, 0)).toEqual({ issue: 'quantity' });
+    expect(marginCloseQuantity(10, 10 - 1e-9)).toEqual({ issue: 'quantity' });
   });
 
   it('rejects a short take profit at or above the entry', () => {

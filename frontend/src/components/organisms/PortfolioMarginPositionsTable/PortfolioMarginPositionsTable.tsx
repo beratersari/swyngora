@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, InputNumber, Modal, Popconfirm, Space } from 'antd';
+import { Button, InputNumber, Modal, Space } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import { BrandTag } from '@/components/atoms/BrandTag';
@@ -11,6 +11,7 @@ import { semanticColors } from '@/styles/tokens';
 import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
 import {
   marginBracketChange,
+  marginCloseQuantity,
   type MarginBracketIssue,
 } from './PortfolioMarginPositionsTable.helpers';
 import type { PortfolioMarginPositionsTableProps } from './PortfolioMarginPositionsTable.types';
@@ -47,12 +48,21 @@ export function PortfolioMarginPositionsTable({
   const [stopLoss, setStopLoss] = useState<number | null>(null);
   const [takeProfit, setTakeProfit] = useState<number | null>(null);
   const [issue, setIssue] = useState<MarginBracketIssue | null>(null);
+  const [closing, setClosing] = useState<MarginPosition | null>(null);
+  const [closeQty, setCloseQty] = useState<number | null>(null);
+  const [closeIssue, setCloseIssue] = useState(false);
 
   const openEdit = (row: MarginPosition) => {
     setEdit(row);
     setStopLoss(row.stopLoss ?? null);
     setTakeProfit(row.takeProfit ?? null);
     setIssue(null);
+  };
+
+  const openClose = (row: MarginPosition) => {
+    setClosing(row);
+    setCloseQty(row.quantity ?? null);
+    setCloseIssue(false);
   };
 
   const columns: ColumnsType<MarginPosition> = [
@@ -162,16 +172,9 @@ export function PortfolioMarginPositionsTable({
               </Button>
             ) : null}
             {onClose ? (
-              <Popconfirm
-                title={t('portfolio:margin.closeConfirm')}
-                onConfirm={() => void onClose(row.id!)}
-                okText={t('portfolio:margin.close')}
-                cancelText={t('common:actions.cancel', { defaultValue: 'Cancel' })}
-              >
-                <Button size="small" danger loading={closeLoading}>
-                  {t('portfolio:margin.close')}
-                </Button>
-              </Popconfirm>
+              <Button size="small" danger loading={closeLoading} onClick={() => openClose(row)}>
+                {t('portfolio:margin.close')}
+              </Button>
             ) : null}
           </Space>
         );
@@ -185,6 +188,8 @@ export function PortfolioMarginPositionsTable({
 
   const openedStop = edit?.stopLoss ?? null;
   const openedTake = edit?.takeProfit ?? null;
+  const closePlan =
+    closing && closeQty != null ? marginCloseQuantity(closing.quantity, closeQty) : null;
 
   return (
     <>
@@ -281,6 +286,68 @@ export function PortfolioMarginPositionsTable({
               {issue === 'stop'
                 ? t('portfolio:margin.badStop')
                 : t('portfolio:margin.badTakeProfit')}
+            </Text>
+          ) : null}
+        </Space>
+      </Modal>
+      <Modal
+        open={Boolean(closing)}
+        title={t('portfolio:margin.closeConfirm')}
+        okText={t('portfolio:margin.close')}
+        cancelText={t('common:actions.cancel', { defaultValue: 'Cancel' })}
+        confirmLoading={closeLoading}
+        onCancel={() => setClosing(null)}
+        onOk={() => {
+          if (!closing?.id || !onClose) return;
+          const plan = marginCloseQuantity(closing.quantity, closeQty);
+          if ('issue' in plan) {
+            setCloseIssue(true);
+            return;
+          }
+          void Promise.resolve(onClose(closing.id, plan.full ? undefined : plan.quantity))
+            .then(() => setClosing(null))
+            .catch(() => undefined);
+        }}
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Text variant="caption" color="secondary">
+            {t('portfolio:margin.closeHint', {
+              qty: formatPrice(closing?.quantity),
+              symbol: formatSymbolDisplay(closing?.symbol),
+            })}
+          </Text>
+          <div>
+            <Text variant="caption" color="secondary">
+              {t('portfolio:margin.closeQuantity')}
+            </Text>
+            <InputNumber
+              aria-label={t('portfolio:margin.closeQuantity')}
+              style={{ width: '100%' }}
+              value={closeQty}
+              onChange={(v) => {
+                setCloseQty(asPrice(v));
+                setCloseIssue(false);
+              }}
+            />
+            <Button
+              type="link"
+              size="small"
+              onClick={() => {
+                setCloseQty(closing?.quantity ?? null);
+                setCloseIssue(false);
+              }}
+            >
+              {t('portfolio:margin.closeAll')}
+            </Button>
+          </div>
+          {closePlan && !('issue' in closePlan) && !closePlan.full ? (
+            <Text variant="caption" color="secondary">
+              {t('portfolio:margin.closeRemain', { qty: formatPrice(closePlan.remain) })}
+            </Text>
+          ) : null}
+          {closeIssue ? (
+            <Text variant="caption" color="error" role="alert">
+              {t('portfolio:margin.badCloseQty')}
             </Text>
           ) : null}
         </Space>

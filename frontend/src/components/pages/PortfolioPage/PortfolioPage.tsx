@@ -601,13 +601,27 @@ export function PortfolioPage() {
                     closeLoading={closeMarginState.isLoading}
                     bracketsLoading={marginBracketsState.isLoading}
                     onOpen={openMarket}
-                    onClose={async (id) => {
-                      await closeMargin({
-                        id,
-                        portfolioId: bookId,
-                        idempotencyKey: `web-mc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                      }).unwrap();
-                      void message.success(t('portfolio:margin.closeSuccess'));
+                    onClose={async (id, quantity) => {
+                      try {
+                        await closeMargin({
+                          id,
+                          portfolioId: bookId,
+                          quantity,
+                          idempotencyKey: `web-mc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                        }).unwrap();
+                        void message.success(
+                          quantity != null && quantity > 0
+                            ? t('portfolio:margin.closePartialSuccess', {
+                                qty: formatPrice(quantity),
+                              })
+                            : t('portfolio:margin.closeSuccess'),
+                        );
+                      } catch (err: unknown) {
+                        void message.error(
+                          rtkErrorMessage(err, { resource: t('portfolio:margin.positionsTitle') }),
+                        );
+                        throw err;
+                      }
                     }}
                     onBrackets={async (values) => {
                       try {

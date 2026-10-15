@@ -70,6 +70,53 @@ describe('PortfolioMarginPositionsTable brackets', () => {
     expect(onBrackets).not.toHaveBeenCalled();
   });
 
+  it('closes 4 of a 10 BTC position and leaves the rest', async () => {
+    const onClose = vi.fn().mockResolvedValue(undefined);
+    renderWithTheme(
+      <PortfolioMarginPositionsTable items={[{ ...long, quantity: 10 }]} onClose={onClose} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^close$|^kapat$/i }));
+    const qty = await screen.findByRole('spinbutton', {
+      name: /size to close|kapatılacak miktar/i,
+    });
+    fireEvent.change(qty, { target: { value: '4' } });
+    fireEvent.blur(qty);
+    expect(screen.getByText(/6 stays open|6 açık kalır/i)).toBeInTheDocument();
+    const closeButtons = screen.getAllByRole('button', { name: /^close$|^kapat$/i });
+    fireEvent.click(closeButtons[closeButtons.length - 1]);
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledWith('pos-1', 4);
+    });
+  });
+
+  it('closes the whole position when the size is the open size', async () => {
+    const onClose = vi.fn().mockResolvedValue(undefined);
+    renderWithTheme(<PortfolioMarginPositionsTable items={[long]} onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: /^close$|^kapat$/i }));
+    const closeButtons = await screen.findAllByRole('button', { name: /^close$|^kapat$/i });
+    fireEvent.click(closeButtons[closeButtons.length - 1]);
+    await waitFor(() => {
+      expect(onClose).toHaveBeenCalledWith('pos-1', undefined);
+    });
+  });
+
+  it('does not close more than the open size', async () => {
+    const onClose = vi.fn().mockResolvedValue(undefined);
+    renderWithTheme(
+      <PortfolioMarginPositionsTable items={[{ ...long, quantity: 10 }]} onClose={onClose} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^close$|^kapat$/i }));
+    const qty = await screen.findByRole('spinbutton', {
+      name: /size to close|kapatılacak miktar/i,
+    });
+    fireEvent.change(qty, { target: { value: '11' } });
+    fireEvent.blur(qty);
+    const closeButtons = screen.getAllByRole('button', { name: /^close$|^kapat$/i });
+    fireEvent.click(closeButtons[closeButtons.length - 1]);
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('hides edit and close on a closed position', () => {
     renderWithTheme(
       <PortfolioMarginPositionsTable

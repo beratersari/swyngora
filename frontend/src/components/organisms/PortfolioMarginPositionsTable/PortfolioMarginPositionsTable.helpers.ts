@@ -77,3 +77,31 @@ export function marginBracketChange(
   }
   return { change };
 }
+
+/** Smallest paper close. Matches the backend minimum trade size. */
+export const MIN_MARGIN_CLOSE_QUANTITY = 1e-8;
+
+export type MarginClosePlan =
+  { full: true } | { full: false; quantity: number; remain: number } | { issue: 'quantity' };
+
+function sameSize(a: number, b: number): boolean {
+  const scale = Math.max(1, Math.abs(a), Math.abs(b));
+  return Math.abs(a - b) <= 1e-12 * scale;
+}
+
+/**
+ * Size to send on a margin close. The full open size omits quantity.
+ * A smaller size is a partial close. A remainder below the minimum is rejected.
+ */
+export function marginCloseQuantity(
+  openQty: number | undefined,
+  requested: number | null,
+): MarginClosePlan {
+  if (!finitePositive(openQty) || !finitePositive(requested)) return { issue: 'quantity' };
+  if (requested < MIN_MARGIN_CLOSE_QUANTITY) return { issue: 'quantity' };
+  if (requested > openQty && !sameSize(requested, openQty)) return { issue: 'quantity' };
+  if (requested >= openQty || sameSize(requested, openQty)) return { full: true };
+  const remain = openQty - requested;
+  if (remain < MIN_MARGIN_CLOSE_QUANTITY) return { issue: 'quantity' };
+  return { full: false, quantity: requested, remain };
+}
