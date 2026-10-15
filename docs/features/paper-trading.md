@@ -323,7 +323,7 @@ Releases unused cash/position reservations in one store transaction. `canceled: 
 | `/portfolio` spot ticket | Market, limit, stop, trailing stop, OCO, bracket; TIF GTC/IOC/FOK; lot FIFO/LIFO on sells. The ticket shows fee, cash, and risk before the order is placed. A buy or a bracket can take a risk % and a stop; the preview fills the quantity |
 | Open orders table | Cancel + **amend** (standalone GTC limit/stop: trigger and remaining qty) |
 | `/portfolio` margin ticket | Isolated/cross mode, long/short 1–10x, market or limit, optional SL/TP. Same preview: margin, liquidation, borrow cap. A risk % and a stop size the open |
-| Margin positions tab | Mark, liq, debt, uPnL, market close |
+| Margin positions tab | Mark, liq, debt, uPnL, stop, take profit, market close. Edit or remove the stop and take profit on an open position |
 | Coin detail compact ticket | Market + limit + stop (no OCO/bracket), with the same preview. A buy can be sized from a risk % and a stop |
 
 ## Code

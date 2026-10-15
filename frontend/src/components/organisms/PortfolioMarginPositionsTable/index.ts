@@ -1,2 +1,5 @@
 export { PortfolioMarginPositionsTable } from './PortfolioMarginPositionsTable';
-export type { PortfolioMarginPositionsTableProps } from './PortfolioMarginPositionsTable.types';
+export type {
+  MarginBracketUpdate,
+  PortfolioMarginPositionsTableProps,
+} from './PortfolioMarginPositionsTable.types';

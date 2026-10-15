@@ -50,6 +50,7 @@ import {
   useListPortfoliosQuery,
   usePlaceMarginOrderMutation,
   usePlacePortfolioOrderMutation,
+  useSetMarginBracketsMutation,
   useSetMarginModeMutation,
   useStressPortfolioMutation,
   useTransferPortfolioCashMutation,
@@ -59,7 +60,13 @@ import {
 import { useDocumentVisible, useMediaQuery, useOrderPreview } from '@/libs/hooks';
 import type { MarginOrderPreviewDraft, SpotOrderPreviewDraft } from '@/libs/hooks/orderPreview';
 import { usePortfolioSubscription } from '@/libs/realtime';
-import { formatDateTime, formatPrice, newPaperIdempotencyKey, rtkCurrent, rtkCurrentPending } from '@/libs/utils';
+import {
+  formatDateTime,
+  formatPrice,
+  newPaperIdempotencyKey,
+  rtkCurrent,
+  rtkCurrentPending,
+} from '@/libs/utils';
 import { mediaQueries } from '@/styles/tokens';
 import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
 import { DeskTabs, PageStack, PanelCard, Section, Split } from './PortfolioPage.styles';
@@ -112,10 +119,11 @@ export function PortfolioPage() {
   const needBook = books.length > 1 && !bookId;
   usePortfolioSubscription(bookId, visible && Boolean(bookId));
 
-  const portfolioQuery = useGetPortfolioQuery(
-    bookId ? { portfolioId: bookId } : undefined,
-    { skip: !bookId && books.length !== 1, pollingInterval: visible ? 15_000 : 0, refetchOnFocus: true },
-  );
+  const portfolioQuery = useGetPortfolioQuery(bookId ? { portfolioId: bookId } : undefined, {
+    skip: !bookId && books.length !== 1,
+    pollingInterval: visible ? 15_000 : 0,
+    refetchOnFocus: true,
+  });
   const [period, setPeriod] = useState<PortfolioPerformancePeriod>('1w');
   const perfQuery = useGetPortfolioPerformanceQuery(
     { period, portfolioId: bookId },
@@ -123,7 +131,11 @@ export function PortfolioPage() {
   );
   const ordersQuery = useListPortfolioOrdersQuery(
     { status: 'open', portfolioId: bookId },
-    { skip: !bookId && books.length !== 1, pollingInterval: visible ? 10_000 : 0, refetchOnFocus: true },
+    {
+      skip: !bookId && books.length !== 1,
+      pollingInterval: visible ? 10_000 : 0,
+      refetchOnFocus: true,
+    },
   );
   const recordQuery = useGetPortfolioSituationRecordQuery(
     { portfolioId: bookId },
@@ -156,7 +168,11 @@ export function PortfolioPage() {
   );
   const marginPosQuery = useListMarginPositionsQuery(
     { portfolioId: bookId },
-    { skip: !bookId && books.length !== 1, pollingInterval: visible ? 12_000 : 0, refetchOnFocus: true },
+    {
+      skip: !bookId && books.length !== 1,
+      pollingInterval: visible ? 12_000 : 0,
+      refetchOnFocus: true,
+    },
   );
 
   const [createBook, createState] = useCreatePortfolioMutation();
@@ -172,6 +188,7 @@ export function PortfolioPage() {
   const [placeMargin, placeMarginState] = usePlaceMarginOrderMutation();
   const previewOn = !needBook && (books.length === 1 || Boolean(bookId));
   const [closeMargin, closeMarginState] = useCloseMarginPositionMutation();
+  const [setMarginBrackets, marginBracketsState] = useSetMarginBracketsMutation();
   const [continueRebalance, continueRebalanceState] = useContinuePortfolioRebalanceMutation();
 
   const view = rtkCurrent(portfolioQuery);
@@ -233,7 +250,9 @@ export function PortfolioPage() {
       takeProfit: values.takeProfit,
       idempotencyKey: `web-m-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
     }).unwrap();
-    void message.success(t('portfolio:margin.successOpen', { symbol: values.symbol, lev: values.leverage }));
+    void message.success(
+      t('portfolio:margin.successOpen', { symbol: values.symbol, lev: values.leverage }),
+    );
   };
 
   const cashColumns = useMemo(
@@ -362,9 +381,7 @@ export function PortfolioPage() {
         />
       ) : null}
 
-      {needBook ? (
-        <Alert type="info" showIcon message={t('portfolio:books.select')} />
-      ) : null}
+      {needBook ? <Alert type="info" showIcon message={t('portfolio:books.select')} /> : null}
 
       {(books.length > 0 || view) && (
         <>
@@ -423,7 +440,9 @@ export function PortfolioPage() {
                     }).unwrap();
                     transferKeyRef.current = null;
                     void message.success(
-                      got.replayed ? t('portfolio:cash.transferReplayed') : t('portfolio:cash.transferSuccess'),
+                      got.replayed
+                        ? t('portfolio:cash.transferReplayed')
+                        : t('portfolio:cash.transferSuccess'),
                     );
                   } catch (err) {
                     const status = getRtkErrorStatus(err);
@@ -580,6 +599,7 @@ export function PortfolioPage() {
                     items={marginPositions}
                     loading={rtkCurrentPending(marginPosQuery) || rtkCurrentPending(portfolioQuery)}
                     closeLoading={closeMarginState.isLoading}
+                    bracketsLoading={marginBracketsState.isLoading}
                     onOpen={openMarket}
                     onClose={async (id) => {
                       await closeMargin({
@@ -588,6 +608,24 @@ export function PortfolioPage() {
                         idempotencyKey: `web-mc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
                       }).unwrap();
                       void message.success(t('portfolio:margin.closeSuccess'));
+                    }}
+                    onBrackets={async (values) => {
+                      try {
+                        await setMarginBrackets({
+                          id: values.id,
+                          portfolioId: bookId,
+                          stopLoss: values.stopLoss,
+                          takeProfit: values.takeProfit,
+                          clearStopLoss: values.clearStopLoss,
+                          clearTakeProfit: values.clearTakeProfit,
+                        }).unwrap();
+                        void message.success(t('portfolio:margin.bracketsSuccess'));
+                      } catch (err: unknown) {
+                        void message.error(
+                          rtkErrorMessage(err, { resource: t('portfolio:margin.positionsTitle') }),
+                        );
+                        throw err;
+                      }
                     }}
                   />
                 ),
@@ -609,7 +647,9 @@ export function PortfolioPage() {
                         await continueRebalance({ id, portfolioId: bookId }).unwrap();
                         void message.success(t('portfolio:rebalance.continueSuccess'));
                       } catch (err) {
-                        void message.error(rtkErrorMessage(err, { resource: t('portfolio:rebalance.title') }));
+                        void message.error(
+                          rtkErrorMessage(err, { resource: t('portfolio:rebalance.title') }),
+                        );
                       }
                     }}
                   />
@@ -631,7 +671,8 @@ export function PortfolioPage() {
                 label: t('portfolio:movements.title'),
                 children: (
                   <>
-                    {!rtkCurrentPending(cashQuery) && (rtkCurrent(cashQuery)?.movements?.length ?? 0) === 0 ? (
+                    {!rtkCurrentPending(cashQuery) &&
+                    (rtkCurrent(cashQuery)?.movements?.length ?? 0) === 0 ? (
                       <Text variant="body" color="secondary">
                         {t('portfolio:movements.empty')}
                       </Text>
