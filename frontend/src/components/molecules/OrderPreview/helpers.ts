@@ -3,6 +3,21 @@ import { formatPrice } from '@/libs/utils/formatPrice';
 import { PREVIEW_WARNING_IDS, type PreviewWarningId } from './constants';
 import type { PreviewRow } from './OrderPreview.types';
 
+const SWING_EPSILON = 0.05;
+
+export type PreviewSwingChange = 'up' | 'down' | 'same' | 'first' | 'unknown';
+
+/** How this order changes the book's day swing. Unknown stays quiet rather than zero. */
+export function previewSwingChange(preview: OrderPreview | null | undefined): PreviewSwingChange {
+  const add = preview?.correlation?.add;
+  if (!add?.complete || add.swingPct == null || !Number.isFinite(add.swingPct)) return 'unknown';
+  const before = preview?.correlation?.swingPct;
+  if (before == null || !Number.isFinite(before)) return 'first';
+  if (add.swingPct > before + SWING_EPSILON) return 'up';
+  if (add.swingPct + SWING_EPSILON < before) return 'down';
+  return 'same';
+}
+
 /** One decimal, without locale grouping, so 40 and 12.5 stay stable in tests. */
 export function formatPreviewPct(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return '—';

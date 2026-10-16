@@ -191,6 +191,7 @@ type DataPort interface {
 	TransferPortfolioCash(ctx context.Context, clientID, fromPortfolioID, toPortfolioID string, amount float64, note string) (json.RawMessage, error)
 	ListTransferAttempts(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	StressPortfolio(ctx context.Context, clientID, moves string) (json.RawMessage, error)
+	GetPortfolioCorrelation(ctx context.Context, clientID, exchange, symbol, side string, notional float64) (json.RawMessage, error)
 	GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
 	PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct, maxExposurePct *float64) (json.RawMessage, error)
 	DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
@@ -3401,6 +3402,27 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
+	addTool(mcp.NewTool("get_portfolio_correlation",
+		mcp.WithDescription("How the open paper coins moved together over the last day, from 5-minute percent changes. together is the size-weighted average correlation from -1 to +1. swingPct is the size of a day built from those moves. apartPct is the same mix if the coins had moved independently. A short is the opposite of a long. A coin without enough shared minutes is named in missing and is not zero. Optional addSymbol, addSide (buy|sell|long|short), and addNotional show the book after that extra line, in add. Nothing is traded."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
+		mcp.WithString("addSymbol", mcp.Description("Optional pair, e.g. SOLUSDT, to see this extra line")),
+		mcp.WithString("addSide", mcp.Description("buy|sell|long|short. Default buy")),
+		mcp.WithString("addExchange", mcp.Description("Venue for addSymbol. Default binance")),
+		mcp.WithNumber("addNotional", mcp.Description("Absolute quote notional of the extra line")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		raw, err := api.GetPortfolioCorrelation(ctx, clientID, req.GetString("addExchange", ""), req.GetString("addSymbol", ""), req.GetString("addSide", ""), req.GetFloat("addNotional", 0))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
 	addTool(mcp.NewTool("get_portfolio_risk_limits",
 		mcp.WithDescription("Get optional paper risk limits and live status (daily trading loss %, per-coin weights, whether new buys/margin opens are blocked). Deposits and withdrawals are not daily profit or loss. Limits never close positions."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
@@ -3478,7 +3500,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("preview_portfolio_order",
-		mcp.WithDescription("Preview a paper order before it is placed. Returns the slipped fill, taker fee, cash in or out, reserved cash or quantity, estimated sell profit, and whether a risk limit or the borrow cap would block it. Pass riskPercent and stopLossPrice to size a spot buy, bracket, or margin open from portfolio equity (quantity is then ignored). product=spot (default) or margin. When reason names clauses and the live read is ready, reasonHistory is how this book's past closes of each selected live kind did: still kept the kind, left changed or went blank. Both counts at zero means no past close stored that kind. The rows are not one total. A failed history read omits reasonHistory and still returns the price. Nothing is written. Not real money."),
+		mcp.WithDescription("Preview a paper order before it is placed. Returns the slipped fill, taker fee, cash in or out, reserved cash or quantity, estimated sell profit, and whether a risk limit or the borrow cap would block it. Pass riskPercent and stopLossPrice to size a spot buy, bracket, or margin open from portfolio equity (quantity is then ignored). product=spot (default) or margin. When reason names clauses and the live read is ready, reasonHistory is how this book's past closes of each selected live kind did: still kept the kind, left changed or went blank. Both counts at zero means no past close stored that kind. The rows are not one total. A failed history read omits reasonHistory and still returns the price. correlation is how the open coins moved together and how this order changes the book's day swing. A failed correlation read omits it and still returns the price. Nothing is written. Not real money."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),

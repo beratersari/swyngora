@@ -1752,6 +1752,15 @@ class PortfolioGetInput(BaseModel):
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
+class PortfolioCorrelationInput(BaseModel):
+    client_id: str
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+    add_symbol: str = Field(default="", description="Optional pair, e.g. SOLUSDT")
+    add_side: str = Field(default="", description="buy|sell|long|short. Empty means buy")
+    add_exchange: str = Field(default="", description="Venue for add_symbol. Empty uses binance")
+    add_notional: float = Field(default=0, description="Absolute quote notional of the extra line")
+
+
 class FillPocketInput(BaseModel):
     client_id: str
     exchange: str = Field(description="binance | coinbase | bybit | nasdaq | bist")
@@ -4073,6 +4082,27 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
 
     def list_shared_portfolios(client_id: str) -> str:
         return http.get("/api/v1/portfolios/shared", {"clientId": client_id})
+
+    def get_portfolio_correlation(
+        client_id: str,
+        portfolio_id: str = "",
+        add_symbol: str = "",
+        add_side: str = "",
+        add_exchange: str = "",
+        add_notional: float = 0,
+    ) -> str:
+        q: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        if add_symbol:
+            q["addSymbol"] = add_symbol
+        if add_side:
+            q["addSide"] = add_side
+        if add_exchange:
+            q["addExchange"] = add_exchange
+        if add_notional:
+            q["addNotional"] = add_notional
+        return http.get("/api/v1/portfolio/correlation", q)
 
     def get_portfolio_risk_limits(client_id: str, portfolio_id: str = "") -> str:
         q: dict[str, Any] = {"clientId": client_id}
@@ -6987,6 +7017,20 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="list_portfolio_cash_movements",
             description="List paper deposits and withdrawals (newest first).",
             args_schema=PortfolioCashListInput,
+        ),
+        StructuredTool.from_function(
+            get_portfolio_correlation,
+            name="get_portfolio_correlation",
+            description=(
+                "How the open paper coins moved together over the last day of "
+                "5-minute changes. together is the size-weighted correlation "
+                "from -1 to +1. swingPct is the day-sized swing of this mix. "
+                "apartPct is the same mix if the coins had moved independently. "
+                "A short offsets a long. missing names a coin without enough "
+                "shared minutes and is not zero. add_symbol, add_side, and "
+                "add_notional show the book after that extra line. Nothing is traded."
+            ),
+            args_schema=PortfolioCorrelationInput,
         ),
         StructuredTool.from_function(
             get_portfolio_risk_limits,

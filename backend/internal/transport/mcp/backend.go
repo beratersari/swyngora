@@ -4733,6 +4733,22 @@ func stressReportMap(rep *domain.StressReport) map[string]any {
 	}
 }
 
+func (b *Backend) GetPortfolioCorrelation(ctx context.Context, clientID, exchange, symbol, side string, notional float64) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("portfolio service unavailable")
+	}
+	rep, err := b.Portfolio.BookCorrelation(ctx, clientID, PortfolioIDFrom(ctx), "", portfolio.PortfolioCorrRequest{
+		Exchange: domain.Exchange(strings.ToLower(strings.TrimSpace(exchange))),
+		Symbol:   symbol,
+		Side:     side,
+		Notional: notional,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(rep)
+}
+
 func (b *Backend) GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)

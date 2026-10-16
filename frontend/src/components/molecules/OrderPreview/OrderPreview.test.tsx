@@ -83,4 +83,28 @@ describe('OrderPreview', () => {
     renderWithTheme(<OrderPreview preview={blockedBuy} />);
     expect(screen.getByText(/preview only|yalnızca önizleme/i)).toBeInTheDocument();
   });
+
+  it('shows when the order raises the day swing', () => {
+    renderWithTheme(
+      <OrderPreview
+        preview={{
+          ...blockedBuy,
+          correlation: {
+            window: '24h',
+            interval: '5m',
+            gross: 200,
+            samples: 30,
+            swingPct: 2,
+            apartPct: 1,
+            holdings: [],
+            pairs: [],
+            missing: [],
+            note: 'note',
+            add: { asset: 'SOL', notional: 100, side: 'long', swingPct: 4.5, samples: 30, complete: true },
+          },
+        }}
+      />,
+    );
+    expect(screen.getByTestId('preview-correlation')).toHaveTextContent(/2% to 4\.5%/i);
+  });
 });

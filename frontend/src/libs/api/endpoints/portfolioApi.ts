@@ -5,6 +5,7 @@ import type { MarketExchange } from './marketApi';
 export type PortfolioSummary = components['schemas']['PortfolioSummary'];
 export type PortfolioPerformance = components['schemas']['PortfolioPerformance'];
 export type RiskLimitsView = components['schemas']['RiskLimitsView'];
+export type PortfolioCorrelation = components['schemas']['PortfolioCorrelation'];
 export type PortfolioEquityPoint = components['schemas']['PortfolioEquityPoint'];
 export type PortfolioPerformancePeriod = NonNullable<
   NonNullable<components['schemas']['PortfolioPerformance']['period']>
@@ -635,6 +636,12 @@ export const portfolioApi = baseApi.injectEndpoints({
       }),
       providesTags: ['Portfolio'],
     }),
+    getPortfolioCorrelation: build.query<PortfolioCorrelation, BookArg | void>({
+      query: (arg) => ({
+        url: '/api/v1/portfolio/correlation',
+        params: bookParams(arg?.portfolioId),
+      }),
+    }),
     getPortfolioRiskLimits: build.query<RiskLimitsView, BookArg | void>({
       query: (arg) => ({
         url: '/api/v1/portfolio/risk-limits',
@@ -688,6 +695,7 @@ export const {
   useRenamePortfolioMutation,
   useDeletePortfolioMutation,
   useGetPortfolioPerformanceQuery,
+  useGetPortfolioCorrelationQuery,
   useGetPortfolioRiskLimitsQuery,
   useSetPortfolioRiskLimitsMutation,
   useStressPortfolioMutation,

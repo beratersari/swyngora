@@ -4,9 +4,33 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { formatPrice } from '@/libs/utils/formatPrice';
 import type { PreviewWarningId } from './constants';
-import { formatPreviewPct, previewRows, previewWarnings } from './helpers';
+import { formatPreviewPct, previewRows, previewSwingChange, previewWarnings } from './helpers';
 import { Grid, Label, Panel, Value } from './OrderPreview.styles';
 import type { OrderPreviewProps } from './OrderPreview.types';
+
+function CorrelationLine({ preview }: { preview: OrderPreviewProps['preview'] }) {
+  const { t } = useTranslation('portfolio');
+  const change = previewSwingChange(preview);
+  if (!preview?.correlation) return null;
+  const before = formatPreviewPct(preview.correlation.swingPct);
+  const after = formatPreviewPct(preview.correlation.add?.swingPct);
+  if (change === 'unknown' && preview.correlation.add) {
+    return (
+      <Text variant="caption" color="secondary">
+        {t('preview.corrUnknown')}
+      </Text>
+    );
+  }
+  if (change === 'unknown') return null;
+  return (
+    <Text variant="caption" color="secondary" data-testid="preview-correlation">
+      {t(`preview.corr${change === 'up' ? 'Up' : change === 'down' ? 'Down' : change === 'first' ? 'First' : 'Same'}`, {
+        before,
+        after,
+      })}
+    </Text>
+  );
+}
 
 function warningTone(id: PreviewWarningId): 'info' | 'error' | 'warning' {
   if (id === 'dailyLoss') return 'info';
@@ -74,6 +98,7 @@ export function OrderPreview({ preview, loading, failed }: OrderPreviewProps) {
               {t('preview.exposure', { pct: formatPreviewPct(exposure) })}
             </Text>
           ) : null}
+          <CorrelationLine preview={preview} />
           {preview.sizing ? (
             <Text variant="caption" color="secondary">
               {t('preview.sized', {

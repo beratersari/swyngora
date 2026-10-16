@@ -3894,6 +3894,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portfolio/correlation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How open paper coins move together
+         * @description Reads the open spot and margin coins over the last day of 5-minute
+         *     percent changes. `together` is the size-weighted average correlation,
+         *     from -1 to +1. `swingPct` is the size of a day built from those moves.
+         *     `apartPct` is the same mix if the coins had moved independently.
+         *     A short notional is the opposite of a long. A coin without enough
+         *     shared minutes is named in `missing` and is not treated as zero.
+         *     Optional `addSymbol`, `addSide`, and `addNotional` price one extra
+         *     line in `add` without placing it. Nothing is traded.
+         */
+        get: operations["getPortfolioCorrelation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portfolio/risk-limits": {
         parameters: {
             query?: never;
@@ -10406,6 +10433,57 @@ export interface components {
             /** @description True when a margin stop is at or past liquidation, so the stop would not be the exit. */
             stopBeyondLiquidation?: boolean;
         };
+        PortfolioCorrHolding: {
+            asset: string;
+            /** @description Signed quote notional. Positive is long. */
+            notional: number;
+            /** @enum {string} */
+            side: "long" | "short";
+        };
+        PortfolioCorrPair: {
+            left: string;
+            right: string;
+            /** @description Pearson correlation of 5-minute percent returns. Omitted when the pair is not complete. */
+            corr?: number;
+            /** @enum {string} */
+            relation?: "follows" | "loose" | "mixed" | "inverse";
+            samples: number;
+            complete: boolean;
+        };
+        PortfolioCorrAdd: {
+            asset: string;
+            /** @description Signed quote notional of the extra line. */
+            notional: number;
+            /** @enum {string} */
+            side: "long" | "short";
+            together?: number;
+            swingPct?: number;
+            apartPct?: number;
+            samples: number;
+            /** @description False when the extra coin does not share enough minutes. The swing is then omitted. */
+            complete: boolean;
+        };
+        PortfolioCorrelation: {
+            /** @example 24h */
+            window: string;
+            /** @example 5m */
+            interval: string;
+            /** @description Sum of absolute notionals. */
+            gross: number;
+            holdings: components["schemas"]["PortfolioCorrHolding"][];
+            pairs: components["schemas"]["PortfolioCorrPair"][];
+            /** @description Size-weighted average pairwise correlation. Omitted when fewer than two coins share the window. */
+            together?: number;
+            /** @description Day-sized swing of this mix, from the 5-minute moves. Omitted when the window is too short. */
+            swingPct?: number;
+            /** @description The same scale if correlations were zero. */
+            apartPct?: number;
+            samples: number;
+            /** @description Coins left out because they do not share enough minutes. Not zeros. */
+            missing: string[];
+            note: string;
+            add?: components["schemas"]["PortfolioCorrAdd"];
+        };
         OrderPreview: {
             /** @enum {string} */
             product?: "spot" | "margin";
@@ -10463,6 +10541,12 @@ export interface components {
             borrowedPrincipal?: number;
             borrowedAsset?: string;
             risk?: components["schemas"]["OrderPreviewRisk"];
+            /**
+             * @description How the open coins moved together, and how this order's notional
+             *     would change the day swing (`add`). Omitted when that read failed.
+             *     The price is still returned.
+             */
+            correlation?: components["schemas"]["PortfolioCorrelation"];
             sizing?: components["schemas"]["OrderPreviewSizing"];
             /** @description Take-profit and stop-loss outcomes for an OCO or a bracket. */
             legs?: components["schemas"]["OrderPreviewLeg"][];
@@ -16687,6 +16771,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+            400: components["responses"]["Error"];
+        };
+    };
+    getPortfolioCorrelation: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                portfolioId?: string;
+                /** @description Venue for addSymbol. Empty uses binance. */
+                addExchange?: string;
+                /** @description Pair to add, such as SOLUSDT. */
+                addSymbol?: string;
+                /** @description buy, sell, long, or short. Empty means buy. */
+                addSide?: string;
+                /** @description Absolute quote notional of the extra line. */
+                addNotional?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Open-book correlation, and the book after the extra line when asked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PortfolioCorrelation"];
                 };
             };
             400: components["responses"]["Error"];

@@ -76,6 +76,9 @@ func OrderPreviewPayload(p *domain.OrderPreview) map[string]any {
 	if len(p.ReasonHistory) > 0 {
 		out["reasonHistory"] = p.ReasonHistory
 	}
+	if p.Correlation != nil {
+		out["correlation"] = p.Correlation
+	}
 	return out
 }
 

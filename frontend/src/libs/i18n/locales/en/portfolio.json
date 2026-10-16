@@ -43,6 +43,27 @@
     "margin": "Margin equity {{now}} → {{next}}",
     "liquidated": "{{n}} margin position would be liquidated"
   },
+  "correlation": {
+    "title": "Do these coins move together",
+    "hint": "The last day of 5-minute moves. Swing is how large a day of those moves is for this mix. Apart is the same mix if the coins had moved independently. A short offsets a long. A coin without enough shared minutes is left out.",
+    "loading": "Reading the last day…",
+    "failed": "The correlation could not be read.",
+    "empty": "No open coin to compare.",
+    "incomplete": "Not enough shared minutes to measure the book.",
+    "one": "{{asset}} is the only open coin. Its day swing is {{swing}}%. There is no second coin to spread the risk.",
+    "together": "These coins have been moving together ({{corr}}). The day's swing is {{swing}}%. If they had moved independently it would be {{apart}}%. Different coins have not spread this risk.",
+    "hedge": "These coins have been moving together ({{corr}}). Shorts offset longs, so the day swing is {{swing}}% rather than {{apart}}%.",
+    "inverse": "These coins have been moving in opposite directions ({{corr}}). The day's swing is {{swing}}%.",
+    "mixed": "These coins have not been moving as one ({{corr}}). The day's swing is {{swing}}%. Independent would be {{apart}}%.",
+    "pair": "{{left}} and {{right}}: {{corr}} ({{relation}})",
+    "missing": "Left out, not enough shared minutes: {{names}}.",
+    "relation": {
+      "follows": "moved together",
+      "loose": "loosely together",
+      "mixed": "mixed",
+      "inverse": "opposite"
+    }
+  },
   "risk": {
     "title": "Total exposure",
     "hint": "New buys stop once all coins together pass this share of equity. Positions you already hold stay open.",
@@ -137,6 +158,11 @@
     "leverage": "{{lev}}x",
     "weight": "{{asset}} would be {{pct}} of the book",
     "exposure": "Coins together would be {{pct}} of the book",
+    "corrUp": "This order raises the day swing from {{before}} to {{after}}.",
+    "corrDown": "This order lowers the day swing from {{before}} to {{after}}.",
+    "corrSame": "This order leaves the day swing near {{before}}.",
+    "corrFirst": "This would be the only open coin. Its day swing would be {{after}}.",
+    "corrUnknown": "This coin does not share enough minutes with the book, so the change in swing is not shown.",
     "legTakeProfit": "Take profit",
     "legStopLoss": "Stop loss",
     "riskBudget": "Risk budget",

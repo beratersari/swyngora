@@ -95,6 +95,10 @@ type OrderPreview struct {
 	// kind the live read says now. Nil when this preview does not name a reason,
 	// or when that close list could not be read. The price is still valid then.
 	ReasonHistory []SituationLeaveRow
+	// Correlation is how the open coins move together, and how this order's
+	// notional would change the book's day swing. Nil when the tape could not
+	// be read. The price is still valid then.
+	Correlation *PortfolioCorrelation
 }
 
 // QuoteFill is the slipped fill, notional, fee, and cash movement for a quantity.
