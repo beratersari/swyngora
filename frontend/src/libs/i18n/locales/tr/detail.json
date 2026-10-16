@@ -603,6 +603,7 @@
       "poc": "POC",
       "aria": "Fiyata göre alış ve satış baskısı",
       "hint": "Her satır o fiyattaki agresif işlemlerdir. Yeşil alış, kırmızı satış. POC en yoğun satırdır. Bir taraf diğerinin en az 3 katıysa rozet görünür.",
+      "missing": "{{venues}} bu pencerenin başına ulaşmıyor. Birleşik merdiven kapalı.",
       "truncated": "Bu pencere kısmen kayıtlı, daha eski dakikalar eksik olabilir.",
       "imbalanceCount": "{{buy}} alış dengesizliği · {{sell}} satış dengesizliği",
       "buyImbalance": "{{ratio}} alış",

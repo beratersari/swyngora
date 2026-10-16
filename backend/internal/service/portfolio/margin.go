@@ -701,9 +701,9 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 		return nil, nil, err
 	}
 	cost := s.paperCost(ex)
-	price := domain.ApplySlippage(last, domain.MarginOpenTradeSide(side), cost.SlippageRate)
-	if price <= 0 {
-		return nil, nil, fmt.Errorf("%w: invalid fill price after slippage", domain.ErrInvalidArgument)
+	price, err := s.executionPrice(ctx, ex, sym, domain.MarginOpenTradeSide(side), in.Quantity, last, 0)
+	if err != nil {
+		return nil, nil, err
 	}
 	openFee := domain.FeeAmount(in.Quantity, price, cost.FeeRate)
 	entry := domain.EffectiveMarginEntry(side, price, cost.FeeRate)
@@ -1291,8 +1291,8 @@ func (s *Service) tryFillMarginLimit(ctx context.Context, o *domain.MarginOrder,
 		return false
 	}
 	cost := s.paperCost(o.Exchange)
-	price := domain.ApplySlippage(last, domain.MarginOpenTradeSide(o.Side), cost.SlippageRate)
-	if price <= 0 {
+	price, err := s.executionPrice(ctx, o.Exchange, o.Symbol, domain.MarginOpenTradeSide(o.Side), o.Quantity, last, o.LimitPrice)
+	if err != nil || price <= 0 {
 		return false
 	}
 	openFee := domain.FeeAmount(o.Quantity, price, cost.FeeRate)
@@ -1413,9 +1413,16 @@ func (s *Service) closeMarginAt(ctx context.Context, pos *domain.MarginPosition,
 		remainI := cur.DebtInterest - ip
 
 		cost := s.paperCost(cur.Exchange)
-		fill := domain.ApplySlippage(price, domain.MarginCloseTradeSide(cur.Side), cost.SlippageRate)
-		if fill <= 0 {
-			fill = price
+		fill, ferr := s.executionPrice(ctx, cur.Exchange, cur.Symbol, domain.MarginCloseTradeSide(cur.Side), cq, price, 0)
+		if ferr != nil {
+			protective := reason == domain.MarginCloseLiquidation || reason == domain.MarginCloseStopLoss || reason == domain.MarginCloseTakeProfit
+			if !protective {
+				return nil, nil, ferr
+			}
+			fill = domain.ApplySlippage(price, domain.MarginCloseTradeSide(cur.Side), cost.SlippageRate)
+			if fill <= 0 {
+				fill = price
+			}
 		}
 		closeFee := domain.FeeAmount(cq, fill, cost.FeeRate)
 		exit := domain.EffectiveMarginExit(cur.Side, fill, cost.FeeRate)

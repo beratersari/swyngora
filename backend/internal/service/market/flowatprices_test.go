@@ -3,6 +3,7 @@ package market
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -42,6 +43,40 @@ func TestGetFlowAtPrices_LevelAtPrice(t *testing.T) {
 	}
 	if row.BuyVolume != 8_000_000 || row.SellVolume != 2_000_000 || row.Delta != 6_000_000 || row.Trades != 2 {
 		t.Fatalf("65520 %+v", row)
+	}
+}
+
+func TestGetFlowAtPrices_LateVenueKeepsCombinedOff(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Minute)
+	from := now.Add(-4 * time.Hour)
+	store := footprintRows{rows: []domain.FlowAtPricesCell{
+		profilePrint(domain.ExchangeBinance, "BTCUSDT", from, 65200, 40, 10),
+		profilePrint(domain.ExchangeBybit, "BTCUSDT", now.Add(-30*time.Minute), 65200, 5, 5),
+		profilePrint(domain.ExchangeOKX, "BTCUSDT", from, 65200, 8, 2),
+	}}
+	svc := New(&fakeMarket{ticker: &domain.Ticker24h{LastPrice: "65500"}}, &fakeSupply{}).
+		WithRecentPrints(profilePorts(domain.ExchangeBinance, domain.ExchangeBybit, domain.ExchangeOKX)).
+		WithFlowAtPricesHistory(store)
+	got, err := svc.GetFlowAtPrices(context.Background(), "all", "BTCUSDT", "4h", nil, nil, 100, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Definite || got.Combined != nil {
+		t.Fatalf("combined should stay off: %+v missing=%v", got.Combined, got.Missing)
+	}
+	if len(got.Missing) != 1 || got.Missing[0] != domain.ExchangeBybit {
+		t.Fatalf("missing %v", got.Missing)
+	}
+	if !strings.Contains(got.Summary, "bybit") {
+		t.Fatalf("summary %q", got.Summary)
+	}
+	for _, v := range got.Venues {
+		if v.Exchange == domain.ExchangeBybit {
+			continue
+		}
+		if !v.Complete || len(v.Levels) == 0 {
+			t.Fatalf("covered venue %+v", v.Exchange)
+		}
 	}
 }
 

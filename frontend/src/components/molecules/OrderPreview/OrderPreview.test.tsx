@@ -60,6 +60,25 @@ describe('OrderPreview', () => {
     expect(screen.getByText(/risk budget|risk bütçesi/i)).toBeInTheDocument();
   });
 
+  it('says the visible book cannot hold the size', () => {
+    renderWithTheme(
+      <OrderPreview
+        preview={{
+          ...blockedBuy,
+          fillsNow: false,
+          bookSource: 'book',
+          bookExhausted: true,
+          bookVisibleQuantity: 1,
+          fillPrice: 100,
+        }}
+      />,
+    );
+    expect(screen.getByText(/average of the visible book|görünen defterin ortalaması/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/cannot hold this size|bu büyüklüğü taşımıyor/i),
+    ).toBeInTheDocument();
+  });
+
   it('says nothing was placed', () => {
     renderWithTheme(<OrderPreview preview={blockedBuy} />);
     expect(screen.getByText(/preview only|yalnızca önizleme/i)).toBeInTheDocument();

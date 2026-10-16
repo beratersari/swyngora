@@ -59,6 +59,37 @@ describe('FlowFootprint', () => {
     expect(poc?.getAttribute('title')).toContain('buy');
   });
 
+  it('names a venue that did not reach the window and does not draw another venue as the combined ladder', () => {
+    renderWithProviders(
+      <FlowFootprint
+        report={{
+          exchange: 'all',
+          definite: false,
+          missing: ['bybit'],
+          summary: 'bybit did not reach the start of this window.',
+          venues: [
+            {
+              exchange: 'binance',
+              levels: [
+                {
+                  price: '65520',
+                  high: '65530',
+                  buyVolume: '10',
+                  sellVolume: '1',
+                  volume: '11',
+                  delta: '9',
+                  trades: 2,
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByText(/bybit did not reach the start of this window/i)).toBeInTheDocument();
+    expect(screen.queryByRole('listitem')).not.toBeInTheDocument();
+  });
+
   it('renders nothing when the ladder is empty', () => {
     const { container } = renderWithProviders(<FlowFootprint report={{ summary: 'none', combined: { levels: [] } }} />);
     expect(container).toBeEmptyDOMElement();

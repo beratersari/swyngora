@@ -136,7 +136,8 @@
     "lossAtStop": "Loss at stop",
     "sized": "{{pct}} of the book. The size loses about {{budget}} if the stop fills.",
     "stopNotAttached": "This stop only sizes the buy. A market or limit order does not place it.",
-    "note": "Preview only — nothing was placed. Fee and slippage match a paper fill. Risk limits block new buys and new margin opens. Sells are not blocked. Not real money.",
+    "fromBook": "The fill is the average of the visible book.",
+    "note": "Preview only — nothing was placed. A crypto fill walks the visible book. Equities use a fixed slippage. A size the book cannot hold is not filled. Risk limits block new buys and new margin opens. Sells are not blocked. Not real money.",
     "warnings": {
       "blocked": "Risk limits would block this order.",
       "dailyLoss": "Today's loss limit is already hit. Deposits and withdrawals are not part of that loss.",
@@ -145,7 +146,8 @@
       "cash": "Not enough available cash.",
       "quantity": "Not enough available quantity.",
       "borrow": "This would pass the borrow limit.",
-      "stopBeyondLiquidation": "The stop is past liquidation, so the position would close there first. The loss would not be the stop distance."
+      "stopBeyondLiquidation": "The stop is past liquidation, so the position would close there first. The loss would not be the stop distance.",
+      "book": "The visible book cannot hold this size. Nothing would be filled."
     }
   },
   "margin": {

@@ -91,6 +91,7 @@ export function previewWarnings(preview: OrderPreview): PreviewWarningId[] {
     quantity: Boolean(preview.insufficientQuantity),
     borrow: Boolean(preview.borrowLimitHit),
     stopBeyondLiquidation: Boolean(preview.sizing?.stopBeyondLiquidation),
+    book: Boolean(preview.bookExhausted),
   };
   return PREVIEW_WARNING_IDS.filter((id) => hit[id]);
 }

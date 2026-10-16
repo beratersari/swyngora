@@ -166,7 +166,18 @@ func (s *Service) PreviewOrder(ctx context.Context, in OrderPreviewInput) (*doma
 	if product == "margin" {
 		return s.previewMargin(ctx, p, out, in, ex, last, cost, avail, snap)
 	}
-	return s.previewSpot(out, in, clientID, ex, sym, last, cost, avail, p.CashBalance, posQty, avg, availQty, lots, lotMethod, snap)
+	return s.previewSpot(ctx, out, in, clientID, ex, sym, last, cost, avail, p.CashBalance, posQty, avg, availQty, lots, lotMethod, snap)
+}
+
+func stampBook(out *domain.OrderPreview, q domain.PaperFillQuote) {
+	if out == nil {
+		return
+	}
+	out.BookSource = q.Source
+	out.BookExhausted = q.Exhausted
+	out.BookVisibleQuantity = q.VisibleQuantity
+	out.BookFilledQuantity = q.FilledQuantity
+	out.BookLevels = q.LevelsUsed
 }
 
 func (s *Service) previewSnap(ctx context.Context, p *domain.Portfolio, asset string) (riskSnap, error) {
@@ -198,6 +209,7 @@ func (s *Service) previewSnap(ctx context.Context, p *domain.Portfolio, asset st
 }
 
 func (s *Service) previewSpot(
+	ctx context.Context,
 	out *domain.OrderPreview,
 	in OrderPreviewInput,
 	bookID string,
@@ -223,7 +235,24 @@ func (s *Service) previewSpot(
 		}
 		out.Side = string(side)
 		out.FillsNow = true
-		fill, notional, fee, debit, credit := domain.QuoteFill(side, last, in.Quantity, cost)
+		q, qerr := s.quoteFill(ctx, ex, sym, side, in.Quantity, last, 0)
+		if qerr != nil {
+			return nil, qerr
+		}
+		stampBook(out, q)
+		fillRef := last
+		costUsed := cost
+		if q.Source == domain.PaperFillBook {
+			if q.Exhausted || q.Price <= 0 {
+				out.FillsNow = false
+				out.ReferencePrice = last
+				out.FillPrice = q.Price
+				return out, nil
+			}
+			fillRef = q.Price
+			costUsed.SlippageRate = 0
+		}
+		fill, notional, fee, debit, credit := domain.QuoteFill(side, fillRef, in.Quantity, costUsed)
 		if fill <= 0 {
 			return nil, fmt.Errorf("%w: invalid fill price after slippage", domain.ErrInvalidArgument)
 		}
@@ -382,6 +411,21 @@ func (s *Service) previewMargin(
 		reference = in.LimitPrice
 	} else {
 		out.FillsNow = true
+		q, qerr := s.quoteFill(ctx, ex, out.Symbol, tradeSide, in.Quantity, last, 0)
+		if qerr != nil {
+			return nil, qerr
+		}
+		stampBook(out, q)
+		if q.Source == domain.PaperFillBook {
+			if q.Exhausted || q.Price <= 0 {
+				out.FillsNow = false
+				out.ReferencePrice = last
+				out.FillPrice = q.Price
+				return out, nil
+			}
+			reference = q.Price
+			cost.SlippageRate = 0
+		}
 	}
 	fill, notional, fee, _, _ := domain.QuoteFill(tradeSide, reference, in.Quantity, cost)
 	if fill <= 0 {

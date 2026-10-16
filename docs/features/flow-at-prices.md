@@ -12,8 +12,11 @@ prints hit that row, or what the **delta** was.
 `GET /api/v1/market/flow-at-prices?symbol=BTCUSDT`
 
 - Works for BTC and other linear USDT pairs the venues list
-- `exchange=all` (default): **Binance** USD-M and **Bybit** linear
-  separately plus `combined`
+- `exchange=all` (default): **Binance** USD-M, **Bybit** linear, and
+  **OKX** USDT-swap separately. `combined` is set only when every
+  requested venue reaches the window open. A venue that starts later
+  is named in `missing` and is not added as zero. A covered venue with
+  no prints is a real empty ladder.
 - Time range: `window=5m|15m|1h|4h|1d|3d|7d|30d` (default `15m`) **or**
   `startTime` + `endTime` (RFC3339 or unix ms). Max **30 days**
 - Optional `tickSize` (price row width, e.g. `10`). Omit to pick a row

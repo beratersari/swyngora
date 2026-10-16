@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	paperNote = "Paper trading only — simulated fills at last price plus venue slippage and taker fee. Not financial advice. No real money."
+	paperNote = "Paper trading only — crypto fills walk the visible spot book. Equities use last price plus a fixed slippage. A size the book cannot hold is not filled. Taker fee applies. Not financial advice. No real money."
 )
 
 // PriceFetcher loads last prices for paper fills and marks.
@@ -34,10 +34,16 @@ type AccountChecker interface {
 	IsClosed(ctx context.Context, clientID string) (bool, *domain.Account, error)
 }
 
+// BookSource loads one venue's visible spot book for a paper fill.
+type BookSource interface {
+	GetRawOrderBook(ctx context.Context, exchange, symbol string) (*domain.RawOrderBook, error)
+}
+
 // Service orchestrates paper-trading portfolios.
 type Service struct {
 	store      domain.PortfolioPort
 	market     PriceFetcher
+	books      BookSource
 	sink       domain.PortfolioChangeSink
 	account    AccountChecker
 	costFor    func(domain.Exchange) domain.TradingCost
@@ -72,10 +78,58 @@ func (s *Service) paperCost(ex domain.Exchange) domain.TradingCost {
 	return domain.TradingCostFor(ex)
 }
 
+// SetBookSource prices crypto fills from the visible spot book. Optional.
+// Without it, fills keep the fixed slippage used by tests and equities.
+func (s *Service) SetBookSource(books BookSource) {
+	if s != nil {
+		s.books = books
+	}
+}
+
 // SetSituationSource stores the coin-page read on new paper orders. Optional.
 func (s *Service) SetSituationSource(src SituationSource) {
 	if s != nil {
 		s.situations = src
+	}
+}
+
+// quoteFill prices qty from the spot book when one is configured.
+// Equities and a service with no book source use the fixed slippage.
+// limit > 0 keeps only prices at or better than the limit.
+func (s *Service) quoteFill(ctx context.Context, ex domain.Exchange, sym string, side domain.TradeSide, qty, reference, limit float64) (domain.PaperFillQuote, error) {
+	cost := s.paperCost(ex)
+	if s == nil || s.books == nil || domain.IsEquityExchange(ex) {
+		return domain.QuoteSlippageFill(side, reference, qty, cost), nil
+	}
+	raw, err := s.books.GetRawOrderBook(ctx, string(ex), sym)
+	if err != nil {
+		return domain.PaperFillQuote{}, err
+	}
+	return domain.WalkPaperBook(side, qty, raw, limit), nil
+}
+
+// executionPrice is the price a paper fill books.
+// A crypto book that cannot hold qty returns ErrBookExhausted and does not invent a worse price.
+func (s *Service) executionPrice(ctx context.Context, ex domain.Exchange, sym string, side domain.TradeSide, qty, reference, limit float64) (float64, error) {
+	q, err := s.quoteFill(ctx, ex, sym, side, qty, reference, limit)
+	if err != nil {
+		return 0, err
+	}
+	if q.Source == domain.PaperFillBook && (q.Exhausted || q.Price <= 0) {
+		return 0, domain.ErrBookExhausted
+	}
+	if q.Price <= 0 {
+		return 0, fmt.Errorf("%w: invalid fill price", domain.ErrInvalidArgument)
+	}
+	return q.Price, nil
+}
+
+func pendingBookLimit(o domain.PendingOrder) float64 {
+	switch o.Type {
+	case domain.PendingLimitBuy, domain.PendingLimitSell:
+		return o.TriggerPrice
+	default:
+		return 0
 	}
 }
 
@@ -569,9 +623,9 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 		}
 	}
 	cost := s.paperCost(ex)
-	price := domain.ApplySlippage(last, side, cost.SlippageRate)
-	if price <= 0 {
-		return nil, nil, fmt.Errorf("%w: invalid fill price after slippage", domain.ErrInvalidArgument)
+	price, err := s.executionPrice(ctx, ex, sym, side, in.Quantity, last, 0)
+	if err != nil {
+		return nil, nil, err
 	}
 	if in.RecurringPlanID != "" {
 		qty, err := s.enforceRecurringLimits(ctx, clientID, in, last, cost, price)
@@ -1867,8 +1921,14 @@ func (s *Service) tryFillPendingOrderLocked(ctx context.Context, o domain.Pendin
 	}
 	now := time.Now().UTC()
 	cost := s.paperCost(o.Exchange)
-	fillPrice := domain.ApplySlippage(lastPrice, o.Side, cost.SlippageRate)
-	if fillPrice <= 0 {
+	quote, qerr := s.quoteFill(ctx, o.Exchange, o.Symbol, o.Side, remaining, lastPrice, pendingBookLimit(o))
+	if qerr != nil || quote.Price <= 0 || quote.FilledQuantity < domain.MinTradeQuantity {
+		if s.books != nil && !domain.IsEquityExchange(o.Exchange) {
+			return nil, false, nil
+		}
+		if qerr != nil {
+			return nil, false, qerr
+		}
 		return nil, false, nil
 	}
 	p, err := s.store.GetPortfolio(ctx, o.ClientID)
@@ -1883,12 +1943,16 @@ func (s *Service) tryFillPendingOrderLocked(ctx context.Context, o domain.Pendin
 		return nil, false, perr
 	}
 
-	// How much can we fill this pass?
-	fillQty := domain.ClampFillQty(remaining, 0, maxFillQty)
+	// How much can we fill this pass? A book quote caps the size at the visible quantity.
+	fillPrice := quote.Price
+	fillQty := domain.ClampFillQty(remaining, quote.FilledQuantity, maxFillQty)
 	switch o.Side {
 	case domain.TradeSideBuy:
-		// Bound by remaining reserved cash at slipped fill + fee.
+		// Bound by remaining reserved cash at the book (or slipped) price plus the fee.
 		maxByRes := domain.MaxBuyFillQty(remaining, o.ReservedCash, fillPrice, cost.FeeRate)
+		if quote.FilledQuantity < maxByRes {
+			maxByRes = quote.FilledQuantity
+		}
 		if maxFillQty > 0 && maxFillQty < maxByRes {
 			fillQty = maxFillQty
 		} else {
@@ -1905,8 +1969,18 @@ func (s *Service) tryFillPendingOrderLocked(ctx context.Context, o domain.Pendin
 			maxByRes = remaining
 		}
 		fillQty = domain.ClampFillQty(maxByRes, 0, maxFillQty)
+		if quote.FilledQuantity < fillQty {
+			fillQty = quote.FilledQuantity
+		}
 	default:
 		return nil, false, fmt.Errorf("%w: invalid order side", domain.ErrInvalidArgument)
+	}
+	if fillQty+1e-12 < quote.FilledQuantity && quote.Source == domain.PaperFillBook {
+		again, aerr := s.quoteFill(ctx, o.Exchange, o.Symbol, o.Side, fillQty, lastPrice, pendingBookLimit(o))
+		if aerr != nil || again.Exhausted || again.Price <= 0 {
+			return nil, false, nil
+		}
+		fillPrice = again.Price
 	}
 	if fillQty < domain.MinTradeQuantity {
 		// Cannot fill any this pass — leave open for GTC; IOC/FOK handled by ProcessOpenOrder.

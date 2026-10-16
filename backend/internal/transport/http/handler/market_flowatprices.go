@@ -129,6 +129,8 @@ type flowAtPricesResponse struct {
 	TickSize string                 `json:"tickSize"`
 	Venues   []flowAtPricesVenueDTO `json:"venues"`
 	Combined *flowAtPricesVenueDTO  `json:"combined,omitempty"`
+	Definite bool                   `json:"definite"`
+	Missing  []string               `json:"missing,omitempty"`
 	Summary  string                 `json:"summary"`
 	Note     string                 `json:"note"`
 }
@@ -141,10 +143,18 @@ func flowAtPricesToDTO(a *domain.FlowAtPricesReport) flowAtPricesResponse {
 	for _, v := range a.Venues {
 		venues = append(venues, flowAtPricesVenueToDTO(v))
 	}
+	var missing []string
+	if len(a.Missing) > 0 {
+		missing = make([]string, 0, len(a.Missing))
+		for _, ex := range a.Missing {
+			missing = append(missing, string(ex))
+		}
+	}
 	out := flowAtPricesResponse{
 		Symbol: a.Symbol, Exchange: a.Exchange, Window: a.Window,
 		From: a.From.UTC(), To: a.To.UTC(), AsOf: a.AsOf.UTC(),
-		TickSize: formatHistQty(a.TickSize), Venues: venues, Summary: a.Summary, Note: a.Note,
+		TickSize: formatHistQty(a.TickSize), Venues: venues,
+		Definite: a.Definite, Missing: missing, Summary: a.Summary, Note: a.Note,
 	}
 	if a.MinPrice > 0 {
 		out.MinPrice = formatHistQty(a.MinPrice)

@@ -10,7 +10,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const flowAtPricesDisclaimer = "Aggressive futures prints binned by price (USDT notional). Each row is market buy vs sell, print count, and delta (buy − sell) at that price — not candle volume smeared across high–low. Binance, Bybit, and OKX use the live trade stream when it already covers the window, and the public trade list until it does. Closed minutes are kept while this process runs (about 30 days) so 4h, 1d, 3d, 7d, and 30d use that stored ladder. Binance minutes for the liquid list are also filled from public aggTrades, about 7 days. Bybit and OKX minutes before this process started are still missing. trades is aggregated print count, not individual orders. Informational only — not financial advice."
+const flowAtPricesDisclaimer = "Aggressive futures prints binned by price (USDT notional). Each row is market buy vs sell, print count, and delta (buy − sell) at that price — not candle volume smeared across high–low. Binance, Bybit, and OKX use the live trade stream when it already covers the window, and the public trade list until it does. Closed minutes are kept while this process runs (about 30 days) so 4h, 1d, 3d, 7d, and 30d use that stored ladder. Binance minutes for the liquid list are also filled from public aggTrades, about 7 days. Bybit and OKX minutes before this process started are still missing. Combined is present only when every requested venue reaches the window open. A venue that starts later is named in missing and is not counted as zero. A quiet covered venue is a real empty ladder. trades is aggregated print count, not individual orders. Informational only — not financial advice."
 
 // GetFlowAtPrices returns buy/sell/count/delta at each traded price.
 func (s *Service) GetFlowAtPrices(ctx context.Context, exchange, symbol, window string, start, end *time.Time, tickSize, minPrice, maxPrice float64) (*domain.FlowAtPricesReport, error) {
@@ -130,14 +130,49 @@ func (s *Service) GetFlowAtPrices(ctx context.Context, exchange, symbol, window 
 		if px <= 0 {
 			px = last
 		}
-		out.Venues = append(out.Venues, flowVenue(f.ex, symbol, f.prints, f.cells, tick, px, minPrice, maxPrice, from, to))
+		v := flowVenue(f.ex, symbol, f.prints, f.cells, tick, px, minPrice, maxPrice, from, to)
+		if s.flowTapeCovers(f.ex, symbol, from, to) || domain.FlowRangeCovered(v.KnownFrom, from, to.Sub(from)) {
+			v.Complete = true
+			v.Truncated = false
+			if len(v.Levels) == 0 {
+				v.Error = ""
+				v.Summary = domain.ExplainFlowAtPricesVenue(v)
+			}
+		}
+		out.Venues = append(out.Venues, v)
 	}
 	sort.Slice(out.Venues, func(i, j int) bool {
 		return string(out.Venues[i].Exchange) < string(out.Venues[j].Exchange)
 	})
-	if ex == "all" && len(out.Venues) > 0 {
-		out.Combined = domain.CombineFlowAtPricesVenues(symbol, out.Venues, tick, last, from, to)
+	if ex == "all" {
+		out.Definite = len(out.Venues) > 0
+		for _, v := range out.Venues {
+			if v.Complete && v.Error == "" {
+				continue
+			}
+			out.Definite = false
+			out.Missing = append(out.Missing, v.Exchange)
+		}
+		if out.Definite {
+			out.Combined = domain.CombineFlowAtPricesVenues(symbol, out.Venues, tick, last, from, to)
+		}
+	} else if len(out.Venues) == 1 {
+		out.Definite = out.Venues[0].Complete && out.Venues[0].Error == ""
 	}
 	out.Summary = domain.ExplainFlowAtPricesReport(*out)
 	return out, nil
+}
+
+// flowTapeCovers is true when the live trade stream already reaches the window open,
+// including a quiet stream that printed nothing.
+func (s *Service) flowTapeCovers(ex domain.Exchange, symbol string, from, to time.Time) bool {
+	if s == nil {
+		return false
+	}
+	mem, ok := s.printPort(ex).(domain.MemoryPrintPort)
+	if !ok || mem == nil {
+		return false
+	}
+	_, covered := mem.MemoryPrints(symbol, from, to)
+	return covered
 }

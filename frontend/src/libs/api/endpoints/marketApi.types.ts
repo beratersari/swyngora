@@ -498,6 +498,10 @@ export type FlowAtPricesReport = {
   summary?: string;
   note?: string;
   tickSize?: string;
+  /** False when a requested venue does not reach the window open. */
+  definite?: boolean;
+  /** Venues left out of combined. They are not treated as zero. */
+  missing?: string[];
   venues?: FlowAtPricesVenue[];
   combined?: FlowAtPricesVenue;
 };

@@ -136,7 +136,8 @@
     "lossAtStop": "Stopta kayıp",
     "sized": "Defterin {{pct}} kadarı. Stop dolarsa kayıp yaklaşık {{budget}} olur.",
     "stopNotAttached": "Bu zarar kes yalnızca alım miktarını hesaplar. Piyasa veya limit emri onu göndermez.",
-    "note": "Yalnızca önizleme — hiçbir emir gönderilmedi. Komisyon ve kayma kağıt dolumla aynıdır. Risk limitleri yeni alışları ve yeni marjin açılışlarını durdurur. Satışlar durmaz. Gerçek para değildir.",
+    "fromBook": "Dolum, görünen defterin ortalamasıdır.",
+    "note": "Yalnızca önizleme — hiçbir emir gönderilmedi. Kripto dolumu görünen defteri yürür. Hisseler sabit kayma kullanır. Defterin taşımadığı büyüklük dolmaz. Risk limitleri yeni alışları ve yeni marjin açılışlarını durdurur. Satışlar durmaz. Gerçek para değildir.",
     "warnings": {
       "blocked": "Risk limitleri bu emri durdururdu.",
       "dailyLoss": "Bugünkü zarar limiti zaten dolu. Yatırma ve çekme bu zararın parçası değildir.",
@@ -145,7 +146,8 @@
       "cash": "Kullanılabilir nakit yetmiyor.",
       "quantity": "Kullanılabilir miktar yetmiyor.",
       "borrow": "Bu emir borç limitini aşardı.",
-      "stopBeyondLiquidation": "Zarar kes likidasyonun ötesinde, bu yüzden pozisyon önce orada kapanır. Kayıp, zarar kes mesafesi olmaz."
+      "stopBeyondLiquidation": "Zarar kes likidasyonun ötesinde, bu yüzden pozisyon önce orada kapanır. Kayıp, zarar kes mesafesi olmaz.",
+      "book": "Görünen defter bu büyüklüğü taşımıyor. Hiçbir şey dolmaz."
     }
   },
   "margin": {

@@ -603,6 +603,7 @@
       "poc": "POC",
       "aria": "Buy and sell pressure by price",
       "hint": "Each row is aggressive prints at that price. Green is buying, red is selling. POC is the busiest row. A badge marks a side at least 3× the other.",
+      "missing": "{{venues}} did not reach the start of this window. The combined ladder stays off.",
       "truncated": "This window is only partly stored, so earlier minutes may be missing.",
       "imbalanceCount": "{{buy}} buy imbalances · {{sell}} sell imbalances",
       "buyImbalance": "{{ratio}} buy",

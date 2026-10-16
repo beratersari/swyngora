@@ -4004,7 +4004,10 @@ paths:
         row at 65520. Built from aggressive **futures prints** (Binance
         USD-M aggTrades, Bybit recent trades), not candle volume smeared
         across high–low. The volume profile uses these same stored prints.
-        `exchange=all` (default) returns Binance and Bybit separately plus `combined`.
+        `exchange=all` (default) returns Binance, Bybit, and OKX separately.
+        `combined` is present only when every requested venue reaches the
+        window open. A venue that starts later is named in `missing` and
+        is not counted as zero. A quiet covered venue is a real empty ladder.
         Use `window` (`5m` / `15m` / `1h` / `4h` / `1d` / `3d` / `7d` / `30d`,
         default `15m`) or `startTime` + `endTime` (max 30d). The live
         tape is about the last hour on Binance and the newest ~1000
@@ -14558,7 +14561,7 @@ components:
           description: Last price for a market order, or the trigger the resting order uses.
         fillPrice:
           type: number
-          description: Reference price after adverse slippage.
+          description: Average price of the visible book for a crypto market order, or the reference after fixed slippage for an equity.
         notional: { type: number }
         fee: { type: number, description: Quote-currency taker fee }
         cashDebit:
@@ -14583,7 +14586,23 @@ components:
         borrowLimitHit: { type: boolean }
         fillsNow:
           type: boolean
-          description: True for a market order. A resting order shows the fill if the trigger is touched.
+          description: True for a market order the visible book can fill. A resting order shows the fill if the trigger is touched.
+        bookSource:
+          type: string
+          enum: [book, slippage]
+          description: book walks the visible spot book. slippage is the fixed equity rate, or crypto when no book is configured.
+        bookExhausted:
+          type: boolean
+          description: True when the visible book cannot hold the full size. Nothing is filled.
+        bookVisibleQuantity:
+          type: number
+          description: Size resting on the side the order would take.
+        bookFilledQuantity:
+          type: number
+          description: Size the visible book could take, which is less than quantity when bookExhausted is true.
+        bookLevels:
+          type: integer
+          description: How many price levels the walk used.
         leverage: { type: integer }
         initialMargin: { type: number }
         liquidationPrice: { type: number }

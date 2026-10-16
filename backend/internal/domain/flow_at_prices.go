@@ -113,8 +113,14 @@ type FlowAtPricesReport struct {
 	TickSize float64
 	Venues   []FlowAtPricesVenue
 	Combined *FlowAtPricesVenue
-	Summary  string
-	Note     string
+	// Definite is true when every requested venue reaches the window open.
+	// A quiet covered venue still counts. A late venue does not.
+	Definite bool
+	// Missing names venues that do not reach the window open.
+	// Their prints are not added into Combined.
+	Missing []Exchange
+	Summary string
+	Note    string
 }
 
 // ParseFlowAtPricesWindow accepts 5m / 15m / 1h / 4h / 1d / 3d / 7d / 30d (empty = 15m).
@@ -488,19 +494,31 @@ func ExplainFlowAtPricesVenue(v FlowAtPricesVenue) string {
 }
 
 // ExplainFlowAtPricesReport prefers combined, then the first venue with a POC.
+// A venue that does not reach the window open is named. Its prints are not the combined ladder.
 func ExplainFlowAtPricesReport(r FlowAtPricesReport) string {
-	if r.Combined != nil && r.Combined.POC.Volume > 0 {
-		return r.Combined.Summary
+	var head string
+	if !r.Definite && len(r.Missing) > 0 {
+		names := make([]string, len(r.Missing))
+		for i, ex := range r.Missing {
+			names[i] = string(ex)
+		}
+		head = strings.Join(names, ", ") + " did not reach the start of this window. "
+	}
+	if r.Definite && r.Combined != nil && r.Combined.POC.Volume > 0 {
+		return head + r.Combined.Summary
 	}
 	for _, v := range r.Venues {
-		if v.POC.Volume > 0 {
-			return v.Summary
+		if v.Complete && v.POC.Volume > 0 {
+			return head + string(v.Exchange) + ": " + v.Summary
 		}
 	}
 	for _, v := range r.Venues {
-		if v.Summary != "" {
-			return v.Summary
+		if v.Summary != "" && v.Error == "" {
+			return head + v.Summary
 		}
+	}
+	if head != "" {
+		return strings.TrimSpace(head)
 	}
 	return prettyBase(r.Symbol) + ": no aggressive prints in this range."
 }

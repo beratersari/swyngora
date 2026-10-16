@@ -49,7 +49,15 @@ export function FlowFootprint({ report }: FlowFootprintProps) {
   const { t } = useTranslation('detail');
   const venue = footprintVenue(report);
   const rows = footprintRows(venue?.levels);
-  if (!venue || rows.length === 0) return null;
+  const missing = (report?.missing ?? []).filter((name) => name.trim() !== '');
+  if (!venue || rows.length === 0) {
+    if (missing.length === 0) return null;
+    return (
+      <Text variant="caption" color="secondary">
+        {t('flow.footprint.missing', { venues: missing.join(', ') })}
+      </Text>
+    );
+  }
 
   const peak = sidePeak(rows);
   const imbalances = rows.filter((row) => imbalanceSide(row));

@@ -2,11 +2,78 @@ package portfolio
 
 import (
 	"context"
+	"errors"
 	"math"
 	"testing"
 
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
+
+type fakeBook struct {
+	book *domain.RawOrderBook
+}
+
+func (f fakeBook) GetRawOrderBook(context.Context, string, string) (*domain.RawOrderBook, error) {
+	return f.book, nil
+}
+
+func TestPreviewOrder_BookWalkPricesTheTicketAndDoesNotPlace(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	book := &domain.RawOrderBook{Asks: []domain.PriceLevel{{Price: 100, Quantity: 1}, {Price: 110, Quantity: 1}}}
+	svc := newSvc(t, px)
+	svc.SetBookSource(fakeBook{book: book})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "prev-book", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.PreviewOrder(ctx, OrderPreviewInput{
+		ClientID: "prev-book", Symbol: "BTCUSDT", Side: "buy", Quantity: 1.5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := (100 + 55) / 1.5
+	if got.BookSource != domain.PaperFillBook || got.BookExhausted || math.Abs(got.FillPrice-want) > 1e-9 || !got.FillsNow {
+		t.Fatalf("%+v", got)
+	}
+	view, err := svc.View(ctx, "prev-book")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(view.CashBalance-10000) > 1e-9 {
+		t.Fatalf("preview wrote cash %v", view.CashBalance)
+	}
+}
+
+func TestPlaceOrder_BookExhaustedDoesNotFill(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	book := &domain.RawOrderBook{Asks: []domain.PriceLevel{{Price: 100, Quantity: 1}}}
+	svc := newSvc(t, px)
+	svc.SetBookSource(fakeBook{book: book})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "prev-thin", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.PreviewOrder(ctx, OrderPreviewInput{
+		ClientID: "prev-thin", Symbol: "BTCUSDT", Side: "buy", Quantity: 3,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.BookExhausted || got.FillsNow || got.BookVisibleQuantity != 1 || got.FillPrice != 100 {
+		t.Fatalf("preview %+v", got)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "prev-thin", Symbol: "BTCUSDT", Side: "buy", Quantity: 3}); !errors.Is(err, domain.ErrBookExhausted) {
+		t.Fatalf("place %v", err)
+	}
+	view, err := svc.View(ctx, "prev-thin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(view.CashBalance-10000) > 1e-9 || len(view.Positions) != 0 {
+		t.Fatalf("thin book wrote a fill: cash=%v positions=%d", view.CashBalance, len(view.Positions))
+	}
+}
 
 func TestPreviewOrder_MarketBuyDoesNotPlace(t *testing.T) {
 	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}

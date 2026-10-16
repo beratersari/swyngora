@@ -9,6 +9,8 @@ export function flowNum(value?: string | number): number {
 export function footprintVenue(report?: FlowAtPricesReport | null): FlowAtPricesVenue | undefined {
   if (!report) return undefined;
   if ((report.combined?.levels?.length ?? 0) > 0) return report.combined;
+  // A late venue keeps the combined ladder off. One venue's rows are not the whole window.
+  if (report.exchange === 'all' && report.definite === false) return undefined;
   return report.venues?.find((v) => (v.levels?.length ?? 0) > 0 && !v.error) ?? report.venues?.[0];
 }
 

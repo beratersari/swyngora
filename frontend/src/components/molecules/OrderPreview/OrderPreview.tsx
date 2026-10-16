@@ -42,6 +42,7 @@ export function OrderPreview({ preview, loading, failed }: OrderPreviewProps) {
       {preview ? (
         <>
           <Text variant="caption" color="secondary">
+            {preview.bookSource === 'book' ? `${t('preview.fromBook')} ` : ''}
             {preview.fillsNow ? t('preview.fillsNow') : t('preview.rests')}
             {preview.product === 'margin' && (preview.leverage ?? 0) > 0
               ? ` · ${t('preview.leverage', { lev: preview.leverage })}`

@@ -96,19 +96,22 @@ Grantees select the book with `portfolioId` (UUID) or `ownerClientId` + name. Ca
 
 MCP: `list_portfolios`, `create_portfolio` (name), `rename_portfolio`, `delete_portfolio`, `share_portfolio`, `update_portfolio_share`, `revoke_portfolio_share`, `list_portfolio_shares`, `list_shared_portfolios`; other portfolio tools take optional `portfolioId`. Telegram: `/portfolio list`, `/portfolio create [balance] [name]`, `/portfolio use NAME`, `/portfolio share CLIENT trader`, `/portfolio shared`.
 
-### Fees and slippage
+### Fees and the book
 
-Every fill (market, pending, recurring DCA, margin open/close) uses a **slipped** price and a **taker fee** for that exchange:
+A crypto market fill, and a resting order when it triggers, walks that venue's visible spot book. The fill price is the average of the levels taken. A buy walks asks from low to high. A sell walks bids from high to low. A limit only takes prices at or better than the limit. A size the visible book cannot hold is not invented past the last level: a market order is rejected, and a resting order stays open. Equities have no book, so they still use last price plus the fixed slippage below. A liquidation, stop, or take-profit that the book cannot hold also falls back to that slippage so the protective close still happens.
+
+Every fill still pays a **taker fee**. The fixed slippage rates are:
 
 | Venue | Fee | Slippage |
 |-------|-----|----------|
 | Binance / Bybit | 0.10% | 0.05% |
 | Coinbase | 0.60% | 0.08% |
 
-- **Buy fill:** `last × (1 + slip)`. Cash debit is `qty × fill × (1 + fee)`. Tax-lot unit cost is `fill × (1 + fee)`.
-- **Sell fill:** `last × (1 − slip)`. Cash credit is `qty × fill × (1 − fee)`. Realized PnL uses net sell `fill × (1 − fee)` minus lot cost.
-- **Pending buy reservation:** `remaining × slipped trigger × (1 + fee)` so the reserved cash covers the fee (and worst-case slip) when the order fills.
-- Trades expose `price` (slipped fill), `fee` (quote), and `lastPrice` (pre-slip last).
+- **Crypto buy:** average of the visible asks. Cash debit is `qty × fill × (1 + fee)`. Tax-lot unit cost is `fill × (1 + fee)`.
+- **Crypto sell:** average of the visible bids. Cash credit is `qty × fill × (1 − fee)`. Realized PnL uses net sell `fill × (1 − fee)` minus lot cost.
+- **Equity fill:** `last × (1 ± slip)` with the rates below.
+- **Pending buy reservation:** `remaining × slipped trigger × (1 + fee)` so the reserved cash covers the fee. When the order triggers, the fill walks the book and only takes prices at or better than the limit.
+- Trades expose `price` (book average, or slipped equity fill), `fee` (quote), and `lastPrice` (the last print).
 
 `GET /api/v1/portfolio/trading-costs` lists the rates. MCP: `get_paper_trading_costs`.
 
@@ -181,7 +184,7 @@ See `docs/features/paper-margin.md`. Modes: `isolated` (default) vs `cross`; mod
 
 | `type` | Required fields | Fill condition (last price) | Side | Reservation |
 |--------|-----------------|------------------------------|------|-------------|
-| `market` (default) | `side`, `quantity` | Immediate at last price plus adverse slippage | buy / sell | Uses **available** cash/qty only (buy cash must cover fill + fee) |
+| `market` (default) | `side`, `quantity` | Immediate. Crypto walks the visible spot book (average price). Equities use last price plus adverse slippage. A size the book cannot hold is not filled | buy / sell | Uses **available** cash/qty only (buy cash must cover fill + fee) |
 | `limit_buy` | `quantity`, `triggerPrice` | last ≤ trigger | buy | Reserves `qty × slipped trigger × (1+fee)` cash |
 | `limit_sell` | `quantity`, `triggerPrice` | last ≥ trigger | sell | Reserves `quantity` of position |
 | `stop_loss` | `quantity`, `triggerPrice` | last ≤ trigger | sell | Reserves `quantity` of position |

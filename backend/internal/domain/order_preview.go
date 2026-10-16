@@ -3,7 +3,7 @@ package domain
 // Order preview is a read of what a paper order would cost and whether a risk
 // limit would block it. It does not place the order.
 
-const OrderPreviewNote = "Preview only — nothing was placed. Fee and slippage match a paper fill. Risk limits block new buys and new margin opens. Sells are not blocked. Not real money."
+const OrderPreviewNote = "Preview only — nothing was placed. A crypto fill walks the visible book. Equities use a fixed slippage. A size the book cannot hold is not filled. Risk limits block new buys and new margin opens. Sells are not blocked. Not real money."
 
 // OrderPreviewLeg is one fill the ticket is about to rest or send.
 // Role is fill, take_profit, or stop_loss.
@@ -68,15 +68,21 @@ type OrderPreview struct {
 	InsufficientQuantity bool
 	BorrowLimitHit       bool
 	FillsNow             bool
-	Leverage             int
-	InitialMargin        float64
-	LiquidationPrice     float64
-	BorrowedPrincipal    float64
-	BorrowedAsset        string
-	Risk                 OrderPreviewRisk
-	Legs                 []OrderPreviewLeg
-	Sizing               *OrderPreviewSizing
-	Note                 string
+	// BookSource is "book" when the fill walks the visible spot book, or "slippage" for equities and tests.
+	BookSource          string
+	BookExhausted       bool
+	BookVisibleQuantity float64
+	BookFilledQuantity  float64
+	BookLevels          int
+	Leverage            int
+	InitialMargin       float64
+	LiquidationPrice    float64
+	BorrowedPrincipal   float64
+	BorrowedAsset       string
+	Risk                OrderPreviewRisk
+	Legs                []OrderPreviewLeg
+	Sizing              *OrderPreviewSizing
+	Note                string
 }
 
 // QuoteFill is the slipped fill, notional, fee, and cash movement for a quantity.
