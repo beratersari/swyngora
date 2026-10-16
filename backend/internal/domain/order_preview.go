@@ -83,6 +83,14 @@ type OrderPreview struct {
 	Legs                []OrderPreviewLeg
 	Sizing              *OrderPreviewSizing
 	Note                string
+	// Situation is the live coin read for a spot buy, limit buy, or bracket.
+	// SituationStatus is ready, blank, failed, or skipped.
+	Situation       *CoinSituation
+	SituationStatus string
+	// ReasonSet reports that the preview named which clauses would be stored.
+	ReasonSet     bool
+	Reason        []string
+	ReasonMissing []string
 }
 
 // QuoteFill is the slipped fill, notional, fee, and cash movement for a quantity.

@@ -10150,6 +10150,11 @@ export interface components {
             leverage?: number;
             /** @description Margin limit price. */
             limitPrice?: number;
+            /**
+             * @description Clauses a spot buy, limit buy, or bracket would store.
+             *     Omit the field to leave the stored set unset. An empty array would store no read.
+             */
+            reason?: ("priceCvd" | "openInterest" | "liquidation" | "prints" | "funding" | "crowd" | "size")[];
         };
         OrderPreviewLeg: {
             /** @enum {string} */
@@ -10265,6 +10270,18 @@ export interface components {
             sizing?: components["schemas"]["OrderPreviewSizing"];
             /** @description Take-profit and stop-loss outcomes for an OCO or a bracket. */
             legs?: components["schemas"]["OrderPreviewLeg"][];
+            /** @description Live coin read for a spot buy, limit buy, or bracket. The whole read, so the ticket can mark a reason. */
+            situation?: components["schemas"]["CoinSituation"];
+            /**
+             * @description ready means at least one clause loaded. blank means the read loaded with no clauses.
+             *     failed means the read did not load; the price is still returned. skipped means this order does not store a reason.
+             * @enum {string}
+             */
+            situationStatus?: "ready" | "blank" | "failed" | "skipped";
+            /** @description Clauses that would be stored when the request named a reason. Empty when none of them are on the read. */
+            reason?: string[];
+            /** @description Named clauses that are blank on the live read and would not be stored. */
+            reasonMissing?: string[];
             note?: string;
         };
         PortfolioCashMovement: {
@@ -10464,6 +10481,12 @@ export interface components {
              * @enum {string}
              */
             lotMethod?: "fifo" | "lifo";
+            /** @description Coin read stored when this order was placed. A buy that named a reason keeps only those clauses. */
+            situation?: components["schemas"]["CoinSituation"];
+            /** @description True when the placer named which clauses this buy stores. */
+            reasonSet?: boolean;
+            /** @description Clause ids this buy stores. Empty when reasonSet is true and the order stores no read. */
+            reason?: string[];
         };
         /** @description At least one of triggerPrice or remainingQuantity is required. */
         AmendPendingOrderRequest: {
@@ -16669,6 +16692,12 @@ export interface operations {
                     lotMethod?: "fifo" | "lifo";
                     /** @description Optional client key; same key + same request replays the original result (header Idempotency-Key also accepted) */
                     idempotencyKey?: string;
+                    /**
+                     * @description Clauses a buy, limit buy, or bracket entry stores.
+                     *     Omit the field to store the whole read. An empty array stores no read.
+                     *     A sell ignores this and keeps the whole read, so a close can still be compared with each buy.
+                     */
+                    reason?: ("priceCvd" | "openInterest" | "liquidation" | "prints" | "funding" | "crowd" | "size")[];
                 };
             };
         };

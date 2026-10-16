@@ -3368,6 +3368,7 @@ export function CoinDetailPage() {
                   timeInForce: values.timeInForce,
                   lotMethod: values.lotMethod,
                   idempotencyKey: newPaperIdempotencyKey('detail'),
+                  reason: values.reason,
                 }).unwrap();
                 void message.success(
                   values.orderType !== 'market'

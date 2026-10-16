@@ -488,6 +488,8 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_
 		`ALTER TABLE trades ADD COLUMN last_price REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE trades ADD COLUMN situation_json TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE pending_orders ADD COLUMN situation_json TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE pending_orders ADD COLUMN reason_set INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE pending_orders ADD COLUMN reason_json TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE margin_trades ADD COLUMN fee REAL NOT NULL DEFAULT 0`,
 		`CREATE TABLE IF NOT EXISTS cash_movements (
 	id                  TEXT PRIMARY KEY NOT NULL,
@@ -1039,8 +1041,9 @@ const pendingOrderInsertSQL = `
 			id, client_id, exchange, symbol, order_type, side, quantity, filled_quantity, remaining_quantity,
 			trigger_price, reserved_cash, reserved_quantity, time_in_force, expires_at, status,
 			created_at, updated_at, filled_at, canceled_at, fill_trade_id, fill_price, reject_reason, cancel_reason,
-			oco_group_id, oco_peer_id, trail_type, trail_value, trail_peak, bracket_id, bracket_role, lot_method, situation_json
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			oco_group_id, oco_peer_id, trail_type, trail_value, trail_peak, bracket_id, bracket_role, lot_method, situation_json,
+			reason_set, reason_json
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 func (s *SQLite) txInsertPendingOrder(ctx context.Context, tx *sql.Tx, o domain.PendingOrder) error {
 	_, err := tx.ExecContext(ctx, pendingOrderInsertSQL,
@@ -1049,7 +1052,7 @@ func (s *SQLite) txInsertPendingOrder(ctx context.Context, tx *sql.Tx, o domain.
 		o.CreatedAt.UTC().Format(time.RFC3339Nano), o.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		nullTime(o.FilledAt), nullTime(o.CanceledAt), o.FillTradeID, o.FillPrice, o.RejectReason, o.CancelReason,
 		o.OCOGroupID, o.OCOPeerID, o.TrailType, o.TrailValue, o.TrailPeak, o.BracketID, o.BracketRole, lotMethodOrDefault(o.LotMethod),
-		marshalSituation(o.Situation),
+		marshalSituation(o.Situation), reasonSetValue(o), marshalReason(o),
 	)
 	return err
 }
@@ -1820,7 +1823,7 @@ const pendingOrderSelect = `
 		COALESCE(oco_group_id, ''), COALESCE(oco_peer_id, ''),
 		COALESCE(trail_type, ''), COALESCE(trail_value, 0), COALESCE(trail_peak, 0),
 		COALESCE(bracket_id, ''), COALESCE(bracket_role, ''), COALESCE(lot_method, 'fifo'),
-		COALESCE(situation_json, '')
+		COALESCE(situation_json, ''), COALESCE(reason_set, 0), COALESCE(reason_json, '')
 	FROM pending_orders`
 
 type scannable interface {
@@ -1829,19 +1832,22 @@ type scannable interface {
 
 func scanPendingOrder(row scannable) (*domain.PendingOrder, error) {
 	var o domain.PendingOrder
-	var ex, typ, side, tif, st, cAt, uAt, lotMethod, situation string
+	var ex, typ, side, tif, st, cAt, uAt, lotMethod, situation, reasonJSON string
+	var reasonSet int
 	var filledAt, canceledAt, expiresAt sql.NullString
 	if err := row.Scan(
 		&o.ID, &o.ClientID, &ex, &o.Symbol, &typ, &side, &o.Quantity, &o.FilledQuantity, &o.RemainingQuantity,
 		&o.TriggerPrice, &o.ReservedCash, &o.ReservedQuantity, &tif, &expiresAt, &st,
 		&cAt, &uAt, &filledAt, &canceledAt, &o.FillTradeID, &o.FillPrice, &o.RejectReason, &o.CancelReason,
 		&o.OCOGroupID, &o.OCOPeerID, &o.TrailType, &o.TrailValue, &o.TrailPeak,
-		&o.BracketID, &o.BracketRole, &lotMethod, &situation,
+		&o.BracketID, &o.BracketRole, &lotMethod, &situation, &reasonSet, &reasonJSON,
 	); err != nil {
 		return nil, err
 	}
 	o.LotMethod, _ = domain.NormalizeLotMethod(lotMethod)
 	o.Situation = unmarshalSituation(situation)
+	o.ReasonSet = reasonSet != 0
+	o.Reason = unmarshalReason(reasonJSON)
 	o.Exchange = domain.Exchange(ex)
 	o.Type = domain.PendingOrderType(typ)
 	o.Side = domain.TradeSide(side)

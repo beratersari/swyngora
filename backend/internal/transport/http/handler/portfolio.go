@@ -342,61 +342,72 @@ func (h *PortfolioHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 type orderBody struct {
-	ClientID        string  `json:"clientId"`
-	PortfolioID     string  `json:"portfolioId"`
-	OwnerClientID   string  `json:"ownerClientId"`
-	Exchange        string  `json:"exchange"`
-	Symbol          string  `json:"symbol"`
-	Side            string  `json:"side"`
-	Quantity        float64 `json:"quantity"`
-	Type            string  `json:"type"`            // market | limit_buy | limit_sell | stop_loss | trailing_stop | oco | bracket
-	TriggerPrice    float64 `json:"triggerPrice"`    // pending single-leg / bracket entry
-	TakeProfitPrice float64 `json:"takeProfitPrice"` // oco / bracket
-	StopLossPrice   float64 `json:"stopLossPrice"`   // oco / bracket
-	TrailType       string  `json:"trailType"`       // trailing_stop: percent | offset
-	TrailValue      float64 `json:"trailValue"`      // trailing_stop distance
-	TimeInForce     string  `json:"timeInForce"`     // gtc | ioc | fok
-	ExpiresAt       string  `json:"expiresAt"`       // RFC3339; GTC only
-	LotMethod       string  `json:"lotMethod"`       // fifo | lifo (sells)
-	IdempotencyKey  string  `json:"idempotencyKey"`
-	Product         string  `json:"product"`     // spot (default) or margin — preview only
-	Leverage        int     `json:"leverage"`    // margin preview, 1–10
-	LimitPrice      float64 `json:"limitPrice"`  // margin limit preview
-	RiskPercent     float64 `json:"riskPercent"` // preview only: size from equity and the stop
+	ClientID        string    `json:"clientId"`
+	PortfolioID     string    `json:"portfolioId"`
+	OwnerClientID   string    `json:"ownerClientId"`
+	Exchange        string    `json:"exchange"`
+	Symbol          string    `json:"symbol"`
+	Side            string    `json:"side"`
+	Quantity        float64   `json:"quantity"`
+	Type            string    `json:"type"`            // market | limit_buy | limit_sell | stop_loss | trailing_stop | oco | bracket
+	TriggerPrice    float64   `json:"triggerPrice"`    // pending single-leg / bracket entry
+	TakeProfitPrice float64   `json:"takeProfitPrice"` // oco / bracket
+	StopLossPrice   float64   `json:"stopLossPrice"`   // oco / bracket
+	TrailType       string    `json:"trailType"`       // trailing_stop: percent | offset
+	TrailValue      float64   `json:"trailValue"`      // trailing_stop distance
+	TimeInForce     string    `json:"timeInForce"`     // gtc | ioc | fok
+	ExpiresAt       string    `json:"expiresAt"`       // RFC3339; GTC only
+	LotMethod       string    `json:"lotMethod"`       // fifo | lifo (sells)
+	IdempotencyKey  string    `json:"idempotencyKey"`
+	Product         string    `json:"product"`     // spot (default) or margin — preview only
+	Leverage        int       `json:"leverage"`    // margin preview, 1–10
+	LimitPrice      float64   `json:"limitPrice"`  // margin limit preview
+	RiskPercent     float64   `json:"riskPercent"` // preview only: size from equity and the stop
+	Reason          *[]string `json:"reason"`      // clauses a buy stores; omitted keeps the whole read
+}
+
+func situationReasonFrom(raw *[]string) (domain.SituationReason, error) {
+	if raw == nil {
+		return domain.SituationReason{}, nil
+	}
+	return domain.ParseSituationReason(*raw)
 }
 
 type pendingOrderDTO struct {
-	ID                string  `json:"id"`
-	ClientID          string  `json:"clientId"`
-	Exchange          string  `json:"exchange"`
-	Symbol            string  `json:"symbol"`
-	Type              string  `json:"type"`
-	Side              string  `json:"side"`
-	Quantity          float64 `json:"quantity"`
-	FilledQuantity    float64 `json:"filledQuantity"`
-	RemainingQuantity float64 `json:"remainingQuantity"`
-	TriggerPrice      float64 `json:"triggerPrice"`
-	ReservedCash      float64 `json:"reservedCash"`
-	ReservedQuantity  float64 `json:"reservedQuantity"`
-	TimeInForce       string  `json:"timeInForce"`
-	ExpiresAt         *string `json:"expiresAt,omitempty"`
-	Status            string  `json:"status"`
-	OCOGroupID        string  `json:"ocoGroupId,omitempty"`
-	OCOPeerID         string  `json:"ocoPeerId,omitempty"`
-	BracketID         string  `json:"bracketId,omitempty"`
-	BracketRole       string  `json:"bracketRole,omitempty"`
-	TrailType         string  `json:"trailType,omitempty"`
-	TrailValue        float64 `json:"trailValue,omitempty"`
-	TrailPeak         float64 `json:"trailPeak,omitempty"`
-	CreatedAt         string  `json:"createdAt"`
-	UpdatedAt         string  `json:"updatedAt"`
-	FilledAt          *string `json:"filledAt,omitempty"`
-	CanceledAt        *string `json:"canceledAt,omitempty"`
-	FillTradeID       string  `json:"fillTradeId,omitempty"`
-	FillPrice         float64 `json:"fillPrice,omitempty"`
-	RejectReason      string  `json:"rejectReason,omitempty"`
-	CancelReason      string  `json:"cancelReason,omitempty"`
-	LotMethod         string  `json:"lotMethod,omitempty"`
+	ID                string                `json:"id"`
+	ClientID          string                `json:"clientId"`
+	Exchange          string                `json:"exchange"`
+	Symbol            string                `json:"symbol"`
+	Type              string                `json:"type"`
+	Side              string                `json:"side"`
+	Quantity          float64               `json:"quantity"`
+	FilledQuantity    float64               `json:"filledQuantity"`
+	RemainingQuantity float64               `json:"remainingQuantity"`
+	TriggerPrice      float64               `json:"triggerPrice"`
+	ReservedCash      float64               `json:"reservedCash"`
+	ReservedQuantity  float64               `json:"reservedQuantity"`
+	TimeInForce       string                `json:"timeInForce"`
+	ExpiresAt         *string               `json:"expiresAt,omitempty"`
+	Status            string                `json:"status"`
+	OCOGroupID        string                `json:"ocoGroupId,omitempty"`
+	OCOPeerID         string                `json:"ocoPeerId,omitempty"`
+	BracketID         string                `json:"bracketId,omitempty"`
+	BracketRole       string                `json:"bracketRole,omitempty"`
+	TrailType         string                `json:"trailType,omitempty"`
+	TrailValue        float64               `json:"trailValue,omitempty"`
+	TrailPeak         float64               `json:"trailPeak,omitempty"`
+	CreatedAt         string                `json:"createdAt"`
+	UpdatedAt         string                `json:"updatedAt"`
+	FilledAt          *string               `json:"filledAt,omitempty"`
+	CanceledAt        *string               `json:"canceledAt,omitempty"`
+	FillTradeID       string                `json:"fillTradeId,omitempty"`
+	FillPrice         float64               `json:"fillPrice,omitempty"`
+	RejectReason      string                `json:"rejectReason,omitempty"`
+	CancelReason      string                `json:"cancelReason,omitempty"`
+	LotMethod         string                `json:"lotMethod,omitempty"`
+	Situation         *domain.CoinSituation `json:"situation,omitempty"`
+	ReasonSet         bool                  `json:"reasonSet,omitempty"`
+	Reason            []string              `json:"reason,omitempty"`
 }
 
 func pendingOrderToDTO(o *domain.PendingOrder) pendingOrderDTO {
@@ -418,6 +429,14 @@ func pendingOrderToDTO(o *domain.PendingOrder) pendingOrderDTO {
 		UpdatedAt:   o.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		FillTradeID: o.FillTradeID, FillPrice: o.FillPrice, RejectReason: o.RejectReason, CancelReason: o.CancelReason,
 		LotMethod: string(o.LotMethod),
+		Situation: o.Situation,
+		ReasonSet: o.ReasonSet,
+	}
+	if o.ReasonSet {
+		d.Reason = append([]string{}, o.Reason...)
+		if d.Reason == nil {
+			d.Reason = []string{}
+		}
 	}
 	if o.ExpiresAt != nil {
 		s := o.ExpiresAt.UTC().Format(time.RFC3339Nano)
@@ -451,6 +470,11 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	if body.OwnerClientID != "" {
 		ownerID = body.OwnerClientID
 	}
+	reason, rerr := situationReasonFrom(body.Reason)
+	if rerr != nil {
+		writeError(w, rerr)
+		return
+	}
 	typ := body.Type
 	if typ == "" {
 		typ = "market"
@@ -461,6 +485,7 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
 			Side: body.Side, Quantity: body.Quantity, LotMethod: body.LotMethod,
 			IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
+			Reason:         reason,
 		})
 		if err != nil {
 			writeError(w, err)
@@ -492,6 +517,7 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			TrailType: body.TrailType, TrailValue: body.TrailValue,
 			TimeInForce: body.TimeInForce, ExpiresAt: exp, LotMethod: body.LotMethod,
 			IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
+			Reason:         reason,
 		})
 		if err != nil {
 			writeError(w, err)
@@ -557,6 +583,7 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			TakeProfitPrice: body.TakeProfitPrice, StopLossPrice: body.StopLossPrice,
 			ExpiresAt: exp, LotMethod: body.LotMethod,
 			IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
+			Reason:         reason,
 		})
 		if err != nil {
 			writeError(w, err)

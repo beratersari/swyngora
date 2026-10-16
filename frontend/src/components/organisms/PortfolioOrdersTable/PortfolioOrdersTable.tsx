@@ -6,6 +6,7 @@ import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
 import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import type { PendingOrder } from '@/libs/api';
+import { OrderReasonNote } from './OrderReasonNote';
 import { formatPrice, formatSymbolDisplay } from '@/libs/utils';
 import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
 import type { PortfolioOrdersTableProps } from './PortfolioOrdersTable.types';
@@ -46,14 +47,19 @@ export function PortfolioOrdersTable({
       title: t('portfolio:positions.symbol'),
       key: 'symbol',
       render: (_, row) => (
-        <Button
-          type="link"
-          size="small"
-          disabled={!onOpen || !row.exchange || !row.symbol}
-          onClick={() => row.exchange && row.symbol && onOpen?.(row.exchange, row.symbol)}
-        >
-          {formatSymbolDisplay(row.symbol)}
-        </Button>
+        <>
+          <Button
+            type="link"
+            size="small"
+            disabled={!onOpen || !row.exchange || !row.symbol}
+            onClick={() => row.exchange && row.symbol && onOpen?.(row.exchange, row.symbol)}
+          >
+            {formatSymbolDisplay(row.symbol)}
+          </Button>
+          {row.side === 'buy' && row.status === 'open' && row.situation && row.symbol ? (
+            <OrderReasonNote symbol={row.symbol} entry={row.situation} />
+          ) : null}
+        </>
       ),
     },
     {

@@ -235,6 +235,51 @@ func (s *Service) captureSituation(ctx context.Context, ex domain.Exchange, symb
 	return domain.WithoutSituationHeld(got)
 }
 
+// readSituation loads the coin read for a preview.
+// failed is true when the tape was asked and did not answer.
+func (s *Service) readSituation(ctx context.Context, ex domain.Exchange, symbol string) (*domain.CoinSituation, bool) {
+	if s == nil || s.situations == nil || domain.IsEquityExchange(ex) {
+		return nil, false
+	}
+	cctx, cancel := context.WithTimeout(ctx, 12*time.Second)
+	defer cancel()
+	got, err := s.situations.GetCoinSituation(cctx, symbol)
+	if err != nil {
+		return nil, true
+	}
+	return domain.WithoutSituationHeld(got), false
+}
+
+// captureEntryRead stores the whole tape, or only the clauses a buy named.
+// A sell keeps the whole read so a close can still be compared with each buy.
+func (s *Service) captureEntryRead(ctx context.Context, ex domain.Exchange, symbol string, side domain.TradeSide, reason domain.SituationReason) *domain.CoinSituation {
+	sit := s.captureSituation(ctx, ex, symbol)
+	if side != domain.TradeSideBuy || !reason.Set {
+		return sit
+	}
+	return domain.KeepSituationClauses(sit, reason)
+}
+
+// fillSituation is the read stored on a resting fill.
+// A buy that named its clauses keeps only those from the fresh read.
+func (s *Service) fillSituation(ctx context.Context, o domain.PendingOrder) *domain.CoinSituation {
+	sit := s.captureSituation(ctx, o.Exchange, o.Symbol)
+	if o.Side != domain.TradeSideBuy || !o.ReasonSet {
+		return sit
+	}
+	return domain.KeepSituationClauses(sit, domain.SituationReason{Set: true, Clauses: o.Reason})
+}
+
+// applyBuyReason keeps only the named clauses on a buy order and remembers the set for the fill.
+func applyBuyReason(o *domain.PendingOrder, reason domain.SituationReason) {
+	if o == nil || o.Side != domain.TradeSideBuy || !reason.Set {
+		return
+	}
+	o.ReasonSet = true
+	o.Reason = append([]string(nil), reason.Clauses...)
+	o.Situation = domain.KeepSituationClauses(o.Situation, reason)
+}
+
 // SetChangeSink receives order/position/cash mutations for realtime subscribers.
 func (s *Service) SetChangeSink(sink domain.PortfolioChangeSink) {
 	if s != nil {
@@ -324,6 +369,8 @@ type OrderInput struct {
 	RecurringRunID        string
 	// RecurringCatchUp buys a missed slot later without moving the plan clock.
 	RecurringCatchUp bool
+	// Reason names the clauses a buy stores. Unset keeps the whole read.
+	Reason domain.SituationReason
 }
 
 // requireBook loads a book the caller owns (owner role).
@@ -606,7 +653,7 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	if err := domain.RequireQuoteMatchesCurrency(ex, sym, p.Currency); err != nil {
 		return nil, nil, err
 	}
-	idempHash := hashParts("market", string(ex), sym, string(side), in.Quantity, string(lotMethod))
+	idempHash := hashParts("market", string(ex), sym, string(side), in.Quantity, string(lotMethod), in.Reason.HashPart())
 	if rec, err := s.checkIdempotency(ctx, clientID, idempKey, idempHash); err != nil {
 		return nil, nil, err
 	} else if rec != nil {
@@ -737,7 +784,7 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 		LotMethod:   lotMethod,
 		Fee:         fee,
 		LastPrice:   last,
-		Situation:   s.captureSituation(ctx, ex, sym),
+		Situation:   s.captureEntryRead(ctx, ex, sym, side, in.Reason),
 		CreatedAt:   now,
 	}
 	if lotOps != nil {
@@ -888,6 +935,8 @@ type PendingOrderInput struct {
 	ExpiresAt      *time.Time // optional; GTC only
 	LotMethod      string     // fifo | lifo for sell types
 	IdempotencyKey string
+	// Reason names the clauses a limit buy stores. Unset keeps the whole read. Sells ignore it.
+	Reason domain.SituationReason
 }
 
 // OCOOrderInput places a linked take-profit limit_sell + stop_loss for the same quantity.
@@ -920,6 +969,8 @@ type BracketOrderInput struct {
 	ExpiresAt       *time.Time
 	LotMethod       string
 	IdempotencyKey  string
+	// Reason names the clauses the entry buy stores. Unset keeps the whole read.
+	Reason domain.SituationReason
 }
 
 // PlaceBracketOrder creates entry (open limit_buy) + TP/SL (pending) linked by bracket id.
@@ -961,7 +1012,7 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 	if err := domain.RequireQuoteMatchesCurrency(ex, sym, p.Currency); err != nil {
 		return nil, nil, nil, err
 	}
-	idempHash := hashParts("bracket", string(ex), sym, in.Quantity, in.EntryPrice, in.TakeProfitPrice, in.StopLossPrice, in.LotMethod)
+	idempHash := hashParts("bracket", string(ex), sym, in.Quantity, in.EntryPrice, in.TakeProfitPrice, in.StopLossPrice, in.LotMethod, in.Reason.HashPart())
 	if rec, err := s.checkIdempotency(ctx, clientID, idempKey, idempHash); err != nil {
 		return nil, nil, nil, err
 	} else if rec != nil {
@@ -1038,6 +1089,7 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 		tpOrd.Situation = sit
 		slOrd.Situation = sit
 	}
+	applyBuyReason(&entryOrd, in.Reason)
 	ctx = s.withIdempotency(ctx, clientID, idempKey, idempHash, domain.IdempotencyKindBracket, idempIDs{EntryID: entryID, TakeProfitID: tpID, StopLossID: slID})
 	entry, tp, sl, err = s.store.CreateBracket(ctx, entryOrd, tpOrd, slOrd)
 	if err != nil {
@@ -1236,7 +1288,7 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 	if in.ExpiresAt != nil && !in.ExpiresAt.IsZero() {
 		expKey = in.ExpiresAt.UTC().Format(time.RFC3339Nano)
 	}
-	idempHash := hashParts("pending", string(typ), string(ex), sym, in.Quantity, in.TriggerPrice, trailType, in.TrailValue, string(tif), in.LotMethod, expKey)
+	idempHash := hashParts("pending", string(typ), string(ex), sym, in.Quantity, in.TriggerPrice, trailType, in.TrailValue, string(tif), in.LotMethod, expKey, in.Reason.HashPart())
 	if rec, err := s.checkIdempotency(ctx, clientID, idempKey, idempHash); err != nil {
 		return nil, err
 	} else if rec != nil {
@@ -1339,6 +1391,7 @@ func (s *Service) PlacePendingOrder(ctx context.Context, in PendingOrderInput) (
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}
+	applyBuyReason(&o, in.Reason)
 	ctx = s.withIdempotency(ctx, clientID, idempKey, idempHash, domain.IdempotencyKindPending, idempIDs{OrderID: o.ID})
 	created, err := s.store.CreatePendingOrder(ctx, o)
 	if err != nil {
@@ -2080,7 +2133,7 @@ func (s *Service) tryFillPendingOrderLocked(ctx context.Context, o domain.Pendin
 		ID: tradeID, ClientID: o.ClientID, Exchange: o.Exchange, Symbol: o.Symbol,
 		Side: o.Side, Quantity: fillQty, Price: fillPrice, Notional: fillQty * fillPrice,
 		RealizedPnL: realized, PendingOrderID: o.ID, LotMethod: lotMethod,
-		Fee: fee, LastPrice: lastPrice, Situation: s.captureSituation(ctx, o.Exchange, o.Symbol), CreatedAt: now,
+		Fee: fee, LastPrice: lastPrice, Situation: s.fillSituation(ctx, o), CreatedAt: now,
 	}
 	if lotOps != nil {
 		tr.LotFills = lotOps.Fills

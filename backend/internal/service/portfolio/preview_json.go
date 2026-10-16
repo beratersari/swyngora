@@ -57,6 +57,22 @@ func OrderPreviewPayload(p *domain.OrderPreview) map[string]any {
 	if p.EstimatedRealizedPnL != nil {
 		out["estimatedRealizedPnl"] = *p.EstimatedRealizedPnL
 	}
+	if p.SituationStatus != "" {
+		out["situationStatus"] = p.SituationStatus
+	}
+	if p.Situation != nil {
+		out["situation"] = p.Situation
+	}
+	if p.ReasonSet {
+		reason := p.Reason
+		if reason == nil {
+			reason = []string{}
+		}
+		out["reason"] = reason
+		if len(p.ReasonMissing) > 0 {
+			out["reasonMissing"] = p.ReasonMissing
+		}
+	}
 	return out
 }
 

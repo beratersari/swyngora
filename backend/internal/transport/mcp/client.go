@@ -2378,6 +2378,7 @@ func (c *APIClient) PreviewPortfolioOrder(ctx context.Context, clientID, exchang
 	if leverage > 0 {
 		body["leverage"] = leverage
 	}
+	applySituationReason(ctx, body)
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders/preview", body)
 }
 
@@ -2392,6 +2393,7 @@ func (c *APIClient) PlacePortfolioOrder(ctx context.Context, clientID, exchange,
 	if k := IdempotencyKeyFrom(ctx); k != "" {
 		body["idempotencyKey"] = k
 	}
+	applySituationReason(ctx, body)
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders", body)
 }
 
@@ -2434,6 +2436,7 @@ func (c *APIClient) PlacePortfolioPendingOrder(ctx context.Context, clientID, ex
 	if k := IdempotencyKeyFrom(ctx); k != "" {
 		body["idempotencyKey"] = k
 	}
+	applySituationReason(ctx, body)
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders", body)
 }
 
@@ -2450,6 +2453,7 @@ func (c *APIClient) PlacePortfolioBracketOrder(ctx context.Context, clientID, ex
 	if k := IdempotencyKeyFrom(ctx); k != "" {
 		body["idempotencyKey"] = k
 	}
+	applySituationReason(ctx, body)
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders", body)
 }
 

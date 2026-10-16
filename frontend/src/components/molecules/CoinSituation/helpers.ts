@@ -255,6 +255,88 @@ function clauseMissing(clause: string, missing: string[] | undefined): CoinSitua
   return out;
 }
 
+const COMPARE_CLAUSES = [
+  'priceCvd',
+  'openInterest',
+  'liquidation',
+  'prints',
+  'funding',
+  'crowd',
+  'size',
+] as const;
+
+function clauseKind(sit: CoinSituation | null | undefined, clause: string): string {
+  switch (clause) {
+    case 'priceCvd':
+      return sit?.priceCvd?.kind ?? '';
+    case 'openInterest':
+      return sit?.openInterest?.flow ?? '';
+    case 'liquidation':
+      return sit?.liquidation?.side ?? '';
+    case 'prints':
+      return sit?.prints?.side ?? '';
+    case 'funding':
+      return sit?.funding?.payer ?? '';
+    case 'crowd':
+      return sit?.crowd?.lean ?? '';
+    case 'size':
+      return sit?.size?.kind ?? '';
+    default:
+      return '';
+  }
+}
+
+function clauseMissingList(sit: CoinSituation | null | undefined, clause: string): string[] {
+  switch (clause) {
+    case 'priceCvd':
+      return sit?.priceCvdMissing ?? [];
+    case 'openInterest':
+      return sit?.openInterestMissing ?? [];
+    case 'liquidation':
+      return sit?.liquidationMissing ?? [];
+    case 'prints':
+      return sit?.printsMissing ?? [];
+    case 'funding':
+      return sit?.fundingMissing ?? [];
+    case 'crowd':
+      return sit?.crowdMissing ?? [];
+    case 'size':
+      return sit?.sizeMissing ?? [];
+    default:
+      return [];
+  }
+}
+
+/** Same rule as the Go compare: only clauses stored on the entry count. */
+export function compareCoinSituation(
+  entry: CoinSituation | null | undefined,
+  live: CoinSituation | null | undefined,
+): SituationComparison {
+  if (!entry) return { same: false, clauses: [] };
+  const clauses: SituationClauseChange[] = [];
+  let stored = 0;
+  for (const clause of COMPARE_CLAUSES) {
+    const entryKind = clauseKind(entry, clause);
+    if (!entryKind) continue;
+    stored += 1;
+    const liveKind = clauseKind(live, clause);
+    if (!liveKind) {
+      const missing = clauseMissingList(live, clause);
+      clauses.push({
+        clause,
+        status: 'missing',
+        entry: entryKind,
+        ...(missing.length > 0 ? { missing } : {}),
+      });
+      continue;
+    }
+    if (liveKind !== entryKind) {
+      clauses.push({ clause, status: 'changed', entry: entryKind, live: liveKind });
+    }
+  }
+  return { same: stored > 0 && clauses.length === 0, clauses };
+}
+
 /** Sentences for the clauses that left. A blank later clause uses the missing-venue sentence. */
 export function situationChangeLines(
   entry: CoinSituation | null | undefined,

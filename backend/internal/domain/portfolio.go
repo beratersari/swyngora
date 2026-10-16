@@ -205,6 +205,10 @@ type PendingOrder struct {
 	TrailValue float64
 	// Situation is the coin-page read captured when this resting order was placed.
 	Situation *CoinSituation
+	// ReasonSet is true when the placer named which clauses this buy is for.
+	// Reason is those clause ids. An empty list with ReasonSet stores no read.
+	ReasonSet bool
+	Reason    []string
 	// TrailPeak is the high-water mark for a sell trailing stop (only ratchets up).
 	TrailPeak float64
 	// BracketID links entry + take-profit + stop-loss of a bracket order.

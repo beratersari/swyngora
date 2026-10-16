@@ -31,6 +31,8 @@ type OrderPreviewInput struct {
 	Leverage        int
 	LimitPrice      float64
 	RiskPercent     float64 // when > 0, quantity is sized from equity and the stop
+	// Reason names the clauses a spot buy would store. Unset leaves the stored set unset on the preview.
+	Reason domain.SituationReason
 }
 
 // riskSnap is the live book used to price one preview. It is not saved as an order.
@@ -169,6 +171,68 @@ func (s *Service) PreviewOrder(ctx context.Context, in OrderPreviewInput) (*doma
 	return s.previewSpot(ctx, out, in, clientID, ex, sym, last, cost, avail, p.CashBalance, posQty, avg, availQty, lots, lotMethod, snap)
 }
 
+// finishPreview attaches the live coin read for a spot buy, limit buy, or bracket.
+// A failed read does not fail the price. Nothing is written.
+func (s *Service) finishPreview(ctx context.Context, out *domain.OrderPreview, reason domain.SituationReason) (*domain.OrderPreview, error) {
+	if out == nil {
+		return nil, nil
+	}
+	if !previewStoresReason(out) {
+		out.SituationStatus = domain.SituationPreviewSkipped
+		return out, nil
+	}
+	sit, failed := s.readSituation(ctx, out.Exchange, out.Symbol)
+	if failed {
+		out.SituationStatus = domain.SituationPreviewFailed
+		stampPreviewReason(out, sit, reason)
+		return out, nil
+	}
+	if len(domain.SituationClauseNames(sit)) == 0 {
+		out.SituationStatus = domain.SituationPreviewBlank
+	} else {
+		out.SituationStatus = domain.SituationPreviewReady
+	}
+	out.Situation = sit
+	stampPreviewReason(out, sit, reason)
+	return out, nil
+}
+
+func previewStoresReason(p *domain.OrderPreview) bool {
+	if p == nil || p.Product == "margin" || domain.IsEquityExchange(p.Exchange) {
+		return false
+	}
+	switch p.Type {
+	case "bracket", "limit_buy":
+		return true
+	case "market", "":
+		return p.Side == string(domain.TradeSideBuy)
+	default:
+		return false
+	}
+}
+
+func stampPreviewReason(out *domain.OrderPreview, sit *domain.CoinSituation, reason domain.SituationReason) {
+	if out == nil || !reason.Set {
+		return
+	}
+	out.ReasonSet = true
+	have := map[string]bool{}
+	for _, name := range domain.SituationClauseNames(sit) {
+		have[name] = true
+	}
+	kept := make([]string, 0, len(reason.Clauses))
+	var missing []string
+	for _, name := range reason.Clauses {
+		if have[name] {
+			kept = append(kept, name)
+		} else {
+			missing = append(missing, name)
+		}
+	}
+	out.Reason = kept
+	out.ReasonMissing = missing
+}
+
 func stampBook(out *domain.OrderPreview, q domain.PaperFillQuote) {
 	if out == nil {
 		return
@@ -247,7 +311,7 @@ func (s *Service) previewSpot(
 				out.FillsNow = false
 				out.ReferencePrice = last
 				out.FillPrice = q.Price
-				return out, nil
+				return s.finishPreview(ctx, out, in.Reason)
 			}
 			fillRef = q.Price
 			costUsed.SlippageRate = 0
@@ -329,7 +393,7 @@ func (s *Service) previewSpot(
 	default:
 		return nil, fmt.Errorf("%w: type must be market, limit_buy, limit_sell, stop_loss, trailing_stop, oco, or bracket", domain.ErrInvalidArgument)
 	}
-	return out, nil
+	return s.finishPreview(ctx, out, in.Reason)
 }
 
 func fillResting(
@@ -421,7 +485,7 @@ func (s *Service) previewMargin(
 				out.FillsNow = false
 				out.ReferencePrice = last
 				out.FillPrice = q.Price
-				return out, nil
+				return s.finishPreview(ctx, out, in.Reason)
 			}
 			reference = q.Price
 			cost.SlippageRate = 0
@@ -498,7 +562,7 @@ func (s *Service) previewMargin(
 		out.Risk.Blocked = true
 		out.Risk.Reasons = append(out.Risk.Reasons, "borrow limit would be exceeded")
 	}
-	return out, nil
+	return s.finishPreview(ctx, out, in.Reason)
 }
 
 func sellLeg(role string, reference, qty float64, cost domain.TradingCost, lots []domain.TaxLot, bookID string, ex domain.Exchange, sym string, posQty, avg float64, method domain.LotMethod, skipPnL bool) domain.OrderPreviewLeg {

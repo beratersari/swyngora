@@ -21,6 +21,8 @@ export type SpotOrderPreviewDraft = {
   lotMethod?: 'fifo' | 'lifo';
   /** Percent of portfolio equity to lose if the stop fills. Sizes the buy. */
   riskPercent?: number;
+  /** Clauses this buy stores. Omit to leave the request unset. An empty list stores no read. */
+  reason?: string[];
 };
 
 export type MarginOrderPreviewDraft = {
@@ -146,5 +148,6 @@ export function toPreviewArg(
     trailType: draft.trailType,
     trailValue: positive(draft.trailValue) ? draft.trailValue : undefined,
     lotMethod: draft.lotMethod,
+    reason: draft.reason,
   };
 }

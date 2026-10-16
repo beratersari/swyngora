@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, InputNumber, Select, Segmented } from 'antd';
+import { Alert, Button, Checkbox, InputNumber, Select, Segmented } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
+import { situationLines } from '@/components/molecules/CoinSituation';
 import { OrderPreview } from '@/components/molecules/OrderPreview';
 import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
 import { rtkErrorMessage, type MarketExchange } from '@/libs/api';
@@ -15,7 +16,11 @@ import {
   needsTpSl,
   needsTrail,
   needsTrigger,
+  orderKeepsReason,
+  presentReasonClauses,
+  reasonClauseReport,
   toApiOrderType,
+  type ReasonSituation,
   type SpotOrderKind,
 } from './helpers';
 
@@ -56,6 +61,7 @@ export function PaperTradeForm({
   const [trailValue, setTrailValue] = useState<number | null>(null);
   const [lotMethod, setLotMethod] = useState<'fifo' | 'lifo'>('fifo');
   const [tif, setTif] = useState<'gtc' | 'ioc' | 'fok'>('gtc');
+  const [pickedReason, setPickedReason] = useState<string[] | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [localBusy, setLocalBusy] = useState(false);
   const inFlightRef = useRef(false);
@@ -67,6 +73,9 @@ export function PaperTradeForm({
   useEffect(() => {
     if (lockedSymbol) setSymbol(lockedSymbol);
   }, [lockedSymbol]);
+  useEffect(() => {
+    setPickedReason(null);
+  }, [exchange, symbol, kind, side]);
 
   const kindOptions = useMemo(() => {
     const base: { value: SpotOrderKind; label: string }[] = [
@@ -93,6 +102,27 @@ export function PaperTradeForm({
     showLotMethod &&
     (kind === 'market' ? side === 'sell' : kind !== 'limit' || side === 'sell') &&
     kind !== 'bracket';
+  const keepsReason = orderKeepsReason(exchange, kind, side);
+  const reasonPreview = preview as
+    | (NonNullable<PaperTradeFormProps['preview']> & {
+        situation?: ReasonSituation;
+        situationStatus?: string;
+      })
+    | null
+    | undefined;
+  const presentReason = useMemo(
+    () => presentReasonClauses(reasonPreview?.situation),
+    [reasonPreview?.situation],
+  );
+  const selectedReason = pickedReason ?? presentReason;
+  const reasonForWire = useMemo<string[] | undefined>(() => {
+    if (!keepsReason) return undefined;
+    if (reasonPreview?.situationStatus === 'failed' || reasonPreview?.situationStatus === 'blank') {
+      return [];
+    }
+    if (reasonPreview?.situationStatus === 'ready') return selectedReason;
+    return undefined;
+  }, [keepsReason, reasonPreview?.situationStatus, selectedReason]);
   const canSize = canSizeByRisk(kind, side);
   const riskActive = canSize && riskPercent != null && riskPercent > 0;
   const stopForSize = stopLossPrice != null && stopLossPrice > 0;
@@ -119,6 +149,7 @@ export function PaperTradeForm({
       trailType: showTrail ? trailType : undefined,
       trailValue: showTrail && trailValue != null ? trailValue : undefined,
       lotMethod: showLot ? lotMethod : undefined,
+      reason: reasonForWire,
     });
   }, [
     onDraftChange,
@@ -139,6 +170,7 @@ export function PaperTradeForm({
     showLot,
     riskActive,
     riskPercent,
+    reasonForWire,
   ]);
 
   const submit = async (forcedSide?: 'buy' | 'sell') => {
@@ -167,6 +199,7 @@ export function PaperTradeForm({
           ? lotMethod
           : undefined,
       timeInForce: showTif ? tif : undefined,
+      reason: reasonForWire,
     };
     setLocalError(null);
     inFlightRef.current = true;
@@ -438,6 +471,46 @@ export function PaperTradeForm({
                   : 'portfolio:trade.riskSizesBuy',
               )
             : t('portfolio:trade.riskNeedStop')}
+        </Text>
+      ) : null}
+
+      {keepsReason && reasonPreview?.situationStatus === 'ready' ? (
+        <Field>
+          <Text variant="caption">{t('portfolio:trade.reasonTitle')}</Text>
+          <Text variant="caption" color="secondary">
+            {t('portfolio:trade.reasonHint')}
+          </Text>
+          {presentReason.map((id) => {
+            const sentence =
+              situationLines(
+                reasonClauseReport(reasonPreview.situation ?? {}, id),
+                t as unknown as Parameters<typeof situationLines>[1],
+              )[0] ?? id;
+            return (
+              <Checkbox
+                key={id}
+                checked={selectedReason.includes(id)}
+                onChange={() => {
+                  const base = pickedReason ?? presentReason;
+                  setPickedReason(
+                    base.includes(id) ? base.filter((item) => item !== id) : [...base, id],
+                  );
+                }}
+              >
+                {sentence}
+              </Checkbox>
+            );
+          })}
+        </Field>
+      ) : null}
+      {keepsReason && reasonPreview?.situationStatus === 'failed' ? (
+        <Text variant="caption" color="secondary">
+          {t('portfolio:trade.reasonFailed')}
+        </Text>
+      ) : null}
+      {keepsReason && reasonPreview?.situationStatus === 'blank' ? (
+        <Text variant="caption" color="secondary">
+          {t('portfolio:trade.reasonBlank')}
         </Text>
       ) : null}
 

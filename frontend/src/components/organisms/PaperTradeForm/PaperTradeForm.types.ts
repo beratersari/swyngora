@@ -16,6 +16,8 @@ export type PaperTradeFormValues = {
   trailValue?: number;
   lotMethod?: 'fifo' | 'lifo';
   timeInForce?: 'gtc' | 'ioc' | 'fok';
+  /** Set on a buy that names its clauses. An empty list stores no read. */
+  reason?: string[];
 };
 
 export type PaperTradeFormProps = {

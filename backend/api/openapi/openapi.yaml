@@ -6792,6 +6792,15 @@ paths:
                   type: string
                   maxLength: 128
                   description: Optional client key; same key + same request replays the original result (header Idempotency-Key also accepted)
+                reason:
+                  type: array
+                  description: |
+                    Clauses a buy, limit buy, or bracket entry stores.
+                    Omit the field to store the whole read. An empty array stores no read.
+                    A sell ignores this and keeps the whole read, so a close can still be compared with each buy.
+                  items:
+                    type: string
+                    enum: [priceCvd, openInterest, liquidation, prints, funding, crowd, size]
       responses:
         '200':
           description: Market fill and updated portfolio
@@ -14491,6 +14500,14 @@ components:
           type: number
           exclusiveMinimum: 0
           description: Margin limit price.
+        reason:
+          type: array
+          description: |
+            Clauses a spot buy, limit buy, or bracket would store.
+            Omit the field to leave the stored set unset. An empty array would store no read.
+          items:
+            type: string
+            enum: [priceCvd, openInterest, liquidation, prints, funding, crowd, size]
     OrderPreviewLeg:
       type: object
       properties:
@@ -14633,6 +14650,23 @@ components:
           type: array
           items: { $ref: '#/components/schemas/OrderPreviewLeg' }
           description: Take-profit and stop-loss outcomes for an OCO or a bracket.
+        situation:
+          $ref: '#/components/schemas/CoinSituation'
+          description: Live coin read for a spot buy, limit buy, or bracket. The whole read, so the ticket can mark a reason.
+        situationStatus:
+          type: string
+          enum: [ready, blank, failed, skipped]
+          description: |
+            ready means at least one clause loaded. blank means the read loaded with no clauses.
+            failed means the read did not load; the price is still returned. skipped means this order does not store a reason.
+        reason:
+          type: array
+          description: Clauses that would be stored when the request named a reason. Empty when none of them are on the read.
+          items: { type: string }
+        reasonMissing:
+          type: array
+          description: Named clauses that are blank on the live read and would not be stored.
+          items: { type: string }
         note: { type: string }
     PortfolioCashMovement:
       type: object
@@ -14816,6 +14850,16 @@ components:
           type: string
           description: user | expired | ioc_remainder | ioc_no_fill | fok_unfilled | oco_peer_filled | oco_group_canceled
         lotMethod: { type: string, enum: [fifo, lifo], description: Lot matching used when this sell fills }
+        situation:
+          $ref: '#/components/schemas/CoinSituation'
+          description: Coin read stored when this order was placed. A buy that named a reason keeps only those clauses.
+        reasonSet:
+          type: boolean
+          description: True when the placer named which clauses this buy stores.
+        reason:
+          type: array
+          items: { type: string }
+          description: Clause ids this buy stores. Empty when reasonSet is true and the order stores no read.
     AmendPendingOrderRequest:
       type: object
       description: At least one of triggerPrice or remainingQuantity is required.

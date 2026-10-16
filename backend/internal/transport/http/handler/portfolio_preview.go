@@ -25,6 +25,11 @@ func (h *PortfolioHandler) PreviewOrder(w http.ResponseWriter, r *http.Request) 
 	if body.OwnerClientID != "" {
 		ownerID = body.OwnerClientID
 	}
+	reason, rerr := situationReasonFrom(body.Reason)
+	if rerr != nil {
+		writeError(w, rerr)
+		return
+	}
 	got, err := h.svc.PreviewOrder(r.Context(), portfolio.OrderPreviewInput{
 		ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID,
 		Product: body.Product, Exchange: body.Exchange, Symbol: body.Symbol,
@@ -32,6 +37,7 @@ func (h *PortfolioHandler) PreviewOrder(w http.ResponseWriter, r *http.Request) 
 		TriggerPrice: body.TriggerPrice, TakeProfitPrice: body.TakeProfitPrice, StopLossPrice: body.StopLossPrice,
 		TrailType: body.TrailType, TrailValue: body.TrailValue, LotMethod: body.LotMethod,
 		Leverage: body.Leverage, LimitPrice: body.LimitPrice, RiskPercent: body.RiskPercent,
+		Reason: reason,
 	})
 	if err != nil {
 		writeError(w, err)

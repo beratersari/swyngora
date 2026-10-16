@@ -92,6 +92,10 @@
     "lotMethod": "Lot yöntemi",
     "fifo": "FIFO",
     "lifo": "LIFO",
+    "reasonTitle": "Bu emrin gerekçesi",
+    "reasonHint": "Yalnızca işaretlediğin maddeler saklanır. Sonraki okumalar onları kullanır.",
+    "reasonFailed": "Piyasa okuması gelmedi. Bu emir bir gerekçe saklamaz.",
+    "reasonBlank": "Bu okumada madde yok. Bu emir bir gerekçe saklamaz.",
     "kinds": {
       "market": "Piyasa",
       "limit": "Limit",
@@ -243,7 +247,8 @@
     "cancelSuccess": "Emir iptal edildi",
     "amend": "Düzenle",
     "amendTitle": "Bekleyen emri düzenle",
-    "amendSuccess": "Emir güncellendi"
+    "amendSuccess": "Emir güncellendi",
+    "reasonLeft": "Piyasa bu emrin gerekçesinden ayrıldı."
   },
   "situationRecord": {
     "title": "Kapanışların ne getirdiği",

@@ -5100,6 +5100,7 @@ func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange,
 		Side: side, Type: orderType, Product: product, TrailType: trailType, LotMethod: lotMethod,
 		Quantity: quantity, TriggerPrice: triggerPrice, TakeProfitPrice: takeProfitPrice, StopLossPrice: stopLossPrice,
 		TrailValue: trailValue, LimitPrice: limitPrice, Leverage: leverage, RiskPercent: riskPercent,
+		Reason: reasonInput(ctx),
 	})
 	if err != nil {
 		return nil, err
@@ -5113,7 +5114,7 @@ func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, s
 	}
 	tr, v, err := b.Portfolio.PlaceOrder(ctx, portfolio.OrderInput{
 		ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol, Side: side, Quantity: quantity, LotMethod: lotMethod,
-		IdempotencyKey: IdempotencyKeyFrom(ctx),
+		IdempotencyKey: IdempotencyKeyFrom(ctx), Reason: reasonInput(ctx),
 	})
 	if err != nil {
 		return nil, err
@@ -5200,7 +5201,7 @@ func (b *Backend) PlacePortfolioPendingOrder(ctx context.Context, clientID, exch
 		ClientID:    clientID, Exchange: exchange, Symbol: symbol, Type: orderType,
 		Quantity: quantity, TriggerPrice: triggerPrice, TimeInForce: timeInForce, ExpiresAt: exp,
 		TrailType: trailType, TrailValue: trailValue, LotMethod: lotMethod,
-		IdempotencyKey: IdempotencyKeyFrom(ctx),
+		IdempotencyKey: IdempotencyKeyFrom(ctx), Reason: reasonInput(ctx),
 	})
 	if err != nil {
 		return nil, err
@@ -5232,6 +5233,7 @@ func (b *Backend) PlacePortfolioBracketOrder(ctx context.Context, clientID, exch
 		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID:    clientID, Exchange: exchange, Symbol: symbol, Quantity: quantity,
 		EntryPrice: entryPrice, TakeProfitPrice: takeProfitPrice, StopLossPrice: stopLossPrice, ExpiresAt: exp,
+		Reason: reasonInput(ctx),
 	})
 	if err != nil {
 		return nil, err
@@ -6128,6 +6130,17 @@ func pendingOrderMap(o *domain.PendingOrder) map[string]any {
 		"createdAt":   o.CreatedAt.UTC().Format(time.RFC3339Nano),
 		"updatedAt":   o.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		"fillTradeId": o.FillTradeID, "fillPrice": o.FillPrice, "rejectReason": o.RejectReason, "cancelReason": o.CancelReason,
+	}
+	if o.Situation != nil {
+		m["situation"] = o.Situation
+	}
+	if o.ReasonSet {
+		reason := o.Reason
+		if reason == nil {
+			reason = []string{}
+		}
+		m["reasonSet"] = true
+		m["reason"] = reason
 	}
 	if o.ExpiresAt != nil {
 		m["expiresAt"] = o.ExpiresAt.UTC().Format(time.RFC3339Nano)

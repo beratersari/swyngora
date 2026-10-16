@@ -92,6 +92,10 @@
     "lotMethod": "Lot method",
     "fifo": "FIFO",
     "lifo": "LIFO",
+    "reasonTitle": "Reason for this order",
+    "reasonHint": "Only the clauses you mark are stored. Later reads use those.",
+    "reasonFailed": "The market read did not load. This order will not store a reason.",
+    "reasonBlank": "This read has no clauses. This order will not store a reason.",
     "kinds": {
       "market": "Market",
       "limit": "Limit",
@@ -243,7 +247,8 @@
     "cancelSuccess": "Order canceled",
     "amend": "Amend",
     "amendTitle": "Amend pending order",
-    "amendSuccess": "Order amended"
+    "amendSuccess": "Order amended",
+    "reasonLeft": "The market has left the reason on this order."
   },
   "situationRecord": {
     "title": "What your closes made",

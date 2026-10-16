@@ -1877,6 +1877,14 @@ class OrderPreviewInput(BaseModel):
     limit_price: float = Field(default=0, description="Margin limit price")
     leverage: int = Field(default=0, description="Margin leverage 1-10")
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+    reason: list[str] | None = Field(
+        default=None,
+        description=(
+            "Clauses a spot buy, limit buy, or bracket stores: priceCvd, openInterest, "
+            "liquidation, prints, funding, crowd, size. Omit to store the whole read. "
+            "An empty list stores no read. A sell ignores this."
+        ),
+    )
 
 
 class PortfolioOrderInput(BaseModel):
@@ -1891,6 +1899,13 @@ class PortfolioOrderInput(BaseModel):
         description="Optional retry key; same key + same request returns the original fill",
     )
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+    reason: list[str] | None = Field(
+        default=None,
+        description=(
+            "Buy only. Clause ids to store. Omit to store the whole read. "
+            "An empty list stores no read. A sell ignores this."
+        ),
+    )
 
 
 class PortfolioPendingOrderInput(BaseModel):
@@ -1911,6 +1926,10 @@ class PortfolioPendingOrderInput(BaseModel):
         default=0, description="trailing_stop: fraction e.g. 0.05 or fixed offset"
     )
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+    reason: list[str] | None = Field(
+        default=None,
+        description="limit_buy only. Clause ids to store. Omit to store the whole read. An empty list stores no read.",
+    )
 
 
 class PortfolioLotsInput(BaseModel):
@@ -1956,6 +1975,10 @@ class PortfolioBracketInput(BaseModel):
     expires_at: str = ""
     idempotency_key: str = ""
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+    reason: list[str] | None = Field(
+        default=None,
+        description="Clauses the entry buy stores. Omit to store the whole read. An empty list stores no read.",
+    )
 
 
 class PortfolioAmendInput(BaseModel):
@@ -4176,6 +4199,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         leverage: int = 0,
         portfolio_id: str = "",
         risk_percent: float = 0,
+        reason: list[str] | None = None,
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -4208,6 +4232,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["leverage"] = leverage
         if portfolio_id:
             body["portfolioId"] = portfolio_id
+        if reason is not None:
+            body["reason"] = reason
         # A preview does not place, reserve, or open. Read-only sessions may call it.
         return http.post("/api/v1/portfolio/orders/preview", body, mutating=False)
 
@@ -4220,6 +4246,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         lot_method: str = "",
         idempotency_key: str = "",
         portfolio_id: str = "",
+        reason: list[str] | None = None,
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -4234,6 +4261,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["idempotencyKey"] = idempotency_key
         if portfolio_id:
             body["portfolioId"] = portfolio_id
+        if reason is not None:
+            body["reason"] = reason
         return http.post("/api/v1/portfolio/orders", body)
 
     def place_portfolio_pending_order(
@@ -4250,6 +4279,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         trail_type: str = "",
         trail_value: float = 0,
         portfolio_id: str = "",
+        reason: list[str] | None = None,
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -4273,6 +4303,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["trailValue"] = trail_value
         if portfolio_id:
             body["portfolioId"] = portfolio_id
+        if reason is not None:
+            body["reason"] = reason
         return http.post("/api/v1/portfolio/orders", body)
 
     def list_portfolio_lots(
@@ -4345,6 +4377,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         expires_at: str = "",
         idempotency_key: str = "",
         portfolio_id: str = "",
+        reason: list[str] | None = None,
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -4362,6 +4395,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["idempotencyKey"] = idempotency_key
         if portfolio_id:
             body["portfolioId"] = portfolio_id
+        if reason is not None:
+            body["reason"] = reason
         return http.post("/api/v1/portfolio/orders", body)
 
     def amend_portfolio_order(
@@ -6940,7 +6975,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "estimated sell profit, and whether a risk limit or the borrow cap would block it. "
                 "Pass risk_percent and stop_loss_price to size a spot buy, bracket, or margin open "
                 "from portfolio equity; quantity is then ignored. "
-                "Nothing is written. Call this before place_portfolio_order, a pending order, "
+                "Nothing is written. A spot buy also returns the live coin read. "
+                "Pass reason to name the clauses a buy would store. "
+                "Call this before place_portfolio_order, a pending order, "
                 "OCO, bracket, or place_margin_order. Not real money."
             ),
             args_schema=OrderPreviewInput,
@@ -6951,6 +6988,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "Paper market buy/sell. Fill is last price plus adverse slippage; a taker fee is charged. "
                 "Buy lot cost includes the fee; sell realized PnL is after the fee. "
+                "Pass reason to store only those clauses on a buy. Omit it to store the whole read. "
                 "Pass idempotency_key on retries so a timeout does not create a second fill. Not real money."
             ),
             args_schema=PortfolioOrderInput,

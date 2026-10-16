@@ -49,6 +49,8 @@ export type PlacePortfolioOrderArg = {
   timeInForce?: 'gtc' | 'ioc' | 'fok';
   expiresAt?: string;
   idempotencyKey?: string;
+  /** Clauses a buy stores. Omit to store the whole read. An empty list stores no read. */
+  reason?: string[];
 };
 
 export type PlacePortfolioOrderResponse = {
@@ -88,6 +90,8 @@ export type PreviewPortfolioOrderArg = {
   lotMethod?: 'fifo' | 'lifo';
   limitPrice?: number;
   leverage?: number;
+  /** Clauses a spot buy would store. Omit to leave the stored set unset. */
+  reason?: string[];
 };
 
 export type AmendPortfolioOrderArg = {
@@ -369,6 +373,7 @@ export const portfolioApi = baseApi.injectEndpoints({
           timeInForce: body.timeInForce,
           expiresAt: body.expiresAt,
           idempotencyKey: body.idempotencyKey,
+          ...(body.reason !== undefined ? { reason: body.reason } : {}),
         },
         headers: body.idempotencyKey ? { 'Idempotency-Key': body.idempotencyKey } : undefined,
       }),
@@ -395,6 +400,7 @@ export const portfolioApi = baseApi.injectEndpoints({
           lotMethod: body.lotMethod,
           limitPrice: body.limitPrice,
           leverage: body.leverage,
+          ...(body.reason !== undefined ? { reason: body.reason } : {}),
         },
       }),
       providesTags: ['Portfolio'],

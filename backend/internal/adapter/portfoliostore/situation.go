@@ -46,6 +46,40 @@ func marshalSituation(s *domain.CoinSituation) string {
 	return string(raw)
 }
 
+func reasonSetValue(o domain.PendingOrder) int {
+	if !o.ReasonSet {
+		return 0
+	}
+	return 1
+}
+
+func marshalReason(o domain.PendingOrder) string {
+	if !o.ReasonSet {
+		return ""
+	}
+	clauses := o.Reason
+	if clauses == nil {
+		clauses = []string{}
+	}
+	raw, err := json.Marshal(clauses)
+	if err != nil {
+		return "[]"
+	}
+	return string(raw)
+}
+
+func unmarshalReason(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var out []string
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil
+	}
+	return out
+}
+
 // ListSituationCloses returns every sold slice in the book with the buy's stored read
 // and the sell's stored read. A missing trade has a nil situation.
 func (s *SQLite) ListSituationCloses(ctx context.Context, clientID string) ([]domain.SituationClose, error) {
