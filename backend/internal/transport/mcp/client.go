@@ -783,7 +783,7 @@ func (c *APIClient) GetLiquidationHuntHeatmap(ctx context.Context, exchange, sym
 	return c.get(ctx, "/api/v1/market/liquidation-hunt/heatmap", q)
 }
 
-// GetLiquidationPrintHeatmap returns stored force-order notional by price and time.
+// GetLiquidationPrintHeatmap returns stored force-order notional by price and time, plus day and 4-hour print anchors on each requested book.
 func (c *APIClient) GetLiquidationPrintHeatmap(ctx context.Context, exchange, symbol, rawRange string) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("symbol", symbol)
@@ -1448,7 +1448,7 @@ func (c *APIClient) GetBreadth(ctx context.Context, exchange string, limit int) 
 	return c.get(ctx, "/api/v1/market/breadth", q)
 }
 
-// GetCoinSituation returns the short coin read: price versus CVD, 1h open interest, the leverage model, and measured 24h liquidation prints.
+// GetCoinSituation returns the short coin read: price versus CVD, 1h open interest, the leverage model, measured 24h liquidation prints, and those prints since 00:00 UTC and the current 4-hour open.
 // Empty at is the live read. A past at reads the stored minute at that candle close and leaves out the estimated pocket.
 func (c *APIClient) GetCoinSituation(ctx context.Context, symbol, at string) (json.RawMessage, error) {
 	q := url.Values{}

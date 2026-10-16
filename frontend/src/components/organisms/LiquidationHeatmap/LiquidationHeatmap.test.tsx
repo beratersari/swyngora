@@ -207,6 +207,50 @@ describe('LiquidationHeatmap', () => {
     expect(onSourceChange).toHaveBeenCalledWith('model');
   });
 
+  it('shows the day and 4-hour print clocks for the selected book', () => {
+    const props = {
+      data: {
+        ...data,
+        kind: 'prints' as const,
+        leverageMix: [],
+        combined: {
+          ...data.combined,
+          printAnchors: [
+            { anchor: 'day' as const, complete: true, side: 'short' as const, longNotional: 100, shortNotional: 4_000 },
+            { anchor: '4h' as const, complete: false, missing: ['bybit'] },
+          ],
+        },
+        binance: {
+          exchange: 'binance',
+          printAnchors: [
+            { anchor: 'day' as const, complete: true, side: 'quiet' as const, longNotional: 0, shortNotional: 0 },
+          ],
+        },
+      },
+      range: '24h' as const,
+      onRangeChange: () => undefined,
+      venue: 'combined' as const,
+      onVenueChange: () => undefined,
+      side: 'totals' as const,
+      onSideChange: () => undefined,
+      source: 'prints' as const,
+    };
+    const { rerender } = renderWithProviders(<LiquidationHeatmap {...props} />);
+    expect(screen.getByTestId('liquidation-heatmap-anchor-day')).toHaveTextContent(
+      'Since 00:00 UTC, measured prints are mostly short liquidations (100 long, 4.00K short).',
+    );
+    expect(screen.getByTestId('liquidation-heatmap-anchor-4h')).toHaveTextContent(
+      'Measured prints since this 4-hour open stay blank until Bybit cover that clock.',
+    );
+    rerender(<LiquidationHeatmap {...props} venue="binance" />);
+    expect(screen.getByTestId('liquidation-heatmap-anchor-day')).toHaveTextContent(
+      'Since 00:00 UTC, measured prints are quiet (0 long, 0 short).',
+    );
+    expect(screen.queryByTestId('liquidation-heatmap-anchor-4h')).not.toBeInTheDocument();
+    rerender(<LiquidationHeatmap {...props} source="model" />);
+    expect(screen.queryByTestId('liquidation-heatmap-anchor-day')).not.toBeInTheDocument();
+  });
+
   it('names an unrecorded print column and leaves a quiet recorded hour unmarked', () => {
     const props = {
       data: {

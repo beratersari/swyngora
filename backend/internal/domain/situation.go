@@ -46,7 +46,7 @@ const (
 	SituationSizeRetailSell         = "retail_sell"
 	SituationSizeFlat               = "flat"
 
-	situationNote = "Each clause stays blank until every venue that publishes it covers it. Funding, price versus CVD, open interest, the liquidation model, measured liquidation prints, and whale versus retail need Binance, Bybit, and OKX. Top versus crowd needs Binance and OKX; Bybit does not publish a top-trader ratio. A named venue is missing from that clause and is not treated as zero. The model names the closer estimated pocket. Measured prints are force-orders over the last 24 hours, and that total is definite only when the window was recorded. Informational only — not financial advice."
+	situationNote = "Each clause stays blank until every venue that publishes it covers it. Funding, price versus CVD, open interest, the liquidation model, measured liquidation prints, and whale versus retail need Binance, Bybit, and OKX. Top versus crowd needs Binance and OKX; Bybit does not publish a top-trader ratio. A named venue is missing from that clause and is not treated as zero. The model names the closer estimated pocket. Measured prints are force-orders over the last 24 hours, and that total is definite only when the window was recorded. printAnchors are those same prints since 00:00 UTC and since the current 4-hour open. An anchor stays blank and names the venue when that clock was not fully recorded. A quiet recorded clock is a real zero. Informational only — not financial advice."
 	// situationSizeFlatUSD ignores dust smaller than one USDT on a sized bar.
 	situationSizeFlatUSD = 1.0
 )
@@ -64,6 +64,7 @@ type CoinSituation struct {
 	LiquidationMissing  []string               `json:"liquidationMissing,omitempty"`
 	Prints              *SituationPrints       `json:"prints,omitempty"`
 	PrintsMissing       []string               `json:"printsMissing,omitempty"`
+	PrintAnchors        []PrintAnchor          `json:"printAnchors,omitempty"`
 	Funding             *SituationFunding      `json:"funding,omitempty"`
 	FundingMissing      []string               `json:"fundingMissing,omitempty"`
 	Crowd               *SituationCrowd        `json:"crowd,omitempty"`
@@ -140,6 +141,8 @@ type SituationPrints struct {
 // SituationPrintInput is the 24h print archive plus the live coverage clock.
 // ArchiveOK is false when the stored sum could not be read. The clause then
 // stays blank, because the memory book alone is not the whole window.
+// Anchors are the UTC day open and the current 4-hour open. Each window
+// has its own archive flag so a failed clock does not blank the other.
 type SituationPrintInput struct {
 	ArchiveOK bool
 	Coverage  []LiquidationCoverage
@@ -147,6 +150,37 @@ type SituationPrintInput struct {
 	// Minutes are five-minute venue buckets over the last 48 hours.
 	// They are how the print clock finds when the 24h side changed.
 	Minutes []SituationPrintMinute
+	Anchors []PrintAnchorWindow
+}
+
+const (
+	// PrintAnchorDay is 00:00 UTC.
+	PrintAnchorDay = "day"
+	// PrintAnchor4h is the current 4-hour block (00/04/08/12/16/20 UTC).
+	PrintAnchor4h = "4h"
+)
+
+// PrintAnchor is measured long and short notional since a clock.
+// Complete is false when a requested venue did not record [From, now).
+// Side is then empty and Missing names that venue. A complete quiet window
+// has Side quiet and zero notionals. Those zeros are a real reading.
+type PrintAnchor struct {
+	Anchor        string    `json:"anchor"`
+	From          time.Time `json:"from"`
+	Side          string    `json:"side,omitempty"`
+	LongNotional  float64   `json:"longNotional,omitempty"`
+	ShortNotional float64   `json:"shortNotional,omitempty"`
+	Complete      bool      `json:"complete"`
+	Missing       []string  `json:"missing,omitempty"`
+}
+
+// PrintAnchorWindow is one clock's stored sides.
+// ArchiveOK is false when that sum could not be read.
+type PrintAnchorWindow struct {
+	Anchor    string
+	From      time.Time
+	ArchiveOK bool
+	Sides     []LiquidationPrintSideRow
 }
 
 // BuildCoinSituation folds an already-loaded tape into one read.
@@ -180,6 +214,9 @@ func BuildCoinSituation(symbol string, now time.Time, cvd *CVDReport, oi *OpenIn
 		out.Prints = &row
 	} else {
 		out.PrintsMissing = missing
+	}
+	if len(prints.Anchors) > 0 {
+		out.PrintAnchors = BuildPrintAnchors(out.Symbol, now, prints.Coverage, prints.Anchors, FuturesVenues())
 	}
 	if payer, rate, ok, missing := situationFunding(funding); ok {
 		out.Funding = &SituationFunding{Payer: payer, RatePct: rate}
@@ -717,6 +754,109 @@ func situationPrints(symbol string, now time.Time, in SituationPrintInput) (Situ
 		ShortNotional: roundSituationUSD(shortN),
 		Window:        LiquidationWindow24h,
 	}, true, nil
+}
+
+// PrintAnchorStarts is the UTC day open and the current 4-hour open.
+func PrintAnchorStarts(now time.Time) (day, block time.Time) {
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	now = now.UTC()
+	day = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	block = now.Truncate(4 * time.Hour)
+	return day, block
+}
+
+// BuildPrintAnchors folds stored print sides into the day and 4-hour clocks.
+// venues is the book being read. One venue uses only that venue. All three
+// venues withhold the anchor when any of them missed the clock.
+func BuildPrintAnchors(symbol string, now time.Time, coverage []LiquidationCoverage, windows []PrintAnchorWindow, venues []Exchange) []PrintAnchor {
+	if len(windows) == 0 {
+		return nil
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	now = now.UTC()
+	if len(venues) == 0 {
+		venues = FuturesVenues()
+	}
+	out := make([]PrintAnchor, 0, len(windows))
+	for _, w := range windows {
+		out = append(out, buildPrintAnchor(symbol, now, w, coverage, venues))
+	}
+	return out
+}
+
+// AttachPrintAnchors writes day and 4-hour print clocks onto a measured map.
+// A single-venue map leaves the other books alone. Combined is set only when
+// Binance, Bybit, and OKX are all in the request. A model map is left alone.
+func AttachPrintAnchors(report *HuntHeatmapReport, symbol string, now time.Time, coverage []LiquidationCoverage, windows []PrintAnchorWindow, venues []Exchange) {
+	if report == nil || report.Kind != HuntHeatmapKindPrints || len(windows) == 0 {
+		return
+	}
+	want := map[Exchange]bool{}
+	for _, ex := range venues {
+		want[ex] = true
+	}
+	if want[ExchangeBinance] {
+		report.Binance.PrintAnchors = BuildPrintAnchors(symbol, now, coverage, windows, []Exchange{ExchangeBinance})
+	}
+	if want[ExchangeBybit] {
+		report.Bybit.PrintAnchors = BuildPrintAnchors(symbol, now, coverage, windows, []Exchange{ExchangeBybit})
+	}
+	if want[ExchangeOKX] {
+		report.OKX.PrintAnchors = BuildPrintAnchors(symbol, now, coverage, windows, []Exchange{ExchangeOKX})
+	}
+	if want[ExchangeBinance] && want[ExchangeBybit] && want[ExchangeOKX] {
+		report.Combined.PrintAnchors = BuildPrintAnchors(symbol, now, coverage, windows, FuturesVenues())
+	}
+}
+
+func buildPrintAnchor(symbol string, now time.Time, w PrintAnchorWindow, coverage []LiquidationCoverage, venues []Exchange) PrintAnchor {
+	from := w.From.UTC()
+	out := PrintAnchor{Anchor: w.Anchor, From: from}
+	if !w.ArchiveOK {
+		out.Missing = printAnchorVenueNames(venues)
+		return out
+	}
+	byEx := map[Exchange]LiquidationPrintSideRow{}
+	for _, row := range w.Sides {
+		byEx[row.Exchange] = row
+	}
+	var missing []string
+	var longN, shortN float64
+	for _, ex := range venues {
+		cov := printCoverage(ex, symbol, coverage)
+		if !situationPrintWindowRecorded(cov, from, now) {
+			missing = append(missing, string(ex))
+			continue
+		}
+		row := byEx[ex]
+		if row.Long > 0 {
+			longN += row.Long
+		}
+		if row.Short > 0 {
+			shortN += row.Short
+		}
+	}
+	if len(missing) > 0 {
+		out.Missing = missing
+		return out
+	}
+	out.Complete = true
+	out.Side = situationPrintSide(longN, shortN)
+	out.LongNotional = roundSituationUSD(longN)
+	out.ShortNotional = roundSituationUSD(shortN)
+	return out
+}
+
+func printAnchorVenueNames(venues []Exchange) []string {
+	out := make([]string, 0, len(venues))
+	for _, ex := range venues {
+		out = append(out, string(ex))
+	}
+	return out
 }
 
 // situationPrintWindowRecorded is true when the watch started at or before

@@ -971,16 +971,27 @@ func levelsReviewVenueToDTO(v domain.LiquidationLevelsReviewVenue) liquidationLe
 }
 
 type huntHeatmapGridDTO struct {
-	Exchange      string      `json:"exchange"`
-	Longs         [][]float64 `json:"longs"`
-	Shorts        [][]float64 `json:"shorts"`
-	Totals        [][]float64 `json:"totals"`
-	MaxIntensity  float64     `json:"maxIntensity"`
-	Coverage      float64     `json:"coverage"`
-	ColumnsWithOi int         `json:"columnsWithOi"`
-	LastPrice     float64     `json:"lastPrice,omitempty"`
-	AccountBlend  string      `json:"accountBlend,omitempty"`
-	HasData       []bool      `json:"hasData,omitempty"`
+	Exchange      string           `json:"exchange"`
+	Longs         [][]float64      `json:"longs"`
+	Shorts        [][]float64      `json:"shorts"`
+	Totals        [][]float64      `json:"totals"`
+	MaxIntensity  float64          `json:"maxIntensity"`
+	Coverage      float64          `json:"coverage"`
+	ColumnsWithOi int              `json:"columnsWithOi"`
+	LastPrice     float64          `json:"lastPrice,omitempty"`
+	AccountBlend  string           `json:"accountBlend,omitempty"`
+	HasData       []bool           `json:"hasData,omitempty"`
+	PrintAnchors  []printAnchorDTO `json:"printAnchors,omitempty"`
+}
+
+type printAnchorDTO struct {
+	Anchor        string    `json:"anchor"`
+	From          time.Time `json:"from"`
+	Side          string    `json:"side,omitempty"`
+	LongNotional  float64   `json:"longNotional,omitempty"`
+	ShortNotional float64   `json:"shortNotional,omitempty"`
+	Complete      bool      `json:"complete"`
+	Missing       []string  `json:"missing,omitempty"`
 }
 
 type huntLeverageBucketDTO struct {
@@ -1155,5 +1166,21 @@ func huntGridToDTO(g domain.HuntHeatmapGrid) huntHeatmapGridDTO {
 		Exchange: g.Exchange, Longs: g.Longs, Shorts: g.Shorts, Totals: g.Totals,
 		MaxIntensity: g.MaxIntensity, Coverage: g.Coverage, ColumnsWithOi: g.ColumnsWithOI,
 		LastPrice: g.LastPrice, AccountBlend: g.AccountBlend, HasData: g.HasData,
+		PrintAnchors: printAnchorsToDTO(g.PrintAnchors),
 	}
+}
+
+func printAnchorsToDTO(rows []domain.PrintAnchor) []printAnchorDTO {
+	if len(rows) == 0 {
+		return nil
+	}
+	out := make([]printAnchorDTO, len(rows))
+	for i, row := range rows {
+		out[i] = printAnchorDTO{
+			Anchor: row.Anchor, From: row.From.UTC(), Side: row.Side,
+			LongNotional: row.LongNotional, ShortNotional: row.ShortNotional,
+			Complete: row.Complete, Missing: row.Missing,
+		}
+	}
+	return out
 }

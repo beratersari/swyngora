@@ -1917,6 +1917,9 @@ func TestGetLiquidationHuntHeatmap_OK(t *testing.T) {
 	if len(body.Review.Binance.Horizons) != 3 || body.Review.HotFrac <= 0 {
 		t.Fatalf("review %+v", body.Review)
 	}
+	if len(body.Combined.PrintAnchors) != 0 || len(body.Binance.PrintAnchors) != 0 {
+		t.Fatalf("model map has print anchors %+v", body.Combined.PrintAnchors)
+	}
 }
 
 func TestGetLiquidationOpenLevels_OK(t *testing.T) {
@@ -1979,6 +1982,13 @@ func TestGetLiquidationPrintHeatmap_OK(t *testing.T) {
 	}
 	if len(body.Review.Binance.Horizons) != 0 || len(body.Review.OKX.Horizons) != 0 {
 		t.Fatalf("review %+v", body.Review)
+	}
+	day := body.Combined.PrintAnchors
+	if len(day) != 2 || day[0].Anchor != domain.PrintAnchorDay || day[1].Anchor != domain.PrintAnchor4h || day[0].Complete || day[0].Side != "" || len(day[0].Missing) != 3 || day[0].Missing[0] != "binance" {
+		t.Fatalf("print anchors %+v", day)
+	}
+	if len(body.Binance.PrintAnchors) != 2 || body.Binance.PrintAnchors[0].Complete || body.Binance.PrintAnchors[0].Missing[0] != "binance" {
+		t.Fatalf("binance anchors %+v", body.Binance.PrintAnchors)
 	}
 }
 

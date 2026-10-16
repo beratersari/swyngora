@@ -70,6 +70,14 @@ func TestGetCoinSituation_MeasuredPrintsUseStoredRowsAndNewerBook(t *testing.T) 
 	if got.Prints.LongNotional != 135 || got.Prints.ShortNotional != 40 {
 		t.Fatalf("notionals %+v", got.Prints)
 	}
+	if len(got.PrintAnchors) != 2 || got.PrintAnchors[0].Anchor != domain.PrintAnchorDay || got.PrintAnchors[1].Anchor != domain.PrintAnchor4h {
+		t.Fatalf("anchors %+v", got.PrintAnchors)
+	}
+	for _, row := range got.PrintAnchors {
+		if !row.Complete || row.Side != domain.SituationPrintLong || row.LongNotional != 135 || row.ShortNotional != 40 {
+			t.Fatalf("anchor %+v", row)
+		}
+	}
 	if got.Liquidation != nil && got.Liquidation.Side == got.Prints.Side && got.Prints.LongNotional == 0 {
 		t.Fatal("measured notionals must stay on the print clause")
 	}
@@ -94,6 +102,14 @@ func TestGetCoinSituation_MeasuredPrintsStayBlankWithoutTheArchive(t *testing.T)
 	}
 	if got.Prints != nil || len(got.PrintsMissing) != len(domain.FuturesVenues()) {
 		t.Fatalf("prints %+v missing %v", got.Prints, got.PrintsMissing)
+	}
+	if len(got.PrintAnchors) != 2 {
+		t.Fatalf("anchors %+v", got.PrintAnchors)
+	}
+	for _, row := range got.PrintAnchors {
+		if row.Complete || row.Side != "" || len(row.Missing) != len(domain.FuturesVenues()) {
+			t.Fatalf("blank anchor %+v", row)
+		}
 	}
 }
 

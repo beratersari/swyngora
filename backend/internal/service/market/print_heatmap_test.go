@@ -94,10 +94,16 @@ func TestGetLiquidationPrintHeatmap_BookPrintAndCoverage(t *testing.T) {
 	if got.Combined.ColumnsWithOI != 0 {
 		t.Fatalf("combined cols %d", got.Combined.ColumnsWithOI)
 	}
+	if len(got.Combined.PrintAnchors) != 2 || got.Combined.PrintAnchors[0].Anchor != domain.PrintAnchorDay || got.Combined.PrintAnchors[0].Complete || len(got.Combined.PrintAnchors[0].Missing) != 3 {
+		t.Fatalf("anchors without an archive stay blank: %+v", got.Combined.PrintAnchors)
+	}
 
 	one, err := svc.GetLiquidationPrintHeatmap(context.Background(), "binance", "BTCUSDT", "24h")
 	if err != nil || one.Binance.MaxIntensity != 2500 || one.Bybit.ColumnsWithOI != 0 {
 		t.Fatalf("%v %+v", err, one)
+	}
+	if len(one.Combined.PrintAnchors) != 0 || len(one.Binance.PrintAnchors) != 2 || one.Binance.PrintAnchors[1].Complete || one.Binance.PrintAnchors[1].Missing[0] != "binance" {
+		t.Fatalf("single-venue anchors %+v combined %+v", one.Binance.PrintAnchors, one.Combined.PrintAnchors)
 	}
 }
 

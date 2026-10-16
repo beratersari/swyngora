@@ -752,6 +752,22 @@
       "quiet": "Measured liquidation prints over the last 24h are quiet.",
       "missing": "Measured liquidation prints stay blank until {{venues}} cover the last 24h."
     },
+    "printAnchors": {
+      "day": {
+        "long": "Since 00:00 UTC, measured prints are mostly long liquidations ({{long}} long, {{short}} short).",
+        "short": "Since 00:00 UTC, measured prints are mostly short liquidations ({{long}} long, {{short}} short).",
+        "even": "Since 00:00 UTC, measured long and short prints are about even ({{long}} long, {{short}} short).",
+        "quiet": "Since 00:00 UTC, measured prints are quiet ({{long}} long, {{short}} short).",
+        "missing": "Measured prints since 00:00 UTC stay blank until {{venues}} cover that clock."
+      },
+      "4h": {
+        "long": "Since this 4-hour open, measured prints are mostly long liquidations ({{long}} long, {{short}} short).",
+        "short": "Since this 4-hour open, measured prints are mostly short liquidations ({{long}} long, {{short}} short).",
+        "even": "Since this 4-hour open, measured long and short prints are about even ({{long}} long, {{short}} short).",
+        "quiet": "Since this 4-hour open, measured prints are quiet ({{long}} long, {{short}} short).",
+        "missing": "Measured prints since this 4-hour open stay blank until {{venues}} cover that clock."
+      }
+    },
     "funding": {
       "long": "Longs pay the combined funding ({{pct}}%).",
       "short": "Shorts pay the combined funding ({{pct}}%).",

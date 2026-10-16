@@ -287,6 +287,15 @@ export type CoinSituationPrints = {
   window?: string;
   since?: string;
 };
+export type CoinSituationPrintAnchor = {
+  anchor?: 'day' | '4h';
+  from?: string;
+  side?: 'long' | 'short' | 'even' | 'quiet';
+  longNotional?: number;
+  shortNotional?: number;
+  complete?: boolean;
+  missing?: string[];
+};
 export type CoinSituationFunding = {
   payer?: 'long' | 'short' | 'none';
   ratePct?: number;
@@ -321,6 +330,7 @@ export type CoinSituation = {
   liquidationMissing?: string[];
   prints?: CoinSituationPrints | null;
   printsMissing?: string[];
+  printAnchors?: CoinSituationPrintAnchor[];
   funding?: CoinSituationFunding | null;
   fundingMissing?: string[];
   crowd?: CoinSituationCrowd | null;

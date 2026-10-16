@@ -44,6 +44,7 @@ func (s *Service) GetLiquidationPrintHeatmap(ctx context.Context, exchange, symb
 	}
 	if pMax <= pMin || len(times) == 0 {
 		got := domain.BuildMeasuredLiquidationHeatmap(in)
+		domain.AttachPrintAnchors(&got, symbol, now, in.Coverage, s.measuredPrintAnchorWindows(ctx, symbol, now), venues)
 		return &got, nil
 	}
 	q := domain.MeasuredPrintQuery{
@@ -57,7 +58,33 @@ func (s *Service) GetLiquidationPrintHeatmap(ctx context.Context, exchange, symb
 	scan = mergeBookPrints(scan, q, s.liq)
 	in.Bins = scan.Bins
 	got := domain.BuildMeasuredLiquidationHeatmap(in)
+	domain.AttachPrintAnchors(&got, symbol, now, in.Coverage, s.measuredPrintAnchorWindows(ctx, symbol, now), venues)
 	return &got, nil
+}
+
+// measuredPrintAnchorWindows loads the UTC day and the current 4-hour print sums.
+// A failed window stays incomplete. It does not fail the heatmap.
+func (s *Service) measuredPrintAnchorWindows(ctx context.Context, symbol string, now time.Time) []domain.PrintAnchorWindow {
+	day, block := domain.PrintAnchorStarts(now)
+	specs := []struct {
+		id   string
+		from time.Time
+	}{
+		{domain.PrintAnchorDay, day},
+		{domain.PrintAnchor4h, block},
+	}
+	out := make([]domain.PrintAnchorWindow, len(specs))
+	var wg sync.WaitGroup
+	for i, spec := range specs {
+		wg.Add(1)
+		go func(i int, id string, from time.Time) {
+			defer wg.Done()
+			sides, ok := s.summedPrintSides(ctx, symbol, from, now)
+			out[i] = domain.PrintAnchorWindow{Anchor: id, From: from, ArchiveOK: ok, Sides: sides}
+		}(i, spec.id, spec.from)
+	}
+	wg.Wait()
+	return out
 }
 
 func (s *Service) measuredPrintExtent(ctx context.Context, venues []domain.Exchange, symbol string, spec domain.HuntHeatmapSpec, now time.Time, times []time.Time, origin, until time.Time) (float64, float64) {

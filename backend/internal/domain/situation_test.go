@@ -375,3 +375,138 @@ func TestBuildCoinSituation_MeasuredPrintsStayBlankWhenTheWindowIsOpen(t *testin
 		t.Fatalf("pair clock %+v missing %v", pairLate.Prints, pairLate.PrintsMissing)
 	}
 }
+
+func TestBuildPrintAnchors_DayAndBlockStaySeparateFrom24h(t *testing.T) {
+	now := time.Date(2026, 10, 12, 15, 30, 0, 0, time.UTC)
+	day, block := PrintAnchorStarts(now)
+	if !day.Equal(time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC)) || !block.Equal(time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)) {
+		t.Fatalf("clocks day %s block %s", day, block)
+	}
+	start := now.Add(-48 * time.Hour)
+	cov := watchedPrints(now, nil).Coverage
+	late := time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC)
+	windows := []PrintAnchorWindow{
+		{
+			Anchor: PrintAnchorDay, From: day, ArchiveOK: true,
+			Sides: []LiquidationPrintSideRow{
+				{Exchange: ExchangeBinance, Long: 80, Short: 10},
+				{Exchange: ExchangeBybit, Long: 30, Short: 5},
+				{Exchange: ExchangeOKX, Short: 5},
+			},
+		},
+		{Anchor: PrintAnchor4h, From: block, ArchiveOK: true},
+	}
+	got := BuildCoinSituation("BTCUSDT", now, nil, nil, nil, nil, nil, SituationPrintInput{
+		ArchiveOK: false,
+		Coverage:  cov,
+		Anchors:   windows,
+	})
+	if got.Prints != nil || len(got.PrintsMissing) != 3 {
+		t.Fatalf("24h stays blank when its own archive failed: %+v missing %v", got.Prints, got.PrintsMissing)
+	}
+	if len(got.PrintAnchors) != 2 {
+		t.Fatalf("anchors %+v", got.PrintAnchors)
+	}
+	dayRow, blockRow := got.PrintAnchors[0], got.PrintAnchors[1]
+	if dayRow.Anchor != PrintAnchorDay || !dayRow.Complete || dayRow.Side != SituationPrintLong || dayRow.LongNotional != 110 || dayRow.ShortNotional != 20 {
+		t.Fatalf("day %+v", dayRow)
+	}
+	if blockRow.Anchor != PrintAnchor4h || !blockRow.From.Equal(block) || !blockRow.Complete || blockRow.Side != SituationPrintQuiet || blockRow.LongNotional != 0 || blockRow.ShortNotional != 0 {
+		t.Fatalf("quiet block %+v", blockRow)
+	}
+
+	lateCov := []LiquidationCoverage{
+		{Exchange: ExchangeBinance, Symbol: "BTCUSDT", FirstWatch: late},
+		{Exchange: ExchangeBybit, Symbol: "BTCUSDT", FirstWatch: start},
+		{Exchange: ExchangeOKX, Symbol: "BTCUSDT", FirstWatch: start},
+	}
+	partial := []PrintAnchorWindow{
+		{Anchor: PrintAnchorDay, From: day, ArchiveOK: true, Sides: []LiquidationPrintSideRow{{Exchange: ExchangeBybit, Long: 50}}},
+		{Anchor: PrintAnchor4h, From: block, ArchiveOK: true, Sides: []LiquidationPrintSideRow{{Exchange: ExchangeBybit, Short: 9}}},
+	}
+	open := BuildPrintAnchors("BTCUSDT", now, lateCov, partial, FuturesVenues())
+	if open[0].Complete || open[0].Side != "" || open[0].LongNotional != 0 || len(open[0].Missing) != 1 || open[0].Missing[0] != "binance" {
+		t.Fatalf("partial day must stay blank: %+v", open[0])
+	}
+	if !open[1].Complete || open[1].Side != SituationPrintShort || open[1].ShortNotional != 9 || open[1].LongNotional != 0 {
+		t.Fatalf("block is inside the later watch: %+v", open[1])
+	}
+	gappedCov := append([]LiquidationCoverage{}, lateCov...)
+	gappedCov[2].Gaps = []LiquidationGap{{From: block.Add(time.Minute)}}
+	gapped := BuildPrintAnchors("BTCUSDT", now, gappedCov, partial, FuturesVenues())
+	if gapped[0].Complete || len(gapped[0].Missing) != 2 || gapped[0].Missing[0] != "binance" || gapped[0].Missing[1] != "okx" {
+		t.Fatalf("day contains the gap: %+v", gapped[0])
+	}
+	if gapped[1].Complete || gapped[1].Side != "" || gapped[1].ShortNotional != 0 || len(gapped[1].Missing) != 1 || gapped[1].Missing[0] != "okx" {
+		t.Fatalf("block gap %+v", gapped[1])
+	}
+
+	binanceOnly := BuildPrintAnchors("BTCUSDT", now, []LiquidationCoverage{
+		{Exchange: ExchangeBinance, Symbol: "BTCUSDT", FirstWatch: late},
+	}, windows, []Exchange{ExchangeBinance})
+	if binanceOnly[0].Complete || len(binanceOnly[0].Missing) != 1 || binanceOnly[0].Missing[0] != "binance" {
+		t.Fatalf("binance day %+v", binanceOnly[0])
+	}
+	if !binanceOnly[1].Complete || binanceOnly[1].Side != SituationPrintQuiet {
+		t.Fatalf("binance block is inside the watch: %+v", binanceOnly[1])
+	}
+
+	down := BuildPrintAnchors("BTCUSDT", now, cov, []PrintAnchorWindow{
+		{Anchor: PrintAnchorDay, From: day},
+		{Anchor: PrintAnchor4h, From: block},
+	}, FuturesVenues())
+	if down[0].Complete || len(down[0].Missing) != 3 || down[1].Side != "" {
+		t.Fatalf("unread archive %+v", down)
+	}
+}
+
+func TestAttachPrintAnchors_FollowsTheSelectedBook(t *testing.T) {
+	now := time.Date(2026, 10, 12, 15, 30, 0, 0, time.UTC)
+	day, block := PrintAnchorStarts(now)
+	start := now.Add(-48 * time.Hour)
+	cov := []LiquidationCoverage{
+		{Exchange: ExchangeBinance, Symbol: "BTCUSDT", FirstWatch: time.Date(2026, 10, 12, 10, 0, 0, 0, time.UTC)},
+		{Exchange: ExchangeBybit, Symbol: "BTCUSDT", FirstWatch: start},
+		{Exchange: ExchangeOKX, Symbol: "BTCUSDT", FirstWatch: start},
+	}
+	windows := []PrintAnchorWindow{
+		{Anchor: PrintAnchorDay, From: day, ArchiveOK: true, Sides: []LiquidationPrintSideRow{{Exchange: ExchangeBybit, Long: 50}}},
+		{Anchor: PrintAnchor4h, From: block, ArchiveOK: true},
+	}
+	all := HuntHeatmapReport{Kind: HuntHeatmapKindPrints}
+	AttachPrintAnchors(&all, "BTCUSDT", now, cov, windows, FuturesVenues())
+	if all.Combined.PrintAnchors[0].Complete || all.Combined.PrintAnchors[0].Missing[0] != "binance" {
+		t.Fatalf("combined day %+v", all.Combined.PrintAnchors)
+	}
+	if !all.Combined.PrintAnchors[1].Complete || all.Combined.PrintAnchors[1].Side != SituationPrintQuiet {
+		t.Fatalf("combined block %+v", all.Combined.PrintAnchors[1])
+	}
+	if !all.Bybit.PrintAnchors[0].Complete || all.Bybit.PrintAnchors[0].Side != SituationPrintLong || all.Bybit.PrintAnchors[0].LongNotional != 50 {
+		t.Fatalf("bybit day %+v", all.Bybit.PrintAnchors[0])
+	}
+
+	one := HuntHeatmapReport{Kind: HuntHeatmapKindPrints}
+	AttachPrintAnchors(&one, "BTCUSDT", now, cov, windows, []Exchange{ExchangeBinance})
+	if len(one.Combined.PrintAnchors) != 0 || len(one.Bybit.PrintAnchors) != 0 || one.Binance.PrintAnchors[0].Complete {
+		t.Fatalf("single venue %+v %+v %+v", one.Binance.PrintAnchors, one.Bybit.PrintAnchors, one.Combined.PrintAnchors)
+	}
+
+	model := HuntHeatmapReport{Kind: HuntHeatmapKindModel}
+	AttachPrintAnchors(&model, "BTCUSDT", now, cov, windows, FuturesVenues())
+	if len(model.Combined.PrintAnchors) != 0 {
+		t.Fatalf("model map %+v", model.Combined.PrintAnchors)
+	}
+}
+
+func TestSituationLeft_IgnoresPrintAnchors(t *testing.T) {
+	entry := &CoinSituation{Prints: &SituationPrints{Side: SituationPrintLong}}
+	live := &CoinSituation{
+		Prints: &SituationPrints{Side: SituationPrintLong},
+		PrintAnchors: []PrintAnchor{{
+			Anchor: PrintAnchorDay, Side: SituationPrintShort, Complete: true, LongNotional: 1,
+		}},
+	}
+	if left, changed := SituationLeft(entry, live); left || len(changed) != 0 {
+		t.Fatalf("anchors must stay out of the alert: %v %v", left, changed)
+	}
+}

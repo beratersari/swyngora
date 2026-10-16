@@ -752,6 +752,22 @@
       "quiet": "Son 24 saatte ölçülen likidasyon baskısı sakin.",
       "missing": "Ölçülen likidasyon baskıları, {{venues}} son 24 saati kapatana kadar boş kalır."
     },
+    "printAnchors": {
+      "day": {
+        "long": "00:00 UTC'den beri ölçülen baskılar çoğunlukla long likidasyon ({{long}} long, {{short}} short).",
+        "short": "00:00 UTC'den beri ölçülen baskılar çoğunlukla short likidasyon ({{long}} long, {{short}} short).",
+        "even": "00:00 UTC'den beri ölçülen long ve short likidasyonlar yaklaşık denk ({{long}} long, {{short}} short).",
+        "quiet": "00:00 UTC'den beri ölçülen likidasyon baskısı sakin ({{long}} long, {{short}} short).",
+        "missing": "00:00 UTC'den beri ölçülen baskılar, {{venues}} o saati kapatana kadar boş kalır."
+      },
+      "4h": {
+        "long": "Bu 4 saatlik açılıştan beri ölçülen baskılar çoğunlukla long likidasyon ({{long}} long, {{short}} short).",
+        "short": "Bu 4 saatlik açılıştan beri ölçülen baskılar çoğunlukla short likidasyon ({{long}} long, {{short}} short).",
+        "even": "Bu 4 saatlik açılıştan beri ölçülen long ve short likidasyonlar yaklaşık denk ({{long}} long, {{short}} short).",
+        "quiet": "Bu 4 saatlik açılıştan beri ölçülen likidasyon baskısı sakin ({{long}} long, {{short}} short).",
+        "missing": "Bu 4 saatlik açılıştan beri ölçülen baskılar, {{venues}} o saati kapatana kadar boş kalır."
+      }
+    },
     "funding": {
       "long": "Longlar birleşik fonlamayı ödüyor (%{{pct}}).",
       "short": "Shortlar birleşik fonlamayı ödüyor (%{{pct}}).",

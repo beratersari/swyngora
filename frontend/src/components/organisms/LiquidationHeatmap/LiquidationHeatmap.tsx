@@ -3,6 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Skeleton } from '@/components/atoms/Skeleton';
 import { Text } from '@/components/atoms/Text';
+import { situationVenueList } from '@/components/molecules/CoinSituation';
+import { formatCompactUsd } from '@/libs/utils/formatMarket';
 import { LIQ_HEATMAP_RANGES, liqMapReadsArchive } from './LiquidationHeatmap.constants';
 import {
   buildLayout,
@@ -181,6 +183,27 @@ export function LiquidationHeatmap({
           {t('liqHeatmap.gap', { venues: gapLabel })}
         </Text>
       ) : null}
+      {prints
+        ? (['day', '4h'] as const).map((id) => {
+            const row = pickGrid(data, venue)?.printAnchors?.find((anchor) => anchor.anchor === id);
+            if (!row) return null;
+            const kind = row.complete && row.side ? row.side : 'missing';
+            return (
+              <Text
+                key={id}
+                variant="caption"
+                color="secondary"
+                data-testid={`liquidation-heatmap-anchor-${id}`}
+              >
+                {t(`situation.printAnchors.${id}.${kind}`, {
+                  long: formatCompactUsd(row.longNotional ?? 0),
+                  short: formatCompactUsd(row.shortNotional ?? 0),
+                  venues: situationVenueList(row.missing, t),
+                })}
+              </Text>
+            );
+          })
+        : null}
       <ChipRow>
         {onSourceChange ? (
           <>
