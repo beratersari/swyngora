@@ -5,8 +5,9 @@
 Keep **open interest**, **funding rate**, **long/short ratio**, and **liquidation**
 history for Binance USD-M, Bybit linear, and OKX USDT-swap so values survive a
 server restart and can be queried later by users or the AI. Hyperliquid adds
-sampled open interest and settled hourly funding for the same liquid USDT names.
-It does not add a long/short ratio, a tape, or a liquidation history.
+sampled open interest, settled hourly funding, and taker minutes for the same
+liquid USDT names. The taker minutes grow only while this process is watching.
+It does not add a long/short ratio or a liquidation history.
 
 ## Behavior
 
@@ -66,6 +67,7 @@ It does not add a long/short ratio, a tape, or a liquidation history.
 | OKX long/short | `GET /api/v5/rubik/stat/contracts/long-short-account-ratio-contract`, plus the top-trader account and position ratios, `period=1H` | Latest 1,440 entries on each endpoint. Top traders are OKX's top 5% by position value. |
 | Hyperliquid funding | `POST /info` `fundingHistory` | Settled hourly prints. This archive requests 90 days, 500 rows a page. A 429 pauses the pass. |
 | Hyperliquid open interest | `POST /info` `metaAndAssetCtxs` | No public history. The worker stores the current coin size times the mark while this process runs. |
+| Hyperliquid trades | `POST /info` `recentTrades` and `wss://api.hyperliquid.xyz/ws` `trades` | Newest public prints, then the live stream. There is no paged trade history. Minutes are kept while this process is watching. |
 
 - Liquidation prints are kept for the same retention. Public REST only
   refills about the last 7 days (Binance rejects a wider force-order

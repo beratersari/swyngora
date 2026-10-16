@@ -10,7 +10,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const takerDisclaimer = "Taker buy/sell is aggressive market-order volume (who hit the book), not how many accounts are already long or short. Binance USD-M, Bybit linear, and OKX USDT-swap each sum measured prints (price × size) from the public trade stream. A minute is kept while this process is recording. 1h and 4h stay incomplete until that tape covers the window. Informational only — not financial advice."
+const takerDisclaimer = "Taker buy/sell is aggressive market-order volume (who hit the book), not how many accounts are already long or short. Binance USD-M, Bybit linear, and OKX USDT-swap each sum measured prints (price × size) from the public trade stream. exchange=hyperliquid is that venue's own tape and is not inside the combined view. Its public history is only the newest trades, so the hour grows while this process is watching. A minute is kept while this process is recording. 1h and 4h stay incomplete until that tape covers the window. Informational only — not financial advice."
 
 // GetTakerFlow returns aggressive futures buy vs sell volume for 5m / 1h / 4h.
 func (s *Service) GetTakerFlow(ctx context.Context, exchange, symbol string) (*domain.TakerFlowReport, error) {

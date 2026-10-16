@@ -335,6 +335,20 @@ func TestBuildDerivativesGrid_HyperliquidIsFundingAndOpenInterestOnly(t *testing
 			t.Fatalf("%s venues %+v", metric, cell.Venues)
 		}
 	}
+	cvd := BuildDerivativesGrid(GridBuildInput{
+		Exchange: "hyperliquid", Now: now, Symbols: []string{"BTCUSDT"},
+		Spec: spec(GridMetricCVD),
+		Taker: []GridTakerSum{{
+			Exchange: ExchangeHyperliquid, Symbol: "BTCUSDT", Bucket: col,
+			Buy: 80, Sell: 30, Minutes: 50,
+			First: col, Last: col.Add(59 * time.Minute),
+		}},
+	})
+	cell = gridTestCell(t, cvd, "BTCUSDT", col)
+	if !cell.Definite || math.Abs(cell.Value-50) > 1e-9 || len(cell.Missing) != 0 {
+		t.Fatalf("cvd %+v", cell)
+	}
+	requireGridVenue(t, cell, "hyperliquid", true, 50)
 
 	combined := []GridSnapshot{
 		{Metric: GridMetricFunding, Exchange: ExchangeBinance, Symbol: "BTCUSDT", Bucket: col, SampledAt: at, FundingRate: 0.0001},

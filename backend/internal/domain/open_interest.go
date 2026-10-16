@@ -89,7 +89,7 @@ type OpenInterestSnapshot struct {
 }
 
 // ParseOpenInterestExchange accepts binance, bybit, okx, hyperliquid, or all (empty = all).
-// Hyperliquid is mark, open interest, and funding only. Liquidation routes still reject it.
+// Hyperliquid is its own venue. Liquidation routes still reject it. Its tape and book are not inside all.
 func ParseOpenInterestExchange(raw string) (string, error) {
 	s := strings.ToLower(strings.TrimSpace(raw))
 	if s == "" || s == "all" || s == "combined" {

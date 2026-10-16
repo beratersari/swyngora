@@ -789,7 +789,9 @@ export interface paths {
          *     the price. Example: **40M bid within 1% below** mid and **15M ask
          *     above**. `exchange=all` (default) returns **Binance USD-M**,
          *     **Bybit linear**, and **OKX USDT-swap** separately plus `combined`
-         *     (sum of each venue's own ±% band). OKX contract size is converted
+         *     (sum of each venue's own ±% band). `exchange=hyperliquid` is that
+         *     book alone, at most 20 levels a side, and is not inside `combined`.
+         *     A band those levels do not reach stays incomplete. OKX contract size is converted
          *     to base before notional. `rangePct` is the headline band (default **1**,
          *     max 5). `bands` also include 0.1 / 0.25 / 0.5 / 2. `below` is
          *     resting bids; `above` is resting asks. `complete` is false when
@@ -888,9 +890,13 @@ export interface paths {
          *     only when every expected venue is fresh for that column.
          *     `exchange=hyperliquid` fills the mark, open interest, and the hourly
          *     funding rate. Open interest is the mark times coin size. The margin
-         *     is USDC, lined up with the USDT name. Liquidation, crowd, tape, CVD,
-         *     print size, order count, and book columns stay blank and are named
-         *     unsupported. Hyperliquid is not part of `exchange=all`. Order count
+         *     is USDC, lined up with the USDT name. Day CVD, the price-versus-CVD
+         *     run, 15-minute print size, 15-minute order count, 1-hour taker buy
+         *     share, and 1% bid share fill when that tape or book covers the window.
+         *     A short tape stays blank and is not zero. The public book is at most
+         *     20 levels a side, so bid share stays blank until those levels reach
+         *     1% of mid. Liquidation, crowd, and the crowd-versus-top gap stay
+         *     blank and are named unsupported. Hyperliquid is not part of `exchange=all`. Order count
          *     sums aggressive print counts over 15 minutes and stays blank when any
          *     venue's tape does not cover that window. Unusual names one venue's
          *     standout and does not average venues. A coin with no standout stays
@@ -939,9 +945,10 @@ export interface paths {
          *     absent, and that venue is not counted as zero. `venues` lists each
          *     expected exchange and that exchange's own number when it has the
          *     column. A missing exchange omits `value` and is not a zero.
-         *     `exchange=hyperliquid` publishes mark, open interest, and hourly funding
-         *     only. It is not folded into `exchange=all`. CVD and liquidation cells
-         *     stay blank and name Hyperliquid. They are not zeros. The open column stays
+         *     `exchange=hyperliquid` fills funding, open interest, and CVD when the
+         *     stored tape covers that column. It is not folded into `exchange=all`.
+         *     Liquidation cells stay blank and name Hyperliquid. They are not zeros.
+         *     A short tape stays blank. The open column stays
          *     blank when its newest sample is older than five minutes, or when the
          *     tape does not reach both edges of the column. `heat` on a liquidation
          *     cell is that column versus the coin's own median. Informational only.
@@ -1799,7 +1806,7 @@ export interface paths {
         /**
          * Average aggressive print size
          * @description Average **USDT notional per taker fill** on Binance USD-M, Bybit linear, and OKX USDT-swap
-         *     linear, split buy vs sell. Windows are **5 minutes** and **15 minutes**,
+         *     linear, split buy vs sell. `exchange=hyperliquid` uses that venue's own tape and is not inside `all`. Windows are **5 minutes** and **15 minutes**,
          *     each compared to the same length just before. A jump from 20K to 180K
          *     means a few large market orders, not many small ones (`read=few_large`).
          *     `kind` is jumped / faded / stable. Bybit is the newest ~1000 public
@@ -1880,7 +1887,7 @@ export interface paths {
          *     sell count), from **−1** (all sells) to **+1** (all buys). `lean` is
          *     buy, sell, or balanced (inside ±0.10). Combined sums the counts, then
          *     divides. Binance pages aggTrades; Bybit and OKX use the newest public
-         *     trades. Informational only.
+         *     trades. `exchange=hyperliquid` counts that venue's own tape and is not inside `all`. Informational only.
          */
         get: operations["getMarketOrderCount"];
         put?: never;
@@ -1904,7 +1911,7 @@ export interface paths {
          *     for the last **5 minutes, 1 hour, and 4 hours**. Each venue sums measured prints
          *     (price × size) from the public trade stream. Returns buy notional, sell notional,
          *     delta, and a short read with price / OI / funding. 1h and 4h stay incomplete until
-         *     this process has recorded that long. This is who is hitting the book now — not the
+         *     this process has recorded that long. `exchange=hyperliquid` is that venue's own tape and is not inside the combined view. Its public history is only the newest trades, so the hour grows while this process is watching. This is who is hitting the book now — not the
          *     account long/short ratio. `exchange=all` adds a combined view.
          */
         get: operations["getMarketTakerFlow"];
@@ -2026,7 +2033,9 @@ export interface paths {
          *     out, not filled from the others; a minute nobody printed is not a
          *     gap) and is
          *     `complete` only when every venue passed in has reached the window
-         *     open. Futures expects Binance, Bybit, and OKX. Spot expects Binance
+         *     open. Futures expects Binance, Bybit, and OKX. `exchange=hyperliquid`
+         *     is that venue's own tape, grows only while this process is watching,
+         *     and is not inside the combined view. Spot expects Binance
          *     and Bybit. OKX has no spot CVD.
          *     `venues` / `combined` are futures; `spotVenues` / `spotCombined`
          *     are spot. `spotFutures` flags when spot CVD and futures CVD
@@ -12681,7 +12690,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | okx | all (default all) */
+                /** @description binance | bybit | okx | hyperliquid | all (default all). hyperliquid is that book alone and is not inside all */
                 exchange?: string;
                 /** @description Headline ± percent of mid (default 1, 0.05–5) */
                 rangePct?: number;
@@ -13756,7 +13765,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | all (default all = both + combined) */
+                /** @description binance | bybit | okx | hyperliquid | all (default all = Binance, Bybit, and OKX plus combined; hyperliquid is that venue alone) */
                 exchange?: string;
             };
             header?: never;
@@ -13836,7 +13845,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | okx | all (default all) */
+                /** @description binance | bybit | okx | hyperliquid | all (default all = Binance, Bybit, and OKX plus combined; hyperliquid is that venue alone) */
                 exchange?: string;
             };
             header?: never;
@@ -13862,7 +13871,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
+                /** @description binance | bybit | okx | hyperliquid | all (default all = Binance, Bybit, and OKX plus combined; hyperliquid is that venue alone) */
                 exchange?: string;
             };
             header?: never;
@@ -13940,7 +13949,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
+                /** @description binance | bybit | okx | hyperliquid | all (default all = Binance, Bybit, and OKX plus combined; hyperliquid is that venue alone) */
                 exchange?: string;
                 /** @description 24h (5m bars) | 7d (30m) | 30d (2h) | 90d (4h). Default 24h. Use a range that reaches anchor. */
                 range?: "24h" | "7d" | "30d" | "90d";
@@ -14114,7 +14123,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
+                /** @description binance | bybit | okx | hyperliquid | all (default all = Binance, Bybit, and OKX plus combined; hyperliquid is that venue alone) */
                 exchange?: string;
             };
             header?: never;
@@ -14142,7 +14151,7 @@ export interface operations {
                 symbol: string;
                 /** @description Event time (RFC3339 or unix ms) — start of the during window */
                 at: string;
-                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
+                /** @description binance | bybit | okx | hyperliquid | all (default all = Binance, Bybit, and OKX plus combined; hyperliquid is that venue alone) */
                 exchange?: string;
                 /** @description Before/after lookback — 15m | 30m | 1h | 2h | 4h (default 1h) */
                 window?: string;
@@ -14176,7 +14185,7 @@ export interface operations {
                 from: string;
                 /** @description Second event time (RFC3339 or unix ms) */
                 to: string;
-                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
+                /** @description binance | bybit | okx | hyperliquid | all (default all = Binance, Bybit, and OKX plus combined; hyperliquid is that venue alone) */
                 exchange?: string;
                 /** @description Before/after lookback — 15m | 30m | 1h | 2h | 4h (default 1h) */
                 window?: string;
@@ -14340,7 +14349,7 @@ export interface operations {
                 at: string;
                 /** @description Observer clock (RFC3339 or unix ms). Tape, timeline, and similar-setup after-windows only include prints at or before this time. Must be at or after `at` and not in the future. Omit to use now (old events keep later prints that have already happened). */
                 asOf?: string;
-                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
+                /** @description binance | bybit | okx | hyperliquid | all (default all = Binance, Bybit, and OKX plus combined; hyperliquid is that venue alone) */
                 exchange?: string;
                 /** @description Before/after lookback — 15m | 30m | 1h | 2h | 4h (default 1h) */
                 window?: string;
@@ -14464,7 +14473,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
+                /** @description binance | bybit | okx | hyperliquid | all (default all = Binance, Bybit, and OKX plus combined; hyperliquid is that venue alone) */
                 exchange?: string;
                 /** @description 1h | 4h | 24h | 7d | 30d (default 24h). Ignored when startTime is set. */
                 window?: string;
@@ -14496,7 +14505,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
+                /** @description binance | bybit | okx | hyperliquid | all (default all = Binance, Bybit, and OKX plus combined; hyperliquid is that venue alone) */
                 exchange?: string;
                 /** @description 1h | 4h | 24h | 7d | 30d (default 24h). Ignored when startTime/endTime are set. */
                 window?: string;
@@ -14624,7 +14633,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
+                /** @description binance | bybit | okx | hyperliquid | all (default all = Binance, Bybit, and OKX plus combined; hyperliquid is that venue alone) */
                 exchange?: string;
             };
             header?: never;
@@ -14650,7 +14659,7 @@ export interface operations {
         parameters: {
             query: {
                 symbol: string;
-                /** @description binance | bybit | okx | all (default all = all futures venues + combined) */
+                /** @description binance | bybit | okx | hyperliquid | all (default all = Binance, Bybit, and OKX plus combined; hyperliquid is that venue alone) */
                 exchange?: string;
             };
             header?: never;

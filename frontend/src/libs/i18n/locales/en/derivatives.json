@@ -22,7 +22,7 @@
   "gridCombined": "Combined",
   "gridVenueMissing": "Missing. Not counted as zero.",
   "gridNoVenues": "No exchange breakdown for this cell.",
-  "hyperliquidHint": "Hyperliquid shows mark, open interest, and the hourly funding rate. Liquidation, tape, and book columns stay blank because that venue does not publish them. Open interest is mark times coin size. The margin is USDC, lined up with the USDT name.",
+  "hyperliquidHint": "Hyperliquid shows mark, open interest, and the hourly funding rate. Day CVD, print size, order count, taker buy share, and bid share fill when that tape or book covers the window. A short tape stays blank. The public book has at most 20 levels a side, so the 1% bid share stays blank until those levels reach 1%. Liquidation and crowd stay blank because Hyperliquid does not publish them. Open interest is mark times coin size. The margin is USDC, lined up with the USDT name.",
   "gridBlank": "Not a combined total until every venue has this column.",
   "gridMissing": "Missing: {{venues}}. That venue is not counted as zero.",
   "metric": "Color",

@@ -42,6 +42,7 @@ type Config struct {
 	OKXBaseURL              string
 	OKXWSURL                string
 	HyperliquidInfoURL      string
+	HyperliquidWSURL        string
 	HTTPClientTimeout       time.Duration
 	CandleCacheTTL          time.Duration
 	CandleCacheMaxEntries   int
@@ -254,6 +255,7 @@ func Load() Config {
 		OKXBaseURL:              getenv("OKX_BASE_URL", "https://www.okx.com"),
 		OKXWSURL:                getenv("OKX_WS_URL", "wss://ws.okx.com:8443/ws/v5/public"),
 		HyperliquidInfoURL:      getenv("HYPERLIQUID_INFO_URL", "https://api.hyperliquid.xyz"),
+		HyperliquidWSURL:        getenv("HYPERLIQUID_WS_URL", "wss://api.hyperliquid.xyz/ws"),
 		HTTPClientTimeout:       positiveDurationEnv("HTTP_CLIENT_TIMEOUT", 15*time.Second),
 		CandleCacheTTL:          positiveDurationEnv("CANDLE_CACHE_TTL", 30*time.Second),
 		CandleCacheMaxEntries:   positiveIntEnv("CANDLE_CACHE_MAX_ENTRIES", 512),

@@ -19,7 +19,7 @@ const (
 // GetWhales returns the largest recent aggressive trades and liquidations.
 // Empty symbol scans the top liquid USDT pairs (biggest first).
 func (s *Service) GetWhales(ctx context.Context, exchange, symbol string, minNotional float64, limit int) (*domain.WhaleReport, error) {
-	ex, err := domain.ParseLiquidationExchange(exchange)
+	ex, err := domain.ParseTakerExchange(exchange)
 	if err != nil {
 		return nil, err
 	}

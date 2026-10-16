@@ -259,6 +259,18 @@ func (w *FlowAtPricesHistoryWorker) Start(ctx context.Context) {
 	}
 }
 
+// flowSampleVenues is the combined tape plus a separate venue such as Hyperliquid.
+// The separate venue is stored for its own desk and is not part of exchange=all.
+func flowSampleVenues(has func(domain.Exchange) bool) []domain.Exchange {
+	out := configuredFutures("all", has)
+	for _, ex := range domain.MarkOnlyVenues() {
+		if has != nil && has(ex) {
+			out = append(out, ex)
+		}
+	}
+	return out
+}
+
 // RunOnce stores one pass and drops rows older than the retention window.
 func (w *FlowAtPricesHistoryWorker) RunOnce(ctx context.Context) {
 	if w == nil || w.Svc == nil {
@@ -273,7 +285,7 @@ func (w *FlowAtPricesHistoryWorker) RunOnce(ctx context.Context) {
 		if item.Slow && !doSlow {
 			continue
 		}
-		for _, ex := range configuredFutures("all", func(v domain.Exchange) bool { return w.Svc.printPort(v) != nil }) {
+		for _, ex := range flowSampleVenues(func(v domain.Exchange) bool { return w.Svc.printPort(v) != nil }) {
 			if ctx.Err() != nil {
 				return
 			}

@@ -27,6 +27,10 @@ func TestParsePerpDepthExchange(t *testing.T) {
 	if _, err := ParsePerpDepthExchange("coinbase"); !errors.Is(err, ErrInvalidArgument) {
 		t.Fatalf("%v", err)
 	}
+	got, err = ParsePerpDepthExchange("hyperliquid")
+	if err != nil || got != "hyperliquid" {
+		t.Fatalf("%s %v", got, err)
+	}
 }
 
 func TestBuildPerpDepthVenue_OnePercentBand(t *testing.T) {

@@ -237,6 +237,7 @@ func main() {
 		},
 		Taker: map[domain.Exchange]domain.TakerBucketPort{
 			domain.ExchangeBinance: binanceClient, domain.ExchangeBybit: bybitClient, domain.ExchangeOKX: okxClient,
+			domain.ExchangeHyperliquid: hyperliquidClient,
 		},
 		Logger: logger,
 		Seeds:  histSeeds,
@@ -317,19 +318,22 @@ func main() {
 		domain.ExchangeBybit:   bybitClient,
 		domain.ExchangeOKX:     okxClient,
 	}).WithTakerFlow(map[domain.Exchange]domain.TakerFlowPort{
-		domain.ExchangeBinance: binanceClient,
-		domain.ExchangeBybit:   bybitClient,
-		domain.ExchangeOKX:     okxClient,
+		domain.ExchangeBinance:     binanceClient,
+		domain.ExchangeBybit:       bybitClient,
+		domain.ExchangeOKX:         okxClient,
+		domain.ExchangeHyperliquid: hyperliquidClient,
 	}).WithRecentPrints(map[domain.Exchange]domain.RecentPrintPort{
-		domain.ExchangeOKX: okxClient,
+		domain.ExchangeOKX:         okxClient,
+		domain.ExchangeHyperliquid: hyperliquidClient,
 	}).WithFuturesVolume(map[domain.Exchange]domain.FuturesVolumePort{
 		domain.ExchangeBinance: binanceClient,
 		domain.ExchangeBybit:   bybitClient,
 		domain.ExchangeOKX:     okxClient,
 	}).WithFuturesDepth(map[domain.Exchange]domain.FuturesDepthPort{
-		domain.ExchangeBinance: binanceClient,
-		domain.ExchangeBybit:   bybitClient,
-		domain.ExchangeOKX:     okxClient,
+		domain.ExchangeBinance:     binanceClient,
+		domain.ExchangeBybit:       bybitClient,
+		domain.ExchangeOKX:         okxClient,
+		domain.ExchangeHyperliquid: hyperliquidClient,
 	}).WithFuturesCandles(map[domain.Exchange]domain.FuturesCandlePort{
 		domain.ExchangeOKX: okxClient,
 	}).WithTakerBucketStore(futuresStore).WithBasis(map[domain.Exchange]domain.BasisPort{
@@ -411,6 +415,13 @@ func main() {
 	})
 	okxClient.SetTakerWatch(okxTrades.Watch)
 	defer okxTrades.Close()
+	hyperliquidTrades := hyperliquid.NewTradeHub(hyperliquid.TradeHubOptions{
+		WSURL: cfg.HyperliquidWSURL,
+		Book:  hyperliquidClient.TakerBook(),
+		Tape:  hyperliquidClient.PrintTape(),
+	})
+	hyperliquidClient.SetTakerWatch(hyperliquidTrades.Watch)
+	defer hyperliquidTrades.Close()
 	marketSvc.SetOnFuturesSymbol(futuresHist.NoteSymbol)
 	marketSvc.SetFuturesHistory(futuresHist)
 	marketSvc.SetDerivativesGrid(futuresStore)
@@ -637,9 +648,10 @@ func main() {
 		logger.Info("futures liquidations restored", "events", nLiq)
 	}
 	takerBooks := map[domain.Exchange]*domain.TakerBook{
-		domain.ExchangeBinance: binanceClient.TakerBook(),
-		domain.ExchangeBybit:   bybitClient.TakerBook(),
-		domain.ExchangeOKX:     okxClient.TakerBook(),
+		domain.ExchangeBinance:     binanceClient.TakerBook(),
+		domain.ExchangeBybit:       bybitClient.TakerBook(),
+		domain.ExchangeOKX:         okxClient.TakerBook(),
+		domain.ExchangeHyperliquid: hyperliquidClient.TakerBook(),
 	}
 	restoreTaker := func(symbols []string) {
 		n := futureshist.RestoreTakerMemory(ctx, futuresStore, takerBooks, symbols, time.Now().UTC())
@@ -659,6 +671,7 @@ func main() {
 				binanceTrades.Watch(sym)
 				bybitTrades.Watch(sym)
 				okxTrades.Watch(sym)
+				hyperliquidTrades.Watch(sym)
 			}
 			logger.Info("liquid recorder universe", "symbols", len(syms))
 		}
@@ -683,6 +696,7 @@ func main() {
 	go bybitTrades.Start(ctx)
 	go binanceTrades.Start(ctx)
 	go okxTrades.Start(ctx)
+	go hyperliquidTrades.Start(ctx)
 	go (&futureshist.Worker{
 		Hist:     futuresHist,
 		Interval: cfg.FuturesHistoryInterval,
