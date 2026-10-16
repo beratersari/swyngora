@@ -19,6 +19,7 @@ from swyngora_ai.constants import (
 )
 from swyngora_ai.graph.facts import MarketFacts, extract_market_facts
 from swyngora_ai.graph.route import Route, classify_route
+from swyngora_ai.graph.situation_fetch import prefetch_situations, situation_prompt
 from swyngora_ai.graph.tape_fetch import prefetch_tape
 from swyngora_ai.grounding import apply_grounding
 from swyngora_ai.language import detect_reply_lang
@@ -39,6 +40,7 @@ class DeskState(TypedDict, total=False):
     bull: str
     bear: str
     facts: dict[str, Any]
+    situation: str
     packet: str
     reply: str
     tool_blobs: list[str]
@@ -153,7 +155,11 @@ def build_desk_graph(runner: SpecialistRunner) -> Any:
             )
             blobs = extra + blobs
             facts = extract_market_facts(*blobs)
-        return {"facts": facts.as_dict(), "tool_blobs": blobs}
+        # No client is bound on this path, so the entry read stays off.
+        situation = situation_prompt(
+            prefetch_situations(runner.settings, state.get("message") or "")
+        )
+        return {"facts": facts.as_dict(), "tool_blobs": blobs, "situation": situation}
 
     def debate_node(state: DeskState) -> DeskState:
         route = _route_obj(state)
@@ -198,10 +204,11 @@ def build_desk_graph(runner: SpecialistRunner) -> Any:
 
 def _packet(state: DeskState) -> str:
     facts = MarketFacts(**(state.get("facts") or {}))
-    parts = [
-        f"User question: {state.get('message') or ''}",
-        facts.as_prompt(),
-    ]
+    parts = [f"User question: {state.get('message') or ''}"]
+    situation = (state.get("situation") or "").strip()
+    if situation:
+        parts.append(situation)
+    parts.append(facts.as_prompt())
     # Do not pass internal cache/TTL notes to the analyst — it will quote them.
     for label, key in (
         ("Tape", "tape"),

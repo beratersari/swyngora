@@ -5385,7 +5385,10 @@ export interface paths {
         /**
          * Stream AI chat thinking and tools (NDJSON)
          * @description Same request as POST /api/v1/ai/chat. Response is NDJSON lines:
-         *     `{type:status|thinking|tool|tool_result|final|error|done, text?, reply?, tools?}`.
+         *     `{type:status|thinking|tool|tool_result|final|error|done, text?, reply?, tools?, reads?}`.
+         *     `reads` on the final event is the coin situation for each crypto name in the
+         *     question, the same clauses as GET /api/v1/market/situation. An open paper
+         *     spot buy for that coin includes the entry read. A blank clause stays blank.
          *     Informational only — not financial advice.
          */
         post: operations["postAiChatStream"];
@@ -5446,6 +5449,36 @@ export interface components {
             references?: components["schemas"]["AiChatReference"][];
             /** @description Disclaimer (e.g. not financial advice) */
             note?: string;
+            /**
+             * @description Coin situation for each crypto name in the question. The clauses match
+             *     GET /api/v1/market/situation. Equities are omitted. A missing clause keeps
+             *     its Missing list and is not filled with a side, a flow, or a number.
+             *     entries are open paper spot buys for that symbol. The field is omitted
+             *     when the portfolio could not be read; that is not a claim the caller is flat.
+             */
+            reads?: components["schemas"]["AiSituationRead"][];
+        };
+        AiSituationRead: {
+            /** @example BTCUSDT */
+            symbol: string;
+            situation: components["schemas"]["CoinSituation"];
+            /**
+             * @description Open paper spot buys for this symbol across the caller's books, up to
+             *     eight books. Omitted when none stored a read, or the book could not be read.
+             */
+            entries?: components["schemas"]["AiSituationEntry"][];
+        };
+        AiSituationEntry: {
+            /** @description Paper book venue of the open spot buy */
+            exchange: string;
+            /** @description Paper book name, when the snapshot includes one */
+            book?: string;
+            /**
+             * Format: date-time
+             * @description When the buy that stored entrySituation was placed
+             */
+            entryAt?: string;
+            entrySituation: components["schemas"]["CoinSituation"];
         };
         AiChatReference: {
             title?: string;
@@ -19401,6 +19434,11 @@ export interface operations {
                         thinking?: string[];
                         message?: string;
                         sessionId?: string;
+                        /**
+                         * @description Coin situation reads for crypto names in the question.
+                         *     Present on the final event. Same shape as AiChatResponse.reads.
+                         */
+                        reads?: components["schemas"]["AiSituationRead"][];
                     };
                 };
             };

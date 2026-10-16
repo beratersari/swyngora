@@ -10,6 +10,7 @@ export type AiStreamEvent = {
   tools?: string[];
   thinking?: string[];
   references?: AiChatResponse['references'];
+  reads?: AiChatResponse['reads'];
   message?: string;
   sessionId?: string;
   note?: string;
@@ -78,7 +79,10 @@ export async function streamAiChat(arg: StreamAiChatArg): Promise<AiStreamEvent>
       }
       if (!ev?.type || ev.type === 'ping') continue;
       arg.onEvent(ev);
-      if (ev.type === 'final' && (ev.reply || ev.tools || ev.thinking || ev.references)) {
+      if (
+        ev.type === 'final' &&
+        (ev.reply || ev.tools || ev.thinking || ev.references || (ev.reads && ev.reads.length > 0))
+      ) {
         finalEv = ev;
       }
       if (ev.type === 'error' && ev.message) {

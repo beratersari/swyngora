@@ -16,6 +16,7 @@ from swyngora_ai.agents.specialists import SpecialistRunner
 from swyngora_ai.config import Settings, get_settings
 from swyngora_ai.graph.facts import extract_market_facts
 from swyngora_ai.graph.route import classify_route
+from swyngora_ai.graph.situation_fetch import prefetch_situations, situation_prompt
 from swyngora_ai.graph.tape_fetch import prefetch_tape
 from swyngora_ai.grounding import apply_grounding, grounded_references
 from swyngora_ai.language import disclaimer_for, empty_reply_for, has_advice_disclaimer
@@ -61,6 +62,7 @@ class ChatResult:
     thinking: list[str] = field(default_factory=list)
     session_id: str = "default"
     references: list[dict[str, str]] = field(default_factory=list)
+    reads: list[dict[str, Any]] = field(default_factory=list)
 
 
 # SessionMemory + memory_key live in swyngora_ai.memory.finmem (re-exported here).
@@ -370,6 +372,13 @@ class Orchestrator:
             emit("status", "Planning…")
             history = self.memory.get(mem_key)
             messages: list[BaseMessage] = list(history) + [HumanMessage(content=user_message)]
+            # Crypto names get the coin-card read even when tape is fresh or the
+            # route is not tape. The block stays out of tool JSON so number-walking
+            # cannot turn a blank clause into a price.
+            situation_reads = prefetch_situations(self.settings, user_message, client_id=cid)
+            situation_block = situation_prompt(situation_reads)
+            if situation_block:
+                messages.insert(-1, SystemMessage(content=situation_block))
             if _should_refresh_tape(self.memory, cid, user_message):
                 emit("status", "Refreshing stale tape…")
                 tape_blobs = prefetch_tape(self.settings, user_message)
@@ -441,6 +450,7 @@ class Orchestrator:
                 thinking=thinking_acc,
                 session_id=public_session,
                 references=[r.as_dict() for r in refs],
+                reads=[read.as_dict() for read in situation_reads],
             )
         except Exception as exc:
             both = format_llm_failures(self._llm_note_handlers())

@@ -1,3 +1,5 @@
+import type { AiSituationRead } from './ChatSituation';
+
 export type ChatRole = 'user' | 'assistant' | 'system';
 
 export type ChatReference = {
@@ -29,6 +31,8 @@ export type ChatMessage = {
   streaming?: boolean;
   /** Public web/X/news URLs gathered by research tools. */
   references?: ChatReference[];
+  /** Coin-card situation reads for crypto names in the question. */
+  reads?: AiSituationRead[];
   /** True when this bubble is an error presentation. */
   isError?: boolean;
   createdAt: number;
