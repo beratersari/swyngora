@@ -115,6 +115,7 @@ func (s *Service) replayTrade(ctx context.Context, rec *domain.IdempotencyRecord
 	if err != nil {
 		return nil, nil, err
 	}
+	tr = s.stampTrade(ctx, tr)
 	view, err := s.View(ctx, actor, portfolioID)
 	if err != nil {
 		return tr, nil, err

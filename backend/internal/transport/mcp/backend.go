@@ -2373,6 +2373,17 @@ func (b *Backend) GetBreadth(ctx context.Context, exchange string, limit int) (j
 	return mustJSON(got)
 }
 
+func (b *Backend) GetFillPocket(ctx context.Context, clientID, exchange, symbol string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	got, err := b.Portfolio.FillPocket(ctx, clientID, exchange, symbol, PortfolioIDFrom(ctx))
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(got)
+}
+
 func (b *Backend) GetCoinSituation(ctx context.Context, symbol, at string) (json.RawMessage, error) {
 	if b.Market == nil {
 		return nil, fmt.Errorf("%w: market not configured", domain.ErrUpstream)

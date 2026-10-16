@@ -118,6 +118,7 @@ type DataPort interface {
 	GetBreadth(ctx context.Context, exchange string, limit int) (json.RawMessage, error)
 	GetFearGreed(ctx context.Context) (json.RawMessage, error)
 	GetCoinSituation(ctx context.Context, symbol, at string) (json.RawMessage, error)
+	GetFillPocket(ctx context.Context, clientID, exchange, symbol string) (json.RawMessage, error)
 	GetVolatility(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetSnapshot(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
 	GetLevels(ctx context.Context, exchange, symbol string) (json.RawMessage, error)
@@ -3149,8 +3150,35 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		return mcp.NewToolResultText(PrettyJSON(raw)), nil
 	})
 
+	addTool(mcp.NewTool("get_fill_pocket",
+		mcp.WithDescription("Where an open paper fill sits against the nearer estimated liquidation pocket. fillPrice is the newest open spot buy, or the margin entry when that book has no spot lot. pocketPrice is that pocket on the combined Binance, Bybit, and OKX map. gapPct is the percent from the fill to the pocket. pocketFromFill is above or below. marginLiqPrice is the paper liquidation price, and marginGapPct is the percent from the pocket to that price. A missing venue leaves the pocket blank and is named. It is not zero. open is false when the book has no position. Equities set equity and return no prices. Not financial advice."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("exchange", mcp.Required(), mcp.Description("binance | coinbase | bybit | nasdaq | bist")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name; required if multiple portfolios exist")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		exchange, err := req.RequireString("exchange")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		raw, err := api.GetFillPocket(ctx, clientID, exchange, symbol)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
 	addTool(mcp.NewTool("get_portfolio",
-		mcp.WithDescription("Get paper portfolio cash, positions, realized/unrealized P&L (mark-to-market). Each open crypto position includes entrySituation, the coin read stored when the newest buy still held filled, and openReads for every remaining buy (size, fill time, and that fill's stored read). Equities omit both. The live read is get_coin_situation. What changed on each buy is get_situation_change. Pass portfolioId when the client has more than one book. Works for shared books if you have access."),
+		mcp.WithDescription("Get paper portfolio cash, positions, realized/unrealized P&L (mark-to-market). Each open crypto position includes entrySituation, the coin read stored when the newest buy still held filled, and openReads for every remaining buy (size, fill time, and that fill's stored read). Equities omit both. Every open position includes moves: the 1h, 4h, and 24h venue price change after the newest open lot, including equities. pending means that minute has not closed. missing means the close is absent and is not zero. ready pct is the price change, not profit. The live read is get_coin_situation. What changed on each buy is get_situation_change. Pass portfolioId when the client has more than one book. Works for shared books if you have access."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name; required if multiple portfolios exist")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -3541,7 +3569,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("list_portfolio_trades",
-		mcp.WithDescription("List paper trade history. Each fill includes slipped price, lastPrice, and taker fee."),
+		mcp.WithDescription("List paper trade history. Each fill includes slipped price, lastPrice, taker fee, and moves (1h, 4h, 24h venue price change after the fill). pending means that minute has not closed. missing means the close is absent and is not zero. ready pct is the price change, not realized profit. A sell with a positive pct means price rose after the sell."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),

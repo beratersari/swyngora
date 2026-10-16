@@ -5,6 +5,7 @@ import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
 import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import { situationChangeLines, situationLines } from '@/components/molecules/CoinSituation';
+import { FillMoves } from '@/components/molecules/FillMoves';
 import type { PaperTrade } from '@/libs/api';
 import { formatDateTime, formatPrice, formatSymbolDisplay } from '@/libs/utils';
 import { DataTable, DataTableCard } from '@/styles/shared/dataTable.styles';
@@ -108,6 +109,11 @@ export function PortfolioTradesTable({ items, loading, onOpen }: PortfolioTrades
           </div>
         );
       },
+    },
+    {
+      title: t('moves.title'),
+      key: 'moves',
+      render: (_, row) => <FillMoves moves={row.moves} />,
     },
     {
       title: t('trades.realized'),

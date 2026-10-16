@@ -53,7 +53,7 @@ func TestBuildCoinSituation_CompleteRead(t *testing.T) {
 	if got.OpenInterest == nil || got.OpenInterest.Flow != SituationOIOpened || got.OpenInterest.Window != "1h" {
 		t.Fatalf("oi %+v", got.OpenInterest)
 	}
-	if got.Liquidation == nil || got.Liquidation.Side != SituationLiqLong || got.Liquidation.DistancePct != 1 {
+	if got.Liquidation == nil || got.Liquidation.Side != SituationLiqLong || got.Liquidation.DistancePct != 1 || got.Liquidation.Price != 99 {
 		t.Fatalf("liq %+v", got.Liquidation)
 	}
 	if len(got.PriceCVDMissing) != 0 || len(got.OpenInterestMissing) != 0 || len(got.LiquidationMissing) != 0 {
@@ -101,11 +101,11 @@ func TestBuildCoinSituation_ShortPocketCloserAndNone(t *testing.T) {
 			{Price: "101", ShortNotional: "5"},
 		},
 	}, nil, nil, SituationPrintInput{})
-	if closer.Liquidation == nil || closer.Liquidation.Side != SituationLiqShort || closer.Liquidation.DistancePct != 1 {
+	if closer.Liquidation == nil || closer.Liquidation.Side != SituationLiqShort || closer.Liquidation.DistancePct != 1 || closer.Liquidation.Price != 101 {
 		t.Fatalf("short %+v", closer.Liquidation)
 	}
 	none := BuildCoinSituation("ETHUSDT", now, nil, nil, &LiquidationLevelsReport{LastPrice: "100"}, nil, nil, SituationPrintInput{})
-	if none.Liquidation == nil || none.Liquidation.Side != SituationLiqNone || none.Liquidation.DistancePct != 0 {
+	if none.Liquidation == nil || none.Liquidation.Side != SituationLiqNone || none.Liquidation.DistancePct != 0 || none.Liquidation.Price != 0 {
 		t.Fatalf("none %+v", none.Liquidation)
 	}
 }

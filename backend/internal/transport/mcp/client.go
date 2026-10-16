@@ -1448,6 +1448,18 @@ func (c *APIClient) GetBreadth(ctx context.Context, exchange string, limit int) 
 	return c.get(ctx, "/api/v1/market/breadth", q)
 }
 
+// GetFillPocket returns the open paper fill against the nearer estimated liquidation pocket.
+func (c *APIClient) GetFillPocket(ctx context.Context, clientID, exchange, symbol string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	q.Set("exchange", exchange)
+	q.Set("symbol", symbol)
+	if id := PortfolioIDFrom(ctx); id != "" {
+		q.Set("portfolioId", id)
+	}
+	return c.get(ctx, "/api/v1/portfolio/fill-pocket", q)
+}
+
 // GetCoinSituation returns the short coin read: price versus CVD, 1h open interest, the leverage model, measured 24h liquidation prints, and those prints since 00:00 UTC and the current 4-hour open.
 // Empty at is the live read. A past at reads the stored minute at that candle close and leaves out the estimated pocket.
 func (c *APIClient) GetCoinSituation(ctx context.Context, symbol, at string) (json.RawMessage, error) {

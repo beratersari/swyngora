@@ -169,7 +169,8 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `get_situation_change` | Which stored clauses changed. `symbol` compares the newest open buy with the live read. `openReads` lists every remaining buy, newest first, with its size, fill time, stored read, and that buy's comparison when `liveOk` is true. A buy with no stored read keeps its size and time. The situation alert still follows the newest buy. `tradeId` compares a sell with each buy it closed. A blank later clause is missing, not a new kind. `liveOk` false omits the comparison |
 | `get_situation_record` | What this book's closed crypto lots made, by the read stored on the buy. Each row is one entry kind and lists those closes, newest first, with symbol, sell time, and realized profit. The same close can appear on more than one row. `skipped` is a crypto close with no stored read. Equities and open positions are left out |
 | `get_situation_leave` | Whether those closes kept each entry kind or sold after it left. `still` kept the kind. `left` changed it or left the clause blank. A change in print dollars with the same side stays in `still`. `unreadable` is a buy read with no sell read, and it stays out of both groups. The same close can appear on more than one row. Equities and open positions are left out |
-| `get_portfolio` | Cash, positions, P&L snapshot. Crypto positions include `entrySituation` from the newest buy still held and `openReads` for every remaining buy. The live read is `get_coin_situation`. What changed on each buy is `get_situation_change`. Optional `portfolioId`; required when the client has 2+ books |
+| `get_fill_pocket` | Open paper fill against the nearer estimated liquidation pocket. `gapPct` is the percent from the fill to the pocket. `marginLiqPrice` is the paper liquidation price. A missing venue leaves the pocket blank. `exchange` and `symbol` are required |
+| `get_portfolio` | Cash, positions, P&L snapshot. Crypto positions include `entrySituation` from the newest buy still held and `openReads` for every remaining buy. Every open position includes `moves` (1h/4h/24h price change after the newest open lot, including equities). `pending` has not closed its minute. `missing` is a blank close, not zero. The live read is `get_coin_situation`. What changed on each buy is `get_situation_change`. Optional `portfolioId`; required when the client has 2+ books |
 | `deposit_portfolio_cash` | Add virtual cash (not trading P&L) |
 | `transfer_portfolio_cash` | Move cash between your own books (owner only; pass `idempotencyKey` so retries do not double-move) |
 | `list_transfer_attempts` | Transfer request tries: completed, replayed, or conflict |
@@ -191,7 +192,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `amend_portfolio_order` | Amend open GTC limit/stop price and/or remaining size |
 | `cancel_all_portfolio_orders` | Cancel all open paper orders, or one market |
 | `cancel_portfolio_order` | Cancel open pending paper order |
-| `list_portfolio_trades` | Paper trade history |
+| `list_portfolio_trades` | Paper trade history. Each fill includes `moves` (1h/4h/24h venue price change after the fill). A blank window is not zero and is not profit |
 | `list_portfolio_lots` | Open (or closed) tax lots for FIFO/LIFO sells |
 | `create_recurring_buy` | Create named paper recurring buy (schedule, DST-aware timeZone, maxPrice, budget, endDate) |
 | `update_recurring_buy` | Update recurring buy name, amount, schedule, timezone/clock, maxPrice, budget, or end |

@@ -230,6 +230,7 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		ph := handler.NewPortfolioHandler(opts.Portfolio)
 		mux.HandleFunc("POST /api/v1/portfolio", ph.Create)
 		mux.HandleFunc("GET /api/v1/portfolio", ph.Get)
+		mux.HandleFunc("GET /api/v1/portfolio/fill-pocket", ph.GetFillPocket)
 		mux.HandleFunc("GET /api/v1/portfolios", ph.List)
 		mux.HandleFunc("GET /api/v1/portfolios/shared", ph.ListSharedPortfolios)
 		mux.HandleFunc("PATCH /api/v1/portfolios/{id}", ph.Rename)

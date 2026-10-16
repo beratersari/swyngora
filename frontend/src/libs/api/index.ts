@@ -322,6 +322,7 @@ export type { PriceAlert, CreatePriceAlertArg } from './endpoints/alertsApi';
 export {
   useListPortfoliosQuery,
   useGetPortfolioQuery,
+  useGetFillPocketQuery,
   useCreatePortfolioMutation,
   useRenamePortfolioMutation,
   useDeletePortfolioMutation,
@@ -427,6 +428,7 @@ export type {
   PaperTrade,
   SituationRecord,
   SituationLeave,
+  FillMove,
   RebalanceResult,
   RebalanceLegOutcome,
   RebalanceLineSnapshot,

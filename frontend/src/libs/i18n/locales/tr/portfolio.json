@@ -319,6 +319,13 @@
     "time": "Zaman",
     "situation": "Durum"
   },
+  "moves": {
+    "title": "İşlemden sonra",
+    "hint": "İşlemden sonraki fiyat değişimi. Boş bir pencere sıfır değildir ve kâr değildir.",
+    "pending": "{{window}} bekliyor",
+    "missing": "{{window}} —",
+    "ready": "{{window}} {{pct}}"
+  },
   "movements": {
     "title": "Nakit defteri",
     "empty": "Nakit hareketi yok",

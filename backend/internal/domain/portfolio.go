@@ -107,7 +107,10 @@ type Trade struct {
 	Situation *CoinSituation
 	// Left is set on a sell when the list is built. Each item is one buy this
 	// fill closed, compared with Situation. It is not stored.
-	Left      []SituationExit
+	Left []SituationExit
+	// Moves is the 1h, 4h, and 24h venue price change after this fill.
+	// It is computed when the trade is read and is not stored.
+	Moves     []FillMove
 	CreatedAt time.Time
 }
 
@@ -264,6 +267,9 @@ type PositionView struct {
 	// OpenReads lists every remaining buy, newest first. Equities leave it nil.
 	// A buy that stored no read is still listed, with Situation nil.
 	OpenReads []OpenLotRead
+	// Moves is the 1h, 4h, and 24h venue price change after the newest open lot.
+	// It is computed when the book is read. Equities are included. It is not profit.
+	Moves []FillMove
 }
 
 // PortfolioView is the full paper-trading snapshot for a client.

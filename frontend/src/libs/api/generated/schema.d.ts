@@ -1570,7 +1570,7 @@ export interface paths {
          *     - `liquidation.side`: the leverage model. `long` when the nearest estimated
          *       long pocket below last is closer, `short` when the nearest short pocket
          *       above last is closer, `none` when the map has no pocket.
-         *       `distancePct` is that distance from last.
+         *       `distancePct` is that distance from last. `price` is that pocket.
          *     - `prints.side`: measured force-order prints over the last 24 hours.
          *       `long` or `short` when that side is at least 60% of the notional,
          *       `even` when both sides printed and neither reaches 60%, `quiet` when
@@ -3597,6 +3597,10 @@ export interface paths {
          *     list with its size and time. The live comparison for each buy is
          *     GET /api/v1/portfolio/situation-change. An equity omits both.
          *     The live read is GET /api/v1/market/situation.
+         *     Every open position includes moves: the 1h, 4h, and 24h venue
+         *     price change after the newest open lot, including equities. pending
+         *     means that minute has not closed. missing means the close is absent
+         *     and is not zero. ready pct is the price change, not profit.
          *     When the client has more than one book, pass portfolioId (or X-Portfolio-Id).
          */
         get: operations["getPortfolio"];
@@ -3798,6 +3802,40 @@ export interface paths {
          * @description Newest first. Includes the opening balance row created with the portfolio. Transfer rows include the other book id and name.
          */
         get: operations["listPortfolioCashMovements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/fill-pocket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Paper fill against the nearer estimated liquidation pocket
+         * @description The newest open spot buy on this book and symbol, or the margin entry
+         *     when there is no spot lot, and the nearer estimated liquidation pocket
+         *     on the combined Binance, Bybit, and OKX map.
+         *
+         *     `gapPct` is the percent from the fill to that pocket. `pocketFromFill`
+         *     is `above` or `below`. A zero gap is the same price and is kept.
+         *
+         *     `marginLiqPrice` is this book's paper liquidation price when a margin
+         *     position is open. `marginGapPct` is the percent from the pocket to that
+         *     price. It is omitted when the pocket is unmarked.
+         *
+         *     A missing venue leaves the pocket blank and is named in `missing`.
+         *     It is not treated as zero. `open` is false when the book has neither
+         *     a spot lot nor a margin position, and the map is not read. Equities
+         *     set `equity` and return no prices. Nasdaq and BIST have no map.
+         */
+        get: operations["getFillPocket"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4134,7 +4172,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List paper trade history */
+        /**
+         * List paper trade history
+         * @description Each fill includes the slipped price, the taker fee, and moves:
+         *     the 1h, 4h, and 24h venue price change after that fill.
+         *     pending means that minute has not closed. missing means the close
+         *     is absent and is not zero. ready pct is the price change, not
+         *     realized profit. A sell with a positive pct means price rose after the sell.
+         */
         get: operations["listPortfolioTrades"];
         put?: never;
         post?: never;
@@ -9773,7 +9818,8 @@ export interface components {
          *     buy that still has remaining quantity filled. openReads lists every
          *     remaining buy. Equities omit both. The live read is
          *     GET /api/v1/market/situation. The per-buy comparison is
-         *     GET /api/v1/portfolio/situation-change.
+         *     GET /api/v1/portfolio/situation-change. moves is the venue price change
+         *     after the newest open lot, including equities, and is not profit.
          */
         PortfolioPosition: {
             exchange?: string;
@@ -9799,6 +9845,12 @@ export interface components {
              *     comparison is on SituationChange. Equities omit this list.
              */
             openReads?: components["schemas"]["OpenLotRead"][];
+            /**
+             * @description 1h, 4h, and 24h venue price change after the newest open lot, in that order.
+             *     The lot price and open time are the fill. Average cost is not used.
+             *     A window with no numbers is pending or missing, never a made-up zero.
+             */
+            moves?: components["schemas"]["FillMove"][];
         };
         /**
          * @description One remaining buy. newest marks the buy that entrySituation and a
@@ -9819,6 +9871,22 @@ export interface components {
             situation?: components["schemas"]["CoinSituation"];
             newest?: boolean;
             comparison?: components["schemas"]["SituationComparison"];
+        };
+        /**
+         * @description Venue price change after a paper fill. Not profit.
+         *     pending: the one-minute bar that contains the horizon has not closed.
+         *     ready: pct is (minute close - fill price) / fill price * 100. 0 is a real unchanged price.
+         *     missing: the window is due and that minute close is absent. A missing window is not zero.
+         */
+        FillMove: {
+            /** @enum {string} */
+            window?: "1h" | "4h" | "24h";
+            /** @enum {string} */
+            status?: "pending" | "ready" | "missing";
+            /** @description Percent change. Present only when status is ready, including 0. */
+            pct?: number;
+            /** @description One-minute close used for pct. Present only when status is ready. */
+            price?: number;
         };
         /** @description One remaining (or closed) buy lot used for FIFO/LIFO realized PnL */
         TaxLot: {
@@ -9876,6 +9944,11 @@ export interface components {
              *     comparison is that buy against this fill. A buy with no stored read is omitted.
              */
             left?: components["schemas"]["SituationExit"][];
+            /**
+             * @description 1h, 4h, and 24h venue price change after this fill, in that order.
+             *     price on the trade is the slipped fill. The percent is not realized profit.
+             */
+            moves?: components["schemas"]["FillMove"][];
             /** Format: date-time */
             createdAt?: string;
         };
@@ -10049,6 +10122,37 @@ export interface components {
             /** @description Venues that left this clock unrecorded. Empty when complete. */
             missing?: string[];
         };
+        /**
+         * @description Open paper fill against the nearer estimated liquidation pocket.
+         *     gapPct is the percent from fillPrice to pocketPrice. marginGapPct is the
+         *     percent from pocketPrice to marginLiqPrice. A missing venue leaves the
+         *     pocket blank. open false means this book has no position, and the map
+         *     was not read.
+         */
+        FillPocketMark: {
+            symbol?: string;
+            exchange?: string;
+            open?: boolean;
+            equity?: boolean;
+            fillPrice?: number;
+            /** @enum {string} */
+            fillKind?: "spot" | "margin";
+            /** @enum {string} */
+            pocketSide?: "long" | "short" | "none";
+            pocketPrice?: number;
+            /** @description Percent from the fill to the pocket. 0 means the same price. */
+            gapPct?: number;
+            /** @enum {string} */
+            pocketFromFill?: "above" | "below";
+            /** @description Paper liquidation price of the open margin position. */
+            marginLiqPrice?: number;
+            /** @description Percent from the pocket to the paper liquidation price. */
+            marginGapPct?: number;
+            /** @enum {string} */
+            marginFromPocket?: "above" | "below";
+            missing?: string[];
+            note?: string;
+        };
         /** @description Short combined read. A missing clause lists the venues that did not cover it. */
         CoinSituation: {
             symbol?: string;
@@ -10079,6 +10183,8 @@ export interface components {
                 /** @enum {string} */
                 side?: "long" | "short" | "none";
                 distancePct?: number;
+                /** @description Price of the nearer estimated pocket. Omitted when side is none. */
+                price?: number;
                 /**
                  * Format: date-time
                  * @description Absent. The estimated pocket is not stored as its own minute series.
@@ -16476,6 +16582,33 @@ export interface operations {
                     };
                 };
             };
+            404: components["responses"]["Error"];
+        };
+    };
+    getFillPocket: {
+        parameters: {
+            query: {
+                exchange: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
+                symbol: string;
+                portfolioId?: string;
+                clientId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fill, pocket, and paper liquidation marks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FillPocketMark"];
+                };
+            };
+            400: components["responses"]["Error"];
             404: components["responses"]["Error"];
         };
     };

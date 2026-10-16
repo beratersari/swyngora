@@ -1,3 +1,4 @@
+import { FillMoves } from '@/components/molecules/FillMoves';
 import {
   PositionSituation,
   isCashEquity,
@@ -31,18 +32,22 @@ export function PositionRead({ row, portfolioId }: { row: SpotPosition; portfoli
       refetchOnFocus: true,
     },
   );
-  if (equity) return null;
   const fromChange = change.data?.liveOk ? change.data.live : undefined;
   const now = fromChange ?? query.data;
   const nowLoading =
     now == null && (hasEntry ? change.isLoading && !changeFailed : query.isLoading);
   return (
-    <PositionSituation
-      entry={row.entrySituation}
-      lots={positionLotReads(row, change.data)}
-      now={now}
-      nowLoading={nowLoading}
-      comparison={change.data?.liveOk ? change.data.comparison : undefined}
-    />
+    <>
+      <FillMoves moves={row.moves} />
+      {equity ? null : (
+        <PositionSituation
+          entry={row.entrySituation}
+          lots={positionLotReads(row, change.data)}
+          now={now}
+          nowLoading={nowLoading}
+          comparison={change.data?.liveOk ? change.data.comparison : undefined}
+        />
+      )}
+    </>
   );
 }

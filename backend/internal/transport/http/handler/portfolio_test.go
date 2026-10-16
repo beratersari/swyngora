@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -220,6 +221,54 @@ func TestPortfolioHTTP_CreateOrderTrades(t *testing.T) {
 	_ = json.Unmarshal(rr.Body.Bytes(), &got)
 	if int(got["total"].(float64)) != 1 {
 		t.Fatalf("%v", got)
+	}
+	trades, _ := got["trades"].([]any)
+	if len(trades) != 1 {
+		t.Fatalf("trades %+v", got["trades"])
+	}
+	row, _ := trades[0].(map[string]any)
+	moves, _ := row["moves"].([]any)
+	if len(moves) != 3 {
+		t.Fatalf("moves %+v", row["moves"])
+	}
+	for i, want := range []string{"1h", "4h", "24h"} {
+		m, _ := moves[i].(map[string]any)
+		if m["window"] != want || m["status"] != "pending" {
+			t.Fatalf("move %d %+v", i, m)
+		}
+		if _, ok := m["pct"]; ok {
+			t.Fatalf("pending move included pct %+v", m)
+		}
+	}
+}
+
+func TestTradeDTO_ReadyZeroIsPresentAndMissingOmitsIt(t *testing.T) {
+	pct := 0.0
+	price := 80.0
+	raw, err := json.Marshal(tradeToDTO(&domain.Trade{
+		Price: 80,
+		Moves: []domain.FillMove{
+			{Window: domain.FillMove1h, Status: domain.FillMovePending},
+			{Window: domain.FillMove4h, Status: domain.FillMoveReady, Pct: &pct, Price: &price},
+			{Window: domain.FillMove24h, Status: domain.FillMoveMissing},
+		},
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(raw)
+	for _, part := range []string{`"window":"4h"`, `"status":"ready"`, `"pct":0`, `"price":80`} {
+		if !strings.Contains(body, part) {
+			t.Fatalf("missing %s in %s", part, body)
+		}
+	}
+	readyAt := strings.Index(body, `"window":"4h"`)
+	dayAt := strings.Index(body, `"window":"24h"`)
+	if readyAt < 0 || dayAt < 0 {
+		t.Fatalf("windows %s", body)
+	}
+	if strings.Contains(body[:readyAt], `"pct"`) || strings.Contains(body[dayAt:], `"pct"`) {
+		t.Fatalf("blank window leaked pct %s", body)
 	}
 }
 

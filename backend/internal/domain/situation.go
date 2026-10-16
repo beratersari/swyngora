@@ -120,10 +120,12 @@ type SituationOpenInterest struct {
 }
 
 // SituationLiquidation is which estimated liquidation side sits closer to last.
+// Price is that pocket. It is omitted when the map is complete and empty.
 // The estimated pocket is not stored as its own minute series, so Since stays zero.
 type SituationLiquidation struct {
 	Side        string    `json:"side"`
 	DistancePct float64   `json:"distancePct,omitempty"`
+	Price       float64   `json:"price,omitempty"`
 	Since       time.Time `json:"since,omitempty"`
 }
 
@@ -205,10 +207,14 @@ func BuildCoinSituation(symbol string, now time.Time, cvd *CVDReport, oi *OpenIn
 	} else {
 		out.OpenInterestMissing = missing
 	}
-	if side, dist, ok, missing := situationLiquidation(levels); ok {
-		out.Liquidation = &SituationLiquidation{Side: side, DistancePct: dist}
+	if pocket, ok := CloserPocketFromLevels(levels); ok {
+		liq := &SituationLiquidation{Side: pocket.Side, DistancePct: pocket.DistancePct}
+		if pocket.Price > 0 {
+			liq.Price = pocket.Price
+		}
+		out.Liquidation = liq
 	} else {
-		out.LiquidationMissing = missing
+		out.LiquidationMissing = pocket.Missing
 	}
 	if row, ok, missing := situationPrints(symbol, now, prints); ok {
 		out.Prints = &row
@@ -658,18 +664,39 @@ func situationOIWindow(windows []OpenInterestWindow) (OpenInterestWindow, bool) 
 	return OpenInterestWindow{}, false
 }
 
-func situationLiquidation(report *LiquidationLevelsReport) (side string, distance float64, ok bool, missing []string) {
+// CloserPocket is the nearer estimated liquidation level on a covered map.
+// Covered is false when a venue is missing. Side none means the map is complete and empty.
+type CloserPocket struct {
+	Side        string
+	Price       float64
+	DistancePct float64
+	Covered     bool
+	Missing     []string
+}
+
+// CloserPocketFromLevels picks the same bar the situation clause uses.
+// A long pocket is the nearest estimated long notional below last.
+// A short pocket is the nearest estimated short notional above last.
+func CloserPocketFromLevels(report *LiquidationLevelsReport) (CloserPocket, bool) {
+	side, dist, price, ok, missing := situationLiquidation(report)
+	return CloserPocket{
+		Side: side, Price: price, DistancePct: dist, Covered: ok, Missing: missing,
+	}, ok
+}
+
+func situationLiquidation(report *LiquidationLevelsReport) (side string, distance, price float64, ok bool, missing []string) {
 	if report == nil {
-		return "", 0, false, situationVenueNames()
+		return "", 0, 0, false, situationVenueNames()
 	}
 	if len(report.Missing) > 0 {
-		return "", 0, false, append([]string(nil), report.Missing...)
+		return "", 0, 0, false, append([]string(nil), report.Missing...)
 	}
 	last := parseQty(report.LastPrice)
 	if last <= 0 {
-		return "", 0, false, situationVenueNames()
+		return "", 0, 0, false, situationVenueNames()
 	}
 	var longDist, shortDist float64
+	var longPx, shortPx float64
 	var longN, shortN float64
 	longFound, shortFound := false, false
 	for _, bar := range report.Levels {
@@ -686,6 +713,7 @@ func situationLiquidation(report *LiquidationLevelsReport) (side string, distanc
 			if !longFound || dist < longDist || (dist == longDist && n > longN) {
 				longFound = true
 				longDist = dist
+				longPx = px
 				longN = n
 			}
 		}
@@ -697,6 +725,7 @@ func situationLiquidation(report *LiquidationLevelsReport) (side string, distanc
 			if !shortFound || dist < shortDist || (dist == shortDist && n > shortN) {
 				shortFound = true
 				shortDist = dist
+				shortPx = px
 				shortN = n
 			}
 		}
@@ -704,15 +733,15 @@ func situationLiquidation(report *LiquidationLevelsReport) (side string, distanc
 	switch {
 	case longFound && shortFound:
 		if longDist < shortDist || (longDist == shortDist && longN >= shortN) {
-			return SituationLiqLong, roundSituationPct(longDist), true, nil
+			return SituationLiqLong, roundSituationPct(longDist), longPx, true, nil
 		}
-		return SituationLiqShort, roundSituationPct(shortDist), true, nil
+		return SituationLiqShort, roundSituationPct(shortDist), shortPx, true, nil
 	case longFound:
-		return SituationLiqLong, roundSituationPct(longDist), true, nil
+		return SituationLiqLong, roundSituationPct(longDist), longPx, true, nil
 	case shortFound:
-		return SituationLiqShort, roundSituationPct(shortDist), true, nil
+		return SituationLiqShort, roundSituationPct(shortDist), shortPx, true, nil
 	default:
-		return SituationLiqNone, 0, true, nil
+		return SituationLiqNone, 0, 0, true, nil
 	}
 }
 

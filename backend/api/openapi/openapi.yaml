@@ -2492,7 +2492,7 @@ paths:
         - `liquidation.side`: the leverage model. `long` when the nearest estimated
           long pocket below last is closer, `short` when the nearest short pocket
           above last is closer, `none` when the map has no pocket.
-          `distancePct` is that distance from last.
+          `distancePct` is that distance from last. `price` is that pocket.
         - `prints.side`: measured force-order prints over the last 24 hours.
           `long` or `short` when that side is at least 60% of the notional,
           `even` when both sides printed and neither reaches 60%, `quiet` when
@@ -6027,6 +6027,10 @@ paths:
         list with its size and time. The live comparison for each buy is
         GET /api/v1/portfolio/situation-change. An equity omits both.
         The live read is GET /api/v1/market/situation.
+        Every open position includes moves: the 1h, 4h, and 24h venue
+        price change after the newest open lot, including equities. pending
+        means that minute has not closed. missing means the close is absent
+        and is not zero. ready pct is the price change, not profit.
         When the client has more than one book, pass portfolioId (or X-Portfolio-Id).
       operationId: getPortfolio
       tags: [Portfolio]
@@ -6471,6 +6475,53 @@ paths:
                   total: { type: integer }
                   limit: { type: integer }
                   offset: { type: integer }
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/fill-pocket:
+    get:
+      summary: Paper fill against the nearer estimated liquidation pocket
+      description: |
+        The newest open spot buy on this book and symbol, or the margin entry
+        when there is no spot lot, and the nearer estimated liquidation pocket
+        on the combined Binance, Bybit, and OKX map.
+
+        `gapPct` is the percent from the fill to that pocket. `pocketFromFill`
+        is `above` or `below`. A zero gap is the same price and is kept.
+
+        `marginLiqPrice` is this book's paper liquidation price when a margin
+        position is open. `marginGapPct` is the percent from the pocket to that
+        price. It is omitted when the pocket is unmarked.
+
+        A missing venue leaves the pocket blank and is named in `missing`.
+        It is not treated as zero. `open` is false when the book has neither
+        a spot lot nor a margin position, and the map is not read. Equities
+        set `equity` and return no prices. Nasdaq and BIST have no map.
+      operationId: getFillPocket
+      tags: [Portfolio]
+      parameters:
+        - name: exchange
+          in: query
+          required: true
+          schema: { type: string, enum: [binance, coinbase, bybit, nasdaq, bist] }
+        - name: symbol
+          in: query
+          required: true
+          schema: { type: string, example: BTCUSDT }
+        - name: portfolioId
+          in: query
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Fill, pocket, and paper liquidation marks
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FillPocketMark'
+        '400':
+          $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
   /api/v1/portfolio/performance:
@@ -7141,6 +7192,12 @@ paths:
   /api/v1/portfolio/trades:
     get:
       summary: List paper trade history
+      description: |
+        Each fill includes the slipped price, the taker fee, and moves:
+        the 1h, 4h, and 24h venue price change after that fill.
+        pending means that minute has not closed. missing means the close
+        is absent and is not zero. ready pct is the price change, not
+        realized profit. A sell with a positive pct means price rose after the sell.
       operationId: listPortfolioTrades
       tags: [Portfolio]
       parameters:
@@ -14120,7 +14177,8 @@ components:
         buy that still has remaining quantity filled. openReads lists every
         remaining buy. Equities omit both. The live read is
         GET /api/v1/market/situation. The per-buy comparison is
-        GET /api/v1/portfolio/situation-change.
+        GET /api/v1/portfolio/situation-change. moves is the venue price change
+        after the newest open lot, including equities, and is not profit.
       properties:
         exchange: { type: string }
         symbol: { type: string }
@@ -14150,6 +14208,14 @@ components:
             comparison is on SituationChange. Equities omit this list.
           items:
             $ref: '#/components/schemas/OpenLotRead'
+        moves:
+          type: array
+          description: |
+            1h, 4h, and 24h venue price change after the newest open lot, in that order.
+            The lot price and open time are the fill. Average cost is not used.
+            A window with no numbers is pending or missing, never a made-up zero.
+          items:
+            $ref: '#/components/schemas/FillMove'
     OpenLotRead:
       type: object
       description: |
@@ -14167,6 +14233,26 @@ components:
         newest: { type: boolean }
         comparison:
           $ref: '#/components/schemas/SituationComparison'
+    FillMove:
+      type: object
+      description: |
+        Venue price change after a paper fill. Not profit.
+        pending: the one-minute bar that contains the horizon has not closed.
+        ready: pct is (minute close - fill price) / fill price * 100. 0 is a real unchanged price.
+        missing: the window is due and that minute close is absent. A missing window is not zero.
+      properties:
+        window:
+          type: string
+          enum: [1h, 4h, 24h]
+        status:
+          type: string
+          enum: [pending, ready, missing]
+        pct:
+          type: number
+          description: Percent change. Present only when status is ready, including 0.
+        price:
+          type: number
+          description: One-minute close used for pct. Present only when status is ready.
     TaxLot:
       type: object
       description: One remaining (or closed) buy lot used for FIFO/LIFO realized PnL
@@ -14219,6 +14305,13 @@ components:
             On a sell, one item per buy this fill closed that stored a read.
             comparison is that buy against this fill. A buy with no stored read is omitted.
           items: { $ref: '#/components/schemas/SituationExit' }
+        moves:
+          type: array
+          description: |
+            1h, 4h, and 24h venue price change after this fill, in that order.
+            price on the trade is the slipped fill. The percent is not realized profit.
+          items:
+            $ref: '#/components/schemas/FillMove'
         createdAt: { type: string, format: date-time }
     SituationClauseLeft:
       type: object
@@ -14405,6 +14498,32 @@ components:
           items: { type: string }
           description: Venues that left this clock unrecorded. Empty when complete.
       required: [anchor, from, complete]
+    FillPocketMark:
+      type: object
+      description: |
+        Open paper fill against the nearer estimated liquidation pocket.
+        gapPct is the percent from fillPrice to pocketPrice. marginGapPct is the
+        percent from pocketPrice to marginLiqPrice. A missing venue leaves the
+        pocket blank. open false means this book has no position, and the map
+        was not read.
+      properties:
+        symbol: { type: string }
+        exchange: { type: string }
+        open: { type: boolean }
+        equity: { type: boolean }
+        fillPrice: { type: number }
+        fillKind: { type: string, enum: [spot, margin] }
+        pocketSide: { type: string, enum: [long, short, none] }
+        pocketPrice: { type: number }
+        gapPct: { type: number, description: Percent from the fill to the pocket. 0 means the same price. }
+        pocketFromFill: { type: string, enum: [above, below] }
+        marginLiqPrice: { type: number, description: Paper liquidation price of the open margin position. }
+        marginGapPct: { type: number, description: Percent from the pocket to the paper liquidation price. }
+        marginFromPocket: { type: string, enum: [above, below] }
+        missing:
+          type: array
+          items: { type: string }
+        note: { type: string }
     CoinSituation:
       type: object
       description: Short combined read. A missing clause lists the venues that did not cover it.
@@ -14441,6 +14560,7 @@ components:
           properties:
             side: { type: string, enum: [long, short, none] }
             distancePct: { type: number }
+            price: { type: number, description: Price of the nearer estimated pocket. Omitted when side is none. }
             since:
               type: string
               format: date-time

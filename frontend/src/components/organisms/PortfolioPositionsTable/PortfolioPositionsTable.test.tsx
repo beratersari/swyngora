@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
+import { i18n } from '@/libs/i18n';
 import { renderWithProviders } from '@/test/render';
 import { PortfolioPositionsTable } from './PortfolioPositionsTable';
 
@@ -114,5 +115,32 @@ describe('PortfolioPositionsTable', () => {
     expect(screen.getByText('The situation alert follows this buy.')).toBeInTheDocument();
     expect(screen.getByText('Price is falling while futures CVD is rising.')).toBeInTheDocument();
     expect(screen.getByText('Price is rising while futures CVD is falling.')).toBeInTheDocument();
+  });
+
+  it('shows the price move after the fill on an equity position', async () => {
+    await i18n.changeLanguage('en');
+    renderWithProviders(
+      <PortfolioPositionsTable
+        items={[
+          {
+            exchange: 'nasdaq',
+            symbol: 'AAPL',
+            quantity: 1,
+            avgCost: 150,
+            markPrice: 180,
+            moves: [
+              { window: '1h', status: 'ready', pct: 2, price: 102 },
+              { window: '4h', status: 'pending' },
+              { window: '24h', status: 'missing' },
+            ],
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText('1h +2.00%')).toBeInTheDocument();
+    expect(screen.getByText('4h pending')).toBeInTheDocument();
+    expect(screen.getByText('24h —')).toBeInTheDocument();
+    expect(screen.queryByText('Entered as')).not.toBeInTheDocument();
+    expect(screen.queryByText('24h 0.00%')).not.toBeInTheDocument();
   });
 });
