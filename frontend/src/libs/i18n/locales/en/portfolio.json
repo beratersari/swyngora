@@ -45,7 +45,7 @@
   },
   "correlation": {
     "title": "Do these coins move together",
-    "hint": "The last day of 5-minute moves. Swing is how large a day of those moves is for this mix. Apart is the same mix if the coins had moved independently. A short offsets a long. A coin without enough shared minutes is left out.",
+    "hint": "The last day of 5-minute moves. Pairs start with the strongest link, up or down. Swing is how large a day of those moves is for this mix. Apart is the same mix if the coins had moved independently. A short offsets a long. A coin without enough shared minutes is left out.",
     "loading": "Reading the last day…",
     "failed": "The correlation could not be read.",
     "empty": "No open coin to compare.",

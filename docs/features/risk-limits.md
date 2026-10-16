@@ -72,7 +72,7 @@ go test ./internal/domain/ ./internal/service/portfolio/ ./internal/transport/ht
 
 ## How the coins move together
 
-`GET /api/v1/portfolio/correlation` reads the open spot and margin coins over the last day of 5-minute percent changes. `together` is the size-weighted average correlation. `swingPct` is the size of a day built from those moves. `apartPct` is the same mix if the coins had moved independently. A short is the opposite of a long, so two coins that rise together can still hedge when one is short. A coin without enough shared minutes is named in `missing` and is not treated as zero. One coin has a swing and no pair.
+`GET /api/v1/portfolio/correlation` reads the open spot and margin coins over the last day of 5-minute percent changes. `together` is the size-weighted average correlation. `pairs` lists each coin pair with the strongest absolute correlation first, whether that link is positive or negative. A pair with no correlation stays last. `swingPct` is the size of a day built from those moves. `apartPct` is the same mix if the coins had moved independently. A short is the opposite of a long, so two coins that rise together can still hedge when one is short. A coin without enough shared minutes is named in `missing` and is not treated as zero. One coin has a swing and no pair.
 
 Optional `addSymbol`, `addSide` (`buy`, `sell`, `long`, or `short`), and `addNotional` return `add` for the book after that extra line. Nothing is placed. The order preview also returns this read as `correlation`, including `add` for the order on the ticket. A failed read leaves `correlation` off the preview and still returns the price.
 

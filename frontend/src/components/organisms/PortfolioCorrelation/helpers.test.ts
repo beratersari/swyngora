@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { correlationKind, swingChange } from './helpers';
+import { correlationKind, pairsByStrength, swingChange } from './helpers';
 
 describe('correlationKind', () => {
   it('says the risk is not spread when the coins move together', () => {
@@ -44,6 +44,23 @@ describe('correlationKind', () => {
         missing: [],
       }),
     ).toBe('one');
+  });
+});
+
+describe('pairsByStrength', () => {
+  it('puts the strongest up or down link first', () => {
+    const ordered = pairsByStrength([
+      { left: 'ADA', right: 'BTC', corr: 0.1, relation: 'mixed', samples: 16, complete: true },
+      { left: 'BTC', right: 'ETH', corr: -0.95, relation: 'inverse', samples: 16, complete: true },
+      { left: 'ETH', right: 'XRP', corr: 0.4, relation: 'loose', samples: 16, complete: true },
+      { left: 'SOL', right: 'XRP', samples: 16, complete: false },
+    ]);
+    expect(ordered.map((pair) => `${pair.left}-${pair.right}`)).toEqual([
+      'BTC-ETH',
+      'ETH-XRP',
+      'ADA-BTC',
+      'SOL-XRP',
+    ]);
   });
 });
 

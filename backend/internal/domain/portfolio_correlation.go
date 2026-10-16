@@ -1,6 +1,9 @@
 package domain
 
-import "math"
+import (
+	"math"
+	"sort"
+)
 
 const portfolioCorrNote = "How the open coins moved together over the last day, from 5-minute percent changes on the venue with the largest line in each coin. Together is the size-weighted average correlation, from -1 to +1. Swing is the size of a day built from those 5-minute moves. Apart is that same mix if the coins had moved independently. A short notional is the opposite of a long. A coin without enough shared minutes is named and left out, and is not treated as zero. This is not a forecast. Nothing is traded. Not financial advice."
 
@@ -137,6 +140,9 @@ func BuildPortfolioCorrelation(in []PortfolioCorrInput) PortfolioCorrelation {
 			out.Pairs = append(out.Pairs, corrPair(used[i], used[j]))
 		}
 	}
+	sort.SliceStable(out.Pairs, func(i, j int) bool {
+		return pairBefore(out.Pairs[i], out.Pairs[j])
+	})
 	if together, ok := weightedTogether(used, out.Pairs); ok {
 		out.Together = &together
 	}
@@ -171,6 +177,30 @@ func corrPair(a, b PortfolioCorrInput) PortfolioCorrPair {
 	pair.Corr = &c
 	pair.Relation = ClassifyCorrRelation(c)
 	return pair
+}
+
+// pairBefore lists the strongest absolute correlation first.
+// A pair with no correlation stays at the bottom. Equal strength keeps left, then right.
+func pairBefore(a, b PortfolioCorrPair) bool {
+	ac, aok := pairAbs(a)
+	bc, bok := pairAbs(b)
+	if aok != bok {
+		return aok
+	}
+	if aok && ac != bc {
+		return ac > bc
+	}
+	if a.Left != b.Left {
+		return a.Left < b.Left
+	}
+	return a.Right < b.Right
+}
+
+func pairAbs(p PortfolioCorrPair) (float64, bool) {
+	if !p.Complete || p.Corr == nil || math.IsNaN(*p.Corr) {
+		return 0, false
+	}
+	return math.Abs(*p.Corr), true
 }
 
 func weightedTogether(rows []PortfolioCorrInput, pairs []PortfolioCorrPair) (float64, bool) {

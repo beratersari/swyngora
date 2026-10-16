@@ -10471,6 +10471,7 @@ export interface components {
             /** @description Sum of absolute notionals. */
             gross: number;
             holdings: components["schemas"]["PortfolioCorrHolding"][];
+            /** @description Strongest absolute correlation first. A pair with no correlation is last. */
             pairs: components["schemas"]["PortfolioCorrPair"][];
             /** @description Size-weighted average pairwise correlation. Omitted when fewer than two coins share the window. */
             together?: number;

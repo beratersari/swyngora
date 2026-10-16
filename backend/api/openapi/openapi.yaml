@@ -14899,6 +14899,7 @@ components:
           items: { $ref: '#/components/schemas/PortfolioCorrHolding' }
         pairs:
           type: array
+          description: Strongest absolute correlation first. A pair with no correlation is last.
           items: { $ref: '#/components/schemas/PortfolioCorrPair' }
         together:
           type: number

@@ -7026,6 +7026,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "5-minute changes. together is the size-weighted correlation "
                 "from -1 to +1. swingPct is the day-sized swing of this mix. "
                 "apartPct is the same mix if the coins had moved independently. "
+                "pairs lists the strongest absolute correlation first. "
                 "A short offsets a long. missing names a coin without enough "
                 "shared minutes and is not zero. add_symbol, add_side, and "
                 "add_notional show the book after that extra line. Nothing is traded."

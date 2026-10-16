@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { useGetPortfolioCorrelationQuery } from '@/libs/api';
-import { correlationKind, formatCorr, formatSwing } from './helpers';
+import { correlationKind, formatCorr, formatSwing, pairsByStrength } from './helpers';
 import type { PortfolioCorrelationProps } from './PortfolioCorrelation.types';
 
 /**
@@ -55,7 +55,7 @@ export function PortfolioCorrelation({ portfolioId, disabled }: PortfolioCorrela
           })}
         </Text>
       ) : null}
-      {(report?.pairs ?? []).map((pair) =>
+      {pairsByStrength(report?.pairs).map((pair) =>
         pair.complete && pair.corr != null ? (
           <Text key={`${pair.left}-${pair.right}`} variant="caption" color="secondary">
             {t('correlation.pair', {

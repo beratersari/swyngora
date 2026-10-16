@@ -3403,7 +3403,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("get_portfolio_correlation",
-		mcp.WithDescription("How the open paper coins moved together over the last day, from 5-minute percent changes. together is the size-weighted average correlation from -1 to +1. swingPct is the size of a day built from those moves. apartPct is the same mix if the coins had moved independently. A short is the opposite of a long. A coin without enough shared minutes is named in missing and is not zero. Optional addSymbol, addSide (buy|sell|long|short), and addNotional show the book after that extra line, in add. Nothing is traded."),
+		mcp.WithDescription("How the open paper coins moved together over the last day, from 5-minute percent changes. together is the size-weighted average correlation from -1 to +1. pairs lists each coin pair with the strongest absolute correlation first, up or down. swingPct is the size of a day built from those moves. apartPct is the same mix if the coins had moved independently. A short is the opposite of a long. A coin without enough shared minutes is named in missing and is not zero. Optional addSymbol, addSide (buy|sell|long|short), and addNotional show the book after that extra line, in add. Nothing is traded."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("addSymbol", mcp.Description("Optional pair, e.g. SOLUSDT, to see this extra line")),

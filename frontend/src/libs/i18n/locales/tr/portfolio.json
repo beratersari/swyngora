@@ -45,7 +45,7 @@
   },
   "correlation": {
     "title": "Bu coinler birlikte mi hareket ediyor",
-    "hint": "Son günün 5 dakikalık hareketleri. Salınım, bu karışım için o hareketlerden bir günün büyüklüğüdür. Ayrı olsaydı, coinler bağımsız hareket etseydi aynı karışımdır. Short, longun tersidir. Yeterli ortak dakikası olmayan coin dışarıda kalır.",
+    "hint": "Son günün 5 dakikalık hareketleri. Çiftler en güçlü bağdan başlar, yukarı ya da aşağı. Salınım, bu karışım için o hareketlerden bir günün büyüklüğüdür. Ayrı olsaydı, coinler bağımsız hareket etseydi aynı karışımdır. Short, longun tersidir. Yeterli ortak dakikası olmayan coin dışarıda kalır.",
     "loading": "Son gün okunuyor…",
     "failed": "Korelasyon okunamadı.",
     "empty": "Karşılaştırılacak açık coin yok.",

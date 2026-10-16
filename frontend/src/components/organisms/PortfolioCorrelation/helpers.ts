@@ -2,10 +2,36 @@ import type { PortfolioCorrelation } from '@/libs/api';
 import { SWING_EPSILON, TOGETHER_FOLLOWS, TOGETHER_INVERSE } from './constants';
 import type { CorrelationKind } from './PortfolioCorrelation.types';
 
+type Pair = NonNullable<PortfolioCorrelation['pairs']>[number];
+
 type Book = Pick<
   PortfolioCorrelation,
   'holdings' | 'together' | 'swingPct' | 'apartPct' | 'missing' | 'pairs'
 >;
+
+/** Strongest absolute correlation first. A pair with no number stays last. */
+export function pairsByStrength(pairs: Pair[] | null | undefined): Pair[] {
+  return [...(pairs ?? [])].sort((a, b) => {
+    const as = pairStrength(a);
+    const bs = pairStrength(b);
+    if (as == null && bs == null) return pairName(a, b);
+    if (as == null) return 1;
+    if (bs == null) return -1;
+    if (as !== bs) return bs - as;
+    return pairName(a, b);
+  });
+}
+
+function pairStrength(pair: Pair): number | null {
+  if (!pair.complete || pair.corr == null || !Number.isFinite(pair.corr)) return null;
+  return Math.abs(pair.corr);
+}
+
+function pairName(a: Pair, b: Pair): number {
+  if (a.left !== b.left) return a.left < b.left ? -1 : 1;
+  if (a.right !== b.right) return a.right < b.right ? -1 : 1;
+  return 0;
+}
 
 export function formatCorr(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return '—';

@@ -80,6 +80,49 @@ func TestBuildPortfolioCorrelation_ShortListIsNotZero(t *testing.T) {
 	}
 }
 
+func TestBuildPortfolioCorrelation_PairsLeadWithTheStrongestLink(t *testing.T) {
+	n := corrMinSamples + 1
+	up := wave(n, 1)
+	down := make([]float64, n)
+	flat := make([]float64, n)
+	for i := range up {
+		down[i] = -up[i]
+	}
+	broken := wave(n, 1)
+	broken[0] = math.NaN()
+	got := BuildPortfolioCorrelation([]PortfolioCorrInput{
+		{Asset: "ADA", Notional: 10, Returns: flat},
+		{Asset: "BTC", Notional: 10, Returns: up},
+		{Asset: "ETH", Notional: 10, Returns: down},
+		{Asset: "ZZZ", Notional: 10, Returns: broken},
+	})
+	want := [][2]string{
+		{"BTC", "ETH"},
+		{"ADA", "BTC"},
+		{"ADA", "ETH"},
+		{"ADA", "ZZZ"},
+		{"BTC", "ZZZ"},
+		{"ETH", "ZZZ"},
+	}
+	if len(got.Pairs) != len(want) {
+		t.Fatalf("pairs %+v", got.Pairs)
+	}
+	for i, pair := range want {
+		if got.Pairs[i].Left != pair[0] || got.Pairs[i].Right != pair[1] {
+			t.Fatalf("order[%d] %+v", i, got.Pairs)
+		}
+	}
+	if got.Pairs[0].Corr == nil || math.Abs(*got.Pairs[0].Corr-(-1)) > 1e-9 {
+		t.Fatalf("strongest should be the inverse %+v", got.Pairs[0])
+	}
+	if got.Pairs[1].Corr == nil || math.Abs(*got.Pairs[1].Corr) > 1e-9 {
+		t.Fatalf("flat pair %+v", got.Pairs[1])
+	}
+	if got.Pairs[len(got.Pairs)-1].Complete {
+		t.Fatalf("unreadable pair sorted up %+v", got.Pairs[len(got.Pairs)-1])
+	}
+}
+
 func TestBuildPortfolioCorrelation_EmptyBook(t *testing.T) {
 	got := BuildPortfolioCorrelation(nil)
 	if got.Gross != 0 || got.Together != nil || len(got.Holdings) != 0 {
