@@ -118,6 +118,46 @@
     "cvdVenueSpot": "Spot CVD on this chart is {{exchange}}. Combined stays off until {{venues}} cover the same minutes.",
     "cvdSplitUp": "Price up, CVD down",
     "cvdSplitDown": "Price down, CVD up",
+    "situationMark": {
+      "note": "A circle marks the minute the current situation kind began. Earlier changes in that series are not drawn. The estimated pocket is not marked. A gap, or a kind that runs to the start of the stored minutes, stays unmarked.",
+      "priceCvd": {
+        "price_up_cvd_down": "Price up, CVD down",
+        "price_down_cvd_up": "Price down, CVD up",
+        "agrees": "Price and CVD agree"
+      },
+      "openInterest": {
+        "opened": "Open interest building",
+        "closed": "Open interest closing",
+        "flat": "Open interest flat"
+      },
+      "prints": {
+        "long": "Prints mostly long",
+        "short": "Prints mostly short",
+        "even": "Prints even",
+        "quiet": "Prints quiet"
+      },
+      "funding": {
+        "long": "Longs pay funding",
+        "short": "Shorts pay funding",
+        "none": "Funding flat"
+      },
+      "crowd": {
+        "top_more_long": "Top more long",
+        "top_more_short": "Top more short",
+        "even": "Top and crowd even"
+      },
+      "size": {
+        "whale_buy_retail_sell": "Whales buy, retail sells",
+        "whale_sell_retail_buy": "Whales sell, retail buys",
+        "both_buy": "Whales and retail buy",
+        "both_sell": "Whales and retail sell",
+        "whale_buy": "Whales buy",
+        "whale_sell": "Whales sell",
+        "retail_buy": "Retail buys",
+        "retail_sell": "Retail sells",
+        "flat": "Print size quiet"
+      }
+    },
     "cvdSplit": "{{kind}} for {{duration}} on {{exchange}}.",
     "cvdSplitWithheld": "{{kind}} for {{duration}} on {{exchange}}. Combined stays off until {{venues}} cover the same minutes.",
     "cvdDay": "CVD since 00:00 UTC",

@@ -1017,6 +1017,36 @@ describe('CoinDetailPage', () => {
     expect(screen.getByTestId('chart-cvd-split')).toHaveTextContent('Price up, CVD down for 35m on Binance.');
   });
 
+  it('marks a situation kind change on the crypto chart and skips equities', async () => {
+    const report = {
+      symbol: 'BTCUSDT',
+      changes: [
+        { clause: 'funding', at: '2024-01-01T00:00:00Z', kind: 'short' },
+        { clause: 'openInterest', at: '2024-01-01T00:20:00Z', kind: 'opened' },
+      ],
+    };
+    mockSituation.mockReturnValue({
+      data: report,
+      currentData: report,
+      isLoading: false,
+      isError: false,
+      isFetching: false,
+      refetch: vi.fn(),
+    });
+    const crypto = renderDetail('/markets/binance/BTCUSDT');
+    expect(await screen.findByTestId('chart-situation-marks')).toHaveTextContent(/estimated pocket/i);
+    const marks = screen.getByTestId('candle-chart').getAttribute('data-marks') ?? '';
+    expect(marks).toContain('Shorts pay funding');
+    expect(marks).toContain('Open interest building');
+    crypto.unmount();
+
+    renderDetail('/markets/nasdaq/AAPL');
+    expect(screen.queryByTestId('chart-situation-marks')).not.toBeInTheDocument();
+    expect(screen.getByTestId('candle-chart').getAttribute('data-marks') ?? '').not.toContain(
+      'Shorts pay funding',
+    );
+  });
+
   it('opens holders tab from the URL', async () => {
     renderDetail('/markets/binance/BTCUSDT?tab=holders');
     expect(await screen.findByText(/On-chain wallet count and top addresses/i)).toBeInTheDocument();

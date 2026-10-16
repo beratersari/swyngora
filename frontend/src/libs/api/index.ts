@@ -194,6 +194,7 @@ export type {
   MarketNetPositionWindow,
   FearGreedReport,
   CoinSituation,
+  CoinSituationChange,
   CoinSituationPriceCVD,
   CoinSituationOpenInterest,
   CoinSituationLiquidation,

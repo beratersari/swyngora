@@ -6227,10 +6227,13 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "derivatives board and each unusual-scan row open these clauses. "
                 "A live clause may include since when the stored minutes reach "
                 "a different kind. since is absent when the archive does not "
-                "reach that change. The liquidation model has no since. A stored "
-                "fill omits it. Omit at for that live read. Pass at as RFC3339 "
+                "reach that change. The liquidation model has no since. changes "
+                "lists each minute a stored kind changed. A gap or an unreadable "
+                "minute is not a change, and the liquidation model is not listed. "
+                "A stored fill omits since and changes. Omit at for that live read. "
+                "Pass at as RFC3339 "
                 "to read the stored five-minute minute at a candle close. That "
-                "past read leaves out the estimated liquidation pocket."
+                "past read leaves out the estimated liquidation pocket and changes."
             ),
             args_schema=CoinSituationInput,
         ),

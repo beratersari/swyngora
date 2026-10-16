@@ -159,12 +159,18 @@ func TestStampSituationHeld_NamesEachClockTheArchiveReaches(t *testing.T) {
 
 func TestWithoutSituationHeld_LeavesTheLiveReadAlone(t *testing.T) {
 	since := time.Date(2026, 10, 12, 11, 0, 0, 0, time.UTC)
-	live := &CoinSituation{PriceCVD: &SituationPriceCVD{Kind: SituationCVDAgrees, Since: since}}
+	live := &CoinSituation{
+		PriceCVD: &SituationPriceCVD{Kind: SituationCVDAgrees, Since: since},
+		Changes:  []SituationChange{{Clause: "funding", At: since, Kind: "short"}},
+	}
 	stored := WithoutSituationHeld(live)
 	if stored == nil || stored.PriceCVD == nil || !stored.PriceCVD.Since.IsZero() || stored.PriceCVD.Kind != SituationCVDAgrees {
 		t.Fatalf("stored %+v", stored)
 	}
-	if !live.PriceCVD.Since.Equal(since) {
+	if len(stored.Changes) != 0 {
+		t.Fatalf("stored changes %+v", stored.Changes)
+	}
+	if !live.PriceCVD.Since.Equal(since) || len(live.Changes) != 1 {
 		t.Fatal("live clock was cleared")
 	}
 }

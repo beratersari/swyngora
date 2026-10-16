@@ -223,6 +223,7 @@ import {
   pumpEventsToChartMarkers,
   scannerResultsToChartMarkers,
 } from './CoinDetailPage.helpers';
+import { situationChangeMarkers } from './situationMarks';
 import {
   anchoredCvdByCandle,
   cvdAnchorStartsLate,
@@ -1892,9 +1893,17 @@ export function CoinDetailPage() {
           ]
         : [];
     const splitSnapped = snapMarkersToCandleTimes(splitRaw, chartData, { maxDistanceSec: maxDist });
+    const situationMarks = isEquity
+      ? []
+      : situationChangeMarkers(rtkCurrent(situationQuery)?.changes, chartData, maxDist, (clause, kind) =>
+          t(`detail:chart.situationMark.${clause}.${kind}`),
+        );
     return mergeChartMarkers(
-      mergeChartMarkers(mergeChartMarkers(mergeChartMarkers(pumpSnapped, signalSnapped), sweepSnapped), botSnapped),
-      splitSnapped,
+      mergeChartMarkers(
+        mergeChartMarkers(mergeChartMarkers(pumpSnapped, signalSnapped), sweepSnapped),
+        botSnapped,
+      ),
+      mergeChartMarkers(splitSnapped, situationMarks),
     );
   }, [
     showPumpMarkers,
@@ -1903,6 +1912,7 @@ export function CoinDetailPage() {
     showBots,
     showCvd,
     tapeCvd.split,
+    situationQuery,
     isEquity,
     pumpsQuery,
     historyPumpEvents,
@@ -2402,6 +2412,11 @@ export function CoinDetailPage() {
                     .map((id) => t(`detail:liqHeatmap.venues.${id}`, { defaultValue: id }))
                     .join(', '),
                 })}
+              </Text>
+            ) : null}
+            {!isEquity && rtkCurrent(situationQuery) ? (
+              <Text variant="caption" color="secondary" data-testid="chart-situation-marks">
+                {t('detail:chart.situationMark.note')}
               </Text>
             ) : null}
             {!isEquity && tapeCvd.points.length > 0 && tapeCvd.withheld.length > 0 ? (

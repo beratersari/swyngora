@@ -327,7 +327,18 @@ export type CoinSituation = {
   crowdMissing?: string[];
   size?: CoinSituationSize | null;
   sizeMissing?: string[];
+  /**
+   * Live read only. Each item is a minute a stored kind changed.
+   * A past candle read and a stored fill omit this.
+   */
+  changes?: CoinSituationChange[];
   note?: string;
+};
+
+export type CoinSituationChange = {
+  clause?: 'priceCvd' | 'openInterest' | 'prints' | 'funding' | 'crowd' | 'size';
+  at?: string;
+  kind?: string;
 };
 export type CoinSituationQuery = {
   symbol: string;

@@ -118,6 +118,46 @@
     "cvdVenueSpot": "Grafikteki spot CVD {{exchange}} verisidir. {{venues}} aynı dakikaları kapsamadan birleşik çizgi kapalı kalır.",
     "cvdSplitUp": "Fiyat yukarı, CVD aşağı",
     "cvdSplitDown": "Fiyat aşağı, CVD yukarı",
+    "situationMark": {
+      "note": "Bir daire, şu anki durum türünün başladığı dakikayı işaretler. O serideki daha eski değişimler çizilmez. Tahmini cep işaretlenmez. Bir boşluk, ya da kayıtlı dakikaların başına kadar giden bir tür, işaretsiz kalır.",
+      "priceCvd": {
+        "price_up_cvd_down": "Fiyat yukarı, CVD aşağı",
+        "price_down_cvd_up": "Fiyat aşağı, CVD yukarı",
+        "agrees": "Fiyat ve CVD birlikte"
+      },
+      "openInterest": {
+        "opened": "Açık pozisyon artıyor",
+        "closed": "Açık pozisyon kapanıyor",
+        "flat": "Açık pozisyon yatay"
+      },
+      "prints": {
+        "long": "Baskılar çoğunlukla long",
+        "short": "Baskılar çoğunlukla short",
+        "even": "Baskılar denk",
+        "quiet": "Baskılar sessiz"
+      },
+      "funding": {
+        "long": "Long fonlama öder",
+        "short": "Short fonlama öder",
+        "none": "Fonlama yatay"
+      },
+      "crowd": {
+        "top_more_long": "Üstler daha long",
+        "top_more_short": "Üstler daha short",
+        "even": "Üst ve kalabalık denk"
+      },
+      "size": {
+        "whale_buy_retail_sell": "Balinalar alır, perakende satar",
+        "whale_sell_retail_buy": "Balinalar satar, perakende alır",
+        "both_buy": "Balina ve perakende alır",
+        "both_sell": "Balina ve perakende satar",
+        "whale_buy": "Balinalar alır",
+        "whale_sell": "Balinalar satar",
+        "retail_buy": "Perakende alır",
+        "retail_sell": "Perakende satar",
+        "flat": "İşlem boyu sessiz"
+      }
+    },
     "cvdSplit": "{{exchange}} üzerinde {{duration}} boyunca {{kind}}.",
     "cvdSplitWithheld": "{{exchange}} üzerinde {{duration}} boyunca {{kind}}. {{venues}} aynı dakikaları kapsamadan birleşik çizgi kapalı kalır.",
     "cvdDay": "CVD 00:00 UTC’den beri",

@@ -30,6 +30,7 @@ func (s *Service) attachSituationHeld(ctx context.Context, symbol string, now ti
 		in.Crowd = longs.Venues
 	}
 	domain.StampSituationHeld(sit, in)
+	sit.Changes = domain.SituationChanges(in)
 }
 
 func (s *Service) situationOISnapshots(ctx context.Context, symbol string, now time.Time) []domain.FuturesSnapshot {

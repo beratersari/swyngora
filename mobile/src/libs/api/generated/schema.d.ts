@@ -2553,7 +2553,10 @@ export interface paths {
          *     row at 65520. Built from aggressive **futures prints** (Binance
          *     USD-M aggTrades, Bybit recent trades), not candle volume smeared
          *     across high–low. The volume profile uses these same stored prints.
-         *     `exchange=all` (default) returns Binance and Bybit separately plus `combined`.
+         *     `exchange=all` (default) returns Binance, Bybit, and OKX separately.
+         *     `combined` is present only when every requested venue reaches the
+         *     window open. A venue that starts later is named in `missing` and
+         *     is not counted as zero. A quiet covered venue is a real empty ladder.
          *     Use `window` (`5m` / `15m` / `1h` / `4h` / `1d` / `3d` / `7d` / `30d`,
          *     default `15m`) or `startTime` + `endTime` (max 30d). The live
          *     tape is about the last hour on Binance and the newest ~1000
@@ -10063,6 +10066,21 @@ export interface components {
                 since?: string;
             };
             sizeMissing?: string[];
+            /**
+             * @description Live read only. Each item is a minute when a stored kind changed.
+             *     clause is priceCvd, openInterest, prints, funding, crowd, or size.
+             *     kind is the new kind. A gap wider than ten minutes, or a minute
+             *     that cannot be read, is not a change. The estimated liquidation
+             *     pocket is not included. A past candle read and a stored paper fill
+             *     omit this list.
+             */
+            changes?: {
+                /** @enum {string} */
+                clause?: "priceCvd" | "openInterest" | "prints" | "funding" | "crowd" | "size";
+                /** Format: date-time */
+                at?: string;
+                kind?: string;
+            }[];
             note?: string;
         };
         PaperTradingCost: {
@@ -10202,7 +10220,7 @@ export interface components {
             slippageRate?: number;
             /** @description Last price for a market order, or the trigger the resting order uses. */
             referencePrice?: number;
-            /** @description Reference price after adverse slippage. */
+            /** @description Average price of the visible book for a crypto market order, or the reference after fixed slippage for an equity. */
             fillPrice?: number;
             notional?: number;
             /** @description Quote-currency taker fee */
@@ -10223,8 +10241,21 @@ export interface components {
             insufficientCash?: boolean;
             insufficientQuantity?: boolean;
             borrowLimitHit?: boolean;
-            /** @description True for a market order. A resting order shows the fill if the trigger is touched. */
+            /** @description True for a market order the visible book can fill. A resting order shows the fill if the trigger is touched. */
             fillsNow?: boolean;
+            /**
+             * @description book walks the visible spot book. slippage is the fixed equity rate, or crypto when no book is configured.
+             * @enum {string}
+             */
+            bookSource?: "book" | "slippage";
+            /** @description True when the visible book cannot hold the full size. Nothing is filled. */
+            bookExhausted?: boolean;
+            /** @description Size resting on the side the order would take. */
+            bookVisibleQuantity?: number;
+            /** @description Size the visible book could take, which is less than quantity when bookExhausted is true. */
+            bookFilledQuantity?: number;
+            /** @description How many price levels the walk used. */
+            bookLevels?: number;
             leverage?: number;
             initialMargin?: number;
             liquidationPrice?: number;

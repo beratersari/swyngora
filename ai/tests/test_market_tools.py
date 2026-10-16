@@ -769,6 +769,7 @@ def test_market_tools_hit_api(monkeypatch):
 
     assert "get_coin_situation" in by_name
     assert "Pass at as RFC3339" in by_name["get_coin_situation"].description
+    assert "changes" in by_name["get_coin_situation"].description
     live = json.loads(by_name["get_coin_situation"].invoke({"symbol": "BTCUSDT"}))
     assert live["symbol"] == "BTCUSDT"
     assert live["at"] == ""

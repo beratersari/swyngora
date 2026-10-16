@@ -10066,6 +10066,21 @@ export interface components {
                 since?: string;
             };
             sizeMissing?: string[];
+            /**
+             * @description Live read only. Each item is a minute when a stored kind changed.
+             *     clause is priceCvd, openInterest, prints, funding, crowd, or size.
+             *     kind is the new kind. A gap wider than ten minutes, or a minute
+             *     that cannot be read, is not a change. The estimated liquidation
+             *     pocket is not included. A past candle read and a stored paper fill
+             *     omit this list.
+             */
+            changes?: {
+                /** @enum {string} */
+                clause?: "priceCvd" | "openInterest" | "prints" | "funding" | "crowd" | "size";
+                /** Format: date-time */
+                at?: string;
+                kind?: string;
+            }[];
             note?: string;
         };
         PaperTradingCost: {

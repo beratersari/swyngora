@@ -51,34 +51,13 @@ type SituationHeldInput struct {
 // minute sits inside the run, when the minutes jump by more than situationHeldGap,
 // or when the run reaches the oldest minute without a different kind.
 func HeldSince(samples []HeldSample, kind string) time.Time {
-	if kind == "" || len(samples) == 0 {
+	if kind == "" {
 		return time.Time{}
 	}
-	rows := make([]HeldSample, 0, len(samples))
-	for _, sample := range samples {
-		if sample.At.IsZero() {
-			continue
-		}
-		rows = append(rows, HeldSample{At: sample.At.UTC(), Kind: sample.Kind})
-	}
+	rows := compactHeldSamples(samples)
 	if len(rows) == 0 {
 		return time.Time{}
 	}
-	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].At.Equal(rows[j].At) {
-			return rows[i].Kind < rows[j].Kind
-		}
-		return rows[i].At.Before(rows[j].At)
-	})
-	compact := rows[:0]
-	for _, sample := range rows {
-		if len(compact) > 0 && compact[len(compact)-1].At.Equal(sample.At) {
-			compact[len(compact)-1] = sample
-			continue
-		}
-		compact = append(compact, sample)
-	}
-	rows = compact
 	last := rows[len(rows)-1]
 	if last.Kind != kind {
 		return time.Time{}
@@ -97,6 +76,67 @@ func HeldSince(samples []HeldSample, kind string) time.Time {
 		start = rows[i].At
 	}
 	return time.Time{}
+}
+
+// compactHeldSamples sorts stored minutes and keeps one row per timestamp.
+// An empty Kind is kept. It means that minute cannot be read.
+func compactHeldSamples(samples []HeldSample) []HeldSample {
+	if len(samples) == 0 {
+		return nil
+	}
+	rows := make([]HeldSample, 0, len(samples))
+	for _, sample := range samples {
+		if sample.At.IsZero() {
+			continue
+		}
+		rows = append(rows, HeldSample{At: sample.At.UTC(), Kind: sample.Kind})
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].At.Equal(rows[j].At) {
+			return rows[i].Kind < rows[j].Kind
+		}
+		return rows[i].At.Before(rows[j].At)
+	})
+	compact := rows[:0]
+	for _, sample := range rows {
+		if len(compact) > 0 && compact[len(compact)-1].At.Equal(sample.At) {
+			compact[len(compact)-1] = sample
+			continue
+		}
+		compact = append(compact, sample)
+	}
+	return compact
+}
+
+// kindChanges is each minute a readable kind differs from the previous
+// readable minute, when those minutes are at most situationHeldGap apart.
+// The first minute of a series is not a change. An empty kind, or a wider
+// hole, starts a new run and is not a change.
+func kindChanges(samples []HeldSample) []HeldSample {
+	rows := compactHeldSamples(samples)
+	if len(rows) == 0 {
+		return nil
+	}
+	var out []HeldSample
+	var prevKind string
+	var prevAt time.Time
+	have := false
+	for _, row := range rows {
+		if row.Kind == "" {
+			have = false
+			continue
+		}
+		if have && row.At.Sub(prevAt) <= situationHeldGap && row.Kind != prevKind {
+			out = append(out, HeldSample{At: row.At, Kind: row.Kind})
+		}
+		have = true
+		prevKind = row.Kind
+		prevAt = row.At
+	}
+	return out
 }
 
 // StampSituationHeld sets Since on the clauses whose stored minutes show a change.
@@ -132,6 +172,7 @@ func WithoutSituationHeld(sit *CoinSituation) *CoinSituation {
 		return nil
 	}
 	out := *sit
+	out.Changes = nil
 	if sit.PriceCVD != nil {
 		c := *sit.PriceCVD
 		c.Since = time.Time{}
@@ -197,6 +238,7 @@ func ClearSituationHeld(sit *CoinSituation) {
 	if sit.Size != nil {
 		sit.Size.Since = time.Time{}
 	}
+	sit.Changes = nil
 }
 
 // PrintMinutes folds force-order events into five-minute venue buckets.

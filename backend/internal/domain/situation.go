@@ -70,7 +70,11 @@ type CoinSituation struct {
 	CrowdMissing        []string               `json:"crowdMissing,omitempty"`
 	Size                *SituationSize         `json:"size,omitempty"`
 	SizeMissing         []string               `json:"sizeMissing,omitempty"`
-	Note                string                 `json:"note,omitempty"`
+	// Changes is each minute a stored kind changed on the live read.
+	// A paper fill and a past candle read leave it empty. The estimated
+	// liquidation pocket is not included.
+	Changes []SituationChange `json:"changes,omitempty"`
+	Note    string            `json:"note,omitempty"`
 }
 
 // SituationFunding is who pays the OI-weighted predicted funding rate.
