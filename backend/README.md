@@ -179,7 +179,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `POST` | `/api/v1/portfolio/recurring-buys/{id}/runs/{runId}/complete` | Buy a missed slot now (late; does not move next run) |
 | `POST`/`GET` | `/api/v1/portfolio/margin/orders` | Paper margin open (market/limit long/short 1x–10x; optional `Idempotency-Key`) / list |
 | `DELETE` | `/api/v1/portfolio/margin/orders/{id}` | Cancel margin limit order |
-| `GET` | `/api/v1/portfolio/margin/positions` | Open margin positions |
+| `GET` | `/api/v1/portfolio/margin/positions` | Open margin positions. `entrySituation` is the coin read stored when the order was placed |
 | `GET` | `/api/v1/portfolio/margin/positions/{id}` | Get margin position |
 | `POST` | `/api/v1/portfolio/margin/positions/{id}/close` | Full or partial margin close (optional `Idempotency-Key`) |
 | `PUT` | `/api/v1/portfolio/margin/positions/{id}/brackets` | Stop-loss / take-profit |

@@ -7229,6 +7229,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="place_margin_order",
             description=(
                 "Paper isolated margin open: long|short, leverage 1-10, market or limit. "
+                "Stores the coin read from placement; a limit fill keeps that read. "
                 "Optional stop_loss/take_profit. Pass idempotency_key on retries. Simulated only."
             ),
             args_schema=MarginOrderInput,
@@ -7236,7 +7237,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         StructuredTool.from_function(
             list_margin_positions,
             name="list_margin_positions",
-            description="List open paper margin positions with marks and liquidation price.",
+            description="List open paper margin positions with marks, liquidation price, and entrySituation from order placement.",
             args_schema=PortfolioGetInput,
         ),
         StructuredTool.from_function(

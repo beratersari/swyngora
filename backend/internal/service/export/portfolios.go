@@ -253,46 +253,48 @@ type portfolioRecurringRunPayload struct {
 }
 
 type portfolioMarginPosPayload struct {
-	ID               string   `json:"id"`
-	Exchange         string   `json:"exchange"`
-	Symbol           string   `json:"symbol"`
-	Side             string   `json:"side"`
-	Mode             string   `json:"mode"`
-	Quantity         float64  `json:"quantity"`
-	EntryPrice       float64  `json:"entryPrice"`
-	Leverage         int      `json:"leverage"`
-	Margin           float64  `json:"margin"`
-	DebtPrincipal    float64  `json:"debtPrincipal"`
-	DebtInterest     float64  `json:"debtInterest"`
-	DebtAsset        string   `json:"debtAsset"`
-	LastInterestAt   string   `json:"lastInterestAt,omitempty"`
-	LiquidationPrice float64  `json:"liquidationPrice"`
-	StopLoss         *float64 `json:"stopLoss,omitempty"`
-	TakeProfit       *float64 `json:"takeProfit,omitempty"`
-	Status           string   `json:"status"`
-	RealizedPnL      float64  `json:"realizedPnL"`
-	CloseReason      string   `json:"closeReason,omitempty"`
-	OpenedAt         string   `json:"openedAt"`
-	UpdatedAt        string   `json:"updatedAt"`
-	ClosedAt         *string  `json:"closedAt,omitempty"`
+	ID               string                `json:"id"`
+	Exchange         string                `json:"exchange"`
+	Symbol           string                `json:"symbol"`
+	Side             string                `json:"side"`
+	Mode             string                `json:"mode"`
+	Quantity         float64               `json:"quantity"`
+	EntryPrice       float64               `json:"entryPrice"`
+	Leverage         int                   `json:"leverage"`
+	Margin           float64               `json:"margin"`
+	DebtPrincipal    float64               `json:"debtPrincipal"`
+	DebtInterest     float64               `json:"debtInterest"`
+	DebtAsset        string                `json:"debtAsset"`
+	LastInterestAt   string                `json:"lastInterestAt,omitempty"`
+	LiquidationPrice float64               `json:"liquidationPrice"`
+	StopLoss         *float64              `json:"stopLoss,omitempty"`
+	TakeProfit       *float64              `json:"takeProfit,omitempty"`
+	Status           string                `json:"status"`
+	RealizedPnL      float64               `json:"realizedPnL"`
+	CloseReason      string                `json:"closeReason,omitempty"`
+	OpenedAt         string                `json:"openedAt"`
+	UpdatedAt        string                `json:"updatedAt"`
+	ClosedAt         *string               `json:"closedAt,omitempty"`
+	EntrySituation   *domain.CoinSituation `json:"entrySituation,omitempty"`
 }
 
 type portfolioMarginOrdPayload struct {
-	ID             string   `json:"id"`
-	Exchange       string   `json:"exchange"`
-	Symbol         string   `json:"symbol"`
-	Side           string   `json:"side"`
-	Type           string   `json:"type"`
-	Quantity       float64  `json:"quantity"`
-	Leverage       int      `json:"leverage"`
-	LimitPrice     float64  `json:"limitPrice"`
-	ReservedMargin float64  `json:"reservedMargin"`
-	StopLoss       *float64 `json:"stopLoss,omitempty"`
-	TakeProfit     *float64 `json:"takeProfit,omitempty"`
-	Status         string   `json:"status"`
-	PositionID     string   `json:"positionId,omitempty"`
-	CreatedAt      string   `json:"createdAt"`
-	UpdatedAt      string   `json:"updatedAt"`
+	ID             string                `json:"id"`
+	Exchange       string                `json:"exchange"`
+	Symbol         string                `json:"symbol"`
+	Side           string                `json:"side"`
+	Type           string                `json:"type"`
+	Quantity       float64               `json:"quantity"`
+	Leverage       int                   `json:"leverage"`
+	LimitPrice     float64               `json:"limitPrice"`
+	ReservedMargin float64               `json:"reservedMargin"`
+	StopLoss       *float64              `json:"stopLoss,omitempty"`
+	TakeProfit     *float64              `json:"takeProfit,omitempty"`
+	Status         string                `json:"status"`
+	PositionID     string                `json:"positionId,omitempty"`
+	CreatedAt      string                `json:"createdAt"`
+	UpdatedAt      string                `json:"updatedAt"`
+	Situation      *domain.CoinSituation `json:"situation,omitempty"`
 }
 
 type portfolioMarginTrPayload struct {
@@ -406,7 +408,7 @@ func snapshotToPayload(snap domain.PortfolioSnapshot) portfolioBookPayload {
 			LastInterestAt: rfcNano(m.LastInterestAt), LiquidationPrice: m.LiquidationPrice,
 			StopLoss: m.StopLoss, TakeProfit: m.TakeProfit, Status: string(m.Status), RealizedPnL: m.RealizedPnL,
 			CloseReason: m.CloseReason, OpenedAt: rfcNano(m.OpenedAt), UpdatedAt: rfcNano(m.UpdatedAt),
-			ClosedAt: rfcNanoPtr(m.ClosedAt),
+			ClosedAt: rfcNanoPtr(m.ClosedAt), EntrySituation: m.EntrySituation,
 		})
 	}
 	for _, o := range snap.MarginOrders {
@@ -414,7 +416,7 @@ func snapshotToPayload(snap domain.PortfolioSnapshot) portfolioBookPayload {
 			ID: o.ID, Exchange: string(o.Exchange), Symbol: o.Symbol, Side: string(o.Side), Type: string(o.Type),
 			Quantity: o.Quantity, Leverage: o.Leverage, LimitPrice: o.LimitPrice, ReservedMargin: o.ReservedMargin,
 			StopLoss: o.StopLoss, TakeProfit: o.TakeProfit, Status: string(o.Status), PositionID: o.PositionID,
-			CreatedAt: rfcNano(o.CreatedAt), UpdatedAt: rfcNano(o.UpdatedAt),
+			CreatedAt: rfcNano(o.CreatedAt), UpdatedAt: rfcNano(o.UpdatedAt), Situation: o.Situation,
 		})
 	}
 	for _, t := range snap.MarginTrades {

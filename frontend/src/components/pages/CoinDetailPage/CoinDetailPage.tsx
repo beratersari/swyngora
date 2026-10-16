@@ -145,6 +145,7 @@ import {
   useListPortfoliosQuery,
   useGetPortfolioQuery,
   useGetPortfolioSituationChangeQuery,
+  useListMarginPositionsQuery,
   useListScannerResultsQuery,
   usePlacePortfolioOrderMutation,
   useRemoveWatchlistItemMutation,
@@ -254,7 +255,12 @@ import {
   type ChartDeskLayers,
 } from './chartPresets';
 import { CoinSituation } from '@/components/molecules/CoinSituation';
-import { openPositionFor, positionLotReads, PositionSituation } from '@/components/molecules/PositionSituation';
+import {
+  openMarginFor,
+  openPositionFor,
+  positionLotReads,
+  PositionSituation,
+} from '@/components/molecules/PositionSituation';
 import {
   clickSecFromForensicsAt,
   forensicsKnownUntil,
@@ -502,6 +508,15 @@ export function CoinDetailPage() {
       pollingInterval: visible ? 60_000 : 0,
       refetchOnFocus: true,
     },
+  );
+  const marginPosQuery = useListMarginPositionsQuery(
+    { portfolioId: paperBookId || undefined },
+    { skip: !paperBookId || isEquity, refetchOnFocus: true },
+  );
+  const heldMargin = openMarginFor(
+    rtkCurrent(marginPosQuery)?.positions,
+    exchange ?? '',
+    symbol ?? '',
   );
   const [placePaperOrder, placePaperState] = usePlacePortfolioOrderMutation();
   const paperPreviewOn = books.length > 0 && !(books.length > 1 && !paperBookId);
@@ -3343,6 +3358,22 @@ export function CoinDetailPage() {
                 }
               />
             ) : null}
+            {!isEquity
+              ? heldMargin.map((row) => (
+                  <PositionSituation
+                    key={row.id ?? `${row.side}-${row.leverage}`}
+                    lead={t('detail:situation.marginLead', {
+                      side: t(
+                        `detail:situation.marginSide.${row.side === 'short' ? 'short' : 'long'}`,
+                      ),
+                      leverage: row.leverage ?? '',
+                    })}
+                    entry={row.entrySituation}
+                    now={rtkCurrent(situationQuery)}
+                    nowLoading={rtkCurrentPending(situationQuery)}
+                  />
+                ))
+              : null}
             <CoinPaperTicket
               portfolioId={paperBookId || undefined}
               previewEnabled={paperPreviewOn}

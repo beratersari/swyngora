@@ -4414,7 +4414,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("place_margin_order",
-		mcp.WithDescription("Paper margin open: long|short, leverage 1-10, market or limit (uses account isolated|cross mode). Optional stopLoss/takeProfit. Simulated only."),
+		mcp.WithDescription("Paper margin open: long|short, leverage 1-10, market or limit (uses account isolated|cross mode). Stores the coin read from placement. A limit fill keeps that read. Optional stopLoss/takeProfit. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
@@ -4466,7 +4466,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("list_margin_positions",
-		mcp.WithDescription("List open paper margin positions with mark, unrealized PnL, liquidation price."),
+		mcp.WithDescription("List open paper margin positions with mark, unrealized PnL, liquidation price, and entrySituation (the coin read stored when the order was placed)."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

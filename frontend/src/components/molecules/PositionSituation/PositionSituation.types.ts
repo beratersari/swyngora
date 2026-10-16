@@ -3,6 +3,8 @@ import type { SituationComparison } from '@/components/molecules/CoinSituation';
 import type { OpenLotReadView } from './helpers';
 
 export type PositionSituationProps = {
+  /** Shown above the two reads, for example a margin side and leverage. */
+  lead?: string;
   entry?: CoinSituation | null;
   now?: CoinSituation | null;
   nowLoading?: boolean;

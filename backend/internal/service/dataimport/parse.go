@@ -484,6 +484,7 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 					StopLoss: csvOptF64(row, "stopLoss"), TakeProfit: csvOptF64(row, "takeProfit"), Status: row["status"],
 					RealizedPnL: csvF64(row, "realizedPnL"), CloseReason: row["closeReason"],
 					OpenedAt: row["openedAt"], UpdatedAt: row["updatedAt"], ClosedAt: csvOptStr(row, "closedAt"),
+					EntrySituation: situationFromCSV(row["entrySituation"]),
 				})
 			}
 		case "portfolio_margin_orders":
@@ -493,6 +494,7 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 					Quantity: csvF64(row, "quantity"), Leverage: csvI(row, "leverage"), LimitPrice: csvF64(row, "limitPrice"),
 					ReservedMargin: csvF64(row, "reservedMargin"), StopLoss: csvOptF64(row, "stopLoss"), TakeProfit: csvOptF64(row, "takeProfit"),
 					Status: row["status"], PositionID: row["positionId"], CreatedAt: row["createdAt"], UpdatedAt: row["updatedAt"],
+					Situation: situationFromCSV(row["situation"]),
 				})
 			}
 		case "portfolio_margin_trades":

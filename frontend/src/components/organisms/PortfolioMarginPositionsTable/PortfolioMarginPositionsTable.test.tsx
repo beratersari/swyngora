@@ -1,9 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { renderWithTheme } from '@/test/render';
+import { renderWithProviders, renderWithTheme } from '@/test/render';
 import type { MarginPosition } from '@/libs/api';
 import { PortfolioMarginPositionsTable } from './PortfolioMarginPositionsTable';
 import type { MarginBracketUpdate } from './PortfolioMarginPositionsTable.types';
+
+vi.mock('@/libs/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/libs/api')>();
+  return {
+    ...actual,
+    useGetMarketSituationQuery: () => ({
+      data: {
+        symbol: 'BTCUSDT',
+        priceCvd: { kind: 'agrees' },
+      },
+      isLoading: false,
+      isFetching: false,
+    }),
+  };
+});
 
 const long: MarginPosition = {
   id: 'pos-1',
@@ -127,5 +142,48 @@ describe('PortfolioMarginPositionsTable brackets', () => {
     );
     expect(screen.queryByRole('button', { name: /edit stop|zarar kesi düzenle/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /^close$|^kapat$/i })).toBeNull();
+  });
+});
+
+describe('PortfolioMarginPositionsTable', () => {
+  it('shows the placement read and the live read on an open margin position', () => {
+    renderWithProviders(
+      <PortfolioMarginPositionsTable
+        items={[
+          {
+            id: 'm1',
+            exchange: 'binance',
+            symbol: 'BTCUSDT',
+            side: 'long',
+            leverage: 5,
+            quantity: 1,
+            status: 'open',
+            entrySituation: {
+              symbol: 'BTCUSDT',
+              priceCvd: { kind: 'price_up_cvd_down' },
+            },
+          },
+          {
+            id: 'eq',
+            exchange: 'nasdaq',
+            symbol: 'AAPL',
+            side: 'long',
+            leverage: 2,
+            quantity: 1,
+            status: 'open',
+            entrySituation: {
+              symbol: 'AAPL',
+              priceCvd: { kind: 'agrees' },
+            },
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText('Margin long 5x')).toBeInTheDocument();
+    expect(screen.getByText('Entered as')).toBeInTheDocument();
+    expect(screen.getByText('Price is rising while futures CVD is falling.')).toBeInTheDocument();
+    expect(screen.getByText('Now')).toBeInTheDocument();
+    expect(screen.getByText('Price and futures CVD are moving together.')).toBeInTheDocument();
+    expect(screen.queryByText('Margin long 2x')).not.toBeInTheDocument();
   });
 });

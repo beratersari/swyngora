@@ -21,6 +21,7 @@ Users want leveraged long/short paper trading without real money: market and lim
 - **Initial margin:** `qty * slippedFill / leverage` plus the open taker fee, debited from available cash
 - **Fill price:** last plus adverse slippage (long pays more / short receives less); entry stores the fee-inclusive effective price
 - **Limit:** reserves required margin **and** worst-case open fee until fill, cancel, or reject (released on cancel)
+- **Entry read:** a market open and a resting limit store the coin situation at placement. The fill keeps that read on `entrySituation`. A later tape change does not replace it. Nasdaq and BIST leave it empty. The portfolio margin table and the coin Trade tab show that entry next to the live read. The situation alert still follows the newest open spot buy.
 
 ### Liquidation (maintenance 0.5% of **entry** notional)
 - **Isolated:** assigned-margin formula, interest-adjusted (`LiquidationPriceWithDebt`). Long buffer is `margin − maint − debtInterest` (may be **negative** when interest exceeds free buffer → liquidation price rises **above** entry so insolvent longs still liquidate). Short divides by coin debt including interest. Without extra margin/interest this is `entry × (1 − 1/lev + mmr)` long and `entry × (1 + 1/lev − mmr)` short.

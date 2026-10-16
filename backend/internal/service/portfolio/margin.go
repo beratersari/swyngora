@@ -679,11 +679,13 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 			return nil, nil, fmt.Errorf("%w: insufficient available cash for margin (need %g, available %g)", domain.ErrInvalidArgument, need, avail)
 		}
 		// Reserve required margin; released on cancel/reject/fill (fill then debits cash).
+		// The coin read is the placement tape. The fill copies it and does not read again.
 		o := domain.MarginOrder{
 			ID: uuid.NewString(), ClientID: clientID, Exchange: ex, Symbol: sym,
 			Side: side, Type: domain.MarginOrderLimit, Quantity: in.Quantity, Leverage: in.Leverage,
 			LimitPrice: in.LimitPrice, ReservedMargin: need, StopLoss: in.StopLoss, TakeProfit: in.TakeProfit,
-			Status: domain.MarginOrderOpen, CreatedAt: now, UpdatedAt: now,
+			Status: domain.MarginOrderOpen, Situation: s.captureSituation(ctx, ex, sym),
+			CreatedAt: now, UpdatedAt: now,
 		}
 		ctx = s.withIdempotency(ctx, clientID, idempKey, idempHash, domain.IdempotencyKindMarginOpen, idempIDs{OrderID: o.ID})
 		out, err := s.store.CreateMarginOrder(ctx, o)
@@ -744,7 +746,8 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 		Quantity: in.Quantity, EntryPrice: entry, Leverage: in.Leverage, Margin: margin,
 		DebtPrincipal: borrowP, DebtInterest: 0, DebtAsset: debtAsset, LastInterestAt: lastInt,
 		LiquidationPrice: liq, StopLoss: in.StopLoss, TakeProfit: in.TakeProfit,
-		Status: domain.MarginPositionOpen, OpenedAt: now, UpdatedAt: now,
+		Status: domain.MarginPositionOpen, EntrySituation: s.captureSituation(ctx, ex, sym),
+		OpenedAt: now, UpdatedAt: now,
 	}
 	tr := domain.MarginTrade{
 		ID: uuid.NewString(), ClientID: clientID, PositionID: pos.ID, Exchange: ex, Symbol: sym,
@@ -1349,7 +1352,8 @@ func (s *Service) tryFillMarginLimit(ctx context.Context, o *domain.MarginOrder,
 		Quantity: o.Quantity, EntryPrice: entry, Leverage: o.Leverage, Margin: margin,
 		DebtPrincipal: borrowP, DebtInterest: 0, DebtAsset: debtAsset, LastInterestAt: lastInt,
 		LiquidationPrice: liq, StopLoss: o.StopLoss, TakeProfit: o.TakeProfit,
-		Status: domain.MarginPositionOpen, OpenedAt: now, UpdatedAt: now,
+		Status: domain.MarginPositionOpen, EntrySituation: o.Situation,
+		OpenedAt: now, UpdatedAt: now,
 	}
 	tr := domain.MarginTrade{
 		ID: uuid.NewString(), ClientID: o.ClientID, PositionID: pos.ID, Exchange: o.Exchange, Symbol: o.Symbol,

@@ -212,6 +212,7 @@ CREATE TABLE IF NOT EXISTS margin_positions (
 	opened_at         TEXT NOT NULL,
 	updated_at        TEXT NOT NULL,
 	closed_at         TEXT,
+	situation_json    TEXT NOT NULL DEFAULT '',
 	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_margin_pos_client ON margin_positions(client_id, status, opened_at DESC);
@@ -238,6 +239,7 @@ CREATE TABLE IF NOT EXISTS margin_orders (
 	updated_at       TEXT NOT NULL,
 	filled_at        TEXT,
 	canceled_at      TEXT,
+	situation_json   TEXT NOT NULL DEFAULT '',
 	FOREIGN KEY (client_id) REFERENCES portfolios(client_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_margin_orders_client ON margin_orders(client_id, status, created_at DESC);
@@ -490,6 +492,8 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_
 		`ALTER TABLE pending_orders ADD COLUMN situation_json TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE pending_orders ADD COLUMN reason_set INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE pending_orders ADD COLUMN reason_json TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE margin_positions ADD COLUMN situation_json TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE margin_orders ADD COLUMN situation_json TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE margin_trades ADD COLUMN fee REAL NOT NULL DEFAULT 0`,
 		`CREATE TABLE IF NOT EXISTS cash_movements (
 	id                  TEXT PRIMARY KEY NOT NULL,

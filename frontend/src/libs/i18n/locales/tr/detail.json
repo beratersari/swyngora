@@ -709,6 +709,11 @@
     "lotBlank": "Bu alım okuma saklamadı.",
     "alertFollows": "Durum uyarısı bu alımı izler.",
     "atFill": "Bu emir dolduğundaki piyasa.",
+    "marginLead": "{{leverage}}x {{side}} marjin",
+    "marginSide": {
+      "long": "long",
+      "short": "short"
+    },
     "now": "Şimdi",
     "nowLoading": "Şimdiki bant okunuyor…",
     "loading": "Birleşik bant okunuyor…",

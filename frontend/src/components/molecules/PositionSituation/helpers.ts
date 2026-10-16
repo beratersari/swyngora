@@ -1,4 +1,4 @@
-import type { CoinSituation, SpotPosition } from '@/libs/api';
+import type { CoinSituation, MarginPosition, SpotPosition } from '@/libs/api';
 import type { SituationComparison } from '@/components/molecules/CoinSituation';
 import { formatDateTime } from '@/libs/utils/formatMarket';
 import { formatPrice } from '@/libs/utils/formatPrice';
@@ -65,5 +65,20 @@ export function openPositionFor(
 ): SpotPosition | undefined {
   return positions?.find(
     (row) => row.exchange === exchange && row.symbol === symbol && (row.quantity ?? 0) > 0,
+  );
+}
+
+/** Open margin rows for this coin. A closed row is left out. */
+export function openMarginFor(
+  positions: MarginPosition[] | undefined,
+  exchange: string,
+  symbol: string,
+): MarginPosition[] {
+  return (positions ?? []).filter(
+    (row) =>
+      row.exchange === exchange &&
+      row.symbol === symbol &&
+      row.status !== 'closed' &&
+      (row.quantity ?? 0) > 0,
   );
 }

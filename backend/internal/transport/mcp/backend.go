@@ -6019,6 +6019,9 @@ func marginPosMap(p *domain.MarginPosition) map[string]any {
 		"openedAt":    p.OpenedAt.UTC().Format(time.RFC3339Nano),
 		"updatedAt":   p.UpdatedAt.UTC().Format(time.RFC3339Nano),
 	}
+	if p.EntrySituation != nil {
+		m["entrySituation"] = p.EntrySituation
+	}
 	if !p.LastInterestAt.IsZero() {
 		m["lastInterestAt"] = p.LastInterestAt.UTC().Format(time.RFC3339Nano)
 	}
@@ -6048,6 +6051,9 @@ func marginOrdMap(o *domain.MarginOrder) map[string]any {
 	}
 	if o.TakeProfit != nil {
 		m["takeProfit"] = *o.TakeProfit
+	}
+	if o.Situation != nil {
+		m["situation"] = o.Situation
 	}
 	return m
 }
@@ -6190,6 +6196,9 @@ func portfolioViewJSON(v *domain.PortfolioView) (json.RawMessage, error) {
 			"liquidationPrice": p.LiquidationPrice, "status": string(p.Status),
 			"openedAt":  p.OpenedAt.UTC().Format(time.RFC3339Nano),
 			"updatedAt": p.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		}
+		if p.EntrySituation != nil {
+			m["entrySituation"] = p.EntrySituation
 		}
 		if p.StopLoss != nil {
 			m["stopLoss"] = *p.StopLoss

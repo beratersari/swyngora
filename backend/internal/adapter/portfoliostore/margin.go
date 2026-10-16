@@ -20,21 +20,24 @@ func isUniqueViolation(err error) bool {
 
 const marginPosCols = `id, client_id, exchange, symbol, side, COALESCE(mode, 'isolated'), quantity, entry_price, leverage, margin,
 	COALESCE(debt_principal, 0), COALESCE(debt_interest, 0), COALESCE(debt_asset, 'quote'), last_interest_at,
-	liquidation_price, stop_loss, take_profit, status, realized_pnl, close_reason, opened_at, updated_at, closed_at`
+	liquidation_price, stop_loss, take_profit, status, realized_pnl, close_reason, opened_at, updated_at, closed_at,
+	COALESCE(situation_json, '')`
 
 const marginPosInsertCols = `id, client_id, exchange, symbol, side, mode, quantity, entry_price, leverage, margin,
 	debt_principal, debt_interest, debt_asset, last_interest_at,
-	liquidation_price, stop_loss, take_profit, status, realized_pnl, close_reason, opened_at, updated_at, closed_at`
+	liquidation_price, stop_loss, take_profit, status, realized_pnl, close_reason, opened_at, updated_at, closed_at,
+	situation_json`
 
 func scanMarginPos(row scannable) (*domain.MarginPosition, error) {
 	var p domain.MarginPosition
-	var ex, side, mode, st, opened, updated, debtAsset string
+	var ex, side, mode, st, opened, updated, debtAsset, situation string
 	var sl, tp sql.NullFloat64
 	var closed, lastInt sql.NullString
 	if err := row.Scan(
 		&p.ID, &p.ClientID, &ex, &p.Symbol, &side, &mode, &p.Quantity, &p.EntryPrice, &p.Leverage, &p.Margin,
 		&p.DebtPrincipal, &p.DebtInterest, &debtAsset, &lastInt,
 		&p.LiquidationPrice, &sl, &tp, &st, &p.RealizedPnL, &p.CloseReason, &opened, &updated, &closed,
+		&situation,
 	); err != nil {
 		return nil, err
 	}
@@ -70,6 +73,7 @@ func scanMarginPos(row scannable) (*domain.MarginPosition, error) {
 		t := parseTime(closed.String)
 		p.ClosedAt = &t
 	}
+	p.EntrySituation = unmarshalSituation(situation)
 	return &p, nil
 }
 
@@ -96,12 +100,13 @@ func (s *SQLite) CreateMarginPosition(ctx context.Context, pos domain.MarginPosi
 	}
 	_, err := s.db.ExecContext(ctx, `
 		INSERT INTO margin_positions (`+marginPosInsertCols+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, pos.ID, pos.ClientID, string(pos.Exchange), pos.Symbol, string(pos.Side), string(pos.Mode), pos.Quantity, pos.EntryPrice,
 		pos.Leverage, pos.Margin, pos.DebtPrincipal, pos.DebtInterest, string(pos.DebtAsset), lastInt,
 		pos.LiquidationPrice, nullFloat(pos.StopLoss), nullFloat(pos.TakeProfit),
 		string(pos.Status), pos.RealizedPnL, pos.CloseReason,
-		pos.OpenedAt.UTC().Format(time.RFC3339Nano), pos.UpdatedAt.UTC().Format(time.RFC3339Nano), nullTime(pos.ClosedAt))
+		pos.OpenedAt.UTC().Format(time.RFC3339Nano), pos.UpdatedAt.UTC().Format(time.RFC3339Nano), nullTime(pos.ClosedAt),
+		marshalSituation(pos.EntrySituation))
 	if err != nil {
 		return nil, err
 	}
@@ -244,17 +249,17 @@ func scanMarginPositions(rows *sql.Rows) ([]domain.MarginPosition, error) {
 
 const marginOrderCols = `id, client_id, exchange, symbol, side, order_type, quantity, leverage, limit_price,
 	reserved_margin, stop_loss, take_profit, status, position_id, reject_reason, cancel_reason,
-	created_at, updated_at, filled_at, canceled_at`
+	created_at, updated_at, filled_at, canceled_at, situation_json`
 
 func scanMarginOrder(row scannable) (*domain.MarginOrder, error) {
 	var o domain.MarginOrder
-	var ex, side, typ, st, cAt, uAt string
+	var ex, side, typ, st, cAt, uAt, situation string
 	var sl, tp sql.NullFloat64
 	var filled, canceled sql.NullString
 	if err := row.Scan(
 		&o.ID, &o.ClientID, &ex, &o.Symbol, &side, &typ, &o.Quantity, &o.Leverage, &o.LimitPrice,
 		&o.ReservedMargin, &sl, &tp, &st, &o.PositionID, &o.RejectReason, &o.CancelReason,
-		&cAt, &uAt, &filled, &canceled,
+		&cAt, &uAt, &filled, &canceled, &situation,
 	); err != nil {
 		return nil, err
 	}
@@ -280,6 +285,7 @@ func scanMarginOrder(row scannable) (*domain.MarginOrder, error) {
 		t := parseTime(canceled.String)
 		o.CanceledAt = &t
 	}
+	o.Situation = unmarshalSituation(situation)
 	return &o, nil
 }
 
@@ -297,12 +303,12 @@ func (s *SQLite) CreateMarginOrder(ctx context.Context, o domain.MarginOrder) (*
 	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO margin_orders (`+marginOrderCols+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, o.ID, o.ClientID, string(o.Exchange), o.Symbol, string(o.Side), string(o.Type), o.Quantity, o.Leverage,
 		o.LimitPrice, o.ReservedMargin, nullFloat(o.StopLoss), nullFloat(o.TakeProfit), string(o.Status),
 		o.PositionID, o.RejectReason, o.CancelReason,
 		o.CreatedAt.UTC().Format(time.RFC3339Nano), o.UpdatedAt.UTC().Format(time.RFC3339Nano),
-		nullTime(o.FilledAt), nullTime(o.CanceledAt)); err != nil {
+		nullTime(o.FilledAt), nullTime(o.CanceledAt), marshalSituation(o.Situation)); err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -730,12 +736,13 @@ func (s *SQLite) txInsertMarginPos(ctx context.Context, tx *sql.Tx, pos domain.M
 	}
 	_, err := tx.ExecContext(ctx, `
 		INSERT INTO margin_positions (`+marginPosInsertCols+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, pos.ID, pos.ClientID, string(pos.Exchange), pos.Symbol, string(pos.Side), string(pos.Mode), pos.Quantity, pos.EntryPrice,
 		pos.Leverage, pos.Margin, pos.DebtPrincipal, pos.DebtInterest, string(pos.DebtAsset), lastInt,
 		pos.LiquidationPrice, nullFloat(pos.StopLoss), nullFloat(pos.TakeProfit),
 		string(pos.Status), pos.RealizedPnL, pos.CloseReason,
-		pos.OpenedAt.UTC().Format(time.RFC3339Nano), pos.UpdatedAt.UTC().Format(time.RFC3339Nano), nullTime(pos.ClosedAt))
+		pos.OpenedAt.UTC().Format(time.RFC3339Nano), pos.UpdatedAt.UTC().Format(time.RFC3339Nano), nullTime(pos.ClosedAt),
+		marshalSituation(pos.EntrySituation))
 	return err
 }
 
@@ -797,7 +804,6 @@ func (s *SQLite) UpdatePortfolioMarginMode(ctx context.Context, clientID string,
 	}
 	return nil
 }
-
 
 func (s *SQLite) txInsertMarginTrade(ctx context.Context, tx *sql.Tx, t domain.MarginTrade) error {
 	_, err := tx.ExecContext(ctx, `

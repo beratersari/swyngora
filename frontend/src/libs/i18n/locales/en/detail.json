@@ -709,6 +709,11 @@
     "lotBlank": "This buy stored no read.",
     "alertFollows": "The situation alert follows this buy.",
     "atFill": "Market when this order filled.",
+    "marginLead": "Margin {{side}} {{leverage}}x",
+    "marginSide": {
+      "long": "long",
+      "short": "short"
+    },
     "now": "Now",
     "nowLoading": "Reading the tape now…",
     "loading": "Reading the combined tape…",

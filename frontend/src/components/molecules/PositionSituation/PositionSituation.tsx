@@ -6,6 +6,7 @@ import { Lot, Stack } from './PositionSituation.styles';
 import type { PositionSituationProps } from './PositionSituation.types';
 
 export function PositionSituation({
+  lead,
   entry,
   now,
   nowLoading,
@@ -20,7 +21,12 @@ export function PositionSituation({
   if (openLots.length === 0 && entered.length === 0 && current.length === 0 && !nowLoading)
     return null;
   return (
-    <Stack role="group" aria-label={t('situation.compare')}>
+    <Stack role="group" aria-label={lead || t('situation.compare')}>
+      {lead ? (
+        <Text variant="caption" color="secondary">
+          {lead}
+        </Text>
+      ) : null}
       {openLots.length > 0
         ? openLots.map((lot, index) => (
             <LotRead

@@ -110,8 +110,11 @@ type MarginPosition struct {
 	StopLoss         *float64
 	TakeProfit       *float64
 	Status           MarginPositionStatus
-	UnrealizedPnL    float64 // view-only / last mark
-	MarkPrice        float64 // view-only
+	// EntrySituation is the coin read captured when the open order was placed.
+	// A limit fill keeps that placement read. Equities leave it nil.
+	EntrySituation *CoinSituation
+	UnrealizedPnL  float64 // view-only / last mark
+	MarkPrice      float64 // view-only
 	// DebtNotional is view-only: principal+interest in quote terms (short uses mark).
 	DebtNotional float64
 	RealizedPnL  float64 // cumulative realized on this position (partials + final)
@@ -136,13 +139,15 @@ type MarginOrder struct {
 	StopLoss       *float64
 	TakeProfit     *float64
 	Status         MarginOrderStatus
-	PositionID     string // set when filled
-	RejectReason   string
-	CancelReason   string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	FilledAt       *time.Time
-	CanceledAt     *time.Time
+	// Situation is the coin read at placement. The fill copies it onto the position.
+	Situation    *CoinSituation
+	PositionID   string // set when filled
+	RejectReason string
+	CancelReason string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	FilledAt     *time.Time
+	CanceledAt   *time.Time
 }
 
 // MarginTrade is a margin open/close/repay fill record.
