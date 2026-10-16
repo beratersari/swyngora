@@ -4284,6 +4284,21 @@ func (b *Backend) CreateSituationAlert(ctx context.Context, clientID, exchange, 
 	return alertJSON(a)
 }
 
+func (b *Backend) CreateSituationMatchAlert(ctx context.Context, clientID, exchange, symbol, mode string, match domain.SituationMatch) (json.RawMessage, error) {
+	if b.Alerts == nil {
+		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
+	}
+	a, err := b.Alerts.Create(ctx, pricealert.CreateInput{
+		ClientID: clientID, Exchange: exchange, Symbol: symbol,
+		Kind: string(domain.AlertKindSituation), Condition: string(domain.AlertConditionMatches), Mode: mode,
+		Situation: &match,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return alertJSON(a)
+}
+
 func (b *Backend) CreateTapeAlert(ctx context.Context, clientID, exchange, symbol, kind, condition string, target float64, mode string) (json.RawMessage, error) {
 	if b.Alerts == nil {
 		return nil, fmt.Errorf("%w: alerts not configured", domain.ErrUpstream)
@@ -6296,6 +6311,9 @@ func alertJSON(a *domain.PriceAlert) (json.RawMessage, error) {
 	}
 	if a.SituationFire != nil && len(a.SituationFire.Comparison.Clauses) > 0 {
 		m["situationFire"] = a.SituationFire
+	}
+	if a.SituationMatch != nil && a.SituationMatch.HasClause() {
+		m["situationMatch"] = a.SituationMatch
 	}
 	return mustJSON(m)
 }

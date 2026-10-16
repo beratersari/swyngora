@@ -148,6 +148,45 @@ func TestSQLite_SituationFireSurvivesRearmAndReplaces(t *testing.T) {
 	}
 }
 
+func TestSQLite_SituationMatchSurvivesReopen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "match.db")
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	want := &domain.SituationMatch{PriceCVD: domain.SituationCVDPriceUp, Funding: "long"}
+	alert := sample("m1", "c")
+	alert.Kind = domain.AlertKindSituation
+	alert.Condition = domain.AlertConditionMatches
+	alert.SituationMatch = want
+	if _, err := s.Create(ctx, alert); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	got, err := s2.Get(ctx, "c", "m1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SituationMatch == nil || got.SituationMatch.PriceCVD != domain.SituationCVDPriceUp || got.SituationMatch.Funding != "long" {
+		t.Fatalf("%+v", got.SituationMatch)
+	}
+	if _, err := s2.db.ExecContext(ctx, `UPDATE price_alerts SET situation_match_json = ? WHERE id = ?`, "{", "m1"); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s2.Get(ctx, "c", "m1")
+	if err != nil || got.SituationMatch != nil {
+		t.Fatalf("bad json should leave the match off: %+v %v", got, err)
+	}
+}
+
 func TestSQLite_MarkTriggeredOnce(t *testing.T) {
 	s := openTemp(t)
 	ctx := context.Background()

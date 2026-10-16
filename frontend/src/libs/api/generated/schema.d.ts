@@ -3458,12 +3458,20 @@ export interface paths {
          *     condition=any (default) | up | down (after-path lean). symbol=BTCUSDT or all (any
          *     scanned coin). exchange=binance|bybit|okx|all. Repeating by default: one fire when the
          *     match appears, quiet while still similar, re-arm when it clears. Informational only.
-         *     kind=situation: the live coin read leaves the clauses stored on the newest open paper
-         *     buy. condition=leaves. A newest buy with no stored read does not fire. No open crypto
+         *     kind=situation condition=leaves: the live coin read leaves the clauses stored on the
+         *     newest open paper buy. A newest buy with no stored read does not fire. No open crypto
          *     position stays quiet. One-time fires once. Repeating re-arms when the live read matches
          *     again. The last fire keeps situationFire (the clauses that left, what they were, and
          *     what they became). Re-arming leaves that fire in place until the next one replaces it.
-         *     Listing the alert adds situationWatch: stored, blank, or flat. Equities are rejected.
+         *     Listing the alert adds situationWatch: stored, blank, or flat.
+         *     kind=situation condition=matches: the live coin read matches the clause kinds in
+         *     situation. No open trade is required. Omit a clause to ignore it. At least one clause
+         *     is required. A blank live clause is not a match. Print dollars can change without a
+         *     new prints side. The day and 4-hour print clocks are not compared. One-time fires once.
+         *     Repeating fires when the match appears, stays quiet while it remains true, and re-arms
+         *     when any selected clause no longer matches. The last fire keeps situationFire with
+         *     status met. Listing adds situationMatch and situationWatch selected. It does not read
+         *     the paper book. Equities are rejected for both conditions.
          */
         post: operations["createPriceAlert"];
         delete?: never;
@@ -9347,7 +9355,7 @@ export interface components {
             symbol?: string;
             /** @enum {string} */
             kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional" | "liquidation_level" | "setup_radar" | "funding" | "open_interest" | "taker" | "fear_greed" | "situation";
-            /** @description price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both; setup_radar any|up|down */
+            /** @description price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both; setup_radar any|up|down; situation leaves|matches */
             condition?: string;
             targetPrice?: number;
             /** @description Analysis band for imbalance/wall alerts */
@@ -9367,19 +9375,44 @@ export interface components {
             triggeredVenue?: string;
             /**
              * @description Filled when a situation alert is read. stored means the newest open buy has a coin read.
-             *     blank means that buy stored none, so this alert does not fire.
-             *     flat means no open crypto buy is left, so this alert stays quiet.
-             *     Omitted for other kinds, and when the book could not be read.
+             *     blank means that buy stored none, so a leaves alert does not fire.
+             *     flat means no open crypto buy is left, so a leaves alert stays quiet.
+             *     selected means the alert watches situationMatch and does not read the paper book.
+             *     Omitted for other kinds, and when a leaves alert's book could not be read.
              * @enum {string}
              */
-            situationWatch?: "stored" | "blank" | "flat";
+            situationWatch?: "stored" | "blank" | "flat" | "selected";
+            situationMatch?: components["schemas"]["SituationMatch"];
             situationFire?: components["schemas"]["SituationFire"];
         };
         /**
-         * @description The last time a situation alert fired. comparison names the stored clauses that had left,
-         *     with the entry kind, the later kind, and any missing venues. entry and live are those two
-         *     reads with the held-since clock cleared. A repeating alert keeps this until the next fire
-         *     replaces it. Re-arming does not clear it. Omitted until the first fire.
+         * @description Clause kinds a situation alert watches when condition is matches.
+         *     Omit a clause to ignore it. At least one clause is required on create.
+         *     Prints compare side only. Clocks and dollar amounts are not part of the match.
+         */
+        SituationMatch: {
+            /** @enum {string} */
+            priceCvd?: "price_up_cvd_down" | "price_down_cvd_up" | "agrees";
+            /** @enum {string} */
+            openInterest?: "opened" | "closed" | "flat";
+            /** @enum {string} */
+            liquidation?: "long" | "short" | "none";
+            /** @enum {string} */
+            prints?: "long" | "short" | "even" | "quiet";
+            /** @enum {string} */
+            funding?: "long" | "short" | "none";
+            /** @enum {string} */
+            crowd?: "top_more_long" | "top_more_short" | "even";
+            /** @enum {string} */
+            size?: "whale_buy_retail_sell" | "whale_sell_retail_buy" | "both_buy" | "both_sell" | "whale_buy" | "whale_sell" | "retail_buy" | "retail_sell" | "flat";
+        };
+        /**
+         * @description The last time a situation alert fired. For condition leaves, comparison names the stored
+         *     clauses that had left, with the entry kind, the later kind, and any missing venues.
+         *     For condition matches, comparison.same is true and each selected clause has status met.
+         *     entry and live are those two reads with the held-since clock cleared. A repeating alert
+         *     keeps this until the next fire replaces it. Re-arming does not clear it. Omitted until
+         *     the first fire.
          */
         SituationFire: {
             comparison?: components["schemas"]["SituationComparison"];
@@ -9955,14 +9988,15 @@ export interface components {
         /**
          * @description One clause the entry stored that the later read does not still say.
          *     status changed means the kind differs. status missing means the later
-         *     read left the clause blank. Missing names those venues when the later
+         *     read left the clause blank. status met means a selected-read alert fired
+         *     because this clause matched. Missing names those venues when the later
          *     read says who is absent. A blank clause is not a new kind.
          */
         SituationClauseLeft: {
             /** @enum {string} */
             clause?: "priceCvd" | "openInterest" | "liquidation" | "prints" | "funding" | "crowd" | "size";
             /** @enum {string} */
-            status?: "changed" | "missing";
+            status?: "changed" | "missing" | "met";
             /** @description Kind stored on the entry read */
             entry?: string;
             /** @description Kind on the later read */
@@ -15739,8 +15773,10 @@ export interface operations {
                      * @enum {string}
                      */
                     kind?: "price" | "imbalance" | "wall" | "liquidation_feed" | "liquidation_cascade" | "liquidation_notional" | "liquidation_level" | "setup_radar" | "funding" | "open_interest" | "taker" | "fear_greed" | "situation";
-                    /** @description price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both; liquidation_level any|high|fair; setup_radar any|up|down */
+                    /** @description price/imbalance above|below; wall bid|ask|any; liquidation_cascade cascade|extreme|elevated; liquidation_notional long|short|both; liquidation_level any|high|fair; setup_radar any|up|down; situation leaves|matches */
                     condition: string;
+                    /** @description Required when kind=situation and condition=matches. Each set clause is a kind the live read must show. */
+                    situation?: components["schemas"]["SituationMatch"];
                     /** @description Price target, |imbalance| threshold, wall min share, liquidation_feed min down seconds (0 = 300), liquidation_notional USDT amount, liquidation_level min confidence 0–1 (0 = default), or setup_radar min similarity 40–100 (0 = 60) */
                     targetPrice?: number;
                     /** @description liquidation_notional lookback 1m|5m|15m|1h (default 5m) */

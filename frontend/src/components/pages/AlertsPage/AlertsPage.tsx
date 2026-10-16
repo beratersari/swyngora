@@ -10,6 +10,8 @@ import {
   type CreatePriceAlertValues,
 } from '@/components/organisms/CreateAlertForm/CreateAlertForm';
 import type { AlertKind } from '@/components/organisms/CreateAlertForm/CreateAlertForm.types';
+import { SITUATION_MATCH_CLAUSES } from '@/components/organisms/CreateAlertForm/constants';
+import { situationMatchFromSearch } from '@/components/organisms/CreateAlertForm/helpers';
 import {
   rtkErrorMessage,
   useCreatePriceAlertMutation,
@@ -73,6 +75,9 @@ export function AlertsPage() {
     if (defaultKind === 'setup_radar' && (raw === '' || raw === 'ALL')) return '';
     return raw;
   }, [searchParams, defaultKind]);
+  const defaultCondition = (searchParams.get('condition') ?? '').trim().toLowerCase();
+  const defaultMatch = useMemo(() => situationMatchFromSearch(searchParams), [searchParams]);
+  const matchKey = SITUATION_MATCH_CLAUSES.map((clause) => defaultMatch[clause.id] ?? '').join(',');
 
   const items = list.data?.alerts ?? [];
 
@@ -82,10 +87,12 @@ export function AlertsPage() {
 
       <Section>
         <CreateAlertForm
-          key={`${defaultKind}:${defaultExchange}:${defaultSymbol}`}
+          key={`${defaultKind}:${defaultExchange}:${defaultSymbol}:${defaultCondition}:${matchKey}`}
           defaultExchange={defaultExchange}
           defaultSymbol={defaultSymbol}
           defaultKind={defaultKind}
+          defaultCondition={defaultCondition}
+          defaultMatch={defaultMatch}
           isSubmitting={createState.isLoading}
           submitError={createState.isError ? createState.error : undefined}
           onSubmit={async (values: CreatePriceAlertValues) => {

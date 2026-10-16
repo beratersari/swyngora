@@ -1644,6 +1644,35 @@ class SituationAlertInput(BaseModel):
     )
 
 
+class SituationMatchAlertInput(BaseModel):
+    client_id: str
+    symbol: str = Field(description="Pair, e.g. BTCUSDT or BTC-USD. No open trade is required")
+    exchange: str = Field(default="binance", description="binance | coinbase | bybit")
+    mode: str = Field(
+        default="one_time",
+        description="one_time (default) fires once; repeating re-arms when a selected clause no longer matches",
+    )
+    price_cvd: str = Field(
+        default="",
+        description="price_up_cvd_down | price_down_cvd_up | agrees. Empty ignores this clause",
+    )
+    open_interest: str = Field(default="", description="opened | closed | flat. Empty ignores this clause")
+    liquidation: str = Field(default="", description="long | short | none. Empty ignores this clause")
+    prints: str = Field(
+        default="",
+        description="24h force-order side: long | short | even | quiet. Empty ignores this clause. Dollars do not count",
+    )
+    funding: str = Field(default="", description="long | short | none. Empty ignores this clause")
+    crowd: str = Field(
+        default="",
+        description="top_more_long | top_more_short | even. Empty ignores this clause",
+    )
+    size: str = Field(
+        default="",
+        description="whale_buy_retail_sell | whale_sell_retail_buy | both_buy | both_sell | whale_buy | whale_sell | retail_buy | retail_sell | flat. Empty ignores this clause",
+    )
+
+
 class AlertCreateInput(BaseModel):
     client_id: str
     symbol: str
@@ -3825,6 +3854,45 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "kind": "situation",
                 "condition": "leaves",
                 "mode": mode,
+            },
+        )
+
+    def create_situation_match_alert(
+        client_id: str,
+        symbol: str,
+        exchange: str = "binance",
+        mode: str = "one_time",
+        price_cvd: str = "",
+        open_interest: str = "",
+        liquidation: str = "",
+        prints: str = "",
+        funding: str = "",
+        crowd: str = "",
+        size: str = "",
+    ) -> str:
+        situation = {
+            key: value
+            for key, value in {
+                "priceCvd": price_cvd,
+                "openInterest": open_interest,
+                "liquidation": liquidation,
+                "prints": prints,
+                "funding": funding,
+                "crowd": crowd,
+                "size": size,
+            }.items()
+            if value
+        }
+        return http.post(
+            "/api/v1/alerts",
+            {
+                "clientId": client_id,
+                "symbol": symbol,
+                "exchange": exchange,
+                "kind": "situation",
+                "condition": "matches",
+                "mode": mode,
+                "situation": situation,
             },
         )
 
@@ -6735,12 +6803,14 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             list_price_alerts,
             name="list_price_alerts",
             description=(
-                "List price alerts for a clientId (active and triggered). A situation alert "
-                "includes situationWatch: stored when the newest open buy has a read, blank "
-                "when that buy stored none, or flat when no open crypto buy is left. After it "
-                "fires, situationFire names the clauses that left, what they were, what they "
-                "became, and any missing venue. Repeating re-arm keeps that fire until the "
-                "next one replaces it. The alert still follows the newest open buy."
+                "List price alerts for a clientId (active and triggered). A leaves situation "
+                "alert includes situationWatch: stored when the newest open buy has a read, "
+                "blank when that buy stored none, or flat when no open crypto buy is left. "
+                "After it fires, situationFire names the clauses that left. A matches alert "
+                "includes situationMatch, the clause kinds it watches, and situationWatch "
+                "selected. It does not need an open trade. After it fires, situationFire "
+                "lists those clauses with status met. Repeating re-arm keeps that fire until "
+                "the next one replaces it."
             ),
             args_schema=AlertListInput,
         ),
@@ -6756,6 +6826,22 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "the last fire and says when the alert is not watching."
             ),
             args_schema=SituationAlertInput,
+        ),
+        StructuredTool.from_function(
+            create_situation_match_alert,
+            name="create_situation_match_alert",
+            description=(
+                "Alert when the live coin read matches the clause kinds you pass. "
+                "No open paper trade is required. Set at least one of price_cvd, "
+                "open_interest, liquidation, prints, funding, crowd, or size. "
+                "An empty clause is ignored. A blank live clause is not a match. "
+                "Print dollars do not count, and the day and 4-hour print clocks "
+                "are not compared. mode=one_time (default) fires once. repeating "
+                "fires when the match appears, stays quiet while it remains true, "
+                "and re-arms when a selected clause no longer matches. Not for "
+                "Nasdaq or BIST."
+            ),
+            args_schema=SituationMatchAlertInput,
         ),
         StructuredTool.from_function(
             create_price_alert,

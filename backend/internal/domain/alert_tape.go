@@ -12,7 +12,9 @@ const (
 	AlertKindOpenInterest AlertKind = "open_interest"
 	AlertKindTaker        AlertKind = "taker"
 	AlertKindFearGreed    AlertKind = "fear_greed"
-	// AlertKindSituation fires when the live coin read leaves the read stored on the open paper buy.
+	// AlertKindSituation fires on the coin read.
+	// condition=leaves follows the newest open paper buy.
+	// condition=matches watches clause kinds stored on the alert, with no open trade.
 	AlertKindSituation AlertKind = "situation"
 )
 
@@ -28,7 +30,7 @@ func IsFearGreedAlert(k AlertKind) bool {
 	return ok && k == AlertKindFearGreed
 }
 
-// IsSituationAlert reports an alert on the open position's stored coin read.
+// IsSituationAlert reports an alert on the coin read.
 func IsSituationAlert(k AlertKind) bool {
 	k, ok := NormalizeAlertKind(string(k))
 	return ok && k == AlertKindSituation

@@ -385,3 +385,46 @@ export function situationChangeLines(
   }
   return lines;
 }
+
+type SituationMatchSource = {
+  priceCvd?: { kind?: string } | null;
+  openInterest?: { flow?: string } | null;
+  liquidation?: { side?: string } | null;
+  prints?: { side?: string } | null;
+  funding?: { payer?: string } | null;
+  crowd?: { lean?: string } | null;
+  size?: { kind?: string } | null;
+};
+
+/** Alerts-page path that watches the definite clauses on this read. Blank clauses stay off. */
+export function situationMatchAlertPath(
+  exchange: string,
+  symbol: string,
+  report: SituationMatchSource | null | undefined,
+): string | null {
+  const venue = exchange.trim().toLowerCase();
+  const pair = symbol.trim();
+  if (!report || !venue || !pair) return null;
+  if (venue !== 'binance' && venue !== 'coinbase' && venue !== 'bybit') return null;
+  const params = new URLSearchParams();
+  params.set('kind', 'situation');
+  params.set('condition', 'matches');
+  params.set('exchange', venue);
+  params.set('symbol', pair);
+  const set = (key: string, value?: string) => {
+    const kind = (value ?? '').trim();
+    if (kind) params.set(key, kind);
+  };
+  set('priceCvd', report.priceCvd?.kind);
+  set('openInterest', report.openInterest?.flow);
+  set('liquidation', report.liquidation?.side);
+  set('prints', report.prints?.side);
+  set('funding', report.funding?.payer);
+  set('crowd', report.crowd?.lean);
+  set('size', report.size?.kind);
+  const watched = [...params.keys()].filter(
+    (key) => key !== 'kind' && key !== 'condition' && key !== 'exchange' && key !== 'symbol',
+  );
+  if (watched.length === 0) return null;
+  return `/alerts?${params.toString()}`;
+}

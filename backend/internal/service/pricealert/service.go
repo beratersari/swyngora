@@ -29,6 +29,8 @@ type CreateInput struct {
 	RangePct float64
 	// Window is 1m|5m|15m|1h for liquidation_notional (overrides RangePct).
 	Window string
+	// Situation is the clause kinds for kind=situation condition=matches.
+	Situation *domain.SituationMatch
 }
 
 // LiquidationTape subscribes a coin and fills a lookback from venue history.
@@ -91,10 +93,19 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 		in.RangePct = d.Minutes()
 	}
 	if kind == domain.AlertKindSituation && cond == "" {
-		cond = "leaves"
+		cond = string(domain.AlertConditionLeaves)
 	}
 	if err := domain.ValidateAlertSpec(kind, cond, in.TargetPrice, in.RangePct); err != nil {
 		return nil, err
+	}
+	var match *domain.SituationMatch
+	if kind == domain.AlertKindSituation && cond == string(domain.AlertConditionMatches) {
+		match, err = domain.NormalizeSituationMatch(in.Situation)
+		if err != nil {
+			return nil, err
+		}
+	} else if in.Situation != nil && in.Situation.HasClause() {
+		return nil, fmt.Errorf("%w: situation clauses are only stored when condition is matches", domain.ErrInvalidArgument)
 	}
 	mode, ok := domain.NormalizeAlertMode(in.Mode)
 	if !ok {
@@ -128,18 +139,19 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*domain.PriceAler
 		armed = true
 	}
 	alert := domain.PriceAlert{
-		ID:          uuid.NewString(),
-		ClientID:    clientID,
-		Exchange:    ex,
-		Symbol:      sym,
-		Kind:        kind,
-		Condition:   domain.AlertCondition(cond),
-		TargetPrice: in.TargetPrice,
-		RangePct:    rangePct,
-		Mode:        mode,
-		Armed:       armed,
-		Status:      domain.AlertStatusActive,
-		CreatedAt:   time.Now().UTC(),
+		ID:             uuid.NewString(),
+		ClientID:       clientID,
+		Exchange:       ex,
+		Symbol:         sym,
+		Kind:           kind,
+		Condition:      domain.AlertCondition(cond),
+		TargetPrice:    in.TargetPrice,
+		RangePct:       rangePct,
+		Mode:           mode,
+		Armed:          armed,
+		Status:         domain.AlertStatusActive,
+		CreatedAt:      time.Now().UTC(),
+		SituationMatch: match,
 	}
 	out, err := s.store.Create(ctx, alert)
 	if err != nil {
@@ -227,6 +239,10 @@ func (s *Service) decorateSituation(ctx context.Context, list []domain.PriceAler
 	seen := map[string]domain.SituationWatchStatus{}
 	for i := range list {
 		if !domain.IsSituationAlert(list[i].Kind) {
+			continue
+		}
+		if domain.IsSituationMatchAlert(list[i]) {
+			list[i].SituationWatch = domain.SituationWatchSelected
 			continue
 		}
 		key := list[i].ClientID + "\x00" + string(list[i].Exchange) + "\x00" + list[i].Symbol
@@ -723,7 +739,7 @@ func normalizeExchangeSymbolForKind(kind domain.AlertKind, exchange, symbol stri
 			return "", "", err
 		}
 		if domain.IsEquityExchange(ex) {
-			return "", "", fmt.Errorf("%w: situation alerts follow a crypto position", domain.ErrInvalidArgument)
+			return "", "", fmt.Errorf("%w: situation alerts are for a crypto pair", domain.ErrInvalidArgument)
 		}
 		return ex, sym, nil
 	}

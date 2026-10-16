@@ -33,7 +33,7 @@ Users should be able to take their own product data offline: **watchlist**, **sh
 |---------|--------|
 | watchlist | Owner's list items |
 | shares | Shares granted by the owner |
-| alerts | All price alerts for the client (active + triggered) |
+| alerts | All price alerts for the client (active + triggered). A matches alert includes `situation`, the selected clause kinds |
 | backtests | Backtest jobs + all signals (paged) |
 | portfolios | Owned paper books: cash/balance, positions, trades, open orders, tax lots, recurring buys, margin positions/orders/trades, outgoing shares, **allocation baskets**, **rebalance history** (legs, leftover mix, attempts), and **risk limits** |
 | customSignals | Named custom swing mixes (factor weights + which mix is the Custom tab default) |

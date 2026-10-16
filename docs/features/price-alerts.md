@@ -59,9 +59,26 @@ PUT /api/v1/alerts/webhook
 | `open_interest` | Current open-interest notional in USDT | `above` / `below` | Positive USDT | `one_time` unless repeating |
 | `taker` | 5-minute taker buy share, 0–100 | `above` / `below` | 0–100 | `one_time` unless repeating |
 | `fear_greed` | Market-wide fear and greed score. No symbol | `above` / `below` | 0–100 | `one_time` unless repeating |
-| `situation` | Live coin read leaves the clauses stored when the newest open paper buy filled. A blank newest buy and a flat book stay quiet and are named on the row | `leaves` | unused | `one_time` unless repeating |
+| `situation` | `leaves`: live coin read leaves the clauses stored when the newest open paper buy filled. A blank newest buy and a flat book stay quiet and are named on the row. `matches`: live coin read matches the clause kinds in `situation`. No open trade is required. A blank live clause is not a match | `leaves` (default) or `matches` | unused | `one_time` unless repeating |
 
-A situation alert's last fire is `situationFire` on `GET /api/v1/alerts` and on the webhook `situation_alert.triggered`, beside `changed` (the clause names). It names the entry kind, the later kind, and any missing venue. The alerts table shows that in English and Turkish with the fire time. Repeating re-arm keeps it until the next fire replaces it. The list does not load a live tape. `situationWatch` is `stored`, `blank`, or `flat` when the alert is read.
+A `leaves` situation alert's last fire is `situationFire` on `GET /api/v1/alerts` and on the webhook `situation_alert.triggered`, beside `changed` (the clause names). It names the entry kind, the later kind, and any missing venue. The alerts table shows that in English and Turkish with the fire time. Repeating re-arm keeps it until the next fire replaces it. The list does not load a live tape. `situationWatch` is `stored`, `blank`, or `flat` when the alert is read.
+
+A `matches` alert stores the selected clause kinds on `situationMatch`. The checker loads the same live coin read as the coin page. Every selected clause must be present with that kind. A clause left off the selection is ignored. A blank live clause is not a match, so a missing venue does not fire the alert. Print dollars can change without a new `prints` side. The day and 4-hour print clocks are not compared. No open paper position is required. `mode=one_time` fires once. `mode=repeating` fires when the match appears, stays quiet while every selected clause still matches, and re-arms when one no longer does. The last fire uses `situationFire` with `comparison.same` true and each clause `status` `met`. The webhook also sends `matched` (the clause names). Listing the alert sets `situationWatch` to `selected` and does not read the paper book. Nasdaq and BIST are rejected. The coin card links here with the definite clauses already filled in. The caller can change them before creating the alert.
+
+```json
+POST /api/v1/alerts
+{
+  "kind": "situation",
+  "condition": "matches",
+  "exchange": "binance",
+  "symbol": "BTCUSDT",
+  "mode": "repeating",
+  "situation": {
+    "priceCvd": "price_up_cvd_down",
+    "funding": "long"
+  }
+}
+```
 
 Book kinds are evaluated in the background from the same live local books as `GET /api/v1/market/orderbook` (Binance, Coinbase, Bybit). Repeating book alerts fire when the condition **appears**, stay quiet while it remains true, and re-arm after it clears so the next appearance can fire again.
 

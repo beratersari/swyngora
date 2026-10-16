@@ -58,18 +58,19 @@ type sharePayload struct {
 }
 
 type alertPayload struct {
-	ID             string  `json:"id"`
-	Exchange       string  `json:"exchange"`
-	Symbol         string  `json:"symbol"`
-	Kind           string  `json:"kind,omitempty"`
-	Condition      string  `json:"condition"`
-	TargetPrice    float64 `json:"targetPrice"`
-	RangePct       float64 `json:"rangePct,omitempty"`
-	Mode           string  `json:"mode"`
-	Status         string  `json:"status"`
-	CreatedAt      string  `json:"createdAt"`
-	TriggeredAt    *string `json:"triggeredAt,omitempty"`
-	TriggeredPrice float64 `json:"triggeredPrice,omitempty"`
+	ID             string                 `json:"id"`
+	Exchange       string                 `json:"exchange"`
+	Symbol         string                 `json:"symbol"`
+	Kind           string                 `json:"kind,omitempty"`
+	Condition      string                 `json:"condition"`
+	TargetPrice    float64                `json:"targetPrice"`
+	RangePct       float64                `json:"rangePct,omitempty"`
+	Mode           string                 `json:"mode"`
+	Status         string                 `json:"status"`
+	CreatedAt      string                 `json:"createdAt"`
+	TriggeredAt    *string                `json:"triggeredAt,omitempty"`
+	TriggeredPrice float64                `json:"triggeredPrice,omitempty"`
+	Situation      *domain.SituationMatch `json:"situation,omitempty"`
 }
 
 type backtestPayload struct {
@@ -185,6 +186,9 @@ func (s *Service) runJob(ctx context.Context, job *domain.ExportJob) error {
 				if a.TriggeredAt != nil {
 					t := a.TriggeredAt.UTC().Format(time.RFC3339Nano)
 					ap.TriggeredAt = &t
+				}
+				if a.SituationMatch != nil && a.SituationMatch.HasClause() {
+					ap.Situation = a.SituationMatch
 				}
 				pl.Alerts = append(pl.Alerts, ap)
 			}
@@ -389,16 +393,25 @@ func buildCSV(pl *payload) ([]byte, error) {
 			if a.TriggeredAt != nil {
 				trig = *a.TriggeredAt
 			}
+			situation := ""
+			if a.Situation != nil && a.Situation.HasClause() {
+				raw, err := json.Marshal(a.Situation)
+				if err != nil {
+					return nil, err
+				}
+				situation = string(raw)
+			}
 			rows = append(rows, []string{
 				a.ID, a.Exchange, a.Symbol, a.Kind, a.Condition,
 				strconv.FormatFloat(a.TargetPrice, 'f', -1, 64),
 				strconv.FormatFloat(a.RangePct, 'f', -1, 64),
 				a.Mode, a.Status, a.CreatedAt, trig,
 				strconv.FormatFloat(a.TriggeredPrice, 'f', -1, 64),
+				situation,
 			})
 		}
 		if err := writeSection("alerts", []string{
-			"id", "exchange", "symbol", "kind", "condition", "targetPrice", "rangePct", "mode", "status", "createdAt", "triggeredAt", "triggeredPrice",
+			"id", "exchange", "symbol", "kind", "condition", "targetPrice", "rangePct", "mode", "status", "createdAt", "triggeredAt", "triggeredPrice", "situation",
 		}, rows); err != nil {
 			return nil, err
 		}

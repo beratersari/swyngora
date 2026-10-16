@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -211,6 +212,11 @@ func newTestService(t *testing.T) (*Service, *watchliststore.Memory) {
 		ID: "a1", ClientID: "user1", Exchange: domain.ExchangeBinance, Symbol: "ETHUSDT",
 		Condition: domain.AlertAbove, TargetPrice: 100, Mode: domain.AlertModeOneTime,
 		Status: domain.AlertStatusTriggered, CreatedAt: time.Now().UTC(),
+	}, {
+		ID: "a2", ClientID: "user1", Exchange: domain.ExchangeBinance, Symbol: "BTCUSDT",
+		Kind: domain.AlertKindSituation, Condition: domain.AlertConditionMatches,
+		Mode: domain.AlertModeRepeating, Status: domain.AlertStatusActive, CreatedAt: time.Now().UTC(),
+		SituationMatch: &domain.SituationMatch{PriceCVD: domain.SituationCVDPriceUp, Funding: "long"},
 	}}}
 	scanner := &fakeScanner{
 		backtests: []domain.ScannerBacktest{{
@@ -274,6 +280,9 @@ func TestExport_JSONCompleteAndDownload(t *testing.T) {
 	}
 	if pl["clientId"] != "user1" {
 		t.Fatalf("%v", pl)
+	}
+	if !strings.Contains(string(raw), `"priceCvd":"price_up_cvd_down"`) && !strings.Contains(string(raw), `"priceCvd": "price_up_cvd_down"`) {
+		t.Fatalf("export dropped the selected read: %s", raw)
 	}
 	// Stranger cannot get job
 	_, err = svc.Get(ctx, "stranger", job.ID)

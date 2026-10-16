@@ -296,6 +296,32 @@ func newTestSvc(t *testing.T) (*Service, *watchliststore.Memory, *fakeAlerts, *f
 	return svc, wl, alerts, sc
 }
 
+func TestImport_SituationMatchKeepsClauses(t *testing.T) {
+	svc, _, alerts, _ := newTestSvc(t)
+	ctx := context.Background()
+	raw, _ := json.Marshal(map[string]any{
+		"alerts": []map[string]any{{
+			"id": "m1", "exchange": "binance", "symbol": "BTCUSDT", "kind": "situation",
+			"condition": "matches", "mode": "repeating", "status": "active",
+			"createdAt": time.Now().UTC().Format(time.RFC3339Nano),
+			"situation": map[string]any{"priceCvd": "price_up_cvd_down", "funding": "long"},
+		}},
+	})
+	job, err := svc.Preview(ctx, PreviewInput{ClientID: "user1", FileName: "m.json", FileBytes: raw, FormatHint: "json"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.Confirm(ctx, "user1", job.ID, "merge", nil); err != nil {
+		t.Fatal(err)
+	}
+	if n, err := svc.ProcessPending(ctx); err != nil || n != 1 {
+		t.Fatalf("n=%d err=%v", n, err)
+	}
+	if len(alerts.list) != 1 || alerts.list[0].SituationMatch == nil || alerts.list[0].SituationMatch.Funding != "long" || alerts.list[0].SituationMatch.PriceCVD != domain.SituationCVDPriceUp {
+		t.Fatalf("%+v", alerts.list)
+	}
+}
+
 func TestImport_PreviewMergeConfirm(t *testing.T) {
 	svc, wl, alerts, sc := newTestSvc(t)
 	ctx := context.Background()

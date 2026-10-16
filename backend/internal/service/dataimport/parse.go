@@ -47,18 +47,19 @@ type wirePayload struct {
 		UpdatedAt       string `json:"updatedAt"`
 	} `json:"shares"`
 	Alerts []struct {
-		ID             string  `json:"id"`
-		Exchange       string  `json:"exchange"`
-		Symbol         string  `json:"symbol"`
-		Kind           string  `json:"kind"`
-		Condition      string  `json:"condition"`
-		TargetPrice    float64 `json:"targetPrice"`
-		RangePct       float64 `json:"rangePct"`
-		Mode           string  `json:"mode"`
-		Status         string  `json:"status"`
-		CreatedAt      string  `json:"createdAt"`
-		TriggeredAt    *string `json:"triggeredAt"`
-		TriggeredPrice float64 `json:"triggeredPrice"`
+		ID             string                 `json:"id"`
+		Exchange       string                 `json:"exchange"`
+		Symbol         string                 `json:"symbol"`
+		Kind           string                 `json:"kind"`
+		Condition      string                 `json:"condition"`
+		TargetPrice    float64                `json:"targetPrice"`
+		RangePct       float64                `json:"rangePct"`
+		Mode           string                 `json:"mode"`
+		Status         string                 `json:"status"`
+		CreatedAt      string                 `json:"createdAt"`
+		TriggeredAt    *string                `json:"triggeredAt"`
+		TriggeredPrice float64                `json:"triggeredPrice"`
+		Situation      *domain.SituationMatch `json:"situation"`
 	} `json:"alerts"`
 	ClientID      string              `json:"clientId"`
 	Portfolios    []wirePortfolioBook `json:"portfolios"`
@@ -177,7 +178,7 @@ func parseJSON(data []byte, importer string) (*parseResult, error) {
 	// Alerts
 	seenAl := map[string]struct{}{}
 	for _, a := range w.Alerts {
-		al, err := normalizeAlert(importer, a.ID, a.Exchange, a.Symbol, a.Kind, a.Condition, a.TargetPrice, a.RangePct, a.Mode, a.Status, a.CreatedAt, a.TriggeredAt, a.TriggeredPrice)
+		al, err := normalizeAlert(importer, a.ID, a.Exchange, a.Symbol, a.Kind, a.Condition, a.TargetPrice, a.RangePct, a.Mode, a.Status, a.CreatedAt, a.TriggeredAt, a.TriggeredPrice, a.Situation)
 		if err != nil {
 			res.Invalid[domain.ExportSectionAlerts]++
 			continue
@@ -351,8 +352,17 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 				trigAt = &t
 			}
 			rng, _ := strconv.ParseFloat(row["rangePct"], 64)
+			var match *domain.SituationMatch
+			if raw := strings.TrimSpace(row["situation"]); raw != "" {
+				var parsed domain.SituationMatch
+				if err := json.Unmarshal([]byte(raw), &parsed); err != nil {
+					res.Invalid[domain.ExportSectionAlerts]++
+					continue
+				}
+				match = &parsed
+			}
 			al, err := normalizeAlert(importer, row["id"], row["exchange"], row["symbol"], row["kind"], row["condition"],
-				tp, rng, row["mode"], row["status"], row["createdAt"], trigAt, trigP)
+				tp, rng, row["mode"], row["status"], row["createdAt"], trigAt, trigP, match)
 			if err != nil {
 				res.Invalid[domain.ExportSectionAlerts]++
 				continue
@@ -792,7 +802,7 @@ func normalizeShare(owner, grantee, role, createdAt, updatedAt string) (domain.W
 	}, nil
 }
 
-func normalizeAlert(clientID, id, exchange, symbol, kind, condition string, target, rangePct float64, mode, status, createdAt string, triggeredAt *string, triggeredPrice float64) (domain.PriceAlert, error) {
+func normalizeAlert(clientID, id, exchange, symbol, kind, condition string, target, rangePct float64, mode, status, createdAt string, triggeredAt *string, triggeredPrice float64, match *domain.SituationMatch) (domain.PriceAlert, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return domain.PriceAlert{}, fmt.Errorf("id required")
@@ -845,6 +855,16 @@ func normalizeAlert(clientID, id, exchange, symbol, kind, condition string, targ
 	if err := domain.ValidateAlertSpec(k, condition, target, rangePct); err != nil {
 		return domain.PriceAlert{}, err
 	}
+	cond := strings.ToLower(strings.TrimSpace(condition))
+	if k == domain.AlertKindSituation && cond == string(domain.AlertConditionMatches) {
+		normalized, err := domain.NormalizeSituationMatch(match)
+		if err != nil {
+			return domain.PriceAlert{}, err
+		}
+		match = normalized
+	} else {
+		match = nil
+	}
 	m, ok := domain.NormalizeAlertMode(mode)
 	if !ok {
 		m = domain.AlertModeOneTime
@@ -873,7 +893,7 @@ func normalizeAlert(clientID, id, exchange, symbol, kind, condition string, targ
 		ID: id, ClientID: clientID, Exchange: ex, Symbol: sym, Kind: k,
 		Condition:   domain.AlertCondition(strings.ToLower(strings.TrimSpace(condition))),
 		TargetPrice: target, RangePct: rangePct, Mode: m, Status: st, CreatedAt: cAt,
-		TriggeredAt: tAt, TriggeredPrice: triggeredPrice,
+		TriggeredAt: tAt, TriggeredPrice: triggeredPrice, SituationMatch: match,
 	}, nil
 }
 

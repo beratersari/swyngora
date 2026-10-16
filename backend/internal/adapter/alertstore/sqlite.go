@@ -81,7 +81,8 @@ CREATE TABLE IF NOT EXISTS price_alerts (
 	kind            TEXT NOT NULL DEFAULT 'price',
 	range_pct       REAL NOT NULL DEFAULT 0,
 	triggered_venue TEXT NOT NULL DEFAULT '',
-	situation_fire_json TEXT NOT NULL DEFAULT ''
+	situation_fire_json TEXT NOT NULL DEFAULT '',
+	situation_match_json TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_price_alerts_client ON price_alerts(client_id);
 CREATE INDEX IF NOT EXISTS idx_price_alerts_active ON price_alerts(status) WHERE status = 'active';
@@ -163,6 +164,7 @@ CREATE INDEX IF NOT EXISTS idx_alert_notifications_alert
 		`ALTER TABLE price_alerts ADD COLUMN range_pct REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE price_alerts ADD COLUMN triggered_venue TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE price_alerts ADD COLUMN situation_fire_json TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE price_alerts ADD COLUMN situation_match_json TEXT NOT NULL DEFAULT ''`,
 	} {
 		if err := sqliteutil.ExecAllowExists(s.db, stmt); err != nil {
 			return err
@@ -248,7 +250,7 @@ func (s *SQLite) Close() error {
 const alertSelectCols = `
 	id, client_id, exchange, symbol, condition, target_price,
 	mode, armed, status, created_at, triggered_at, triggered_price,
-	kind, range_pct, triggered_venue, situation_fire_json
+	kind, range_pct, triggered_venue, situation_fire_json, situation_match_json
 `
 
 // Create inserts a new alert. Caller supplies a unique ID and Active status.
@@ -271,19 +273,23 @@ func (s *SQLite) Create(ctx context.Context, alert domain.PriceAlert) (*domain.P
 	if alert.Armed {
 		armed = 1
 	}
-	_, err := s.db.ExecContext(ctx, `
+	matchJSON, err := marshalSituationMatch(alert.SituationMatch)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.db.ExecContext(ctx, `
 		INSERT INTO price_alerts (
 			id, client_id, exchange, symbol, condition, target_price,
 			mode, armed, status, created_at, triggered_at, triggered_price,
-			kind, range_pct
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			kind, range_pct, situation_match_json
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		alert.ID, alert.ClientID, string(alert.Exchange), alert.Symbol,
 		string(alert.Condition), alert.TargetPrice,
 		string(alert.Mode), armed, string(alert.Status),
 		alert.CreatedAt.UTC().Format(time.RFC3339Nano),
 		nullTime(alert.TriggeredAt), alert.TriggeredPrice,
-		string(alert.Kind), alert.RangePct,
+		string(alert.Kind), alert.RangePct, matchJSON,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("alerts sqlite insert: %w", err)
@@ -833,16 +839,17 @@ func (s *SQLite) scanOne(ctx context.Context, q rowScanner, query string, args .
 		armed                          int
 		trigRaw                        sql.NullString
 	)
-	var kind, situationFire string
+	var kind, situationFire, situationMatch string
 	err := q.QueryRowContext(ctx, query, args...).Scan(
 		&a.ID, &a.ClientID, &ex, &a.Symbol, &cond, &a.TargetPrice,
 		&mode, &armed, &st, &createdRaw, &trigRaw, &a.TriggeredPrice,
-		&kind, &a.RangePct, &a.TriggeredVenue, &situationFire,
+		&kind, &a.RangePct, &a.TriggeredVenue, &situationFire, &situationMatch,
 	)
 	if err != nil {
 		return nil, err
 	}
 	applySituationFire(&a, situationFire)
+	applySituationMatch(&a, situationMatch)
 	a.Exchange = domain.Exchange(ex)
 	a.Condition = domain.AlertCondition(cond)
 	a.Mode = domain.AlertMode(mode)
@@ -872,15 +879,16 @@ func scanAll(rows *sql.Rows) ([]domain.PriceAlert, error) {
 			armed                          int
 			trigRaw                        sql.NullString
 		)
-		var kind, situationFire string
+		var kind, situationFire, situationMatch string
 		if err := rows.Scan(
 			&a.ID, &a.ClientID, &ex, &a.Symbol, &cond, &a.TargetPrice,
 			&mode, &armed, &st, &createdRaw, &trigRaw, &a.TriggeredPrice,
-			&kind, &a.RangePct, &a.TriggeredVenue, &situationFire,
+			&kind, &a.RangePct, &a.TriggeredVenue, &situationFire, &situationMatch,
 		); err != nil {
 			return nil, fmt.Errorf("alerts sqlite scan: %w", err)
 		}
 		applySituationFire(&a, situationFire)
+		applySituationMatch(&a, situationMatch)
 		a.Exchange = domain.Exchange(ex)
 		a.Condition = domain.AlertCondition(cond)
 		a.Mode = domain.AlertMode(mode)
@@ -904,6 +912,32 @@ func scanAll(rows *sql.Rows) ([]domain.PriceAlert, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+func marshalSituationMatch(m *domain.SituationMatch) (string, error) {
+	if m == nil || !m.HasClause() {
+		return "", nil
+	}
+	raw, err := json.Marshal(m)
+	if err != nil {
+		return "", fmt.Errorf("alerts sqlite situation match: %w", err)
+	}
+	return string(raw), nil
+}
+
+func applySituationMatch(a *domain.PriceAlert, raw string) {
+	raw = strings.TrimSpace(raw)
+	if a == nil || raw == "" {
+		return
+	}
+	var match domain.SituationMatch
+	if err := json.Unmarshal([]byte(raw), &match); err != nil {
+		return
+	}
+	if !match.HasClause() {
+		return
+	}
+	a.SituationMatch = &match
 }
 
 func applySituationFire(a *domain.PriceAlert, raw string) {
