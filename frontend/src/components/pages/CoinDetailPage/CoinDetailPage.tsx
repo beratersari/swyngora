@@ -263,6 +263,7 @@ import {
   openPositionFor,
   positionLotReads,
   PositionSituation,
+  storedReadComparison,
 } from '@/components/molecules/PositionSituation';
 import {
   clickSecFromForensicsAt,
@@ -3404,6 +3405,11 @@ export function CoinDetailPage() {
                     entry={row.entrySituation}
                     now={rtkCurrent(situationQuery)}
                     nowLoading={rtkCurrentPending(situationQuery)}
+                    comparison={storedReadComparison(
+                      row.entrySituation,
+                      rtkCurrent(situationQuery),
+                      !situationQuery.isError && rtkCurrent(situationQuery) != null,
+                    )}
                   />
                 ))
               : null}

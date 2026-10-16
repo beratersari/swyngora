@@ -184,6 +184,11 @@ describe('PortfolioMarginPositionsTable', () => {
     expect(screen.getByText('Price is rising while futures CVD is falling.')).toBeInTheDocument();
     expect(screen.getByText('Now')).toBeInTheDocument();
     expect(screen.getByText('Price and futures CVD are moving together.')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Was: Price is rising while futures CVD is falling. Now: Price and futures CVD are moving together.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Margin long 2x')).not.toBeInTheDocument();
   });
 });

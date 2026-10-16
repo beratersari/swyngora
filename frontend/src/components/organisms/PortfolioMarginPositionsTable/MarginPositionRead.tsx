@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { isCashEquity, PositionSituation } from '@/components/molecules/PositionSituation';
+import { isCashEquity, PositionSituation, storedReadComparison } from '@/components/molecules/PositionSituation';
 import { useGetMarketSituationQuery, type MarginPosition } from '@/libs/api';
 
 /** Same cadence as the spot position read. */
@@ -18,6 +18,7 @@ export function MarginPositionRead({ row }: { row: MarginPosition }) {
   );
   if (equity) return null;
   const sideKey = row.side === 'short' ? 'short' : 'long';
+  const liveOk = !query.isError && query.data != null;
   return (
     <PositionSituation
       lead={t('situation.marginLead', {
@@ -27,6 +28,7 @@ export function MarginPositionRead({ row }: { row: MarginPosition }) {
       entry={row.entrySituation}
       now={query.data}
       nowLoading={query.isLoading && query.data == null}
+      comparison={storedReadComparison(row.entrySituation, query.data, liveOk)}
     />
   );
 }

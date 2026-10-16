@@ -331,7 +331,7 @@ func TestPlaceMarginOrder_StoresEntrySituation(t *testing.T) {
 	}
 }
 
-func TestPlaceMarginLimit_KeepsPlacementSituation(t *testing.T) {
+func TestPlaceMarginLimit_StoresTheFillRead(t *testing.T) {
 	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
 	src := &fakeSituation{got: &domain.CoinSituation{
 		Symbol:   "BTCUSDT",
@@ -355,12 +355,37 @@ func TestPlaceMarginLimit_KeepsPlacementSituation(t *testing.T) {
 	if err != nil || filled != 1 {
 		t.Fatalf("filled=%d err=%v", filled, err)
 	}
-	if src.n != 1 {
-		t.Fatalf("fill read the tape again: %d", src.n)
+	if src.n != 2 {
+		t.Fatalf("fill reads: %d", src.n)
 	}
 	list, err := svc.ListMarginPositions(ctx, "m-lim")
-	if err != nil || len(list) != 1 || list[0].EntrySituation == nil || list[0].EntrySituation.PriceCVD.Kind != domain.SituationCVDPriceUp {
-		t.Fatalf("fill replaced the placement read: %+v %v", list, err)
+	if err != nil || len(list) != 1 || list[0].EntrySituation == nil || list[0].EntrySituation.PriceCVD.Kind != domain.SituationCVDPriceDown {
+		t.Fatalf("fill read %+v %v", list, err)
+	}
+	src.got = &domain.CoinSituation{Symbol: "BTCUSDT", PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDAgrees}}
+	if _, ord, err = svc.PlaceMarginOrder(ctx, MarginOrderInput{
+		ClientID: "m-lim", Symbol: "BTCUSDT", Side: "long", Type: "limit",
+		Quantity: 1, Leverage: 2, LimitPrice: 80,
+	}); err != nil || ord == nil || ord.Situation == nil || ord.Situation.PriceCVD.Kind != domain.SituationCVDAgrees {
+		t.Fatalf("placement read %+v %v", ord, err)
+	}
+	src.err = errors.New("tape down")
+	svc.market = &fakePx{prices: map[string]string{"binance|BTCUSDT": "80"}}
+	if _, _, _, err = svc.ProcessMarginMaintenance(ctx, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	list, err = svc.ListMarginPositions(ctx, "m-lim")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var blank *domain.MarginPosition
+	for i := range list {
+		if list[i].Leverage == 2 {
+			blank = &list[i]
+		}
+	}
+	if blank == nil || blank.EntrySituation != nil {
+		t.Fatalf("failed fill %+v", blank)
 	}
 }
 
