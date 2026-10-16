@@ -3478,7 +3478,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("preview_portfolio_order",
-		mcp.WithDescription("Preview a paper order before it is placed. Returns the slipped fill, taker fee, cash in or out, reserved cash or quantity, estimated sell profit, and whether a risk limit or the borrow cap would block it. Pass riskPercent and stopLossPrice to size a spot buy, bracket, or margin open from portfolio equity (quantity is then ignored). product=spot (default) or margin. Nothing is written. Not real money."),
+		mcp.WithDescription("Preview a paper order before it is placed. Returns the slipped fill, taker fee, cash in or out, reserved cash or quantity, estimated sell profit, and whether a risk limit or the borrow cap would block it. Pass riskPercent and stopLossPrice to size a spot buy, bracket, or margin open from portfolio equity (quantity is then ignored). product=spot (default) or margin. When reason names clauses and the live read is ready, reasonHistory is how this book's past closes of each selected live kind did: still kept the kind, left changed or went blank. Both counts at zero means no past close stored that kind. The rows are not one total. A failed history read omits reasonHistory and still returns the price. Nothing is written. Not real money."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),

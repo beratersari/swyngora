@@ -96,6 +96,9 @@
     "reasonHint": "Yalnızca işaretlediğin maddeler saklanır. Sonraki okumalar onları kullanır.",
     "reasonFailed": "Piyasa okuması gelmedi. Bu emir bir gerekçe saklamaz.",
     "reasonBlank": "Bu okumada madde yok. Bu emir bir gerekçe saklamaz.",
+    "reasonHistoryTitle": "Bu gerekçedeki geçmiş kapanışlar",
+    "reasonHistoryHint": "Her satır, işaretlediğin maddenin canlı okumadaki türüdür. Aynı kaldı, satışın o türü koruduğu kapanışlardır. Ayrıldı, türün değiştiği ya da satışın o maddeyi boş bıraktığı kapanışlardır. Aynı kapanış birden fazla satırda görünebilir, bu yüzden satırlar tek bir toplam değildir.",
+    "reasonHistoryNone": "Bu gerekçeyi saklayan geçmiş bir kapanış yok.",
     "kinds": {
       "market": "Piyasa",
       "limit": "Limit",

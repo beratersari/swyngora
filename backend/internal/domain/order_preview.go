@@ -91,6 +91,10 @@ type OrderPreview struct {
 	ReasonSet     bool
 	Reason        []string
 	ReasonMissing []string
+	// ReasonHistory is this book's past closes for each selected clause at the
+	// kind the live read says now. Nil when this preview does not name a reason,
+	// or when that close list could not be read. The price is still valid then.
+	ReasonHistory []SituationLeaveRow
 }
 
 // QuoteFill is the slipped fill, notional, fee, and cash movement for a quantity.

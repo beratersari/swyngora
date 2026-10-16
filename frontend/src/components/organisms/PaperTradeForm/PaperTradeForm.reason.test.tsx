@@ -64,5 +64,70 @@ describe('PaperTradeForm reason', () => {
     expect(
       screen.getByText('The market read did not load. This order will not store a reason.'),
     ).toBeInTheDocument();
+    expect(screen.queryByText('Past closes with this reason')).not.toBeInTheDocument();
+  });
+
+  it('shows past closes for the clauses that stay checked', () => {
+    renderWithTheme(
+      <PaperTradeForm
+        lockedExchange="binance"
+        lockedSymbol="BTCUSDT"
+        compact
+        preview={{
+          ...preview,
+          reasonHistory: [
+            {
+              clause: 'priceCvd',
+              kind: 'price_up_cvd_down',
+              still: { count: 1, profitable: 1, realizedPnL: 20, closes: [] },
+              left: { count: 1, profitable: 0, realizedPnL: -10, closes: [] },
+            },
+            {
+              clause: 'openInterest',
+              kind: 'opened',
+              still: { count: 0, profitable: 0, realizedPnL: 0, closes: [] },
+              left: { count: 0, profitable: 0, realizedPnL: 0, closes: [] },
+            },
+          ],
+        }}
+        onSubmit={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Past closes with this reason')).toBeInTheDocument();
+    expect(screen.getByText(/Still the same: 1 close/)).toBeInTheDocument();
+    expect(screen.getByText('No past close stored this reason.')).toBeInTheDocument();
+
+    const boxes = screen.getAllByRole('checkbox');
+    fireEvent.click(boxes[0]);
+    expect(screen.queryByText(/Still the same: 1 close/)).not.toBeInTheDocument();
+    expect(screen.getByText('No past close stored this reason.')).toBeInTheDocument();
+
+    fireEvent.click(boxes[1]);
+    expect(screen.queryByText('Past closes with this reason')).not.toBeInTheDocument();
+  });
+
+  it('hides past closes on a sell', () => {
+    renderWithTheme(
+      <PaperTradeForm
+        lockedExchange="binance"
+        lockedSymbol="BTCUSDT"
+        compact
+        defaultSide="sell"
+        preview={{
+          ...preview,
+          side: 'sell',
+          reasonHistory: [
+            {
+              clause: 'priceCvd',
+              kind: 'price_up_cvd_down',
+              still: { count: 1, profitable: 1, realizedPnL: 20, closes: [] },
+              left: { count: 0, profitable: 0, realizedPnL: 0, closes: [] },
+            },
+          ],
+        }}
+        onSubmit={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText('Past closes with this reason')).not.toBeInTheDocument();
   });
 });

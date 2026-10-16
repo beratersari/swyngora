@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { situationLines } from '@/components/molecules/CoinSituation';
 import { OrderPreview } from '@/components/molecules/OrderPreview';
+import { OrderReasonHistory } from '@/components/organisms/OrderReasonHistory';
 import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
 import { rtkErrorMessage, type MarketExchange } from '@/libs/api';
 import { sizedQuantity } from '@/libs/hooks/orderPreview';
@@ -475,33 +476,36 @@ export function PaperTradeForm({
       ) : null}
 
       {keepsReason && reasonPreview?.situationStatus === 'ready' ? (
-        <Field>
-          <Text variant="caption">{t('portfolio:trade.reasonTitle')}</Text>
-          <Text variant="caption" color="secondary">
-            {t('portfolio:trade.reasonHint')}
-          </Text>
-          {presentReason.map((id) => {
-            const sentence =
-              situationLines(
-                reasonClauseReport(reasonPreview.situation ?? {}, id),
-                t as unknown as Parameters<typeof situationLines>[1],
-              )[0] ?? id;
-            return (
-              <Checkbox
-                key={id}
-                checked={selectedReason.includes(id)}
-                onChange={() => {
-                  const base = pickedReason ?? presentReason;
-                  setPickedReason(
-                    base.includes(id) ? base.filter((item) => item !== id) : [...base, id],
-                  );
-                }}
-              >
-                {sentence}
-              </Checkbox>
-            );
-          })}
-        </Field>
+        <>
+          <Field>
+            <Text variant="caption">{t('portfolio:trade.reasonTitle')}</Text>
+            <Text variant="caption" color="secondary">
+              {t('portfolio:trade.reasonHint')}
+            </Text>
+            {presentReason.map((id) => {
+              const sentence =
+                situationLines(
+                  reasonClauseReport(reasonPreview.situation ?? {}, id),
+                  t as unknown as Parameters<typeof situationLines>[1],
+                )[0] ?? id;
+              return (
+                <Checkbox
+                  key={id}
+                  checked={selectedReason.includes(id)}
+                  onChange={() => {
+                    const base = pickedReason ?? presentReason;
+                    setPickedReason(
+                      base.includes(id) ? base.filter((item) => item !== id) : [...base, id],
+                    );
+                  }}
+                >
+                  {sentence}
+                </Checkbox>
+              );
+            })}
+          </Field>
+          <OrderReasonHistory rows={preview?.reasonHistory} selected={selectedReason} />
+        </>
       ) : null}
       {keepsReason && reasonPreview?.situationStatus === 'failed' ? (
         <Text variant="caption" color="secondary">

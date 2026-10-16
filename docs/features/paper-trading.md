@@ -201,6 +201,8 @@ Prices the same spot body, or a margin open (`product=margin`, `side=long|short`
 
 Nothing is written: no trade, no reservation, no margin position. A draft that cannot be priced (bad quantity, missing trigger, bad bracket prices) is **400**. Not enough cash, a risk block, or the borrow cap is **200** with a flag. A sell is not blocked. The daily-loss figure is trading P&L since the UTC day baseline. Deposits, withdrawals, and transfers are not part of it. MCP `preview_portfolio_order`. A read-only assistant session can call that tool. It still cannot place the order.
 
+A spot buy, limit buy, or bracket that names `reason`, and whose live read is `ready`, also returns `reasonHistory`. Each row is one marked clause at the kind that read says now. `still` is this book's past closes whose sell kept that kind. `left` is the closes whose sell changed it or left the clause blank. A change in print dollars with the same side stays in `still`. Both counts at zero means no past close stored that live kind. The same close can appear on more than one row. An unset reason, an empty reason, a sell, a margin order, an equity, and a blank, failed, or skipped read omit the list. If the close list cannot be read, the price is still returned and `reasonHistory` is omitted.
+
 **Size from a risk percent.** Send `riskPercent` (greater than 0 and at most 100) and `stopLossPrice`. `quantity` is ignored. The size is the base amount that loses that percent of **portfolio equity** if the stop fills. The loss of one unit includes the taker fee and adverse slippage on the entry and on the stop, the same loss a paper fill would book. Leverage does not change that loss. It changes the margin and the liquidation price.
 
 | Order | Entry used | Stop is placed |

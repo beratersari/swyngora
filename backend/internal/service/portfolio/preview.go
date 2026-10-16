@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"strings"
 	"time"
@@ -172,8 +173,11 @@ func (s *Service) PreviewOrder(ctx context.Context, in OrderPreviewInput) (*doma
 }
 
 // finishPreview attaches the live coin read for a spot buy, limit buy, or bracket.
-// A failed read does not fail the price. Nothing is written.
-func (s *Service) finishPreview(ctx context.Context, out *domain.OrderPreview, reason domain.SituationReason) (*domain.OrderPreview, error) {
+// A failed read does not fail the price. When the read is ready and a reason is
+// set, it also attaches how this book's past closes did for each selected live
+// kind. A failed close list leaves that history off and still returns the price.
+// Nothing is written.
+func (s *Service) finishPreview(ctx context.Context, bookID string, out *domain.OrderPreview, reason domain.SituationReason) (*domain.OrderPreview, error) {
 	if out == nil {
 		return nil, nil
 	}
@@ -194,7 +198,34 @@ func (s *Service) finishPreview(ctx context.Context, out *domain.OrderPreview, r
 	}
 	out.Situation = sit
 	stampPreviewReason(out, sit, reason)
+	if out.SituationStatus == domain.SituationPreviewReady {
+		s.attachReasonHistory(ctx, bookID, out)
+	}
 	return out, nil
+}
+
+// attachReasonHistory loads this book's still and left groups for the clauses
+// the preview would store. A store error leaves ReasonHistory nil.
+func (s *Service) attachReasonHistory(ctx context.Context, bookID string, out *domain.OrderPreview) {
+	if out == nil || s == nil || s.store == nil || bookID == "" {
+		return
+	}
+	if out.SituationStatus != domain.SituationPreviewReady || !out.ReasonSet || len(out.Reason) == 0 {
+		return
+	}
+	closes, err := s.store.ListSituationCloses(ctx, bookID)
+	if err != nil {
+		slog.Warn("order preview reason history", "book", bookID, "err", err)
+		return
+	}
+	rows := domain.ReasonHistory(domain.BuildSituationLeave(closes), domain.SituationReason{
+		Set:     true,
+		Clauses: out.Reason,
+	}, out.Situation)
+	if len(rows) == 0 {
+		return
+	}
+	out.ReasonHistory = rows
 }
 
 func previewStoresReason(p *domain.OrderPreview) bool {
@@ -311,7 +342,7 @@ func (s *Service) previewSpot(
 				out.FillsNow = false
 				out.ReferencePrice = last
 				out.FillPrice = q.Price
-				return s.finishPreview(ctx, out, in.Reason)
+				return s.finishPreview(ctx, bookID, out, in.Reason)
 			}
 			fillRef = q.Price
 			costUsed.SlippageRate = 0
@@ -393,7 +424,7 @@ func (s *Service) previewSpot(
 	default:
 		return nil, fmt.Errorf("%w: type must be market, limit_buy, limit_sell, stop_loss, trailing_stop, oco, or bracket", domain.ErrInvalidArgument)
 	}
-	return s.finishPreview(ctx, out, in.Reason)
+	return s.finishPreview(ctx, bookID, out, in.Reason)
 }
 
 func fillResting(
@@ -485,7 +516,7 @@ func (s *Service) previewMargin(
 				out.FillsNow = false
 				out.ReferencePrice = last
 				out.FillPrice = q.Price
-				return s.finishPreview(ctx, out, in.Reason)
+				return s.finishPreview(ctx, p.BookID(), out, in.Reason)
 			}
 			reference = q.Price
 			cost.SlippageRate = 0
@@ -562,7 +593,7 @@ func (s *Service) previewMargin(
 		out.Risk.Blocked = true
 		out.Risk.Reasons = append(out.Risk.Reasons, "borrow limit would be exceeded")
 	}
-	return s.finishPreview(ctx, out, in.Reason)
+	return s.finishPreview(ctx, p.BookID(), out, in.Reason)
 }
 
 func sellLeg(role string, reference, qty float64, cost domain.TradingCost, lots []domain.TaxLot, bookID string, ex domain.Exchange, sym string, posQty, avg float64, method domain.LotMethod, skipPnL bool) domain.OrderPreviewLeg {

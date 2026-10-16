@@ -7026,6 +7026,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "from portfolio equity; quantity is then ignored. "
                 "Nothing is written. A spot buy also returns the live coin read. "
                 "Pass reason to name the clauses a buy would store. "
+                "When that reason is set and the read is ready, reasonHistory lists this book's "
+                "past closes of each selected live kind, split into still and left. "
+                "Both counts at zero means no past close stored that kind. "
+                "The rows are not one total. A failed history read omits the field and still returns the price. "
                 "Call this before place_portfolio_order, a pending order, "
                 "OCO, bracket, or place_margin_order. Not real money."
             ),

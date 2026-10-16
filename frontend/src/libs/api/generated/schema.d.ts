@@ -3965,6 +3965,12 @@ export interface paths {
          *     order shows the cash or quantity it would lock, and the fill if it triggers at that price.
          *     A sell estimates realized profit from the open lots. Deposits and withdrawals are not part
          *     of the daily loss.
+         *     When a spot buy, limit buy, or bracket names reason and the live read is ready, reasonHistory
+         *     lists this book's past closes for each selected clause at the kind that read says now.
+         *     still kept that kind at the sell. left changed it or left the clause blank. Both counts at
+         *     zero means no past close stored that live kind. The same close can appear on more than one
+         *     row, so the rows are not one total. A failed history read omits reasonHistory and still
+         *     returns the price. A sell, a margin order, an equity, and a preview with no reason omit it.
          *     riskPercent with stopLossPrice sizes the order instead of using quantity. The size is the
          *     base amount that loses that percent of portfolio equity if the stop fills, after the taker
          *     fee and adverse slippage. It applies to a spot buy (market, limit_buy, bracket) and to a
@@ -10472,6 +10478,17 @@ export interface components {
             reason?: string[];
             /** @description Named clauses that are blank on the live read and would not be stored. */
             reasonMissing?: string[];
+            /**
+             * @description Past closes of this book for each selected clause at the kind the live read says now.
+             *     Present when situationStatus is ready and reason names at least one clause on that read.
+             *     still kept the kind at the sell. left changed it or left the clause blank. A change in
+             *     print dollars with the same side stays in still. Both counts at zero means no past close
+             *     stored this live kind. The same close can appear on more than one row, so the rows are
+             *     not one total. Omitted when the history read fails, when reason is unset or empty, and
+             *     for a sell, a margin order, an equity, or a blank, failed, or skipped read. The price
+             *     is still returned.
+             */
+            reasonHistory?: components["schemas"]["SituationLeaveRow"][];
             note?: string;
         };
         PortfolioCashMovement: {

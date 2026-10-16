@@ -73,6 +73,9 @@ func OrderPreviewPayload(p *domain.OrderPreview) map[string]any {
 			out["reasonMissing"] = p.ReasonMissing
 		}
 	}
+	if len(p.ReasonHistory) > 0 {
+		out["reasonHistory"] = p.ReasonHistory
+	}
 	return out
 }
 

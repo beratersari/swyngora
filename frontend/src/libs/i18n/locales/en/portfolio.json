@@ -96,6 +96,9 @@
     "reasonHint": "Only the clauses you mark are stored. Later reads use those.",
     "reasonFailed": "The market read did not load. This order will not store a reason.",
     "reasonBlank": "This read has no clauses. This order will not store a reason.",
+    "reasonHistoryTitle": "Past closes with this reason",
+    "reasonHistoryHint": "Each line is a clause you marked, at the kind the live read says now. Still the same means the sell kept that kind. After it left means the kind changed, or the sell left that clause blank. The same close can appear on more than one line, so these lines are not one total.",
+    "reasonHistoryNone": "No past close stored this reason.",
     "kinds": {
       "market": "Market",
       "limit": "Limit",
