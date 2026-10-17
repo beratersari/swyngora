@@ -25,6 +25,7 @@ export function SpreadOrderList({ items, canceling = false, onCancel }: SpreadOr
               quantity: formatPrice(order.quantity),
               done: order.slicesDone,
               count: order.sliceCount,
+              minutes: order.durationMinutes,
             })}
           </Text>
           <Button

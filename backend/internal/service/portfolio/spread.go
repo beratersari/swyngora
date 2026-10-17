@@ -14,10 +14,14 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-// previewSpread prices the first slice of a 10-minute best-cost order.
+// previewSpread prices the first slice of a timed best-cost order.
 // Nothing is written. Later slices are not priced, because each one reads the books again.
 func (s *Service) previewSpread(ctx context.Context, p *domain.Portfolio, in OrderPreviewInput) (*domain.OrderPreview, error) {
-	side, canon, lotMethod, slip, err := spreadInputs(in.Side, in.Symbol, in.LotMethod, in.MaxSlippagePct, in.Quantity)
+	plan, err := domain.NormalizeSpreadSchedule(in.SpreadMinutes, in.SliceCount)
+	if err != nil {
+		return nil, err
+	}
+	side, canon, lotMethod, slip, err := spreadInputs(in.Side, in.Symbol, in.LotMethod, in.MaxSlippagePct, in.Quantity, plan.SliceCount)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +39,7 @@ func (s *Service) previewSpread(ctx context.Context, p *domain.Portfolio, in Ord
 	if err := domain.RouteSymbolMatchesBook(canon, p.Currency); err != nil {
 		return nil, err
 	}
-	target := domain.SpreadTarget(in.Quantity, 0, domain.SpreadSliceCount)
+	target := domain.SpreadTarget(in.Quantity, 0, plan.SliceCount)
 	books, err := s.loadRouteBooks(ctx, clientID, canon, p.Currency, side)
 	if err != nil {
 		return nil, err
@@ -85,12 +89,12 @@ func (s *Service) previewSpread(ctx context.Context, p *domain.Portfolio, in Ord
 		AvailableQuantity: held,
 		CashAfter:         p.CashBalance,
 		AvailableAfter:    avail,
-		Note:              domain.SpreadPreviewNote,
+		Note:              domain.ExplainSpread(plan.SliceCount, plan.Minutes),
 		Spread:            true,
-		SpreadMinutes:     int((domain.SpreadSpan() + domain.SpreadInterval) / time.Minute),
-		SliceCount:        domain.SpreadSliceCount,
+		SpreadMinutes:     plan.Minutes,
+		SliceCount:        plan.SliceCount,
 		SliceQuantity:     target,
-		SliceIntervalSec:  int(domain.SpreadInterval / time.Second),
+		SliceIntervalSec:  plan.IntervalSec(),
 	}
 	s.stampSpreadPreview(out, route, target, inventoryShort, compare, p.CashBalance, avail, snap, slip)
 	if side == domain.TradeSideSell && spreadSliceComplete(route, target) {
@@ -101,8 +105,9 @@ func (s *Service) previewSpread(ctx context.Context, p *domain.Portfolio, in Ord
 	return s.finishPreview(ctx, clientID, out, in.Reason)
 }
 
-// PlaceSpreadOrder starts a best-cost order that fills in 10 slices, one per minute.
+// PlaceSpreadOrder starts a best-cost order that fills in the requested slices.
 // The first slice is due immediately and is taken by the background worker.
+// The last slice is due when the duration ends.
 func (s *Service) PlaceSpreadOrder(ctx context.Context, in OrderInput) (*domain.SpreadOrder, *domain.PortfolioView, error) {
 	if s.store == nil || s.market == nil {
 		return nil, nil, fmt.Errorf("%w: portfolio service not configured", domain.ErrUpstream)
@@ -120,7 +125,11 @@ func (s *Service) PlaceSpreadOrder(ctx context.Context, in OrderInput) (*domain.
 	if err := s.rejectClosedOwner(ctx, p); err != nil {
 		return nil, nil, err
 	}
-	side, canon, lotMethod, slip, err := spreadInputs(in.Side, in.Symbol, in.LotMethod, in.MaxSlippagePct, in.Quantity)
+	plan, err := domain.NormalizeSpreadSchedule(in.SpreadMinutes, in.SliceCount)
+	if err != nil {
+		return nil, nil, err
+	}
+	side, canon, lotMethod, slip, err := spreadInputs(in.Side, in.Symbol, in.LotMethod, in.MaxSlippagePct, in.Quantity, plan.SliceCount)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -139,13 +148,13 @@ func (s *Service) PlaceSpreadOrder(ctx context.Context, in OrderInput) (*domain.
 	if err := domain.RouteSymbolMatchesBook(canon, p.Currency); err != nil {
 		return nil, nil, err
 	}
-	idempHash := hashParts("spread", canon, string(side), in.Quantity, string(lotMethod), slip, in.Reason.HashPart())
+	idempHash := hashParts("spread", canon, string(side), in.Quantity, string(lotMethod), slip, in.Reason.HashPart(), plan.Minutes, plan.SliceCount)
 	if rec, err := s.checkIdempotency(ctx, clientID, idempKey, idempHash); err != nil {
 		return nil, nil, err
 	} else if rec != nil {
 		return s.replaySpread(ctx, rec, in.ClientID, p.ID)
 	}
-	target := domain.SpreadTarget(in.Quantity, 0, domain.SpreadSliceCount)
+	target := domain.SpreadTarget(in.Quantity, 0, plan.SliceCount)
 	books, err := s.loadRouteBooks(ctx, clientID, canon, p.Currency, side)
 	if err != nil {
 		return nil, nil, err
@@ -167,7 +176,7 @@ func (s *Service) PlaceSpreadOrder(ctx context.Context, in OrderInput) (*domain.
 	order := domain.SpreadOrder{
 		ID: uuid.NewString(), ClientID: clientID, Symbol: canon, Side: side,
 		Quantity: in.Quantity, RemainingQuantity: in.Quantity,
-		SliceCount: domain.SpreadSliceCount, NextSliceAt: now, EndsAt: now.Add(domain.SpreadSpan()),
+		SliceCount: plan.SliceCount, Duration: plan.Duration, NextSliceAt: now, EndsAt: now.Add(plan.Duration),
 		Status: domain.SpreadStatusOpen, MaxSlippage: slip, LotMethod: lotMethod,
 		CreatedAt: now, UpdatedAt: now,
 	}
@@ -398,9 +407,9 @@ func (s *Service) finishSpread(ctx context.Context, p *domain.Portfolio, o *doma
 		o.ReservedCash = 0
 		o.Holds = nil
 	} else if route != nil {
-		next := o.NextSliceAt.Add(domain.SpreadInterval)
+		next := o.NextSliceAt.Add(o.SliceInterval())
 		if !next.After(now) {
-			next = now.Add(domain.SpreadInterval)
+			next = now.Add(o.SliceInterval())
 		}
 		o.NextSliceAt = next
 	}
@@ -449,7 +458,9 @@ func (s *Service) stampSpreadPreview(out *domain.OrderPreview, route domain.Pape
 	out.RouteMissing = route.Missing
 	out.RouteSkipped = route.Skipped
 	out.RouteCompare = compare
-	out.RouteNote = domain.SpreadPreviewNote
+	if out.Note != "" {
+		out.RouteNote = out.Note
+	}
 	complete := spreadSliceComplete(route, target)
 	out.BookExhausted = !complete && !route.SlippageLimited && !route.InventoryShort && !inventoryShort
 	out.BookVisibleQuantity = route.VisibleQuantity
@@ -502,7 +513,7 @@ func (s *Service) stampSpreadPreview(out *domain.OrderPreview, route domain.Pape
 	out.Risk = snap.sellView(out.Quantity * price)
 }
 
-func spreadInputs(sideRaw, symbol, lotRaw string, maxSlippagePct, qty float64) (domain.TradeSide, string, domain.LotMethod, float64, error) {
+func spreadInputs(sideRaw, symbol, lotRaw string, maxSlippagePct, qty float64, slices int) (domain.TradeSide, string, domain.LotMethod, float64, error) {
 	side := domain.TradeSide(strings.ToLower(strings.TrimSpace(sideRaw)))
 	if !domain.IsValidTradeSide(string(side)) {
 		return "", "", "", 0, fmt.Errorf("%w: side must be buy or sell", domain.ErrInvalidArgument)
@@ -510,7 +521,7 @@ func spreadInputs(sideRaw, symbol, lotRaw string, maxSlippagePct, qty float64) (
 	if qty < domain.MinTradeQuantity || qty > domain.MaxTradeQuantity || math.IsNaN(qty) || math.IsInf(qty, 0) {
 		return "", "", "", 0, fmt.Errorf("%w: quantity out of range", domain.ErrInvalidArgument)
 	}
-	target := domain.SpreadTarget(qty, 0, domain.SpreadSliceCount)
+	target := domain.SpreadTarget(qty, 0, slices)
 	if target < domain.MinTradeQuantity {
 		return "", "", "", 0, fmt.Errorf("%w: quantity is too small to spread", domain.ErrInvalidArgument)
 	}

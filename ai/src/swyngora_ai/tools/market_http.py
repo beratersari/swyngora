@@ -1913,10 +1913,18 @@ class OrderPreviewInput(BaseModel):
     spread: bool = Field(
         default=False,
         description=(
-            "With exchange=all and a spot market order, price 10 slices one minute apart. "
+            "With exchange=all and a spot market order, price timed slices. "
             "The legs are the first slice on the current book. Later slices read the books again. "
             "Nothing is written."
         ),
+    )
+    spread_minutes: int = Field(
+        default=0,
+        description="Minutes from the first slice to the last. 0 means 10. From 1 to 1440.",
+    )
+    slice_count: int = Field(
+        default=0,
+        description="How many slices. 0 means 10. From 2 to 60. Closer than 15 seconds is rejected.",
     )
 
 
@@ -1952,10 +1960,18 @@ class PortfolioOrderInput(BaseModel):
     spread: bool = Field(
         default=False,
         description=(
-            "With exchange=all, work the order as 10 slices, one every minute. "
+            "With exchange=all, work the order as timed slices. "
             "Each slice reads the books again and takes the cheapest venue for that size. "
-            "The first slice is due now. Nothing fills inside this call."
+            "The first slice is due now. The last slice is due at the end of spread_minutes."
         ),
+    )
+    spread_minutes: int = Field(
+        default=0,
+        description="Minutes from the first slice to the last. 0 means 10. From 1 to 1440.",
+    )
+    slice_count: int = Field(
+        default=0,
+        description="How many slices. 0 means 10. From 2 to 60.",
     )
 
 
@@ -4272,6 +4288,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         compare_exchange: str = "",
         max_slippage_pct: float = 0,
         spread: bool = False,
+        spread_minutes: int = 0,
+        slice_count: int = 0,
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -4308,6 +4326,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["maxSlippagePct"] = max_slippage_pct
         if spread:
             body["spread"] = True
+        if spread_minutes:
+            body["spreadMinutes"] = spread_minutes
+        if slice_count:
+            body["sliceCount"] = slice_count
         if portfolio_id:
             body["portfolioId"] = portfolio_id
         if reason is not None:
@@ -4327,6 +4349,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         reason: list[str] | None = None,
         max_slippage_pct: float = 0,
         spread: bool = False,
+        spread_minutes: int = 0,
+        slice_count: int = 0,
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -4337,6 +4361,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         }
         if spread:
             body["spread"] = True
+        if spread_minutes:
+            body["spreadMinutes"] = spread_minutes
+        if slice_count:
+            body["sliceCount"] = slice_count
         if max_slippage_pct:
             body["maxSlippagePct"] = max_slippage_pct
         if lot_method:
@@ -7116,7 +7144,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "routeLegs lists each venue. A missing book is named. "
                 "max_slippage_pct of 0.5 keeps fills within 0.5% of the best price. "
                 "When the size inside that cap is short, nothing is filled. "
-                "spread=true with exchange=all prices 10 slices, one every minute. "
+                "spread=true with exchange=all prices timed slices. "
+                "spread_minutes is the clock and slice_count is how many reads. "
+                "Defaults are 10 slices over 10 minutes. "
                 "routeLegs are the first slice. Later slices read the books again. "
                 "A sell only uses coins already held on that venue. "
                 "Nothing is written. A spot buy also returns the live coin read. "
@@ -7140,8 +7170,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Buy lot cost includes the fee; sell realized PnL is after the fee. "
                 "max_slippage_pct of 0.5 keeps fills within 0.5% of the best price. "
                 "When the size inside that cap is short, nothing is filled. "
-                "spread=true with exchange=all works the order as 10 slices, one every minute. "
-                "Each slice reads the books again. The first slice is due now. "
+                "spread=true with exchange=all works the order as timed slices. "
+                "spread_minutes is the clock and slice_count is how many fills. "
+                "Defaults are 10 slices over 10 minutes. The last slice is due at the end. "
                 "A sell only uses coins already held on that venue. "
                 "Pass reason to store only those clauses on a buy. Omit it to store the whole read. "
                 "Pass idempotency_key on retries so a timeout does not create a second fill. Not real money."
@@ -7153,7 +7184,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="list_spread_orders",
             description=(
                 "List paper spread orders. A spread order fills a best-cost spot market order "
-                "as 10 slices, one every minute. Each slice reads the books again. "
+                "as timed slices. spread_minutes and slice_count choose the clock. "
                 "status=open (default), filled, canceled, or all."
             ),
             args_schema=SpreadOrderListInput,

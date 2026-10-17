@@ -38,8 +38,12 @@ type OrderPreviewInput struct {
 	CompareExchange string
 	// MaxSlippagePct caps a best-cost walk. 0.5 means 0.5% from the best price. Zero means no cap.
 	MaxSlippagePct float64
-	// Spread prices a best-cost spot market order as 10 slices over about 10 minutes.
+	// Spread prices a best-cost spot market order as timed slices.
 	Spread bool
+	// SpreadMinutes is the clock from the first slice to the last. Zero means 10.
+	SpreadMinutes int
+	// SliceCount is how many times the books are read. Zero means 10.
+	SliceCount int
 }
 
 // riskSnap is the live book used to price one preview. It is not saved as an order.

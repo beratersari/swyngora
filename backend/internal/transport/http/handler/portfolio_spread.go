@@ -27,6 +27,7 @@ type spreadOrderDTO struct {
 	RemainingQuantity float64         `json:"remainingQuantity"`
 	SliceCount        int             `json:"sliceCount"`
 	SlicesDone        int             `json:"slicesDone"`
+	DurationMinutes   int             `json:"durationMinutes"`
 	NextSliceAt       string          `json:"nextSliceAt,omitempty"`
 	EndsAt            string          `json:"endsAt,omitempty"`
 	Status            string          `json:"status"`
@@ -54,7 +55,7 @@ func spreadOrderToDTO(o *domain.SpreadOrder) spreadOrderDTO {
 	d := spreadOrderDTO{
 		ID: o.ID, ClientID: o.ClientID, Symbol: o.Symbol, Side: string(o.Side),
 		Quantity: o.Quantity, FilledQuantity: o.FilledQuantity, RemainingQuantity: o.RemainingQuantity,
-		SliceCount: o.SliceCount, SlicesDone: o.SlicesDone, Status: string(o.Status),
+		SliceCount: o.SliceCount, SlicesDone: o.SlicesDone, DurationMinutes: o.DurationMinutes(), Status: string(o.Status),
 		MaxSlippagePct: o.MaxSlippage * 100, ReservedCash: o.ReservedCash,
 		FilledNotional: o.FilledNotional, FilledFee: o.FilledFee, LotMethod: string(o.LotMethod),
 		ReasonSet: o.ReasonSet, CancelReason: o.CancelReason, Holds: holds,
@@ -83,6 +84,8 @@ func (h *PortfolioHandler) placeSpread(w http.ResponseWriter, r *http.Request, c
 		IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
 		Reason:         reason,
 		MaxSlippagePct: body.MaxSlippagePct,
+		SpreadMinutes:  body.SpreadMinutes,
+		SliceCount:     body.SliceCount,
 	})
 	if err != nil {
 		writeError(w, err)
@@ -97,7 +100,7 @@ func (h *PortfolioHandler) placeSpread(w http.ResponseWriter, r *http.Request, c
 		"spread":    true,
 		"order":     spreadOrderToDTO(order),
 		"portfolio": book,
-		"note":      domain.SpreadPlaceNote,
+		"note":      domain.ExplainSpreadPlace(order.SliceCount, order.DurationMinutes()),
 	})
 }
 

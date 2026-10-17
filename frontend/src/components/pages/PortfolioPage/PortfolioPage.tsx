@@ -244,7 +244,11 @@ export function PortfolioPage() {
     const isPending = Boolean(res.order || res.entry || res.ocoGroupId || res.bracketId);
     void message.success(
       isSpread
-        ? t('portfolio:trade.successSpread', { symbol: values.symbol })
+        ? t('portfolio:trade.successSpread', {
+            symbol: values.symbol,
+            count: values.sliceCount ?? 10,
+            minutes: values.spreadMinutes ?? 10,
+          })
         : isPending
         ? t('portfolio:trade.successPending', { symbol: values.symbol })
         : values.side === 'buy'
@@ -594,6 +598,7 @@ export function PortfolioPage() {
                               filledQuantity: order.filledQuantity ?? 0,
                               sliceCount: order.sliceCount ?? 0,
                               slicesDone: order.slicesDone ?? 0,
+                              durationMinutes: order.durationMinutes ?? 0,
                             },
                           ]
                         : [],

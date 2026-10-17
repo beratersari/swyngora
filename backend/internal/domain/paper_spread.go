@@ -1,19 +1,85 @@
 package domain
 
 import (
+	"fmt"
 	"math"
 	"time"
 )
 
 const (
-	// SpreadSliceCount is how many child fills a spread order attempts.
-	SpreadSliceCount = 10
-	// SpreadInterval is the time between those child fills.
-	SpreadInterval = time.Minute
+	// SpreadDefaultSlices is the slice count when a request omits one.
+	SpreadDefaultSlices = 10
+	// SpreadDefaultMinutes is the duration when a request omits one.
+	SpreadDefaultMinutes = 10
+	// SpreadMinSlices is the smallest schedule. One slice is an immediate order.
+	SpreadMinSlices = 2
+	// SpreadMaxSlices bounds how often the book is read.
+	SpreadMaxSlices = 60
+	// SpreadMinMinutes is the shortest working window.
+	SpreadMinMinutes = 1
+	// SpreadMaxMinutes is one day.
+	SpreadMaxMinutes = 24 * 60
+	// SpreadMinInterval is the closest two slices may be. The worker passes about this often.
+	SpreadMinInterval = 15 * time.Second
 	// SpreadReserveBuffer is the cash lock above the best ask when the order has no slippage cap.
 	// 0.01 means 1%. A cap, when set, replaces this buffer.
 	SpreadReserveBuffer = 0.01
 )
+
+// SpreadSchedule is how a best-cost order is cut across a clock.
+// The first slice is due when the order is placed. The last slice is due when Duration ends.
+// The gap is Duration / (SliceCount - 1).
+type SpreadSchedule struct {
+	SliceCount int
+	Minutes    int
+	Duration   time.Duration
+	Interval   time.Duration
+}
+
+// NormalizeSpreadSchedule reads a duration in minutes and a slice count.
+// Zero for both means 10 slices over 10 minutes. A gap shorter than 15 seconds is rejected.
+func NormalizeSpreadSchedule(minutes, slices int) (SpreadSchedule, error) {
+	if minutes == 0 && slices == 0 {
+		minutes = SpreadDefaultMinutes
+		slices = SpreadDefaultSlices
+	}
+	if minutes == 0 {
+		minutes = SpreadDefaultMinutes
+	}
+	if slices == 0 {
+		slices = SpreadDefaultSlices
+	}
+	if slices < SpreadMinSlices || slices > SpreadMaxSlices {
+		return SpreadSchedule{}, fmt.Errorf("%w: slices must be from %d to %d", ErrInvalidArgument, SpreadMinSlices, SpreadMaxSlices)
+	}
+	if minutes < SpreadMinMinutes || minutes > SpreadMaxMinutes {
+		return SpreadSchedule{}, fmt.Errorf("%w: duration must be from %d to %d minutes", ErrInvalidArgument, SpreadMinMinutes, SpreadMaxMinutes)
+	}
+	duration := time.Duration(minutes) * time.Minute
+	interval := duration / time.Duration(slices-1)
+	if interval < SpreadMinInterval {
+		return SpreadSchedule{}, fmt.Errorf("%w: slices would be closer than %s", ErrInvalidArgument, SpreadMinInterval)
+	}
+	return SpreadSchedule{SliceCount: slices, Minutes: minutes, Duration: duration, Interval: interval}, nil
+}
+
+// IntervalSec is the gap rounded to the nearest second, for a preview line.
+func (s SpreadSchedule) IntervalSec() int {
+	if s.Interval <= 0 {
+		return 0
+	}
+	return int((s.Interval + time.Second/2) / time.Second)
+}
+
+// ExplainSpread is the English preview sentence for this schedule.
+func ExplainSpread(slices, minutes int) string {
+	return fmt.Sprintf("Preview only — nothing was placed. This best-cost order works as %d slices over %d minutes. The first slice is due when you place it. The last slice is due at the end. Each slice reads Binance, Coinbase, and Bybit again and takes the cheapest fee-adjusted size. The legs are the first slice on this book. Later slices can use a different venue. A buy locks cash from the best ask up front. A sell locks quantity on the venues that already hold the coin. Not real money.", slices, minutes)
+}
+
+// ExplainSpreadPlace is returned when that schedule starts. No slice has filled yet.
+func ExplainSpreadPlace(slices, minutes int) string {
+	return fmt.Sprintf("Spread order is working. %d slices over %d minutes. The first slice is due now. The last slice is due at the end. Each slice reads the books again and takes the cheapest venue for that size. Cancel releases what has not filled. Paper only.", slices, minutes)
+}
 
 // SpreadStatus is the life of a working spread order.
 type SpreadStatus string
@@ -23,12 +89,6 @@ const (
 	SpreadStatusFilled   SpreadStatus = "filled"
 	SpreadStatusCanceled SpreadStatus = "canceled"
 )
-
-// SpreadPreviewNote tells the assistant what a spread preview is pricing.
-const SpreadPreviewNote = "Preview only — nothing was placed. This best-cost order works as 10 slices, one every minute. Each slice reads Binance, Coinbase, and Bybit again and takes the cheapest fee-adjusted size. The legs are the first slice on this book. Later slices can use a different venue. A buy locks cash from the best ask up front. A sell locks quantity on the venues that already hold the coin. Not real money."
-
-// SpreadPlaceNote is returned when a spread order starts. No slice has filled yet.
-const SpreadPlaceNote = "Spread order is working. Ten slices, one every minute. The first slice is due now. Each slice reads the books again and takes the cheapest venue for that size. Cancel releases what has not filled. Paper only."
 
 // SpreadHold is quantity a spread sell has locked on one venue.
 type SpreadHold struct {
@@ -56,9 +116,11 @@ type SpreadOrder struct {
 	RemainingQuantity float64
 	SliceCount        int
 	SlicesDone        int
-	NextSliceAt       time.Time
-	EndsAt            time.Time
-	Status            SpreadStatus
+	// Duration is the clock from the first slice to the last.
+	Duration    time.Duration
+	NextSliceAt time.Time
+	EndsAt      time.Time
+	Status      SpreadStatus
 	// MaxSlippage is a fraction. Zero means no price cap.
 	MaxSlippage    float64
 	ReservedCash   float64
@@ -73,12 +135,29 @@ type SpreadOrder struct {
 	UpdatedAt      time.Time
 }
 
-// SpreadSpan is the time from the first slice to the last scheduled slice.
-func SpreadSpan() time.Duration {
-	if SpreadSliceCount < 2 {
+// SliceInterval is the gap stored on this order.
+// The last slice is due Duration after the first. A missing duration keeps a one-minute gap.
+func (o SpreadOrder) SliceInterval() time.Duration {
+	if o.SliceCount < 2 {
+		return time.Minute
+	}
+	d := o.Duration
+	if d <= 0 {
+		d = time.Duration(o.SliceCount-1) * time.Minute
+	}
+	gap := d / time.Duration(o.SliceCount-1)
+	if gap < time.Second {
+		return time.Second
+	}
+	return gap
+}
+
+// DurationMinutes is the working window in whole minutes.
+func (o SpreadOrder) DurationMinutes() int {
+	if o.Duration <= 0 {
 		return 0
 	}
-	return time.Duration(SpreadSliceCount-1) * SpreadInterval
+	return int(o.Duration / time.Minute)
 }
 
 // SpreadTarget is the size of the next slice.

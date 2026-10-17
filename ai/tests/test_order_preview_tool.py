@@ -154,10 +154,14 @@ def test_preview_portfolio_order_sends_spread(monkeypatch):
                 "quantity": 1,
                 "exchange": "all",
                 "spread": True,
+                "spread_minutes": 30,
+                "slice_count": 15,
             }
         )
     finally:
         reset_tool_scope(scope)
     assert seen[0]["spread"] is True
+    assert seen[0]["spreadMinutes"] == 30
+    assert seen[0]["sliceCount"] == 15
     assert seen[0]["exchange"] == "all"
     assert seen[0]["quantity"] == 1

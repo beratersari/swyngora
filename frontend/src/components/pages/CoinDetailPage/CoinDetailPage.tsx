@@ -3438,7 +3438,11 @@ export function CoinDetailPage() {
                 }).unwrap();
                 void message.success(
                   values.spread
-                    ? t('portfolio:trade.successSpread', { symbol: values.symbol })
+                    ? t('portfolio:trade.successSpread', {
+                        symbol: values.symbol,
+                        count: values.sliceCount ?? 10,
+                        minutes: values.spreadMinutes ?? 10,
+                      })
                     : values.orderType !== 'market'
                     ? t('detail:paperTrade.successPending', {
                         defaultValue: 'Pending paper order placed',

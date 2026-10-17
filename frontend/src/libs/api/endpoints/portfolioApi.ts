@@ -56,8 +56,12 @@ export type PlacePortfolioOrderArg = {
   idempotencyKey?: string;
   /** Best-cost cap in percent. 0.5 means 0.5% from the best price. */
   maxSlippagePct?: number;
-  /** Work a best-cost market order as 10 slices, one every minute. */
+  /** Work a best-cost market order as timed slices. */
   spread?: boolean;
+  /** Minutes from the first slice to the last. */
+  spreadMinutes?: number;
+  /** How many slices. */
+  sliceCount?: number;
   /** Clauses a buy stores. Omit to store the whole read. An empty list stores no read. */
   reason?: string[];
 };
@@ -104,8 +108,12 @@ export type PreviewPortfolioOrderArg = {
   lotMethod?: 'fifo' | 'lifo';
   limitPrice?: number;
   leverage?: number;
-  /** Price a best-cost market order as 10 slices, one every minute. */
+  /** Price a best-cost market order as timed slices. */
   spread?: boolean;
+  /** Minutes from the first slice to the last. */
+  spreadMinutes?: number;
+  /** How many slices. */
+  sliceCount?: number;
   /** Clauses a spot buy would store. Omit to leave the request unset. */
   reason?: string[];
 };
@@ -401,6 +409,8 @@ export const portfolioApi = baseApi.injectEndpoints({
           idempotencyKey: body.idempotencyKey,
           maxSlippagePct: body.maxSlippagePct,
           ...(body.spread ? { spread: true } : {}),
+          ...(body.spread && body.spreadMinutes ? { spreadMinutes: body.spreadMinutes } : {}),
+          ...(body.spread && body.sliceCount ? { sliceCount: body.sliceCount } : {}),
           ...(body.reason !== undefined ? { reason: body.reason } : {}),
         },
         headers: body.idempotencyKey ? { 'Idempotency-Key': body.idempotencyKey } : undefined,
@@ -431,6 +441,8 @@ export const portfolioApi = baseApi.injectEndpoints({
           compareExchange: body.compareExchange,
           maxSlippagePct: body.maxSlippagePct,
           ...(body.spread ? { spread: true } : {}),
+          ...(body.spread && body.spreadMinutes ? { spreadMinutes: body.spreadMinutes } : {}),
+          ...(body.spread && body.sliceCount ? { sliceCount: body.sliceCount } : {}),
           ...(body.reason !== undefined ? { reason: body.reason } : {}),
         },
       }),

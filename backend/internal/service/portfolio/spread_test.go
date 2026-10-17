@@ -141,6 +141,62 @@ func TestSpreadOrder_SlicesRepickTheCheapestBook(t *testing.T) {
 	}
 }
 
+func TestSpreadSchedule_FiveSlicesOverFiveMinutes(t *testing.T) {
+	px := &fakePx{prices: map[string]string{
+		"binance|BTCUSDT": "100", "coinbase|BTC-USD": "100", "bybit|BTCUSDT": "100",
+	}}
+	svc := newSvc(t, px).WithPaperCosts(domain.TradingCostFor)
+	svc.SetBookSource(booksByVenue{by: map[string]*domain.RawOrderBook{
+		"binance":  {Asks: []domain.PriceLevel{{Price: 100, Quantity: 5}}},
+		"coinbase": {Asks: []domain.PriceLevel{{Price: 101, Quantity: 5}}},
+		"bybit":    {Asks: []domain.PriceLevel{{Price: 102, Quantity: 5}}},
+	}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "spread-clock", StartingBalance: 100000}); err != nil {
+		t.Fatal(err)
+	}
+	preview, err := svc.PreviewOrder(ctx, OrderPreviewInput{
+		ClientID: "spread-clock", Exchange: "all", Symbol: "BTCUSDT", Side: "buy", Quantity: 1,
+		Spread: true, SpreadMinutes: 5, SliceCount: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.SpreadMinutes != 5 || preview.SliceCount != 5 || math.Abs(preview.SliceQuantity-0.2) > 1e-12 || preview.SliceIntervalSec != 75 {
+		t.Fatalf("preview minutes=%d slices=%d qty=%v every=%d", preview.SpreadMinutes, preview.SliceCount, preview.SliceQuantity, preview.SliceIntervalSec)
+	}
+	if _, err := svc.PreviewOrder(ctx, OrderPreviewInput{
+		ClientID: "spread-clock", Exchange: "all", Symbol: "BTCUSDT", Side: "buy", Quantity: 1,
+		Spread: true, SpreadMinutes: 1, SliceCount: 60,
+	}); err == nil {
+		t.Fatal("60 slices in one minute should be rejected")
+	}
+	order, _, err := svc.PlaceSpreadOrder(ctx, OrderInput{
+		ClientID: "spread-clock", Exchange: "all", Symbol: "BTCUSDT", Side: "buy", Quantity: 1,
+		SpreadMinutes: 5, SliceCount: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if order.Duration != 5*time.Minute || order.SliceCount != 5 || order.SliceInterval() != 75*time.Second {
+		t.Fatalf("order duration %s interval %s count %d", order.Duration, order.SliceInterval(), order.SliceCount)
+	}
+	if _, err := svc.ProcessDueSpreadOrders(ctx, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	open, err := svc.ListSpreadOrders(ctx, "spread-clock", "open", 10, 0)
+	if err != nil || len(open) != 1 {
+		t.Fatalf("open %+v %v", open, err)
+	}
+	gap := open[0].NextSliceAt.Sub(order.CreatedAt)
+	if gap < 74*time.Second || gap > 76*time.Second {
+		t.Fatalf("next slice gap %s", gap)
+	}
+	if !open[0].EndsAt.Equal(order.CreatedAt.Add(5 * time.Minute)) {
+		t.Fatalf("ends %s created %s", open[0].EndsAt, order.CreatedAt)
+	}
+}
+
 func TestSpreadSell_RepicksTheBetterBid(t *testing.T) {
 	px := &fakePx{prices: map[string]string{
 		"binance|BTCUSDT":  "100",

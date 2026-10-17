@@ -15,8 +15,9 @@ describe('SpreadOrderList', () => {
             side: 'buy',
             quantity: 1,
             filledQuantity: 0.2,
-            sliceCount: 10,
+            sliceCount: 15,
             slicesDone: 2,
+            durationMinutes: 30,
           },
         ]}
         onCancel={onCancel}

@@ -90,11 +90,24 @@ describe('PaperTradeForm', () => {
       />,
     );
     fireEvent.click(screen.getByText(/best cost|en düşük maliyet/i));
-    fireEvent.click(screen.getByText(/10 min|10 dk/i));
+    fireEvent.click(screen.getByText(/^spread$|^yay$/i));
+    const minutes = screen.getByRole('spinbutton', { name: /minutes|dakika/i });
+    const slices = screen.getByRole('spinbutton', { name: /slices|dilim/i });
+    fireEvent.change(minutes, { target: { value: '30' } });
+    fireEvent.blur(minutes);
+    fireEvent.change(slices, { target: { value: '15' } });
+    fireEvent.blur(slices);
     await waitFor(() => {
-      const last = onDraftChange.mock.calls.at(-1)?.[0] as { exchange: string; spread?: boolean };
+      const last = onDraftChange.mock.calls.at(-1)?.[0] as {
+        exchange: string;
+        spread?: boolean;
+        spreadMinutes?: number;
+        sliceCount?: number;
+      };
       expect(last.exchange).toBe('all');
       expect(last.spread).toBe(true);
+      expect(last.spreadMinutes).toBe(30);
+      expect(last.sliceCount).toBe(15);
     });
     const spin = screen.getByRole('spinbutton', { name: /quantity|miktar/i });
     fireEvent.change(spin, { target: { value: '1' } });
@@ -103,9 +116,16 @@ describe('PaperTradeForm', () => {
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalled();
     });
-    const arg = onSubmit.mock.calls.at(-1)?.[0] as { spread?: boolean; quantity: number };
+    const arg = onSubmit.mock.calls.at(-1)?.[0] as {
+      spread?: boolean;
+      quantity: number;
+      spreadMinutes?: number;
+      sliceCount?: number;
+    };
     expect(arg.spread).toBe(true);
     expect(arg.quantity).toBe(1);
+    expect(arg.spreadMinutes).toBe(30);
+    expect(arg.sliceCount).toBe(15);
   });
 
   it('finding 8: limit ticket posts the raw typed trigger with no FX conversion', async () => {

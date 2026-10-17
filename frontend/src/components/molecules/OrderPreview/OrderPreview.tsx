@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { formatPrice } from '@/libs/utils/formatPrice';
 import type { PreviewWarningId } from './constants';
-import { formatPreviewPct, previewRows, previewWarnings } from './helpers';
+import { formatPreviewPct, previewRows, previewWarnings, spreadEvery } from './helpers';
 import { Grid, Label, Panel, Value } from './OrderPreview.styles';
 import type { OrderPreviewProps } from './OrderPreview.types';
 
@@ -23,6 +23,13 @@ export function OrderPreview({ preview, loading, failed }: OrderPreviewProps) {
   if (!preview && !loading && !failed) return null;
 
   const rows = preview ? previewRows(preview) : [];
+  const every = spreadEvery(preview?.sliceIntervalSec);
+  const everyLabel =
+    every.min > 0 && every.sec > 0
+      ? t('preview.everyMinSec', every)
+      : every.min > 0
+        ? t('preview.everyMin', every)
+        : t('preview.everySec', every);
   const warnings = preview ? previewWarnings(preview) : [];
   const weight = preview?.risk?.projectedWeightPct;
   const exposure = preview?.risk?.projectedExposurePct;
@@ -99,7 +106,9 @@ export function OrderPreview({ preview, loading, failed }: OrderPreviewProps) {
             <Text variant="caption" color="secondary" data-testid="spread-plan">
               {t('preview.spreadPlan', {
                 count: preview.sliceCount ?? 10,
+                minutes: preview.spreadMinutes ?? 10,
                 qty: formatPrice(preview.sliceQuantity),
+                every: everyLabel,
               })}
             </Text>
           ) : null}

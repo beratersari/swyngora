@@ -7,17 +7,38 @@ import (
 )
 
 func TestSpreadTarget_SplitsWhatIsLeft(t *testing.T) {
-	if math.Abs(SpreadTarget(1, 0, SpreadSliceCount)-0.1) > 1e-12 {
-		t.Fatalf("first slice %v", SpreadTarget(1, 0, SpreadSliceCount))
+	if math.Abs(SpreadTarget(1, 0, SpreadDefaultSlices)-0.1) > 1e-12 {
+		t.Fatalf("first slice %v", SpreadTarget(1, 0, SpreadDefaultSlices))
 	}
-	if math.Abs(SpreadTarget(0.9, 1, SpreadSliceCount)-0.1) > 1e-12 {
-		t.Fatalf("second slice %v", SpreadTarget(0.9, 1, SpreadSliceCount))
+	if math.Abs(SpreadTarget(0.9, 1, SpreadDefaultSlices)-0.1) > 1e-12 {
+		t.Fatalf("second slice %v", SpreadTarget(0.9, 1, SpreadDefaultSlices))
 	}
-	if math.Abs(SpreadTarget(0.4, 9, SpreadSliceCount)-0.4) > 1e-12 {
-		t.Fatalf("last slice takes the rest, got %v", SpreadTarget(0.4, 9, SpreadSliceCount))
+	if math.Abs(SpreadTarget(0.4, 9, SpreadDefaultSlices)-0.4) > 1e-12 {
+		t.Fatalf("last slice takes the rest, got %v", SpreadTarget(0.4, 9, SpreadDefaultSlices))
 	}
-	if SpreadSpan() != 9*time.Minute {
-		t.Fatalf("span %s", SpreadSpan())
+}
+
+func TestNormalizeSpreadSchedule(t *testing.T) {
+	def, err := NormalizeSpreadSchedule(0, 0)
+	if err != nil || def.SliceCount != 10 || def.Minutes != 10 {
+		t.Fatalf("default %+v %v", def, err)
+	}
+	if def.Duration != 10*time.Minute || def.Interval != 10*time.Minute/9 {
+		t.Fatalf("default gap %s duration %s", def.Interval, def.Duration)
+	}
+	wide, err := NormalizeSpreadSchedule(30, 15)
+	if err != nil || wide.Interval != 30*time.Minute/14 || wide.IntervalSec() != 129 {
+		t.Fatalf("30m/15 %+v sec %d err %v", wide, wide.IntervalSec(), err)
+	}
+	short, err := NormalizeSpreadSchedule(5, 5)
+	if err != nil || short.Interval != 75*time.Second {
+		t.Fatalf("5m/5 %+v %v", short, err)
+	}
+	if _, err := NormalizeSpreadSchedule(1, 60); err == nil {
+		t.Fatal("60 slices in one minute should be too close")
+	}
+	if _, err := NormalizeSpreadSchedule(0, 1); err == nil {
+		t.Fatal("one slice is not a spread")
 	}
 }
 

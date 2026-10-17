@@ -65,6 +65,8 @@ export function PaperTradeForm({
   const [pickedReason, setPickedReason] = useState<string[] | null>(null);
   const [bestCost, setBestCost] = useState(false);
   const [spread, setSpread] = useState(false);
+  const [spreadMinutes, setSpreadMinutes] = useState<number | null>(10);
+  const [sliceCount, setSliceCount] = useState<number | null>(10);
   const [maxSlippagePct, setMaxSlippagePct] = useState<number | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [localBusy, setLocalBusy] = useState(false);
@@ -130,6 +132,8 @@ export function PaperTradeForm({
   const equityVenue = exchange === 'nasdaq' || exchange === 'bist';
   const routing = bestCost && kind === 'market' && !equityVenue;
   const pacing = routing && spread;
+  const minutes = spreadMinutes != null && spreadMinutes >= 1 ? Math.round(spreadMinutes) : 10;
+  const slices = sliceCount != null && sliceCount >= 2 ? Math.round(sliceCount) : 10;
   const wireExchange = routing ? 'all' : exchange;
   const canSize = canSizeByRisk(kind, side) && !routing;
   const riskActive = canSize && riskPercent != null && riskPercent > 0;
@@ -149,6 +153,8 @@ export function PaperTradeForm({
       compareExchange: routing ? exchange : undefined,
       maxSlippagePct: routing && maxSlippagePct != null && maxSlippagePct > 0 ? maxSlippagePct : undefined,
       spread: pacing || undefined,
+      spreadMinutes: pacing ? minutes : undefined,
+      sliceCount: pacing ? slices : undefined,
       symbol: symbol.trim().toUpperCase(),
       type: toApiOrderType(kind, side),
       side,
@@ -168,6 +174,8 @@ export function PaperTradeForm({
     wireExchange,
     routing,
     pacing,
+    minutes,
+    slices,
     maxSlippagePct,
     symbol,
     kind,
@@ -201,6 +209,8 @@ export function PaperTradeForm({
       exchange: wireExchange,
       maxSlippagePct: routing && maxSlippagePct != null && maxSlippagePct > 0 ? maxSlippagePct : undefined,
       spread: pacing || undefined,
+      spreadMinutes: pacing ? minutes : undefined,
+      sliceCount: pacing ? slices : undefined,
       symbol: sym,
       orderType,
       side: s,
@@ -308,9 +318,35 @@ export function PaperTradeForm({
                 aria-label={t('portfolio:trade.pace')}
                 options={[
                   { label: t('portfolio:trade.fillNow'), value: 'now' },
-                  { label: t('portfolio:trade.spread10'), value: 'spread' },
+                  { label: t('portfolio:trade.spread'), value: 'spread' },
                 ]}
                 onChange={(value) => setSpread(value === 'spread')}
+              />
+            ) : null}
+            {pacing ? (
+              <InputNumber
+                min={1}
+                max={1440}
+                step={1}
+                precision={0}
+                value={spreadMinutes}
+                onChange={(value) => setSpreadMinutes(typeof value === 'number' ? value : null)}
+                style={{ minWidth: 110 }}
+                aria-label={t('portfolio:trade.spreadMinutes')}
+                placeholder={t('portfolio:trade.spreadMinutes')}
+              />
+            ) : null}
+            {pacing ? (
+              <InputNumber
+                min={2}
+                max={60}
+                step={1}
+                precision={0}
+                value={sliceCount}
+                onChange={(value) => setSliceCount(typeof value === 'number' ? value : null)}
+                style={{ minWidth: 110 }}
+                aria-label={t('portfolio:trade.spreadSlices')}
+                placeholder={t('portfolio:trade.spreadSlices')}
               />
             ) : null}
             {routing ? (

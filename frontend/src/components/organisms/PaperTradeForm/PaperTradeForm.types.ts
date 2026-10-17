@@ -20,8 +20,12 @@ export type PaperTradeFormValues = {
   reason?: string[];
   /** Best-cost cap in percent. 0.5 means 0.5% from the best price. */
   maxSlippagePct?: number;
-  /** Work the best-cost order as 10 slices, one every minute. */
+  /** Work the best-cost order as timed slices. */
   spread?: boolean;
+  /** Minutes from the first slice to the last. */
+  spreadMinutes?: number;
+  /** How many slices. */
+  sliceCount?: number;
 };
 
 export type PaperTradeFormProps = {

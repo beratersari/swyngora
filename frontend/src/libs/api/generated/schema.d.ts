@@ -3981,8 +3981,10 @@ export interface paths {
          *     total cost first. One preview lists a leg per venue. compareExchange prices that whole quantity
          *     on one venue and returns savedCash when both can fill. A missing book is named in missingVenues.
          *     A sell only uses coins already held on that venue. A USDT book books a Coinbase USD fill 1:1.
-         *     spread=true on that best-cost market order prices 10 slices, one every minute, instead of one
-         *     fill. routeLegs are the first slice on the current book. Later slices read the books again.
+         *     spread=true on that best-cost market order prices timed slices instead of one fill.
+         *     spreadMinutes is the clock from the first slice to the last (default 10). sliceCount is how
+         *     many reads (default 10). The last slice is due at the end. routeLegs are the first slice on
+         *     the current book. Later slices read the books again.
          *     A buy shows the cash the whole order would lock. A sell shows the quantity it would lock.
          *     Margin, equities, and resting orders stay on one venue. Not real money.
          */
@@ -4031,8 +4033,9 @@ export interface paths {
          *     balance update. A book that cannot hold the size fills nothing. A sell only uses coins already
          *     held on that venue. Margin, equities, and resting orders stay on one venue.
          *     spread=true with exchange=all and type=market does not fill now. It locks cash for a buy, or
-         *     quantity on the venues that already hold the coin for a sell, and works the order as 10 slices,
-         *     one every minute. Each slice reads the books again. The response is 201 and order is a SpreadOrder.
+         *     quantity on the venues that already hold the coin for a sell, and works the order as timed slices.
+         *     spreadMinutes (default 10) is the clock. sliceCount (default 10) is how many fills. The last
+         *     slice is due at the end. Each slice reads the books again. The response is 201 and order is a SpreadOrder.
          *     The first slice is due immediately and is filled by the background worker. Cancel releases the
          *     size that has not filled. Paper trading only — not real money.
          */
@@ -4052,7 +4055,7 @@ export interface paths {
         };
         /**
          * List spread paper orders
-         * @description Best-cost orders that fill as 10 slices, one every minute.
+         * @description Best-cost orders that fill as timed slices. The last slice is due when the duration ends.
          *     Defaults to open orders. status=open|filled|canceled|all.
          *     Paper trading only — not real money.
          */
@@ -10424,10 +10427,14 @@ export interface components {
              */
             reason?: ("priceCvd" | "openInterest" | "liquidation" | "prints" | "funding" | "crowd" | "size")[];
             /**
-             * @description When true with exchange=all and a spot market order, price 10 slices one minute apart.
+             * @description When true with exchange=all and a spot market order, price timed slices.
              *     The legs are the first slice. Nothing is written.
              */
             spread?: boolean;
+            /** @description Minutes from the first slice to the last. Omit for 10. */
+            spreadMinutes?: number;
+            /** @description How many slices. Omit for 10. A gap shorter than 15 seconds is rejected. */
+            sliceCount?: number;
         };
         OrderPreviewLeg: {
             /** @enum {string} */
@@ -10587,21 +10594,21 @@ export interface components {
             slippageInsideQuantity?: number;
             /** @description True when that size is shorter than the order, so nothing is filled. */
             slippageLimited?: boolean;
-            /** @description True when this preview is 10 slices over about 10 minutes instead of one fill. */
+            /** @description True when this preview is timed slices instead of one fill. */
             spread?: boolean;
-            /** @description The schedule is named in minutes. The last slice is due one interval before this many minutes have passed. */
+            /** @description Minutes from the first slice to the last. The last slice is due at the end. */
             spreadMinutes?: number;
             /** @description How many times the order reads the books. */
             sliceCount?: number;
             /** @description Size of the first slice. Later slices use whatever quantity is still open. */
             sliceQuantity?: number;
-            /** @description Seconds between slices. */
+            /** @description Seconds between slices, rounded to the nearest second. The stored gap divides the duration by one less than the slice count. */
             sliceIntervalSec?: number;
             note?: string;
         };
         /**
-         * @description A best-cost spot market order worked as 10 slices, one every minute.
-         *     Each slice reads Binance, Coinbase, and Bybit again. Paper only.
+         * @description A best-cost spot market order worked as timed slices.
+         *     The last slice is due when the duration ends. Each slice reads Binance, Coinbase, and Bybit again. Paper only.
          */
         SpreadOrder: {
             id?: string;
@@ -10614,6 +10621,8 @@ export interface components {
             remainingQuantity?: number;
             sliceCount?: number;
             slicesDone?: number;
+            /** @description Minutes from the first slice to the last. */
+            durationMinutes?: number;
             /** Format: date-time */
             nextSliceAt?: string;
             /**
@@ -17128,10 +17137,14 @@ export interface operations {
                      */
                     reason?: ("priceCvd" | "openInterest" | "liquidation" | "prints" | "funding" | "crowd" | "size")[];
                     /**
-                     * @description With exchange=all and type=market, work the order as 10 slices, one every minute.
+                     * @description With exchange=all and type=market, work the order as timed slices.
                      *     Each slice chooses the cheapest venue from the books at that time.
                      */
                     spread?: boolean;
+                    /** @description Minutes from the first slice to the last. Omit for 10. The last slice is due at the end. */
+                    spreadMinutes?: number;
+                    /** @description How many slices. Omit for 10. A gap shorter than 15 seconds is rejected. */
+                    sliceCount?: number;
                 };
             };
         };

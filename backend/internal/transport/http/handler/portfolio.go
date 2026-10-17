@@ -371,6 +371,8 @@ type orderBody struct {
 	CompareExchange string    `json:"compareExchange"`
 	MaxSlippagePct  float64   `json:"maxSlippagePct"`
 	Spread          bool      `json:"spread"`
+	SpreadMinutes   int       `json:"spreadMinutes"`
+	SliceCount      int       `json:"sliceCount"`
 }
 
 func situationReasonFrom(raw *[]string) (domain.SituationReason, error) {

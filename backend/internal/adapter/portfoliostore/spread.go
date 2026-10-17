@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS spread_orders (
 	remaining_quantity REAL NOT NULL DEFAULT 0,
 	slice_count      INTEGER NOT NULL,
 	slices_done      INTEGER NOT NULL DEFAULT 0,
+	duration_sec     INTEGER NOT NULL DEFAULT 600,
 	next_slice_at    TEXT NOT NULL,
 	ends_at          TEXT NOT NULL,
 	status           TEXT NOT NULL,
@@ -53,7 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_spread_holds_order ON spread_holds(order_id);
 
 const spreadOrderSelect = `
 SELECT id, client_id, symbol, side, quantity, filled_quantity, remaining_quantity,
-	slice_count, slices_done, next_slice_at, ends_at, status, max_slippage, reserved_cash,
+	slice_count, slices_done, duration_sec, next_slice_at, ends_at, status, max_slippage, reserved_cash,
 	filled_notional, filled_fee, lot_method, reason_set, reason_json, cancel_reason, created_at, updated_at
 FROM spread_orders `
 
@@ -73,7 +74,10 @@ func (s *SQLite) CreateSpreadOrder(ctx context.Context, o domain.SpreadOrder) (*
 		o.RemainingQuantity = o.Quantity
 	}
 	if o.SliceCount <= 0 {
-		o.SliceCount = domain.SpreadSliceCount
+		o.SliceCount = domain.SpreadDefaultSlices
+	}
+	if o.Duration <= 0 {
+		o.Duration = time.Duration(domain.SpreadDefaultMinutes) * time.Minute
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -245,11 +249,11 @@ func insertSpreadOrder(ctx context.Context, tx *sql.Tx, o domain.SpreadOrder) er
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO spread_orders (
 			id, client_id, symbol, side, quantity, filled_quantity, remaining_quantity,
-			slice_count, slices_done, next_slice_at, ends_at, status, max_slippage, reserved_cash,
+			slice_count, slices_done, duration_sec, next_slice_at, ends_at, status, max_slippage, reserved_cash,
 			filled_notional, filled_fee, lot_method, reason_set, reason_json, cancel_reason, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, o.ID, o.ClientID, o.Symbol, string(o.Side), o.Quantity, o.FilledQuantity, o.RemainingQuantity,
-		o.SliceCount, o.SlicesDone, formatSpreadTime(o.NextSliceAt), formatSpreadTime(o.EndsAt), string(o.Status),
+		o.SliceCount, o.SlicesDone, int(o.Duration/time.Second), formatSpreadTime(o.NextSliceAt), formatSpreadTime(o.EndsAt), string(o.Status),
 		o.MaxSlippage, o.ReservedCash, o.FilledNotional, o.FilledFee, string(o.LotMethod), set, reason, o.CancelReason,
 		formatSpreadTime(o.CreatedAt), formatSpreadTime(o.UpdatedAt))
 	return err
@@ -303,20 +307,21 @@ type spreadScanner interface {
 
 func scanSpreadOrder(row spreadScanner) (*domain.SpreadOrder, error) {
 	var (
-		o       domain.SpreadOrder
-		side    string
-		status  string
-		nextAt  string
-		endsAt  string
-		lot     string
-		reason  string
-		set     int
-		created string
-		updated string
+		o        domain.SpreadOrder
+		side     string
+		status   string
+		nextAt   string
+		endsAt   string
+		lot      string
+		reason   string
+		set      int
+		created  string
+		updated  string
+		duration int
 	)
 	err := row.Scan(
 		&o.ID, &o.ClientID, &o.Symbol, &side, &o.Quantity, &o.FilledQuantity, &o.RemainingQuantity,
-		&o.SliceCount, &o.SlicesDone, &nextAt, &endsAt, &status, &o.MaxSlippage, &o.ReservedCash,
+		&o.SliceCount, &o.SlicesDone, &duration, &nextAt, &endsAt, &status, &o.MaxSlippage, &o.ReservedCash,
 		&o.FilledNotional, &o.FilledFee, &lot, &set, &reason, &o.CancelReason, &created, &updated,
 	)
 	if err != nil {
@@ -326,6 +331,7 @@ func scanSpreadOrder(row spreadScanner) (*domain.SpreadOrder, error) {
 	o.Status = domain.SpreadStatus(status)
 	o.LotMethod = domain.LotMethod(lot)
 	o.ReasonSet = set != 0
+	o.Duration = time.Duration(duration) * time.Second
 	o.NextSliceAt = parseSpreadTime(nextAt)
 	o.EndsAt = parseSpreadTime(endsAt)
 	o.CreatedAt = parseSpreadTime(created)

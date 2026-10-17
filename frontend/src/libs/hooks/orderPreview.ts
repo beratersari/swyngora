@@ -27,8 +27,12 @@ export type SpotOrderPreviewDraft = {
   compareExchange?: string;
   /** Best-cost cap in percent. 0.5 means 0.5% from the best price. */
   maxSlippagePct?: number;
-  /** Price the best-cost order as 10 slices, one every minute. */
+  /** Price the best-cost order as timed slices. */
   spread?: boolean;
+  /** Minutes from the first slice to the last. */
+  spreadMinutes?: number;
+  /** How many slices. */
+  sliceCount?: number;
 };
 
 export type MarginOrderPreviewDraft = {
@@ -158,5 +162,7 @@ export function toPreviewArg(
     compareExchange: draft.compareExchange,
     maxSlippagePct: draft.maxSlippagePct,
     spread: draft.spread || undefined,
+    spreadMinutes: draft.spread ? draft.spreadMinutes : undefined,
+    sliceCount: draft.spread ? draft.sliceCount : undefined,
   };
 }

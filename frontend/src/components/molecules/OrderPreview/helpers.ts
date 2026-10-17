@@ -3,6 +3,12 @@ import { formatPrice } from '@/libs/utils/formatPrice';
 import { PREVIEW_WARNING_IDS, type PreviewWarningId } from './constants';
 import type { PreviewRow } from './OrderPreview.types';
 
+/** Whole minutes and leftover seconds for a spread gap. */
+export function spreadEvery(seconds: number | null | undefined): { min: number; sec: number } {
+  const total = Math.max(0, Math.round(seconds ?? 0));
+  return { min: Math.floor(total / 60), sec: total % 60 };
+}
+
 /** One decimal, without locale grouping, so 40 and 12.5 stay stable in tests. */
 export function formatPreviewPct(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return '—';

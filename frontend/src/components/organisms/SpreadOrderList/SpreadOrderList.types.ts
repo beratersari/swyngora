@@ -6,6 +6,7 @@ export type SpreadOrderRow = {
   filledQuantity: number;
   sliceCount: number;
   slicesDone: number;
+  durationMinutes: number;
 };
 
 export type SpreadOrderListProps = {

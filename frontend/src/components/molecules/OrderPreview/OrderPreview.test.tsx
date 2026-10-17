@@ -112,8 +112,10 @@ describe('OrderPreview', () => {
           side: 'buy',
           spread: true,
           fillsNow: false,
-          sliceCount: 10,
-          sliceQuantity: 0.1,
+          sliceCount: 15,
+          spreadMinutes: 30,
+          sliceIntervalSec: 129,
+          sliceQuantity: 0.0667,
           risk: { ...blockedBuy.risk, blocked: false, weightLimitHit: false },
           routeLegs: [
             { exchange: 'binance', symbol: 'BTCUSDT', quantity: 0.1, fillPrice: 100, fee: 0.01 },
@@ -122,7 +124,9 @@ describe('OrderPreview', () => {
         }}
       />,
     );
-    expect(screen.getByTestId('spread-plan')).toHaveTextContent(/10/);
+    expect(screen.getByTestId('spread-plan')).toHaveTextContent(/15/);
+    expect(screen.getByTestId('spread-plan')).toHaveTextContent(/30/);
+    expect(screen.getByTestId('spread-plan')).toHaveTextContent(/2 min 9 s|2 dk 9 sn/);
     expect(screen.getByTestId('route-leg')).toHaveTextContent(/binance/i);
     expect(screen.getByTestId('route-saved')).toHaveTextContent(/0[.,]2/);
     expect(screen.getByText(/later slices choose again|sonraki dilimler yeniden/i)).toBeInTheDocument();
