@@ -466,6 +466,8 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_
 		`ALTER TABLE pending_orders ADD COLUMN bracket_id TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE pending_orders ADD COLUMN bracket_role TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE pending_orders ADD COLUMN target_percent REAL NOT NULL DEFAULT 0`,
+		`ALTER TABLE pending_orders ADD COLUMN move_stop_to_entry INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE pending_orders ADD COLUMN entry_price REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE spread_orders ADD COLUMN duration_sec INTEGER NOT NULL DEFAULT 540`,
 		`CREATE INDEX IF NOT EXISTS idx_pending_orders_bracket ON pending_orders(bracket_id) WHERE bracket_id != ''`,
 		`ALTER TABLE portfolios ADD COLUMN margin_mode TEXT NOT NULL DEFAULT 'isolated'`,
@@ -1114,8 +1116,8 @@ const pendingOrderInsertSQL = `
 			trigger_price, reserved_cash, reserved_quantity, time_in_force, expires_at, status,
 			created_at, updated_at, filled_at, canceled_at, fill_trade_id, fill_price, reject_reason, cancel_reason,
 			oco_group_id, oco_peer_id, trail_type, trail_value, trail_peak, bracket_id, bracket_role, target_percent, lot_method, situation_json,
-			reason_set, reason_json
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			reason_set, reason_json, move_stop_to_entry, entry_price
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 func (s *SQLite) txInsertPendingOrder(ctx context.Context, tx *sql.Tx, o domain.PendingOrder) error {
 	_, err := tx.ExecContext(ctx, pendingOrderInsertSQL,
@@ -1125,6 +1127,7 @@ func (s *SQLite) txInsertPendingOrder(ctx context.Context, tx *sql.Tx, o domain.
 		nullTime(o.FilledAt), nullTime(o.CanceledAt), o.FillTradeID, o.FillPrice, o.RejectReason, o.CancelReason,
 		o.OCOGroupID, o.OCOPeerID, o.TrailType, o.TrailValue, o.TrailPeak, o.BracketID, o.BracketRole, o.TargetPercent, lotMethodOrDefault(o.LotMethod),
 		marshalSituation(o.Situation), reasonSetValue(o), marshalReason(o),
+		boolToInt(o.MoveStopToEntry), o.EntryPrice,
 	)
 	return err
 }
@@ -1348,7 +1351,25 @@ func (s *SQLite) SyncBracketExitsToFilled(ctx context.Context, clientID, bracket
 		return nil
 	}
 	slQty := sl.filled + unsold
-	return writeExitSize(ctx, s.db, sl.id, sl.status, sl.cancel, sl.filled, slQty, unsold, entryFilled, atStr)
+	if err := writeExitSize(ctx, s.db, sl.id, sl.status, sl.cancel, sl.filled, slQty, unsold, entryFilled, atStr); err != nil {
+		return err
+	}
+	return copyBracketEntryPrice(ctx, s.db, clientID, bracketID, sl.id)
+}
+
+// copyBracketEntryPrice stores the entry's average fill on the stop.
+// The stop trigger stays where it is. A later entry fill can change this price
+// without moving a stop that already rose.
+func copyBracketEntryPrice(ctx context.Context, db *sql.DB, clientID, bracketID, stopID string) error {
+	_, err := db.ExecContext(ctx, `
+		UPDATE pending_orders
+		SET entry_price = COALESCE((
+			SELECT entry_price FROM pending_orders
+			WHERE client_id = ? AND bracket_id = ? AND bracket_role = 'entry' AND entry_price > 0
+		), entry_price)
+		WHERE id = ?
+	`, clientID, bracketID, stopID)
+	return err
 }
 
 func writeExitSize(ctx context.Context, db *sql.DB, id, status, cancel string, filled, newQty, newRem, entryFilled float64, atStr string) error {
@@ -1852,10 +1873,11 @@ func (s *SQLite) ExecutePendingFill(ctx context.Context, order *domain.PendingOr
 	res, err := tx.ExecContext(ctx, `
 		UPDATE pending_orders
 		SET filled_quantity = ?, remaining_quantity = ?, reserved_cash = ?, reserved_quantity = ?,
-		    status = ?, updated_at = ?, fill_trade_id = ?, fill_price = ?, filled_at = COALESCE(?, filled_at)
+		    status = ?, updated_at = ?, fill_trade_id = ?, fill_price = ?, filled_at = COALESCE(?, filled_at),
+		    entry_price = CASE WHEN ? > 0 THEN ? ELSE entry_price END
 		WHERE id = ? AND status = 'open' AND ABS(remaining_quantity - ?) < 1e-9
 	`, filledAfter, remainingAfter, reservedCash, reservedQty,
-		statusAfter, atStr, t.ID, t.Price, filledAt, order.ID, remaining)
+		statusAfter, atStr, t.ID, t.Price, filledAt, order.EntryPrice, order.EntryPrice, order.ID, remaining)
 	if err != nil {
 		return err
 	}
@@ -1995,7 +2017,8 @@ func adjustOCOAfterFill(ctx context.Context, tx *sql.Tx, filled *domain.PendingO
 		return nil
 	}
 	rows, err := tx.QueryContext(ctx, `
-		SELECT id, order_type, quantity, filled_quantity, remaining_quantity, trigger_price
+		SELECT id, order_type, quantity, filled_quantity, remaining_quantity, trigger_price,
+		       COALESCE(move_stop_to_entry, 0), COALESCE(entry_price, 0)
 		FROM pending_orders
 		WHERE client_id = ? AND oco_group_id = ? AND status = 'open' AND id != ?
 		ORDER BY trigger_price ASC
@@ -2007,11 +2030,13 @@ func adjustOCOAfterFill(ctx context.Context, tx *sql.Tx, filled *domain.PendingO
 	type leg struct {
 		id, typ                 string
 		qty, filled, rem, price float64
+		move                    int
+		entry                   float64
 	}
 	var others []leg
 	for rows.Next() {
 		var L leg
-		if err := rows.Scan(&L.id, &L.typ, &L.qty, &L.filled, &L.rem, &L.price); err != nil {
+		if err := rows.Scan(&L.id, &L.typ, &L.qty, &L.filled, &L.rem, &L.price, &L.move, &L.entry); err != nil {
 			return err
 		}
 		others = append(others, L)
@@ -2072,13 +2097,42 @@ func adjustOCOAfterFill(ctx context.Context, tx *sql.Tx, filled *domain.PendingO
 		return cancelOpenIDs(ctx, tx, []string{stop.id}, atStr, domain.CancelReasonOCOPeerFilled)
 	}
 	newQty := stop.filled + newRem
+	next := 0.0
+	for _, L := range others {
+		if L.typ == string(domain.PendingLimitSell) {
+			next = L.price
+			break
+		}
+	}
+	raise := raisedStopTrigger(ctx, tx, filled, stop.move != 0, stop.entry, stop.price, next)
 	_, err = tx.ExecContext(ctx, `
 		UPDATE pending_orders
 		SET quantity = ?, remaining_quantity = ?, reserved_quantity = ?,
+		    trigger_price = CASE WHEN ? > 0 THEN ? ELSE trigger_price END,
 		    reserved_cash = 0, updated_at = ?
 		WHERE id = ? AND status = 'open'
-	`, newQty, newRem, newRem, atStr, stop.id)
+	`, newQty, newRem, newRem, raise, raise, atStr, stop.id)
 	return err
+}
+
+// raisedStopTrigger is the buy price when the nearest take-profit has just filled
+// completely. Zero leaves the current stop where it is.
+func raisedStopTrigger(ctx context.Context, tx *sql.Tx, filled *domain.PendingOrder, move bool, entry, stopPrice, nextTarget float64) float64 {
+	if filled == nil || filled.Type != domain.PendingLimitSell || !move {
+		return 0
+	}
+	if filled.RemainingQuantity > domain.PositionEpsilon {
+		return 0
+	}
+	var minPx sql.NullFloat64
+	err := tx.QueryRowContext(ctx, `
+		SELECT MIN(trigger_price) FROM pending_orders
+		WHERE client_id = ? AND oco_group_id = ? AND order_type = ?
+	`, filled.ClientID, filled.OCOGroupID, string(domain.PendingLimitSell)).Scan(&minPx)
+	if err != nil || !minPx.Valid || filled.TriggerPrice > minPx.Float64+1e-9 {
+		return 0
+	}
+	return domain.RaiseStopToBuyPrice(true, entry, stopPrice, nextTarget)
 }
 
 func adjustLegacyOCOPeer(ctx context.Context, tx *sql.Tx, filled, peer *domain.PendingOrder, atStr string) error {
@@ -2147,7 +2201,8 @@ const pendingOrderSelect = `
 		COALESCE(oco_group_id, ''), COALESCE(oco_peer_id, ''),
 		COALESCE(trail_type, ''), COALESCE(trail_value, 0), COALESCE(trail_peak, 0),
 		COALESCE(bracket_id, ''), COALESCE(bracket_role, ''), COALESCE(target_percent, 0), COALESCE(lot_method, 'fifo'),
-		COALESCE(situation_json, ''), COALESCE(reason_set, 0), COALESCE(reason_json, '')
+		COALESCE(situation_json, ''), COALESCE(reason_set, 0), COALESCE(reason_json, ''),
+		COALESCE(move_stop_to_entry, 0), COALESCE(entry_price, 0)
 	FROM pending_orders`
 
 type scannable interface {
@@ -2157,7 +2212,7 @@ type scannable interface {
 func scanPendingOrder(row scannable) (*domain.PendingOrder, error) {
 	var o domain.PendingOrder
 	var ex, typ, side, tif, st, cAt, uAt, lotMethod, situation, reasonJSON string
-	var reasonSet int
+	var reasonSet, moveStop int
 	var filledAt, canceledAt, expiresAt sql.NullString
 	if err := row.Scan(
 		&o.ID, &o.ClientID, &ex, &o.Symbol, &typ, &side, &o.Quantity, &o.FilledQuantity, &o.RemainingQuantity,
@@ -2165,9 +2220,11 @@ func scanPendingOrder(row scannable) (*domain.PendingOrder, error) {
 		&cAt, &uAt, &filledAt, &canceledAt, &o.FillTradeID, &o.FillPrice, &o.RejectReason, &o.CancelReason,
 		&o.OCOGroupID, &o.OCOPeerID, &o.TrailType, &o.TrailValue, &o.TrailPeak,
 		&o.BracketID, &o.BracketRole, &o.TargetPercent, &lotMethod, &situation, &reasonSet, &reasonJSON,
+		&moveStop, &o.EntryPrice,
 	); err != nil {
 		return nil, err
 	}
+	o.MoveStopToEntry = moveStop != 0
 	o.LotMethod, _ = domain.NormalizeLotMethod(lotMethod)
 	o.Situation = unmarshalSituation(situation)
 	o.ReasonSet = reasonSet != 0

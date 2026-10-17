@@ -438,6 +438,7 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 					TrailValue: csvF64(row, "trailValue"), TrailPeak: csvF64(row, "trailPeak"),
 					BracketID: row["bracketId"], BracketRole: row["bracketRole"], TargetPercent: csvF64(row, "targetPercent"), LotMethod: row["lotMethod"],
 					CreatedAt: row["createdAt"], UpdatedAt: row["updatedAt"],
+					MoveStopToEntry: csvBool(row, "moveStopToEntry"), EntryPrice: csvF64(row, "entryPrice"),
 				})
 			}
 		case "portfolio_lots":

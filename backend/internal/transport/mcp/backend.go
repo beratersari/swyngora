@@ -5102,7 +5102,7 @@ func (b *Backend) GetPortfolioPerformance(ctx context.Context, clientID, period 
 	return mustJSON(m)
 }
 
-func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int, takeProfitTargets string) (json.RawMessage, error) {
+func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int, takeProfitTargets string, moveStopToEntry bool) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
@@ -5114,8 +5114,8 @@ func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange,
 		ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol,
 		Side: side, Type: orderType, Product: product, TrailType: trailType, LotMethod: lotMethod,
 		Quantity: quantity, TriggerPrice: triggerPrice, TakeProfitPrice: takeProfitPrice, StopLossPrice: stopLossPrice,
-		TakeProfitTargets: targets,
-		TrailValue:        trailValue, LimitPrice: limitPrice, Leverage: leverage, RiskPercent: riskPercent,
+		TakeProfitTargets: targets, MoveStopToEntry: moveStopToEntry,
+		TrailValue: trailValue, LimitPrice: limitPrice, Leverage: leverage, RiskPercent: riskPercent,
 		Reason: reasonInput(ctx), CompareExchange: compareExchange, MaxSlippagePct: maxSlippagePct, Spread: spread,
 		SpreadMinutes: spreadMinutes, SliceCount: sliceCount,
 	})
@@ -5357,7 +5357,7 @@ func (b *Backend) PlacePortfolioPendingOrder(ctx context.Context, clientID, exch
 	})
 }
 
-func (b *Backend) PlacePortfolioBracketOrder(ctx context.Context, clientID, exchange, symbol string, quantity, entryPrice, takeProfitPrice, stopLossPrice float64, expiresAt, takeProfitTargets string) (json.RawMessage, error) {
+func (b *Backend) PlacePortfolioBracketOrder(ctx context.Context, clientID, exchange, symbol string, quantity, entryPrice, takeProfitPrice, stopLossPrice float64, expiresAt, takeProfitTargets string, moveStopToEntry bool) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
@@ -5381,7 +5381,7 @@ func (b *Backend) PlacePortfolioBracketOrder(ctx context.Context, clientID, exch
 		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID:    clientID, Exchange: exchange, Symbol: symbol, Quantity: quantity,
 		EntryPrice: entryPrice, TakeProfitPrice: takeProfitPrice, TakeProfitTargets: targets,
-		StopLossPrice: stopLossPrice, ExpiresAt: exp,
+		StopLossPrice: stopLossPrice, MoveStopToEntry: moveStopToEntry, ExpiresAt: exp,
 		Reason: reasonInput(ctx),
 	})
 	if err != nil {
@@ -5395,7 +5395,7 @@ func (b *Backend) PlacePortfolioBracketOrder(ctx context.Context, clientID, exch
 	})
 }
 
-func (b *Backend) PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange, symbol string, quantity, takeProfitPrice, stopLossPrice float64, expiresAt, takeProfitTargets string) (json.RawMessage, error) {
+func (b *Backend) PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange, symbol string, quantity, takeProfitPrice, stopLossPrice float64, expiresAt, takeProfitTargets string, moveStopToEntry bool) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
@@ -5418,7 +5418,8 @@ func (b *Backend) PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange
 	tps, sl, err := b.Portfolio.PlaceOCOOrder(ctx, portfolio.OCOOrderInput{
 		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID:    clientID, Exchange: exchange, Symbol: symbol, Quantity: quantity,
-		TakeProfitPrice: takeProfitPrice, TakeProfitTargets: targets, StopLossPrice: stopLossPrice, ExpiresAt: exp,
+		TakeProfitPrice: takeProfitPrice, TakeProfitTargets: targets, StopLossPrice: stopLossPrice,
+		MoveStopToEntry: moveStopToEntry, ExpiresAt: exp,
 	})
 	if err != nil {
 		return nil, err
@@ -6316,6 +6317,12 @@ func pendingOrderMap(o *domain.PendingOrder) map[string]any {
 	}
 	if o.TargetPercent > 0 {
 		m["targetPercent"] = o.TargetPercent
+	}
+	if o.MoveStopToEntry {
+		m["moveStopToEntry"] = true
+	}
+	if o.EntryPrice > 0 {
+		m["entryPrice"] = o.EntryPrice
 	}
 	if o.Situation != nil {
 		m["situation"] = o.Situation

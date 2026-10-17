@@ -193,6 +193,27 @@ describe('OrderPreview', () => {
     expect(screen.getByTestId('preview-stop-shrinks')).toBeInTheDocument();
   });
 
+  it('says the stop moves to the buy price after the first target', () => {
+    renderWithTheme(
+      <OrderPreview
+        preview={{
+          ...blockedBuy,
+          type: 'oco',
+          side: 'sell',
+          quantity: 1,
+          risk: { ...blockedBuy.risk, blocked: false, weightLimitHit: false },
+          moveStopToEntry: true,
+          moveStopPrice: 100,
+          legs: [
+            { role: 'take_profit', side: 'sell', referencePrice: 110, fillPrice: 110, quantity: 1, percent: 100 },
+            { role: 'stop_loss', side: 'sell', referencePrice: 90, fillPrice: 90, quantity: 1, percent: 100 },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByTestId('preview-move-stop')).toHaveTextContent(/100/);
+  });
+
   it('says nothing was placed', () => {
     renderWithTheme(<OrderPreview preview={blockedBuy} />);
     expect(screen.getByText(/preview only|yalnızca önizleme/i)).toBeInTheDocument();

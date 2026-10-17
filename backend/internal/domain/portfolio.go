@@ -222,14 +222,19 @@ type PendingOrder struct {
 	// TargetPercent is this take-profit's share of the order (25 means 25%).
 	// Zero on a single legacy target means the whole size. The stop leaves it zero.
 	TargetPercent float64
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	FilledAt      *time.Time
-	CanceledAt    *time.Time
-	FillTradeID   string  // latest fill trade id
-	FillPrice     float64 // latest fill price
-	RejectReason  string
-	CancelReason  string
+	// MoveStopToEntry raises the stop to EntryPrice when the nearest take-profit fills.
+	MoveStopToEntry bool
+	// EntryPrice is that buy price. An OCO stores the average cost at placement.
+	// A bracket stores the average fill price of the entry as it fills.
+	EntryPrice   float64
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	FilledAt     *time.Time
+	CanceledAt   *time.Time
+	FillTradeID  string  // latest fill trade id
+	FillPrice    float64 // latest fill price
+	RejectReason string
+	CancelReason string
 	// LotMethod is fifo|lifo for sell fills (ignored on buys). Empty = fifo.
 	LotMethod LotMethod
 }

@@ -51,6 +51,10 @@ func OrderPreviewPayload(p *domain.OrderPreview) map[string]any {
 		"legs":                 legs,
 		"note":                 p.Note,
 	}
+	if p.MoveStopToEntry {
+		out["moveStopToEntry"] = true
+		out["moveStopPrice"] = p.MoveStopPrice
+	}
 	if p.Sizing != nil {
 		out["sizing"] = previewSizingPayload(*p.Sizing)
 	}

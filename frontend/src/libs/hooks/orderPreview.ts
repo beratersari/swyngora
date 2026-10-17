@@ -25,6 +25,8 @@ export type SpotOrderPreviewDraft = {
   /** Scale-out slices. Omitted when one absolute price covers the whole size. */
   takeProfitTargets?: TakeProfitTargetInput[];
   stopLossPrice?: number;
+  /** Raise the stop to the buy price after the nearest take-profit fills. */
+  moveStopToEntry?: boolean;
   trailType?: 'percent' | 'offset';
   trailValue?: number;
   lotMethod?: 'fifo' | 'lifo';
@@ -174,6 +176,7 @@ export function toPreviewArg(
     takeProfitPrice: positive(draft.takeProfitPrice) ? draft.takeProfitPrice : undefined,
     takeProfitTargets: draft.takeProfitTargets,
     stopLossPrice: positive(draft.stopLossPrice) ? draft.stopLossPrice : undefined,
+    moveStopToEntry: draft.moveStopToEntry || undefined,
     trailType: draft.trailType,
     trailValue: positive(draft.trailValue) ? draft.trailValue : undefined,
     lotMethod: draft.lotMethod,

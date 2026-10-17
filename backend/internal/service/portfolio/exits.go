@@ -29,17 +29,41 @@ func targetKey(targets []domain.ResolvedTakeProfit) string {
 }
 
 func ocoIdempotencyHash(ex domain.Exchange, sym string, in OCOOrderInput, resolved []domain.ResolvedTakeProfit) string {
-	if len(in.TakeProfitTargets) == 0 {
+	if len(in.TakeProfitTargets) == 0 && !in.MoveStopToEntry {
 		return hashParts("oco", string(ex), sym, in.Quantity, in.TakeProfitPrice, in.StopLossPrice, in.LotMethod)
+	}
+	if in.MoveStopToEntry {
+		return hashParts("oco-targets", string(ex), sym, in.Quantity, in.StopLossPrice, in.LotMethod, targetKey(resolved), "move-stop")
 	}
 	return hashParts("oco-targets", string(ex), sym, in.Quantity, in.StopLossPrice, in.LotMethod, targetKey(resolved))
 }
 
 func bracketIdempotencyHash(ex domain.Exchange, sym string, in BracketOrderInput, resolved []domain.ResolvedTakeProfit) string {
-	if len(in.TakeProfitTargets) == 0 {
+	if len(in.TakeProfitTargets) == 0 && !in.MoveStopToEntry {
 		return hashParts("bracket", string(ex), sym, in.Quantity, in.EntryPrice, in.TakeProfitPrice, in.StopLossPrice, in.LotMethod, in.Reason.HashPart())
 	}
+	if in.MoveStopToEntry {
+		return hashParts("bracket-targets", string(ex), sym, in.Quantity, in.EntryPrice, in.StopLossPrice, in.LotMethod, in.Reason.HashPart(), targetKey(resolved), "move-stop")
+	}
 	return hashParts("bracket-targets", string(ex), sym, in.Quantity, in.EntryPrice, in.StopLossPrice, in.LotMethod, in.Reason.HashPart(), targetKey(resolved))
+}
+
+func ocoBuyPrice(move bool, avg float64) float64 {
+	if !move {
+		return 0
+	}
+	return avg
+}
+
+func rejectMoveStop(move bool, buy, stop float64, resolved []domain.ResolvedTakeProfit) error {
+	if !move {
+		return nil
+	}
+	first := 0.0
+	if len(resolved) > 0 {
+		first = resolved[0].Price
+	}
+	return domain.ValidateMoveStopToEntry(buy, stop, first)
 }
 
 func exitPreviewLegs(

@@ -205,6 +205,11 @@ export function OrderPreview({ preview, loading, failed }: OrderPreviewProps) {
               {t('preview.legStopShrinks')}
             </Text>
           ) : null}
+          {preview.moveStopToEntry && preview.moveStopPrice != null && preview.moveStopPrice > 0 ? (
+            <Text variant="caption" color="secondary" data-testid="preview-move-stop">
+              {t('preview.moveStop', { price: formatPrice(preview.moveStopPrice) })}
+            </Text>
+          ) : null}
           {warnings.map((id) => (
             <Alert key={id} type={warningTone(id)} showIcon message={t(`preview.warnings.${id}`)} />
           ))}

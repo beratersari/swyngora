@@ -195,14 +195,14 @@ type DataPort interface {
 	PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct, maxExposurePct *float64) (json.RawMessage, error)
 	DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetPaperTradingCosts(ctx context.Context, exchange string) (json.RawMessage, error)
-	PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int, takeProfitTargets string) (json.RawMessage, error)
+	PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int, takeProfitTargets string, moveStopToEntry bool) (json.RawMessage, error)
 	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int) (json.RawMessage, error)
 	ListSpreadOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
 	CancelSpreadOrder(ctx context.Context, clientID, orderID string) (json.RawMessage, error)
 	PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt, trailType string, trailValue float64, lotMethod string) (json.RawMessage, error)
 	ListPortfolioLots(ctx context.Context, clientID, exchange, symbol, status string) (json.RawMessage, error)
-	PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange, symbol string, quantity, takeProfitPrice, stopLossPrice float64, expiresAt, takeProfitTargets string) (json.RawMessage, error)
-	PlacePortfolioBracketOrder(ctx context.Context, clientID, exchange, symbol string, quantity, entryPrice, takeProfitPrice, stopLossPrice float64, expiresAt, takeProfitTargets string) (json.RawMessage, error)
+	PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange, symbol string, quantity, takeProfitPrice, stopLossPrice float64, expiresAt, takeProfitTargets string, moveStopToEntry bool) (json.RawMessage, error)
+	PlacePortfolioBracketOrder(ctx context.Context, clientID, exchange, symbol string, quantity, entryPrice, takeProfitPrice, stopLossPrice float64, expiresAt, takeProfitTargets string, moveStopToEntry bool) (json.RawMessage, error)
 	ListPortfolioOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
 	GetPortfolioOrder(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	AmendPortfolioOrder(ctx context.Context, clientID, id string, triggerPrice, remainingQuantity *float64) (json.RawMessage, error)
@@ -3505,6 +3505,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithBoolean("spread", mcp.Description("With exchange=all and a spot market order, price timed slices. routeLegs are the first slice on the current book. Later slices read the books again. Nothing is written.")),
 		mcp.WithNumber("spreadMinutes", mcp.Description("Minutes from the first slice to the last. Default 10. From 1 to 1440. The last slice is due at the end.")),
 		mcp.WithNumber("sliceCount", mcp.Description("How many times the books are read. Default 10. From 2 to 60. Slices closer than 15 seconds are rejected.")),
+		mcp.WithBoolean("moveStopToEntry", mcp.Description("OCO or bracket. After the nearest take-profit fills, move the stop up to the buy price. An OCO uses the average cost. A bracket uses the average entry fill. The stop never moves down and stays below the next target. Default false.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -3530,7 +3531,8 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			qty, req.GetFloat("triggerPrice", 0), req.GetFloat("takeProfitPrice", 0), req.GetFloat("stopLossPrice", 0),
 			req.GetFloat("trailValue", 0), req.GetFloat("limitPrice", 0), int(req.GetFloat("leverage", 0)), riskPct,
 			req.GetString("compareExchange", ""), req.GetFloat("maxSlippagePct", 0), req.GetBool("spread", false),
-			int(req.GetFloat("spreadMinutes", 0)), int(req.GetFloat("sliceCount", 0)), req.GetString("takeProfitTargets", ""))
+			int(req.GetFloat("spreadMinutes", 0)), int(req.GetFloat("sliceCount", 0)), req.GetString("takeProfitTargets", ""),
+			req.GetBool("moveStopToEntry", false))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -3731,6 +3733,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
 		mcp.WithString("expiresAt", mcp.Description("RFC3339 expiry for GTC legs")),
 		mcp.WithString("idempotencyKey", mcp.Description("Optional retry key; same key + same request returns the original pair")),
+		mcp.WithBoolean("moveStopToEntry", mcp.Description("After the nearest take-profit fills, move the stop up to the average cost. It never moves down and stays below the next target. Default false.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		ctx = WithIdempotencyKey(ctx, req.GetString("idempotencyKey", ""))
 		clientID, err := req.RequireString("clientId")
@@ -3755,7 +3758,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.PlacePortfolioOCOOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, qty, tp, sl, req.GetString("expiresAt", ""), targets)
+		raw, err := api.PlacePortfolioOCOOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, qty, tp, sl, req.GetString("expiresAt", ""), targets, req.GetBool("moveStopToEntry", false))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -3776,6 +3779,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("expiresAt", mcp.Description("RFC3339 expiry")),
 		mcp.WithString("idempotencyKey", mcp.Description("Optional retry key; same key + same request returns the original bracket")),
 		mcp.WithString("reason", mcp.Description("Clauses the entry buy stores, comma-separated. Omit to store the whole read. Pass none to store no read.")),
+		mcp.WithBoolean("moveStopToEntry", mcp.Description("After the nearest take-profit fills, move the stop up to the average entry fill. It never moves down and stays below the next target. Default false.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		ctx = WithIdempotencyKey(ctx, req.GetString("idempotencyKey", ""))
 		var err error
@@ -3809,7 +3813,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.PlacePortfolioBracketOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, qty, entry, tp, sl, req.GetString("expiresAt", ""), targets)
+		raw, err := api.PlacePortfolioBracketOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, qty, entry, tp, sl, req.GetString("expiresAt", ""), targets, req.GetBool("moveStopToEntry", false))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

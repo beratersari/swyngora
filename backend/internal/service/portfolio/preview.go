@@ -27,12 +27,14 @@ type OrderPreviewInput struct {
 	TakeProfitPrice   float64
 	TakeProfitTargets []domain.TakeProfitTarget
 	StopLossPrice     float64
-	TrailType         string
-	TrailValue        float64
-	LotMethod         string
-	Leverage          int
-	LimitPrice        float64
-	RiskPercent       float64 // when > 0, quantity is sized from equity and the stop
+	// MoveStopToEntry asks the preview to price a stop that rises to the buy price.
+	MoveStopToEntry bool
+	TrailType       string
+	TrailValue      float64
+	LotMethod       string
+	Leverage        int
+	LimitPrice      float64
+	RiskPercent     float64 // when > 0, quantity is sized from equity and the stop
 	// Reason names the clauses a spot buy would store. Unset leaves the stored set unset on the preview.
 	Reason domain.SituationReason
 	// CompareExchange prices the whole quantity on one venue when Exchange is all.
@@ -436,6 +438,13 @@ func (s *Service) previewSpot(
 		out.ReferencePrice = last
 		out.InsufficientQuantity = in.Quantity > availQty+domain.PositionEpsilon
 		out.Legs = exitPreviewLegs(resolved, in.StopLossPrice, in.Quantity, cost, lots, bookID, ex, sym, posQty, avg, lotMethod, out.InsufficientQuantity)
+		if err := rejectMoveStop(in.MoveStopToEntry, avg, in.StopLossPrice, resolved); err != nil {
+			return nil, err
+		}
+		if in.MoveStopToEntry {
+			out.MoveStopToEntry = true
+			out.MoveStopPrice = avg
+		}
 		out.Risk = snap.sellView(0)
 	case "bracket":
 		if in.TriggerPrice <= 0 || math.IsNaN(in.TriggerPrice) || math.IsInf(in.TriggerPrice, 0) {
@@ -457,6 +466,13 @@ func (s *Service) previewSpot(
 		hypQty := posQty + in.Quantity
 		hypAvg := domain.AvgCostFromLots(hyp)
 		out.Legs = exitPreviewLegs(resolved, in.StopLossPrice, in.Quantity, cost, hyp, bookID, ex, sym, hypQty, hypAvg, lotMethod, false)
+		if err := rejectMoveStop(in.MoveStopToEntry, in.TriggerPrice, in.StopLossPrice, resolved); err != nil {
+			return nil, err
+		}
+		if in.MoveStopToEntry {
+			out.MoveStopToEntry = true
+			out.MoveStopPrice = in.TriggerPrice
+		}
 	default:
 		return nil, fmt.Errorf("%w: type must be market, limit_buy, limit_sell, stop_loss, trailing_stop, oco, or bracket", domain.ErrInvalidArgument)
 	}

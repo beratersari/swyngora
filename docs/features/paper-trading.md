@@ -229,6 +229,7 @@ Place take-profit and stop-loss **with** a limit-buy entry. Exit legs start as `
 | Partial entry fill | Each target opens for its percent of the **filled** size. The stop opens for that whole fill |
 | Later entry fill | Targets grow by their percent of the new coins. A target that already filled its earlier share reopens for the rest |
 | Target fill | The stop quantity becomes the coins still held. Other targets stay |
+| Move stop to the buy price | Optional `moveStopToEntry`. After the nearest target fills completely, the stop rises to the average entry fill. It never moves down and stays below the next open target |
 | Stop fill | A full stop cancels the remaining targets. A partial stop shrinks them so they cannot sell more than what is left |
 | Cancel entry | Cancels pending/open exits (`bracket_entry_canceled`) |
 | Prices | Each target is above the entry, and the entry is above `stopLossPrice` |
@@ -268,6 +269,7 @@ One or more **take-profit** limit sells and one **stop-loss** for the same coins
 |------|----------|
 | Place | Every target and the stop are open with one `ocoGroupId`. The position is reserved **once** (the stop size, not the sum of the legs) |
 | Target fill | That slice sells. The stop quantity becomes the coins still held. The other targets stay |
+| Move stop to the buy price | Optional `moveStopToEntry`. After the nearest target fills completely, the stop trigger rises to the buy price. An OCO uses the average cost at placement. A bracket uses the average entry fill. The preview shows the entry limit for a bracket. The stop never moves down, and it stays below the next open target. A later entry fill can change the stored average without moving the stop again. A partial fill of the nearest target does not move it. A later target does not move it when a nearer target was canceled. If that nearest target is the whole size, the stop is canceled with the fill and the option does nothing. The buy price must sit strictly between the stop and the first target, or place and preview are rejected |
 | Full stop fill | Stop → `filled`. Every open target → `canceled` with `cancelReason=oco_peer_filled` |
 | Partial stop fill | The open targets shrink in proportion. The furthest target absorbs the rounding, so they cannot sell more than what is left |
 | Same tick | If the stop and a target are both touched, **only the stop fills**. Several targets the price has already reached fill together, nearest first |

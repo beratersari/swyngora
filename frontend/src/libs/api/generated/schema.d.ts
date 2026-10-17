@@ -4021,13 +4021,17 @@ export interface paths {
          *     {percent, price} or {percent, offsetPercent}; the percents sum to 100. offsetPercent
          *     is a gain above the average cost (5 means +5%). The position is reserved once.
          *     When a target fills, the stop quantity becomes the coins still held. A full stop fill
-         *     cancels the remaining targets. If the stop and a target are both touched on the same
+         *     cancels the remaining targets. moveStopToEntry moves that stop up to the average cost
+         *     once the nearest target has filled completely. It never moves down, and it stays below
+         *     the next open target. If the stop and a target are both touched on the same
          *     price, only the stop fills. Several targets the price has already reached can fill together.
          *     type=trailing_stop: sell stop that trails a high-water mark by percent or fixed offset; stop only moves up;
          *     triggers once when last <= stop (including price gaps through the level).
          *     type=bracket: limit_buy entry (triggerPrice) plus the same take-profit targets and stopLossPrice.
          *     Exits stay pending until the entry fills. Each target is its percent of the filled size.
          *     The stop covers the coins those targets have not sold.
+         *     moveStopToEntry moves that stop up to the average entry fill once the nearest target
+         *     has filled completely. The preview shows the entry limit as that planned buy price.
          *     lotMethod=fifo (default) or lifo selects which buy lots a sell consumes; remaining qty stays on the lot.
          *     See GET /api/v1/portfolio/trading-costs for per-exchange rates.
          *     Optional Idempotency-Key header or idempotencyKey body: a retry with the same key and same request
@@ -10419,6 +10423,12 @@ export interface components {
             takeProfitTargets?: components["schemas"]["TakeProfitTarget"][];
             /** @description Required when riskPercent is set. Also the OCO, bracket, or margin stop. */
             stopLossPrice?: number;
+            /**
+             * @description OCO or bracket. After the nearest take-profit fills, the stop moves up to the buy price.
+             *     The preview moveStopPrice is the average cost for an OCO, or the entry limit for a bracket.
+             *     The live bracket stop uses the average entry fill, which can differ from that limit.
+             */
+            moveStopToEntry?: boolean;
             /** @enum {string} */
             trailType?: "percent" | "offset";
             trailValue?: number;
@@ -10577,6 +10587,13 @@ export interface components {
             sizing?: components["schemas"]["OrderPreviewSizing"];
             /** @description Take-profit and stop-loss outcomes for an OCO or a bracket. */
             legs?: components["schemas"]["OrderPreviewLeg"][];
+            /** @description True when the stop rises to the buy price after the nearest take-profit fills. */
+            moveStopToEntry?: boolean;
+            /**
+             * @description That buy price. An OCO shows the average cost. A bracket shows the entry limit.
+             *     The live bracket stop uses the average entry fill.
+             */
+            moveStopPrice?: number;
             /** @description Live coin read for a spot buy, limit buy, or bracket. The whole read, so the ticket can mark a reason. */
             situation?: components["schemas"]["CoinSituation"];
             /**
@@ -10889,6 +10906,13 @@ export interface components {
             bracketRole?: "entry" | "take_profit" | "stop_loss";
             /** @description This take-profit's share of the order. 25 means 25%. Omitted on the stop and on a legacy single target. */
             targetPercent?: number;
+            /** @description True when this OCO or bracket raises the stop to entryPrice after the nearest take-profit fills. */
+            moveStopToEntry?: boolean;
+            /**
+             * @description Buy price for that move. An OCO stores the average cost at placement.
+             *     A bracket stores the average entry fill once the entry has filled. Omitted until then.
+             */
+            entryPrice?: number;
             /**
              * @description Trailing distance mode
              * @enum {string}
@@ -17148,6 +17172,14 @@ export interface operations {
                     takeProfitTargets?: components["schemas"]["TakeProfitTarget"][];
                     /** @description OCO stop-loss trigger (required for type=oco; must be below takeProfitPrice) */
                     stopLossPrice?: number;
+                    /**
+                     * @description For type=oco or type=bracket. After the nearest take-profit fills completely,
+                     *     move the stop up to the buy price. An OCO uses the average cost at placement.
+                     *     A bracket uses the average price of the entry fills. The stop never moves down
+                     *     and stays below the next open target. Omit or false leaves the stop where it was placed.
+                     *     The buy price must sit strictly between the stop and the first target.
+                     */
+                    moveStopToEntry?: boolean;
                     /**
                      * @description gtc - rest until filled/canceled/expired;
                      *     ioc - fill available on first try, cancel remainder;

@@ -87,8 +87,12 @@ type OrderPreview struct {
 	BorrowedAsset       string
 	Risk                OrderPreviewRisk
 	Legs                []OrderPreviewLeg
-	Sizing              *OrderPreviewSizing
-	Note                string
+	// MoveStopToEntry is set when the stop should rise to the buy price after the first target fills.
+	MoveStopToEntry bool
+	// MoveStopPrice is that buy price. A bracket shows the entry limit. The live stop uses the fill.
+	MoveStopPrice float64
+	Sizing        *OrderPreviewSizing
+	Note          string
 	// Situation is the live coin read for a spot buy, limit buy, or bracket.
 	// SituationStatus is ready, blank, failed, or skipped.
 	Situation       *CoinSituation

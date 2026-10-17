@@ -61,6 +61,7 @@ export function PaperTradeForm({
     { percent: 100, offsetPercent: null, price: null },
   ]);
   const [stopLossPrice, setStopLossPrice] = useState<number | null>(null);
+  const [moveStopToEntry, setMoveStopToEntry] = useState(false);
   const [riskPercent, setRiskPercent] = useState<number | null>(null);
   const [trailType, setTrailType] = useState<'percent' | 'offset'>('percent');
   const [trailValue, setTrailValue] = useState<number | null>(null);
@@ -168,6 +169,7 @@ export function PaperTradeForm({
       takeProfitPrice: showTpSl ? profit.takeProfitPrice : undefined,
       takeProfitTargets: showTpSl ? profit.takeProfitTargets : undefined,
       stopLossPrice: (showTpSl || riskActive) && stopLossPrice != null ? stopLossPrice : undefined,
+      moveStopToEntry: showTpSl && moveStopToEntry ? true : undefined,
       riskPercent: riskActive ? (riskPercent ?? undefined) : undefined,
       trailType: showTrail ? trailType : undefined,
       trailValue: showTrail && trailValue != null ? trailValue : undefined,
@@ -190,6 +192,7 @@ export function PaperTradeForm({
     triggerPrice,
     profit,
     stopLossPrice,
+    moveStopToEntry,
     trailType,
     trailValue,
     lotMethod,
@@ -233,6 +236,7 @@ export function PaperTradeForm({
       takeProfitPrice: showTpSl ? profit.takeProfitPrice : undefined,
       takeProfitTargets: showTpSl ? profit.takeProfitTargets : undefined,
       stopLossPrice: showTpSl ? (stopLossPrice ?? undefined) : undefined,
+      moveStopToEntry: showTpSl && moveStopToEntry ? true : undefined,
       trailType: showTrail ? trailType : undefined,
       trailValue: showTrail ? (trailValue ?? undefined) : undefined,
       lotMethod:
@@ -254,6 +258,7 @@ export function PaperTradeForm({
       if (showTpSl) {
         setTargets([{ percent: 100, offsetPercent: null, price: null }]);
         setStopLossPrice(null);
+        setMoveStopToEntry(false);
       }
       if (showTrail) setTrailValue(null);
     } catch {
@@ -501,6 +506,14 @@ export function PaperTradeForm({
                 aria-label={t('portfolio:trade.stopLoss')}
               />
             </Field>
+            <Checkbox
+              checked={moveStopToEntry}
+              disabled={disabled || busy}
+              data-testid="move-stop-to-entry"
+              onChange={(event) => setMoveStopToEntry(event.target.checked)}
+            >
+              {t('portfolio:trade.moveStopToEntry')}
+            </Checkbox>
           </>
         ) : null}
 

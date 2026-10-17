@@ -258,6 +258,253 @@ func TestPreview_OCOTargets(t *testing.T) {
 	}
 }
 
+func TestPortfolio_MoveStopToEntryAfterNearestTarget(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "oco-move", StartingBalance: 100000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "oco-move", Symbol: "BTCUSDT", Side: "buy", Quantity: 1}); err != nil {
+		t.Fatal(err)
+	}
+	targets := []domain.TakeProfitTarget{
+		{Percent: 25, Price: 105},
+		{Percent: 25, Price: 110},
+		{Percent: 50, Price: 115},
+	}
+	tps, sl, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
+		ClientID: "oco-move", Symbol: "BTCUSDT", Quantity: 1, StopLossPrice: 90,
+		TakeProfitTargets: targets, MoveStopToEntry: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sl.MoveStopToEntry || math.Abs(sl.EntryPrice-100) > 1e-9 {
+		t.Fatalf("stop should remember the average cost: %+v", sl)
+	}
+	now := time.Now().UTC()
+	if _, ok, err := svc.ProcessOCOGroup(ctx, ordersOf(tps, sl), 106, now, 0); err != nil || !ok {
+		t.Fatalf("nearest fill ok=%v err=%v", ok, err)
+	}
+	stop, err := svc.store.GetPendingOrder(ctx, "oco-move", sl.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(stop.TriggerPrice-100) > 1e-9 || math.Abs(stop.RemainingQuantity-0.75) > 1e-6 {
+		t.Fatalf("stop should rise to the buy price and cover 0.75: %+v", stop)
+	}
+	second, _ := svc.store.GetPendingOrder(ctx, "oco-move", tps[1].ID)
+	if second.Status != domain.PendingStatusOpen {
+		t.Fatalf("the next target stays open: %+v", second)
+	}
+
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "oco-still", StartingBalance: 100000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "oco-still", Symbol: "BTCUSDT", Side: "buy", Quantity: 1}); err != nil {
+		t.Fatal(err)
+	}
+	off, offSL, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
+		ClientID: "oco-still", Symbol: "BTCUSDT", Quantity: 1, StopLossPrice: 90,
+		TakeProfitTargets: targets,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := svc.ProcessOCOGroup(ctx, ordersOf(off, offSL), 106, now, 0); err != nil || !ok {
+		t.Fatalf("plain fill ok=%v err=%v", ok, err)
+	}
+	plain, _ := svc.store.GetPendingOrder(ctx, "oco-still", offSL.ID)
+	if math.Abs(plain.TriggerPrice-90) > 1e-9 || math.Abs(plain.RemainingQuantity-0.75) > 1e-6 {
+		t.Fatalf("without the option the stop stays: %+v", plain)
+	}
+}
+
+func TestPortfolio_PartialTargetDoesNotMoveStop(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "oco-part-move", StartingBalance: 100000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "oco-part-move", Symbol: "BTCUSDT", Side: "buy", Quantity: 1}); err != nil {
+		t.Fatal(err)
+	}
+	tps, sl, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
+		ClientID: "oco-part-move", Symbol: "BTCUSDT", Quantity: 1, StopLossPrice: 90, MoveStopToEntry: true,
+		TakeProfitTargets: []domain.TakeProfitTarget{
+			{Percent: 25, Price: 105},
+			{Percent: 75, Price: 115},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := svc.TryFillPendingOrder(ctx, *tps[0], 106, 0.1); err != nil || !ok {
+		t.Fatalf("partial ok=%v err=%v", ok, err)
+	}
+	stop, _ := svc.store.GetPendingOrder(ctx, "oco-part-move", sl.ID)
+	if math.Abs(stop.TriggerPrice-90) > 1e-9 || math.Abs(stop.RemainingQuantity-0.9) > 1e-6 {
+		t.Fatalf("a partial nearest target leaves the stop: %+v", stop)
+	}
+	first, _ := svc.store.GetPendingOrder(ctx, "oco-part-move", tps[0].ID)
+	if _, ok, err := svc.TryFillPendingOrder(ctx, *first, 106, 0); err != nil || !ok {
+		t.Fatalf("rest of target ok=%v err=%v", ok, err)
+	}
+	stop, _ = svc.store.GetPendingOrder(ctx, "oco-part-move", sl.ID)
+	if math.Abs(stop.TriggerPrice-100) > 1e-9 || math.Abs(stop.RemainingQuantity-0.75) > 1e-6 {
+		t.Fatalf("the stop moves once the nearest target is complete: %+v", stop)
+	}
+}
+
+func TestPortfolio_CanceledNearestTargetDoesNotMoveStop(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "oco-skip", StartingBalance: 100000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "oco-skip", Symbol: "BTCUSDT", Side: "buy", Quantity: 1}); err != nil {
+		t.Fatal(err)
+	}
+	tps, sl, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
+		ClientID: "oco-skip", Symbol: "BTCUSDT", Quantity: 1, StopLossPrice: 90, MoveStopToEntry: true,
+		TakeProfitTargets: []domain.TakeProfitTarget{
+			{Percent: 25, Price: 105},
+			{Percent: 25, Price: 110},
+			{Percent: 50, Price: 115},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.CancelPendingOrder(ctx, "oco-skip", tps[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	if _, ok, err := svc.ProcessOCOGroup(ctx, ordersOf(tps[1:], sl), 120, now, 0); err != nil || !ok {
+		t.Fatalf("later targets ok=%v err=%v", ok, err)
+	}
+	stop, _ := svc.store.GetPendingOrder(ctx, "oco-skip", sl.ID)
+	if stop.Status != domain.PendingStatusOpen || math.Abs(stop.TriggerPrice-90) > 1e-9 || math.Abs(stop.RemainingQuantity-0.25) > 1e-6 {
+		t.Fatalf("a later target does not move the stop: %+v", stop)
+	}
+}
+
+func TestPortfolio_MoveStopRejectsBuyPriceOutOfRange(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "oco-bad", StartingBalance: 100000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "oco-bad", Symbol: "BTCUSDT", Side: "buy", Quantity: 1}); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
+		ClientID: "oco-bad", Symbol: "BTCUSDT", Quantity: 1, StopLossPrice: 90, MoveStopToEntry: true,
+		TakeProfitTargets: []domain.TakeProfitTarget{{Percent: 100, Price: 99}},
+	})
+	if err == nil {
+		t.Fatal("expected the buy price above the first target to be rejected")
+	}
+	_, _, err = svc.PlaceOCOOrder(ctx, OCOOrderInput{
+		ClientID: "oco-bad", Symbol: "BTCUSDT", Quantity: 1, StopLossPrice: 110, MoveStopToEntry: true,
+		TakeProfitTargets: []domain.TakeProfitTarget{{Percent: 100, Price: 120}},
+	})
+	if err == nil {
+		t.Fatal("expected a buy price at or below the stop to be rejected")
+	}
+}
+
+func TestPreview_MoveStopToEntry(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "prev-move", StartingBalance: 100000}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "prev-move", Symbol: "BTCUSDT", Side: "buy", Quantity: 1}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.PreviewOrder(ctx, OrderPreviewInput{
+		ClientID: "prev-move", Symbol: "BTCUSDT", Type: "oco", Quantity: 1, StopLossPrice: 90,
+		MoveStopToEntry: true,
+		TakeProfitTargets: []domain.TakeProfitTarget{
+			{Percent: 25, OffsetPercent: 5},
+			{Percent: 75, OffsetPercent: 15},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.MoveStopToEntry || math.Abs(got.MoveStopPrice-100) > 1e-6 {
+		t.Fatalf("preview buy price: %+v", got.MoveStopPrice)
+	}
+	bracket, err := svc.PreviewOrder(ctx, OrderPreviewInput{
+		ClientID: "prev-move", Symbol: "BTCUSDT", Type: "bracket", Quantity: 1,
+		TriggerPrice: 100, StopLossPrice: 90, TakeProfitPrice: 120, MoveStopToEntry: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bracket.MoveStopToEntry || math.Abs(bracket.MoveStopPrice-100) > 1e-9 {
+		t.Fatalf("bracket preview uses the entry limit: %+v", bracket.MoveStopPrice)
+	}
+}
+
+func TestPortfolio_BracketMovesStopToAverageFill(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}}
+	svc := newSvc(t, px)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "br-move", StartingBalance: 100000}); err != nil {
+		t.Fatal(err)
+	}
+	entry, tps, sl, err := svc.PlaceBracketOrder(ctx, BracketOrderInput{
+		ClientID: "br-move", Symbol: "BTCUSDT", Quantity: 1, EntryPrice: 100, StopLossPrice: 80,
+		MoveStopToEntry: true,
+		TakeProfitTargets: []domain.TakeProfitTarget{
+			{Percent: 25, OffsetPercent: 5},
+			{Percent: 25, OffsetPercent: 10},
+			{Percent: 50, OffsetPercent: 15},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := svc.TryFillPendingOrder(ctx, *entry, 90, 0.4); err != nil || !ok {
+		t.Fatalf("entry fill err=%v", err)
+	}
+	filledEntry, _ := svc.store.GetPendingOrder(ctx, "br-move", entry.ID)
+	stop, _ := svc.store.GetPendingOrder(ctx, "br-move", sl.ID)
+	if math.Abs(filledEntry.EntryPrice-90) > 1e-9 || math.Abs(stop.EntryPrice-90) > 1e-9 {
+		t.Fatalf("average fill should be stored: entry=%v stop=%v", filledEntry.EntryPrice, stop.EntryPrice)
+	}
+	if math.Abs(stop.TriggerPrice-80) > 1e-9 {
+		t.Fatalf("the stop waits for the first target: %+v", stop)
+	}
+	first, _ := svc.store.GetPendingOrder(ctx, "br-move", tps[0].ID)
+	if _, ok, err := svc.TryFillPendingOrder(ctx, *first, 105, 0); err != nil || !ok {
+		t.Fatalf("target fill err=%v", err)
+	}
+	stop, _ = svc.store.GetPendingOrder(ctx, "br-move", sl.ID)
+	if math.Abs(stop.TriggerPrice-90) > 1e-9 || math.Abs(stop.RemainingQuantity-0.3) > 1e-6 {
+		t.Fatalf("stop rises to the fill and shrinks: %+v", stop)
+	}
+	rest, _ := svc.store.GetPendingOrder(ctx, "br-move", entry.ID)
+	if _, ok, err := svc.TryFillPendingOrder(ctx, *rest, 100, 0); err != nil || !ok {
+		t.Fatalf("rest of entry err=%v", err)
+	}
+	stop, _ = svc.store.GetPendingOrder(ctx, "br-move", sl.ID)
+	if math.Abs(stop.EntryPrice-96) > 1e-6 {
+		t.Fatalf("later fills update the stored average: %+v", stop)
+	}
+	if math.Abs(stop.TriggerPrice-90) > 1e-9 {
+		t.Fatalf("the stop does not move a second time: %+v", stop)
+	}
+}
+
 func ordersOf(tps []*domain.PendingOrder, sl *domain.PendingOrder) []domain.PendingOrder {
 	out := make([]domain.PendingOrder, 0, len(tps)+1)
 	for _, tp := range tps {

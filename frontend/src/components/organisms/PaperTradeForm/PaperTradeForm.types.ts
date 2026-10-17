@@ -13,6 +13,8 @@ export type PaperTradeFormValues = {
   takeProfitPrice?: number;
   takeProfitTargets?: TakeProfitTargetInput[];
   stopLossPrice?: number;
+  /** Raise the stop to the buy price after the nearest take-profit fills. */
+  moveStopToEntry?: boolean;
   trailType?: 'percent' | 'offset';
   trailValue?: number;
   lotMethod?: 'fifo' | 'lifo';

@@ -1959,6 +1959,14 @@ class OrderPreviewInput(BaseModel):
         default=0,
         description="How many slices. 0 means 10. From 2 to 60. Closer than 15 seconds is rejected.",
     )
+    move_stop_to_entry: bool = Field(
+        default=False,
+        description=(
+            "OCO or bracket. After the nearest take-profit fills, move the stop up to the buy price. "
+            "An OCO uses the average cost. A bracket preview uses the entry limit; the live stop uses "
+            "the average entry fill. The stop never moves down and stays below the next target."
+        ),
+    )
 
 
 class PortfolioOrderInput(BaseModel):
@@ -2084,6 +2092,13 @@ class PortfolioOCOInput(BaseModel):
     expires_at: str = ""
     idempotency_key: str = ""
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+    move_stop_to_entry: bool = Field(
+        default=False,
+        description=(
+            "After the nearest take-profit fills, move the stop up to the average cost. "
+            "It never moves down and stays below the next target."
+        ),
+    )
 
 
 class PortfolioBracketInput(BaseModel):
@@ -2110,6 +2125,13 @@ class PortfolioBracketInput(BaseModel):
     reason: list[str] | None = Field(
         default=None,
         description="Clauses the entry buy stores. Omit to store the whole read. An empty list stores no read.",
+    )
+    move_stop_to_entry: bool = Field(
+        default=False,
+        description=(
+            "After the nearest take-profit fills, move the stop up to the average entry fill. "
+            "It never moves down and stays below the next target."
+        ),
     )
 
 
@@ -4344,6 +4366,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         spread: bool = False,
         spread_minutes: int = 0,
         slice_count: int = 0,
+        move_stop_to_entry: bool = False,
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -4390,6 +4413,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["portfolioId"] = portfolio_id
         if reason is not None:
             body["reason"] = reason
+        if move_stop_to_entry:
+            body["moveStopToEntry"] = True
         # A preview does not place, reserve, or open. Read-only sessions may call it.
         return http.post("/api/v1/portfolio/orders/preview", body, mutating=False)
 
@@ -4533,6 +4558,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         idempotency_key: str = "",
         portfolio_id: str = "",
         take_profit_targets: list[TakeProfitTargetInput] | None = None,
+        move_stop_to_entry: bool = False,
     ) -> str:
         if take_profit_price <= 0 and not take_profit_targets:
             raise ValueError("take_profit_price or take_profit_targets is required")
@@ -4556,6 +4582,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["idempotencyKey"] = idempotency_key
         if portfolio_id:
             body["portfolioId"] = portfolio_id
+        if move_stop_to_entry:
+            body["moveStopToEntry"] = True
         return http.post("/api/v1/portfolio/orders", body)
 
     def place_portfolio_bracket_order(
@@ -4571,6 +4599,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         portfolio_id: str = "",
         reason: list[str] | None = None,
         take_profit_targets: list[TakeProfitTargetInput] | None = None,
+        move_stop_to_entry: bool = False,
     ) -> str:
         if take_profit_price <= 0 and not take_profit_targets:
             raise ValueError("take_profit_price or take_profit_targets is required")
@@ -4597,6 +4626,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["portfolioId"] = portfolio_id
         if reason is not None:
             body["reason"] = reason
+        if move_stop_to_entry:
+            body["moveStopToEntry"] = True
         return http.post("/api/v1/portfolio/orders", body)
 
     def amend_portfolio_order(
@@ -7306,7 +7337,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "Paper OCO: take-profit targets plus one stop for the same coins. "
                 "take_profit_targets shares sum to 100. offset_percent is above the average cost. "
-                "When a target fills, the stop quantity becomes the coins still held."
+                "When a target fills, the stop quantity becomes the coins still held. "
+                "move_stop_to_entry moves that stop up to the average cost after the nearest target fills."
             ),
             args_schema=PortfolioOCOInput,
         ),
@@ -7316,7 +7348,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             description=(
                 "Paper bracket: limit-buy entry with take-profit targets and one stop. "
                 "Each target is its share of the filled entry. offset_percent is above the entry. "
-                "When a target fills, the stop covers the coins still held."
+                "When a target fills, the stop covers the coins still held. "
+                "move_stop_to_entry moves that stop up to the average entry fill after the nearest target fills."
             ),
             args_schema=PortfolioBracketInput,
         ),

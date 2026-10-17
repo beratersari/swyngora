@@ -86,6 +86,27 @@ func TestSplitTargetQuantitiesRemainder(t *testing.T) {
 	}
 }
 
+func TestRaiseStopToBuyPrice(t *testing.T) {
+	if got := RaiseStopToBuyPrice(true, 100, 90, 110); got != 100 {
+		t.Fatalf("got %v", got)
+	}
+	if RaiseStopToBuyPrice(false, 100, 90, 110) != 0 {
+		t.Fatal("option off")
+	}
+	if RaiseStopToBuyPrice(true, 80, 90, 110) != 0 {
+		t.Fatal("do not lower the stop")
+	}
+	if RaiseStopToBuyPrice(true, 110, 90, 110) != 0 {
+		t.Fatal("do not sit on the next target")
+	}
+	if err := ValidateMoveStopToEntry(100, 90, 105); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateMoveStopToEntry(0, 90, 105); err == nil {
+		t.Fatal("expected a buy price")
+	}
+}
+
 func TestScaleRemainings(t *testing.T) {
 	got := ScaleRemainings([]float64{0.25, 0.5}, 0.45)
 	if math.Abs(got[0]+got[1]-0.45) > 1e-9 {

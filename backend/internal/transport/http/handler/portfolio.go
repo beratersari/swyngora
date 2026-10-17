@@ -358,11 +358,12 @@ type orderBody struct {
 	TakeProfitPrice   float64                   `json:"takeProfitPrice"` // oco / bracket, one target for the whole size
 	TakeProfitTargets []domain.TakeProfitTarget `json:"takeProfitTargets,omitempty"`
 	StopLossPrice     float64                   `json:"stopLossPrice"` // oco / bracket
-	TrailType         string                    `json:"trailType"`     // trailing_stop: percent | offset
-	TrailValue        float64                   `json:"trailValue"`    // trailing_stop distance
-	TimeInForce       string                    `json:"timeInForce"`   // gtc | ioc | fok
-	ExpiresAt         string                    `json:"expiresAt"`     // RFC3339; GTC only
-	LotMethod         string                    `json:"lotMethod"`     // fifo | lifo (sells)
+	MoveStopToEntry   bool                      `json:"moveStopToEntry,omitempty"`
+	TrailType         string                    `json:"trailType"`   // trailing_stop: percent | offset
+	TrailValue        float64                   `json:"trailValue"`  // trailing_stop distance
+	TimeInForce       string                    `json:"timeInForce"` // gtc | ioc | fok
+	ExpiresAt         string                    `json:"expiresAt"`   // RFC3339; GTC only
+	LotMethod         string                    `json:"lotMethod"`   // fifo | lifo (sells)
 	IdempotencyKey    string                    `json:"idempotencyKey"`
 	Product           string                    `json:"product"`     // spot (default) or margin — preview only
 	Leverage          int                       `json:"leverage"`    // margin preview, 1–10
@@ -404,6 +405,8 @@ type pendingOrderDTO struct {
 	BracketID         string                `json:"bracketId,omitempty"`
 	BracketRole       string                `json:"bracketRole,omitempty"`
 	TargetPercent     float64               `json:"targetPercent,omitempty"`
+	MoveStopToEntry   bool                  `json:"moveStopToEntry,omitempty"`
+	EntryPrice        float64               `json:"entryPrice,omitempty"`
 	TrailType         string                `json:"trailType,omitempty"`
 	TrailValue        float64               `json:"trailValue,omitempty"`
 	TrailPeak         float64               `json:"trailPeak,omitempty"`
@@ -446,6 +449,7 @@ func pendingOrderToDTO(o *domain.PendingOrder) pendingOrderDTO {
 		Status:      string(o.Status),
 		OCOGroupID:  o.OCOGroupID, OCOPeerID: o.OCOPeerID,
 		BracketID: o.BracketID, BracketRole: o.BracketRole, TargetPercent: o.TargetPercent,
+		MoveStopToEntry: o.MoveStopToEntry, EntryPrice: o.EntryPrice,
 		TrailType: o.TrailType, TrailValue: o.TrailValue, TrailPeak: o.TrailPeak,
 		CreatedAt:   o.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt:   o.UpdatedAt.UTC().Format(time.RFC3339Nano),
@@ -613,8 +617,8 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 		tps, sl, err := h.svc.PlaceOCOOrder(r.Context(), portfolio.OCOOrderInput{
 			ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
 			Quantity: body.Quantity, TakeProfitPrice: body.TakeProfitPrice, TakeProfitTargets: body.TakeProfitTargets,
-			StopLossPrice: body.StopLossPrice,
-			ExpiresAt:     exp, LotMethod: body.LotMethod,
+			StopLossPrice: body.StopLossPrice, MoveStopToEntry: body.MoveStopToEntry,
+			ExpiresAt: exp, LotMethod: body.LotMethod,
 			IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
 		})
 		if err != nil {
@@ -647,8 +651,8 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
 			Quantity: body.Quantity, EntryPrice: body.TriggerPrice,
 			TakeProfitPrice: body.TakeProfitPrice, TakeProfitTargets: body.TakeProfitTargets,
-			StopLossPrice: body.StopLossPrice,
-			ExpiresAt:     exp, LotMethod: body.LotMethod,
+			StopLossPrice: body.StopLossPrice, MoveStopToEntry: body.MoveStopToEntry,
+			ExpiresAt: exp, LotMethod: body.LotMethod,
 			IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
 			Reason:         reason,
 		})

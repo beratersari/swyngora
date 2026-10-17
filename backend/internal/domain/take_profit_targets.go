@@ -174,6 +174,37 @@ func SplitTargetQuantities(total float64, percents []float64) ([]float64, error)
 	return out, nil
 }
 
+// ValidateMoveStopToEntry checks that the buy price sits strictly between the stop and the first target.
+// The stop can then move up to that buy price without crossing a target or moving down.
+func ValidateMoveStopToEntry(buy, stop, firstTarget float64) error {
+	if buy <= 0 || math.IsNaN(buy) || math.IsInf(buy, 0) {
+		return fmt.Errorf("%w: a buy price is required to move the stop", ErrInvalidArgument)
+	}
+	if stop <= 0 || buy <= stop {
+		return fmt.Errorf("%w: the buy price must be above the stop", ErrInvalidArgument)
+	}
+	if firstTarget > 0 && buy >= firstTarget {
+		return fmt.Errorf("%w: the buy price must be below the first take-profit", ErrInvalidArgument)
+	}
+	return nil
+}
+
+// RaiseStopToBuyPrice is the stop trigger after the nearest target has filled.
+// Zero means the stop stays put: the option is off, the buy price is missing,
+// it is not above the current stop, or it is not below the next open target.
+func RaiseStopToBuyPrice(move bool, buy, stop, nextTarget float64) float64 {
+	if !move || buy <= 0 || math.IsNaN(buy) || math.IsInf(buy, 0) {
+		return 0
+	}
+	if buy <= stop+1e-9 {
+		return 0
+	}
+	if nextTarget > 0 && buy >= nextTarget-1e-9 {
+		return 0
+	}
+	return buy
+}
+
 // ScaleRemainings shrinks open slices so they add up to target.
 // The last slice absorbs rounding. A target already at or below the sum is left as-is.
 func ScaleRemainings(remainings []float64, target float64) []float64 {
