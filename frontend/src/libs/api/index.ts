@@ -343,6 +343,8 @@ export {
   useRevokePortfolioShareMutation,
   usePlacePortfolioOrderMutation,
   usePreviewPortfolioOrderQuery,
+  useListSpreadOrdersQuery,
+  useCancelSpreadOrderMutation,
   useListPortfolioOrdersQuery,
   useAmendPortfolioOrderMutation,
   useCancelPortfolioOrderMutation,

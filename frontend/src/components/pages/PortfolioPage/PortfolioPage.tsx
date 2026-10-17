@@ -20,6 +20,7 @@ import { PortfolioEquityChart } from '@/components/organisms/PortfolioEquityChar
 import { PortfolioRiskLimits } from '@/components/organisms/PortfolioRiskLimits';
 import { PortfolioMarginPositionsTable } from '@/components/organisms/PortfolioMarginPositionsTable';
 import { PortfolioOrdersTable } from '@/components/organisms/PortfolioOrdersTable';
+import { SpreadOrderList } from '@/components/organisms/SpreadOrderList';
 import { PortfolioPositionsTable } from '@/components/organisms/PortfolioPositionsTable';
 import { PortfolioSituationLeave } from '@/components/organisms/PortfolioSituationLeave';
 import { PortfolioSituationRecord } from '@/components/organisms/PortfolioSituationRecord';
@@ -32,6 +33,8 @@ import {
   rtkErrorMessage,
   useAmendPortfolioOrderMutation,
   useCancelPortfolioOrderMutation,
+  useCancelSpreadOrderMutation,
+  useListSpreadOrdersQuery,
   useCloseMarginPositionMutation,
   useCreatePortfolioMutation,
   useDepositPortfolioCashMutation,
@@ -129,6 +132,14 @@ export function PortfolioPage() {
     { period, portfolioId: bookId },
     { skip: !bookId && books.length !== 1, refetchOnFocus: true },
   );
+  const spreadQuery = useListSpreadOrdersQuery(
+    { status: 'open', portfolioId: bookId },
+    {
+      skip: !bookId && books.length !== 1,
+      pollingInterval: visible ? 10_000 : 0,
+      refetchOnFocus: true,
+    },
+  );
   const ordersQuery = useListPortfolioOrdersQuery(
     { status: 'open', portfolioId: bookId },
     {
@@ -179,6 +190,7 @@ export function PortfolioPage() {
   const [placeOrder, placeState] = usePlacePortfolioOrderMutation();
   const [amendOrder, amendState] = useAmendPortfolioOrderMutation();
   const [cancelOrder, cancelState] = useCancelPortfolioOrderMutation();
+  const [cancelSpread, cancelSpreadState] = useCancelSpreadOrderMutation();
   const [deposit, depositState] = useDepositPortfolioCashMutation();
   const [withdraw, withdrawState] = useWithdrawPortfolioCashMutation();
   const [transfer, transferState] = useTransferPortfolioCashMutation();
@@ -225,11 +237,15 @@ export function PortfolioPage() {
       timeInForce: values.timeInForce,
       idempotencyKey: newPaperIdempotencyKey('web'),
       maxSlippagePct: values.maxSlippagePct,
+      spread: values.spread,
       reason: values.reason,
     }).unwrap();
+    const isSpread = Boolean(res.spread);
     const isPending = Boolean(res.order || res.entry || res.ocoGroupId || res.bracketId);
     void message.success(
-      isPending
+      isSpread
+        ? t('portfolio:trade.successSpread', { symbol: values.symbol })
+        : isPending
         ? t('portfolio:trade.successPending', { symbol: values.symbol })
         : values.side === 'buy'
           ? t('portfolio:trade.successBuy', { qty: values.quantity, symbol: values.symbol })
@@ -565,6 +581,35 @@ export function PortfolioPage() {
                 key: 'orders',
                 label: t('portfolio:orders.title'),
                 children: (
+                  <>
+                  <SpreadOrderList
+                    items={(rtkCurrent(spreadQuery)?.orders ?? []).flatMap((order) =>
+                      order.id
+                        ? [
+                            {
+                              id: order.id,
+                              symbol: order.symbol ?? '',
+                              side: order.side ?? '',
+                              quantity: order.quantity ?? 0,
+                              filledQuantity: order.filledQuantity ?? 0,
+                              sliceCount: order.sliceCount ?? 0,
+                              slicesDone: order.slicesDone ?? 0,
+                            },
+                          ]
+                        : [],
+                    )}
+                    canceling={cancelSpreadState.isLoading}
+                    onCancel={(id) => {
+                      void cancelSpread({ id, portfolioId: bookId })
+                        .unwrap()
+                        .then(() => message.success(t('portfolio:orders.cancelSuccess')))
+                        .catch((err: unknown) => {
+                          void message.error(
+                            rtkErrorMessage(err, { resource: t('portfolio:orders.spreadTitle') }),
+                          );
+                        });
+                    }}
+                  />
                   <PortfolioOrdersTable
                     items={rtkCurrent(ordersQuery)?.orders ?? []}
                     loading={rtkCurrentPending(ordersQuery)}
@@ -591,6 +636,7 @@ export function PortfolioPage() {
                         });
                     }}
                   />
+                  </>
                 ),
               },
               {

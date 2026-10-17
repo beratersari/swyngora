@@ -56,8 +56,16 @@ func (f *OrderFiller) RunOnce(ctx context.Context) {
 	if f.now == nil {
 		f.now = time.Now
 	}
+	now := f.now().UTC()
+	// Spread orders fill one slice per pass. A restart does not dump the rest at once.
+	if n, err := f.Portfolio.ProcessDueSpreadOrders(ctx, now); err != nil {
+		f.Logger.Error("spread orders", "err", err)
+	} else if n > 0 {
+		f.Logger.Info("spread slices", "n", n)
+	}
+
 	// Margin: limit fills, liquidation, stop-loss / take-profit (durable across restarts).
-	if filled, liq, stopped, err := f.Portfolio.ProcessMarginMaintenance(ctx, f.now().UTC()); err != nil {
+	if filled, liq, stopped, err := f.Portfolio.ProcessMarginMaintenance(ctx, now); err != nil {
 		f.Logger.Error("margin maintenance", "err", err)
 	} else if filled > 0 || liq > 0 || stopped > 0 {
 		f.Logger.Info("margin maintenance", "filled", filled, "liquidated", liq, "sl_tp", stopped)
@@ -71,8 +79,6 @@ func (f *OrderFiller) RunOnce(ctx context.Context) {
 	if len(open) == 0 {
 		return
 	}
-
-	now := f.now().UTC()
 
 	// Expire GTC orders first (no ticker required).
 	remaining := make([]domain.PendingOrder, 0, len(open))

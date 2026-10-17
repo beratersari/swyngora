@@ -38,6 +38,7 @@ func (h *PortfolioHandler) PreviewOrder(w http.ResponseWriter, r *http.Request) 
 		TrailType: body.TrailType, TrailValue: body.TrailValue, LotMethod: body.LotMethod,
 		Leverage: body.Leverage, LimitPrice: body.LimitPrice, RiskPercent: body.RiskPercent,
 		Reason: reason, CompareExchange: body.CompareExchange, MaxSlippagePct: body.MaxSlippagePct,
+		Spread: body.Spread,
 	})
 	if err != nil {
 		writeError(w, err)

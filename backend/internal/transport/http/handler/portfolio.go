@@ -370,6 +370,7 @@ type orderBody struct {
 	Reason          *[]string `json:"reason"`      // clauses a buy stores; omitted keeps the whole read
 	CompareExchange string    `json:"compareExchange"`
 	MaxSlippagePct  float64   `json:"maxSlippagePct"`
+	Spread          bool      `json:"spread"`
 }
 
 func situationReasonFrom(raw *[]string) (domain.SituationReason, error) {
@@ -484,6 +485,14 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	typ := body.Type
 	if typ == "" {
 		typ = "market"
+	}
+	if err := rejectSpreadMisuse(body, typ); err != nil {
+		writeError(w, err)
+		return
+	}
+	if body.Spread {
+		h.placeSpread(w, r, clientID, pfID, ownerID, body, reason)
+		return
 	}
 	switch typ {
 	case "market":

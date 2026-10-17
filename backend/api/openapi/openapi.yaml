@@ -6750,6 +6750,9 @@ paths:
         total cost first. One preview lists a leg per venue. compareExchange prices that whole quantity
         on one venue and returns savedCash when both can fill. A missing book is named in missingVenues.
         A sell only uses coins already held on that venue. A USDT book books a Coinbase USD fill 1:1.
+        spread=true on that best-cost market order prices 10 slices, one every minute, instead of one
+        fill. routeLegs are the first slice on the current book. Later slices read the books again.
+        A buy shows the cash the whole order would lock. A sell shows the quantity it would lock.
         Margin, equities, and resting orders stay on one venue. Not real money.
       operationId: previewPortfolioOrder
       tags: [Portfolio]
@@ -6796,7 +6799,11 @@ paths:
         fee-adjusted depth and writes one trade per venue that received size. The cash change is one
         balance update. A book that cannot hold the size fills nothing. A sell only uses coins already
         held on that venue. Margin, equities, and resting orders stay on one venue.
-        Paper trading only — not real money.
+        spread=true with exchange=all and type=market does not fill now. It locks cash for a buy, or
+        quantity on the venues that already hold the coin for a sell, and works the order as 10 slices,
+        one every minute. Each slice reads the books again. The response is 201 and order is a SpreadOrder.
+        The first slice is due immediately and is filled by the background worker. Cancel releases the
+        size that has not filled. Paper trading only — not real money.
       operationId: placePortfolioOrder
       tags: [Portfolio]
       parameters:
@@ -6889,6 +6896,11 @@ paths:
                   items:
                     type: string
                     enum: [priceCvd, openInterest, liquidation, prints, funding, crowd, size]
+                spread:
+                  type: boolean
+                  description: |
+                    With exchange=all and type=market, work the order as 10 slices, one every minute.
+                    Each slice chooses the cheapest venue from the books at that time.
       responses:
         '200':
           description: Market fill and updated portfolio
@@ -6909,14 +6921,20 @@ paths:
                   portfolio: { $ref: '#/components/schemas/PortfolioView' }
                   note: { type: string }
         '201':
-          description: Pending order or OCO pair created
+          description: Pending order, OCO pair, or spread order created. A spread order has not filled yet.
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   type: { type: string }
-                  order: { $ref: '#/components/schemas/PendingOrder' }
+                  spread:
+                    type: boolean
+                    description: True when order is a spread order and no slice has filled yet.
+                  order:
+                    oneOf:
+                      - $ref: '#/components/schemas/PendingOrder'
+                      - $ref: '#/components/schemas/SpreadOrder'
                   ocoGroupId: { type: string }
                   bracketId: { type: string }
                   entry: { $ref: '#/components/schemas/PendingOrder' }
@@ -6954,6 +6972,79 @@ paths:
         '200':
           description: Pending order list
         '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/spread-orders:
+    get:
+      summary: List spread paper orders
+      description: |
+        Best-cost orders that fill as 10 slices, one every minute.
+        Defaults to open orders. status=open|filled|canceled|all.
+        Paper trading only — not real money.
+      operationId: listSpreadOrders
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { type: string, enum: [open, filled, canceled, all], default: open }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Spread orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orders:
+                    type: array
+                    items: { $ref: '#/components/schemas/SpreadOrder' }
+                  count: { type: integer }
+                  status: { type: string }
+        '404':
+          $ref: '#/components/responses/Error'
+  /api/v1/portfolio/spread-orders/{id}:
+    delete:
+      summary: Cancel an open spread order
+      description: |
+        Stops slices that have not run and releases the unused cash or quantity lock.
+        Slices that already filled stay on the book.
+      operationId: cancelSpreadOrder
+      tags: [Portfolio]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Spread order canceled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order: { $ref: '#/components/schemas/SpreadOrder' }
+                  note: { type: string }
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
           $ref: '#/components/responses/Error'
   /api/v1/portfolio/orders/cancel-all:
     post:
@@ -14778,6 +14869,11 @@ components:
           items:
             type: string
             enum: [priceCvd, openInterest, liquidation, prints, funding, crowd, size]
+        spread:
+          type: boolean
+          description: |
+            When true with exchange=all and a spot market order, price 10 slices one minute apart.
+            The legs are the first slice. Nothing is written.
     OrderPreviewLeg:
       type: object
       properties:
@@ -14985,7 +15081,66 @@ components:
         slippageLimited:
           type: boolean
           description: True when that size is shorter than the order, so nothing is filled.
+        spread:
+          type: boolean
+          description: True when this preview is 10 slices over about 10 minutes instead of one fill.
+        spreadMinutes:
+          type: integer
+          description: The schedule is named in minutes. The last slice is due one interval before this many minutes have passed.
+        sliceCount:
+          type: integer
+          description: How many times the order reads the books.
+        sliceQuantity:
+          type: number
+          description: Size of the first slice. Later slices use whatever quantity is still open.
+        sliceIntervalSec:
+          type: integer
+          description: Seconds between slices.
         note: { type: string }
+    SpreadOrder:
+      type: object
+      description: |
+        A best-cost spot market order worked as 10 slices, one every minute.
+        Each slice reads Binance, Coinbase, and Bybit again. Paper only.
+      properties:
+        id: { type: string }
+        clientId: { type: string }
+        symbol: { type: string }
+        side: { type: string, enum: [buy, sell] }
+        quantity: { type: number }
+        filledQuantity: { type: number }
+        remainingQuantity: { type: number }
+        sliceCount: { type: integer }
+        slicesDone: { type: integer }
+        nextSliceAt: { type: string, format: date-time }
+        endsAt:
+          type: string
+          format: date-time
+          description: When the last slice is due if every slice runs on time.
+        status: { type: string, enum: [open, filled, canceled] }
+        maxSlippagePct: { type: number }
+        reservedCash:
+          type: number
+          description: Cash still locked for a buy. It falls as slices fill and returns to available when the order ends.
+        filledNotional: { type: number }
+        filledFee: { type: number }
+        lotMethod: { type: string, enum: [fifo, lifo] }
+        reasonSet: { type: boolean }
+        reason:
+          type: array
+          items: { type: string }
+        cancelReason: { type: string }
+        holds:
+          type: array
+          description: Quantity a sell still has locked on each venue.
+          items:
+            type: object
+            properties:
+              exchange: { type: string }
+              symbol: { type: string }
+              quantity: { type: number }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     PaperRouteLeg:
       type: object
       properties:

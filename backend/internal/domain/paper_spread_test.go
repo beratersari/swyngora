@@ -1,0 +1,77 @@
+package domain
+
+import (
+	"math"
+	"testing"
+	"time"
+)
+
+func TestSpreadTarget_SplitsWhatIsLeft(t *testing.T) {
+	if math.Abs(SpreadTarget(1, 0, SpreadSliceCount)-0.1) > 1e-12 {
+		t.Fatalf("first slice %v", SpreadTarget(1, 0, SpreadSliceCount))
+	}
+	if math.Abs(SpreadTarget(0.9, 1, SpreadSliceCount)-0.1) > 1e-12 {
+		t.Fatalf("second slice %v", SpreadTarget(0.9, 1, SpreadSliceCount))
+	}
+	if math.Abs(SpreadTarget(0.4, 9, SpreadSliceCount)-0.4) > 1e-12 {
+		t.Fatalf("last slice takes the rest, got %v", SpreadTarget(0.4, 9, SpreadSliceCount))
+	}
+	if SpreadSpan() != 9*time.Minute {
+		t.Fatalf("span %s", SpreadSpan())
+	}
+}
+
+func TestSpreadReservePrice_UsesCapOrOnePercent(t *testing.T) {
+	if math.Abs(SpreadReservePrice(100, 0)-101) > 1e-9 {
+		t.Fatalf("buffer %v", SpreadReservePrice(100, 0))
+	}
+	if math.Abs(SpreadReservePrice(100, 0.005)-100.5) > 1e-9 {
+		t.Fatalf("cap %v", SpreadReservePrice(100, 0.005))
+	}
+	lock := SpreadBuyReserve(2, 100, 0, CoinbaseFeeRate)
+	if math.Abs(lock-2*101*1.006) > 1e-6 {
+		t.Fatalf("lock %v", lock)
+	}
+}
+
+func TestAllocateSpreadHolds_FollowsFreeQuantity(t *testing.T) {
+	holds, ok := AllocateSpreadHolds(1, []SpreadFree{
+		{Exchange: ExchangeBinance, Symbol: "BTCUSDT", Free: 1},
+		{Exchange: ExchangeCoinbase, Symbol: "BTC-USD", Free: 1},
+		{Exchange: ExchangeBybit, Symbol: "BTCUSDT", Free: 0},
+	})
+	if !ok || len(holds) != 2 {
+		t.Fatalf("holds %+v ok %v", holds, ok)
+	}
+	var sum float64
+	for _, h := range holds {
+		sum += h.Quantity
+		if math.Abs(h.Quantity-0.5) > 1e-9 {
+			t.Fatalf("share %+v", h)
+		}
+	}
+	if math.Abs(sum-1) > 1e-9 {
+		t.Fatalf("sum %v", sum)
+	}
+	if _, ok := AllocateSpreadHolds(3, []SpreadFree{{Exchange: ExchangeBinance, Symbol: "BTCUSDT", Free: 1}}); ok {
+		t.Fatal("short inventory was accepted")
+	}
+}
+
+func TestReduceSpreadHoldsAndBuyRelease(t *testing.T) {
+	left := ReduceSpreadHolds([]SpreadHold{
+		{Exchange: ExchangeBinance, Symbol: "BTCUSDT", Quantity: 0.5},
+		{Exchange: ExchangeCoinbase, Symbol: "BTC-USD", Quantity: 0.5},
+	}, []SpreadHold{{Exchange: ExchangeBinance, Symbol: "BTCUSDT", Quantity: 0.1}})
+	if len(left) != 2 || math.Abs(left[0].Quantity-0.4) > 1e-9 {
+		t.Fatalf("left %+v", left)
+	}
+	release := SpreadBuyRelease(100, 1, 0.1, 9)
+	if math.Abs(release-10) > 1e-9 {
+		t.Fatalf("release share %v", release)
+	}
+	release = SpreadBuyRelease(100, 1, 0.1, 12)
+	if math.Abs(release-12) > 1e-9 {
+		t.Fatalf("release spent %v", release)
+	}
+}

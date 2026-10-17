@@ -306,6 +306,8 @@ func (s *SQLite) txDeleteBook(ctx context.Context, tx *sql.Tx, id string) error 
 		`DELETE FROM allocation_baskets WHERE client_id = ?`,
 		`DELETE FROM recurring_buy_runs WHERE client_id = ?`,
 		`DELETE FROM recurring_buy_plans WHERE client_id = ?`,
+		`DELETE FROM spread_holds WHERE order_id IN (SELECT id FROM spread_orders WHERE client_id = ?)`,
+		`DELETE FROM spread_orders WHERE client_id = ?`,
 		`DELETE FROM pending_orders WHERE client_id = ?`,
 		`DELETE FROM tax_lot_fills WHERE lot_id IN (SELECT id FROM tax_lots WHERE client_id = ?)`,
 		`DELETE FROM tax_lots WHERE client_id = ?`,

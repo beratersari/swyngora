@@ -195,8 +195,10 @@ type DataPort interface {
 	PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct, maxExposurePct *float64) (json.RawMessage, error)
 	DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetPaperTradingCosts(ctx context.Context, exchange string) (json.RawMessage, error)
-	PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64) (json.RawMessage, error)
-	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string, maxSlippagePct float64) (json.RawMessage, error)
+	PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64, spread bool) (json.RawMessage, error)
+	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string, maxSlippagePct float64, spread bool) (json.RawMessage, error)
+	ListSpreadOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
+	CancelSpreadOrder(ctx context.Context, clientID, orderID string) (json.RawMessage, error)
 	PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt, trailType string, trailValue float64, lotMethod string) (json.RawMessage, error)
 	ListPortfolioLots(ctx context.Context, clientID, exchange, symbol, status string) (json.RawMessage, error)
 	PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange, symbol string, quantity, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error)
@@ -3499,6 +3501,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("limitPrice", mcp.Description("Margin limit price")),
 		mcp.WithNumber("leverage", mcp.Description("Margin leverage 1-10")),
 		mcp.WithString("reason", mcp.Description("Spot buy, limit_buy, or bracket only. Comma-separated clauses to store: priceCvd, openInterest, liquidation, prints, funding, crowd, size. Omit to store the whole read. Pass none to store no read. A sell ignores this and keeps the whole read.")),
+		mcp.WithBoolean("spread", mcp.Description("With exchange=all and a spot market order, price 10 slices one minute apart. routeLegs are the first slice on the current book. Later slices read the books again. Nothing is written.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -3523,7 +3526,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			req.GetString("trailType", ""), req.GetString("lotMethod", ""),
 			qty, req.GetFloat("triggerPrice", 0), req.GetFloat("takeProfitPrice", 0), req.GetFloat("stopLossPrice", 0),
 			req.GetFloat("trailValue", 0), req.GetFloat("limitPrice", 0), int(req.GetFloat("leverage", 0)), riskPct,
-			req.GetString("compareExchange", ""), req.GetFloat("maxSlippagePct", 0))
+			req.GetString("compareExchange", ""), req.GetFloat("maxSlippagePct", 0), req.GetBool("spread", false))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -3542,6 +3545,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("maxSlippagePct", mcp.Description("Best-cost cap in percent. 0.5 keeps fills within 0.5% of the best price. Zero means no cap.")),
 		mcp.WithString("idempotencyKey", mcp.Description("Optional retry key; same key + same request returns the original fill")),
 		mcp.WithString("reason", mcp.Description("Buy only. Comma-separated clauses to store: priceCvd, openInterest, liquidation, prints, funding, crowd, size. Omit to store the whole read. Pass none to store no read. A sell ignores this.")),
+		mcp.WithBoolean("spread", mcp.Description("With exchange=all, work the order as 10 slices, one every minute. Each slice reads the books again and takes the cheapest venue for that size. The first slice is due now. Nothing fills inside this call.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -3565,7 +3569,49 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.PlacePortfolioOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, side, qty, req.GetString("lotMethod", ""), req.GetFloat("maxSlippagePct", 0))
+		raw, err := api.PlacePortfolioOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, side, qty, req.GetString("lotMethod", ""), req.GetFloat("maxSlippagePct", 0), req.GetBool("spread", false))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("list_spread_orders",
+		mcp.WithDescription("List paper spread orders. A spread order is a best-cost spot market order worked as 10 slices, one every minute. Each slice reads the books again. status=open (default), filled, canceled, or all."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
+		mcp.WithString("status", mcp.Description("open|filled|canceled|all. Default open.")),
+		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),
+		mcp.WithNumber("offset", mcp.Description("Offset default 0")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		raw, err := api.ListSpreadOrders(ctx, clientID, req.GetString("status", ""), int(req.GetFloat("limit", 0)), int(req.GetFloat("offset", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("cancel_spread_order",
+		mcp.WithDescription("Cancel an open paper spread order. Slices that already filled stay. The unused cash or quantity lock is released."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
+		mcp.WithString("orderId", mcp.Required(), mcp.Description("Spread order id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		orderID, err := req.RequireString("orderId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		raw, err := api.CancelSpreadOrder(ctx, clientID, orderID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

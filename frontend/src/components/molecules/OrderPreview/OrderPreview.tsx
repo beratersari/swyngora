@@ -47,7 +47,11 @@ export function OrderPreview({ preview, loading, failed }: OrderPreviewProps) {
               : preview.bookSource === 'book'
                 ? `${t('preview.fromBook')} `
                 : ''}
-            {preview.fillsNow ? t('preview.fillsNow') : t('preview.rests')}
+            {preview.spread
+              ? t('preview.spreads')
+              : preview.fillsNow
+                ? t('preview.fillsNow')
+                : t('preview.rests')}
             {preview.product === 'margin' && (preview.leverage ?? 0) > 0
               ? ` · ${t('preview.leverage', { lev: preview.leverage })}`
               : ''}
@@ -91,6 +95,14 @@ export function OrderPreview({ preview, loading, failed }: OrderPreviewProps) {
               {t('preview.stopNotAttached')}
             </Text>
           ) : null}
+          {preview.spread ? (
+            <Text variant="caption" color="secondary" data-testid="spread-plan">
+              {t('preview.spreadPlan', {
+                count: preview.sliceCount ?? 10,
+                qty: formatPrice(preview.sliceQuantity),
+              })}
+            </Text>
+          ) : null}
           {(preview.routeLegs ?? []).map((leg) => (
             <Text
               key={`${leg.exchange}-${leg.symbol}`}
@@ -108,10 +120,19 @@ export function OrderPreview({ preview, loading, failed }: OrderPreviewProps) {
           ))}
           {preview.routed && (preview.compare?.savedCash ?? 0) > 0.005 ? (
             <Text variant="caption" color="secondary" data-testid="route-saved">
-              {t(preview.side === 'sell' ? 'preview.savedSell' : 'preview.savedBuy', {
-                exchange: preview.compare?.exchange,
-                amount: formatPrice(preview.compare?.savedCash),
-              })}
+              {t(
+                preview.spread
+                  ? preview.side === 'sell'
+                    ? 'preview.savedSellSlice'
+                    : 'preview.savedBuySlice'
+                  : preview.side === 'sell'
+                    ? 'preview.savedSell'
+                    : 'preview.savedBuy',
+                {
+                  exchange: preview.compare?.exchange,
+                  amount: formatPrice(preview.compare?.savedCash),
+                },
+              )}
             </Text>
           ) : null}
           {(preview.missingVenues ?? []).length > 0 ? (

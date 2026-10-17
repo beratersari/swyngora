@@ -3981,6 +3981,9 @@ export interface paths {
          *     total cost first. One preview lists a leg per venue. compareExchange prices that whole quantity
          *     on one venue and returns savedCash when both can fill. A missing book is named in missingVenues.
          *     A sell only uses coins already held on that venue. A USDT book books a Coinbase USD fill 1:1.
+         *     spread=true on that best-cost market order prices 10 slices, one every minute, instead of one
+         *     fill. routeLegs are the first slice on the current book. Later slices read the books again.
+         *     A buy shows the cash the whole order would lock. A sell shows the quantity it would lock.
          *     Margin, equities, and resting orders stay on one venue. Not real money.
          */
         post: operations["previewPortfolioOrder"];
@@ -4027,10 +4030,57 @@ export interface paths {
          *     fee-adjusted depth and writes one trade per venue that received size. The cash change is one
          *     balance update. A book that cannot hold the size fills nothing. A sell only uses coins already
          *     held on that venue. Margin, equities, and resting orders stay on one venue.
-         *     Paper trading only — not real money.
+         *     spread=true with exchange=all and type=market does not fill now. It locks cash for a buy, or
+         *     quantity on the venues that already hold the coin for a sell, and works the order as 10 slices,
+         *     one every minute. Each slice reads the books again. The response is 201 and order is a SpreadOrder.
+         *     The first slice is due immediately and is filled by the background worker. Cancel releases the
+         *     size that has not filled. Paper trading only — not real money.
          */
         post: operations["placePortfolioOrder"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/spread-orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List spread paper orders
+         * @description Best-cost orders that fill as 10 slices, one every minute.
+         *     Defaults to open orders. status=open|filled|canceled|all.
+         *     Paper trading only — not real money.
+         */
+        get: operations["listSpreadOrders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/spread-orders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Cancel an open spread order
+         * @description Stops slices that have not run and releases the unused cash or quantity lock.
+         *     Slices that already filled stay on the book.
+         */
+        delete: operations["cancelSpreadOrder"];
         options?: never;
         head?: never;
         patch?: never;
@@ -10373,6 +10423,11 @@ export interface components {
              *     Omit the field to leave the stored set unset. An empty array would store no read.
              */
             reason?: ("priceCvd" | "openInterest" | "liquidation" | "prints" | "funding" | "crowd" | "size")[];
+            /**
+             * @description When true with exchange=all and a spot market order, price 10 slices one minute apart.
+             *     The legs are the first slice. Nothing is written.
+             */
+            spread?: boolean;
         };
         OrderPreviewLeg: {
             /** @enum {string} */
@@ -10532,7 +10587,62 @@ export interface components {
             slippageInsideQuantity?: number;
             /** @description True when that size is shorter than the order, so nothing is filled. */
             slippageLimited?: boolean;
+            /** @description True when this preview is 10 slices over about 10 minutes instead of one fill. */
+            spread?: boolean;
+            /** @description The schedule is named in minutes. The last slice is due one interval before this many minutes have passed. */
+            spreadMinutes?: number;
+            /** @description How many times the order reads the books. */
+            sliceCount?: number;
+            /** @description Size of the first slice. Later slices use whatever quantity is still open. */
+            sliceQuantity?: number;
+            /** @description Seconds between slices. */
+            sliceIntervalSec?: number;
             note?: string;
+        };
+        /**
+         * @description A best-cost spot market order worked as 10 slices, one every minute.
+         *     Each slice reads Binance, Coinbase, and Bybit again. Paper only.
+         */
+        SpreadOrder: {
+            id?: string;
+            clientId?: string;
+            symbol?: string;
+            /** @enum {string} */
+            side?: "buy" | "sell";
+            quantity?: number;
+            filledQuantity?: number;
+            remainingQuantity?: number;
+            sliceCount?: number;
+            slicesDone?: number;
+            /** Format: date-time */
+            nextSliceAt?: string;
+            /**
+             * Format: date-time
+             * @description When the last slice is due if every slice runs on time.
+             */
+            endsAt?: string;
+            /** @enum {string} */
+            status?: "open" | "filled" | "canceled";
+            maxSlippagePct?: number;
+            /** @description Cash still locked for a buy. It falls as slices fill and returns to available when the order ends. */
+            reservedCash?: number;
+            filledNotional?: number;
+            filledFee?: number;
+            /** @enum {string} */
+            lotMethod?: "fifo" | "lifo";
+            reasonSet?: boolean;
+            reason?: string[];
+            cancelReason?: string;
+            /** @description Quantity a sell still has locked on each venue. */
+            holds?: {
+                exchange?: string;
+                symbol?: string;
+                quantity?: number;
+            }[];
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
         };
         PaperRouteLeg: {
             exchange?: string;
@@ -17017,6 +17127,11 @@ export interface operations {
                      *     A sell ignores this and keeps the whole read, so a close can still be compared with each buy.
                      */
                     reason?: ("priceCvd" | "openInterest" | "liquidation" | "prints" | "funding" | "crowd" | "size")[];
+                    /**
+                     * @description With exchange=all and type=market, work the order as 10 slices, one every minute.
+                     *     Each slice chooses the cheapest venue from the books at that time.
+                     */
+                    spread?: boolean;
                 };
             };
         };
@@ -17040,7 +17155,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Pending order or OCO pair created */
+            /** @description Pending order, OCO pair, or spread order created. A spread order has not filled yet. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -17048,7 +17163,9 @@ export interface operations {
                 content: {
                     "application/json": {
                         type?: string;
-                        order?: components["schemas"]["PendingOrder"];
+                        /** @description True when order is a spread order and no slice has filled yet. */
+                        spread?: boolean;
+                        order?: components["schemas"]["PendingOrder"] | components["schemas"]["SpreadOrder"];
                         ocoGroupId?: string;
                         bracketId?: string;
                         entry?: components["schemas"]["PendingOrder"];
@@ -17059,6 +17176,69 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    listSpreadOrders: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                status?: "open" | "filled" | "canceled" | "all";
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Spread orders */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        orders?: components["schemas"]["SpreadOrder"][];
+                        count?: number;
+                        status?: string;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    cancelSpreadOrder: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Spread order canceled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        order?: components["schemas"]["SpreadOrder"];
+                        note?: string;
+                    };
+                };
+            };
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
         };

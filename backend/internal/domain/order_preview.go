@@ -112,6 +112,16 @@ type OrderPreview struct {
 	SlippageInsideQuantity float64
 	// SlippageLimited means that size is shorter than the order, so nothing fills.
 	SlippageLimited bool
+	// Spread is true when the order works as timed slices instead of one fill.
+	Spread bool
+	// SpreadMinutes is the clock the slices are named with. The last slice is due one interval sooner.
+	SpreadMinutes int
+	// SliceCount is how many times the order reads the books.
+	SliceCount int
+	// SliceQuantity is the first slice. Later slices use whatever is still open.
+	SliceQuantity float64
+	// SliceIntervalSec is the pause between slices.
+	SliceIntervalSec int
 }
 
 // QuoteFill is the slipped fill, notional, fee, and cash movement for a quantity.

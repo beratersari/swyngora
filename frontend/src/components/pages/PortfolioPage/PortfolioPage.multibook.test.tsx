@@ -23,6 +23,8 @@ vi.mock('@/libs/api', async (importOriginal) => {
     useGetPortfolioQuery: (...args: unknown[]) => useGetPortfolioQuery(...args),
     useGetPortfolioPerformanceQuery: () => ({ data: { points: [] }, isLoading: false, isError: false }),
     useListPortfolioOrdersQuery: () => ({ data: { orders: [] }, isLoading: false }),
+    useListSpreadOrdersQuery: () => ({ data: { orders: [] }, isLoading: false, isFetching: false }),
+    useCancelSpreadOrderMutation: () => [vi.fn(), { isLoading: false }],
     useListPortfolioTradesQuery: () => ({ data: { trades: [] }, isLoading: false }),
     useGetPortfolioSituationLeaveQuery: () => ({
       currentData: undefined,

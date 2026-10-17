@@ -26,6 +26,7 @@ const (
 	IdempotencyKindMarginOpen  = "margin_open"
 	IdempotencyKindMarginClose = "margin_close"
 	IdempotencyKindTransfer    = "transfer"
+	IdempotencyKindSpread      = "spread"
 )
 
 // IdempotencyRecord stores one client key for a paper book.

@@ -112,6 +112,13 @@ func OrderPreviewPayload(p *domain.OrderPreview) map[string]any {
 			out["slippageLimited"] = p.SlippageLimited
 		}
 	}
+	if p.Spread {
+		out["spread"] = true
+		out["spreadMinutes"] = p.SpreadMinutes
+		out["sliceCount"] = p.SliceCount
+		out["sliceQuantity"] = p.SliceQuantity
+		out["sliceIntervalSec"] = p.SliceIntervalSec
+	}
 	return out
 }
 

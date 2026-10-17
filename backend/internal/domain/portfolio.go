@@ -478,6 +478,18 @@ type PortfolioPort interface {
 	// Returns ErrNotFound if not open.
 	RejectPendingOrder(ctx context.Context, orderID, reason string, at time.Time) error
 
+	// CreateSpreadOrder inserts an open spread order and its sell holds.
+	CreateSpreadOrder(ctx context.Context, o SpreadOrder) (*SpreadOrder, error)
+	// GetSpreadOrder returns one spread order for the book, including holds.
+	GetSpreadOrder(ctx context.Context, clientID, id string) (*SpreadOrder, error)
+	// ListSpreadOrders lists spread orders for a book. An empty status returns every status.
+	ListSpreadOrders(ctx context.Context, clientID string, status SpreadStatus, limit, offset int) ([]SpreadOrder, error)
+	// ListOpenSpreadOrders returns every open spread order for the background worker.
+	ListOpenSpreadOrders(ctx context.Context) ([]SpreadOrder, error)
+	// SaveSpreadWorking writes the order, replaces its holds, and applies any slice fills.
+	// A nil portfolio is only valid when fills is empty.
+	SaveSpreadWorking(ctx context.Context, p *Portfolio, o SpreadOrder, fills []RoutedFill) error
+
 	// Recurring buy plans (paper DCA)
 	CreateRecurringBuyPlan(ctx context.Context, p RecurringBuyPlan) (*RecurringBuyPlan, error)
 	GetRecurringBuyPlan(ctx context.Context, clientID, id string) (*RecurringBuyPlan, error)

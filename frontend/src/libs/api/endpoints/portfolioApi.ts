@@ -26,6 +26,7 @@ export type RebalanceResult = components['schemas']['RebalanceResult'];
 export type RebalanceLegOutcome = components['schemas']['RebalanceLegOutcome'];
 export type RebalanceLineSnapshot = components['schemas']['RebalanceLineSnapshot'];
 export type PendingOrder = components['schemas']['PendingOrder'];
+export type SpreadOrder = components['schemas']['SpreadOrder'];
 
 export type SpotPosition = components['schemas']['PortfolioPosition'];
 
@@ -55,6 +56,8 @@ export type PlacePortfolioOrderArg = {
   idempotencyKey?: string;
   /** Best-cost cap in percent. 0.5 means 0.5% from the best price. */
   maxSlippagePct?: number;
+  /** Work a best-cost market order as 10 slices, one every minute. */
+  spread?: boolean;
   /** Clauses a buy stores. Omit to store the whole read. An empty list stores no read. */
   reason?: string[];
 };
@@ -62,9 +65,10 @@ export type PlacePortfolioOrderArg = {
 export type PlacePortfolioOrderResponse = {
   type?: string;
   routed?: boolean;
+  spread?: boolean;
   trade?: PaperTrade;
   trades?: PaperTrade[];
-  order?: PendingOrder;
+  order?: PendingOrder | SpreadOrder;
   entry?: PendingOrder;
   takeProfit?: PendingOrder;
   stopLoss?: PendingOrder;
@@ -100,7 +104,9 @@ export type PreviewPortfolioOrderArg = {
   lotMethod?: 'fifo' | 'lifo';
   limitPrice?: number;
   leverage?: number;
-  /** Clauses a spot buy would store. Omit to leave the stored set unset. */
+  /** Price a best-cost market order as 10 slices, one every minute. */
+  spread?: boolean;
+  /** Clauses a spot buy would store. Omit to leave the request unset. */
   reason?: string[];
 };
 
@@ -394,6 +400,7 @@ export const portfolioApi = baseApi.injectEndpoints({
           expiresAt: body.expiresAt,
           idempotencyKey: body.idempotencyKey,
           maxSlippagePct: body.maxSlippagePct,
+          ...(body.spread ? { spread: true } : {}),
           ...(body.reason !== undefined ? { reason: body.reason } : {}),
         },
         headers: body.idempotencyKey ? { 'Idempotency-Key': body.idempotencyKey } : undefined,
@@ -423,10 +430,37 @@ export const portfolioApi = baseApi.injectEndpoints({
           leverage: body.leverage,
           compareExchange: body.compareExchange,
           maxSlippagePct: body.maxSlippagePct,
+          ...(body.spread ? { spread: true } : {}),
           ...(body.reason !== undefined ? { reason: body.reason } : {}),
         },
       }),
       providesTags: ['Portfolio'],
+    }),
+    listSpreadOrders: build.query<
+      { orders?: SpreadOrder[]; count?: number; status?: string },
+      ({ status?: string; limit?: number; offset?: number } & BookArg) | void
+    >({
+      query: (arg) => ({
+        url: '/api/v1/portfolio/spread-orders',
+        params: {
+          status: arg?.status ?? 'open',
+          limit: arg?.limit ?? 50,
+          offset: arg?.offset ?? 0,
+          ...bookParams(arg?.portfolioId),
+        },
+      }),
+      providesTags: ['Portfolio'],
+    }),
+    cancelSpreadOrder: build.mutation<
+      { order?: SpreadOrder; note?: string },
+      { id: string; portfolioId?: string }
+    >({
+      query: ({ id, portfolioId }) => ({
+        url: `/api/v1/portfolio/spread-orders/${encodeURIComponent(id)}`,
+        method: 'DELETE',
+        params: bookParams(portfolioId),
+      }),
+      invalidatesTags: ['Portfolio'],
     }),
     listPortfolioOrders: build.query<
       OrdersListResponse,
@@ -713,6 +747,8 @@ export const {
   useRevokePortfolioShareMutation,
   usePlacePortfolioOrderMutation,
   usePreviewPortfolioOrderQuery,
+  useListSpreadOrdersQuery,
+  useCancelSpreadOrderMutation,
   useListPortfolioOrdersQuery,
   useAmendPortfolioOrderMutation,
   useCancelPortfolioOrderMutation,

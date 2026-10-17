@@ -77,6 +77,37 @@ describe('PaperTradeForm', () => {
     expect(arg.maxSlippagePct).toBe(0.5);
   });
 
+  it('sends a best-cost order as ten slices', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const onDraftChange = vi.fn();
+    renderWithTheme(
+      <PaperTradeForm
+        lockedExchange="binance"
+        lockedSymbol="BTCUSDT"
+        compact
+        onDraftChange={onDraftChange}
+        onSubmit={onSubmit}
+      />,
+    );
+    fireEvent.click(screen.getByText(/best cost|en düşük maliyet/i));
+    fireEvent.click(screen.getByText(/10 min|10 dk/i));
+    await waitFor(() => {
+      const last = onDraftChange.mock.calls.at(-1)?.[0] as { exchange: string; spread?: boolean };
+      expect(last.exchange).toBe('all');
+      expect(last.spread).toBe(true);
+    });
+    const spin = screen.getByRole('spinbutton', { name: /quantity|miktar/i });
+    fireEvent.change(spin, { target: { value: '1' } });
+    fireEvent.blur(spin);
+    fireEvent.click(screen.getByRole('button', { name: /paper buy|kağıt al/i }));
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalled();
+    });
+    const arg = onSubmit.mock.calls.at(-1)?.[0] as { spread?: boolean; quantity: number };
+    expect(arg.spread).toBe(true);
+    expect(arg.quantity).toBe(1);
+  });
+
   it('finding 8: limit ticket posts the raw typed trigger with no FX conversion', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(undefined);

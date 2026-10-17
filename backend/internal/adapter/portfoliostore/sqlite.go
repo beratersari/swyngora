@@ -443,6 +443,9 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_
 	if err := s.migrateTransferAttempts(); err != nil {
 		return err
 	}
+	if err := s.migrateSpreadOrders(); err != nil {
+		return err
+	}
 	// Additive migrations for DBs created before reservations/partial fills.
 	alters := []string{
 		`ALTER TABLE trades ADD COLUMN pending_order_id TEXT NOT NULL DEFAULT ''`,
@@ -700,6 +703,8 @@ func (s *SQLite) DeletePortfolio(ctx context.Context, clientID, id string) error
 		`DELETE FROM allocation_baskets WHERE client_id = ?`,
 		`DELETE FROM recurring_buy_runs WHERE client_id = ?`,
 		`DELETE FROM recurring_buy_plans WHERE client_id = ?`,
+		`DELETE FROM spread_holds WHERE order_id IN (SELECT id FROM spread_orders WHERE client_id = ?)`,
+		`DELETE FROM spread_orders WHERE client_id = ?`,
 		`DELETE FROM pending_orders WHERE client_id = ?`,
 		`DELETE FROM tax_lot_fills WHERE lot_id IN (SELECT id FROM tax_lots WHERE client_id = ?)`,
 		`DELETE FROM tax_lots WHERE client_id = ?`,
@@ -1360,9 +1365,14 @@ func (s *SQLite) CountOpenPendingOrders(ctx context.Context, clientID string) (i
 func (s *SQLite) SumReservedCash(ctx context.Context, clientID string) (float64, error) {
 	var n sql.NullFloat64
 	err := s.db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(reserved_cash), 0) FROM pending_orders
-		WHERE client_id = ? AND status = 'open' AND reserved_cash > 0
-	`, clientID).Scan(&n)
+		SELECT COALESCE(SUM(reserved_cash), 0) FROM (
+			SELECT reserved_cash FROM pending_orders
+			WHERE client_id = ? AND status = 'open' AND reserved_cash > 0
+			UNION ALL
+			SELECT reserved_cash FROM spread_orders
+			WHERE client_id = ? AND status = 'open' AND reserved_cash > 0
+		)
+	`, clientID, clientID).Scan(&n)
 	if err != nil {
 		return 0, err
 	}
@@ -1395,7 +1405,16 @@ func (s *SQLite) SumReservedQuantity(ctx context.Context, clientID string, excha
 	if err != nil {
 		return 0, err
 	}
-	return standalone.Float64 + oco.Float64, nil
+	var spread sql.NullFloat64
+	err = s.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(h.quantity), 0) FROM spread_holds h
+		JOIN spread_orders o ON o.id = h.order_id
+		WHERE o.client_id = ? AND o.status = 'open' AND h.exchange = ? AND h.symbol = ?
+	`, clientID, string(exchange), symbol).Scan(&spread)
+	if err != nil {
+		return 0, err
+	}
+	return standalone.Float64 + oco.Float64 + spread.Float64, nil
 }
 
 // ListAllOpenPendingOrders returns all open orders for the background filler.

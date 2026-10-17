@@ -1910,6 +1910,14 @@ class OrderPreviewInput(BaseModel):
             "An empty list stores no read. A sell ignores this."
         ),
     )
+    spread: bool = Field(
+        default=False,
+        description=(
+            "With exchange=all and a spot market order, price 10 slices one minute apart. "
+            "The legs are the first slice on the current book. Later slices read the books again. "
+            "Nothing is written."
+        ),
+    )
 
 
 class PortfolioOrderInput(BaseModel):
@@ -1941,6 +1949,26 @@ class PortfolioOrderInput(BaseModel):
             "An empty list stores no read. A sell ignores this."
         ),
     )
+    spread: bool = Field(
+        default=False,
+        description=(
+            "With exchange=all, work the order as 10 slices, one every minute. "
+            "Each slice reads the books again and takes the cheapest venue for that size. "
+            "The first slice is due now. Nothing fills inside this call."
+        ),
+    )
+
+
+class SpreadOrderListInput(BaseModel):
+    client_id: str
+    status: str = Field(default="open", description="open|filled|canceled|all")
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+
+
+class SpreadOrderCancelInput(BaseModel):
+    client_id: str
+    order_id: str
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
 class PortfolioPendingOrderInput(BaseModel):
@@ -4243,6 +4271,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         reason: list[str] | None = None,
         compare_exchange: str = "",
         max_slippage_pct: float = 0,
+        spread: bool = False,
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -4277,6 +4306,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["compareExchange"] = compare_exchange
         if max_slippage_pct:
             body["maxSlippagePct"] = max_slippage_pct
+        if spread:
+            body["spread"] = True
         if portfolio_id:
             body["portfolioId"] = portfolio_id
         if reason is not None:
@@ -4295,6 +4326,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         portfolio_id: str = "",
         reason: list[str] | None = None,
         max_slippage_pct: float = 0,
+        spread: bool = False,
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -4303,6 +4335,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             "quantity": quantity,
             "exchange": exchange,
         }
+        if spread:
+            body["spread"] = True
         if max_slippage_pct:
             body["maxSlippagePct"] = max_slippage_pct
         if lot_method:
@@ -4314,6 +4348,22 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if reason is not None:
             body["reason"] = reason
         return http.post("/api/v1/portfolio/orders", body)
+
+    def list_spread_orders(
+        client_id: str,
+        status: str = "open",
+        portfolio_id: str = "",
+    ) -> str:
+        q: dict[str, Any] = {"clientId": client_id, "status": status}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.get("/api/v1/portfolio/spread-orders", q)
+
+    def cancel_spread_order(client_id: str, order_id: str, portfolio_id: str = "") -> str:
+        q: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.delete(f"/api/v1/portfolio/spread-orders/{order_id}", params=q)
 
     def place_portfolio_pending_order(
         client_id: str,
@@ -7066,6 +7116,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "routeLegs lists each venue. A missing book is named. "
                 "max_slippage_pct of 0.5 keeps fills within 0.5% of the best price. "
                 "When the size inside that cap is short, nothing is filled. "
+                "spread=true with exchange=all prices 10 slices, one every minute. "
+                "routeLegs are the first slice. Later slices read the books again. "
                 "A sell only uses coins already held on that venue. "
                 "Nothing is written. A spot buy also returns the live coin read. "
                 "Pass reason to name the clauses a buy would store. "
@@ -7088,11 +7140,32 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Buy lot cost includes the fee; sell realized PnL is after the fee. "
                 "max_slippage_pct of 0.5 keeps fills within 0.5% of the best price. "
                 "When the size inside that cap is short, nothing is filled. "
+                "spread=true with exchange=all works the order as 10 slices, one every minute. "
+                "Each slice reads the books again. The first slice is due now. "
                 "A sell only uses coins already held on that venue. "
                 "Pass reason to store only those clauses on a buy. Omit it to store the whole read. "
                 "Pass idempotency_key on retries so a timeout does not create a second fill. Not real money."
             ),
             args_schema=PortfolioOrderInput,
+        ),
+        StructuredTool.from_function(
+            list_spread_orders,
+            name="list_spread_orders",
+            description=(
+                "List paper spread orders. A spread order fills a best-cost spot market order "
+                "as 10 slices, one every minute. Each slice reads the books again. "
+                "status=open (default), filled, canceled, or all."
+            ),
+            args_schema=SpreadOrderListInput,
+        ),
+        StructuredTool.from_function(
+            cancel_spread_order,
+            name="cancel_spread_order",
+            description=(
+                "Cancel an open paper spread order. Slices that already filled stay. "
+                "The unused cash or quantity lock is released."
+            ),
+            args_schema=SpreadOrderCancelInput,
         ),
         StructuredTool.from_function(
             place_portfolio_pending_order,

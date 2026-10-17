@@ -3433,10 +3433,13 @@ export function CoinDetailPage() {
                   lotMethod: values.lotMethod,
                   idempotencyKey: newPaperIdempotencyKey('detail'),
                   maxSlippagePct: values.maxSlippagePct,
+                  spread: values.spread,
                   reason: values.reason,
                 }).unwrap();
                 void message.success(
-                  values.orderType !== 'market'
+                  values.spread
+                    ? t('portfolio:trade.successSpread', { symbol: values.symbol })
+                    : values.orderType !== 'market'
                     ? t('detail:paperTrade.successPending', {
                         defaultValue: 'Pending paper order placed',
                       })

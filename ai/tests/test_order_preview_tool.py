@@ -125,4 +125,39 @@ def test_preview_portfolio_order_sends_best_cost_route(monkeypatch):
     assert seen[0]["exchange"] == "all"
     assert seen[0]["compareExchange"] == "binance"
     assert seen[0]["maxSlippagePct"] == 0.5
-    assert seen[0]["quantity"] == 2
+
+
+def test_preview_portfolio_order_sends_spread(monkeypatch):
+    seen: list[dict] = []
+    real_client = httpx2.Client
+
+    class _Transport(httpx2.BaseTransport):
+        def handle_request(self, request: httpx2.Request) -> httpx2.Response:
+            raw = request.content.decode() if request.content else "{}"
+            seen.append(json.loads(raw or "{}"))
+            return httpx2.Response(200, json={"spread": True, "sliceCount": 10})
+
+    def fake_client(*args, **kwargs):
+        kwargs.pop("timeout", None)
+        return real_client(*args, timeout=5.0, transport=_Transport())
+
+    monkeypatch.setattr(httpx2, "Client", fake_client)
+    tools = build_market_tools(Settings(api_base_url="http://test"))
+    by_name = {tool.name: tool for tool in tools}
+    scope = bind_tool_scope(can_trade=False, can_manage_keys=False)
+    try:
+        by_name["preview_portfolio_order"].invoke(
+            {
+                "client_id": "c1",
+                "symbol": "BTCUSDT",
+                "side": "buy",
+                "quantity": 1,
+                "exchange": "all",
+                "spread": True,
+            }
+        )
+    finally:
+        reset_tool_scope(scope)
+    assert seen[0]["spread"] is True
+    assert seen[0]["exchange"] == "all"
+    assert seen[0]["quantity"] == 1

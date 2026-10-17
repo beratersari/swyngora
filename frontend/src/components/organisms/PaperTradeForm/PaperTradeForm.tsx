@@ -64,6 +64,7 @@ export function PaperTradeForm({
   const [tif, setTif] = useState<'gtc' | 'ioc' | 'fok'>('gtc');
   const [pickedReason, setPickedReason] = useState<string[] | null>(null);
   const [bestCost, setBestCost] = useState(false);
+  const [spread, setSpread] = useState(false);
   const [maxSlippagePct, setMaxSlippagePct] = useState<number | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [localBusy, setLocalBusy] = useState(false);
@@ -128,6 +129,7 @@ export function PaperTradeForm({
   }, [keepsReason, reasonPreview?.situationStatus, selectedReason]);
   const equityVenue = exchange === 'nasdaq' || exchange === 'bist';
   const routing = bestCost && kind === 'market' && !equityVenue;
+  const pacing = routing && spread;
   const wireExchange = routing ? 'all' : exchange;
   const canSize = canSizeByRisk(kind, side) && !routing;
   const riskActive = canSize && riskPercent != null && riskPercent > 0;
@@ -146,6 +148,7 @@ export function PaperTradeForm({
       exchange: wireExchange,
       compareExchange: routing ? exchange : undefined,
       maxSlippagePct: routing && maxSlippagePct != null && maxSlippagePct > 0 ? maxSlippagePct : undefined,
+      spread: pacing || undefined,
       symbol: symbol.trim().toUpperCase(),
       type: toApiOrderType(kind, side),
       side,
@@ -164,6 +167,7 @@ export function PaperTradeForm({
     exchange,
     wireExchange,
     routing,
+    pacing,
     maxSlippagePct,
     symbol,
     kind,
@@ -196,6 +200,7 @@ export function PaperTradeForm({
     const values: PaperTradeFormValues = {
       exchange: wireExchange,
       maxSlippagePct: routing && maxSlippagePct != null && maxSlippagePct > 0 ? maxSlippagePct : undefined,
+      spread: pacing || undefined,
       symbol: sym,
       orderType,
       side: s,
@@ -294,8 +299,19 @@ export function PaperTradeForm({
             />
             {routing ? (
               <Text variant="caption" color="secondary">
-                {t('portfolio:trade.routeHint')}
+                {pacing ? t('portfolio:trade.spreadHint') : t('portfolio:trade.routeHint')}
               </Text>
+            ) : null}
+            {routing ? (
+              <Segmented
+                value={pacing ? 'spread' : 'now'}
+                aria-label={t('portfolio:trade.pace')}
+                options={[
+                  { label: t('portfolio:trade.fillNow'), value: 'now' },
+                  { label: t('portfolio:trade.spread10'), value: 'spread' },
+                ]}
+                onChange={(value) => setSpread(value === 'spread')}
+              />
             ) : null}
             {routing ? (
               <InputNumber

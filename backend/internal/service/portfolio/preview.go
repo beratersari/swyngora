@@ -38,6 +38,8 @@ type OrderPreviewInput struct {
 	CompareExchange string
 	// MaxSlippagePct caps a best-cost walk. 0.5 means 0.5% from the best price. Zero means no cap.
 	MaxSlippagePct float64
+	// Spread prices a best-cost spot market order as 10 slices over about 10 minutes.
+	Spread bool
 }
 
 // riskSnap is the live book used to price one preview. It is not saved as an order.
@@ -107,7 +109,13 @@ func (s *Service) PreviewOrder(ctx context.Context, in OrderPreviewInput) (*doma
 		if sizingOn {
 			return nil, fmt.Errorf("%w: best cost uses the quantity you send", domain.ErrInvalidArgument)
 		}
+		if in.Spread {
+			return s.previewSpread(ctx, p, in)
+		}
 		return s.previewRouted(ctx, p, in)
+	}
+	if in.Spread {
+		return nil, fmt.Errorf("%w: a spread order uses best cost", domain.ErrInvalidArgument)
 	}
 	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
 	if err != nil {
