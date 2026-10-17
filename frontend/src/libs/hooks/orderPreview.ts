@@ -25,6 +25,8 @@ export type SpotOrderPreviewDraft = {
   reason?: string[];
   /** Set when exchange is all. The venue the whole order is compared with. */
   compareExchange?: string;
+  /** Best-cost cap in percent. 0.5 means 0.5% from the best price. */
+  maxSlippagePct?: number;
 };
 
 export type MarginOrderPreviewDraft = {
@@ -152,5 +154,6 @@ export function toPreviewArg(
     lotMethod: draft.lotMethod,
     reason: draft.reason,
     compareExchange: draft.compareExchange,
+    maxSlippagePct: draft.maxSlippagePct,
   };
 }

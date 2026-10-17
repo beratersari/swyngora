@@ -119,6 +119,14 @@ export function OrderPreview({ preview, loading, failed }: OrderPreviewProps) {
               {t('preview.missingVenues', { names: (preview.missingVenues ?? []).join(', ') })}
             </Text>
           ) : null}
+          {preview.routed && (preview.maxSlippagePct ?? 0) > 0 ? (
+            <Text variant="caption" color="secondary" data-testid="route-slippage">
+              {t(preview.side === 'sell' ? 'preview.slippageCapSell' : 'preview.slippageCapBuy', {
+                pct: formatPreviewPct(preview.maxSlippagePct),
+                price: formatPrice(preview.slippageLimitPrice),
+              })}
+            </Text>
+          ) : null}
           {(preview.routeLegs ?? []).some((leg) => leg.aliased) ? (
             <Text variant="caption" color="secondary">
               {t('preview.aliasQuote')}

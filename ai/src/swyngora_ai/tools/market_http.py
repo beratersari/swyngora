@@ -1882,6 +1882,14 @@ class OrderPreviewInput(BaseModel):
         default="",
         description="Preview only. Venue to price the whole quantity against when exchange is all.",
     )
+    max_slippage_pct: float = Field(
+        default=0,
+        description=(
+            "Best-cost cap in percent. 0.5 keeps a buy within 0.5% above the best ask "
+            "and a sell within 0.5% below the best bid. Zero means no cap. "
+            "When the size inside the cap is short, nothing is filled."
+        ),
+    )
     trigger_price: float = Field(default=0, description="Limit, stop, or bracket entry")
     take_profit_price: float = Field(default=0, description="OCO, bracket, or margin take-profit")
     stop_loss_price: float = Field(
@@ -1917,6 +1925,10 @@ class PortfolioOrderInput(BaseModel):
         ),
     )
     lot_method: str = Field(default="", description="fifo (default) or lifo for sells")
+    max_slippage_pct: float = Field(
+        default=0,
+        description="Best-cost cap in percent. 0.5 keeps fills within 0.5% of the best price. Zero means no cap.",
+    )
     idempotency_key: str = Field(
         default="",
         description="Optional retry key; same key + same request returns the original fill",
@@ -4230,6 +4242,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         risk_percent: float = 0,
         reason: list[str] | None = None,
         compare_exchange: str = "",
+        max_slippage_pct: float = 0,
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -4262,6 +4275,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["leverage"] = leverage
         if compare_exchange:
             body["compareExchange"] = compare_exchange
+        if max_slippage_pct:
+            body["maxSlippagePct"] = max_slippage_pct
         if portfolio_id:
             body["portfolioId"] = portfolio_id
         if reason is not None:
@@ -4279,6 +4294,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         idempotency_key: str = "",
         portfolio_id: str = "",
         reason: list[str] | None = None,
+        max_slippage_pct: float = 0,
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -4287,6 +4303,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             "quantity": quantity,
             "exchange": exchange,
         }
+        if max_slippage_pct:
+            body["maxSlippagePct"] = max_slippage_pct
         if lot_method:
             body["lotMethod"] = lot_method
         if idempotency_key:
@@ -7046,6 +7064,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "exchange=all splits a spot market order across Binance, Coinbase, and Bybit "
                 "by depth and taker fee. compare_exchange prices that whole size on one venue. "
                 "routeLegs lists each venue. A missing book is named. "
+                "max_slippage_pct of 0.5 keeps fills within 0.5% of the best price. "
+                "When the size inside that cap is short, nothing is filled. "
                 "A sell only uses coins already held on that venue. "
                 "Nothing is written. A spot buy also returns the live coin read. "
                 "Pass reason to name the clauses a buy would store. "
@@ -7066,6 +7086,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "exchange=all splits the quantity across Binance, Coinbase, and Bybit by depth and "
                 "taker fee and returns one trade per venue. "
                 "Buy lot cost includes the fee; sell realized PnL is after the fee. "
+                "max_slippage_pct of 0.5 keeps fills within 0.5% of the best price. "
+                "When the size inside that cap is short, nothing is filled. "
                 "A sell only uses coins already held on that venue. "
                 "Pass reason to store only those clauses on a buy. Omit it to store the whole read. "
                 "Pass idempotency_key on retries so a timeout does not create a second fill. Not real money."

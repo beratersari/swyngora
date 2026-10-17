@@ -117,10 +117,12 @@ def test_preview_portfolio_order_sends_best_cost_route(monkeypatch):
                 "quantity": 2,
                 "exchange": "all",
                 "compare_exchange": "binance",
+                "max_slippage_pct": 0.5,
             }
         )
     finally:
         reset_tool_scope(scope)
     assert seen[0]["exchange"] == "all"
     assert seen[0]["compareExchange"] == "binance"
+    assert seen[0]["maxSlippagePct"] == 0.5
     assert seen[0]["quantity"] == 2

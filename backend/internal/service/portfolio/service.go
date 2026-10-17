@@ -399,6 +399,8 @@ type OrderInput struct {
 	RecurringCatchUp bool
 	// Reason names the clauses a buy stores. Unset keeps the whole read.
 	Reason domain.SituationReason
+	// MaxSlippagePct caps a best-cost walk. 0.5 means 0.5% from the best price. Zero means no cap.
+	MaxSlippagePct float64
 }
 
 // requireBook loads a book the caller owns (owner role).

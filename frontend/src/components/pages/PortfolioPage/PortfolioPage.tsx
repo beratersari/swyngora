@@ -224,6 +224,7 @@ export function PortfolioPage() {
       lotMethod: values.lotMethod,
       timeInForce: values.timeInForce,
       idempotencyKey: newPaperIdempotencyKey('web'),
+      maxSlippagePct: values.maxSlippagePct,
       reason: values.reason,
     }).unwrap();
     const isPending = Boolean(res.order || res.entry || res.ocoGroupId || res.bracketId);

@@ -12,7 +12,7 @@ func TestRoutePaperBooks_FeeBeatsACheaperCoinbaseAsk(t *testing.T) {
 		{Exchange: ExchangeCoinbase, Symbol: "BTC-USD", Quote: "USD", FeeRate: CoinbaseFeeRate,
 			Asks: []PriceLevel{{Price: 99.60, Quantity: 1}}},
 	}
-	got := RoutePaperBooks(TradeSideBuy, 1, "USDT", books)
+	got := RoutePaperBooks(TradeSideBuy, 1, "USDT", 0, books)
 	if got.Exhausted || got.InventoryShort || len(got.Legs) != 1 {
 		t.Fatalf("%+v", got)
 	}
@@ -33,7 +33,7 @@ func TestRoutePaperBooks_SplitsWhenTheFirstLevelIsThin(t *testing.T) {
 		{Exchange: ExchangeCoinbase, Symbol: "BTC-USD", Quote: "USD", FeeRate: CoinbaseFeeRate,
 			Asks: []PriceLevel{{Price: 110, Quantity: 2}}},
 	}
-	got := RoutePaperBooks(TradeSideBuy, 1, "USDT", books)
+	got := RoutePaperBooks(TradeSideBuy, 1, "USDT", 0, books)
 	if got.Exhausted || len(got.Legs) != 2 {
 		t.Fatalf("%+v", got)
 	}
@@ -43,7 +43,7 @@ func TestRoutePaperBooks_SplitsWhenTheFirstLevelIsThin(t *testing.T) {
 	if got.Legs[1].Exchange != ExchangeBybit || math.Abs(got.Legs[1].Quantity-0.6) > 1e-9 {
 		t.Fatalf("second %+v", got.Legs[1])
 	}
-	cmp := ComparePaperRoute(got, ExchangeBinance, TradeSideBuy, 1, "USDT", books)
+	cmp := ComparePaperRoute(got, ExchangeBinance, TradeSideBuy, 1, "USDT", 0, books)
 	if !cmp.Known || cmp.Exhausted || cmp.SavedCash <= 0.5 {
 		t.Fatalf("compare %+v", cmp)
 	}
@@ -58,7 +58,7 @@ func TestRoutePaperBooks_SellStopsAtTheCoinsHeldOnEachVenue(t *testing.T) {
 		{Exchange: ExchangeBybit, Symbol: "BTCUSDT", Quote: "USDT", FeeRate: BybitFeeRate, CapQty: &bybitHeld,
 			Bids: []PriceLevel{{Price: 99, Quantity: 5}}},
 	}
-	got := RoutePaperBooks(TradeSideSell, 1, "USDT", books)
+	got := RoutePaperBooks(TradeSideSell, 1, "USDT", 0, books)
 	if got.Exhausted || got.InventoryShort || len(got.Legs) != 2 {
 		t.Fatalf("%+v", got)
 	}
@@ -76,7 +76,7 @@ func TestRoutePaperBooks_SellNamesAShortInventory(t *testing.T) {
 		{Exchange: ExchangeBinance, Symbol: "BTCUSDT", Quote: "USDT", FeeRate: BinanceFeeRate, CapQty: &held,
 			Bids: []PriceLevel{{Price: 100, Quantity: 5}}},
 	}
-	got := RoutePaperBooks(TradeSideSell, 1, "USDT", books)
+	got := RoutePaperBooks(TradeSideSell, 1, "USDT", 0, books)
 	if !got.InventoryShort || got.Exhausted || math.Abs(got.FilledQuantity-0.3) > 1e-9 {
 		t.Fatalf("%+v", got)
 	}
@@ -88,7 +88,7 @@ func TestRoutePaperBooks_NamesAMissingBookAndStillFills(t *testing.T) {
 			Asks: []PriceLevel{{Price: 100, Quantity: 2}}},
 		{Exchange: ExchangeCoinbase, Symbol: "BTC-USD", Quote: "USD", Missing: "timeout"},
 	}
-	got := RoutePaperBooks(TradeSideBuy, 1, "USDT", books)
+	got := RoutePaperBooks(TradeSideBuy, 1, "USDT", 0, books)
 	if got.Exhausted || len(got.Legs) != 1 || len(got.Missing) != 1 || got.Missing[0] != "coinbase" {
 		t.Fatalf("%+v", got)
 	}
@@ -105,7 +105,7 @@ func TestRoutePaperBooks_ExhaustedWhenTheBooksAreShort(t *testing.T) {
 		{Exchange: ExchangeBybit, Symbol: "BTCUSDT", Quote: "USDT", FeeRate: BybitFeeRate,
 			Asks: []PriceLevel{{Price: 100, Quantity: 0.2}}},
 	}
-	got := RoutePaperBooks(TradeSideBuy, 1, "USDT", books)
+	got := RoutePaperBooks(TradeSideBuy, 1, "USDT", 0, books)
 	if !got.Exhausted || got.InventoryShort || math.Abs(got.FilledQuantity-0.4) > 1e-9 {
 		t.Fatalf("%+v", got)
 	}
@@ -118,9 +118,53 @@ func TestRoutePaperBooks_CoinbaseLegIsAliasedOntoUSDT(t *testing.T) {
 		{Exchange: ExchangeBinance, Symbol: "BTCUSDT", Quote: "USDT", FeeRate: BinanceFeeRate,
 			Asks: []PriceLevel{{Price: 100, Quantity: 1}}},
 	}
-	got := RoutePaperBooks(TradeSideBuy, 1, "USDT", books)
+	got := RoutePaperBooks(TradeSideBuy, 1, "USDT", 0, books)
 	if len(got.Legs) != 1 || got.Legs[0].Exchange != ExchangeCoinbase || !got.Legs[0].Aliased {
 		t.Fatalf("%+v", got.Legs)
+	}
+}
+
+func TestRoutePaperBooks_MaxSlippageLeavesAPricePastTheCap(t *testing.T) {
+	books := []PaperRouteBook{
+		{Exchange: ExchangeBinance, Symbol: "BTCUSDT", Quote: "USDT", FeeRate: BinanceFeeRate,
+			Asks: []PriceLevel{{Price: 100, Quantity: 0.4}, {Price: 101, Quantity: 2}}},
+		{Exchange: ExchangeBybit, Symbol: "BTCUSDT", Quote: "USDT", FeeRate: BybitFeeRate,
+			Asks: []PriceLevel{{Price: 100.4, Quantity: 2}}},
+	}
+	// 0.5% of 100 is 100.50. 100.40 is inside. 101 is outside.
+	inside := RoutePaperBooks(TradeSideBuy, 1, "USDT", 0.005, books)
+	if inside.SlippageLimited || inside.Exhausted || len(inside.Legs) != 2 {
+		t.Fatalf("inside %+v", inside)
+	}
+	if math.Abs(inside.LimitPrice-100.5) > 1e-9 || math.Abs(inside.TouchPrice-100) > 1e-9 {
+		t.Fatalf("limit %v touch %v", inside.LimitPrice, inside.TouchPrice)
+	}
+	blocked := RoutePaperBooks(TradeSideBuy, 1, "USDT", 0.002, books)
+	if !blocked.SlippageLimited || blocked.Exhausted || blocked.FilledQuantity > 0.4+1e-9 {
+		t.Fatalf("blocked %+v", blocked)
+	}
+	held := 5.0
+	sellBooks := []PaperRouteBook{
+		{Exchange: ExchangeBinance, Symbol: "BTCUSDT", Quote: "USDT", FeeRate: BinanceFeeRate, CapQty: &held,
+			Bids: []PriceLevel{{Price: 100, Quantity: 0.4}, {Price: 99, Quantity: 2}}},
+	}
+	sell := RoutePaperBooks(TradeSideSell, 1, "USDT", 0.005, sellBooks)
+	if !sell.SlippageLimited || sell.FilledQuantity > 0.4+1e-9 {
+		t.Fatalf("sell %+v", sell)
+	}
+}
+
+func TestParseMaxSlippagePct(t *testing.T) {
+	got, err := ParseMaxSlippagePct(0.5)
+	if err != nil || math.Abs(got-0.005) > 1e-12 {
+		t.Fatalf("%v %v", got, err)
+	}
+	if _, err := ParseMaxSlippagePct(-1); err == nil {
+		t.Fatal("negative should be rejected")
+	}
+	zero, err := ParseMaxSlippagePct(0)
+	if err != nil || zero != 0 {
+		t.Fatalf("zero %v %v", zero, err)
 	}
 }
 

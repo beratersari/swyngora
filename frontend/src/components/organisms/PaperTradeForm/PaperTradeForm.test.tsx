@@ -60,13 +60,21 @@ describe('PaperTradeForm', () => {
     const spin = screen.getByRole('spinbutton', { name: /quantity|miktar/i });
     fireEvent.change(spin, { target: { value: '0.5' } });
     fireEvent.blur(spin);
+    const slip = screen.getByRole('spinbutton', { name: /max slippage|kayma/i });
+    fireEvent.change(slip, { target: { value: '0.5' } });
+    fireEvent.blur(slip);
     fireEvent.click(screen.getByRole('button', { name: /paper buy|kağıt al/i }));
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalled();
     });
-    const arg = onSubmit.mock.calls.at(-1)?.[0] as { exchange: string; quantity: number };
+    const arg = onSubmit.mock.calls.at(-1)?.[0] as {
+      exchange: string;
+      quantity: number;
+      maxSlippagePct?: number;
+    };
     expect(arg.exchange).toBe('all');
     expect(arg.quantity).toBe(0.5);
+    expect(arg.maxSlippagePct).toBe(0.5);
   });
 
   it('finding 8: limit ticket posts the raw typed trigger with no FX conversion', async () => {

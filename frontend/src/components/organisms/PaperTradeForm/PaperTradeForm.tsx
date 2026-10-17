@@ -64,6 +64,7 @@ export function PaperTradeForm({
   const [tif, setTif] = useState<'gtc' | 'ioc' | 'fok'>('gtc');
   const [pickedReason, setPickedReason] = useState<string[] | null>(null);
   const [bestCost, setBestCost] = useState(false);
+  const [maxSlippagePct, setMaxSlippagePct] = useState<number | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [localBusy, setLocalBusy] = useState(false);
   const inFlightRef = useRef(false);
@@ -144,6 +145,7 @@ export function PaperTradeForm({
       product: 'spot',
       exchange: wireExchange,
       compareExchange: routing ? exchange : undefined,
+      maxSlippagePct: routing && maxSlippagePct != null && maxSlippagePct > 0 ? maxSlippagePct : undefined,
       symbol: symbol.trim().toUpperCase(),
       type: toApiOrderType(kind, side),
       side,
@@ -162,6 +164,7 @@ export function PaperTradeForm({
     exchange,
     wireExchange,
     routing,
+    maxSlippagePct,
     symbol,
     kind,
     side,
@@ -192,6 +195,7 @@ export function PaperTradeForm({
     const orderType = toApiOrderType(kind, s);
     const values: PaperTradeFormValues = {
       exchange: wireExchange,
+      maxSlippagePct: routing && maxSlippagePct != null && maxSlippagePct > 0 ? maxSlippagePct : undefined,
       symbol: sym,
       orderType,
       side: s,
@@ -292,6 +296,18 @@ export function PaperTradeForm({
               <Text variant="caption" color="secondary">
                 {t('portfolio:trade.routeHint')}
               </Text>
+            ) : null}
+            {routing ? (
+              <InputNumber
+                min={0}
+                max={100}
+                step={0.1}
+                value={maxSlippagePct}
+                onChange={(value) => setMaxSlippagePct(typeof value === 'number' ? value : null)}
+                style={{ minWidth: 120 }}
+                aria-label={t('portfolio:trade.maxSlippage')}
+                placeholder={t('portfolio:trade.maxSlippage')}
+              />
             ) : null}
           </Field>
         ) : null}

@@ -369,6 +369,7 @@ type orderBody struct {
 	RiskPercent     float64   `json:"riskPercent"` // preview only: size from equity and the stop
 	Reason          *[]string `json:"reason"`      // clauses a buy stores; omitted keeps the whole read
 	CompareExchange string    `json:"compareExchange"`
+	MaxSlippagePct  float64   `json:"maxSlippagePct"`
 }
 
 func situationReasonFrom(raw *[]string) (domain.SituationReason, error) {
@@ -492,6 +493,7 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 				Side: body.Side, Quantity: body.Quantity, LotMethod: body.LotMethod,
 				IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
 				Reason:         reason,
+				MaxSlippagePct: body.MaxSlippagePct,
 			})
 			if err != nil {
 				writeError(w, err)

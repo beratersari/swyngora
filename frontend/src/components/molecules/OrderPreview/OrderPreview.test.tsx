@@ -103,6 +103,26 @@ describe('OrderPreview', () => {
     expect(screen.getByText(/after the taker fee|komisyon sonrası/i)).toBeInTheDocument();
   });
 
+  it('says a best-cost order past the slippage limit would not fill', () => {
+    renderWithTheme(
+      <OrderPreview
+        preview={{
+          ...blockedBuy,
+          routed: true,
+          side: 'buy',
+          fillsNow: false,
+          risk: { ...blockedBuy.risk, blocked: false, weightLimitHit: false },
+          maxSlippagePct: 0.5,
+          slippageLimitPrice: 100.5,
+          slippageLimited: true,
+          slippageInsideQuantity: 0.4,
+        }}
+      />,
+    );
+    expect(screen.getByTestId('route-slippage')).toHaveTextContent(/0[.,]5%/);
+    expect(screen.getByText(/inside the slippage limit|kayma limiti içinde/i)).toBeInTheDocument();
+  });
+
   it('says nothing was placed', () => {
     renderWithTheme(<OrderPreview preview={blockedBuy} />);
     expect(screen.getByText(/preview only|yalnızca önizleme/i)).toBeInTheDocument();

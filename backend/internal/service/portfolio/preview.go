@@ -36,6 +36,8 @@ type OrderPreviewInput struct {
 	Reason domain.SituationReason
 	// CompareExchange prices the whole quantity on one venue when Exchange is all.
 	CompareExchange string
+	// MaxSlippagePct caps a best-cost walk. 0.5 means 0.5% from the best price. Zero means no cap.
+	MaxSlippagePct float64
 }
 
 // riskSnap is the live book used to price one preview. It is not saved as an order.

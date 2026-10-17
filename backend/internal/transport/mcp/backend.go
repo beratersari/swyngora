@@ -5102,7 +5102,7 @@ func (b *Backend) GetPortfolioPerformance(ctx context.Context, clientID, period 
 	return mustJSON(m)
 }
 
-func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string) (json.RawMessage, error) {
+func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
@@ -5111,7 +5111,7 @@ func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange,
 		Side: side, Type: orderType, Product: product, TrailType: trailType, LotMethod: lotMethod,
 		Quantity: quantity, TriggerPrice: triggerPrice, TakeProfitPrice: takeProfitPrice, StopLossPrice: stopLossPrice,
 		TrailValue: trailValue, LimitPrice: limitPrice, Leverage: leverage, RiskPercent: riskPercent,
-		Reason: reasonInput(ctx), CompareExchange: compareExchange,
+		Reason: reasonInput(ctx), CompareExchange: compareExchange, MaxSlippagePct: maxSlippagePct,
 	})
 	if err != nil {
 		return nil, err
@@ -5119,14 +5119,14 @@ func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange,
 	return mustJSON(portfolio.OrderPreviewPayload(got))
 }
 
-func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string) (json.RawMessage, error) {
+func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string, maxSlippagePct float64) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
 	if domain.IsPaperRouteExchange(exchange) {
 		trades, v, err := b.Portfolio.PlaceRoutedOrder(ctx, portfolio.OrderInput{
 			ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol, Side: side, Quantity: quantity, LotMethod: lotMethod,
-			IdempotencyKey: IdempotencyKeyFrom(ctx), Reason: reasonInput(ctx),
+			IdempotencyKey: IdempotencyKeyFrom(ctx), Reason: reasonInput(ctx), MaxSlippagePct: maxSlippagePct,
 		})
 		if err != nil {
 			return nil, err
@@ -5160,7 +5160,7 @@ func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, s
 	}
 	tr, v, err := b.Portfolio.PlaceOrder(ctx, portfolio.OrderInput{
 		ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol, Side: side, Quantity: quantity, LotMethod: lotMethod,
-		IdempotencyKey: IdempotencyKeyFrom(ctx), Reason: reasonInput(ctx),
+		IdempotencyKey: IdempotencyKeyFrom(ctx), Reason: reasonInput(ctx), MaxSlippagePct: maxSlippagePct,
 	})
 	if err != nil {
 		return nil, err

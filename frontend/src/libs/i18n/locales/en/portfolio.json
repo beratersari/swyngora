@@ -89,6 +89,7 @@
     "thisVenue": "This venue",
     "bestCost": "Best cost",
     "routeHint": "Split this market order across Binance, Coinbase, and Bybit by depth and taker fee.",
+    "maxSlippage": "Max slippage %",
     "successBuy": "Bought {{qty}} {{symbol}}",
     "successSell": "Sold {{qty}} {{symbol}}",
     "successPending": "Pending order placed for {{symbol}}",
@@ -154,6 +155,8 @@
     "savedSell": "{{amount}} more than selling all of it on {{exchange}}.",
     "missingVenues": "Left out, book unavailable: {{names}}.",
     "aliasQuote": "A USD quote on this book is booked 1:1.",
+    "slippageCapBuy": "Buys stay at or below {{pct}} above the best ask ({{price}}).",
+    "slippageCapSell": "Sells stay at or above {{pct}} below the best bid ({{price}}).",
     "note": "Preview only — nothing was placed. A crypto fill walks the visible book. Equities use a fixed slippage. A size the book cannot hold is not filled. Risk limits block new buys and new margin opens. Sells are not blocked. Not real money.",
     "warnings": {
       "blocked": "Risk limits would block this order.",
@@ -164,7 +167,8 @@
       "quantity": "Not enough available quantity.",
       "borrow": "This would pass the borrow limit.",
       "stopBeyondLiquidation": "The stop is past liquidation, so the position would close there first. The loss would not be the stop distance.",
-      "book": "The visible book cannot hold this size. Nothing would be filled."
+      "book": "The visible book cannot hold this size. Nothing would be filled.",
+      "slippage": "Not enough size inside the slippage limit. Nothing would be filled."
     }
   },
   "margin": {

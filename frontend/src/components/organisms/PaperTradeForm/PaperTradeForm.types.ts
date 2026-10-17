@@ -18,6 +18,8 @@ export type PaperTradeFormValues = {
   timeInForce?: 'gtc' | 'ioc' | 'fok';
   /** Set on a buy that names its clauses. An empty list stores no read. */
   reason?: string[];
+  /** Best-cost cap in percent. 0.5 means 0.5% from the best price. */
+  maxSlippagePct?: number;
 };
 
 export type PaperTradeFormProps = {

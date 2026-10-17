@@ -89,6 +89,7 @@
     "thisVenue": "Bu borsa",
     "bestCost": "En düşük maliyet",
     "routeHint": "Bu piyasa emrini derinlik ve komisyona göre Binance, Coinbase ve Bybit arasında böler.",
+    "maxSlippage": "En fazla kayma %",
     "successBuy": "{{qty}} {{symbol}} alındı",
     "successSell": "{{qty}} {{symbol}} satıldı",
     "successPending": "{{symbol}} için bekleyen emir oluşturuldu",
@@ -154,6 +155,8 @@
     "savedSell": "{{exchange}} üzerinde tamamını satmaktan {{amount}} daha fazla.",
     "missingVenues": "Dışarıda, defter yok: {{names}}.",
     "aliasQuote": "Bu defterde USD kotasyonu bire bir yazılır.",
+    "slippageCapBuy": "Alışlar en iyi satışın en fazla {{pct}} üstünde kalır ({{price}}).",
+    "slippageCapSell": "Satışlar en iyi alışın en fazla {{pct}} altında kalır ({{price}}).",
     "note": "Yalnızca önizleme — hiçbir emir gönderilmedi. Kripto dolumu görünen defteri yürür. Hisseler sabit kayma kullanır. Defterin taşımadığı büyüklük dolmaz. Risk limitleri yeni alışları ve yeni marjin açılışlarını durdurur. Satışlar durmaz. Gerçek para değildir.",
     "warnings": {
       "blocked": "Risk limitleri bu emri durdururdu.",
@@ -164,7 +167,8 @@
       "quantity": "Kullanılabilir miktar yetmiyor.",
       "borrow": "Bu emir borç limitini aşardı.",
       "stopBeyondLiquidation": "Zarar kes likidasyonun ötesinde, bu yüzden pozisyon önce orada kapanır. Kayıp, zarar kes mesafesi olmaz.",
-      "book": "Görünen defter bu büyüklüğü taşımıyor. Hiçbir şey dolmaz."
+      "book": "Görünen defter bu büyüklüğü taşımıyor. Hiçbir şey dolmaz.",
+      "slippage": "Kayma limiti içinde yeterli miktar yok. Hiçbir şey dolmaz."
     }
   },
   "margin": {

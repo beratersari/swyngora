@@ -218,6 +218,42 @@ func TestPlaceRoute_RejectsAShortBookAndAShortSell(t *testing.T) {
 	}
 }
 
+func TestPlaceRoute_MaxSlippageRejectsAPricePastTheCap(t *testing.T) {
+	px := &fakePx{prices: map[string]string{"binance|BTCUSDT": "100", "bybit|BTCUSDT": "100"}}
+	svc := newSvc(t, px).WithPaperCosts(domain.TradingCostFor)
+	svc.SetBookSource(booksByVenue{by: map[string]*domain.RawOrderBook{
+		"binance": {Asks: []domain.PriceLevel{{Price: 100, Quantity: 0.4}, {Price: 101, Quantity: 2}}},
+		"bybit":   {Asks: []domain.PriceLevel{{Price: 100.6, Quantity: 2}}},
+	}})
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, CreateInput{ClientID: "route-slip", StartingBalance: 10000}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.PreviewOrder(ctx, OrderPreviewInput{
+		ClientID: "route-slip", Exchange: "all", Symbol: "BTCUSDT", Side: "buy", Quantity: 1,
+		MaxSlippagePct: 0.5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.SlippageLimited || got.FillsNow || math.Abs(got.MaxSlippagePct-0.5) > 1e-9 {
+		t.Fatalf("preview limited=%v fills=%v pct=%v inside=%v", got.SlippageLimited, got.FillsNow, got.MaxSlippagePct, got.SlippageInsideQuantity)
+	}
+	if _, _, err := svc.PlaceRoutedOrder(ctx, OrderInput{
+		ClientID: "route-slip", Exchange: "all", Symbol: "BTCUSDT", Side: "buy", Quantity: 1,
+		MaxSlippagePct: 0.5,
+	}); err == nil || !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("place %v", err)
+	}
+	view, err := svc.View(ctx, "route-slip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Positions) != 0 || math.Abs(view.CashBalance-10000) > 1e-9 {
+		t.Fatalf("opened a position %+v cash %v", view.Positions, view.CashBalance)
+	}
+}
+
 func TestPreviewRoute_RejectsMarginAndEquities(t *testing.T) {
 	svc := newSvc(t, &fakePx{prices: map[string]string{"binance|BTCUSDT": "100"}})
 	svc.SetBookSource(booksByVenue{by: map[string]*domain.RawOrderBook{

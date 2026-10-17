@@ -10324,6 +10324,12 @@ export interface components {
              * @enum {string}
              */
             compareExchange?: "binance" | "coinbase" | "bybit";
+            /**
+             * @description Best-cost price cap in percent. 0.5 means a buy stays at or below 0.5% above the best ask,
+             *     and a sell stays at or above 0.5% below the best bid. Zero or omitted means no cap.
+             *     When the size inside the cap is short, nothing is filled.
+             */
+            maxSlippagePct?: number;
             symbol: string;
             /**
              * @description spot uses the paper order types. margin prices a long or short open.
@@ -10516,6 +10522,16 @@ export interface components {
             compare?: components["schemas"]["PaperRouteCompare"];
             /** @description How the split was chosen. */
             routeNote?: string;
+            /** @description Best-cost cap in percent. Present when the request set one. */
+            maxSlippagePct?: number;
+            /** @description Best ask for a buy, or best bid for a sell, that the cap is measured from. */
+            slippageTouch?: number;
+            /** @description Furthest raw price the cap allows. */
+            slippageLimitPrice?: number;
+            /** @description Visible size at or better than slippageLimitPrice. */
+            slippageInsideQuantity?: number;
+            /** @description True when that size is shorter than the order, so nothing is filled. */
+            slippageLimited?: boolean;
             note?: string;
         };
         PaperRouteLeg: {
@@ -16944,6 +16960,8 @@ export interface operations {
                      * @enum {string}
                      */
                     exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist" | "all";
+                    /** @description Best-cost cap in percent. 0.5 keeps fills within 0.5% of the best price. Zero means no cap. */
+                    maxSlippagePct?: number;
                     symbol: string;
                     /**
                      * @default market

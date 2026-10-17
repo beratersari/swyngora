@@ -53,6 +53,8 @@ export type PlacePortfolioOrderArg = {
   timeInForce?: 'gtc' | 'ioc' | 'fok';
   expiresAt?: string;
   idempotencyKey?: string;
+  /** Best-cost cap in percent. 0.5 means 0.5% from the best price. */
+  maxSlippagePct?: number;
   /** Clauses a buy stores. Omit to store the whole read. An empty list stores no read. */
   reason?: string[];
 };
@@ -81,6 +83,7 @@ export type PreviewPortfolioOrderArg = {
   portfolioId?: string;
   exchange?: string;
   compareExchange?: string;
+  maxSlippagePct?: number;
   symbol: string;
   product?: 'spot' | 'margin';
   type?: string;
@@ -390,6 +393,7 @@ export const portfolioApi = baseApi.injectEndpoints({
           timeInForce: body.timeInForce,
           expiresAt: body.expiresAt,
           idempotencyKey: body.idempotencyKey,
+          maxSlippagePct: body.maxSlippagePct,
           ...(body.reason !== undefined ? { reason: body.reason } : {}),
         },
         headers: body.idempotencyKey ? { 'Idempotency-Key': body.idempotencyKey } : undefined,
@@ -418,6 +422,7 @@ export const portfolioApi = baseApi.injectEndpoints({
           limitPrice: body.limitPrice,
           leverage: body.leverage,
           compareExchange: body.compareExchange,
+          maxSlippagePct: body.maxSlippagePct,
           ...(body.reason !== undefined ? { reason: body.reason } : {}),
         },
       }),

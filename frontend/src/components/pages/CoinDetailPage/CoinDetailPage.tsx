@@ -3432,6 +3432,7 @@ export function CoinDetailPage() {
                   timeInForce: values.timeInForce,
                   lotMethod: values.lotMethod,
                   idempotencyKey: newPaperIdempotencyKey('detail'),
+                  maxSlippagePct: values.maxSlippagePct,
                   reason: values.reason,
                 }).unwrap();
                 void message.success(

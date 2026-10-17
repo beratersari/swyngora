@@ -42,14 +42,18 @@ func (s *Service) previewRouted(ctx context.Context, p *domain.Portfolio, in Ord
 	if err := domain.RouteSymbolMatchesBook(canon, p.Currency); err != nil {
 		return nil, err
 	}
+	slip, err := domain.ParseMaxSlippagePct(in.MaxSlippagePct)
+	if err != nil {
+		return nil, err
+	}
 	books, err := s.loadRouteBooks(ctx, clientID, canon, p.Currency, side)
 	if err != nil {
 		return nil, err
 	}
-	route := domain.RoutePaperBooks(side, in.Quantity, p.Currency, books)
+	route := domain.RoutePaperBooks(side, in.Quantity, p.Currency, slip, books)
 	var compare *domain.PaperRouteCompare
 	if ex := domain.ParseRouteCompare(in.CompareExchange); ex != "" {
-		got := domain.ComparePaperRoute(route, ex, side, in.Quantity, p.Currency, books)
+		got := domain.ComparePaperRoute(route, ex, side, in.Quantity, p.Currency, slip, books)
 		compare = &got
 	}
 	avail, err := s.availableCashForTrading(ctx, clientID, p.CashBalance)
@@ -133,7 +137,11 @@ func (s *Service) PlaceRoutedOrder(ctx context.Context, in OrderInput) ([]domain
 	if err := domain.RouteSymbolMatchesBook(canon, p.Currency); err != nil {
 		return nil, nil, err
 	}
-	idempHash := hashParts("route", canon, string(side), in.Quantity, string(lotMethod), in.Reason.HashPart())
+	slip, err := domain.ParseMaxSlippagePct(in.MaxSlippagePct)
+	if err != nil {
+		return nil, nil, err
+	}
+	idempHash := hashParts("route", canon, string(side), in.Quantity, string(lotMethod), slip, in.Reason.HashPart())
 	if rec, err := s.checkIdempotency(ctx, clientID, idempKey, idempHash); err != nil {
 		return nil, nil, err
 	} else if rec != nil {
@@ -143,9 +151,12 @@ func (s *Service) PlaceRoutedOrder(ctx context.Context, in OrderInput) ([]domain
 	if err != nil {
 		return nil, nil, err
 	}
-	route := domain.RoutePaperBooks(side, in.Quantity, p.Currency, books)
+	route := domain.RoutePaperBooks(side, in.Quantity, p.Currency, slip, books)
 	if route.InventoryShort {
 		return nil, nil, fmt.Errorf("%w: insufficient position quantity", domain.ErrInvalidArgument)
+	}
+	if route.SlippageLimited {
+		return nil, nil, fmt.Errorf("%w: max slippage cannot fill this size", domain.ErrInvalidArgument)
 	}
 	if route.Exhausted || route.FilledQuantity+1e-12 < in.Quantity || len(route.Legs) == 0 {
 		return nil, nil, domain.ErrBookExhausted
@@ -308,7 +319,12 @@ func (s *Service) stampRoutePreview(out *domain.OrderPreview, route domain.Paper
 	out.BookLevels = route.LevelsUsed
 	out.FillPrice = route.AveragePrice
 	out.ReferencePrice = out.LastPrice
-	full := !route.Exhausted && !route.InventoryShort && route.FilledQuantity+1e-12 >= out.Quantity && len(route.Legs) > 0
+	out.MaxSlippagePct = route.MaxSlippage * 100
+	out.SlippageTouch = route.TouchPrice
+	out.SlippageLimitPrice = route.LimitPrice
+	out.SlippageInsideQuantity = route.InsideQuantity
+	out.SlippageLimited = route.SlippageLimited
+	full := !route.Exhausted && !route.InventoryShort && !route.SlippageLimited && route.FilledQuantity+1e-12 >= out.Quantity && len(route.Legs) > 0
 	out.FillsNow = full
 	out.InsufficientQuantity = route.InventoryShort
 	if !full {

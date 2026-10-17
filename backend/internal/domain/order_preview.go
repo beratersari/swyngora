@@ -102,6 +102,16 @@ type OrderPreview struct {
 	RouteSkipped []PaperRouteSkip
 	RouteCompare *PaperRouteCompare
 	RouteNote    string
+	// MaxSlippagePct is the best-cost price cap in percent. Zero means no cap.
+	MaxSlippagePct float64
+	// SlippageTouch is the best ask or bid the cap is measured from.
+	SlippageTouch float64
+	// SlippageLimitPrice is the furthest raw price the cap allows.
+	SlippageLimitPrice float64
+	// SlippageInsideQuantity is the visible size inside the cap.
+	SlippageInsideQuantity float64
+	// SlippageLimited means that size is shorter than the order, so nothing fills.
+	SlippageLimited bool
 }
 
 // QuoteFill is the slipped fill, notional, fee, and cash movement for a quantity.

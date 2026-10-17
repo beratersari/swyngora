@@ -104,6 +104,13 @@ func OrderPreviewPayload(p *domain.OrderPreview) map[string]any {
 		if p.RouteNote != "" {
 			out["routeNote"] = p.RouteNote
 		}
+		if p.MaxSlippagePct > 0 {
+			out["maxSlippagePct"] = p.MaxSlippagePct
+			out["slippageTouch"] = p.SlippageTouch
+			out["slippageLimitPrice"] = p.SlippageLimitPrice
+			out["slippageInsideQuantity"] = p.SlippageInsideQuantity
+			out["slippageLimited"] = p.SlippageLimited
+		}
 	}
 	return out
 }

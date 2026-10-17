@@ -2355,7 +2355,7 @@ func (c *APIClient) DeletePortfolioRiskLimits(ctx context.Context, clientID stri
 }
 
 // PreviewPortfolioOrder prices a paper order without placing it.
-func (c *APIClient) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string) (json.RawMessage, error) {
+func (c *APIClient) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64) (json.RawMessage, error) {
 	body := map[string]any{
 		"clientId": clientID, "exchange": exchange, "symbol": symbol, "side": side,
 		"type": orderType, "product": product,
@@ -2393,17 +2393,23 @@ func (c *APIClient) PreviewPortfolioOrder(ctx context.Context, clientID, exchang
 	if compareExchange != "" {
 		body["compareExchange"] = compareExchange
 	}
+	if maxSlippagePct > 0 {
+		body["maxSlippagePct"] = maxSlippagePct
+	}
 	applySituationReason(ctx, body)
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders/preview", body)
 }
 
 // PlacePortfolioOrder places a paper market order.
-func (c *APIClient) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string) (json.RawMessage, error) {
+func (c *APIClient) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string, maxSlippagePct float64) (json.RawMessage, error) {
 	body := map[string]any{
 		"clientId": clientID, "exchange": exchange, "symbol": symbol, "side": side, "quantity": quantity,
 	}
 	if lotMethod != "" {
 		body["lotMethod"] = lotMethod
+	}
+	if maxSlippagePct > 0 {
+		body["maxSlippagePct"] = maxSlippagePct
 	}
 	if k := IdempotencyKeyFrom(ctx); k != "" {
 		body["idempotencyKey"] = k

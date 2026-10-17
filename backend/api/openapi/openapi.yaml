@@ -6822,6 +6822,11 @@ paths:
                   enum: [binance, coinbase, bybit, nasdaq, bist, all]
                   default: binance
                   description: all splits a spot market order across Binance, Coinbase, and Bybit by depth and taker fee.
+                maxSlippagePct:
+                  type: number
+                  minimum: 0
+                  maximum: 100
+                  description: Best-cost cap in percent. 0.5 keeps fills within 0.5% of the best price. Zero means no cap.
                 symbol: { type: string }
                 type:
                   type: string
@@ -14713,6 +14718,14 @@ components:
           type: string
           enum: [binance, coinbase, bybit]
           description: Venue to price the whole quantity against when exchange is all. Preview only.
+        maxSlippagePct:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: |
+            Best-cost price cap in percent. 0.5 means a buy stays at or below 0.5% above the best ask,
+            and a sell stays at or above 0.5% below the best bid. Zero or omitted means no cap.
+            When the size inside the cap is short, nothing is filled.
         symbol: { type: string }
         product:
           type: string
@@ -14957,6 +14970,21 @@ components:
         routeNote:
           type: string
           description: How the split was chosen.
+        maxSlippagePct:
+          type: number
+          description: Best-cost cap in percent. Present when the request set one.
+        slippageTouch:
+          type: number
+          description: Best ask for a buy, or best bid for a sell, that the cap is measured from.
+        slippageLimitPrice:
+          type: number
+          description: Furthest raw price the cap allows.
+        slippageInsideQuantity:
+          type: number
+          description: Visible size at or better than slippageLimitPrice.
+        slippageLimited:
+          type: boolean
+          description: True when that size is shorter than the order, so nothing is filled.
         note: { type: string }
     PaperRouteLeg:
       type: object
