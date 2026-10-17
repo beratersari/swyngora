@@ -195,6 +195,7 @@ type wirePFOrder struct {
 	TrailPeak         float64 `json:"trailPeak"`
 	BracketID         string  `json:"bracketId"`
 	BracketRole       string  `json:"bracketRole"`
+	TargetPercent     float64 `json:"targetPercent"`
 	LotMethod         string  `json:"lotMethod"`
 	CreatedAt         string  `json:"createdAt"`
 	UpdatedAt         string  `json:"updatedAt"`
@@ -395,7 +396,7 @@ func normalizePortfolioBook(w wirePortfolioBook, fileOwner, importer string) (do
 			RemainingQuantity: o.RemainingQuantity, TriggerPrice: o.TriggerPrice, ReservedCash: o.ReservedCash,
 			ReservedQuantity: o.ReservedQuantity, TimeInForce: domain.TimeInForce(o.TimeInForce), Status: st,
 			OCOGroupID: o.OCOGroupID, OCOPeerID: o.OCOPeerID, TrailType: o.TrailType, TrailValue: o.TrailValue,
-			TrailPeak: o.TrailPeak, BracketID: o.BracketID, BracketRole: o.BracketRole, LotMethod: lm,
+			TrailPeak: o.TrailPeak, BracketID: o.BracketID, BracketRole: o.BracketRole, TargetPercent: o.TargetPercent, LotMethod: lm,
 			CreatedAt: parseTimeOrNow(o.CreatedAt), UpdatedAt: parseTimeOrNow(o.UpdatedAt),
 		}
 		if o.ExpiresAt != nil {

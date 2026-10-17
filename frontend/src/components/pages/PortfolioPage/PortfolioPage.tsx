@@ -230,6 +230,7 @@ export function PortfolioPage() {
       quantity: values.quantity,
       triggerPrice: values.triggerPrice,
       takeProfitPrice: values.takeProfitPrice,
+      takeProfitTargets: values.takeProfitTargets,
       stopLossPrice: values.stopLossPrice,
       trailType: values.trailType,
       trailValue: values.trailValue,

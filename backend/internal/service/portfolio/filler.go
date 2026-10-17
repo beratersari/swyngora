@@ -139,7 +139,8 @@ func (f *OrderFiller) RunOnce(ctx context.Context) {
 				f.Logger.Debug("bad last price for pending order", "symbol", k.sym, "last", tkr.LastPrice)
 				return
 			}
-			// OCO pairs share a tick: process as a unit so both legs cannot fill.
+			// OCO groups share a tick. A touched stop is the only fill. Otherwise every
+			// take-profit the price has reached fills, and each one shrinks the stop.
 			ocoGroups := map[string][]domain.PendingOrder{}
 			var singles []domain.PendingOrder
 			for _, o := range orders {
@@ -157,7 +158,7 @@ func (f *OrderFiller) RunOnce(ctx context.Context) {
 				var ok bool
 				var err error
 				if len(legs) >= 2 {
-					updated, ok, err = f.Portfolio.ProcessOCOPair(ctx, legs[0], legs[1], last, now, 0)
+					updated, ok, err = f.Portfolio.ProcessOCOGroup(ctx, legs, last, now, 0)
 				} else {
 					// Peer already gone — treat as standalone remainder.
 					updated, ok, err = f.Portfolio.ProcessOpenOrder(ctx, legs[0], last, now, 0)

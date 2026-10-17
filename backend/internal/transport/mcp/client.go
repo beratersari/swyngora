@@ -2355,7 +2355,7 @@ func (c *APIClient) DeletePortfolioRiskLimits(ctx context.Context, clientID stri
 }
 
 // PreviewPortfolioOrder prices a paper order without placing it.
-func (c *APIClient) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int) (json.RawMessage, error) {
+func (c *APIClient) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int, takeProfitTargets string) (json.RawMessage, error) {
 	body := map[string]any{
 		"clientId": clientID, "exchange": exchange, "symbol": symbol, "side": side,
 		"type": orderType, "product": product,
@@ -2371,6 +2371,11 @@ func (c *APIClient) PreviewPortfolioOrder(ctx context.Context, clientID, exchang
 	}
 	if takeProfitPrice > 0 {
 		body["takeProfitPrice"] = takeProfitPrice
+	}
+	if targets, err := decodeTakeProfitTargets(takeProfitTargets); err != nil {
+		return nil, err
+	} else if len(targets) > 0 {
+		body["takeProfitTargets"] = targets
 	}
 	if stopLossPrice > 0 {
 		body["stopLossPrice"] = stopLossPrice
@@ -2507,11 +2512,16 @@ func (c *APIClient) PlacePortfolioPendingOrder(ctx context.Context, clientID, ex
 }
 
 // PlacePortfolioBracketOrder places limit-buy entry with pending TP/SL exits.
-func (c *APIClient) PlacePortfolioBracketOrder(ctx context.Context, clientID, exchange, symbol string, quantity, entryPrice, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error) {
+func (c *APIClient) PlacePortfolioBracketOrder(ctx context.Context, clientID, exchange, symbol string, quantity, entryPrice, takeProfitPrice, stopLossPrice float64, expiresAt, takeProfitTargets string) (json.RawMessage, error) {
 	body := map[string]any{
 		"clientId": clientID, "exchange": exchange, "symbol": symbol, "type": "bracket",
 		"quantity": quantity, "triggerPrice": entryPrice,
 		"takeProfitPrice": takeProfitPrice, "stopLossPrice": stopLossPrice,
+	}
+	if targets, err := decodeTakeProfitTargets(takeProfitTargets); err != nil {
+		return nil, err
+	} else if len(targets) > 0 {
+		body["takeProfitTargets"] = targets
 	}
 	if expiresAt != "" {
 		body["expiresAt"] = expiresAt
@@ -2524,10 +2534,15 @@ func (c *APIClient) PlacePortfolioBracketOrder(ctx context.Context, clientID, ex
 }
 
 // PlacePortfolioOCOOrder places linked take-profit + stop-loss paper orders.
-func (c *APIClient) PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange, symbol string, quantity, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error) {
+func (c *APIClient) PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange, symbol string, quantity, takeProfitPrice, stopLossPrice float64, expiresAt, takeProfitTargets string) (json.RawMessage, error) {
 	body := map[string]any{
 		"clientId": clientID, "exchange": exchange, "symbol": symbol, "type": "oco",
 		"quantity": quantity, "takeProfitPrice": takeProfitPrice, "stopLossPrice": stopLossPrice,
+	}
+	if targets, err := decodeTakeProfitTargets(takeProfitTargets); err != nil {
+		return nil, err
+	} else if len(targets) > 0 {
+		body["takeProfitTargets"] = targets
 	}
 	if expiresAt != "" {
 		body["expiresAt"] = expiresAt

@@ -4016,13 +4016,18 @@ export interface paths {
          *     type=limit_buy|limit_sell|stop_loss: resting order with triggerPrice; reserves cash (buy, including
          *     worst-case slip + fee) or position (sell);
          *     may fill partially and stay open until remaining size is zero; each fill is a trade history row.
-         *     type=oco: linked take-profit limit_sell + stop_loss for the same quantity (takeProfitPrice, stopLossPrice);
-         *     shared position reservation; full fill of one cancels the other; partial fill shrinks both remainings;
-         *     same price tick fills at most one leg (stop preferred if both trigger).
+         *     type=oco: one or more take-profit limit sells plus one stop for the same coins.
+         *     takeProfitPrice is one target for the whole size. takeProfitTargets is a list of
+         *     {percent, price} or {percent, offsetPercent}; the percents sum to 100. offsetPercent
+         *     is a gain above the average cost (5 means +5%). The position is reserved once.
+         *     When a target fills, the stop quantity becomes the coins still held. A full stop fill
+         *     cancels the remaining targets. If the stop and a target are both touched on the same
+         *     price, only the stop fills. Several targets the price has already reached can fill together.
          *     type=trailing_stop: sell stop that trails a high-water mark by percent or fixed offset; stop only moves up;
          *     triggers once when last <= stop (including price gaps through the level).
-         *     type=bracket: limit_buy entry (triggerPrice) plus takeProfitPrice + stopLossPrice; exits stay pending until
-         *     entry fills, size tracks filled qty, exits are OCO so only one side sells each unit.
+         *     type=bracket: limit_buy entry (triggerPrice) plus the same take-profit targets and stopLossPrice.
+         *     Exits stay pending until the entry fills. Each target is its percent of the filled size.
+         *     The stop covers the coins those targets have not sold.
          *     lotMethod=fifo (default) or lifo selects which buy lots a sell consumes; remaining qty stays on the lot.
          *     See GET /api/v1/portfolio/trading-costs for per-exchange rates.
          *     Optional Idempotency-Key header or idempotencyKey body: a retry with the same key and same request
@@ -10407,6 +10412,11 @@ export interface components {
             riskPercent?: number;
             triggerPrice?: number;
             takeProfitPrice?: number;
+            /**
+             * @description Scale-out slices for an OCO or bracket preview. Same shape as the place request.
+             *     The response legs list each slice and the stop for the whole size.
+             */
+            takeProfitTargets?: components["schemas"]["TakeProfitTarget"][];
             /** @description Required when riskPercent is set. Also the OCO, bracket, or margin stop. */
             stopLossPrice?: number;
             /** @enum {string} */
@@ -10436,6 +10446,17 @@ export interface components {
             /** @description How many slices. Omit for 10. A gap shorter than 15 seconds is rejected. */
             sliceCount?: number;
         };
+        TakeProfitTarget: {
+            /** @description Share of the order quantity. The targets sum to 100. */
+            percent: number;
+            /** @description Limit sell price. Omit when offsetPercent is set. */
+            price?: number;
+            /**
+             * @description Gain above the reference price. 5 means +5%.
+             *     A bracket uses the entry limit. An OCO uses the average cost of the open position.
+             */
+            offsetPercent?: number;
+        };
         OrderPreviewLeg: {
             /** @enum {string} */
             role?: "take_profit" | "stop_loss";
@@ -10446,6 +10467,12 @@ export interface components {
             fee?: number;
             cashDebit?: number;
             cashCredit?: number;
+            /** @description Coin size of this leg. The stop is the whole order until a target fills. */
+            quantity?: number;
+            /** @description Share of the order. 25 means 25%. The stop is 100. */
+            percent?: number;
+            /** @description Gain percent used to choose the limit. 5 means +5%. Omitted for an absolute price. */
+            offsetPercent?: number;
             /** @description After-fee profit if this leg filled against the open lots. Omitted when the size is not available. */
             estimatedRealizedPnl?: number;
         };
@@ -10860,6 +10887,8 @@ export interface components {
             bracketId?: string;
             /** @enum {string} */
             bracketRole?: "entry" | "take_profit" | "stop_loss";
+            /** @description This take-profit's share of the order. 25 means 25%. Omitted on the stop and on a legacy single target. */
+            targetPercent?: number;
             /**
              * @description Trailing distance mode
              * @enum {string}
@@ -17105,8 +17134,18 @@ export interface operations {
                      *     Required for type=trailing_stop.
                      */
                     trailValue?: number;
-                    /** @description OCO take-profit limit sell price (required for type=oco) */
+                    /**
+                     * @description One take-profit limit for the whole size. Required for type=oco and type=bracket
+                     *     when takeProfitTargets is omitted.
+                     */
                     takeProfitPrice?: number;
+                    /**
+                     * @description Scale-out take-profit slices for type=oco and type=bracket. The percents sum to 100.
+                     *     A bracket gain is above the entry limit. An OCO gain is above the average cost,
+                     *     or the last price when that cost is missing. When a slice fills, the stop quantity
+                     *     becomes the coins still held.
+                     */
+                    takeProfitTargets?: components["schemas"]["TakeProfitTarget"][];
                     /** @description OCO stop-loss trigger (required for type=oco; must be below takeProfitPrice) */
                     stopLossPrice?: number;
                     /**
@@ -17183,6 +17222,8 @@ export interface operations {
                         bracketId?: string;
                         entry?: components["schemas"]["PendingOrder"];
                         takeProfit?: components["schemas"]["PendingOrder"];
+                        /** @description Every take-profit leg, nearest price first. takeProfit is the first of these. */
+                        takeProfits?: components["schemas"]["PendingOrder"][];
                         stopLoss?: components["schemas"]["PendingOrder"];
                         note?: string;
                     };

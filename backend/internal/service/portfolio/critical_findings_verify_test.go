@@ -232,9 +232,13 @@ func TestVerify_CancelOneOCOLegCancelsPeer(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	tp, sl, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
+	tps, sl, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
 		ClientID: "oco-cxl", Symbol: "BTCUSDT", Quantity: 1, TakeProfitPrice: 120, StopLossPrice: 90,
 	})
+	var tp *domain.PendingOrder
+	if len(tps) > 0 {
+		tp = tps[0]
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

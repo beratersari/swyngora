@@ -47,6 +47,8 @@ export type PlacePortfolioOrderArg = {
   quantity: number;
   triggerPrice?: number;
   takeProfitPrice?: number;
+  /** Scale-out slices. The percents sum to 100. */
+  takeProfitTargets?: { percent: number; price?: number; offsetPercent?: number }[];
   stopLossPrice?: number;
   trailType?: 'percent' | 'offset';
   trailValue?: number;
@@ -75,6 +77,7 @@ export type PlacePortfolioOrderResponse = {
   order?: PendingOrder | SpreadOrder;
   entry?: PendingOrder;
   takeProfit?: PendingOrder;
+  takeProfits?: PendingOrder[];
   stopLoss?: PendingOrder;
   ocoGroupId?: string;
   bracketId?: string;
@@ -102,6 +105,8 @@ export type PreviewPortfolioOrderArg = {
   riskPercent?: number;
   triggerPrice?: number;
   takeProfitPrice?: number;
+  /** Scale-out slices. The percents sum to 100. */
+  takeProfitTargets?: { percent: number; price?: number; offsetPercent?: number }[];
   stopLossPrice?: number;
   trailType?: 'percent' | 'offset';
   trailValue?: number;
@@ -400,6 +405,7 @@ export const portfolioApi = baseApi.injectEndpoints({
           quantity: body.quantity,
           triggerPrice: body.triggerPrice,
           takeProfitPrice: body.takeProfitPrice,
+          ...(body.takeProfitTargets ? { takeProfitTargets: body.takeProfitTargets } : {}),
           stopLossPrice: body.stopLossPrice,
           trailType: body.trailType,
           trailValue: body.trailValue,
@@ -432,6 +438,7 @@ export const portfolioApi = baseApi.injectEndpoints({
           riskPercent: body.riskPercent,
           triggerPrice: body.triggerPrice,
           takeProfitPrice: body.takeProfitPrice,
+          ...(body.takeProfitTargets ? { takeProfitTargets: body.takeProfitTargets } : {}),
           stopLossPrice: body.stopLossPrice,
           trailType: body.trailType,
           trailValue: body.trailValue,

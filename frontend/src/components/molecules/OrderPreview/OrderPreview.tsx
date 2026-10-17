@@ -1,12 +1,37 @@
 import { Fragment } from 'react';
 import { Alert } from 'antd';
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { formatPrice } from '@/libs/utils/formatPrice';
+import type { OrderPreviewLeg } from '@/libs/api';
 import type { PreviewWarningId } from './constants';
 import { formatPreviewPct, previewRows, previewWarnings, spreadEvery } from './helpers';
 import { Grid, Label, Panel, Value } from './OrderPreview.styles';
 import type { OrderPreviewProps } from './OrderPreview.types';
+
+function legLabel(leg: OrderPreviewLeg, t: TFunction<'portfolio'>): string {
+  const price = formatPrice(leg.referencePrice);
+  const qty = formatPrice(leg.quantity);
+  if (leg.role === 'stop_loss') {
+    if (leg.quantity == null) return t('preview.legStopLoss');
+    return t('preview.legStopLossDetail', { qty, price });
+  }
+  if (leg.percent == null) return t('preview.legTakeProfit');
+  if (leg.offsetPercent) {
+    return t('preview.legTakeProfitOffset', {
+      percent: formatPreviewPct(leg.percent),
+      offset: formatPreviewPct(leg.offsetPercent),
+      qty,
+      price,
+    });
+  }
+  return t('preview.legTakeProfitDetail', {
+    percent: formatPreviewPct(leg.percent),
+    qty,
+    price,
+  });
+}
 
 function warningTone(id: PreviewWarningId): 'info' | 'error' | 'warning' {
   if (id === 'dailyLoss') return 'info';
@@ -163,13 +188,23 @@ export function OrderPreview({ preview, loading, failed }: OrderPreviewProps) {
             </Text>
           ) : null}
           {(preview.legs ?? []).map((leg, index) => (
-            <Text key={`${leg.role ?? 'leg'}-${index}`} variant="caption" color="secondary">
-              {leg.role === 'take_profit' ? t('preview.legTakeProfit') : t('preview.legStopLoss')}
+            <Text
+              key={`${leg.role ?? 'leg'}-${index}`}
+              variant="caption"
+              color="secondary"
+              data-testid="preview-leg"
+            >
+              {legLabel(leg, t)}
               {leg.estimatedRealizedPnl != null
                 ? ` · ${t('preview.pnl')} ${formatPrice(leg.estimatedRealizedPnl)}`
                 : ''}
             </Text>
           ))}
+          {(preview.legs ?? []).some((leg) => leg.role === 'take_profit') ? (
+            <Text variant="caption" color="secondary" data-testid="preview-stop-shrinks">
+              {t('preview.legStopShrinks')}
+            </Text>
+          ) : null}
           {warnings.map((id) => (
             <Alert key={id} type={warningTone(id)} showIcon message={t(`preview.warnings.${id}`)} />
           ))}

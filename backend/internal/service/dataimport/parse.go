@@ -436,7 +436,7 @@ func parseCSV(data []byte, importer string) (*parseResult, error) {
 					TimeInForce: row["timeInForce"], ExpiresAt: csvOptStr(row, "expiresAt"), Status: row["status"],
 					OCOGroupID: row["ocoGroupId"], OCOPeerID: row["ocoPeerId"], TrailType: row["trailType"],
 					TrailValue: csvF64(row, "trailValue"), TrailPeak: csvF64(row, "trailPeak"),
-					BracketID: row["bracketId"], BracketRole: row["bracketRole"], LotMethod: row["lotMethod"],
+					BracketID: row["bracketId"], BracketRole: row["bracketRole"], TargetPercent: csvF64(row, "targetPercent"), LotMethod: row["lotMethod"],
 					CreatedAt: row["createdAt"], UpdatedAt: row["updatedAt"],
 				})
 			}

@@ -1570,13 +1570,20 @@ export interface paths {
          *     - `liquidation.side`: the leverage model. `long` when the nearest estimated
          *       long pocket below last is closer, `short` when the nearest short pocket
          *       above last is closer, `none` when the map has no pocket.
-         *       `distancePct` is that distance from last.
+         *       `distancePct` is that distance from last. `price` is that pocket.
          *     - `prints.side`: measured force-order prints over the last 24 hours.
          *       `long` or `short` when that side is at least 60% of the notional,
          *       `even` when both sides printed and neither reaches 60%, `quiet` when
          *       the recorded total is under 1 USDT. `longNotional` and `shortNotional`
          *       are USDT. The window is definite only when Binance, Bybit, and OKX
          *       were watched from the open with no feed gap inside it.
+         *     - `printAnchors`: the same measured prints since 00:00 UTC (`day`) and since
+         *       the current 4-hour open (`4h`, at 00/04/08/12/16/20 UTC). Each anchor has
+         *       `side`, `longNotional`, and `shortNotional` when Binance, Bybit, and OKX
+         *       recorded that clock. `complete` is false and `missing` names the venue when
+         *       the clock was not fully recorded. A quiet recorded clock is a real zero.
+         *       These clocks do not replace the 24-hour total, and a situation alert still
+         *       compares `prints.side` only.
          *     - `funding.payer`, `crowd.lean`, and `size.kind` are the funding payer,
          *       Binance and OKX top-versus-crowd, and whale versus retail.
          *
@@ -2842,6 +2849,11 @@ export interface paths {
          *     `combined` sums a column only when all three were recorded.
          *     `columnsWithOi` and `coverage` count recorded columns, not open interest.
          *     `leverageMix` is empty. `review` has no horizons.
+         *     Each requested book includes `printAnchors` for long and short notional since
+         *     00:00 UTC (`day`) and since the current 4-hour open (`4h`). `complete` is false,
+         *     and `missing` names the venue, when that clock was not fully recorded. A partial
+         *     sum is not shown. A quiet recorded clock is `side=quiet` with zero notionals.
+         *     Combined anchors are present only for `exchange=all`.
          *     Not financial advice.
          */
         get: operations["getMarketLiquidationPrintHeatmap"];
@@ -3585,6 +3597,10 @@ export interface paths {
          *     list with its size and time. The live comparison for each buy is
          *     GET /api/v1/portfolio/situation-change. An equity omits both.
          *     The live read is GET /api/v1/market/situation.
+         *     Every open position includes moves: the 1h, 4h, and 24h venue
+         *     price change after the newest open lot, including equities. pending
+         *     means that minute has not closed. missing means the close is absent
+         *     and is not zero. ready pct is the price change, not profit.
          *     When the client has more than one book, pass portfolioId (or X-Portfolio-Id).
          */
         get: operations["getPortfolio"];
@@ -3794,6 +3810,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portfolio/fill-pocket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Paper fill against the nearer estimated liquidation pocket
+         * @description The newest open spot buy on this book and symbol, or the margin entry
+         *     when there is no spot lot, and the nearer estimated liquidation pocket
+         *     on the combined Binance, Bybit, and OKX map.
+         *
+         *     `gapPct` is the percent from the fill to that pocket. `pocketFromFill`
+         *     is `above` or `below`. A zero gap is the same price and is kept.
+         *
+         *     `marginLiqPrice` is this book's paper liquidation price when a margin
+         *     position is open. `marginGapPct` is the percent from the pocket to that
+         *     price. It is omitted when the pocket is unmarked.
+         *
+         *     A missing venue leaves the pocket blank and is named in `missing`.
+         *     It is not treated as zero. `open` is false when the book has neither
+         *     a spot lot nor a margin position, and the map is not read. Equities
+         *     set `equity` and return no prices. Nasdaq and BIST have no map.
+         */
+        get: operations["getFillPocket"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portfolio/performance": {
         parameters: {
             query?: never;
@@ -3915,11 +3965,28 @@ export interface paths {
          *     order shows the cash or quantity it would lock, and the fill if it triggers at that price.
          *     A sell estimates realized profit from the open lots. Deposits and withdrawals are not part
          *     of the daily loss.
+         *     When a spot buy, limit buy, or bracket names reason and the live read is ready, reasonHistory
+         *     lists this book's past closes for each selected clause at the kind that read says now.
+         *     still kept that kind at the sell. left changed it or left the clause blank. Both counts at
+         *     zero means no past close stored that live kind. The same close can appear on more than one
+         *     row, so the rows are not one total. A failed history read omits reasonHistory and still
+         *     returns the price. A sell, a margin order, an equity, and a preview with no reason omit it.
          *     riskPercent with stopLossPrice sizes the order instead of using quantity. The size is the
          *     base amount that loses that percent of portfolio equity if the stop fills, after the taker
          *     fee and adverse slippage. It applies to a spot buy (market, limit_buy, bracket) and to a
          *     margin long or short. A spot sell or exit is rejected. The stop is placed only with a
-         *     bracket or a margin open. Not real money.
+         *     bracket or a margin open.
+         *     exchange=all (or best) on a spot market order splits the quantity across Binance, Coinbase,
+         *     and Bybit. Each level is taken at price×(1+fee) for a buy and price×(1−fee) for a sell, lowest
+         *     total cost first. One preview lists a leg per venue. compareExchange prices that whole quantity
+         *     on one venue and returns savedCash when both can fill. A missing book is named in missingVenues.
+         *     A sell only uses coins already held on that venue. A USDT book books a Coinbase USD fill 1:1.
+         *     spread=true on that best-cost market order prices timed slices instead of one fill.
+         *     spreadMinutes is the clock from the first slice to the last (default 10). sliceCount is how
+         *     many reads (default 10). The last slice is due at the end. routeLegs are the first slice on
+         *     the current book. Later slices read the books again.
+         *     A buy shows the cash the whole order would lock. A sell shows the quantity it would lock.
+         *     Margin, equities, and resting orders stay on one venue. Not real money.
          */
         post: operations["previewPortfolioOrder"];
         delete?: never;
@@ -3949,22 +4016,79 @@ export interface paths {
          *     type=limit_buy|limit_sell|stop_loss: resting order with triggerPrice; reserves cash (buy, including
          *     worst-case slip + fee) or position (sell);
          *     may fill partially and stay open until remaining size is zero; each fill is a trade history row.
-         *     type=oco: linked take-profit limit_sell + stop_loss for the same quantity (takeProfitPrice, stopLossPrice);
-         *     shared position reservation; full fill of one cancels the other; partial fill shrinks both remainings;
-         *     same price tick fills at most one leg (stop preferred if both trigger).
+         *     type=oco: one or more take-profit limit sells plus one stop for the same coins.
+         *     takeProfitPrice is one target for the whole size. takeProfitTargets is a list of
+         *     {percent, price} or {percent, offsetPercent}; the percents sum to 100. offsetPercent
+         *     is a gain above the average cost (5 means +5%). The position is reserved once.
+         *     When a target fills, the stop quantity becomes the coins still held. A full stop fill
+         *     cancels the remaining targets. If the stop and a target are both touched on the same
+         *     price, only the stop fills. Several targets the price has already reached can fill together.
          *     type=trailing_stop: sell stop that trails a high-water mark by percent or fixed offset; stop only moves up;
          *     triggers once when last <= stop (including price gaps through the level).
-         *     type=bracket: limit_buy entry (triggerPrice) plus takeProfitPrice + stopLossPrice; exits stay pending until
-         *     entry fills, size tracks filled qty, exits are OCO so only one side sells each unit.
+         *     type=bracket: limit_buy entry (triggerPrice) plus the same take-profit targets and stopLossPrice.
+         *     Exits stay pending until the entry fills. Each target is its percent of the filled size.
+         *     The stop covers the coins those targets have not sold.
          *     lotMethod=fifo (default) or lifo selects which buy lots a sell consumes; remaining qty stays on the lot.
          *     See GET /api/v1/portfolio/trading-costs for per-exchange rates.
          *     Optional Idempotency-Key header or idempotencyKey body: a retry with the same key and same request
          *     returns the original order/trade instead of creating a second one. A different request with the same
          *     key returns 409. Keys last 24 hours and are scoped to the paper book.
-         *     Paper trading only — not real money.
+         *     exchange=all on type=market splits the quantity across Binance, Coinbase, and Bybit by
+         *     fee-adjusted depth and writes one trade per venue that received size. The cash change is one
+         *     balance update. A book that cannot hold the size fills nothing. A sell only uses coins already
+         *     held on that venue. Margin, equities, and resting orders stay on one venue.
+         *     spread=true with exchange=all and type=market does not fill now. It locks cash for a buy, or
+         *     quantity on the venues that already hold the coin for a sell, and works the order as timed slices.
+         *     spreadMinutes (default 10) is the clock. sliceCount (default 10) is how many fills. The last
+         *     slice is due at the end. Each slice reads the books again. The response is 201 and order is a SpreadOrder.
+         *     The first slice is due immediately and is filled by the background worker. Cancel releases the
+         *     size that has not filled. Paper trading only — not real money.
          */
         post: operations["placePortfolioOrder"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/spread-orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List spread paper orders
+         * @description Best-cost orders that fill as timed slices. The last slice is due when the duration ends.
+         *     Defaults to open orders. status=open|filled|canceled|all.
+         *     Paper trading only — not real money.
+         */
+        get: operations["listSpreadOrders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/spread-orders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Cancel an open spread order
+         * @description Stops slices that have not run and releases the unused cash or quantity lock.
+         *     Slices that already filled stay on the book.
+         */
+        delete: operations["cancelSpreadOrder"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4122,7 +4246,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List paper trade history */
+        /**
+         * List paper trade history
+         * @description Each fill includes the slipped price, the taker fee, and moves:
+         *     the 1h, 4h, and 24h venue price change after that fill.
+         *     pending means that minute has not closed. missing means the close
+         *     is absent and is not zero. ready pct is the price change, not
+         *     realized profit. A sell with a positive pct means price rose after the sell.
+         */
         get: operations["listPortfolioTrades"];
         put?: never;
         post?: never;
@@ -4528,7 +4659,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List open paper margin positions */
+        /**
+         * List open paper margin positions
+         * @description Each open position includes entrySituation, the coin read stored when that margin order was placed. A limit fill keeps the placement read. Equities omit it.
+         */
         get: operations["listMarginPositions"];
         put?: never;
         post?: never;
@@ -5370,7 +5504,10 @@ export interface paths {
         /**
          * Stream AI chat thinking and tools (NDJSON)
          * @description Same request as POST /api/v1/ai/chat. Response is NDJSON lines:
-         *     `{type:status|thinking|tool|tool_result|final|error|done, text?, reply?, tools?}`.
+         *     `{type:status|thinking|tool|tool_result|final|error|done, text?, reply?, tools?, reads?}`.
+         *     `reads` on the final event is the coin situation for each crypto name in the
+         *     question, the same clauses as GET /api/v1/market/situation. An open paper
+         *     spot buy for that coin includes the entry read. A blank clause stays blank.
          *     Informational only — not financial advice.
          */
         post: operations["postAiChatStream"];
@@ -5431,6 +5568,36 @@ export interface components {
             references?: components["schemas"]["AiChatReference"][];
             /** @description Disclaimer (e.g. not financial advice) */
             note?: string;
+            /**
+             * @description Coin situation for each crypto name in the question. The clauses match
+             *     GET /api/v1/market/situation. Equities are omitted. A missing clause keeps
+             *     its Missing list and is not filled with a side, a flow, or a number.
+             *     entries are open paper spot buys for that symbol. The field is omitted
+             *     when the portfolio could not be read; that is not a claim the caller is flat.
+             */
+            reads?: components["schemas"]["AiSituationRead"][];
+        };
+        AiSituationRead: {
+            /** @example BTCUSDT */
+            symbol: string;
+            situation: components["schemas"]["CoinSituation"];
+            /**
+             * @description Open paper spot buys for this symbol across the caller's books, up to
+             *     eight books. Omitted when none stored a read, or the book could not be read.
+             */
+            entries?: components["schemas"]["AiSituationEntry"][];
+        };
+        AiSituationEntry: {
+            /** @description Paper book venue of the open spot buy */
+            exchange: string;
+            /** @description Paper book name, when the snapshot includes one */
+            book?: string;
+            /**
+             * Format: date-time
+             * @description When the buy that stored entrySituation was placed
+             */
+            entryAt?: string;
+            entrySituation: components["schemas"]["CoinSituation"];
         };
         AiChatReference: {
             title?: string;
@@ -6828,6 +6995,12 @@ export interface components {
             accountBlend?: "stored" | "even" | "mixed";
             /** @description Per time column. On the model map, whether this venue had its own price and open interest. On the print map, whether a print landed or the column was watched outside a known gap. Combined is true only when all three venues were included. */
             hasData?: boolean[];
+            /**
+             * @description Measured force-order notional since 00:00 UTC and the current 4-hour open.
+             *     Set on a print map for each book that was requested. Combined is present only
+             *     when Binance, Bybit, and OKX are all requested. Empty on the leverage model.
+             */
+            printAnchors?: components["schemas"]["PrintAnchor"][];
         };
         /** @description Price × time liquidation grid. kind=model is the open-interest estimate. kind=prints is stored force-order notional. */
         LiquidationHuntHeatmap: {
@@ -9719,7 +9892,8 @@ export interface components {
          *     buy that still has remaining quantity filled. openReads lists every
          *     remaining buy. Equities omit both. The live read is
          *     GET /api/v1/market/situation. The per-buy comparison is
-         *     GET /api/v1/portfolio/situation-change.
+         *     GET /api/v1/portfolio/situation-change. moves is the venue price change
+         *     after the newest open lot, including equities, and is not profit.
          */
         PortfolioPosition: {
             exchange?: string;
@@ -9745,6 +9919,12 @@ export interface components {
              *     comparison is on SituationChange. Equities omit this list.
              */
             openReads?: components["schemas"]["OpenLotRead"][];
+            /**
+             * @description 1h, 4h, and 24h venue price change after the newest open lot, in that order.
+             *     The lot price and open time are the fill. Average cost is not used.
+             *     A window with no numbers is pending or missing, never a made-up zero.
+             */
+            moves?: components["schemas"]["FillMove"][];
         };
         /**
          * @description One remaining buy. newest marks the buy that entrySituation and a
@@ -9765,6 +9945,22 @@ export interface components {
             situation?: components["schemas"]["CoinSituation"];
             newest?: boolean;
             comparison?: components["schemas"]["SituationComparison"];
+        };
+        /**
+         * @description Venue price change after a paper fill. Not profit.
+         *     pending: the one-minute bar that contains the horizon has not closed.
+         *     ready: pct is (minute close - fill price) / fill price * 100. 0 is a real unchanged price.
+         *     missing: the window is due and that minute close is absent. A missing window is not zero.
+         */
+        FillMove: {
+            /** @enum {string} */
+            window?: "1h" | "4h" | "24h";
+            /** @enum {string} */
+            status?: "pending" | "ready" | "missing";
+            /** @description Percent change. Present only when status is ready, including 0. */
+            pct?: number;
+            /** @description One-minute close used for pct. Present only when status is ready. */
+            price?: number;
         };
         /** @description One remaining (or closed) buy lot used for FIFO/LIFO realized PnL */
         TaxLot: {
@@ -9822,6 +10018,11 @@ export interface components {
              *     comparison is that buy against this fill. A buy with no stored read is omitted.
              */
             left?: components["schemas"]["SituationExit"][];
+            /**
+             * @description 1h, 4h, and 24h venue price change after this fill, in that order.
+             *     price on the trade is the slipped fill. The percent is not realized profit.
+             */
+            moves?: components["schemas"]["FillMove"][];
             /** Format: date-time */
             createdAt?: string;
         };
@@ -9971,6 +10172,61 @@ export interface components {
             rows?: components["schemas"]["SituationLeaveRow"][];
             note?: string;
         };
+        /**
+         * @description Measured force-order notional since a clock. `day` is 00:00 UTC.
+         *     `4h` is the current block at 00, 04, 08, 12, 16, or 20 UTC.
+         *     Numbers are set only when `complete` is true. Zero on a complete anchor is a quiet clock.
+         */
+        PrintAnchor: {
+            /** @enum {string} */
+            anchor: "day" | "4h";
+            /** Format: date-time */
+            from: string;
+            /**
+             * @description Omitted when the clock was not fully recorded.
+             * @enum {string}
+             */
+            side?: "long" | "short" | "even" | "quiet";
+            /** @description Long-liquidation notional in USDT. Omitted when incomplete or zero. */
+            longNotional?: number;
+            /** @description Short-liquidation notional in USDT. Omitted when incomplete or zero. */
+            shortNotional?: number;
+            /** @description False when a requested venue did not record the whole clock. That is not a zero. */
+            complete: boolean;
+            /** @description Venues that left this clock unrecorded. Empty when complete. */
+            missing?: string[];
+        };
+        /**
+         * @description Open paper fill against the nearer estimated liquidation pocket.
+         *     gapPct is the percent from fillPrice to pocketPrice. marginGapPct is the
+         *     percent from pocketPrice to marginLiqPrice. A missing venue leaves the
+         *     pocket blank. open false means this book has no position, and the map
+         *     was not read.
+         */
+        FillPocketMark: {
+            symbol?: string;
+            exchange?: string;
+            open?: boolean;
+            equity?: boolean;
+            fillPrice?: number;
+            /** @enum {string} */
+            fillKind?: "spot" | "margin";
+            /** @enum {string} */
+            pocketSide?: "long" | "short" | "none";
+            pocketPrice?: number;
+            /** @description Percent from the fill to the pocket. 0 means the same price. */
+            gapPct?: number;
+            /** @enum {string} */
+            pocketFromFill?: "above" | "below";
+            /** @description Paper liquidation price of the open margin position. */
+            marginLiqPrice?: number;
+            /** @description Percent from the pocket to the paper liquidation price. */
+            marginGapPct?: number;
+            /** @enum {string} */
+            marginFromPocket?: "above" | "below";
+            missing?: string[];
+            note?: string;
+        };
         /** @description Short combined read. A missing clause lists the venues that did not cover it. */
         CoinSituation: {
             symbol?: string;
@@ -10001,6 +10257,8 @@ export interface components {
                 /** @enum {string} */
                 side?: "long" | "short" | "none";
                 distancePct?: number;
+                /** @description Price of the nearer estimated pocket. Omitted when side is none. */
+                price?: number;
                 /**
                  * Format: date-time
                  * @description Absent. The estimated pocket is not stored as its own minute series.
@@ -10029,6 +10287,12 @@ export interface components {
                 since?: string;
             };
             printsMissing?: string[];
+            /**
+             * @description Measured prints since 00:00 UTC and the current 4-hour open.
+             *     An incomplete anchor names the venues that did not record that clock
+             *     and does not publish a partial sum. A complete quiet anchor is a real zero.
+             */
+            printAnchors?: components["schemas"]["PrintAnchor"][];
             /** @description OI-weighted predicted funding. Set only when Binance, Bybit, and OKX all contribute. */
             funding?: {
                 /** @enum {string} */
@@ -10108,10 +10372,22 @@ export interface components {
             clientId?: string;
             portfolioId?: string;
             /**
+             * @description all prices a spot market order as a best-cost split across Binance, Coinbase, and Bybit.
              * @default binance
              * @enum {string}
              */
-            exchange: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
+            exchange: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist" | "all";
+            /**
+             * @description Venue to price the whole quantity against when exchange is all. Preview only.
+             * @enum {string}
+             */
+            compareExchange?: "binance" | "coinbase" | "bybit";
+            /**
+             * @description Best-cost price cap in percent. 0.5 means a buy stays at or below 0.5% above the best ask,
+             *     and a sell stays at or above 0.5% below the best bid. Zero or omitted means no cap.
+             *     When the size inside the cap is short, nothing is filled.
+             */
+            maxSlippagePct?: number;
             symbol: string;
             /**
              * @description spot uses the paper order types. margin prices a long or short open.
@@ -10136,6 +10412,11 @@ export interface components {
             riskPercent?: number;
             triggerPrice?: number;
             takeProfitPrice?: number;
+            /**
+             * @description Scale-out slices for an OCO or bracket preview. Same shape as the place request.
+             *     The response legs list each slice and the stop for the whole size.
+             */
+            takeProfitTargets?: components["schemas"]["TakeProfitTarget"][];
             /** @description Required when riskPercent is set. Also the OCO, bracket, or margin stop. */
             stopLossPrice?: number;
             /** @enum {string} */
@@ -10150,6 +10431,31 @@ export interface components {
             leverage?: number;
             /** @description Margin limit price. */
             limitPrice?: number;
+            /**
+             * @description Clauses a spot buy, limit buy, or bracket would store.
+             *     Omit the field to leave the stored set unset. An empty array would store no read.
+             */
+            reason?: ("priceCvd" | "openInterest" | "liquidation" | "prints" | "funding" | "crowd" | "size")[];
+            /**
+             * @description When true with exchange=all and a spot market order, price timed slices.
+             *     The legs are the first slice. Nothing is written.
+             */
+            spread?: boolean;
+            /** @description Minutes from the first slice to the last. Omit for 10. */
+            spreadMinutes?: number;
+            /** @description How many slices. Omit for 10. A gap shorter than 15 seconds is rejected. */
+            sliceCount?: number;
+        };
+        TakeProfitTarget: {
+            /** @description Share of the order quantity. The targets sum to 100. */
+            percent: number;
+            /** @description Limit sell price. Omit when offsetPercent is set. */
+            price?: number;
+            /**
+             * @description Gain above the reference price. 5 means +5%.
+             *     A bracket uses the entry limit. An OCO uses the average cost of the open position.
+             */
+            offsetPercent?: number;
         };
         OrderPreviewLeg: {
             /** @enum {string} */
@@ -10161,6 +10467,12 @@ export interface components {
             fee?: number;
             cashDebit?: number;
             cashCredit?: number;
+            /** @description Coin size of this leg. The stop is the whole order until a target fills. */
+            quantity?: number;
+            /** @description Share of the order. 25 means 25%. The stop is 100. */
+            percent?: number;
+            /** @description Gain percent used to choose the limit. 5 means +5%. Omitted for an absolute price. */
+            offsetPercent?: number;
             /** @description After-fee profit if this leg filled against the open lots. Omitted when the size is not available. */
             estimatedRealizedPnl?: number;
         };
@@ -10265,7 +10577,142 @@ export interface components {
             sizing?: components["schemas"]["OrderPreviewSizing"];
             /** @description Take-profit and stop-loss outcomes for an OCO or a bracket. */
             legs?: components["schemas"]["OrderPreviewLeg"][];
+            /** @description Live coin read for a spot buy, limit buy, or bracket. The whole read, so the ticket can mark a reason. */
+            situation?: components["schemas"]["CoinSituation"];
+            /**
+             * @description ready means at least one clause loaded. blank means the read loaded with no clauses.
+             *     failed means the read did not load; the price is still returned. skipped means this order does not store a reason.
+             * @enum {string}
+             */
+            situationStatus?: "ready" | "blank" | "failed" | "skipped";
+            /** @description Clauses that would be stored when the request named a reason. Empty when none of them are on the read. */
+            reason?: string[];
+            /** @description Named clauses that are blank on the live read and would not be stored. */
+            reasonMissing?: string[];
+            /**
+             * @description Past closes of this book for each selected clause at the kind the live read says now.
+             *     Present when situationStatus is ready and reason names at least one clause on that read.
+             *     still kept the kind at the sell. left changed it or left the clause blank. A change in
+             *     print dollars with the same side stays in still. Both counts at zero means no past close
+             *     stored this live kind. The same close can appear on more than one row, so the rows are
+             *     not one total. Omitted when the history read fails, when reason is unset or empty, and
+             *     for a sell, a margin order, an equity, or a blank, failed, or skipped read. The price
+             *     is still returned.
+             */
+            reasonHistory?: components["schemas"]["SituationLeaveRow"][];
+            /** @description True when this preview splits a spot market order across venues. */
+            routed?: boolean;
+            /** @description One leg per venue that would receive size, cheapest fee-adjusted level first. */
+            routeLegs?: components["schemas"]["PaperRouteLeg"][];
+            /** @description Spot venues whose book did not load. Their size is not zero. */
+            missingVenues?: string[];
+            /** @description Venues left out because their quote is outside this book's currency. */
+            skippedVenues?: components["schemas"]["PaperRouteSkip"][];
+            compare?: components["schemas"]["PaperRouteCompare"];
+            /** @description How the split was chosen. */
+            routeNote?: string;
+            /** @description Best-cost cap in percent. Present when the request set one. */
+            maxSlippagePct?: number;
+            /** @description Best ask for a buy, or best bid for a sell, that the cap is measured from. */
+            slippageTouch?: number;
+            /** @description Furthest raw price the cap allows. */
+            slippageLimitPrice?: number;
+            /** @description Visible size at or better than slippageLimitPrice. */
+            slippageInsideQuantity?: number;
+            /** @description True when that size is shorter than the order, so nothing is filled. */
+            slippageLimited?: boolean;
+            /** @description True when this preview is timed slices instead of one fill. */
+            spread?: boolean;
+            /** @description Minutes from the first slice to the last. The last slice is due at the end. */
+            spreadMinutes?: number;
+            /** @description How many times the order reads the books. */
+            sliceCount?: number;
+            /** @description Size of the first slice. Later slices use whatever quantity is still open. */
+            sliceQuantity?: number;
+            /** @description Seconds between slices, rounded to the nearest second. The stored gap divides the duration by one less than the slice count. */
+            sliceIntervalSec?: number;
             note?: string;
+        };
+        /**
+         * @description A best-cost spot market order worked as timed slices.
+         *     The last slice is due when the duration ends. Each slice reads Binance, Coinbase, and Bybit again. Paper only.
+         */
+        SpreadOrder: {
+            id?: string;
+            clientId?: string;
+            symbol?: string;
+            /** @enum {string} */
+            side?: "buy" | "sell";
+            quantity?: number;
+            filledQuantity?: number;
+            remainingQuantity?: number;
+            sliceCount?: number;
+            slicesDone?: number;
+            /** @description Minutes from the first slice to the last. */
+            durationMinutes?: number;
+            /** Format: date-time */
+            nextSliceAt?: string;
+            /**
+             * Format: date-time
+             * @description When the last slice is due if every slice runs on time.
+             */
+            endsAt?: string;
+            /** @enum {string} */
+            status?: "open" | "filled" | "canceled";
+            maxSlippagePct?: number;
+            /** @description Cash still locked for a buy. It falls as slices fill and returns to available when the order ends. */
+            reservedCash?: number;
+            filledNotional?: number;
+            filledFee?: number;
+            /** @enum {string} */
+            lotMethod?: "fifo" | "lifo";
+            reasonSet?: boolean;
+            reason?: string[];
+            cancelReason?: string;
+            /** @description Quantity a sell still has locked on each venue. */
+            holds?: {
+                exchange?: string;
+                symbol?: string;
+                quantity?: number;
+            }[];
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        PaperRouteLeg: {
+            exchange?: string;
+            symbol?: string;
+            quote?: string;
+            /** @description True when the venue quote differs from the book currency and is booked 1:1. */
+            aliased?: boolean;
+            quantity?: number;
+            fillPrice?: number;
+            notional?: number;
+            fee?: number;
+            feeRate?: number;
+            cashDebit?: number;
+            cashCredit?: number;
+            levelsUsed?: number;
+            estimatedRealizedPnl?: number;
+        };
+        PaperRouteSkip: {
+            exchange?: string;
+            symbol?: string;
+            /** @enum {string} */
+            reason?: "quote";
+            detail?: string;
+        };
+        PaperRouteCompare: {
+            exchange?: string;
+            symbol?: string;
+            known?: boolean;
+            /** @description Cash the single venue would spend or receive. */
+            cash?: number;
+            /** @description Positive when the split spends less on a buy or receives more on a sell. */
+            savedCash?: number;
+            exhausted?: boolean;
+            inventoryShort?: boolean;
         };
         PortfolioCashMovement: {
             id?: string;
@@ -10363,6 +10810,10 @@ export interface components {
             /** @description Net external cash inside this equity relative to the baseline in startEquity. Performance level is equity minus externalFlow. */
             externalFlow?: number;
         };
+        /**
+         * @description Paper margin position. entrySituation is the coin read stored when the open order was placed.
+         *     A limit fill keeps that placement read. Equities omit it.
+         */
         MarginPosition: {
             id?: string;
             clientId?: string;
@@ -10391,6 +10842,7 @@ export interface components {
             takeProfit?: number | null;
             /** @enum {string} */
             status?: "open" | "closed";
+            entrySituation?: components["schemas"]["CoinSituation"];
             markPrice?: number;
             unrealizedPnL?: number;
             realizedPnL?: number;
@@ -10435,6 +10887,8 @@ export interface components {
             bracketId?: string;
             /** @enum {string} */
             bracketRole?: "entry" | "take_profit" | "stop_loss";
+            /** @description This take-profit's share of the order. 25 means 25%. Omitted on the stop and on a legacy single target. */
+            targetPercent?: number;
             /**
              * @description Trailing distance mode
              * @enum {string}
@@ -10464,6 +10918,12 @@ export interface components {
              * @enum {string}
              */
             lotMethod?: "fifo" | "lifo";
+            /** @description Coin read stored when this order was placed. A buy that named a reason keeps only those clauses. */
+            situation?: components["schemas"]["CoinSituation"];
+            /** @description True when the placer named which clauses this buy stores. */
+            reasonSet?: boolean;
+            /** @description Clause ids this buy stores. Empty when reasonSet is true and the order stores no read. */
+            reason?: string[];
         };
         /** @description At least one of triggerPrice or remainingQuantity is required. */
         AmendPendingOrderRequest: {
@@ -16367,6 +16827,33 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
+    getFillPocket: {
+        parameters: {
+            query: {
+                exchange: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
+                symbol: string;
+                portfolioId?: string;
+                clientId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fill, pocket, and paper liquidation marks */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FillPocketMark"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
     getPortfolioPerformance: {
         parameters: {
             query?: {
@@ -16616,10 +17103,13 @@ export interface operations {
                 "application/json": {
                     clientId?: string;
                     /**
+                     * @description all splits a spot market order across Binance, Coinbase, and Bybit by depth and taker fee.
                      * @default binance
                      * @enum {string}
                      */
-                    exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
+                    exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist" | "all";
+                    /** @description Best-cost cap in percent. 0.5 keeps fills within 0.5% of the best price. Zero means no cap. */
+                    maxSlippagePct?: number;
                     symbol: string;
                     /**
                      * @default market
@@ -16644,8 +17134,18 @@ export interface operations {
                      *     Required for type=trailing_stop.
                      */
                     trailValue?: number;
-                    /** @description OCO take-profit limit sell price (required for type=oco) */
+                    /**
+                     * @description One take-profit limit for the whole size. Required for type=oco and type=bracket
+                     *     when takeProfitTargets is omitted.
+                     */
                     takeProfitPrice?: number;
+                    /**
+                     * @description Scale-out take-profit slices for type=oco and type=bracket. The percents sum to 100.
+                     *     A bracket gain is above the entry limit. An OCO gain is above the average cost,
+                     *     or the last price when that cost is missing. When a slice fills, the stop quantity
+                     *     becomes the coins still held.
+                     */
+                    takeProfitTargets?: components["schemas"]["TakeProfitTarget"][];
                     /** @description OCO stop-loss trigger (required for type=oco; must be below takeProfitPrice) */
                     stopLossPrice?: number;
                     /**
@@ -16669,6 +17169,21 @@ export interface operations {
                     lotMethod?: "fifo" | "lifo";
                     /** @description Optional client key; same key + same request replays the original result (header Idempotency-Key also accepted) */
                     idempotencyKey?: string;
+                    /**
+                     * @description Clauses a buy, limit buy, or bracket entry stores.
+                     *     Omit the field to store the whole read. An empty array stores no read.
+                     *     A sell ignores this and keeps the whole read, so a close can still be compared with each buy.
+                     */
+                    reason?: ("priceCvd" | "openInterest" | "liquidation" | "prints" | "funding" | "crowd" | "size")[];
+                    /**
+                     * @description With exchange=all and type=market, work the order as timed slices.
+                     *     Each slice chooses the cheapest venue from the books at that time.
+                     */
+                    spread?: boolean;
+                    /** @description Minutes from the first slice to the last. Omit for 10. The last slice is due at the end. */
+                    spreadMinutes?: number;
+                    /** @description How many slices. Omit for 10. A gap shorter than 15 seconds is rejected. */
+                    sliceCount?: number;
                 };
             };
         };
@@ -16682,13 +17197,17 @@ export interface operations {
                     "application/json": {
                         /** @example market */
                         type?: string;
+                        /** @description True when exchange=all wrote one trade per venue. */
+                        routed?: boolean;
                         trade?: components["schemas"]["PaperTrade"];
+                        /** @description Present on a best-cost fill. trade is the first of these. */
+                        trades?: components["schemas"]["PaperTrade"][];
                         portfolio?: components["schemas"]["PortfolioView"];
                         note?: string;
                     };
                 };
             };
-            /** @description Pending order or OCO pair created */
+            /** @description Pending order, OCO pair, or spread order created. A spread order has not filled yet. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -16696,17 +17215,84 @@ export interface operations {
                 content: {
                     "application/json": {
                         type?: string;
-                        order?: components["schemas"]["PendingOrder"];
+                        /** @description True when order is a spread order and no slice has filled yet. */
+                        spread?: boolean;
+                        order?: components["schemas"]["PendingOrder"] | components["schemas"]["SpreadOrder"];
                         ocoGroupId?: string;
                         bracketId?: string;
                         entry?: components["schemas"]["PendingOrder"];
                         takeProfit?: components["schemas"]["PendingOrder"];
+                        /** @description Every take-profit leg, nearest price first. takeProfit is the first of these. */
+                        takeProfits?: components["schemas"]["PendingOrder"][];
                         stopLoss?: components["schemas"]["PendingOrder"];
                         note?: string;
                     };
                 };
             };
             400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    listSpreadOrders: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                status?: "open" | "filled" | "canceled" | "all";
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Spread orders */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        orders?: components["schemas"]["SpreadOrder"][];
+                        count?: number;
+                        status?: string;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    cancelSpreadOrder: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Spread order canceled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        order?: components["schemas"]["SpreadOrder"];
+                        note?: string;
+                    };
+                };
+            };
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
         };
@@ -19316,6 +19902,11 @@ export interface operations {
                         thinking?: string[];
                         message?: string;
                         sessionId?: string;
+                        /**
+                         * @description Coin situation reads for crypto names in the question.
+                         *     Present on the final event. Same shape as AiChatResponse.reads.
+                         */
+                        reads?: components["schemas"]["AiSituationRead"][];
                     };
                 };
             };

@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -464,6 +465,7 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_
 		`ALTER TABLE pending_orders ADD COLUMN trail_peak REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE pending_orders ADD COLUMN bracket_id TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE pending_orders ADD COLUMN bracket_role TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE pending_orders ADD COLUMN target_percent REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE spread_orders ADD COLUMN duration_sec INTEGER NOT NULL DEFAULT 540`,
 		`CREATE INDEX IF NOT EXISTS idx_pending_orders_bracket ON pending_orders(bracket_id) WHERE bracket_id != ''`,
 		`ALTER TABLE portfolios ADD COLUMN margin_mode TEXT NOT NULL DEFAULT 'isolated'`,
@@ -1111,9 +1113,9 @@ const pendingOrderInsertSQL = `
 			id, client_id, exchange, symbol, order_type, side, quantity, filled_quantity, remaining_quantity,
 			trigger_price, reserved_cash, reserved_quantity, time_in_force, expires_at, status,
 			created_at, updated_at, filled_at, canceled_at, fill_trade_id, fill_price, reject_reason, cancel_reason,
-			oco_group_id, oco_peer_id, trail_type, trail_value, trail_peak, bracket_id, bracket_role, lot_method, situation_json,
+			oco_group_id, oco_peer_id, trail_type, trail_value, trail_peak, bracket_id, bracket_role, target_percent, lot_method, situation_json,
 			reason_set, reason_json
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 func (s *SQLite) txInsertPendingOrder(ctx context.Context, tx *sql.Tx, o domain.PendingOrder) error {
 	_, err := tx.ExecContext(ctx, pendingOrderInsertSQL,
@@ -1121,7 +1123,7 @@ func (s *SQLite) txInsertPendingOrder(ctx context.Context, tx *sql.Tx, o domain.
 		o.TriggerPrice, o.ReservedCash, o.ReservedQuantity, string(o.TimeInForce), nullTime(o.ExpiresAt), string(o.Status),
 		o.CreatedAt.UTC().Format(time.RFC3339Nano), o.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		nullTime(o.FilledAt), nullTime(o.CanceledAt), o.FillTradeID, o.FillPrice, o.RejectReason, o.CancelReason,
-		o.OCOGroupID, o.OCOPeerID, o.TrailType, o.TrailValue, o.TrailPeak, o.BracketID, o.BracketRole, lotMethodOrDefault(o.LotMethod),
+		o.OCOGroupID, o.OCOPeerID, o.TrailType, o.TrailValue, o.TrailPeak, o.BracketID, o.BracketRole, o.TargetPercent, lotMethodOrDefault(o.LotMethod),
 		marshalSituation(o.Situation), reasonSetValue(o), marshalReason(o),
 	)
 	return err
@@ -1170,8 +1172,55 @@ func (s *SQLite) CreateBracket(ctx context.Context, entry, takeProfit, stopLoss 
 	return &e, &tp, &sl, nil
 }
 
-// SyncBracketExitsToFilled activates or grows exit legs so their open size matches entryFilled.
-// remaining = entryFilled - filled_on_exit; status open when entryFilled > 0 and leg not canceled/filled.
+// CreatePendingOrders inserts every leg of an OCO or bracket in one transaction.
+func (s *SQLite) CreatePendingOrders(ctx context.Context, orders []domain.PendingOrder) ([]domain.PendingOrder, error) {
+	if len(orders) == 0 {
+		return nil, fmt.Errorf("%w: orders are required", domain.ErrInvalidArgument)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC()
+	for i := range orders {
+		o := &orders[i]
+		if o.CreatedAt.IsZero() {
+			o.CreatedAt = now
+		}
+		if o.UpdatedAt.IsZero() {
+			o.UpdatedAt = o.CreatedAt
+		}
+		if o.Status == "" {
+			o.Status = domain.PendingStatusOpen
+		}
+		if o.TimeInForce == "" {
+			o.TimeInForce = domain.TimeInForceGTC
+		}
+		if o.Status == domain.PendingStatusOpen && o.RemainingQuantity <= 0 && o.Quantity > 0 {
+			o.RemainingQuantity = o.Quantity
+		}
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := s.txInsertIdempotency(ctx, tx); err != nil {
+		return nil, err
+	}
+	for _, o := range orders {
+		if err := s.txInsertPendingOrder(ctx, tx, o); err != nil {
+			return nil, fmt.Errorf("pending orders create: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return orders, nil
+}
+
+// SyncBracketExitsToFilled sizes each take-profit to its share of entryFilled and the
+// stop to whatever those exits have not sold. A filled slice reopens when a later
+// entry fill makes its share larger. A stop canceled because the targets were done
+// reopens the same way. A user cancel stays canceled.
 func (s *SQLite) SyncBracketExitsToFilled(ctx context.Context, clientID, bracketID string, entryFilled float64, at time.Time) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1183,7 +1232,8 @@ func (s *SQLite) SyncBracketExitsToFilled(ctx context.Context, clientID, bracket
 	}
 	atStr := at.UTC().Format(time.RFC3339Nano)
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, quantity, filled_quantity, remaining_quantity, status, bracket_role
+		SELECT id, quantity, filled_quantity, remaining_quantity, status, bracket_role,
+		       COALESCE(target_percent, 0), COALESCE(cancel_reason, ''), trigger_price
 		FROM pending_orders
 		WHERE client_id = ? AND bracket_id = ? AND bracket_role IN ('take_profit', 'stop_loss')
 	`, clientID, bracketID)
@@ -1192,71 +1242,142 @@ func (s *SQLite) SyncBracketExitsToFilled(ctx context.Context, clientID, bracket
 	}
 	defer rows.Close()
 	type leg struct {
-		id, status, role string
-		qty, filled, rem float64
+		id, status, role, cancel  string
+		qty, filled, rem, pct, px float64
 	}
-	var legs []leg
+	var tps []leg
+	var sl *leg
 	for rows.Next() {
 		var L leg
-		if err := rows.Scan(&L.id, &L.qty, &L.filled, &L.rem, &L.status, &L.role); err != nil {
+		if err := rows.Scan(&L.id, &L.qty, &L.filled, &L.rem, &L.status, &L.role, &L.pct, &L.cancel, &L.px); err != nil {
 			return err
 		}
-		legs = append(legs, L)
+		if L.role == domain.BracketRoleStopLoss {
+			cp := L
+			sl = &cp
+			continue
+		}
+		tps = append(tps, L)
 	}
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	for _, L := range legs {
-		// Do not resurrect canceled/rejected/filled exits.
-		if L.status != string(domain.PendingStatusPending) && L.status != string(domain.PendingStatusOpen) {
+	sort.SliceStable(tps, func(i, j int) bool { return tps[i].px < tps[j].px })
+
+	active := make([]leg, 0, len(tps))
+	var soldTP float64
+	for _, tp := range tps {
+		soldTP += tp.filled
+		if tp.status == string(domain.PendingStatusRejected) {
 			continue
 		}
-		// Target open size is entry filled amount; already-exited qty stays filled.
-		if L.filled > entryFilled+1e-12 {
-			// Exit already sold more than new target (should not happen); clamp remaining 0.
-			_, err = s.db.ExecContext(ctx, `
-				UPDATE pending_orders
-				SET quantity = ?, remaining_quantity = 0, reserved_quantity = 0,
-				    status = CASE WHEN ? > 0 THEN 'filled' ELSE status END,
-				    updated_at = ?
-				WHERE id = ?
-			`, math.Max(L.qty, entryFilled), L.filled, atStr, L.id)
-			if err != nil {
-				return err
-			}
+		if tp.status == string(domain.PendingStatusCanceled) && tp.cancel != domain.CancelReasonOCOPeerFilled {
 			continue
 		}
-		newQty := entryFilled
-		if newQty < L.filled {
-			newQty = L.filled
+		active = append(active, tp)
+	}
+	percents := make([]float64, len(active))
+	for i, tp := range active {
+		percents[i] = tp.pct
+		if percents[i] <= 0 && len(active) == 1 {
+			percents[i] = 100
 		}
-		newRem := newQty - L.filled
-		if newRem < domain.PositionEpsilon {
-			newRem = 0
-		}
-		newStatus := string(domain.PendingStatusPending)
-		reserved := 0.0
-		if entryFilled > domain.PositionEpsilon && newRem > domain.PositionEpsilon {
-			newStatus = string(domain.PendingStatusOpen)
-			reserved = newRem
-		} else if entryFilled > domain.PositionEpsilon && newRem <= domain.PositionEpsilon && L.filled > domain.PositionEpsilon {
-			newStatus = string(domain.PendingStatusFilled)
-		} else if entryFilled <= domain.PositionEpsilon {
-			newStatus = string(domain.PendingStatusPending)
-			newQty = 0
-			newRem = 0
-		}
-		_, err = s.db.ExecContext(ctx, `
-			UPDATE pending_orders
-			SET quantity = ?, remaining_quantity = ?, reserved_quantity = ?, reserved_cash = 0,
-			    status = ?, updated_at = ?
-			WHERE id = ?
-		`, newQty, newRem, reserved, newStatus, atStr, L.id)
+	}
+	shares := make([]float64, len(active))
+	if entryFilled > domain.PositionEpsilon && len(active) > 0 {
+		shares, err = domain.SplitTargetQuantities(entryFilled, percents)
 		if err != nil {
 			return err
 		}
 	}
-	return nil
+	type sized struct {
+		leg
+		newQty, newRem float64
+	}
+	sizedTPs := make([]sized, len(active))
+	var sumRem float64
+	for i, tp := range active {
+		desired := 0.0
+		if i < len(shares) {
+			desired = shares[i]
+		}
+		if desired < tp.filled {
+			desired = tp.filled
+		}
+		rem := desired - tp.filled
+		if rem < domain.PositionEpsilon {
+			rem = 0
+		}
+		sizedTPs[i] = sized{leg: tp, newQty: desired, newRem: rem}
+		sumRem += rem
+	}
+	var slFilled float64
+	if sl != nil {
+		slFilled = sl.filled
+	}
+	unsold := entryFilled - soldTP - slFilled
+	if unsold < domain.PositionEpsilon {
+		unsold = 0
+	}
+	if sumRem > unsold+1e-9 {
+		rems := make([]float64, len(sizedTPs))
+		for i := range sizedTPs {
+			rems[i] = sizedTPs[i].newRem
+		}
+		rems = domain.ScaleRemainings(rems, unsold)
+		for i := range sizedTPs {
+			sizedTPs[i].newRem = rems[i]
+			if sizedTPs[i].newRem < domain.PositionEpsilon {
+				sizedTPs[i].newRem = 0
+			}
+			sizedTPs[i].newQty = sizedTPs[i].filled + sizedTPs[i].newRem
+		}
+	}
+	for _, tp := range sizedTPs {
+		if err := writeExitSize(ctx, s.db, tp.id, tp.status, tp.cancel, tp.filled, tp.newQty, tp.newRem, entryFilled, atStr); err != nil {
+			return err
+		}
+	}
+	if sl == nil {
+		return nil
+	}
+	if sl.status == string(domain.PendingStatusRejected) {
+		return nil
+	}
+	if sl.status == string(domain.PendingStatusCanceled) && sl.cancel != domain.CancelReasonOCOPeerFilled {
+		return nil
+	}
+	slQty := sl.filled + unsold
+	return writeExitSize(ctx, s.db, sl.id, sl.status, sl.cancel, sl.filled, slQty, unsold, entryFilled, atStr)
+}
+
+func writeExitSize(ctx context.Context, db *sql.DB, id, status, cancel string, filled, newQty, newRem, entryFilled float64, atStr string) error {
+	if status == string(domain.PendingStatusCanceled) && cancel != domain.CancelReasonOCOPeerFilled && newRem <= domain.PositionEpsilon {
+		return nil
+	}
+	newStatus := string(domain.PendingStatusPending)
+	reserved := 0.0
+	if entryFilled > domain.PositionEpsilon && newRem > domain.PositionEpsilon {
+		newStatus = string(domain.PendingStatusOpen)
+		reserved = newRem
+	} else if entryFilled > domain.PositionEpsilon && newRem <= domain.PositionEpsilon && filled > domain.PositionEpsilon {
+		newStatus = string(domain.PendingStatusFilled)
+		newRem = 0
+		reserved = 0
+	} else if entryFilled <= domain.PositionEpsilon {
+		newStatus = string(domain.PendingStatusPending)
+		newQty = 0
+		newRem = 0
+	}
+	_, err := db.ExecContext(ctx, `
+		UPDATE pending_orders
+		SET quantity = ?, remaining_quantity = ?, reserved_quantity = ?, reserved_cash = 0,
+		    status = ?, updated_at = ?,
+		    cancel_reason = CASE WHEN ? IN ('open', 'pending') THEN '' ELSE cancel_reason END,
+		    canceled_at = CASE WHEN ? IN ('open', 'pending') THEN NULL ELSE canceled_at END
+		WHERE id = ?
+	`, newQty, newRem, reserved, newStatus, atStr, newStatus, newStatus, id)
+	return err
 }
 
 // CancelBracket cancels all open or pending legs of a bracket.
@@ -1440,12 +1561,13 @@ func (s *SQLite) CancelPendingOrder(ctx context.Context, clientID, id string, at
 		reason = domain.CancelReasonUser
 	}
 	atStr := at.UTC().Format(time.RFC3339Nano)
-	// Load open row for OCO peer linkage.
-	var ocoGroup, ocoPeer string
+	// Load open row for OCO group linkage.
+	var ocoGroup, ocoPeer, orderType, ocoRole string
 	_ = s.db.QueryRowContext(ctx, `
-		SELECT COALESCE(oco_group_id,''), COALESCE(oco_peer_id,'') FROM pending_orders
+		SELECT COALESCE(oco_group_id,''), COALESCE(oco_peer_id,''), order_type, COALESCE(bracket_role,'')
+		FROM pending_orders
 		WHERE id = ? AND client_id = ? AND status = 'open'
-	`, id, clientID).Scan(&ocoGroup, &ocoPeer)
+	`, id, clientID).Scan(&ocoGroup, &ocoPeer, &orderType, &ocoRole)
 
 	res, err := s.db.ExecContext(ctx, `
 		UPDATE pending_orders
@@ -1460,14 +1582,26 @@ func (s *SQLite) CancelPendingOrder(ctx context.Context, clientID, id string, at
 	if n == 0 {
 		return nil, domain.ErrNotFound
 	}
-	// User cancel of one OCO leg cancels the peer (shared size).
-	if ocoGroup != "" && ocoPeer != "" && reason == domain.CancelReasonUser {
-		_, _ = s.db.ExecContext(ctx, `
-			UPDATE pending_orders
-			SET status = 'canceled', canceled_at = ?, updated_at = ?,
-			    reserved_cash = 0, reserved_quantity = 0, cancel_reason = ?
-			WHERE id = ? AND client_id = ? AND status = 'open'
-		`, atStr, atStr, domain.CancelReasonOCOGroup, ocoPeer, clientID)
+	// Canceling the stop, or the last take-profit, cancels the rest of the group.
+	// Canceling one take-profit while others remain leaves the stop on the coins still held.
+	if ocoGroup != "" && reason == domain.CancelReasonUser {
+		cancelRest := orderType == string(domain.PendingStopLoss) || ocoRole == domain.BracketRoleStopLoss
+		if !cancelRest {
+			var otherTP int
+			_ = s.db.QueryRowContext(ctx, `
+				SELECT COUNT(*) FROM pending_orders
+				WHERE client_id = ? AND oco_group_id = ? AND status = 'open' AND order_type = 'limit_sell'
+			`, clientID, ocoGroup).Scan(&otherTP)
+			cancelRest = otherTP == 0
+		}
+		if cancelRest {
+			_, _ = s.db.ExecContext(ctx, `
+				UPDATE pending_orders
+				SET status = 'canceled', canceled_at = ?, updated_at = ?,
+				    reserved_cash = 0, reserved_quantity = 0, cancel_reason = ?
+				WHERE client_id = ? AND oco_group_id = ? AND status = 'open'
+			`, atStr, atStr, domain.CancelReasonOCOGroup, clientID, ocoGroup)
+		}
 	}
 	// Canceling bracket entry (user/expiry/IOC/…) cancels pending/open exits.
 	var bracketID, bracketRole string
@@ -1843,37 +1977,143 @@ func (s *SQLite) ExecuteOCOFill(ctx context.Context, filled *domain.PendingOrder
 		return domain.ErrNotFound
 	}
 
-	// Peer: cancel if this leg fully filled; otherwise shrink remaining to match (no second cash move).
-	if peer != nil && peer.ID != "" {
-		if filled.Status == domain.PendingStatusFilled || filled.RemainingQuantity <= domain.PositionEpsilon {
-			_, err = tx.ExecContext(ctx, `
-				UPDATE pending_orders
-				SET status = 'canceled', canceled_at = ?, updated_at = ?,
-				    reserved_cash = 0, reserved_quantity = 0, cancel_reason = ?
-				WHERE id = ? AND status = 'open'
-			`, atStr, atStr, domain.CancelReasonOCOPeerFilled, peer.ID)
-			if err != nil {
-				return err
-			}
-		} else {
-			// Align peer remaining/filled so filled+remaining = quantity; reserved = remaining.
-			peerRem := filled.RemainingQuantity
-			peerFilled := peer.Quantity - peerRem
-			if peerFilled < 0 {
-				peerFilled = 0
-			}
-			_, err = tx.ExecContext(ctx, `
-				UPDATE pending_orders
-				SET filled_quantity = ?, remaining_quantity = ?, reserved_quantity = ?,
-				    reserved_cash = 0, updated_at = ?
-				WHERE id = ? AND status = 'open'
-			`, peerFilled, peerRem, peerRem, atStr, peer.ID)
-			if err != nil {
-				return err
-			}
+	if err := adjustOCOAfterFill(ctx, tx, filled, t.Quantity, atStr); err != nil {
+		return err
+	}
+	// A group-less pair still shrinks its single peer.
+	if strings.TrimSpace(filled.OCOGroupID) == "" && peer != nil && peer.ID != "" {
+		if err := adjustLegacyOCOPeer(ctx, tx, filled, peer, atStr); err != nil {
+			return err
 		}
 	}
 	return tx.Commit()
+}
+
+// adjustOCOAfterFill keeps the stop equal to the coins the targets have not sold.
+func adjustOCOAfterFill(ctx context.Context, tx *sql.Tx, filled *domain.PendingOrder, fillQty float64, atStr string) error {
+	if filled == nil || strings.TrimSpace(filled.OCOGroupID) == "" {
+		return nil
+	}
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id, order_type, quantity, filled_quantity, remaining_quantity, trigger_price
+		FROM pending_orders
+		WHERE client_id = ? AND oco_group_id = ? AND status = 'open' AND id != ?
+		ORDER BY trigger_price ASC
+	`, filled.ClientID, filled.OCOGroupID, filled.ID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	type leg struct {
+		id, typ                 string
+		qty, filled, rem, price float64
+	}
+	var others []leg
+	for rows.Next() {
+		var L leg
+		if err := rows.Scan(&L.id, &L.typ, &L.qty, &L.filled, &L.rem, &L.price); err != nil {
+			return err
+		}
+		others = append(others, L)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if filled.Type == domain.PendingStopLoss {
+		ids := make([]string, 0, len(others))
+		for _, L := range others {
+			ids = append(ids, L.id)
+		}
+		if filled.RemainingQuantity <= domain.PositionEpsilon {
+			return cancelOpenIDs(ctx, tx, ids, atStr, domain.CancelReasonOCOPeerFilled)
+		}
+		tps := make([]leg, 0, len(others))
+		for _, L := range others {
+			if L.typ == string(domain.PendingLimitSell) {
+				tps = append(tps, L)
+			}
+		}
+		rems := make([]float64, len(tps))
+		for i := range tps {
+			rems[i] = tps[i].rem
+		}
+		scaled := domain.ScaleRemainings(rems, filled.RemainingQuantity)
+		var drop []string
+		for i, tp := range tps {
+			newRem := scaled[i]
+			if newRem <= domain.PositionEpsilon {
+				drop = append(drop, tp.id)
+				continue
+			}
+			newQty := tp.filled + newRem
+			if _, err := tx.ExecContext(ctx, `
+				UPDATE pending_orders
+				SET quantity = ?, remaining_quantity = ?, reserved_quantity = ?,
+				    reserved_cash = 0, updated_at = ?
+				WHERE id = ? AND status = 'open'
+			`, newQty, newRem, newRem, atStr, tp.id); err != nil {
+				return err
+			}
+		}
+		return cancelOpenIDs(ctx, tx, drop, atStr, domain.CancelReasonOCOPeerFilled)
+	}
+	var stop *leg
+	for i := range others {
+		if others[i].typ == string(domain.PendingStopLoss) {
+			stop = &others[i]
+			break
+		}
+	}
+	if stop == nil {
+		return nil
+	}
+	newRem := stop.rem - fillQty
+	if newRem <= domain.PositionEpsilon {
+		return cancelOpenIDs(ctx, tx, []string{stop.id}, atStr, domain.CancelReasonOCOPeerFilled)
+	}
+	newQty := stop.filled + newRem
+	_, err = tx.ExecContext(ctx, `
+		UPDATE pending_orders
+		SET quantity = ?, remaining_quantity = ?, reserved_quantity = ?,
+		    reserved_cash = 0, updated_at = ?
+		WHERE id = ? AND status = 'open'
+	`, newQty, newRem, newRem, atStr, stop.id)
+	return err
+}
+
+func adjustLegacyOCOPeer(ctx context.Context, tx *sql.Tx, filled, peer *domain.PendingOrder, atStr string) error {
+	if filled.Status == domain.PendingStatusFilled || filled.RemainingQuantity <= domain.PositionEpsilon {
+		return cancelOpenIDs(ctx, tx, []string{peer.ID}, atStr, domain.CancelReasonOCOPeerFilled)
+	}
+	peerRem := filled.RemainingQuantity
+	peerFilled := peer.Quantity - peerRem
+	if peerFilled < 0 {
+		peerFilled = 0
+	}
+	_, err := tx.ExecContext(ctx, `
+		UPDATE pending_orders
+		SET filled_quantity = ?, remaining_quantity = ?, reserved_quantity = ?,
+		    reserved_cash = 0, updated_at = ?
+		WHERE id = ? AND status = 'open'
+	`, peerFilled, peerRem, peerRem, atStr, peer.ID)
+	return err
+}
+
+func cancelOpenIDs(ctx context.Context, tx *sql.Tx, ids []string, atStr, reason string) error {
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE pending_orders
+			SET status = 'canceled', canceled_at = ?, updated_at = ?,
+			    reserved_cash = 0, reserved_quantity = 0, cancel_reason = ?
+			WHERE id = ? AND status = 'open'
+		`, atStr, atStr, reason, id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // RejectPendingOrder marks open order rejected and releases reservation.
@@ -1906,7 +2146,7 @@ const pendingOrderSelect = `
 		created_at, updated_at, filled_at, canceled_at, fill_trade_id, fill_price, reject_reason, cancel_reason,
 		COALESCE(oco_group_id, ''), COALESCE(oco_peer_id, ''),
 		COALESCE(trail_type, ''), COALESCE(trail_value, 0), COALESCE(trail_peak, 0),
-		COALESCE(bracket_id, ''), COALESCE(bracket_role, ''), COALESCE(lot_method, 'fifo'),
+		COALESCE(bracket_id, ''), COALESCE(bracket_role, ''), COALESCE(target_percent, 0), COALESCE(lot_method, 'fifo'),
 		COALESCE(situation_json, ''), COALESCE(reason_set, 0), COALESCE(reason_json, '')
 	FROM pending_orders`
 
@@ -1924,7 +2164,7 @@ func scanPendingOrder(row scannable) (*domain.PendingOrder, error) {
 		&o.TriggerPrice, &o.ReservedCash, &o.ReservedQuantity, &tif, &expiresAt, &st,
 		&cAt, &uAt, &filledAt, &canceledAt, &o.FillTradeID, &o.FillPrice, &o.RejectReason, &o.CancelReason,
 		&o.OCOGroupID, &o.OCOPeerID, &o.TrailType, &o.TrailValue, &o.TrailPeak,
-		&o.BracketID, &o.BracketRole, &lotMethod, &situation, &reasonSet, &reasonJSON,
+		&o.BracketID, &o.BracketRole, &o.TargetPercent, &lotMethod, &situation, &reasonSet, &reasonJSON,
 	); err != nil {
 		return nil, err
 	}

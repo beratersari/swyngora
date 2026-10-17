@@ -17,6 +17,12 @@ type OrderPreviewLeg struct {
 	CashDebit            float64
 	CashCredit           float64
 	EstimatedRealizedPnL *float64
+	// Quantity is the coin size of this leg. For a stop it is the whole order.
+	Quantity float64
+	// Percent is this take-profit's share of the order. 25 means 25%.
+	Percent float64
+	// OffsetPercent is the gain above the entry or average cost. 5 means +5%.
+	OffsetPercent float64
 }
 
 // OrderPreviewRisk is the risk-limit read for this order.

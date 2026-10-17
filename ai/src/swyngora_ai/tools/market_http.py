@@ -18,6 +18,18 @@ from pydantic import BaseModel, Field
 from swyngora_ai.config import Settings, get_settings
 from swyngora_ai.constants import EXCHANGE_VENUES, EXCHANGE_VENUES_OR_ALL
 from swyngora_ai.tools.errors import ToolTransientError
+
+
+def _take_profit_target_body(targets: list[TakeProfitTargetInput] | None) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for target in targets or []:
+        row: dict[str, Any] = {"percent": target.percent}
+        if target.price:
+            row["price"] = target.price
+        if target.offset_percent:
+            row["offsetPercent"] = target.offset_percent
+        rows.append(row)
+    return rows
 from swyngora_ai.tools.packs import filter_tools
 
 bound_client_id: ContextVar[str] = ContextVar("bound_client_id", default="")
@@ -1847,6 +1859,15 @@ class RiskLimitsSetInput(BaseModel):
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
+class TakeProfitTargetInput(BaseModel):
+    percent: float = Field(description="Share of the quantity. The targets sum to 100.")
+    price: float = Field(default=0, description="Limit sell price. Leave 0 when offset_percent is set.")
+    offset_percent: float = Field(
+        default=0,
+        description="Gain above the entry or the average cost. 5 means +5%. Leave 0 when price is set.",
+    )
+
+
 class OrderPreviewInput(BaseModel):
     client_id: str
     symbol: str
@@ -1891,7 +1912,19 @@ class OrderPreviewInput(BaseModel):
         ),
     )
     trigger_price: float = Field(default=0, description="Limit, stop, or bracket entry")
-    take_profit_price: float = Field(default=0, description="OCO, bracket, or margin take-profit")
+    take_profit_price: float = Field(
+        default=0,
+        description="Single take-profit limit for the whole size. Omit when take_profit_targets is set.",
+    )
+    take_profit_targets: list[TakeProfitTargetInput] | None = Field(
+        default=None,
+        description=(
+            "Scale-out slices for an OCO or bracket. Each percent is a share of the quantity "
+            "and the shares sum to 100. price is a limit, or offset_percent is a gain: "
+            "5 means +5% above a bracket entry or an OCO average cost. "
+            "When a slice fills, the stop quantity becomes the coins still held."
+        ),
+    )
     stop_loss_price: float = Field(
         default=0,
         description="Stop used to size the order. Also the OCO, bracket, or margin stop.",
@@ -2035,7 +2068,17 @@ class PortfolioOCOInput(BaseModel):
     client_id: str
     symbol: str
     quantity: float = Field(gt=0)
-    take_profit_price: float = Field(gt=0)
+    take_profit_price: float = Field(
+        default=0,
+        description="Single take-profit limit. Required when take_profit_targets is empty.",
+    )
+    take_profit_targets: list[TakeProfitTargetInput] | None = Field(
+        default=None,
+        description=(
+            "Scale-out slices. Shares sum to 100. offset_percent is above the average cost. "
+            "When a slice fills, the stop covers the coins still held."
+        ),
+    )
     stop_loss_price: float = Field(gt=0)
     exchange: str = Field(default="binance", description=EXCHANGE_VENUES)
     expires_at: str = ""
@@ -2048,7 +2091,17 @@ class PortfolioBracketInput(BaseModel):
     symbol: str
     quantity: float = Field(gt=0)
     entry_price: float = Field(gt=0)
-    take_profit_price: float = Field(gt=0)
+    take_profit_price: float = Field(
+        default=0,
+        description="Single take-profit limit above the entry. Required when take_profit_targets is empty.",
+    )
+    take_profit_targets: list[TakeProfitTargetInput] | None = Field(
+        default=None,
+        description=(
+            "Scale-out slices. Shares sum to 100. offset_percent is above the entry. "
+            "Each slice is that share of the filled entry. The stop covers what is still held."
+        ),
+    )
     stop_loss_price: float = Field(gt=0)
     exchange: str = Field(default="binance", description=EXCHANGE_VENUES)
     expires_at: str = ""
@@ -4279,6 +4332,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         stop_loss_price: float = 0,
         trail_type: str = "",
         trail_value: float = 0,
+        take_profit_targets: list[TakeProfitTargetInput] | None = None,
         lot_method: str = "",
         limit_price: float = 0,
         leverage: int = 0,
@@ -4308,6 +4362,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["triggerPrice"] = trigger_price
         if take_profit_price:
             body["takeProfitPrice"] = take_profit_price
+        if take_profit_targets:
+            body["takeProfitTargets"] = _take_profit_target_body(take_profit_targets)
         if stop_loss_price:
             body["stopLossPrice"] = stop_loss_price
         if trail_type:
@@ -4470,22 +4526,30 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         client_id: str,
         symbol: str,
         quantity: float,
-        take_profit_price: float,
-        stop_loss_price: float,
+        take_profit_price: float = 0,
+        stop_loss_price: float = 0,
         exchange: str = "binance",
         expires_at: str = "",
         idempotency_key: str = "",
         portfolio_id: str = "",
+        take_profit_targets: list[TakeProfitTargetInput] | None = None,
     ) -> str:
+        if take_profit_price <= 0 and not take_profit_targets:
+            raise ValueError("take_profit_price or take_profit_targets is required")
+        if stop_loss_price <= 0:
+            raise ValueError("stop_loss_price is required")
         body: dict[str, Any] = {
             "clientId": client_id,
             "symbol": symbol,
             "type": "oco",
             "quantity": quantity,
-            "takeProfitPrice": take_profit_price,
             "stopLossPrice": stop_loss_price,
             "exchange": exchange,
         }
+        if take_profit_price > 0:
+            body["takeProfitPrice"] = take_profit_price
+        if take_profit_targets:
+            body["takeProfitTargets"] = _take_profit_target_body(take_profit_targets)
         if expires_at:
             body["expiresAt"] = expires_at
         if idempotency_key:
@@ -4499,24 +4563,32 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         symbol: str,
         quantity: float,
         entry_price: float,
-        take_profit_price: float,
-        stop_loss_price: float,
+        take_profit_price: float = 0,
+        stop_loss_price: float = 0,
         exchange: str = "binance",
         expires_at: str = "",
         idempotency_key: str = "",
         portfolio_id: str = "",
         reason: list[str] | None = None,
+        take_profit_targets: list[TakeProfitTargetInput] | None = None,
     ) -> str:
+        if take_profit_price <= 0 and not take_profit_targets:
+            raise ValueError("take_profit_price or take_profit_targets is required")
+        if stop_loss_price <= 0:
+            raise ValueError("stop_loss_price is required")
         body: dict[str, Any] = {
             "clientId": client_id,
             "symbol": symbol,
             "type": "bracket",
             "quantity": quantity,
             "triggerPrice": entry_price,
-            "takeProfitPrice": take_profit_price,
             "stopLossPrice": stop_loss_price,
             "exchange": exchange,
         }
+        if take_profit_price > 0:
+            body["takeProfitPrice"] = take_profit_price
+        if take_profit_targets:
+            body["takeProfitTargets"] = _take_profit_target_body(take_profit_targets)
         if expires_at:
             body["expiresAt"] = expires_at
         if idempotency_key:
@@ -7231,13 +7303,21 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         StructuredTool.from_function(
             place_portfolio_oco_order,
             name="place_portfolio_oco_order",
-            description="Paper OCO: take-profit limit + stop-loss for the same quantity.",
+            description=(
+                "Paper OCO: take-profit targets plus one stop for the same coins. "
+                "take_profit_targets shares sum to 100. offset_percent is above the average cost. "
+                "When a target fills, the stop quantity becomes the coins still held."
+            ),
             args_schema=PortfolioOCOInput,
         ),
         StructuredTool.from_function(
             place_portfolio_bracket_order,
             name="place_portfolio_bracket_order",
-            description="Paper bracket: limit-buy entry with pending take-profit + stop-loss.",
+            description=(
+                "Paper bracket: limit-buy entry with take-profit targets and one stop. "
+                "Each target is its share of the filled entry. offset_percent is above the entry. "
+                "When a target fills, the stop covers the coins still held."
+            ),
             args_schema=PortfolioBracketInput,
         ),
         StructuredTool.from_function(

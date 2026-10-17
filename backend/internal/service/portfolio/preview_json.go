@@ -169,6 +169,15 @@ func previewLegPayload(leg domain.OrderPreviewLeg) map[string]any {
 		"cashDebit":      leg.CashDebit,
 		"cashCredit":     leg.CashCredit,
 	}
+	if leg.Quantity > 0 {
+		out["quantity"] = leg.Quantity
+	}
+	if leg.Percent > 0 {
+		out["percent"] = leg.Percent
+	}
+	if leg.OffsetPercent > 0 {
+		out["offsetPercent"] = leg.OffsetPercent
+	}
 	if leg.EstimatedRealizedPnL != nil {
 		out["estimatedRealizedPnl"] = *leg.EstimatedRealizedPnL
 	}

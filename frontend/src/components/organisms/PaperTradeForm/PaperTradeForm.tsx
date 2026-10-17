@@ -9,7 +9,9 @@ import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
 import { rtkErrorMessage } from '@/libs/api';
 import { sizedQuantity } from '@/libs/hooks/orderPreview';
 import { Actions, Field, FieldRow, FormStack } from './PaperTradeForm.styles';
+import { TakeProfitTargets } from './TakeProfitTargets';
 import type { PaperTradeFormProps, PaperTradeFormValues } from './PaperTradeForm.types';
+import { targetWire, targetsComplete, type TargetRow } from './targets';
 import {
   canSizeByRisk,
   needsSide,
@@ -55,7 +57,9 @@ export function PaperTradeForm({
   const [kind, setKind] = useState<SpotOrderKind>('market');
   const [quantity, setQuantity] = useState<number | null>(null);
   const [triggerPrice, setTriggerPrice] = useState<number | null>(null);
-  const [takeProfitPrice, setTakeProfitPrice] = useState<number | null>(null);
+  const [targets, setTargets] = useState<TargetRow[]>([
+    { percent: 100, offsetPercent: null, price: null },
+  ]);
   const [stopLossPrice, setStopLossPrice] = useState<number | null>(null);
   const [riskPercent, setRiskPercent] = useState<number | null>(null);
   const [trailType, setTrailType] = useState<'percent' | 'offset'>('percent');
@@ -135,6 +139,7 @@ export function PaperTradeForm({
   const minutes = spreadMinutes != null && spreadMinutes >= 1 ? Math.round(spreadMinutes) : 10;
   const slices = sliceCount != null && sliceCount >= 2 ? Math.round(sliceCount) : 10;
   const wireExchange = routing ? 'all' : exchange;
+  const profit = useMemo(() => targetWire(showTpSl ? targets : []), [showTpSl, targets]);
   const canSize = canSizeByRisk(kind, side) && !routing;
   const riskActive = canSize && riskPercent != null && riskPercent > 0;
   const stopForSize = stopLossPrice != null && stopLossPrice > 0;
@@ -160,7 +165,8 @@ export function PaperTradeForm({
       side,
       quantity: quantity ?? 0,
       triggerPrice: showTrigger && triggerPrice != null ? triggerPrice : undefined,
-      takeProfitPrice: showTpSl && takeProfitPrice != null ? takeProfitPrice : undefined,
+      takeProfitPrice: showTpSl ? profit.takeProfitPrice : undefined,
+      takeProfitTargets: showTpSl ? profit.takeProfitTargets : undefined,
       stopLossPrice: (showTpSl || riskActive) && stopLossPrice != null ? stopLossPrice : undefined,
       riskPercent: riskActive ? (riskPercent ?? undefined) : undefined,
       trailType: showTrail ? trailType : undefined,
@@ -182,7 +188,7 @@ export function PaperTradeForm({
     side,
     quantity,
     triggerPrice,
-    takeProfitPrice,
+    profit,
     stopLossPrice,
     trailType,
     trailValue,
@@ -203,6 +209,14 @@ export function PaperTradeForm({
       setLocalError(t('portfolio:trade.validation.quantity'));
       return;
     }
+    if (showTpSl && !targetsComplete(targets)) {
+      setLocalError(t('portfolio:trade.validation.targets'));
+      return;
+    }
+    if (showTpSl && !(stopLossPrice != null && stopLossPrice > 0)) {
+      setLocalError(t('portfolio:trade.validation.stopLossPrice'));
+      return;
+    }
     const sym = symbol.trim().toUpperCase();
     const orderType = toApiOrderType(kind, s);
     const values: PaperTradeFormValues = {
@@ -216,7 +230,8 @@ export function PaperTradeForm({
       side: s,
       quantity: quantity ?? 0,
       triggerPrice: showTrigger ? (triggerPrice ?? undefined) : undefined,
-      takeProfitPrice: showTpSl ? (takeProfitPrice ?? undefined) : undefined,
+      takeProfitPrice: showTpSl ? profit.takeProfitPrice : undefined,
+      takeProfitTargets: showTpSl ? profit.takeProfitTargets : undefined,
       stopLossPrice: showTpSl ? (stopLossPrice ?? undefined) : undefined,
       trailType: showTrail ? trailType : undefined,
       trailValue: showTrail ? (trailValue ?? undefined) : undefined,
@@ -237,7 +252,7 @@ export function PaperTradeForm({
       setRiskPercent(null);
       if (showTrigger) setTriggerPrice(null);
       if (showTpSl) {
-        setTakeProfitPrice(null);
+        setTargets([{ percent: 100, offsetPercent: null, price: null }]);
         setStopLossPrice(null);
       }
       if (showTrail) setTrailValue(null);
@@ -467,18 +482,12 @@ export function PaperTradeForm({
 
         {showTpSl ? (
           <>
-            <Field>
-              <Text variant="caption" color="secondary">
-                {t('portfolio:trade.takeProfit')}
-              </Text>
-              <InputNumber
-                min={0}
-                step={0.01}
-                value={takeProfitPrice}
-                onChange={(v) => setTakeProfitPrice(typeof v === 'number' ? v : null)}
-                style={{ minWidth: 120 }}
-              />
-            </Field>
+            <Text variant="caption" color="secondary">
+              {kind === 'bracket'
+                ? t('portfolio:trade.targetsHintBracket')
+                : t('portfolio:trade.targetsHintOco')}
+            </Text>
+            <TakeProfitTargets rows={targets} onChange={setTargets} disabled={disabled || busy} />
             <Field>
               <Text variant="caption" color="secondary">
                 {t('portfolio:trade.stopLoss')}
@@ -489,6 +498,7 @@ export function PaperTradeForm({
                 value={stopLossPrice}
                 onChange={(v) => setStopLossPrice(typeof v === 'number' ? v : null)}
                 style={{ minWidth: 120 }}
+                aria-label={t('portfolio:trade.stopLoss')}
               />
             </Field>
           </>

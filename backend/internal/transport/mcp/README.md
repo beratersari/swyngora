@@ -187,8 +187,8 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `list_spread_orders` | List paper spread orders (`open`, `filled`, `canceled`, or `all`) |
 | `cancel_spread_order` | Cancel an open spread order. Filled slices stay. The unused lock is released |
 | `place_portfolio_pending_order` | Paper limit_buy / limit_sell / stop_loss / trailing_stop (optional idempotencyKey) |
-| `place_portfolio_oco_order` | Paper OCO take-profit + stop-loss (linked; optional idempotencyKey) |
-| `place_portfolio_bracket_order` | Paper bracket: entry limit buy + pending TP/SL (optional idempotencyKey) |
+| `place_portfolio_oco_order` | Paper OCO: take-profit targets plus one stop. `takeProfitTargets` shares sum to 100. A filled target shrinks the stop to the coins still held |
+| `place_portfolio_bracket_order` | Paper bracket: entry limit buy plus take-profit targets and one stop. Each target is its share of the filled entry. The stop covers what is still held |
 | `list_portfolio_orders` | List pending paper orders |
 | `get_portfolio_order` | Get one pending order + last price + amend hints |
 | `amend_portfolio_order` | Amend open GTC limit/stop price and/or remaining size |
