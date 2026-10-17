@@ -76,6 +76,71 @@ func OrderPreviewPayload(p *domain.OrderPreview) map[string]any {
 	if len(p.ReasonHistory) > 0 {
 		out["reasonHistory"] = p.ReasonHistory
 	}
+	if p.Routed {
+		out["routed"] = true
+		legs := make([]any, 0, len(p.RouteLegs))
+		for _, leg := range p.RouteLegs {
+			legs = append(legs, routeLegPayload(leg))
+		}
+		out["routeLegs"] = legs
+		if len(p.RouteMissing) > 0 {
+			out["missingVenues"] = p.RouteMissing
+		}
+		if len(p.RouteSkipped) > 0 {
+			skipped := make([]any, 0, len(p.RouteSkipped))
+			for _, row := range p.RouteSkipped {
+				skipped = append(skipped, map[string]any{
+					"exchange": string(row.Exchange),
+					"symbol":   row.Symbol,
+					"reason":   row.Reason,
+					"detail":   row.Detail,
+				})
+			}
+			out["skippedVenues"] = skipped
+		}
+		if p.RouteCompare != nil {
+			out["compare"] = routeComparePayload(*p.RouteCompare)
+		}
+		if p.RouteNote != "" {
+			out["routeNote"] = p.RouteNote
+		}
+	}
+	return out
+}
+
+func routeLegPayload(leg domain.PaperRouteLeg) map[string]any {
+	out := map[string]any{
+		"exchange":   string(leg.Exchange),
+		"symbol":     leg.Symbol,
+		"quote":      leg.Quote,
+		"aliased":    leg.Aliased,
+		"quantity":   leg.Quantity,
+		"fillPrice":  leg.FillPrice,
+		"notional":   leg.Notional,
+		"fee":        leg.Fee,
+		"feeRate":    leg.FeeRate,
+		"cashDebit":  leg.CashDebit,
+		"cashCredit": leg.CashCredit,
+		"levelsUsed": leg.LevelsUsed,
+	}
+	if leg.EstimatedRealizedPnL != nil {
+		out["estimatedRealizedPnl"] = *leg.EstimatedRealizedPnL
+	}
+	return out
+}
+
+func routeComparePayload(c domain.PaperRouteCompare) map[string]any {
+	out := map[string]any{
+		"exchange":       string(c.Exchange),
+		"symbol":         c.Symbol,
+		"known":          c.Known,
+		"exhausted":      c.Exhausted,
+		"inventoryShort": c.InventoryShort,
+	}
+	if c.Known && !c.Exhausted && !c.InventoryShort {
+		out["cash"] = c.Cash
+		out["savedCash"] = c.SavedCash
+	}
 	return out
 }
 

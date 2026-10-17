@@ -958,6 +958,66 @@ func (s *SQLite) ExecuteTrade(ctx context.Context, p *domain.Portfolio, pos *dom
 	return tx.Commit()
 }
 
+// ExecuteRoutedTrades writes every venue fill and one cash balance together.
+func (s *SQLite) ExecuteRoutedTrades(ctx context.Context, p *domain.Portfolio, fills []domain.RoutedFill) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if p == nil || len(fills) == 0 {
+		return fmt.Errorf("%w: routed fill is empty", domain.ErrInvalidArgument)
+	}
+	at := p.UpdatedAt
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := s.txInsertIdempotency(ctx, tx); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE portfolios SET cash_balance = ?, realized_pnl_total = ?, updated_at = ?
+		WHERE id = ?
+	`, p.CashBalance, p.RealizedPnLTotal, at.UTC().Format(time.RFC3339Nano), p.BookID()); err != nil {
+		return err
+	}
+	for _, fill := range fills {
+		tradeAt := fill.Trade.CreatedAt
+		if tradeAt.IsZero() {
+			tradeAt = at
+		}
+		pos := fill.Position
+		if pos != nil {
+			if pos.Quantity <= domain.PositionEpsilon {
+				if _, err := tx.ExecContext(ctx, `
+					DELETE FROM positions WHERE client_id = ? AND exchange = ? AND symbol = ?
+				`, pos.ClientID, string(pos.Exchange), pos.Symbol); err != nil {
+					return err
+				}
+			} else if _, err := tx.ExecContext(ctx, `
+				INSERT INTO positions (client_id, exchange, symbol, quantity, avg_cost, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?)
+				ON CONFLICT(client_id, exchange, symbol) DO UPDATE SET
+					quantity = excluded.quantity,
+					avg_cost = excluded.avg_cost,
+					updated_at = excluded.updated_at
+			`, pos.ClientID, string(pos.Exchange), pos.Symbol, pos.Quantity, pos.AvgCost,
+				tradeAt.UTC().Format(time.RFC3339Nano)); err != nil {
+				return err
+			}
+		}
+		if err := execInsertTrade(ctx, tx, fill.Trade, tradeAt); err != nil {
+			return err
+		}
+		if err := applyLotOps(ctx, tx, fill.Lots, fill.Trade.ID, tradeAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 // CreatePendingOrder inserts an open resting order with reservations.
 func (s *SQLite) CreatePendingOrder(ctx context.Context, o domain.PendingOrder) (*domain.PendingOrder, error) {
 	s.mu.Lock()

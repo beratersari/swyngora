@@ -2,7 +2,7 @@ import type { MarketExchange, OrderPreview, PaperOrderType } from '@/libs/api';
 import type { SpotOrderPreviewDraft } from '@/libs/hooks/orderPreview';
 
 export type PaperTradeFormValues = {
-  exchange: MarketExchange;
+  exchange: MarketExchange | 'all';
   symbol: string;
   /** API order type */
   orderType: PaperOrderType;

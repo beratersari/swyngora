@@ -1871,7 +1871,17 @@ class OrderPreviewInput(BaseModel):
         ),
     )
     product: str = Field(default="spot", description="spot or margin")
-    exchange: str = "binance"
+    exchange: str = Field(
+        default="binance",
+        description=(
+            "binance|coinbase|bybit|nasdaq|bist|all. "
+            "all splits a spot market order across Binance, Coinbase, and Bybit by depth and taker fee."
+        ),
+    )
+    compare_exchange: str = Field(
+        default="",
+        description="Preview only. Venue to price the whole quantity against when exchange is all.",
+    )
     trigger_price: float = Field(default=0, description="Limit, stop, or bracket entry")
     take_profit_price: float = Field(default=0, description="OCO, bracket, or margin take-profit")
     stop_loss_price: float = Field(
@@ -1899,7 +1909,13 @@ class PortfolioOrderInput(BaseModel):
     symbol: str
     side: str = Field(description="buy | sell")
     quantity: float = Field(gt=0)
-    exchange: str = "binance"
+    exchange: str = Field(
+        default="binance",
+        description=(
+            "binance|coinbase|bybit|nasdaq|bist|all. "
+            "all splits a spot market order across Binance, Coinbase, and Bybit by depth and taker fee."
+        ),
+    )
     lot_method: str = Field(default="", description="fifo (default) or lifo for sells")
     idempotency_key: str = Field(
         default="",
@@ -4213,6 +4229,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         portfolio_id: str = "",
         risk_percent: float = 0,
         reason: list[str] | None = None,
+        compare_exchange: str = "",
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -4243,6 +4260,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["limitPrice"] = limit_price
         if leverage:
             body["leverage"] = leverage
+        if compare_exchange:
+            body["compareExchange"] = compare_exchange
         if portfolio_id:
             body["portfolioId"] = portfolio_id
         if reason is not None:
@@ -7024,6 +7043,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "estimated sell profit, and whether a risk limit or the borrow cap would block it. "
                 "Pass risk_percent and stop_loss_price to size a spot buy, bracket, or margin open "
                 "from portfolio equity; quantity is then ignored. "
+                "exchange=all splits a spot market order across Binance, Coinbase, and Bybit "
+                "by depth and taker fee. compare_exchange prices that whole size on one venue. "
+                "routeLegs lists each venue. A missing book is named. "
+                "A sell only uses coins already held on that venue. "
                 "Nothing is written. A spot buy also returns the live coin read. "
                 "Pass reason to name the clauses a buy would store. "
                 "When that reason is set and the read is ready, reasonHistory lists this book's "
@@ -7039,8 +7062,11 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             place_portfolio_order,
             name="place_portfolio_order",
             description=(
-                "Paper market buy/sell. Fill is last price plus adverse slippage; a taker fee is charged. "
+                "Paper market buy/sell. The fill walks the visible spot book and pays the taker fee. "
+                "exchange=all splits the quantity across Binance, Coinbase, and Bybit by depth and "
+                "taker fee and returns one trade per venue. "
                 "Buy lot cost includes the fee; sell realized PnL is after the fee. "
+                "A sell only uses coins already held on that venue. "
                 "Pass reason to store only those clauses on a buy. Omit it to store the whole read. "
                 "Pass idempotency_key on retries so a timeout does not create a second fill. Not real money."
             ),

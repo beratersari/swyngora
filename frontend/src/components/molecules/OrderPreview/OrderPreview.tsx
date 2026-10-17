@@ -42,7 +42,11 @@ export function OrderPreview({ preview, loading, failed }: OrderPreviewProps) {
       {preview ? (
         <>
           <Text variant="caption" color="secondary">
-            {preview.bookSource === 'book' ? `${t('preview.fromBook')} ` : ''}
+            {preview.routed
+              ? `${t('preview.fromRoute')} `
+              : preview.bookSource === 'book'
+                ? `${t('preview.fromBook')} `
+                : ''}
             {preview.fillsNow ? t('preview.fillsNow') : t('preview.rests')}
             {preview.product === 'margin' && (preview.leverage ?? 0) > 0
               ? ` · ${t('preview.leverage', { lev: preview.leverage })}`
@@ -85,6 +89,39 @@ export function OrderPreview({ preview, loading, failed }: OrderPreviewProps) {
           {preview.sizing && preview.sizing.stopAttached === false ? (
             <Text variant="caption" color="secondary">
               {t('preview.stopNotAttached')}
+            </Text>
+          ) : null}
+          {(preview.routeLegs ?? []).map((leg) => (
+            <Text
+              key={`${leg.exchange}-${leg.symbol}`}
+              variant="caption"
+              color="secondary"
+              data-testid="route-leg"
+            >
+              {t('preview.routeLeg', {
+                exchange: leg.exchange,
+                qty: formatPrice(leg.quantity),
+                price: formatPrice(leg.fillPrice),
+                fee: formatPrice(leg.fee),
+              })}
+            </Text>
+          ))}
+          {preview.routed && (preview.compare?.savedCash ?? 0) > 0.005 ? (
+            <Text variant="caption" color="secondary" data-testid="route-saved">
+              {t(preview.side === 'sell' ? 'preview.savedSell' : 'preview.savedBuy', {
+                exchange: preview.compare?.exchange,
+                amount: formatPrice(preview.compare?.savedCash),
+              })}
+            </Text>
+          ) : null}
+          {(preview.missingVenues ?? []).length > 0 ? (
+            <Text variant="caption" color="secondary">
+              {t('preview.missingVenues', { names: (preview.missingVenues ?? []).join(', ') })}
+            </Text>
+          ) : null}
+          {(preview.routeLegs ?? []).some((leg) => leg.aliased) ? (
+            <Text variant="caption" color="secondary">
+              {t('preview.aliasQuote')}
             </Text>
           ) : null}
           {(preview.legs ?? []).map((leg, index) => (

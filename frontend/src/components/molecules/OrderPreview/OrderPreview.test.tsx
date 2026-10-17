@@ -79,6 +79,30 @@ describe('OrderPreview', () => {
     ).toBeInTheDocument();
   });
 
+  it('lists each venue and the cash saved against one exchange', () => {
+    renderWithTheme(
+      <OrderPreview
+        preview={{
+          ...blockedBuy,
+          routed: true,
+          side: 'buy',
+          fillsNow: true,
+          risk: { ...blockedBuy.risk, blocked: false, weightLimitHit: false },
+          routeLegs: [
+            { exchange: 'binance', symbol: 'BTCUSDT', quantity: 0.4, fillPrice: 100, fee: 0.04 },
+            { exchange: 'bybit', symbol: 'BTCUSDT', quantity: 0.6, fillPrice: 100.05, fee: 0.06 },
+          ],
+          missingVenues: ['coinbase'],
+          compare: { exchange: 'binance', known: true, savedCash: 0.57 },
+        }}
+      />,
+    );
+    expect(screen.getAllByTestId('route-leg')).toHaveLength(2);
+    expect(screen.getByTestId('route-saved')).toHaveTextContent(/0[.,]57/);
+    expect(screen.getByText(/left out|dışarıda/i)).toBeInTheDocument();
+    expect(screen.getByText(/after the taker fee|komisyon sonrası/i)).toBeInTheDocument();
+  });
+
   it('says nothing was placed', () => {
     renderWithTheme(<OrderPreview preview={blockedBuy} />);
     expect(screen.getByText(/preview only|yalnızca önizleme/i)).toBeInTheDocument();

@@ -23,6 +23,8 @@ export type SpotOrderPreviewDraft = {
   riskPercent?: number;
   /** Clauses this buy stores. Omit to leave the request unset. An empty list stores no read. */
   reason?: string[];
+  /** Set when exchange is all. The venue the whole order is compared with. */
+  compareExchange?: string;
 };
 
 export type MarginOrderPreviewDraft = {
@@ -149,5 +151,6 @@ export function toPreviewArg(
     trailValue: positive(draft.trailValue) ? draft.trailValue : undefined,
     lotMethod: draft.lotMethod,
     reason: draft.reason,
+    compareExchange: draft.compareExchange,
   };
 }

@@ -421,6 +421,8 @@ type PortfolioPort interface {
 
 	// ExecuteTrade applies portfolio cash/realized, position upsert/delete, and trade insert atomically.
 	ExecuteTrade(ctx context.Context, p *Portfolio, pos *Position, t Trade, lots *LotOps) error
+	// ExecuteRoutedTrades applies one cash update and every venue fill in one transaction.
+	ExecuteRoutedTrades(ctx context.Context, p *Portfolio, fills []RoutedFill) error
 
 	// CreatePendingOrder inserts a new open resting order with reservations.
 	CreatePendingOrder(ctx context.Context, o PendingOrder) (*PendingOrder, error)

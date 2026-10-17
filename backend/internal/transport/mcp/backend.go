@@ -5102,7 +5102,7 @@ func (b *Backend) GetPortfolioPerformance(ctx context.Context, clientID, period 
 	return mustJSON(m)
 }
 
-func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64) (json.RawMessage, error) {
+func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
@@ -5111,7 +5111,7 @@ func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange,
 		Side: side, Type: orderType, Product: product, TrailType: trailType, LotMethod: lotMethod,
 		Quantity: quantity, TriggerPrice: triggerPrice, TakeProfitPrice: takeProfitPrice, StopLossPrice: stopLossPrice,
 		TrailValue: trailValue, LimitPrice: limitPrice, Leverage: leverage, RiskPercent: riskPercent,
-		Reason: reasonInput(ctx),
+		Reason: reasonInput(ctx), CompareExchange: compareExchange,
 	})
 	if err != nil {
 		return nil, err
@@ -5122,6 +5122,41 @@ func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange,
 func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	if domain.IsPaperRouteExchange(exchange) {
+		trades, v, err := b.Portfolio.PlaceRoutedOrder(ctx, portfolio.OrderInput{
+			ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol, Side: side, Quantity: quantity, LotMethod: lotMethod,
+			IdempotencyKey: IdempotencyKeyFrom(ctx), Reason: reasonInput(ctx),
+		})
+		if err != nil {
+			return nil, err
+		}
+		pv, err := portfolioViewJSON(v)
+		if err != nil {
+			return nil, err
+		}
+		var pmap map[string]any
+		_ = json.Unmarshal(pv, &pmap)
+		items := make([]map[string]any, 0, len(trades))
+		for _, tr := range trades {
+			items = append(items, map[string]any{
+				"id": tr.ID, "exchange": string(tr.Exchange), "symbol": tr.Symbol, "side": string(tr.Side),
+				"quantity": tr.Quantity, "price": tr.Price, "notional": tr.Notional, "realizedPnL": tr.RealizedPnL,
+				"lotMethod": string(tr.LotMethod), "fee": tr.Fee, "lastPrice": tr.LastPrice,
+				"createdAt": tr.CreatedAt.UTC().Format(time.RFC3339Nano),
+			})
+		}
+		var first map[string]any
+		if len(items) > 0 {
+			first = items[0]
+		}
+		note := ""
+		if v != nil {
+			note = v.Note
+		}
+		return mustJSON(map[string]any{
+			"routed": true, "trade": first, "trades": items, "portfolio": pmap, "note": note,
+		})
 	}
 	tr, v, err := b.Portfolio.PlaceOrder(ctx, portfolio.OrderInput{
 		ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol, Side: side, Quantity: quantity, LotMethod: lotMethod,

@@ -6,7 +6,7 @@ import { situationLines } from '@/components/molecules/CoinSituation';
 import { OrderPreview } from '@/components/molecules/OrderPreview';
 import { OrderReasonHistory } from '@/components/organisms/OrderReasonHistory';
 import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
-import { rtkErrorMessage, type MarketExchange } from '@/libs/api';
+import { rtkErrorMessage } from '@/libs/api';
 import { sizedQuantity } from '@/libs/hooks/orderPreview';
 import { Actions, Field, FieldRow, FormStack } from './PaperTradeForm.styles';
 import type { PaperTradeFormProps, PaperTradeFormValues } from './PaperTradeForm.types';
@@ -63,6 +63,7 @@ export function PaperTradeForm({
   const [lotMethod, setLotMethod] = useState<'fifo' | 'lifo'>('fifo');
   const [tif, setTif] = useState<'gtc' | 'ioc' | 'fok'>('gtc');
   const [pickedReason, setPickedReason] = useState<string[] | null>(null);
+  const [bestCost, setBestCost] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [localBusy, setLocalBusy] = useState(false);
   const inFlightRef = useRef(false);
@@ -124,7 +125,10 @@ export function PaperTradeForm({
     if (reasonPreview?.situationStatus === 'ready') return selectedReason;
     return undefined;
   }, [keepsReason, reasonPreview?.situationStatus, selectedReason]);
-  const canSize = canSizeByRisk(kind, side);
+  const equityVenue = exchange === 'nasdaq' || exchange === 'bist';
+  const routing = bestCost && kind === 'market' && !equityVenue;
+  const wireExchange = routing ? 'all' : exchange;
+  const canSize = canSizeByRisk(kind, side) && !routing;
   const riskActive = canSize && riskPercent != null && riskPercent > 0;
   const stopForSize = stopLossPrice != null && stopLossPrice > 0;
 
@@ -138,7 +142,8 @@ export function PaperTradeForm({
     if (!onDraftChange) return;
     onDraftChange({
       product: 'spot',
-      exchange,
+      exchange: wireExchange,
+      compareExchange: routing ? exchange : undefined,
       symbol: symbol.trim().toUpperCase(),
       type: toApiOrderType(kind, side),
       side,
@@ -155,6 +160,8 @@ export function PaperTradeForm({
   }, [
     onDraftChange,
     exchange,
+    wireExchange,
+    routing,
     symbol,
     kind,
     side,
@@ -184,7 +191,7 @@ export function PaperTradeForm({
     const sym = symbol.trim().toUpperCase();
     const orderType = toApiOrderType(kind, s);
     const values: PaperTradeFormValues = {
-      exchange: exchange as MarketExchange,
+      exchange: wireExchange,
       symbol: sym,
       orderType,
       side: s,
@@ -265,6 +272,28 @@ export function PaperTradeForm({
               />
             </Field>
           </>
+        ) : null}
+
+        {kind === 'market' && !equityVenue ? (
+          <Field>
+            <Text variant="caption" color="secondary">
+              {t('portfolio:trade.route')}
+            </Text>
+            <Segmented
+              value={routing ? 'all' : 'venue'}
+              aria-label={t('portfolio:trade.route')}
+              options={[
+                { label: t('portfolio:trade.thisVenue'), value: 'venue' },
+                { label: t('portfolio:trade.bestCost'), value: 'all' },
+              ]}
+              onChange={(value) => setBestCost(value === 'all')}
+            />
+            {routing ? (
+              <Text variant="caption" color="secondary">
+                {t('portfolio:trade.routeHint')}
+              </Text>
+            ) : null}
+          </Field>
         ) : null}
 
         <Field>

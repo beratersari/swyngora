@@ -95,6 +95,13 @@ type OrderPreview struct {
 	// kind the live read says now. Nil when this preview does not name a reason,
 	// or when that close list could not be read. The price is still valid then.
 	ReasonHistory []SituationLeaveRow
+	// Routed is true when this preview splits a spot market order across venues.
+	Routed       bool
+	RouteLegs    []PaperRouteLeg
+	RouteMissing []string
+	RouteSkipped []PaperRouteSkip
+	RouteCompare *PaperRouteCompare
+	RouteNote    string
 }
 
 // QuoteFill is the slipped fill, notional, fee, and cash movement for a quantity.

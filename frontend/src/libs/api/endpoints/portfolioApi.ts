@@ -39,7 +39,7 @@ export type PaperOrderType =
 
 export type PlacePortfolioOrderArg = {
   portfolioId?: string;
-  exchange?: MarketExchange;
+  exchange?: MarketExchange | 'all';
   symbol: string;
   side?: 'buy' | 'sell';
   type?: PaperOrderType;
@@ -59,7 +59,9 @@ export type PlacePortfolioOrderArg = {
 
 export type PlacePortfolioOrderResponse = {
   type?: string;
+  routed?: boolean;
   trade?: PaperTrade;
+  trades?: PaperTrade[];
   order?: PendingOrder;
   entry?: PendingOrder;
   takeProfit?: PendingOrder;
@@ -78,6 +80,7 @@ export type OrderPreviewRisk = components['schemas']['OrderPreviewRisk'];
 export type PreviewPortfolioOrderArg = {
   portfolioId?: string;
   exchange?: string;
+  compareExchange?: string;
   symbol: string;
   product?: 'spot' | 'margin';
   type?: string;
@@ -414,6 +417,7 @@ export const portfolioApi = baseApi.injectEndpoints({
           lotMethod: body.lotMethod,
           limitPrice: body.limitPrice,
           leverage: body.leverage,
+          compareExchange: body.compareExchange,
           ...(body.reason !== undefined ? { reason: body.reason } : {}),
         },
       }),

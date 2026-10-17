@@ -3975,7 +3975,13 @@ export interface paths {
          *     base amount that loses that percent of portfolio equity if the stop fills, after the taker
          *     fee and adverse slippage. It applies to a spot buy (market, limit_buy, bracket) and to a
          *     margin long or short. A spot sell or exit is rejected. The stop is placed only with a
-         *     bracket or a margin open. Not real money.
+         *     bracket or a margin open.
+         *     exchange=all (or best) on a spot market order splits the quantity across Binance, Coinbase,
+         *     and Bybit. Each level is taken at price×(1+fee) for a buy and price×(1−fee) for a sell, lowest
+         *     total cost first. One preview lists a leg per venue. compareExchange prices that whole quantity
+         *     on one venue and returns savedCash when both can fill. A missing book is named in missingVenues.
+         *     A sell only uses coins already held on that venue. A USDT book books a Coinbase USD fill 1:1.
+         *     Margin, equities, and resting orders stay on one venue. Not real money.
          */
         post: operations["previewPortfolioOrder"];
         delete?: never;
@@ -4017,6 +4023,10 @@ export interface paths {
          *     Optional Idempotency-Key header or idempotencyKey body: a retry with the same key and same request
          *     returns the original order/trade instead of creating a second one. A different request with the same
          *     key returns 409. Keys last 24 hours and are scoped to the paper book.
+         *     exchange=all on type=market splits the quantity across Binance, Coinbase, and Bybit by
+         *     fee-adjusted depth and writes one trade per venue that received size. The cash change is one
+         *     balance update. A book that cannot hold the size fills nothing. A sell only uses coins already
+         *     held on that venue. Margin, equities, and resting orders stay on one venue.
          *     Paper trading only — not real money.
          */
         post: operations["placePortfolioOrder"];
@@ -10304,10 +10314,16 @@ export interface components {
             clientId?: string;
             portfolioId?: string;
             /**
+             * @description all prices a spot market order as a best-cost split across Binance, Coinbase, and Bybit.
              * @default binance
              * @enum {string}
              */
-            exchange: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
+            exchange: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist" | "all";
+            /**
+             * @description Venue to price the whole quantity against when exchange is all. Preview only.
+             * @enum {string}
+             */
+            compareExchange?: "binance" | "coinbase" | "bybit";
             symbol: string;
             /**
              * @description spot uses the paper order types. margin prices a long or short open.
@@ -10489,7 +10505,52 @@ export interface components {
              *     is still returned.
              */
             reasonHistory?: components["schemas"]["SituationLeaveRow"][];
+            /** @description True when this preview splits a spot market order across venues. */
+            routed?: boolean;
+            /** @description One leg per venue that would receive size, cheapest fee-adjusted level first. */
+            routeLegs?: components["schemas"]["PaperRouteLeg"][];
+            /** @description Spot venues whose book did not load. Their size is not zero. */
+            missingVenues?: string[];
+            /** @description Venues left out because their quote is outside this book's currency. */
+            skippedVenues?: components["schemas"]["PaperRouteSkip"][];
+            compare?: components["schemas"]["PaperRouteCompare"];
+            /** @description How the split was chosen. */
+            routeNote?: string;
             note?: string;
+        };
+        PaperRouteLeg: {
+            exchange?: string;
+            symbol?: string;
+            quote?: string;
+            /** @description True when the venue quote differs from the book currency and is booked 1:1. */
+            aliased?: boolean;
+            quantity?: number;
+            fillPrice?: number;
+            notional?: number;
+            fee?: number;
+            feeRate?: number;
+            cashDebit?: number;
+            cashCredit?: number;
+            levelsUsed?: number;
+            estimatedRealizedPnl?: number;
+        };
+        PaperRouteSkip: {
+            exchange?: string;
+            symbol?: string;
+            /** @enum {string} */
+            reason?: "quote";
+            detail?: string;
+        };
+        PaperRouteCompare: {
+            exchange?: string;
+            symbol?: string;
+            known?: boolean;
+            /** @description Cash the single venue would spend or receive. */
+            cash?: number;
+            /** @description Positive when the split spends less on a buy or receives more on a sell. */
+            savedCash?: number;
+            exhausted?: boolean;
+            inventoryShort?: boolean;
         };
         PortfolioCashMovement: {
             id?: string;
@@ -16878,10 +16939,11 @@ export interface operations {
                 "application/json": {
                     clientId?: string;
                     /**
+                     * @description all splits a spot market order across Binance, Coinbase, and Bybit by depth and taker fee.
                      * @default binance
                      * @enum {string}
                      */
-                    exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
+                    exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist" | "all";
                     symbol: string;
                     /**
                      * @default market
@@ -16950,7 +17012,11 @@ export interface operations {
                     "application/json": {
                         /** @example market */
                         type?: string;
+                        /** @description True when exchange=all wrote one trade per venue. */
+                        routed?: boolean;
                         trade?: components["schemas"]["PaperTrade"];
+                        /** @description Present on a best-cost fill. trade is the first of these. */
+                        trades?: components["schemas"]["PaperTrade"][];
                         portfolio?: components["schemas"]["PortfolioView"];
                         note?: string;
                     };

@@ -195,7 +195,7 @@ type DataPort interface {
 	PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct, maxExposurePct *float64) (json.RawMessage, error)
 	DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetPaperTradingCosts(ctx context.Context, exchange string) (json.RawMessage, error)
-	PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64) (json.RawMessage, error)
+	PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string) (json.RawMessage, error)
 	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string) (json.RawMessage, error)
 	PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt, trailType string, trailValue float64, lotMethod string) (json.RawMessage, error)
 	ListPortfolioLots(ctx context.Context, clientID, exchange, symbol, status string) (json.RawMessage, error)
@@ -3478,7 +3478,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("preview_portfolio_order",
-		mcp.WithDescription("Preview a paper order before it is placed. Returns the slipped fill, taker fee, cash in or out, reserved cash or quantity, estimated sell profit, and whether a risk limit or the borrow cap would block it. Pass riskPercent and stopLossPrice to size a spot buy, bracket, or margin open from portfolio equity (quantity is then ignored). product=spot (default) or margin. When reason names clauses and the live read is ready, reasonHistory is how this book's past closes of each selected live kind did: still kept the kind, left changed or went blank. Both counts at zero means no past close stored that kind. The rows are not one total. A failed history read omits reasonHistory and still returns the price. Nothing is written. Not real money."),
+		mcp.WithDescription("Preview a paper order before it is placed. Returns the slipped fill, taker fee, cash in or out, reserved cash or quantity, estimated sell profit, and whether a risk limit or the borrow cap would block it. Pass riskPercent and stopLossPrice to size a spot buy, bracket, or margin open from portfolio equity (quantity is then ignored). product=spot (default) or margin. exchange=all splits a spot market order across Binance, Coinbase, and Bybit by depth and taker fee. compareExchange prices that whole size on one venue. routeLegs lists each venue. A missing book is named. A sell only uses coins already held on that venue. When reason names clauses and the live read is ready, reasonHistory is how this book's past closes of each selected live kind did: still kept the kind, left changed or went blank. Both counts at zero means no past close stored that kind. The rows are not one total. A failed history read omits reasonHistory and still returns the price. Nothing is written. Not real money."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
@@ -3487,7 +3487,8 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("side", mcp.Description("Spot market: buy|sell. Margin: long|short")),
 		mcp.WithString("type", mcp.Description("Spot: market|limit_buy|limit_sell|stop_loss|trailing_stop|oco|bracket. Margin: market|limit")),
 		mcp.WithString("product", mcp.Description("spot (default) or margin")),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist|all. all splits a spot market order by depth and taker fee.")),
+		mcp.WithString("compareExchange", mcp.Description("Preview only. Venue to price the whole quantity against when exchange is all.")),
 		mcp.WithNumber("triggerPrice", mcp.Description("Limit, stop, or bracket entry price")),
 		mcp.WithNumber("takeProfitPrice", mcp.Description("OCO, bracket, or margin take-profit")),
 		mcp.WithNumber("stopLossPrice", mcp.Description("Stop used to size the order. Also the OCO, bracket, or margin stop.")),
@@ -3520,7 +3521,8 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			req.GetString("side", ""), req.GetString("type", ""), req.GetString("product", ""),
 			req.GetString("trailType", ""), req.GetString("lotMethod", ""),
 			qty, req.GetFloat("triggerPrice", 0), req.GetFloat("takeProfitPrice", 0), req.GetFloat("stopLossPrice", 0),
-			req.GetFloat("trailValue", 0), req.GetFloat("limitPrice", 0), int(req.GetFloat("leverage", 0)), riskPct)
+			req.GetFloat("trailValue", 0), req.GetFloat("limitPrice", 0), int(req.GetFloat("leverage", 0)), riskPct,
+			req.GetString("compareExchange", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -3528,13 +3530,13 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("place_portfolio_order",
-		mcp.WithDescription("Paper market buy/sell. Fill is last price plus adverse slippage; a taker fee is charged. Buy lot cost includes the fee; sell realized PnL is after the fee. Simulated only."),
+		mcp.WithDescription("Paper market buy/sell. Fill walks the visible spot book; a taker fee is charged. exchange=all splits the quantity across Binance, Coinbase, and Bybit by depth and taker fee and returns one trade per venue. Buy lot cost includes the fee; sell realized PnL is after the fee. A sell only uses coins already held on that venue. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("side", mcp.Required(), mcp.Description("buy | sell")),
 		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base asset quantity")),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist|all. all splits a spot market order by depth and taker fee.")),
 		mcp.WithString("lotMethod", mcp.Description("fifo (default) or lifo — sell lot matching")),
 		mcp.WithString("idempotencyKey", mcp.Description("Optional retry key; same key + same request returns the original fill")),
 		mcp.WithString("reason", mcp.Description("Buy only. Comma-separated clauses to store: priceCvd, openInterest, liquidation, prints, funding, crowd, size. Omit to store the whole read. Pass none to store no read. A sell ignores this.")),

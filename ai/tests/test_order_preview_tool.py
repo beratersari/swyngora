@@ -88,3 +88,39 @@ def test_preview_portfolio_order_sends_risk_percent_without_quantity(monkeypatch
     assert seen[0]["riskPercent"] == 1
     assert seen[0]["stopLossPrice"] == 90
     assert "quantity" not in seen[0]
+
+
+def test_preview_portfolio_order_sends_best_cost_route(monkeypatch):
+    seen: list[dict] = []
+    real_client = httpx2.Client
+
+    class _Transport(httpx2.BaseTransport):
+        def handle_request(self, request: httpx2.Request) -> httpx2.Response:
+            raw = request.content.decode() if request.content else "{}"
+            seen.append(json.loads(raw or "{}"))
+            return httpx2.Response(200, json={"routed": True, "routeLegs": []})
+
+    def fake_client(*args, **kwargs):
+        kwargs.pop("timeout", None)
+        return real_client(*args, timeout=5.0, transport=_Transport())
+
+    monkeypatch.setattr(httpx2, "Client", fake_client)
+    tools = build_market_tools(Settings(api_base_url="http://test"))
+    by_name = {tool.name: tool for tool in tools}
+    scope = bind_tool_scope(can_trade=False, can_manage_keys=False)
+    try:
+        by_name["preview_portfolio_order"].invoke(
+            {
+                "client_id": "c1",
+                "symbol": "BTCUSDT",
+                "side": "buy",
+                "quantity": 2,
+                "exchange": "all",
+                "compare_exchange": "binance",
+            }
+        )
+    finally:
+        reset_tool_scope(scope)
+    assert seen[0]["exchange"] == "all"
+    assert seen[0]["compareExchange"] == "binance"
+    assert seen[0]["quantity"] == 2
