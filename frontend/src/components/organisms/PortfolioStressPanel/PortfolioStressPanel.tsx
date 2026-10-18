@@ -4,7 +4,8 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { STRESS_START_MOVES } from './constants';
-import { money, portfolioChange, replayMoveLine, replayPreset, utcDay } from './helpers';
+import { money, pathWhen, portfolioChange, replayMoveLine, replayPreset, utcDay } from './helpers';
+import { StressPathChart } from './StressPathChart';
 import type { PortfolioStressPanelProps, StressMode, StressMove } from './PortfolioStressPanel.types';
 import type { TFunction } from 'i18next';
 
@@ -196,6 +197,22 @@ export function PortfolioStressPanel({ disabled, isLoading, report, errorMessage
                 );
               })}
             </div>
+          ) : null}
+          {(report.replay?.points?.length ?? 0) >= 2 ? (
+            <StressPathChart
+              points={report.replay?.points ?? []}
+              title={t('stress.pathTitle')}
+              hint={t('stress.pathHint')}
+              low={
+                report.replay?.lowAt
+                  ? t('stress.pathLow', {
+                      equity: money(report.replay.lowEquity),
+                      when: pathWhen(report.replay.lowAt, report.replay.interval),
+                      change: portfolioChange(report.equity, (report.replay.lowEquity ?? 0) - (report.equity ?? 0)),
+                    })
+                  : undefined
+              }
+            />
           ) : null}
           <Text variant="body" color="primary">
             {t('stress.equity', {

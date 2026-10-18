@@ -10601,6 +10601,15 @@ export interface components {
             interval?: "1h" | "1d";
             /** @description Coins ordered by the size of the close-to-close change, largest up or down first. Equal sizes stay in name order. */
             moves?: components["schemas"]["PortfolioStressReplayMove"][];
+            /**
+             * @description This book's value at each close through the window, using today's positions.
+             *     The first point is the book now. A margin position that liquidates stays liquidated on later points.
+             */
+            points?: components["schemas"]["PortfolioStressPathPoint"][];
+            /** @description Lowest equity on the path. Equal lows keep the earlier close. */
+            lowEquity?: number;
+            /** Format: date-time */
+            lowAt?: string;
             missing?: components["schemas"]["PortfolioStressReplayGap"][];
         };
         PortfolioStressReplayMove: {
@@ -10623,6 +10632,17 @@ export interface components {
             movePct?: number;
             /** @description Spot market value, or margin notional (quantity times mark), used in the blend */
             weight?: number;
+        };
+        PortfolioStressPathPoint: {
+            /** Format: date-time */
+            at?: string;
+            equity?: number;
+            /** @description Change from the book's equity now */
+            delta?: number;
+            /** @description That change as a percent of current equity. Null when equity is not positive. */
+            deltaPct?: number | null;
+            /** @description Margin rows that have been liquidated by this close and stay liquidated afterward */
+            liquidated?: number;
         };
         PortfolioStressReplayGap: {
             asset?: string;

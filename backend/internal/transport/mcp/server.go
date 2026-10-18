@@ -3380,7 +3380,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("stress_portfolio",
-		mcp.WithDescription("Preview paper equity, total P&L, and margin equity if named coins move, or if a past window happened again. moves is BTC:-10,ETH:-15. from and to replay each open position's own close-to-close change over that window. A coin on two venues keeps each venue's move. A date includes the end day. A position with no close at either end stays unchanged and is named. Send moves or a period, not both. Nothing is traded. A margin row that crosses liquidation loses its locked margin."),
+		mcp.WithDescription("Preview paper equity, total P&L, and margin equity if named coins move, or if a past window happened again. moves is BTC:-10,ETH:-15. from and to replay each open position's own close-to-close change over that window. points is the book at today's size on each close, and lowEquity is the lowest point. A coin on two venues keeps each venue's move. A date includes the end day. A position with no close at either end stays unchanged and is named. Send moves or a period, not both. Nothing is traded. A margin row that crosses liquidation loses its locked margin."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("moves", mcp.Description("Comma list asset:percent, e.g. BTC:-10,ETH:-15. Omit when from and to are set.")),

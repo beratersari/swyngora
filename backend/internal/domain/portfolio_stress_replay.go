@@ -11,7 +11,7 @@ import (
 
 const (
 	// PortfolioReplayNote is the what-if shown when moves come from a past window.
-	PortfolioReplayNote = "What-if that replays each open position's own close-to-close change over the chosen window onto the current book. A coin on two venues keeps each venue's move. movePct on the coin is the value-weighted average of the venues that priced. A venue with no close is named and that position stays unchanged. Cash does not change. An isolated margin position that crosses its liquidation price loses the margin locked on it. Nothing is traded. Informational only."
+	PortfolioReplayNote = "What-if that replays each open position's own close-to-close change over the chosen window onto the current book. The path is that book at today's size on each close, so a drop in the middle stays visible if the end recovers. A margin position that is liquidated on the path stays liquidated afterward. A coin on two venues keeps each venue's move. movePct on the coin is the value-weighted average of the venues that priced. A venue with no close is named and that position stays unchanged. Cash does not change. Nothing is traded. Informational only."
 
 	// ReplayReasonNoStart means no bar closed at or before the start.
 	ReplayReasonNoStart = "no_start"
@@ -32,11 +32,23 @@ const stressReplayMaxSpan = 3660 * 24 * time.Hour
 
 // StressReplay is the past window that produced the stress moves.
 type StressReplay struct {
-	From     time.Time
-	To       time.Time
-	Interval string
-	Moves    []StressReplayMove
-	Missing  []StressReplayGap
+	From      time.Time
+	To        time.Time
+	Interval  string
+	Moves     []StressReplayMove
+	Missing   []StressReplayGap
+	Points    []StressPathPoint
+	LowEquity float64
+	LowAt     time.Time
+}
+
+// StressPathPoint is the current book repriced at one close in the window.
+type StressPathPoint struct {
+	At         time.Time
+	Equity     float64
+	Delta      float64
+	DeltaPct   *float64
+	Liquidated int
 }
 
 // StressReplayMove is one coin's percent, plus each venue that priced it.

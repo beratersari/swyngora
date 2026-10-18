@@ -150,13 +150,18 @@ func StressPortfolio(v PortfolioView, moves []StressMove) (StressReport, error) 
 	}
 	rep.ShockedPositionsValue = spotValue
 	rep.ShockedUnrealizedPnL = spotU + marginU
-	rep.ShockedMarginEquity = (v.MarginEquity - v.MarginUnrealizedPnL) + marginU
-	// Equity = cash + spot value + margin locked + margin unrealized.
-	// Margin locked is MarginEquity - MarginUnrealized, already inside ShockedMarginEquity.
-	rep.ShockedEquity = v.Equity - v.PositionsValue - v.MarginEquity + rep.ShockedPositionsValue + rep.ShockedMarginEquity
+	rep.ShockedMarginEquity, rep.ShockedEquity = shockEquity(v, spotValue, marginU)
 	rep.EquityDelta = rep.ShockedEquity - v.Equity
 	rep.ShockedTotalPnL = v.TotalPnL + rep.EquityDelta
 	return rep, nil
+}
+
+// shockEquity is the book after spot marks and margin P&L move.
+// Cash does not change. Margin locked stays inside margin equity.
+func shockEquity(v PortfolioView, spotValue, marginU float64) (marginEquity, equity float64) {
+	marginEquity = (v.MarginEquity - v.MarginUnrealizedPnL) + marginU
+	equity = v.Equity - v.PositionsValue - v.MarginEquity + spotValue + marginEquity
+	return marginEquity, equity
 }
 
 func stressMoveIndex(in []StressMove) (byAsset, byVenue map[string]float64, err error) {

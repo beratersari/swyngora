@@ -111,6 +111,16 @@ func TestStressPeriod_ReplaysDailyCloseOntoOpenBook(t *testing.T) {
 	if rep.Note != domain.PortfolioReplayNote {
 		t.Fatalf("note %q", rep.Note)
 	}
+	if len(rep.Replay.Points) < 2 {
+		t.Fatalf("points %d", len(rep.Replay.Points))
+	}
+	last := rep.Replay.Points[len(rep.Replay.Points)-1]
+	if math.Abs(last.Equity-rep.ShockedEquity) > 0.01 {
+		t.Fatalf("path end %v shocked %v", last.Equity, rep.ShockedEquity)
+	}
+	if math.Abs(rep.Replay.LowEquity-last.Equity) > 0.01 {
+		t.Fatalf("low %v end %v", rep.Replay.LowEquity, last.Equity)
+	}
 	plain, err := svc.Stress(ctx, "rp1", "", "", []domain.StressMove{{Asset: "BTC", MovePct: -10}})
 	if err != nil {
 		t.Fatal(err)

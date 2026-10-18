@@ -124,6 +124,67 @@ func TestBuildReplayPlan_SortsCoinsByAbsoluteMove(t *testing.T) {
 	}
 }
 
+func TestReplayPath_KeepsTheMiddleDipAndALiquidation(t *testing.T) {
+	now := time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)
+	from := time.Date(2024, 8, 5, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2024, 8, 7, 0, 0, 0, 0, time.UTC)
+	bars := []Candle{
+		replayDay(time.Date(2024, 8, 4, 0, 0, 0, 0, time.UTC), 100),
+		replayDay(time.Date(2024, 8, 5, 0, 0, 0, 0, time.UTC), 50),
+		replayDay(time.Date(2024, 8, 6, 0, 0, 0, 0, time.UTC), 90),
+	}
+	series := []ReplaySeries{{Exchange: "binance", Symbol: "BTCUSDT", Weight: 100, Bars: bars}}
+	plan := BuildReplayPlan(series, from, to, Interval1d, now)
+	view := PortfolioView{
+		Equity: 10000, PositionsValue: 100,
+		Positions: []PositionView{{
+			Exchange: ExchangeBinance, Symbol: "BTCUSDT", Quantity: 1,
+			AvgCost: 100, MarkPrice: 100, MarketValue: 100,
+		}},
+	}
+	points := ReplayPath(view, series, plan, to, Interval1d, now)
+	if len(points) != 3 {
+		t.Fatalf("points %d %+v", len(points), points)
+	}
+	if math.Abs(points[0].Equity-10000) > 0.01 || math.Abs(points[1].Equity-9950) > 0.01 {
+		t.Fatalf("path %v then %v", points[0].Equity, points[1].Equity)
+	}
+	end, err := StressPortfolio(view, plan.Moves)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(points[2].Equity-end.ShockedEquity) > 0.01 {
+		t.Fatalf("end path %v stress %v", points[2].Equity, end.ShockedEquity)
+	}
+	low, ok := PathLow(points)
+	if !ok || math.Abs(low.Equity-9950) > 0.01 || !low.At.Equal(points[1].At) {
+		t.Fatalf("low %+v", low)
+	}
+
+	liqBars := []Candle{
+		replayDay(time.Date(2024, 8, 4, 0, 0, 0, 0, time.UTC), 100),
+		replayDay(time.Date(2024, 8, 5, 0, 0, 0, 0, time.UTC), 80),
+		replayDay(time.Date(2024, 8, 6, 0, 0, 0, 0, time.UTC), 120),
+	}
+	liqSeries := []ReplaySeries{{Exchange: "binance", Symbol: "BTCUSDT", Weight: 20, Bars: liqBars}}
+	liqPlan := BuildReplayPlan(liqSeries, from, to, Interval1d, now)
+	margin := PortfolioView{
+		Equity: 10000, MarginEquity: 20,
+		MarginPositions: []MarginPosition{{
+			Exchange: ExchangeBinance, Symbol: "BTCUSDT", Status: MarginPositionOpen,
+			Side: MarginLong, Quantity: 1, EntryPrice: 100, MarkPrice: 100,
+			Margin: 20, LiquidationPrice: 91,
+		}},
+	}
+	liqPoints := ReplayPath(margin, liqSeries, liqPlan, to, Interval1d, now)
+	if len(liqPoints) != 3 || liqPoints[1].Liquidated != 1 || liqPoints[2].Liquidated != 1 {
+		t.Fatalf("liq path %+v", liqPoints)
+	}
+	if math.Abs(liqPoints[1].Equity-9980) > 0.01 || math.Abs(liqPoints[2].Equity-9980) > 0.01 {
+		t.Fatalf("liquidation did not stick: %v then %v", liqPoints[1].Equity, liqPoints[2].Equity)
+	}
+}
+
 func TestBuildReplayPlan_FlatCloseIsARealMove(t *testing.T) {
 	now := time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)
 	from := time.Date(2024, 8, 5, 0, 0, 0, 0, time.UTC)

@@ -7024,6 +7024,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "moves is BTC:-10,ETH:-15. period_from and period_to replay that past window: "
                 "each open coin keeps its own close-to-close change. A YYYY-MM-DD includes the end day. "
                 "A window of at least 24 hours uses daily closes. A shorter window uses hourly closes. "
+                "replay.points is the book at today's size on each close, and replay.lowEquity is the lowest point. "
+                "A margin row that liquidates on that path stays liquidated afterward. "
                 "A position with no close at either end stays unchanged and is named in replay.missing. "
                 "One coin on two venues keeps each venue's own move. "
                 "Send moves or a period, not both. "

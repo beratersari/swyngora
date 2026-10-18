@@ -4776,11 +4776,30 @@ func stressReplayMap(rep *domain.StressReplay) map[string]any {
 			"asset": g.Asset, "exchange": g.Exchange, "symbol": g.Symbol, "reason": g.Reason,
 		})
 	}
-	return map[string]any{
+	out := map[string]any{
 		"from":     rep.From.UTC().Format(time.RFC3339Nano),
 		"to":       rep.To.UTC().Format(time.RFC3339Nano),
 		"interval": rep.Interval, "moves": moves, "missing": missing,
 	}
+	if len(rep.Points) > 0 {
+		points := make([]map[string]any, 0, len(rep.Points))
+		for _, p := range rep.Points {
+			row := map[string]any{
+				"at": p.At.UTC().Format(time.RFC3339Nano), "equity": p.Equity,
+				"delta": p.Delta, "liquidated": p.Liquidated,
+			}
+			if p.DeltaPct != nil {
+				row["deltaPct"] = *p.DeltaPct
+			}
+			points = append(points, row)
+		}
+		out["points"] = points
+		out["lowEquity"] = rep.LowEquity
+		if !rep.LowAt.IsZero() {
+			out["lowAt"] = rep.LowAt.UTC().Format(time.RFC3339Nano)
+		}
+	}
+	return out
 }
 
 func (b *Backend) GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error) {

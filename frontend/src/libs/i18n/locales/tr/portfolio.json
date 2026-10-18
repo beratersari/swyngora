@@ -63,6 +63,9 @@
       "no_history": "Bu pencere için mum yok.",
       "fetch_failed": "Fiyat geçmişi okunamadı."
     },
+    "pathTitle": "Pencere boyunca",
+    "pathHint": "Her kapanış, bugünkü boyuttaki bu defterin o kapanıştaki değeridir. Ortadaki düşüş, sonradan toparlansa da çizgide kalır.",
+    "pathLow": "En düşük {{equity}}, {{when}} ({{change}})",
     "equity": "Özkaynak {{now}} → {{next}} ({{change}})",
     "pnl": "Toplam kâr/zarar {{now}} → {{next}}",
     "margin": "Marj özkaynağı {{now}} → {{next}}",

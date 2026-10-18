@@ -63,6 +63,9 @@
       "no_history": "No candles for that window.",
       "fetch_failed": "The price history could not be read."
     },
+    "pathTitle": "Through the window",
+    "pathHint": "Each close is this book at today's size, repriced by that close. A drop in the middle stays on the line if the end recovers.",
+    "pathLow": "Lowest {{equity}} on {{when}} ({{change}})",
     "equity": "Equity {{now}} → {{next}} ({{change}})",
     "pnl": "Total P&L {{now}} → {{next}}",
     "margin": "Margin equity {{now}} → {{next}}",

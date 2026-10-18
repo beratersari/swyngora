@@ -56,6 +56,14 @@ export function replayPreset(kind: ReplayPreset, now = new Date()): { from: stri
   return { from: utcDay(-n, now), to: utcDay(-1, now) };
 }
 
+export function pathWhen(iso?: string, interval?: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  if (interval === '1h') return `${d.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+  return d.toISOString().slice(0, 10);
+}
+
 export function replayMoveLine(move: PortfolioStressReplayMove): string {
   const pct = formatMovePct(move.movePct);
   const asset = move.asset ?? '';

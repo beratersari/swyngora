@@ -64,6 +64,12 @@ func (s *Service) StressPeriod(ctx context.Context, clientID, portfolioID, owner
 	if err != nil {
 		return nil, err
 	}
+	points := domain.ReplayPath(*view, series, plan, to, interval, now)
+	plan.Replay.Points = points
+	if low, ok := domain.PathLow(points); ok {
+		plan.Replay.LowEquity = low.Equity
+		plan.Replay.LowAt = low.At
+	}
 	rep.Replay = &plan.Replay
 	rep.Note = domain.PortfolioReplayNote
 	return &rep, nil

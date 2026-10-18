@@ -5,6 +5,23 @@ import { renderWithProviders } from '@/test/render';
 import { replayPreset } from './helpers';
 import { PortfolioStressPanel } from './PortfolioStressPanel';
 
+vi.mock('lightweight-charts', () => ({
+  createChart: vi.fn(() => ({
+    addSeries: () => ({ setData: vi.fn() }),
+    timeScale: () => ({ fitContent: vi.fn() }),
+    applyOptions: vi.fn(),
+    remove: vi.fn(),
+  })),
+  LineSeries: {},
+}));
+
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+
 describe('PortfolioStressPanel', () => {
   it('previews BTC and ETH shocks and shows the resulting book', async () => {
     const onPreview = vi.fn();
@@ -59,6 +76,13 @@ describe('PortfolioStressPanel', () => {
               },
             ],
             missing: [{ asset: 'SOL', exchange: 'binance', symbol: 'SOLUSDT', reason: 'no_start' }],
+            points: [
+              { at: '2024-08-04T23:59:59.000Z', equity: 10000, delta: 0 },
+              { at: '2024-08-05T23:59:59.000Z', equity: 9400, delta: -600 },
+              { at: '2024-08-06T23:59:59.000Z', equity: 9800, delta: -200 },
+            ],
+            lowEquity: 9400,
+            lowAt: '2024-08-05T23:59:59.000Z',
           },
         }}
       />,
@@ -72,5 +96,7 @@ describe('PortfolioStressPanel', () => {
     expect(replay).toHaveTextContent(/20/);
     expect(replay).toHaveTextContent(/SOLUSDT/);
     expect(screen.getByTestId('portfolio-stress-result')).toHaveTextContent(/9[.,\s]?800/);
+    expect(screen.getByTestId('portfolio-stress-path')).toHaveTextContent(/2024-08-05/);
+    expect(screen.getByTestId('portfolio-stress-path')).toHaveTextContent(/9[.,\s]?400/);
   });
 });
