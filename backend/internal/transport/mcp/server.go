@@ -199,7 +199,7 @@ type DataPort interface {
 	GetPaperTradingCosts(ctx context.Context, exchange string) (json.RawMessage, error)
 	PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int, takeProfitTargets string, moveStopToEntry bool) (json.RawMessage, error)
 	CompareOrderExecution(ctx context.Context, clientID, exchange, symbol, side string, quantity, maxSlippagePct float64, spreadMinutes, sliceCount int) (json.RawMessage, error)
-	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int) (json.RawMessage, error)
+	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int, executionQuoteID string) (json.RawMessage, error)
 	ListSpreadOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
 	CancelSpreadOrder(ctx context.Context, clientID, orderID string) (json.RawMessage, error)
 	PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt, trailType string, trailValue float64, lotMethod string) (json.RawMessage, error)
@@ -3599,7 +3599,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("compare_order_execution",
-		mcp.WithDescription("Compare fees and slippage for the same crypto spot size before placing it. Returns three rows: market walks one venue now, best_cost splits Binance, Coinbase, and Bybit now by fee-adjusted price, and spread repeats a slice of that walk as if each slice finds this book again. If the book does not refill, spread costs the same as best cost. Later prices are not known. slippagePct is the average fill versus the best price, in percent, before the fee. fee is the taker fee. savedVsMarket is positive when a buy spends less or a sell receives more than the single venue, and only when both can fill. maxSlippagePct caps best cost and the time split. The market row ignores it. A path the book cannot hold fills nothing. A bad slice schedule leaves that row as schedule and still returns the other two. A missing book is named. Nothing is written. Not real money."),
+		mcp.WithDescription("Compare fees and slippage for the same crypto spot size before placing it. Returns three rows: market walks one venue now, best_cost splits Binance, Coinbase, and Bybit now by fee-adjusted price, and spread repeats a slice of that walk as if each slice finds this book again. If the book does not refill, spread costs the same as best cost. Later prices are not known. slippagePct is the average fill versus the best price, in percent, before the fee. fee is the taker fee. savedVsMarket is positive when a buy spends less or a sell receives more than the single venue, and only when both can fill. maxSlippagePct caps best cost and the time split. The market row ignores it. A path the book cannot hold fills nothing. A bad slice schedule leaves that row as schedule and still returns the other two. A missing book is named. id names this comparison for two minutes. place_portfolio_order can send it back as executionQuoteId. Nothing is written. Not real money."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
@@ -3640,7 +3640,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("place_portfolio_order",
-		mcp.WithDescription("Paper market buy/sell. Fill walks the visible spot book; a taker fee is charged. exchange=all splits the quantity across Binance, Coinbase, and Bybit by depth and taker fee and returns one trade per venue. maxSlippagePct (0.5 means 0.5%) refuses prices past that distance from the best price, and refuses the order when the size inside the cap is short. Buy lot cost includes the fee; sell realized PnL is after the fee. A sell only uses coins already held on that venue. Simulated only."),
+		mcp.WithDescription("Paper market buy/sell. Fill walks the visible spot book; a taker fee is charged. exchange=all splits the quantity across Binance, Coinbase, and Bybit by depth and taker fee and returns one trade per venue. maxSlippagePct (0.5 means 0.5%) refuses prices past that distance from the best price, and refuses the order when the size inside the cap is short. Buy lot cost includes the fee; sell realized PnL is after the fee. A sell only uses coins already held on that venue. executionQuoteId is the id from compare_order_execution. When it still matches this order, the finished fill reports expected fee and slippage against what was paid. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
@@ -3654,6 +3654,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithBoolean("spread", mcp.Description("With exchange=all, work the order as timed slices. Each slice reads the books again and takes the cheapest venue for that size. The first slice is due now. The last slice is due at the end of spreadMinutes. Nothing fills inside this call.")),
 		mcp.WithNumber("spreadMinutes", mcp.Description("Minutes from the first slice to the last. Default 10. From 1 to 1440.")),
 		mcp.WithNumber("sliceCount", mcp.Description("How many slices. Default 10. From 2 to 60. Slices closer than 15 seconds are rejected.")),
+		mcp.WithString("executionQuoteId", mcp.Description("id from compare_order_execution. Kept for two minutes when the size, side, venue, and schedule still match. Empty skips the later comparison.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -3677,7 +3678,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.PlacePortfolioOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, side, qty, req.GetString("lotMethod", ""), req.GetFloat("maxSlippagePct", 0), req.GetBool("spread", false), int(req.GetFloat("spreadMinutes", 0)), int(req.GetFloat("sliceCount", 0)))
+		raw, err := api.PlacePortfolioOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, side, qty, req.GetString("lotMethod", ""), req.GetFloat("maxSlippagePct", 0), req.GetBool("spread", false), int(req.GetFloat("spreadMinutes", 0)), int(req.GetFloat("sliceCount", 0)), req.GetString("executionQuoteId", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -3727,7 +3728,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("list_portfolio_trades",
-		mcp.WithDescription("List paper trade history. Each fill includes slipped price, lastPrice, taker fee, and moves (1h, 4h, 24h venue price change after the fill). pending means that minute has not closed. missing means the close is absent and is not zero. ready pct is the price change, not realized profit. A sell with a positive pct means price rose after the sell."),
+		mcp.WithDescription("List paper trade history. Each fill includes slipped price, lastPrice, taker fee, and moves (1h, 4h, 24h venue price change after the fill). pending means that minute has not closed. missing means the close is absent and is not zero. ready pct is the price change, not realized profit. A sell with a positive pct means price rose after the sell. costCheck on the newest fill of a finished order is the fee and slippage from compare_order_execution beside what that order paid. feeDelta and slippageDelta are actual minus expected. Positive means the fill cost more. A spread order omits costCheck until it is filled or canceled."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),

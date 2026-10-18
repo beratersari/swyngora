@@ -404,6 +404,8 @@ type OrderInput struct {
 	Reason domain.SituationReason
 	// MaxSlippagePct caps a best-cost walk. 0.5 means 0.5% from the best price. Zero means no cap.
 	MaxSlippagePct float64
+	// ExecutionQuoteID is the comparison on the ticket. Empty means the fill keeps no quote.
+	ExecutionQuoteID string
 	// SpreadMinutes and SliceCount schedule a spread order. Zero means 10 minutes and 10 slices.
 	SpreadMinutes int
 	SliceCount    int
@@ -868,6 +870,9 @@ func (s *Service) PlaceOrder(ctx context.Context, in OrderInput) (*domain.Trade,
 	}
 	view, err := s.View(ctx, in.ClientID, p.ID)
 	tr = *s.stampTrade(ctx, &tr)
+	if check := s.keepFillCost(ctx, s.takeFillQuote(ctx, clientID, in.ExecutionQuoteID, domain.ExecutionMarket, sym, side, tr.Quantity, ex, in.MaxSlippagePct, 0, 0), []domain.Trade{tr}, "", true); check != nil {
+		tr.CostCheck = check
+	}
 	if err != nil {
 		return &tr, nil, err
 	}
@@ -960,6 +965,7 @@ func (s *Service) ListTrades(ctx context.Context, clientID string, limit, offset
 		return nil, 0, err
 	}
 	s.attachTradeMoves(ctx, list)
+	s.attachFillCosts(ctx, clientID, list)
 	return list, total, nil
 }
 

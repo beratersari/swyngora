@@ -459,7 +459,10 @@
     "notional": "Notional",
     "realized": "Realized",
     "time": "Time",
-    "situation": "Situation"
+    "situation": "Situation",
+    "costFee": "Fee paid {{actual}} · estimate {{expected}} · {{delta}}",
+    "costSlip": "Slippage {{actual}} · estimate {{expected}} · {{delta}}",
+    "costFilled": "Filled {{filled}} of the quoted {{quoted}}"
   },
   "moves": {
     "title": "After fill",

@@ -4133,7 +4133,12 @@ export interface paths {
          *     spreadMinutes (default 10) is the clock. sliceCount (default 10) is how many fills. The last
          *     slice is due at the end. Each slice reads the books again. The response is 201 and order is a SpreadOrder.
          *     The first slice is due immediately and is filled by the background worker. Cancel releases the
-         *     size that has not filled. Paper trading only — not real money.
+         *     size that has not filled.
+         *     executionQuoteId is the id from POST /orders/execution-compare. It is kept for two minutes.
+         *     When the size, side, venue, slippage cap, and slice schedule still match, the finished order
+         *     reports that quote's fee and slippage next to what the fills paid. A spread order reports it
+         *     when the order is filled or canceled. A missing or different id still places the order.
+         *     Paper trading only — not real money.
          */
         post: operations["placePortfolioOrder"];
         delete?: never;
@@ -10128,6 +10133,7 @@ export interface components {
             fee?: number;
             /** @description Last/mark before slippage (0 if not stored) */
             lastPrice?: number;
+            costCheck?: components["schemas"]["FillCostCheck"];
             situation?: components["schemas"]["CoinSituation"];
             /**
              * @description On a sell, one item per buy this fill closed that stored a read.
@@ -10762,7 +10768,41 @@ export interface components {
              */
             assumption?: "refill";
         };
+        /**
+         * @description The comparison the ticket showed, beside what the finished order paid.
+         *     Slippage is quote currency versus the touch that comparison used, before the fee.
+         *     feeDelta and slippageDelta are actual minus expected. Positive means the fill cost more.
+         *     Present on the newest fill once a market order, a best-cost order, or a spread order has finished.
+         */
+        FillCostCheck: {
+            /** @enum {string} */
+            style?: "market" | "best_cost" | "spread";
+            /** @description Taker fee the comparison quoted */
+            expectedFee?: number;
+            /** @description Taker fee the fills paid. */
+            actualFee?: number;
+            /** @description Actual fee minus the quoted fee. */
+            feeDelta?: number;
+            /** @description Quoted slippage in quote currency. */
+            expectedSlippage?: number;
+            /** @description Slippage the fills paid */
+            actualSlippage?: number;
+            /** @description Actual slippage minus the quoted slippage. */
+            slippageDelta?: number;
+            touchPrice?: number;
+            /** @description Size the comparison priced. */
+            quotedQuantity?: number;
+            /** @description Size the fills took. A canceled spread can be smaller. */
+            filledQuantity?: number;
+            /** Format: date-time */
+            quotedAt?: string;
+        };
         ExecutionCompare: {
+            /**
+             * @description Names this comparison for two minutes. Place can send it back as executionQuoteId.
+             *     Omitted when the quote could not be kept.
+             */
+            id?: string;
             /** @enum {string} */
             side?: "buy" | "sell";
             symbol?: string;
@@ -17571,6 +17611,12 @@ export interface operations {
                     exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist" | "all";
                     /** @description Best-cost cap in percent. 0.5 keeps fills within 0.5% of the best price. Zero means no cap. */
                     maxSlippagePct?: number;
+                    /**
+                     * @description id from the execution comparison. Kept for two minutes when this order still matches
+                     *     that size, side, venue, slippage cap, and slice schedule. The finished fill then
+                     *     reports the quoted fee and slippage beside what was paid.
+                     */
+                    executionQuoteId?: string;
                     symbol: string;
                     /**
                      * @default market

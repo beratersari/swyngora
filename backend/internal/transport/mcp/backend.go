@@ -5240,7 +5240,7 @@ func (b *Backend) CompareOrderExecution(ctx context.Context, clientID, exchange,
 	return mustJSON(portfolio.ExecutionComparePayload(got))
 }
 
-func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int) (json.RawMessage, error) {
+func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int, executionQuoteID string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
@@ -5248,7 +5248,7 @@ func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, s
 		order, v, err := b.Portfolio.PlaceSpreadOrder(ctx, portfolio.OrderInput{
 			ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol, Side: side, Quantity: quantity, LotMethod: lotMethod,
 			IdempotencyKey: IdempotencyKeyFrom(ctx), Reason: reasonInput(ctx), MaxSlippagePct: maxSlippagePct,
-			SpreadMinutes: spreadMinutes, SliceCount: sliceCount,
+			SpreadMinutes: spreadMinutes, SliceCount: sliceCount, ExecutionQuoteID: executionQuoteID,
 		})
 		if err != nil {
 			return nil, err
@@ -5271,6 +5271,7 @@ func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, s
 		trades, v, err := b.Portfolio.PlaceRoutedOrder(ctx, portfolio.OrderInput{
 			ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol, Side: side, Quantity: quantity, LotMethod: lotMethod,
 			IdempotencyKey: IdempotencyKeyFrom(ctx), Reason: reasonInput(ctx), MaxSlippagePct: maxSlippagePct,
+			ExecutionQuoteID: executionQuoteID,
 		})
 		if err != nil {
 			return nil, err
@@ -5283,12 +5284,16 @@ func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, s
 		_ = json.Unmarshal(pv, &pmap)
 		items := make([]map[string]any, 0, len(trades))
 		for _, tr := range trades {
-			items = append(items, map[string]any{
+			row := map[string]any{
 				"id": tr.ID, "exchange": string(tr.Exchange), "symbol": tr.Symbol, "side": string(tr.Side),
 				"quantity": tr.Quantity, "price": tr.Price, "notional": tr.Notional, "realizedPnL": tr.RealizedPnL,
 				"lotMethod": string(tr.LotMethod), "fee": tr.Fee, "lastPrice": tr.LastPrice,
 				"createdAt": tr.CreatedAt.UTC().Format(time.RFC3339Nano),
-			})
+			}
+			if cost := portfolio.FillCostPayload(tr.CostCheck); cost != nil {
+				row["costCheck"] = cost
+			}
+			items = append(items, row)
 		}
 		var first map[string]any
 		if len(items) > 0 {
@@ -5305,6 +5310,7 @@ func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, s
 	tr, v, err := b.Portfolio.PlaceOrder(ctx, portfolio.OrderInput{
 		ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol, Side: side, Quantity: quantity, LotMethod: lotMethod,
 		IdempotencyKey: IdempotencyKeyFrom(ctx), Reason: reasonInput(ctx), MaxSlippagePct: maxSlippagePct,
+		ExecutionQuoteID: executionQuoteID,
 	})
 	if err != nil {
 		return nil, err
@@ -5315,13 +5321,17 @@ func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, s
 	}
 	var pmap map[string]any
 	_ = json.Unmarshal(pv, &pmap)
+	trade := map[string]any{
+		"id": tr.ID, "exchange": string(tr.Exchange), "symbol": tr.Symbol, "side": string(tr.Side),
+		"quantity": tr.Quantity, "price": tr.Price, "notional": tr.Notional, "realizedPnL": tr.RealizedPnL,
+		"lotMethod": string(tr.LotMethod), "fee": tr.Fee, "lastPrice": tr.LastPrice,
+		"createdAt": tr.CreatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if cost := portfolio.FillCostPayload(tr.CostCheck); cost != nil {
+		trade["costCheck"] = cost
+	}
 	return mustJSON(map[string]any{
-		"trade": map[string]any{
-			"id": tr.ID, "exchange": string(tr.Exchange), "symbol": tr.Symbol, "side": string(tr.Side),
-			"quantity": tr.Quantity, "price": tr.Price, "notional": tr.Notional, "realizedPnL": tr.RealizedPnL,
-			"lotMethod": string(tr.LotMethod), "fee": tr.Fee, "lastPrice": tr.LastPrice,
-			"createdAt": tr.CreatedAt.UTC().Format(time.RFC3339Nano),
-		},
+		"trade":     trade,
 		"portfolio": pmap,
 		"note":      v.Note,
 	})
@@ -5406,12 +5416,16 @@ func (b *Backend) ListPortfolioTrades(ctx context.Context, clientID string, limi
 	}
 	items := make([]map[string]any, 0, len(list))
 	for _, t := range list {
-		items = append(items, map[string]any{
+		row := map[string]any{
 			"id": t.ID, "exchange": string(t.Exchange), "symbol": t.Symbol, "side": string(t.Side),
 			"quantity": t.Quantity, "price": t.Price, "notional": t.Notional, "realizedPnL": t.RealizedPnL,
 			"pendingOrderId": t.PendingOrderID, "fee": t.Fee, "lastPrice": t.LastPrice,
 			"createdAt": t.CreatedAt.UTC().Format(time.RFC3339Nano),
-		})
+		}
+		if cost := portfolio.FillCostPayload(t.CostCheck); cost != nil {
+			row["costCheck"] = cost
+		}
+		items = append(items, row)
 	}
 	return mustJSON(map[string]any{"clientId": clientID, "trades": items, "count": len(items), "total": total})
 }

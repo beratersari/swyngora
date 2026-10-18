@@ -29,6 +29,8 @@ export type PaperTradeFormValues = {
   spreadMinutes?: number;
   /** How many slices. */
   sliceCount?: number;
+  /** Comparison on the ticket. The place call keeps it when it still matches. */
+  executionQuoteId?: string;
 };
 
 export type PaperTradeFormProps = {

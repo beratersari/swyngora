@@ -2473,7 +2473,7 @@ func (c *APIClient) CompareOrderExecution(ctx context.Context, clientID, exchang
 }
 
 // PlacePortfolioOrder places a paper market order.
-func (c *APIClient) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int) (json.RawMessage, error) {
+func (c *APIClient) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int, executionQuoteID string) (json.RawMessage, error) {
 	body := map[string]any{
 		"clientId": clientID, "exchange": exchange, "symbol": symbol, "side": side, "quantity": quantity,
 	}
@@ -2491,6 +2491,9 @@ func (c *APIClient) PlacePortfolioOrder(ctx context.Context, clientID, exchange,
 	}
 	if sliceCount > 0 {
 		body["sliceCount"] = sliceCount
+	}
+	if executionQuoteID != "" {
+		body["executionQuoteId"] = executionQuoteID
 	}
 	if k := IdempotencyKeyFrom(ctx); k != "" {
 		body["idempotencyKey"] = k

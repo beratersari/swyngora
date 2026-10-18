@@ -210,6 +210,7 @@ func (s *Service) PlaceSpreadOrder(ctx context.Context, in OrderInput) (*domain.
 		}
 		return nil, nil, err
 	}
+	s.keepFillCost(ctx, s.takeFillQuote(ctx, clientID, in.ExecutionQuoteID, domain.ExecutionSpread, canon, side, in.Quantity, "", in.MaxSlippagePct, in.SpreadMinutes, in.SliceCount), nil, created.ID, false)
 	view, verr := s.View(ctx, in.ClientID, p.ID)
 	if verr == nil && view != nil {
 		s.notifyChange(ctx, p.ID, domain.PortfolioChangeOrderPlaced, nil, nil, view)
@@ -247,6 +248,7 @@ func (s *Service) CancelSpreadOrder(ctx context.Context, clientID, id string, po
 	if err := s.store.SaveSpreadWorking(ctx, nil, *o, nil); err != nil {
 		return nil, err
 	}
+	s.applySpreadFillCost(ctx, o, nil)
 	s.notifyChange(ctx, bookID, domain.PortfolioChangeOrderCancelled, nil, nil, nil)
 	return o, nil
 }
@@ -416,6 +418,7 @@ func (s *Service) finishSpread(ctx context.Context, p *domain.Portfolio, o *doma
 	if err := s.store.SaveSpreadWorking(ctx, p, *o, fills); err != nil {
 		return err
 	}
+	s.applySpreadFillCost(ctx, o, fills)
 	fresh, err := s.store.GetPortfolio(ctx, o.ClientID)
 	if err != nil || fresh == nil {
 		return nil

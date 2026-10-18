@@ -240,6 +240,8 @@ Prices one crypto spot size three ways. Nothing is written.
 
 Equities are rejected. Margin stays on one venue. MCP `compare_order_execution`. A read-only assistant session can call it. The crypto market ticket shows the three rows and places the one you choose. A filled row names each venue with the base size it takes, such as `binance 0.4, bybit 0.6`. The rows show the clock of the last successful read. While a newer read is in flight, including the automatic refresh, those rows stay and the ticket says it is updating.
 
+The response `id` is kept for two minutes. Place sends it back as `executionQuoteId`. When the size, side, venue, slippage cap, and slice schedule still match, that quote is kept with the order. Trade history then shows the quoted fee and the quoted slippage in quote currency beside what the fills paid. The difference is actual minus expected. Positive means the fill cost more than the quote. Slippage uses the touch from that comparison, before the fee. A market order and a best-cost order show it on the newest fill as soon as they finish. A spread order shows it when the order is filled or canceled, including a cancel that kept earlier slices. A smaller filled size than the quoted size is named. A missing or different id still places the order and leaves the line off. One quote is kept for one order. MCP `list_portfolio_trades` returns the same `costCheck`.
+
 ### Bracket orders (entry + TP/SL)
 
 Place take-profit and stop-loss **with** a limit-buy entry. Exit legs start as `status=pending` (not marketable) until the entry fills.

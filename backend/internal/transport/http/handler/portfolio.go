@@ -117,7 +117,22 @@ type tradeDTO struct {
 	Situation      *domain.CoinSituation `json:"situation,omitempty"`
 	Left           []situationExitDTO    `json:"left,omitempty"`
 	Moves          []domain.FillMove     `json:"moves,omitempty"`
+	CostCheck      *fillCostDTO          `json:"costCheck,omitempty"`
 	CreatedAt      string                `json:"createdAt"`
+}
+
+type fillCostDTO struct {
+	Style            string  `json:"style"`
+	ExpectedFee      float64 `json:"expectedFee"`
+	ActualFee        float64 `json:"actualFee"`
+	FeeDelta         float64 `json:"feeDelta"`
+	ExpectedSlippage float64 `json:"expectedSlippage"`
+	ActualSlippage   float64 `json:"actualSlippage"`
+	SlippageDelta    float64 `json:"slippageDelta"`
+	TouchPrice       float64 `json:"touchPrice"`
+	QuotedQuantity   float64 `json:"quotedQuantity"`
+	FilledQuantity   float64 `json:"filledQuantity"`
+	QuotedAt         string  `json:"quotedAt"`
 }
 
 type situationExitDTO struct {
@@ -162,6 +177,18 @@ func portfolioViewDTO(v *domain.PortfolioView) portfolioDTO {
 	}
 }
 
+func fillCostToDTO(c *domain.FillCostCheck) *fillCostDTO {
+	if c == nil || c.Status != domain.FillCostComplete {
+		return nil
+	}
+	return &fillCostDTO{
+		Style: string(c.Style), ExpectedFee: c.ExpectedFee, ActualFee: c.ActualFee, FeeDelta: c.FeeDelta(),
+		ExpectedSlippage: c.ExpectedSlippage, ActualSlippage: c.ActualSlippage, SlippageDelta: c.SlippageDelta(),
+		TouchPrice: c.TouchPrice, QuotedQuantity: c.QuotedQuantity, FilledQuantity: c.FilledQuantity,
+		QuotedAt: c.QuotedAt.UTC().Format(time.RFC3339Nano),
+	}
+}
+
 func tradeToDTO(t *domain.Trade) tradeDTO {
 	fills := make([]taxLotFillDTO, 0, len(t.LotFills))
 	for _, f := range t.LotFills {
@@ -176,6 +203,7 @@ func tradeToDTO(t *domain.Trade) tradeDTO {
 		PendingOrderID: t.PendingOrderID, LotMethod: string(t.LotMethod),
 		Fee: t.Fee, LastPrice: t.LastPrice, Situation: t.Situation,
 		Moves:     t.Moves,
+		CostCheck: fillCostToDTO(t.CostCheck),
 		CreatedAt: t.CreatedAt.UTC().Format(time.RFC3339Nano),
 	}
 	if len(fills) > 0 {
@@ -372,6 +400,7 @@ type orderBody struct {
 	Reason            *[]string                 `json:"reason"`      // clauses a buy stores; omitted keeps the whole read
 	CompareExchange   string                    `json:"compareExchange"`
 	MaxSlippagePct    float64                   `json:"maxSlippagePct"`
+	ExecutionQuoteID  string                    `json:"executionQuoteId"`
 	Spread            bool                      `json:"spread"`
 	SpreadMinutes     int                       `json:"spreadMinutes"`
 	SliceCount        int                       `json:"sliceCount"`
@@ -519,9 +548,10 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			trades, view, err := h.svc.PlaceRoutedOrder(r.Context(), portfolio.OrderInput{
 				ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
 				Side: body.Side, Quantity: body.Quantity, LotMethod: body.LotMethod,
-				IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
-				Reason:         reason,
-				MaxSlippagePct: body.MaxSlippagePct,
+				IdempotencyKey:   idempotencyKeyFrom(r, body.IdempotencyKey),
+				Reason:           reason,
+				MaxSlippagePct:   body.MaxSlippagePct,
+				ExecutionQuoteID: body.ExecutionQuoteID,
 			})
 			if err != nil {
 				writeError(w, err)
@@ -552,8 +582,9 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 		tr, view, err := h.svc.PlaceOrder(r.Context(), portfolio.OrderInput{
 			ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
 			Side: body.Side, Quantity: body.Quantity, LotMethod: body.LotMethod,
-			IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
-			Reason:         reason,
+			IdempotencyKey:   idempotencyKeyFrom(r, body.IdempotencyKey),
+			Reason:           reason,
+			ExecutionQuoteID: body.ExecutionQuoteID,
 		})
 		if err != nil {
 			writeError(w, err)

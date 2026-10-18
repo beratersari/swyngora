@@ -266,6 +266,7 @@ export function PaperTradeForm({
           : undefined,
       timeInForce: showTif ? tif : undefined,
       reason: reasonForWire,
+      executionQuoteId: orderType === 'market' && execution?.id ? execution.id : undefined,
     };
     setLocalError(null);
     inFlightRef.current = true;

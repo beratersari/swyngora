@@ -1,6 +1,10 @@
 package portfolio
 
-import "gitlab.com/trace-analysis/swyngora/backend/internal/domain"
+import (
+	"time"
+
+	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
+)
 
 // ExecutionComparePayload is the JSON body for the three prices. Nothing was written.
 func ExecutionComparePayload(c *domain.ExecutionCompare) map[string]any {
@@ -11,7 +15,7 @@ func ExecutionComparePayload(c *domain.ExecutionCompare) map[string]any {
 	for _, row := range c.Rows {
 		rows = append(rows, executionQuotePayload(row))
 	}
-	return map[string]any{
+	out := map[string]any{
 		"side":           string(c.Side),
 		"symbol":         c.Symbol,
 		"quantity":       c.Quantity,
@@ -21,6 +25,31 @@ func ExecutionComparePayload(c *domain.ExecutionCompare) map[string]any {
 		"maxSlippagePct": c.MaxSlippagePct,
 		"rows":           rows,
 		"note":           c.Note,
+	}
+	if c.ID != "" {
+		out["id"] = c.ID
+	}
+	return out
+}
+
+// FillCostPayload is the quote beside what the finished order paid.
+// Deltas are actual minus expected. Positive means the fill cost more.
+func FillCostPayload(c *domain.FillCostCheck) map[string]any {
+	if c == nil || c.Status != domain.FillCostComplete {
+		return nil
+	}
+	return map[string]any{
+		"style":            string(c.Style),
+		"expectedFee":      c.ExpectedFee,
+		"actualFee":        c.ActualFee,
+		"feeDelta":         c.FeeDelta(),
+		"expectedSlippage": c.ExpectedSlippage,
+		"actualSlippage":   c.ActualSlippage,
+		"slippageDelta":    c.SlippageDelta(),
+		"touchPrice":       c.TouchPrice,
+		"quotedQuantity":   c.QuotedQuantity,
+		"filledQuantity":   c.FilledQuantity,
+		"quotedAt":         c.QuotedAt.UTC().Format(time.RFC3339Nano),
 	}
 }
 

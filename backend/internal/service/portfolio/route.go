@@ -204,6 +204,9 @@ func (s *Service) PlaceRoutedOrder(ctx context.Context, in OrderInput) ([]domain
 			s.notifyChange(ctx, p.ID, domain.PortfolioChangeOrderFilled, nil, &out[i], view)
 		}
 	}
+	if check := s.keepFillCost(ctx, s.takeFillQuote(ctx, clientID, in.ExecutionQuoteID, domain.ExecutionBestCost, canon, side, in.Quantity, "", in.MaxSlippagePct, 0, 0), out, "", true); check != nil && len(out) > 0 {
+		out[len(out)-1].CostCheck = check
+	}
 	if verr != nil {
 		return out, nil, verr
 	}

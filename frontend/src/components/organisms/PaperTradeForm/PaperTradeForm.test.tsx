@@ -36,6 +36,29 @@ describe('PaperTradeForm', () => {
     expect(arg.quantity).toBe(0.01);
   });
 
+  it('sends the comparison id with a market order', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    renderWithTheme(
+      <PaperTradeForm
+        lockedExchange="binance"
+        lockedSymbol="BTCUSDT"
+        compact
+        execution={{ id: 'quote-1' }}
+        onSubmit={onSubmit}
+      />,
+    );
+    const spin = screen.getByRole('spinbutton', { name: /quantity|miktar/i });
+    fireEvent.change(spin, { target: { value: '1' } });
+    fireEvent.blur(spin);
+    fireEvent.click(screen.getByRole('button', { name: /paper buy|kağıt al/i }));
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalled();
+    });
+    const arg = onSubmit.mock.calls[0][0] as { executionQuoteId?: string; orderType?: string };
+    expect(arg.orderType).toBe('market');
+    expect(arg.executionQuoteId).toBe('quote-1');
+  });
+
   it('sends a best-cost market order across venues', async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const onDraftChange = vi.fn();

@@ -241,6 +241,9 @@ export function PortfolioPage() {
       idempotencyKey: newPaperIdempotencyKey('web'),
       maxSlippagePct: values.maxSlippagePct,
       spread: values.spread,
+      spreadMinutes: values.spreadMinutes,
+      sliceCount: values.sliceCount,
+      executionQuoteId: values.executionQuoteId,
       reason: values.reason,
     }).unwrap();
     const isSpread = Boolean(res.spread);

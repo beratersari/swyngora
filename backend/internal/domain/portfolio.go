@@ -110,7 +110,11 @@ type Trade struct {
 	Left []SituationExit
 	// Moves is the 1h, 4h, and 24h venue price change after this fill.
 	// It is computed when the trade is read and is not stored.
-	Moves     []FillMove
+	Moves []FillMove
+	// CostCheck is set on the newest fill once that order has finished.
+	// It compares the quote the ticket showed with the fee and slippage actually paid.
+	// It is filled in when the trade is read and is not a column on the trade.
+	CostCheck *FillCostCheck
 	CreatedAt time.Time
 }
 
@@ -403,6 +407,23 @@ type PortfolioPort interface {
 	UpsertPosition(ctx context.Context, pos Position) error
 
 	InsertTrade(ctx context.Context, t Trade) (*Trade, error)
+	// SaveExecutionQuote keeps a comparison until ExecutionQuoteTTL so a following order can name it.
+	SaveExecutionQuote(ctx context.Context, q StoredExecutionQuote) error
+	// GetExecutionQuote returns that comparison when it belongs to this book.
+	GetExecutionQuote(ctx context.Context, clientID, id string) (*StoredExecutionQuote, error)
+	// DeleteExpiredExecutionQuotes drops comparisons saved before the cutoff.
+	DeleteExpiredExecutionQuotes(ctx context.Context, before time.Time) error
+	// SaveFillCostCheck inserts the quote kept for one placed order.
+	// A repeated id is left as it was and created is false.
+	SaveFillCostCheck(ctx context.Context, c FillCostCheck) (created bool, err error)
+	// GetFillCostBySpread returns the quote kept for this spread order.
+	// ErrNotFound means that order did not name a comparison.
+	GetFillCostBySpread(ctx context.Context, clientID, spreadOrderID string) (*FillCostCheck, error)
+	// AddFillCostActual adds one slice onto the check stored for this spread order.
+	// An order that kept no quote is a no-op. complete marks the difference final.
+	AddFillCostActual(ctx context.Context, clientID, spreadOrderID, leadTradeID string, fee, slippage, qty float64, complete bool) error
+	// ListCompleteFillCosts returns finished checks whose newest fill is in the set, keyed by that fill.
+	ListCompleteFillCosts(ctx context.Context, clientID string, tradeIDs []string) (map[string]FillCostCheck, error)
 	GetTrade(ctx context.Context, clientID, id string) (*Trade, error)
 	ListTrades(ctx context.Context, clientID string, limit, offset int) ([]Trade, error)
 	CountTrades(ctx context.Context, clientID string) (int, error)

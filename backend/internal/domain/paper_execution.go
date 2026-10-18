@@ -78,7 +78,9 @@ type ExecutionQuote struct {
 }
 
 // ExecutionCompare is the three ways to work one size. Nothing is placed.
+// ID is set when the quote is kept for a following order. The pure comparison leaves it empty.
 type ExecutionCompare struct {
+	ID             string
 	Side           TradeSide
 	Symbol         string
 	Quantity       float64

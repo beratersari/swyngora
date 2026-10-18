@@ -3451,6 +3451,9 @@ export function CoinDetailPage() {
                   idempotencyKey: newPaperIdempotencyKey('detail'),
                   maxSlippagePct: values.maxSlippagePct,
                   spread: values.spread,
+                  spreadMinutes: values.spreadMinutes,
+                  sliceCount: values.sliceCount,
+                  executionQuoteId: values.executionQuoteId,
                   reason: values.reason,
                 }).unwrap();
                 void message.success(

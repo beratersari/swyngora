@@ -74,6 +74,7 @@ func (s *Service) CompareExecutions(ctx context.Context, in ExecutionCompareInpu
 		return nil, err
 	}
 	got := domain.CompareExecutions(side, in.Quantity, p.Currency, canon, ex, slip, plan, schedule, detail, in.SpreadMinutes, in.SliceCount, books)
+	got = s.rememberExecutionQuote(ctx, clientID, got)
 	return &got, nil
 }
 

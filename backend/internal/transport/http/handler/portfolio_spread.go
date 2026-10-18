@@ -81,11 +81,12 @@ func (h *PortfolioHandler) placeSpread(w http.ResponseWriter, r *http.Request, c
 	order, view, err := h.svc.PlaceSpreadOrder(r.Context(), portfolio.OrderInput{
 		ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
 		Side: body.Side, Quantity: body.Quantity, LotMethod: body.LotMethod,
-		IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
-		Reason:         reason,
-		MaxSlippagePct: body.MaxSlippagePct,
-		SpreadMinutes:  body.SpreadMinutes,
-		SliceCount:     body.SliceCount,
+		IdempotencyKey:   idempotencyKeyFrom(r, body.IdempotencyKey),
+		Reason:           reason,
+		MaxSlippagePct:   body.MaxSlippagePct,
+		SpreadMinutes:    body.SpreadMinutes,
+		SliceCount:       body.SliceCount,
+		ExecutionQuoteID: body.ExecutionQuoteID,
 	})
 	if err != nil {
 		writeError(w, err)

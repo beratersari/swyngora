@@ -2096,6 +2096,13 @@ class PortfolioOrderInput(BaseModel):
         default=0,
         description="How many slices. 0 means 10. From 2 to 60.",
     )
+    execution_quote_id: str = Field(
+        default="",
+        description=(
+            "id from compare_order_execution. Kept for two minutes when the size, side, "
+            "venue, slippage cap, and slice schedule still match. Empty skips the later comparison."
+        ),
+    )
 
 
 class SpreadOrderListInput(BaseModel):
@@ -4644,6 +4651,7 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         spread: bool = False,
         spread_minutes: int = 0,
         slice_count: int = 0,
+        execution_quote_id: str = "",
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -4652,6 +4660,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             "quantity": quantity,
             "exchange": exchange,
         }
+        if execution_quote_id:
+            body["executionQuoteId"] = execution_quote_id
         if spread:
             body["spread"] = True
         if spread_minutes:
@@ -7548,7 +7558,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "savedVsMarket is positive when a buy spends less or a sell receives more than the single venue, "
                 "and only when both can fill. A path the book cannot hold fills nothing. "
                 "A bad slice schedule leaves that row unpriced and still returns the other two. "
-                "Nothing is written. Not real money."
+                "id names this comparison for two minutes. place_portfolio_order can send it "
+                "back as execution_quote_id. Nothing is written. Not real money."
             ),
             args_schema=ExecutionCompareInput,
         ),
@@ -7567,6 +7578,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "Defaults are 10 slices over 10 minutes. The last slice is due at the end. "
                 "A sell only uses coins already held on that venue. "
                 "Pass reason to store only those clauses on a buy. Omit it to store the whole read. "
+                "Pass execution_quote_id from compare_order_execution so a finished order can show "
+                "the quoted fee and slippage beside what was paid. "
                 "Pass idempotency_key on retries so a timeout does not create a second fill. Not real money."
             ),
             args_schema=PortfolioOrderInput,
@@ -7664,7 +7677,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "after the fill. pending means that minute has not closed. missing "
                 "means the close is absent and is not zero. ready pct is the price "
                 "change, not realized profit. A sell with a positive pct means "
-                "price rose after the sell."
+                "price rose after the sell. costCheck on the newest fill of a finished "
+                "order is the fee and slippage from compare_order_execution beside what "
+                "was paid. A positive delta means the fill cost more. A spread order "
+                "omits it until the order is filled or canceled."
             ),
             args_schema=PortfolioGetInput,
         ),

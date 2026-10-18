@@ -51,6 +51,41 @@ def test_compare_order_execution_posts_three_prices(monkeypatch):
     assert "rows" in out
 
 
+def test_place_portfolio_order_sends_execution_quote_id(monkeypatch):
+    seen: list[tuple[str, str, dict]] = []
+    real_client = httpx2.Client
+
+    class _Transport(httpx2.BaseTransport):
+        def handle_request(self, request: httpx2.Request) -> httpx2.Response:
+            raw = request.content.decode() if request.content else "{}"
+            seen.append((request.method, request.url.path, json.loads(raw or "{}")))
+            return httpx2.Response(200, json={"trade": {"id": "t1"}})
+
+    def fake_client(*args, **kwargs):
+        kwargs.pop("timeout", None)
+        return real_client(*args, timeout=5.0, transport=_Transport())
+
+    monkeypatch.setattr(httpx2, "Client", fake_client)
+    tools = build_market_tools(Settings(api_base_url="http://test"))
+    by_name = {tool.name: tool for tool in tools}
+    scope = bind_tool_scope(can_trade=True, can_manage_keys=False)
+    try:
+        by_name["place_portfolio_order"].invoke(
+            {
+                "client_id": "c1",
+                "symbol": "BTCUSDT",
+                "side": "buy",
+                "quantity": 1,
+                "exchange": "binance",
+                "execution_quote_id": "quote-1",
+            }
+        )
+    finally:
+        reset_tool_scope(scope)
+    assert seen[0][1] == "/api/v1/portfolio/orders"
+    assert seen[0][2]["executionQuoteId"] == "quote-1"
+
+
 def test_preview_portfolio_order_posts_preview_only(monkeypatch):
     seen: list[tuple[str, str, dict]] = []
     real_client = httpx2.Client

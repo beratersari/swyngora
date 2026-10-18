@@ -459,7 +459,10 @@
     "notional": "Nominal",
     "realized": "Gerçekleşen",
     "time": "Zaman",
-    "situation": "Durum"
+    "situation": "Durum",
+    "costFee": "Ödenen komisyon {{actual}} · tahmin {{expected}} · {{delta}}",
+    "costSlip": "Kayma {{actual}} · tahmin {{expected}} · {{delta}}",
+    "costFilled": "Kote edilen {{quoted}} miktarın {{filled}} kadarı doldu"
   },
   "moves": {
     "title": "İşlemden sonra",

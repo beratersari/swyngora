@@ -67,6 +67,8 @@ export type PlacePortfolioOrderArg = {
   spreadMinutes?: number;
   /** How many slices. */
   sliceCount?: number;
+  /** id from the execution comparison. Kept when this order still matches that quote. */
+  executionQuoteId?: string;
   /** Clauses a buy stores. Omit to store the whole read. An empty list stores no read. */
   reason?: string[];
 };
@@ -418,6 +420,7 @@ export const portfolioApi = baseApi.injectEndpoints({
           ...(body.spread ? { spread: true } : {}),
           ...(body.spread && body.spreadMinutes ? { spreadMinutes: body.spreadMinutes } : {}),
           ...(body.spread && body.sliceCount ? { sliceCount: body.sliceCount } : {}),
+          ...(body.executionQuoteId ? { executionQuoteId: body.executionQuoteId } : {}),
           ...(body.reason !== undefined ? { reason: body.reason } : {}),
         },
         headers: body.idempotencyKey ? { 'Idempotency-Key': body.idempotencyKey } : undefined,

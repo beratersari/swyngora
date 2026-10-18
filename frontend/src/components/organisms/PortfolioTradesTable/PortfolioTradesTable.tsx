@@ -5,6 +5,7 @@ import { BrandTag } from '@/components/atoms/BrandTag';
 import { Text } from '@/components/atoms/Text';
 import { DeskEmpty } from '@/components/molecules/DeskEmpty';
 import { situationChangeLines, situationLines } from '@/components/molecules/CoinSituation';
+import { FillCostCheck } from '@/components/molecules/FillCostCheck';
 import { FillMoves } from '@/components/molecules/FillMoves';
 import type { PaperTrade } from '@/libs/api';
 import { formatDateTime, formatPrice, formatSymbolDisplay } from '@/libs/utils';
@@ -64,7 +65,14 @@ export function PortfolioTradesTable({ items, loading, onOpen }: PortfolioTrades
       dataIndex: 'fee',
       key: 'f',
       align: 'right',
-      render: (v: number | undefined) => formatPrice(v),
+      render: (v: number | undefined, row) => (
+        <div>
+          <Text variant="caption" mono>
+            {formatPrice(v)}
+          </Text>
+          {row.costCheck ? <FillCostCheck check={row.costCheck} /> : null}
+        </div>
+      ),
     },
     {
       title: t('trades.situation'),
