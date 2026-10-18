@@ -722,6 +722,7 @@
   },
   "situation": {
     "title": "Situation",
+    "alertWhenTrue": "Alert when this read is true",
     "compare": "Position read",
     "entered": "Entered as",
     "earlier": "Earlier buy",

@@ -4,9 +4,41 @@ import { formatDateTime } from '@/libs/utils/formatMarket';
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
+function matchKindLabel(clause: string, kind: string, t: Translate): string {
+  return t(`portfolio:situationRecord.kinds.${clause}_${kind}`, { defaultValue: kind });
+}
+
+function selectedMatchLine(row: PriceAlert, t: Translate): string | null {
+  const match = row.situationMatch;
+  if (!match) return null;
+  const rows: Array<[string, string | undefined]> = [
+    ['priceCvd', match.priceCvd],
+    ['openInterest', match.openInterest],
+    ['liquidation', match.liquidation],
+    ['prints', match.prints],
+    ['funding', match.funding],
+    ['crowd', match.crowd],
+    ['size', match.size],
+  ];
+  const parts = rows.flatMap(([clause, kind]) => (kind ? [matchKindLabel(clause, kind, t)] : []));
+  if (parts.length === 0) return null;
+  return t('alerts:situationMatchWatching', { clauses: parts.join('; ') });
+}
+
 /** Watch sentence and the last fire. A past fire does not say the live read still matches. */
 export function situationAlertNotes(row: PriceAlert, t: Translate, locale?: string): string[] {
   if ((row.kind ?? 'price') !== 'situation') return [];
+  if (row.condition === 'matches') {
+    const lines: string[] = [];
+    const watching = selectedMatchLine(row, t);
+    lines.push(watching ?? t('alerts:situationMatchEmpty'));
+    const met = row.situationFire?.comparison?.clauses?.some((clause) => clause.status === 'met');
+    if (met) {
+      lines.push(t('alerts:situationFireAt', { time: formatDateTime(row.triggeredAt, locale) }));
+      lines.push(t('alerts:situationMatchMet'));
+    }
+    return lines;
+  }
   const lines: string[] = [];
   if (row.situationWatch === 'blank') {
     lines.push(t('alerts:situationWatchBlank'));
@@ -47,7 +79,9 @@ export function alertConditionLabel(row: PriceAlert): string {
     const lean = row.condition && row.condition !== '' ? row.condition : 'any';
     return `setup ≥ ${min} (${lean})`;
   }
-  if (kind === 'situation') return 'leaves the entry read';
+  if (kind === 'situation') {
+    return row.condition === 'matches' ? 'matches the selected read' : 'leaves the entry read';
+  }
   if (kind === 'imbalance' || kind === 'wall') {
     return `${kind} ${row.condition ?? ''} ${row.targetPrice ?? ''}`.trim();
   }

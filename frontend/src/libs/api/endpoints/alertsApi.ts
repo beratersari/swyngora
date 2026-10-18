@@ -12,12 +12,21 @@ type AlertListResponse = {
 export type CreatePriceAlertArg = {
   exchange?: string;
   symbol?: string;
-  kind?: 'price' | 'imbalance' | 'wall' | 'liquidation_feed' | 'liquidation_cascade' | 'liquidation_notional' | 'liquidation_level' | 'setup_radar' | 'funding' | 'open_interest' | 'taker' | 'fear_greed';
+  kind?: 'price' | 'imbalance' | 'wall' | 'liquidation_feed' | 'liquidation_cascade' | 'liquidation_notional' | 'liquidation_level' | 'setup_radar' | 'funding' | 'open_interest' | 'taker' | 'fear_greed' | 'situation';
   condition?: string;
   targetPrice?: number;
   window?: string;
   rangePct?: number;
   mode?: 'one_time' | 'repeating';
+  situation?: {
+    priceCvd?: string;
+    openInterest?: string;
+    liquidation?: string;
+    prints?: string;
+    funding?: string;
+    crowd?: string;
+    size?: string;
+  };
 };
 
 export const alertsApi = baseApi.injectEndpoints({

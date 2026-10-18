@@ -17,7 +17,7 @@ export function AlertsTable({
   onOpen,
   deleteLoading,
 }: AlertsTableProps) {
-  const { t, i18n } = useTranslation(['alerts', 'common', 'detail']);
+  const { t, i18n } = useTranslation(['alerts', 'common', 'detail', 'portfolio']);
 
   const columns: ColumnsType<PriceAlert> = [
     {

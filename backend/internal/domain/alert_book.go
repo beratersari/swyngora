@@ -74,8 +74,8 @@ func ValidateAlertSpec(kind AlertKind, condition string, target, rangePct float6
 	case AlertKindFunding, AlertKindOpenInterest, AlertKindTaker, AlertKindFearGreed:
 		return validateTapeAlertSpec(kind, cond, target)
 	case AlertKindSituation:
-		if cond != "" && cond != "leaves" {
-			return fmt.Errorf("%w: situation condition must be leaves", ErrInvalidArgument)
+		if cond != "" && cond != string(AlertConditionLeaves) && cond != string(AlertConditionMatches) {
+			return fmt.Errorf("%w: situation condition must be leaves or matches", ErrInvalidArgument)
 		}
 	}
 	return nil

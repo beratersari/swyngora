@@ -90,8 +90,11 @@ type PriceAlert struct {
 	// SituationFire is the comparison from the last time a situation alert fired.
 	// Nil until that fire. Re-arming leaves it in place. The next fire replaces it.
 	SituationFire *SituationFire
+	// SituationMatch is the clause kinds a matches alert watches. Nil for other alerts.
+	// It is stored with the alert. The list does not replace it with a live read.
+	SituationMatch *SituationMatch
 	// SituationWatch is filled when a situation alert is read. It is not stored.
-	// Empty for other kinds, and when the book could not be read.
+	// Empty for other kinds, and when a leaves alert's book could not be read.
 	SituationWatch SituationWatchStatus
 }
 
@@ -105,6 +108,9 @@ const (
 	SituationWatchBlank SituationWatchStatus = "blank"
 	// SituationWatchFlat means no open crypto buy is left, so the alert stays quiet.
 	SituationWatchFlat SituationWatchStatus = "flat"
+	// SituationWatchSelected means the alert watches clause kinds stored on itself.
+	// It does not read the paper book.
+	SituationWatchSelected SituationWatchStatus = "selected"
 )
 
 // SituationFire is the entry read and the live read from the last situation fire.

@@ -4,8 +4,37 @@ import { i18n } from '@/libs/i18n';
 import { formatDateTime } from '@/libs/utils/formatMarket';
 import { renderWithProviders } from '@/test/render';
 import { CoinSituation } from './CoinSituation';
+import { situationMatchAlertPath } from './helpers';
+
+describe('situationMatchAlertPath', () => {
+  it('keeps definite clauses and skips a blank read', () => {
+    expect(
+      situationMatchAlertPath('Binance', 'BTCUSDT', {
+        priceCvd: { kind: 'price_up_cvd_down' },
+        funding: { payer: 'long' },
+      }),
+    ).toBe(
+      '/alerts?kind=situation&condition=matches&exchange=binance&symbol=BTCUSDT&priceCvd=price_up_cvd_down&funding=long',
+    );
+    expect(situationMatchAlertPath('binance', 'BTCUSDT', {})).toBeNull();
+    expect(situationMatchAlertPath('nasdaq', 'AAPL', { priceCvd: { kind: 'agrees' } })).toBeNull();
+  });
+});
 
 describe('CoinSituation', () => {
+  it('links to an alert for this read', () => {
+    renderWithProviders(
+      <CoinSituation
+        report={{ symbol: 'BTCUSDT', priceCvd: { kind: 'price_up_cvd_down' } }}
+        alertHref="/alerts?kind=situation&condition=matches&symbol=BTCUSDT"
+      />,
+    );
+    expect(screen.getByRole('link', { name: /alert when this read is true/i })).toHaveAttribute(
+      'href',
+      '/alerts?kind=situation&condition=matches&symbol=BTCUSDT',
+    );
+  });
+
   it('names a missing venue and keeps that clause blank of a number', () => {
     renderWithProviders(
       <CoinSituation
@@ -19,6 +48,7 @@ describe('CoinSituation', () => {
     );
     expect(screen.getByRole('region', { name: 'Situation' })).toBeInTheDocument();
     expect(screen.getByText('Price is rising while futures CVD is falling.')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /alert when this read/i })).not.toBeInTheDocument();
     expect(
       screen.getByText('Open interest stays blank until Bybit and OKX have the last hour.'),
     ).toBeInTheDocument();

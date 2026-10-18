@@ -175,4 +175,44 @@ describe('AlertsTable', () => {
     expect(screen.queryByText(/hâlâ canlı okuma|still the live read/i)).not.toBeInTheDocument();
     await i18n.changeLanguage('en');
   });
+
+  it('names the selected read and says when it was met', async () => {
+    await i18n.changeLanguage('en');
+    renderWithProviders(
+      <AlertsTable
+        items={[
+          {
+            id: 'match',
+            exchange: 'binance',
+            symbol: 'BTCUSDT',
+            kind: 'situation',
+            condition: 'matches',
+            mode: 'repeating',
+            status: 'active',
+            triggeredAt: firedAt,
+            situationWatch: 'selected',
+            situationMatch: { priceCvd: 'price_up_cvd_down', funding: 'long' },
+            situationFire: {
+              comparison: {
+                same: true,
+                clauses: [
+                  { clause: 'priceCvd', status: 'met', entry: 'price_up_cvd_down', live: 'price_up_cvd_down' },
+                  { clause: 'funding', status: 'met', entry: 'long', live: 'long' },
+                ],
+              },
+            },
+          },
+        ]}
+        onDelete={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/matches the selected read/i)).toBeInTheDocument();
+    expect(screen.getByText(/Repeating/)).toBeInTheDocument();
+    expect(
+      screen.getByText('Watching Price rising, futures CVD falling; Longs paying funding.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(`Last fire ${formatDateTime(firedAt, 'en')}`)).toBeInTheDocument();
+    expect(screen.getByText('The selected read was met.')).toBeInTheDocument();
+    expect(screen.queryByText(/newest buy stored no read/i)).not.toBeInTheDocument();
+  });
 });

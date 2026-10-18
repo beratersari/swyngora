@@ -464,7 +464,18 @@ func (c *Checker) finishMetric(ctx context.Context, alerts []domain.PriceAlert, 
 }
 
 func (c *Checker) evalSituationGroup(ctx context.Context, exchange, symbol string, alerts []domain.PriceAlert) {
-	if c == nil || c.Situation == nil || c.Entries == nil || c.Alerts == nil {
+	if c == nil || c.Situation == nil || c.Alerts == nil {
+		return
+	}
+	var matches, leaves []domain.PriceAlert
+	for _, a := range alerts {
+		if domain.IsSituationMatchAlert(a) {
+			matches = append(matches, a)
+			continue
+		}
+		leaves = append(leaves, a)
+	}
+	if len(matches) == 0 && (c.Entries == nil || len(leaves) == 0) {
 		return
 	}
 	live, err := c.Situation.GetCoinSituation(ctx, symbol)
@@ -478,7 +489,32 @@ func (c *Checker) evalSituationGroup(ctx context.Context, exchange, symbol strin
 	if c.now != nil {
 		now = c.now().UTC()
 	}
-	for _, a := range alerts {
+	for _, a := range matches {
+		met, cmp := domain.SituationMatched(a.SituationMatch, live)
+		ev := domain.EvaluateAlertState(a, met)
+		var extra map[string]any
+		if met {
+			names := make([]string, len(cmp.Clauses))
+			for i := range cmp.Clauses {
+				names[i] = cmp.Clauses[i].Clause
+			}
+			extra = map[string]any{
+				"matched": names,
+				"situationFire": domain.SituationFire{
+					Comparison: cmp,
+					Entry:      domain.WithoutSituationHeld(a.SituationMatch.AsSituation()),
+					Live:       domain.WithoutSituationHeld(live),
+				},
+			}
+		}
+		if _, _, err := c.Alerts.ProcessObservationExtra(ctx, a, ev, 0, now, extra); err != nil && c.Logger != nil {
+			c.Logger.Debug("situation match alert failed", "id", a.ID, "err", err)
+		}
+	}
+	if c.Entries == nil {
+		return
+	}
+	for _, a := range leaves {
 		entry, err := c.Entries.EntrySituation(ctx, a.ClientID, exchange, symbol)
 		if err != nil {
 			if c.Logger != nil {

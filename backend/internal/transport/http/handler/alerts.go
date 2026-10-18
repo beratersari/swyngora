@@ -22,23 +22,24 @@ func NewAlertHandler(svc *pricealert.Service) *AlertHandler {
 }
 
 type alertDTO struct {
-	ID             string                `json:"id"`
-	ClientID       string                `json:"clientId"`
-	Exchange       string                `json:"exchange"`
-	Symbol         string                `json:"symbol"`
-	Kind           string                `json:"kind"`
-	Condition      string                `json:"condition"`
-	TargetPrice    float64               `json:"targetPrice"`
-	RangePct       float64               `json:"rangePct,omitempty"`
-	Mode           string                `json:"mode"`
-	Armed          bool                  `json:"armed,omitempty"`
-	Status         string                `json:"status"`
-	CreatedAt      string                `json:"createdAt"`
-	TriggeredAt    *string               `json:"triggeredAt,omitempty"`
-	TriggeredPrice float64               `json:"triggeredPrice,omitempty"`
-	TriggeredVenue string                `json:"triggeredVenue,omitempty"`
-	SituationWatch string                `json:"situationWatch,omitempty"`
-	SituationFire  *domain.SituationFire `json:"situationFire,omitempty"`
+	ID             string                 `json:"id"`
+	ClientID       string                 `json:"clientId"`
+	Exchange       string                 `json:"exchange"`
+	Symbol         string                 `json:"symbol"`
+	Kind           string                 `json:"kind"`
+	Condition      string                 `json:"condition"`
+	TargetPrice    float64                `json:"targetPrice"`
+	RangePct       float64                `json:"rangePct,omitempty"`
+	Mode           string                 `json:"mode"`
+	Armed          bool                   `json:"armed,omitempty"`
+	Status         string                 `json:"status"`
+	CreatedAt      string                 `json:"createdAt"`
+	TriggeredAt    *string                `json:"triggeredAt,omitempty"`
+	TriggeredPrice float64                `json:"triggeredPrice,omitempty"`
+	TriggeredVenue string                 `json:"triggeredVenue,omitempty"`
+	SituationWatch string                 `json:"situationWatch,omitempty"`
+	SituationFire  *domain.SituationFire  `json:"situationFire,omitempty"`
+	SituationMatch *domain.SituationMatch `json:"situationMatch,omitempty"`
 }
 
 func alertToDTO(a *domain.PriceAlert) alertDTO {
@@ -79,6 +80,9 @@ func alertToDTO(a *domain.PriceAlert) alertDTO {
 	if a.SituationFire != nil && len(a.SituationFire.Comparison.Clauses) > 0 {
 		dto.SituationFire = a.SituationFire
 	}
+	if a.SituationMatch != nil && a.SituationMatch.HasClause() {
+		dto.SituationMatch = a.SituationMatch
+	}
 	return dto
 }
 
@@ -112,15 +116,16 @@ func (h *AlertHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 type createAlertBody struct {
-	ClientID    string  `json:"clientId"`
-	Exchange    string  `json:"exchange"`
-	Symbol      string  `json:"symbol"`
-	Kind        string  `json:"kind"` // price | imbalance | wall | liquidation_* | setup_radar
-	Condition   string  `json:"condition"`
-	TargetPrice float64 `json:"targetPrice"`
-	RangePct    float64 `json:"rangePct"`
-	Window      string  `json:"window"` // liquidation_notional: 1m|5m|15m|1h
-	Mode        string  `json:"mode"`   // one_time | repeating
+	ClientID    string                 `json:"clientId"`
+	Exchange    string                 `json:"exchange"`
+	Symbol      string                 `json:"symbol"`
+	Kind        string                 `json:"kind"` // price | imbalance | wall | liquidation_* | setup_radar
+	Condition   string                 `json:"condition"`
+	TargetPrice float64                `json:"targetPrice"`
+	RangePct    float64                `json:"rangePct"`
+	Window      string                 `json:"window"` // liquidation_notional: 1m|5m|15m|1h
+	Mode        string                 `json:"mode"`   // one_time | repeating
+	Situation   *domain.SituationMatch `json:"situation"`
 }
 
 // Create handles POST /api/v1/alerts
@@ -153,6 +158,7 @@ func (h *AlertHandler) Create(w http.ResponseWriter, r *http.Request) {
 		RangePct:    body.RangePct,
 		Window:      body.Window,
 		Mode:        body.Mode,
+		Situation:   body.Situation,
 	})
 	if err != nil {
 		writeError(w, err)

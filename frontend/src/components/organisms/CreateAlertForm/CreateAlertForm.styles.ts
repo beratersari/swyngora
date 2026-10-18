@@ -4,7 +4,7 @@ export const FormStack = styled.div`
   display: flex;
   flex-direction: column;
   gap: ${({ theme }) => theme.spacing[3]}px;
-  max-width: 480px;
+  max-width: 920px;
   width: 100%;
 `;
 

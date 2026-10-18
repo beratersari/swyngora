@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 import { screen } from '@testing-library/react';
 import { renderWithProviders } from '@/test/render';
 import { CreateAlertForm } from './CreateAlertForm';
@@ -30,6 +31,45 @@ describe('CreateAlertForm', () => {
     );
     expect(screen.getByText(/newest open buy filled/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/target price/i)).not.toBeInTheDocument();
+  });
+
+  it('creates a selected-read alert without an open trade', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn(async () => undefined);
+    renderWithProviders(
+      <CreateAlertForm
+        defaultKind="situation"
+        defaultCondition="matches"
+        defaultExchange="binance"
+        defaultSymbol="BTCUSDT"
+        defaultMatch={{ priceCvd: 'price_up_cvd_down', funding: 'long' }}
+        onSubmit={onSubmit}
+      />,
+    );
+    expect(screen.getByText(/No open trade is required/i)).toBeInTheDocument();
+    expect(screen.queryByText(/newest open buy filled/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /create alert/i }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'situation',
+        condition: 'matches',
+        symbol: 'BTCUSDT',
+        situation: { priceCvd: 'price_up_cvd_down', funding: 'long' },
+      }),
+    );
+  });
+
+  it('keeps a selected read without a clause from being created', () => {
+    renderWithProviders(
+      <CreateAlertForm
+        defaultKind="situation"
+        defaultCondition="matches"
+        defaultExchange="binance"
+        defaultSymbol="BTCUSDT"
+        onSubmit={async () => undefined}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /create alert/i })).toBeDisabled();
   });
 
   it('explains that all-exchange funding watches every venue', () => {

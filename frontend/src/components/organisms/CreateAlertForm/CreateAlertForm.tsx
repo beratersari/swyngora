@@ -4,8 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
 import { rtkErrorMessage, type MarketExchange } from '@/libs/api';
+import { SITUATION_MATCH_CLAUSES, type SituationClauseId, type SituationMatch } from './constants';
 import { Field, FieldRow, FormStack } from './CreateAlertForm.styles';
 import type { AlertKind, CreateAlertFormProps } from './CreateAlertForm.types';
+import { compactSituationMatch } from './helpers';
 
 export type { AlertKind } from './CreateAlertForm.types';
 
@@ -17,6 +19,7 @@ export type CreatePriceAlertValues = {
   targetPrice?: number;
   window?: string;
   mode: 'one_time' | 'repeating';
+  situation?: SituationMatch;
 };
 
 /**
@@ -27,6 +30,8 @@ export function CreateAlertForm({
   defaultExchange = 'binance',
   defaultSymbol = '',
   defaultKind = 'price',
+  defaultCondition = '',
+  defaultMatch,
   isSubmitting = false,
   submitError,
   onSubmit,
@@ -35,19 +40,24 @@ export function CreateAlertForm({
   submitError?: unknown;
   onSubmit: (values: CreatePriceAlertValues) => Promise<void>;
 }) {
-  const { t } = useTranslation(['alerts', 'common']);
+  const { t } = useTranslation(['alerts', 'common', 'portfolio']);
   const [kind, setKind] = useState<AlertKind>(defaultKind);
   const [exchange, setExchange] = useState(String(defaultExchange));
   const [symbol, setSymbol] = useState(defaultSymbol);
   const [condition, setCondition] = useState(
-    defaultKind === 'setup_radar' || defaultKind === 'liquidation_level'
-      ? 'any'
-      : defaultKind === 'liquidation_cascade'
-        ? 'cascade'
-        : defaultKind === 'liquidation_notional'
-          ? 'both'
-          : 'above',
+    defaultKind === 'situation'
+      ? defaultCondition === 'matches'
+        ? 'matches'
+        : 'leaves'
+      : defaultKind === 'setup_radar' || defaultKind === 'liquidation_level'
+        ? 'any'
+        : defaultKind === 'liquidation_cascade'
+          ? 'cascade'
+          : defaultKind === 'liquidation_notional'
+            ? 'both'
+            : 'above',
   );
+  const [match, setMatch] = useState<SituationMatch>(defaultMatch ?? {});
   const [targetPrice, setTargetPrice] = useState<number | null>(defaultKind === 'setup_radar' ? 60 : null);
   const [window, setWindow] = useState('5m');
   const [mode, setMode] = useState<'one_time' | 'repeating'>(
@@ -63,6 +73,8 @@ export function CreateAlertForm({
   const isTaker = kind === 'taker';
   const isFear = kind === 'fear_greed';
   const isSituation = kind === 'situation';
+  const isMatch = isSituation && condition === 'matches';
+  const selectedMatch = compactSituationMatch(match);
   const isTape = isFunding || isOI || isTaker || isFear;
   const isLiq = isFeed || isCascade || isNotional || isLevel;
   const venueWide = isLiq || isRadar || isTape;
@@ -78,6 +90,15 @@ export function CreateAlertForm({
     setSymbol(defaultSymbol || '');
   }, [defaultSymbol]);
 
+  const setClause = (id: SituationClauseId, value: string) => {
+    setMatch((prev) => {
+      const next = { ...prev };
+      if (!value) delete next[id];
+      else next[id] = value;
+      return next;
+    });
+  };
+
   const submit = async () => {
     if (kind === 'price') {
       if (!symbol.trim() || targetPrice == null || !Number.isFinite(targetPrice) || targetPrice <= 0) {
@@ -85,6 +106,9 @@ export function CreateAlertForm({
       }
     }
     if ((isCascade || isNotional || isLevel) && !symbol.trim()) {
+      return;
+    }
+    if (isMatch && selectedMatch == null) {
       return;
     }
     if (isNotional && (targetPrice == null || targetPrice <= 0)) {
@@ -106,7 +130,9 @@ export function CreateAlertForm({
                 : isRadar
                   ? condition || 'any'
                   : isSituation
-                    ? 'leaves'
+                    ? condition === 'matches'
+                      ? 'matches'
+                      : 'leaves'
                     : condition,
         targetPrice: isFeed
           ? targetPrice ?? 300
@@ -119,6 +145,7 @@ export function CreateAlertForm({
                 : (targetPrice ?? 0),
         window: isNotional ? window : undefined,
         mode: lockRepeating ? 'repeating' : mode,
+        situation: isMatch ? selectedMatch : undefined,
       });
       if (kind === 'price' || isNotional) setTargetPrice(null);
     } catch {
@@ -160,6 +187,7 @@ export function CreateAlertForm({
               setKind(v);
               if (v === 'situation') {
                 setCondition('leaves');
+                setMatch({});
                 setTargetPrice(null);
                 setMode('one_time');
                 if (!situationExchanges.includes(exchange)) setExchange('binance');
@@ -217,7 +245,7 @@ export function CreateAlertForm({
             />
           </Field>
         )}
-        {isFeed || isSituation ? null : (
+        {isFeed ? null : (
           <Field>
             <Text variant="caption" color="secondary">
               {t('alerts:condition')}
@@ -227,7 +255,12 @@ export function CreateAlertForm({
               aria-label={t('alerts:condition')}
               style={{ minWidth: 140 }}
               options={
-                isCascade
+                isSituation
+                  ? [
+                      { value: 'leaves', label: t('alerts:conditions.leaves', { defaultValue: 'Open buy left' }) },
+                      { value: 'matches', label: t('alerts:conditions.matches', { defaultValue: 'Selected read' }) },
+                    ]
+                  : isCascade
                   ? [
                       { value: 'cascade', label: t('alerts:conditions.cascade', { defaultValue: 'Cascade' }) },
                       { value: 'extreme', label: t('alerts:conditions.extreme', { defaultValue: 'Extreme' }) },
@@ -346,11 +379,42 @@ export function CreateAlertForm({
           </Field>
         )}
       </FieldRow>
-      {isSituation ? (
+      {isMatch ? (
+        <FieldRow>
+          {SITUATION_MATCH_CLAUSES.map((clause) => (
+            <Field key={clause.id}>
+              <Text variant="caption" color="secondary">
+                {t(`alerts:matchClauses.${clause.id}`)}
+              </Text>
+              <Select
+                allowClear
+                value={match[clause.id]}
+                aria-label={t(`alerts:matchClauses.${clause.id}`)}
+                style={{ minWidth: 180 }}
+                placeholder={t('alerts:matchAny', { defaultValue: 'Not watched' })}
+                options={clause.kinds.map((kind) => ({
+                  value: kind,
+                  label: t(`portfolio:situationRecord.kinds.${clause.id}_${kind}`, { defaultValue: kind }),
+                }))}
+                onChange={(value) => setClause(clause.id, value ?? '')}
+              />
+            </Field>
+          ))}
+        </FieldRow>
+      ) : null}
+      {isSituation && !isMatch ? (
         <Text variant="caption" color="secondary">
           {t('alerts:situationHint', {
             defaultValue:
               'Fires when the live read leaves the market stored when your newest open buy filled. Clauses that were missing at the fill are ignored. After it fires, the row names which clauses left and what they became. A newest buy with no stored read is named.',
+          })}
+        </Text>
+      ) : null}
+      {isMatch ? (
+        <Text variant="caption" color="secondary">
+          {t('alerts:situationMatchHint', {
+            defaultValue:
+              'Fires when the live read matches every clause you select. No open trade is required. A blank clause is not a match. Clauses you leave off are ignored. Print dollars can change without a new side.',
           })}
         </Text>
       ) : null}
@@ -381,7 +445,8 @@ export function CreateAlertForm({
             (isNotional && (!symbol.trim() || targetPrice == null || targetPrice <= 0)) ||
             (isRadar && targetPrice != null && (targetPrice < 40 || targetPrice > 100)) ||
             (isTape && targetPrice == null) ||
-            ((isFunding || isOI || isTaker || isSituation) && !symbol.trim())
+            ((isFunding || isOI || isTaker || isSituation) && !symbol.trim()) ||
+            (isMatch && selectedMatch == null)
           }
           onClick={() => void submit()}
         >

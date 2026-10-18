@@ -255,7 +255,7 @@ import {
   printSizeDeskNote,
   type ChartDeskLayers,
 } from './chartPresets';
-import { CoinSituation } from '@/components/molecules/CoinSituation';
+import { CoinSituation, situationMatchAlertPath } from '@/components/molecules/CoinSituation';
 import { FillMoves } from '@/components/molecules/FillMoves';
 import { FillPocket, fillPocketPriceLines } from '@/components/molecules/FillPocket';
 import {
@@ -2173,6 +2173,7 @@ export function CoinDetailPage() {
       {!isEquity && exchange && symbol ? (
         <CoinSituation
           report={rtkCurrent(situationQuery)}
+          alertHref={situationMatchAlertPath(exchange, symbol, rtkCurrent(situationQuery))}
           isLoading={situationQuery.isLoading}
           error={
             situationQuery.isError

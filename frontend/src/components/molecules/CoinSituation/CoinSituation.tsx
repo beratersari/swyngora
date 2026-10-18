@@ -1,10 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
-import { Card } from './CoinSituation.styles';
+import { Card, CardLink } from './CoinSituation.styles';
 import type { CoinSituationProps } from './CoinSituation.types';
 import { situationLines } from './helpers';
 
-export function CoinSituation({ report, isLoading, error }: CoinSituationProps) {
+export function CoinSituation({ report, isLoading, error, alertHref }: CoinSituationProps) {
   const { t, i18n } = useTranslation('detail');
   if (error) {
     return (
@@ -30,6 +30,9 @@ export function CoinSituation({ report, isLoading, error }: CoinSituationProps) 
           {line}
         </Text>
       ))}
+      {alertHref ? (
+        <CardLink to={alertHref}>{t('situation.alertWhenTrue')}</CardLink>
+      ) : null}
     </Card>
   );
 }

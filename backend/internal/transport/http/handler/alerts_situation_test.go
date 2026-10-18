@@ -45,3 +45,28 @@ func TestAlertToDTO_SituationFireAndWatch(t *testing.T) {
 		t.Fatalf("time %#v", body["triggeredAt"])
 	}
 }
+
+func TestAlertToDTO_SituationMatch(t *testing.T) {
+	dto := alertToDTO(&domain.PriceAlert{
+		ID: "a2", ClientID: "c", Exchange: domain.ExchangeBinance, Symbol: "ETHUSDT",
+		Kind: domain.AlertKindSituation, Condition: domain.AlertConditionMatches,
+		Mode: domain.AlertModeOneTime, Status: domain.AlertStatusActive, CreatedAt: time.Now().UTC(),
+		SituationWatch: domain.SituationWatchSelected,
+		SituationMatch: &domain.SituationMatch{PriceCVD: domain.SituationCVDPriceUp, Funding: "long"},
+	})
+	raw, err := json.Marshal(dto)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body map[string]any
+	if err := json.Unmarshal(raw, &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["situationWatch"] != "selected" || body["condition"] != "matches" {
+		t.Fatalf("%s", raw)
+	}
+	match, _ := body["situationMatch"].(map[string]any)
+	if match["priceCvd"] != domain.SituationCVDPriceUp || match["funding"] != "long" || match["prints"] != nil {
+		t.Fatalf("match %#v", match)
+	}
+}

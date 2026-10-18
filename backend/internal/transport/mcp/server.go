@@ -154,6 +154,7 @@ type DataPort interface {
 	ListPriceAlerts(ctx context.Context, clientID string) (json.RawMessage, error)
 	CreatePriceAlert(ctx context.Context, clientID, exchange, symbol, condition string, targetPrice float64, mode string) (json.RawMessage, error)
 	CreateSituationAlert(ctx context.Context, clientID, exchange, symbol, mode string) (json.RawMessage, error)
+	CreateSituationMatchAlert(ctx context.Context, clientID, exchange, symbol, mode string, match domain.SituationMatch) (json.RawMessage, error)
 	CreateTapeAlert(ctx context.Context, clientID, exchange, symbol, kind, condition string, target float64, mode string) (json.RawMessage, error)
 	CreateOrderBookAlert(ctx context.Context, clientID, exchange, symbol, kind, condition string, threshold, rangePct float64, mode string) (json.RawMessage, error)
 	CreateLiquidationFeedAlert(ctx context.Context, clientID, exchange string, minDownSeconds float64, mode string) (json.RawMessage, error)
@@ -2579,7 +2580,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("list_price_alerts",
-		mcp.WithDescription("List price alerts for a clientId (active and triggered). A situation alert includes situationWatch (stored, blank, or flat) and, after it fires, situationFire: the clauses that left, the entry kind, the later kind, and any missing venue. That fire stays until the next fire replaces it. Repeating re-arm does not clear it. The alert still follows the newest open buy."),
+		mcp.WithDescription("List price alerts for a clientId (active and triggered). A leaves situation alert includes situationWatch (stored, blank, or flat) and, after it fires, situationFire: the clauses that left, the entry kind, the later kind, and any missing venue. A matches situation alert includes situationMatch (the selected clause kinds) and situationWatch selected. It does not need an open trade. After it fires, situationFire lists those clauses with status met. That fire stays until the next fire replaces it. Repeating re-arm does not clear it."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
@@ -2641,6 +2642,43 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 		raw, err := api.CreateSituationAlert(ctx, clientID, req.GetString("exchange", "binance"), symbol, req.GetString("mode", "one_time"))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("create_situation_match_alert",
+		mcp.WithDescription("Alert when the live coin read matches the clause kinds you pass. No open paper trade is required. Set at least one clause. Omit a clause to ignore it. priceCvd is price_up_cvd_down, price_down_cvd_up, or agrees. openInterest is opened, closed, or flat. liquidation is long, short, or none. prints is the 24h force-order side: long, short, even, or quiet. Print dollars do not count. funding is long, short, or none. crowd is top_more_long, top_more_short, or even. size is whale_buy_retail_sell, whale_sell_retail_buy, both_buy, both_sell, whale_buy, whale_sell, retail_buy, retail_sell, or flat. A blank live clause is not a match. mode=one_time (default) fires once. mode=repeating fires when the match appears, stays quiet while it remains true, and re-arms when a selected clause no longer matches. Not for Nasdaq or BIST."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair, e.g. BTCUSDT or BTC-USD")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit (default binance)")),
+		mcp.WithString("mode", mcp.Description("one_time (default) | repeating")),
+		mcp.WithString("priceCvd", mcp.Description("price_up_cvd_down | price_down_cvd_up | agrees")),
+		mcp.WithString("openInterest", mcp.Description("opened | closed | flat")),
+		mcp.WithString("liquidation", mcp.Description("long | short | none")),
+		mcp.WithString("prints", mcp.Description("long | short | even | quiet")),
+		mcp.WithString("funding", mcp.Description("long | short | none")),
+		mcp.WithString("crowd", mcp.Description("top_more_long | top_more_short | even")),
+		mcp.WithString("size", mcp.Description("whale_buy_retail_sell | whale_sell_retail_buy | both_buy | both_sell | whale_buy | whale_sell | retail_buy | retail_sell | flat")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		raw, err := api.CreateSituationMatchAlert(ctx, clientID, req.GetString("exchange", "binance"), symbol, req.GetString("mode", "one_time"), domain.SituationMatch{
+			PriceCVD:     req.GetString("priceCvd", ""),
+			OpenInterest: req.GetString("openInterest", ""),
+			Liquidation:  req.GetString("liquidation", ""),
+			Prints:       req.GetString("prints", ""),
+			Funding:      req.GetString("funding", ""),
+			Crowd:        req.GetString("crowd", ""),
+			Size:         req.GetString("size", ""),
+		})
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

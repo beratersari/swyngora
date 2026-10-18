@@ -722,6 +722,7 @@
   },
   "situation": {
     "title": "Durum",
+    "alertWhenTrue": "Bu okuma olunca uyar",
     "compare": "Pozisyon okuması",
     "entered": "Girişte",
     "earlier": "Önceki alım",

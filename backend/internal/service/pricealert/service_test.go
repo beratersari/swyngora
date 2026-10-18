@@ -320,6 +320,157 @@ func TestChecker_SituationFire_NamesWhatLeftAndKeepsIt(t *testing.T) {
 	}
 }
 
+func TestService_SituationMatch_RejectsATradeAndAnEmptyRead(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	_, err := svc.Create(ctx, CreateInput{
+		ClientID: "sit-match", Symbol: "BTCUSDT", Kind: string(domain.AlertKindSituation),
+		Condition: "matches",
+	})
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("empty: %v", err)
+	}
+	_, err = svc.Create(ctx, CreateInput{
+		ClientID: "sit-match", Symbol: "BTCUSDT", Kind: string(domain.AlertKindSituation),
+		Condition: "matches", Situation: &domain.SituationMatch{Funding: "sideways"},
+	})
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("unknown kind: %v", err)
+	}
+	_, err = svc.Create(ctx, CreateInput{
+		ClientID: "sit-match", Exchange: "nasdaq", Symbol: "AAPL", Kind: string(domain.AlertKindSituation),
+		Condition: "matches", Situation: &domain.SituationMatch{PriceCVD: domain.SituationCVDPriceUp},
+	})
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("equity: %v", err)
+	}
+	_, err = svc.Create(ctx, CreateInput{
+		ClientID: "sit-match", Symbol: "BTCUSDT", Kind: string(domain.AlertKindSituation),
+		Situation: &domain.SituationMatch{PriceCVD: domain.SituationCVDPriceUp},
+	})
+	if !errors.Is(err, domain.ErrInvalidArgument) {
+		t.Fatalf("leaves must not store a selection: %v", err)
+	}
+	a, err := svc.Create(ctx, CreateInput{
+		ClientID: "sit-match", Symbol: "BTCUSDT", Kind: string(domain.AlertKindSituation),
+		Condition: "matches", Mode: "repeating",
+		Situation: &domain.SituationMatch{PriceCVD: domain.SituationCVDPriceUp, Funding: "long"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Condition != domain.AlertConditionMatches || a.SituationMatch == nil || a.SituationMatch.Funding != "long" || !a.Armed {
+		t.Fatalf("%+v", a)
+	}
+}
+
+func TestChecker_SituationMatchDoesNotNeedATrade(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	if _, err := svc.SetWebhook(ctx, "sit-match", domain.WebhookSettings{
+		URL: "http://127.0.0.1:9/hook", DeliveryMode: "immediate",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	repeating, err := svc.Create(ctx, CreateInput{
+		ClientID: "sit-match", Symbol: "BTCUSDT", Kind: string(domain.AlertKindSituation),
+		Condition: "matches", Mode: "repeating",
+		Situation: &domain.SituationMatch{PriceCVD: domain.SituationCVDPriceUp, Prints: domain.SituationPrintLong},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	once, err := svc.Create(ctx, CreateInput{
+		ClientID: "sit-once", Symbol: "BTCUSDT", Kind: string(domain.AlertKindSituation),
+		Condition: "matches",
+		Situation: &domain.SituationMatch{Funding: "short"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	live := &domain.CoinSituation{
+		PriceCVD: &domain.SituationPriceCVD{Kind: domain.SituationCVDPriceUp},
+		Prints:   &domain.SituationPrints{Side: domain.SituationPrintShort, LongNotional: 1, ShortNotional: 9},
+		Funding:  &domain.SituationFunding{Payer: "long", RatePct: 0.01},
+	}
+	c := &Checker{Alerts: svc, Situation: fakeSituation{live: live}}
+	c.RunOnce(ctx)
+	got, _ := svc.Get(ctx, "sit-match", repeating.ID)
+	if got.Status != domain.AlertStatusActive || !got.Armed || got.SituationFire != nil {
+		t.Fatalf("short prints must stay quiet: %+v", got)
+	}
+	quiet, _ := svc.Get(ctx, "sit-once", once.ID)
+	if quiet.Status != domain.AlertStatusActive || quiet.SituationFire != nil {
+		t.Fatalf("longs paying must stay quiet: %+v", quiet)
+	}
+	live.Prints.LongNotional = 400
+	live.Prints.ShortNotional = 1
+	c.RunOnce(ctx)
+	dollars, _ := svc.Get(ctx, "sit-match", repeating.ID)
+	if dollars.SituationFire != nil || !dollars.Armed {
+		t.Fatalf("the same print side must stay quiet: %+v", dollars.SituationFire)
+	}
+	live.Prints.Side = domain.SituationPrintLong
+	c.RunOnce(ctx)
+	fired, _ := svc.Get(ctx, "sit-match", repeating.ID)
+	if fired.Armed || fired.SituationFire == nil || !fired.SituationFire.Comparison.Same || len(fired.SituationFire.Comparison.Clauses) != 2 {
+		t.Fatalf("repeating match: %+v", fired.SituationFire)
+	}
+	if fired.SituationFire.Comparison.Clauses[0].Status != domain.SituationMatchMet || fired.SituationFire.Live == nil || fired.SituationFire.Live.Prints == nil || fired.SituationFire.Live.Prints.LongNotional != 400 {
+		t.Fatalf("fire %+v", fired.SituationFire)
+	}
+	note, err := svc.GetNotificationByAlertID(ctx, repeating.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body map[string]any
+	if err := json.Unmarshal([]byte(note.PayloadJSON), &body); err != nil {
+		t.Fatal(err)
+	}
+	matched, _ := body["matched"].([]any)
+	if body["type"] != "situation_alert.triggered" || body["condition"] != "matches" || len(matched) != 2 || matched[0] != "priceCvd" || matched[1] != "prints" {
+		t.Fatalf("webhook %#v", body)
+	}
+	live.Funding.Payer = "short"
+	live.Prints.LongNotional = 12
+	c.RunOnce(ctx)
+	still, _ := svc.Get(ctx, "sit-match", repeating.ID)
+	if still.Armed || still.SituationFire == nil || still.SituationFire.Live.Prints.LongNotional != 400 {
+		t.Fatalf("an unselected funding change must keep the same fire: %+v", still.SituationFire)
+	}
+	onceGot, _ := svc.Get(ctx, "sit-once", once.ID)
+	if onceGot.Status != domain.AlertStatusTriggered || onceGot.SituationFire == nil || onceGot.SituationFire.Comparison.Clauses[0].Clause != "funding" {
+		t.Fatalf("one-time match: %+v", onceGot.SituationFire)
+	}
+	live.Prints = nil
+	c.RunOnce(ctx)
+	rearmed, _ := svc.Get(ctx, "sit-match", repeating.ID)
+	if !rearmed.Armed || rearmed.SituationFire == nil || rearmed.SituationFire.Comparison.Clauses[1].Live != domain.SituationPrintLong {
+		t.Fatalf("a blank clause must re-arm and keep the fire: %+v", rearmed.SituationFire)
+	}
+	live.Prints = &domain.SituationPrints{Side: domain.SituationPrintLong, LongNotional: 3, ShortNotional: 1}
+	c.RunOnce(ctx)
+	again, _ := svc.Get(ctx, "sit-match", repeating.ID)
+	if again.Armed || again.SituationFire == nil || again.SituationFire.Live.Prints.LongNotional != 3 {
+		t.Fatalf("the next match replaces the fire: %+v", again.SituationFire)
+	}
+	c.Situation = failingSituation{err: errors.New("tape down")}
+	live.PriceCVD.Kind = domain.SituationCVDAgrees
+	c.RunOnce(ctx)
+	failed, _ := svc.Get(ctx, "sit-match", repeating.ID)
+	if failed.Armed || failed.SituationFire == nil || failed.SituationFire.Live.Prints.LongNotional != 3 {
+		t.Fatalf("a failed read must not re-arm or replace the fire: %+v", failed.SituationFire)
+	}
+}
+
+type failingSituation struct {
+	err error
+}
+
+func (f failingSituation) GetCoinSituation(context.Context, string) (*domain.CoinSituation, error) {
+	return nil, f.err
+}
+
 type fakeWatch struct {
 	status domain.SituationWatchStatus
 	err    error
@@ -375,12 +526,41 @@ func TestList_SituationWatch_NamesABlankEntry(t *testing.T) {
 	if blank != 2 || watch.n != 2 {
 		t.Fatalf("blank=%d lookups=%d", blank, watch.n)
 	}
+	if _, err := svc.Create(ctx, CreateInput{
+		ClientID: "sit-watch", Symbol: "SOLUSDT", Kind: string(domain.AlertKindSituation),
+		Condition: "matches", Situation: &domain.SituationMatch{Crowd: domain.LongShortGapLeanTopLong},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	watch.n = 0
+	list, err = svc.List(ctx, "sit-watch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected := 0
+	for _, a := range list {
+		if domain.IsSituationMatchAlert(a) {
+			if a.SituationWatch != domain.SituationWatchSelected || a.SituationMatch == nil || a.SituationMatch.Crowd != domain.LongShortGapLeanTopLong {
+				t.Fatalf("match watch %+v", a)
+			}
+			selected++
+		}
+	}
+	if selected != 1 || watch.n != 2 {
+		t.Fatalf("selected=%d lookups=%d", selected, watch.n)
+	}
 	watch.err = errors.New("book down")
 	list, err = svc.List(ctx, "sit-watch")
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, a := range list {
+		if domain.IsSituationMatchAlert(a) {
+			if a.SituationWatch != domain.SituationWatchSelected {
+				t.Fatalf("match watch follows the book: %+v", a.SituationWatch)
+			}
+			continue
+		}
 		if a.SituationWatch != "" {
 			t.Fatalf("lookup error should leave the watch off: %+v", a.SituationWatch)
 		}

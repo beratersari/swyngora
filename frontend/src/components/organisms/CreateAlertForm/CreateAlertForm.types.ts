@@ -1,4 +1,7 @@
 import type { MarketExchange } from '@/libs/api';
+import type { SituationMatch } from './constants';
+
+export type { SituationMatch } from './constants';
 
 export type AlertKind =
   | 'price'
@@ -17,4 +20,6 @@ export type CreateAlertFormProps = {
   defaultExchange?: MarketExchange | string;
   defaultSymbol?: string;
   defaultKind?: AlertKind;
+  defaultCondition?: string;
+  defaultMatch?: SituationMatch;
 };
