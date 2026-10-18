@@ -190,7 +190,7 @@ type DataPort interface {
 	ListPortfolioCashMovements(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
 	TransferPortfolioCash(ctx context.Context, clientID, fromPortfolioID, toPortfolioID string, amount float64, note string) (json.RawMessage, error)
 	ListTransferAttempts(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error)
-	StressPortfolio(ctx context.Context, clientID, moves string) (json.RawMessage, error)
+	StressPortfolio(ctx context.Context, clientID, moves, from, to string) (json.RawMessage, error)
 	GetPortfolioCorrelation(ctx context.Context, clientID, exchange, symbol, side string, notional float64) (json.RawMessage, error)
 	GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
 	PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct, maxExposurePct *float64) (json.RawMessage, error)
@@ -3381,21 +3381,19 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("stress_portfolio",
-		mcp.WithDescription("Preview paper equity, total P&L, and margin equity if named coins move. moves is BTC:-10,ETH:-15. Nothing is traded. A margin row that crosses liquidation loses its locked margin."),
+		mcp.WithDescription("Preview paper equity, total P&L, and margin equity if named coins move, or if a past window happened again. moves is BTC:-10,ETH:-15. from and to replay each open position's own close-to-close change over that window. points is the book at today's size on each close, and lowEquity is the lowest point. A coin on two venues keeps each venue's move. A date includes the end day. A position with no close at either end stays unchanged and is named. Send moves or a period, not both. Nothing is traded. A margin row that crosses liquidation loses its locked margin."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
-		mcp.WithString("moves", mcp.Required(), mcp.Description("Comma list asset:percent, e.g. BTC:-10,ETH:-15")),
+		mcp.WithString("moves", mcp.Description("Comma list asset:percent, e.g. BTC:-10,ETH:-15. Omit when from and to are set.")),
+		mcp.WithString("from", mcp.Description("Start of a past window. YYYY-MM-DD or RFC3339. Use with to, instead of moves.")),
+		mcp.WithString("to", mcp.Description("End of that window. A YYYY-MM-DD is included. Use with from, instead of moves.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		moves, err := req.RequireString("moves")
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
 		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
-		raw, err := api.StressPortfolio(ctx, clientID, moves)
+		raw, err := api.StressPortfolio(ctx, clientID, req.GetString("moves", ""), req.GetString("from", ""), req.GetString("to", ""))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

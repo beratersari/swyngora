@@ -113,8 +113,10 @@ func (s *Service) SetPocketSource(src PocketSource) {
 	}
 }
 
-// SetCandleSource loads the one-minute close used for the price move after a fill.
-// Optional. When unset, a window that is not due stays pending and a due window is missing.
+// SetCandleSource loads candle closes for the price move after a fill and for
+// replaying a past window onto the open book.
+// Optional. When unset, a fill window that is not due stays pending, a due fill
+// window is missing, and a stress replay reports that price history is not configured.
 func (s *Service) SetCandleSource(src CandleSource) {
 	if s != nil {
 		s.candles = src

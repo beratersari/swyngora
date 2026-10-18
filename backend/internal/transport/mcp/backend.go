@@ -4680,12 +4680,25 @@ func (b *Backend) GetPaperTradingCosts(_ context.Context, exchange string) (json
 	return mustJSON(map[string]any{"items": items, "note": note})
 }
 
-func (b *Backend) StressPortfolio(ctx context.Context, clientID, moves string) (json.RawMessage, error) {
+func (b *Backend) StressPortfolio(ctx context.Context, clientID, moves, from, to string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("portfolio service unavailable")
 	}
-	parsed := parseStressMoves(moves)
-	rep, err := b.Portfolio.Stress(ctx, clientID, PortfolioIDFrom(ctx), "", parsed)
+	from = strings.TrimSpace(from)
+	to = strings.TrimSpace(to)
+	moves = strings.TrimSpace(moves)
+	if (from != "" || to != "") && moves != "" {
+		return nil, fmt.Errorf("%w: send moves or a period, not both", domain.ErrInvalidArgument)
+	}
+	var (
+		rep *domain.StressReport
+		err error
+	)
+	if from != "" || to != "" {
+		rep, err = b.Portfolio.StressPeriod(ctx, clientID, PortfolioIDFrom(ctx), "", from, to)
+	} else {
+		rep, err = b.Portfolio.Stress(ctx, clientID, PortfolioIDFrom(ctx), "", parseStressMoves(moves))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -4723,7 +4736,7 @@ func stressReportMap(rep *domain.StressReport) map[string]any {
 			"liquidated": ln.Liquidated,
 		})
 	}
-	return map[string]any{
+	out := map[string]any{
 		"equity": rep.Equity, "shockedEquity": rep.ShockedEquity, "equityDelta": rep.EquityDelta,
 		"totalPnl": rep.TotalPnL, "shockedTotalPnl": rep.ShockedTotalPnL,
 		"unrealizedPnl": rep.UnrealizedPnL, "shockedUnrealizedPnl": rep.ShockedUnrealizedPnL,
@@ -4731,6 +4744,62 @@ func stressReportMap(rep *domain.StressReport) map[string]any {
 		"marginEquity": rep.MarginEquity, "shockedMarginEquity": rep.ShockedMarginEquity,
 		"liquidated": rep.Liquidated, "lines": lines, "note": rep.Note,
 	}
+	if rep.Replay != nil {
+		out["replay"] = stressReplayMap(rep.Replay)
+	}
+	return out
+}
+
+func stressReplayMap(rep *domain.StressReplay) map[string]any {
+	if rep == nil {
+		return map[string]any{}
+	}
+	moves := make([]map[string]any, 0, len(rep.Moves))
+	for _, m := range rep.Moves {
+		venues := make([]map[string]any, 0, len(m.Venues))
+		for _, v := range m.Venues {
+			venues = append(venues, map[string]any{
+				"exchange": v.Exchange, "symbol": v.Symbol,
+				"start": v.Start, "end": v.End,
+				"startAt": v.StartAt.UTC().Format(time.RFC3339Nano),
+				"endAt":   v.EndAt.UTC().Format(time.RFC3339Nano),
+				"movePct": v.MovePct, "weight": v.Weight,
+			})
+		}
+		moves = append(moves, map[string]any{
+			"asset": m.Asset, "movePct": m.MovePct, "venues": venues,
+		})
+	}
+	missing := make([]map[string]any, 0, len(rep.Missing))
+	for _, g := range rep.Missing {
+		missing = append(missing, map[string]any{
+			"asset": g.Asset, "exchange": g.Exchange, "symbol": g.Symbol, "reason": g.Reason,
+		})
+	}
+	out := map[string]any{
+		"from":     rep.From.UTC().Format(time.RFC3339Nano),
+		"to":       rep.To.UTC().Format(time.RFC3339Nano),
+		"interval": rep.Interval, "moves": moves, "missing": missing,
+	}
+	if len(rep.Points) > 0 {
+		points := make([]map[string]any, 0, len(rep.Points))
+		for _, p := range rep.Points {
+			row := map[string]any{
+				"at": p.At.UTC().Format(time.RFC3339Nano), "equity": p.Equity,
+				"delta": p.Delta, "liquidated": p.Liquidated,
+			}
+			if p.DeltaPct != nil {
+				row["deltaPct"] = *p.DeltaPct
+			}
+			points = append(points, row)
+		}
+		out["points"] = points
+		out["lowEquity"] = rep.LowEquity
+		if !rep.LowAt.IsZero() {
+			out["lowAt"] = rep.LowAt.UTC().Format(time.RFC3339Nano)
+		}
+	}
+	return out
 }
 
 func (b *Backend) GetPortfolioCorrelation(ctx context.Context, clientID, exchange, symbol, side string, notional float64) (json.RawMessage, error) {

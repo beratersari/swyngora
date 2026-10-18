@@ -3832,10 +3832,19 @@ export interface paths {
         put?: never;
         /**
          * Preview a paper book after price shocks
-         * @description Reprices the open spot and margin book. Each move is a percent on a
-         *     base asset (BTC -10, ETH -15). Returns equity, total P&L, and margin
-         *     equity before and after. A margin row that crosses its liquidation
-         *     price loses the margin locked on it. Nothing is traded.
+         * @description Reprices the open spot and margin book. Nothing is traded.
+         *     Send `moves` or a past window (`from` and `to`), not both.
+         *     Each move is a percent on a base asset (BTC -10, ETH -15).
+         *     A past window replays each open coin's own close-to-close change
+         *     onto the current book. YYYY-MM-DD is a UTC day and the end day is
+         *     included. A window of at least 24 hours uses daily closes. A shorter
+         *     window uses hourly closes. A coin or venue with no close at either
+         *     end stays unchanged and is named. Each position uses its own venue's
+         *     change. A coin's movePct is the value-weighted average of the venues
+         *     that priced, weighted by spot market value and margin notional.
+         *     Returns equity, total P&L, and margin equity before and
+         *     after. A margin row that crosses its liquidation price loses the
+         *     margin locked on it.
          */
         post: operations["stressPortfolio"];
         delete?: never;
@@ -10314,6 +10323,115 @@ export interface components {
             /** Format: date-time */
             createdAt?: string;
         };
+        /**
+         * @description Open book before and after a what-if. replay is present when the percents
+         *     came from a past window. Cash does not change. Nothing is traded.
+         */
+        PortfolioStressReport: {
+            equity?: number;
+            shockedEquity?: number;
+            equityDelta?: number;
+            totalPnl?: number;
+            shockedTotalPnl?: number;
+            unrealizedPnl?: number;
+            shockedUnrealizedPnl?: number;
+            positionsValue?: number;
+            shockedPositionsValue?: number;
+            marginEquity?: number;
+            shockedMarginEquity?: number;
+            /** @description Open margin rows whose shocked mark crosses the liquidation price */
+            liquidated?: number;
+            lines?: components["schemas"]["PortfolioStressLine"][];
+            note?: string;
+            replay?: components["schemas"]["PortfolioStressReplay"];
+        };
+        PortfolioStressLine: {
+            /** @enum {string} */
+            kind?: "spot" | "margin";
+            symbol?: string;
+            side?: string;
+            asset?: string;
+            movePct?: number;
+            mark?: number;
+            shockedMark?: number;
+            value?: number;
+            shockedValue?: number;
+            unrealized?: number;
+            shockedUnrealized?: number;
+            liquidated?: boolean;
+        };
+        /**
+         * @description Closes used to reprice the open book. from and to are the instants the
+         *     selector used, after a future end is cut back to now. A date request's
+         *     to is the midnight after the included end day.
+         */
+        PortfolioStressReplay: {
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            /**
+             * @description 1d when the window is at least 24 hours, otherwise 1h
+             * @enum {string}
+             */
+            interval?: "1h" | "1d";
+            /** @description Coins ordered by the size of the close-to-close change, largest up or down first. Equal sizes stay in name order. */
+            moves?: components["schemas"]["PortfolioStressReplayMove"][];
+            /**
+             * @description This book's value at each close through the window, using today's positions.
+             *     The first point is the book now. A margin position that liquidates stays liquidated on later points.
+             */
+            points?: components["schemas"]["PortfolioStressPathPoint"][];
+            /** @description Lowest equity on the path. Equal lows keep the earlier close. */
+            lowEquity?: number;
+            /** Format: date-time */
+            lowAt?: string;
+            missing?: components["schemas"]["PortfolioStressReplayGap"][];
+        };
+        PortfolioStressReplayMove: {
+            asset?: string;
+            /** @description Value-weighted average of the venues that priced. Each position is repriced with its own venue move. */
+            movePct?: number;
+            venues?: components["schemas"]["PortfolioStressReplayVenue"][];
+        };
+        PortfolioStressReplayVenue: {
+            exchange?: string;
+            symbol?: string;
+            /** @description Close at the start of the window */
+            start?: number;
+            /** @description Close at the end of the window */
+            end?: number;
+            /** Format: date-time */
+            startAt?: string;
+            /** Format: date-time */
+            endAt?: string;
+            movePct?: number;
+            /** @description Spot market value, or margin notional (quantity times mark), used in the blend */
+            weight?: number;
+        };
+        PortfolioStressPathPoint: {
+            /** Format: date-time */
+            at?: string;
+            equity?: number;
+            /** @description Change from the book's equity now */
+            delta?: number;
+            /** @description That change as a percent of current equity. Null when equity is not positive. */
+            deltaPct?: number | null;
+            /** @description Margin rows that have been liquidated by this close and stay liquidated afterward */
+            liquidated?: number;
+        };
+        PortfolioStressReplayGap: {
+            asset?: string;
+            exchange?: string;
+            symbol?: string;
+            /**
+             * @description no_start and no_end have no close at that end. same_close has only one close.
+             *     out_of_range is outside -100% to +500%. no_history returned no bars.
+             *     fetch_failed could not read the candles. That holding stays unchanged.
+             * @enum {string}
+             */
+            reason?: "no_start" | "no_end" | "same_close" | "out_of_range" | "no_history" | "fetch_failed";
+        };
         /** @description Period trading P&L plus equity time series. External cash is not profit or loss. */
         PortfolioPerformance: {
             clientId?: string;
@@ -16408,7 +16526,18 @@ export interface operations {
             content: {
                 "application/json": {
                     portfolioId?: string;
-                    moves: {
+                    /**
+                     * @description Start of a past window. YYYY-MM-DD (UTC, included) or RFC3339. Send with to, instead of moves.
+                     * @example 2024-08-05
+                     */
+                    from?: string;
+                    /**
+                     * @description End of that window. A date is included. An RFC3339 time uses the last close at or before that instant.
+                     * @example 2024-08-06
+                     */
+                    to?: string;
+                    /** @description Typed percents. Omit when from and to are set. */
+                    moves?: {
                         /** @example BTC */
                         asset: string;
                         /** @example -10 */
@@ -16418,16 +16547,17 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Before and after totals */
+            /** @description Before and after totals. replay is set when the moves came from a past window. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["PortfolioStressReport"];
                 };
             };
             400: components["responses"]["Error"];
+            502: components["responses"]["Error"];
         };
     };
     getPortfolioRiskLimits: {

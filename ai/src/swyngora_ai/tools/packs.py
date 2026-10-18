@@ -152,6 +152,7 @@ PAPER_TOOLS: frozenset[str] = frozenset(
         "get_fill_pocket",
         "get_portfolio",
         "get_portfolio_performance",
+        "stress_portfolio",
         "deposit_portfolio_cash",
         "withdraw_portfolio_cash",
         "transfer_portfolio_cash",

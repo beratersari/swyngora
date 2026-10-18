@@ -415,6 +415,8 @@ export type {
   PortfolioView,
   PortfolioSummary,
   PortfolioPerformance,
+  PortfolioStressReport,
+  PortfolioStressReplayMove,
   RiskLimitsView,
   PortfolioCorrelation,
   PortfolioEquityPoint,
