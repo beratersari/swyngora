@@ -11,7 +11,15 @@ export const Panel = styled.div`
   min-width: 0;
 `;
 
-export const Columns = styled.div`
+export const Status = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: ${({ theme }) => theme.spacing[2]}px;
+  min-width: 0;
+`;
+
+export const Columns = styled.div<{ $busy?: boolean }>`
+  opacity: ${({ $busy }) => ($busy ? 0.55 : 1)};
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: ${({ theme }) => theme.spacing[2]}px;

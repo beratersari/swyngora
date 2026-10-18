@@ -50,6 +50,10 @@ export type PaperTradeFormProps = {
   /** Fee and slippage for this venue, best cost, and a time split. The page owns the request. */
   execution?: ExecutionCompare | null;
   executionLoading?: boolean;
+  /** True while a newer comparison is in flight and the rows are the previous success. */
+  executionRefreshing?: boolean;
+  /** Client time of the last successful comparison, in milliseconds. */
+  executionUpdatedAt?: number | null;
   executionFailed?: boolean;
   /** Fires when the draft changes so the page can price it. */
   onDraftChange?: (draft: SpotOrderPreviewDraft) => void;

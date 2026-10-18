@@ -20,6 +20,18 @@ export function unfilledReason(
   return t('compare.status.exhausted');
 }
 
+/** Local clock of a successful comparison, including seconds. */
+export function formatCompareUpdated(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
 /** Percent with up to three decimals. 0.5 means 0.5%. */
 export function formatComparePct(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return '—';

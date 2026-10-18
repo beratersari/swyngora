@@ -5,7 +5,7 @@ import type { ExecutionCompare as ExecutionCompareModel } from '@/libs/api';
 import { renderWithTheme } from '@/test/render';
 import { ExecutionCompare } from './ExecutionCompare';
 import { formatPrice } from '@/libs/utils/formatPrice';
-import { cheapestStyles, formatComparePct, legVenues } from './helpers';
+import { cheapestStyles, formatComparePct, formatCompareUpdated, legVenues } from './helpers';
 
 const priced: ExecutionCompareModel = {
   side: 'buy',
@@ -80,6 +80,49 @@ describe('ExecutionCompare', () => {
     expect(screen.getAllByText('binance 2')).toHaveLength(2);
     await user.click(screen.getByRole('button', { name: /over time|zamana yay/i }));
     expect(onSelect).toHaveBeenCalledWith('spread');
+  });
+
+  it('shows when the rows were calculated and when a newer read is loading', () => {
+    const updatedAt = Date.UTC(2026, 9, 18, 13, 42, 8);
+    const time = formatCompareUpdated(updatedAt);
+    const { rerender } = renderWithTheme(
+      <ExecutionCompare
+        compare={priced}
+        updatedAt={updatedAt}
+        selected="market"
+        minutes={10}
+        slices={2}
+        onSelect={vi.fn()}
+        onMinutes={vi.fn()}
+        onSlices={vi.fn()}
+      />,
+    );
+    const settled = screen.getByRole('status');
+    expect(settled.textContent).toContain(time);
+    expect(settled.textContent).toMatch(/updated|son hesap/i);
+    expect(screen.queryByText(/updating|yenileniyor/i)).not.toBeInTheDocument();
+
+    rerender(
+      <ExecutionCompare
+        compare={priced}
+        refreshing
+        updatedAt={updatedAt}
+        selected="market"
+        minutes={10}
+        slices={2}
+        onSelect={vi.fn()}
+        onMinutes={vi.fn()}
+        onSlices={vi.fn()}
+      />,
+    );
+    const busy = screen.getByRole('status');
+    expect(busy.textContent).toMatch(/updating|yenileniyor/i);
+    expect(busy.textContent).toContain(time);
+    expect(screen.getByText('5%')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: /same size, three ways|aynı boy, üç yol/i })).toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
   });
 
   it('says when a path cannot fill and does not treat that as zero cash', () => {

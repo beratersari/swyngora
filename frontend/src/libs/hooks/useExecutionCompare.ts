@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { useCompareOrderExecutionQuery, type CompareOrderExecutionArg } from '@/libs/api';
 import { executionDraftReady, toExecutionArg } from './executionCompare';
 import { ORDER_PREVIEW_DEBOUNCE_MS, ORDER_PREVIEW_POLL_MS, type OrderPreviewDraft } from './orderPreview';
@@ -36,10 +37,23 @@ export function useExecutionCompare(
     pollingInterval: ready && visible ? ORDER_PREVIEW_POLL_MS : 0,
     refetchOnFocus: true,
   });
-  const compare = ready ? query.currentData : undefined;
+  // currentData is only the result for the request in flight. data keeps the previous
+  // success while that request runs, including a poll and a changed size.
+  const current = ready ? query.currentData : undefined;
+  const compare = current ?? (ready ? query.data : undefined);
+  const updatedAtRef = useRef<number | null>(null);
+  if (!ready) {
+    updatedAtRef.current = null;
+  } else if (current != null && query.fulfilledTimeStamp != null) {
+    updatedAtRef.current = query.fulfilledTimeStamp;
+  }
+  const refreshing = ready && query.isFetching && compare != null;
   return {
     compare,
+    /** No rows yet. A later read keeps the last rows and sets refreshing instead. */
     loading: ready && query.isFetching && compare == null,
+    refreshing,
+    updatedAt: compare != null ? updatedAtRef.current : null,
     failed: ready && query.isError && compare == null,
   };
 }

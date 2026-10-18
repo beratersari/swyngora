@@ -47,6 +47,8 @@ export function PaperTradeForm({
   previewFailed = false,
   execution,
   executionLoading = false,
+  executionRefreshing = false,
+  executionUpdatedAt = null,
   executionFailed = false,
   onDraftChange,
   onSubmit,
@@ -610,6 +612,8 @@ export function PaperTradeForm({
           compare={execution}
           hasSize={quantity != null && quantity > 0}
           loading={executionLoading}
+          refreshing={executionRefreshing}
+          updatedAt={executionUpdatedAt}
           failed={executionFailed}
           selected={selectedStyle}
           minutes={spreadMinutes}

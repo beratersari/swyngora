@@ -3,9 +3,15 @@ import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { formatPrice } from '@/libs/utils/formatPrice';
 import { EXECUTION_STYLES, type ExecutionStyleId } from './constants';
-import { Card, Columns, Line, Panel, Pick, Schedule } from './ExecutionCompare.styles';
+import { Card, Columns, Line, Panel, Pick, Schedule, Status } from './ExecutionCompare.styles';
 import type { ExecutionCompareProps } from './ExecutionCompare.types';
-import { cheapestStyles, formatComparePct, legVenues, unfilledReason } from './helpers';
+import {
+  cheapestStyles,
+  formatComparePct,
+  formatCompareUpdated,
+  legVenues,
+  unfilledReason,
+} from './helpers';
 
 /**
  * Fee and slippage for one size, three ways. Choosing a column does not place the order.
@@ -15,6 +21,8 @@ export function ExecutionCompare({
   compare,
   hasSize = false,
   loading = false,
+  refreshing = false,
+  updatedAt = null,
   failed = false,
   selected,
   minutes,
@@ -27,9 +35,11 @@ export function ExecutionCompare({
   const rows = compare?.rows ?? [];
   const cheap = cheapestStyles(compare?.side, rows);
   const sell = compare?.side === 'sell';
+  const updated = rows.length > 0 ? formatCompareUpdated(updatedAt) : '';
+  const busy = refreshing && rows.length > 0;
 
   return (
-    <Panel role="region" aria-label={t('compare.title')}>
+    <Panel role="region" aria-label={t('compare.title')} aria-busy={loading || busy}>
       <Text variant="caption" color="primary">
         {t('compare.title')}
       </Text>
@@ -37,9 +47,23 @@ export function ExecutionCompare({
         {t('compare.note')}
       </Text>
       {loading && rows.length === 0 ? (
-        <Text variant="caption" color="secondary">
+        <Text variant="caption" color="secondary" role="status">
           {t('compare.pricing')}
         </Text>
+      ) : null}
+      {busy || updated ? (
+        <Status role="status" aria-live="polite">
+          {busy ? (
+            <Text variant="caption" color="primary">
+              {t('compare.updating')}
+            </Text>
+          ) : null}
+          {updated ? (
+            <Text variant="caption" color="secondary">
+              {t('compare.updated', { time: updated })}
+            </Text>
+          ) : null}
+        </Status>
       ) : null}
       {failed && rows.length === 0 ? <Alert type="warning" showIcon message={t('compare.failed')} /> : null}
       {!hasSize && !loading && !failed && rows.length === 0 ? (
@@ -55,7 +79,7 @@ export function ExecutionCompare({
           })}
         </Text>
       ) : null}
-      <Columns>
+      <Columns $busy={busy}>
           {EXECUTION_STYLES.map((style) => {
             const row = rows.find((item) => item.style === style);
             const filled = row?.status === 'filled';

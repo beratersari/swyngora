@@ -133,6 +133,8 @@
     "note": "Bu boy için komisyon ve kayma. Kayma sınırı en düşük maliyet ve zamana yay için geçerlidir. Siz seçene kadar bir şey yazılmaz.",
     "enterSize": "Karşılaştırmak için bir boy girin.",
     "pricing": "Bu boy karşılaştırılıyor…",
+    "updating": "Yenileniyor…",
+    "updated": "Son hesap {{time}}",
     "failed": "Bu boy karşılaştırılamadı.",
     "touch": "En iyi fiyat {{price}}, {{venue}}",
     "lowestBuy": "En az nakit",

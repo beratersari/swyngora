@@ -133,6 +133,8 @@
     "note": "Fee and slippage for this size. A slippage cap applies to best cost and over time. Nothing is placed until you choose.",
     "enterSize": "Enter a size to compare.",
     "pricing": "Comparing this size…",
+    "updating": "Updating…",
+    "updated": "Updated {{time}}",
     "failed": "Could not compare this size.",
     "touch": "Best price {{price}} on {{venue}}",
     "lowestBuy": "Least cash",

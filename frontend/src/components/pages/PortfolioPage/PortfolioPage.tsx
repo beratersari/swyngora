@@ -813,6 +813,8 @@ function SpotOrderTicket({
       previewFailed={priced.failed}
       execution={compared.compare}
       executionLoading={compared.loading}
+      executionRefreshing={compared.refreshing}
+      executionUpdatedAt={compared.updatedAt}
       executionFailed={compared.failed}
       onDraftChange={setDraft}
     />
