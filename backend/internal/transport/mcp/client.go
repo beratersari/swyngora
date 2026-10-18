@@ -2320,6 +2320,26 @@ func parseStressMoveBody(raw string) []map[string]any {
 	return out
 }
 
+func (c *APIClient) GetPortfolioCorrelation(ctx context.Context, clientID, exchange, symbol, side string, notional float64) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	if symbol != "" {
+		q.Set("addSymbol", symbol)
+	}
+	if side != "" {
+		q.Set("addSide", side)
+	}
+	if exchange != "" {
+		q.Set("addExchange", exchange)
+	}
+	if notional > 0 {
+		q.Set("addNotional", strconv.FormatFloat(notional, 'f', -1, 64))
+	}
+	return c.get(ctx, "/api/v1/portfolio/correlation", q)
+}
+
 func (c *APIClient) GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error) {
 	q := url.Values{}
 	q.Set("clientId", clientID)

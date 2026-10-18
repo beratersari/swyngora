@@ -61,13 +61,26 @@ Blocked trades return **403** `forbidden` with a human `message` (e.g. `BTC woul
 | Store | `risk_limits` table in `portfoliostore` |
 | Service | `backend/internal/service/portfolio/risk.go` (`guardNewRisk` on buy / margin open) |
 | HTTP | `backend/internal/transport/http/handler/portfolio_risk.go` |
-| MCP | `get_portfolio_risk_limits`, `set_portfolio_risk_limits`, `clear_portfolio_risk_limits`, `preview_portfolio_order` |
+| MCP | `get_portfolio_risk_limits`, `set_portfolio_risk_limits`, `clear_portfolio_risk_limits`, `get_portfolio_correlation`, `preview_portfolio_order` |
 
 ## Tests
 
 ```bash
 cd backend
 go test ./internal/domain/ ./internal/service/portfolio/ ./internal/transport/http/handler/ -run 'Risk' -count=1
+```
+
+## How the coins move together
+
+`GET /api/v1/portfolio/correlation` reads the open spot and margin coins over the last day of 5-minute percent changes. `together` is the size-weighted average correlation. `pairs` lists each coin pair with the strongest absolute correlation first, whether that link is positive or negative. A pair with no correlation stays last. `swingPct` is the size of a day built from those moves. `apartPct` is the same mix if the coins had moved independently. A short is the opposite of a long, so two coins that rise together can still hedge when one is short. A coin without enough shared minutes is named in `missing` and is not treated as zero. One coin has a swing and no pair.
+
+Optional `addSymbol`, `addSide` (`buy`, `sell`, `long`, or `short`), and `addNotional` return `add` for the book after that extra line. Nothing is placed. The order preview also returns this read as `correlation`, including `add` for the order on the ticket. A failed read leaves `correlation` off the preview and still returns the price.
+
+The portfolio screen shows the open book under the risk limits. The ticket says whether the order raises or lowers the day swing. This read does not block an order.
+
+```bash
+cd backend
+go test ./internal/domain/ ./internal/service/portfolio/ ./internal/transport/http/handler/ -run 'PortfolioCorrelation|BookCorrelation|PreviewOrder_Opposite|PortfolioHTTP_Correlation' -count=1
 ```
 
 ## What-if (not a limit)

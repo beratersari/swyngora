@@ -6614,6 +6614,52 @@ paths:
               schema: { type: object }
         '400':
           $ref: '#/components/responses/Error'
+  /api/v1/portfolio/correlation:
+    get:
+      summary: How open paper coins move together
+      description: |
+        Reads the open spot and margin coins over the last day of 5-minute
+        percent changes. `together` is the size-weighted average correlation,
+        from -1 to +1. `swingPct` is the size of a day built from those moves.
+        `apartPct` is the same mix if the coins had moved independently.
+        A short notional is the opposite of a long. A coin without enough
+        shared minutes is named in `missing` and is not treated as zero.
+        Optional `addSymbol`, `addSide`, and `addNotional` price one extra
+        line in `add` without placing it. Nothing is traded.
+      operationId: getPortfolioCorrelation
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: portfolioId
+          in: query
+          schema: { type: string }
+        - name: addExchange
+          in: query
+          description: Venue for addSymbol. Empty uses binance.
+          schema: { type: string }
+        - name: addSymbol
+          in: query
+          description: Pair to add, such as SOLUSDT.
+          schema: { type: string }
+        - name: addSide
+          in: query
+          description: buy, sell, long, or short. Empty means buy.
+          schema: { type: string }
+        - name: addNotional
+          in: query
+          description: Absolute quote notional of the extra line.
+          schema: { type: number }
+      responses:
+        '200':
+          description: Open-book correlation, and the book after the extra line when asked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioCorrelation'
+        '400':
+          $ref: '#/components/responses/Error'
   /api/v1/portfolio/risk-limits:
     get:
       summary: Get paper risk limits and live status
@@ -14815,6 +14861,72 @@ components:
         stopBeyondLiquidation:
           type: boolean
           description: True when a margin stop is at or past liquidation, so the stop would not be the exit.
+    PortfolioCorrHolding:
+      type: object
+      required: [asset, notional, side]
+      properties:
+        asset: { type: string }
+        notional: { type: number, description: Signed quote notional. Positive is long. }
+        side: { type: string, enum: [long, short] }
+    PortfolioCorrPair:
+      type: object
+      required: [left, right, samples, complete]
+      properties:
+        left: { type: string }
+        right: { type: string }
+        corr:
+          type: number
+          description: Pearson correlation of 5-minute percent returns. Omitted when the pair is not complete.
+        relation:
+          type: string
+          enum: [follows, loose, mixed, inverse]
+        samples: { type: integer }
+        complete: { type: boolean }
+    PortfolioCorrAdd:
+      type: object
+      required: [asset, notional, side, samples, complete]
+      properties:
+        asset: { type: string }
+        notional: { type: number, description: Signed quote notional of the extra line. }
+        side: { type: string, enum: [long, short] }
+        together: { type: number }
+        swingPct: { type: number }
+        apartPct: { type: number }
+        samples: { type: integer }
+        complete:
+          type: boolean
+          description: False when the extra coin does not share enough minutes. The swing is then omitted.
+    PortfolioCorrelation:
+      type: object
+      required: [window, interval, gross, holdings, pairs, samples, missing, note]
+      properties:
+        window: { type: string, example: 24h }
+        interval: { type: string, example: 5m }
+        gross: { type: number, description: Sum of absolute notionals. }
+        holdings:
+          type: array
+          items: { $ref: '#/components/schemas/PortfolioCorrHolding' }
+        pairs:
+          type: array
+          description: Strongest absolute correlation first. A pair with no correlation is last.
+          items: { $ref: '#/components/schemas/PortfolioCorrPair' }
+        together:
+          type: number
+          description: Size-weighted average pairwise correlation. Omitted when fewer than two coins share the window.
+        swingPct:
+          type: number
+          description: Day-sized swing of this mix, from the 5-minute moves. Omitted when the window is too short.
+        apartPct:
+          type: number
+          description: The same scale if correlations were zero.
+        samples: { type: integer }
+        missing:
+          type: array
+          items: { type: string }
+          description: Coins left out because they do not share enough minutes. Not zeros.
+        note: { type: string }
+        add:
+          $ref: '#/components/schemas/PortfolioCorrAdd'
     OrderPreview:
       type: object
       properties:
@@ -14881,6 +14993,12 @@ components:
         borrowedAsset: { type: string }
         risk:
           $ref: '#/components/schemas/OrderPreviewRisk'
+        correlation:
+          $ref: '#/components/schemas/PortfolioCorrelation'
+          description: |
+            How the open coins moved together, and how this order's notional
+            would change the day swing (`add`). Omitted when that read failed.
+            The price is still returned.
         sizing:
           $ref: '#/components/schemas/OrderPreviewSizing'
         legs:

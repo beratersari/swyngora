@@ -183,12 +183,14 @@ func (s *Service) finishPreview(ctx context.Context, bookID string, out *domain.
 	}
 	if !previewStoresReason(out) {
 		out.SituationStatus = domain.SituationPreviewSkipped
+		s.attachBookCorrelation(ctx, bookID, out)
 		return out, nil
 	}
 	sit, failed := s.readSituation(ctx, out.Exchange, out.Symbol)
 	if failed {
 		out.SituationStatus = domain.SituationPreviewFailed
 		stampPreviewReason(out, sit, reason)
+		s.attachBookCorrelation(ctx, bookID, out)
 		return out, nil
 	}
 	if len(domain.SituationClauseNames(sit)) == 0 {
@@ -201,6 +203,7 @@ func (s *Service) finishPreview(ctx context.Context, bookID string, out *domain.
 	if out.SituationStatus == domain.SituationPreviewReady {
 		s.attachReasonHistory(ctx, bookID, out)
 	}
+	s.attachBookCorrelation(ctx, bookID, out)
 	return out, nil
 }
 

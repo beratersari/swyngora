@@ -43,6 +43,27 @@
     "margin": "Marj özkaynağı {{now}} → {{next}}",
     "liquidated": "{{n}} marj pozisyonu likide olur"
   },
+  "correlation": {
+    "title": "Bu coinler birlikte mi hareket ediyor",
+    "hint": "Son günün 5 dakikalık hareketleri. Çiftler en güçlü bağdan başlar, yukarı ya da aşağı. Salınım, bu karışım için o hareketlerden bir günün büyüklüğüdür. Ayrı olsaydı, coinler bağımsız hareket etseydi aynı karışımdır. Short, longun tersidir. Yeterli ortak dakikası olmayan coin dışarıda kalır.",
+    "loading": "Son gün okunuyor…",
+    "failed": "Korelasyon okunamadı.",
+    "empty": "Karşılaştırılacak açık coin yok.",
+    "incomplete": "Defteri ölçmek için yeterli ortak dakika yok.",
+    "one": "{{asset}} tek açık coin. Günlük salınımı %{{swing}}. Riski yayacak ikinci coin yok.",
+    "together": "Bu coinler birlikte hareket etti ({{corr}}). Günün salınımı %{{swing}}. Bağımsız hareket etselerdi %{{apart}} olurdu. Farklı coinler bu riski yaymıyor.",
+    "hedge": "Bu coinler birlikte hareket etti ({{corr}}). Shortlar longları dengeliyor, bu yüzden gün salınımı %{{apart}} değil %{{swing}}.",
+    "inverse": "Bu coinler ters yönlerde hareket etti ({{corr}}). Günün salınımı %{{swing}}.",
+    "mixed": "Bu coinler tek bir hareket gibi gitmedi ({{corr}}). Günün salınımı %{{swing}}. Bağımsız olsaydı %{{apart}} olurdu.",
+    "pair": "{{left}} ve {{right}}: {{corr}} ({{relation}})",
+    "missing": "Dışarıda, yeterli ortak dakika yok: {{names}}.",
+    "relation": {
+      "follows": "birlikte",
+      "loose": "gevşek birlikte",
+      "mixed": "karışık",
+      "inverse": "ters"
+    }
+  },
   "risk": {
     "title": "Toplam risk",
     "hint": "Tüm coinler birlikte özkaynağın bu payını geçince yeni alışlar durur. Açık pozisyonlar kapanmaz.",
@@ -137,6 +158,11 @@
     "leverage": "{{lev}}x",
     "weight": "{{asset}} defterin {{pct}} kadarı olurdu",
     "exposure": "Coinler birlikte defterin {{pct}} kadarı olurdu",
+    "corrUp": "Bu emir gün salınımını {{before}} iken {{after}} yapar.",
+    "corrDown": "Bu emir gün salınımını {{before}} iken {{after}} indirir.",
+    "corrSame": "Bu emir gün salınımını {{before}} civarında bırakır.",
+    "corrFirst": "Bu tek açık coin olurdu. Gün salınımı {{after}} olurdu.",
+    "corrUnknown": "Bu coin defterle yeterli ortak dakikayı paylaşmıyor, bu yüzden salınımdaki değişim gösterilmiyor.",
     "legTakeProfit": "Kâr al",
     "legStopLoss": "Zarar kes",
     "riskBudget": "Risk bütçesi",

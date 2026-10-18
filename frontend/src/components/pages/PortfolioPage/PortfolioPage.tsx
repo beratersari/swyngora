@@ -17,6 +17,7 @@ import {
 import { PortfolioBookSelect } from '@/components/organisms/PortfolioBookSelect';
 import { PortfolioCashPanel } from '@/components/organisms/PortfolioCashPanel';
 import { PortfolioEquityChart } from '@/components/organisms/PortfolioEquityChart';
+import { PortfolioCorrelation } from '@/components/organisms/PortfolioCorrelation';
 import { PortfolioRiskLimits } from '@/components/organisms/PortfolioRiskLimits';
 import { PortfolioMarginPositionsTable } from '@/components/organisms/PortfolioMarginPositionsTable';
 import { PortfolioOrdersTable } from '@/components/organisms/PortfolioOrdersTable';
@@ -480,6 +481,7 @@ export function PortfolioPage() {
           <Section>
             <PanelCard>
               <PortfolioRiskLimits portfolioId={bookId} disabled={needBook} />
+              <PortfolioCorrelation portfolioId={bookId} disabled={needBook} />
             </PanelCard>
           </Section>
 
