@@ -48,7 +48,11 @@ export type PlacePortfolioOrderArg = {
   quantity: number;
   triggerPrice?: number;
   takeProfitPrice?: number;
+  /** Scale-out slices. The percents sum to 100. */
+  takeProfitTargets?: { percent: number; price?: number; offsetPercent?: number }[];
   stopLossPrice?: number;
+  /** Raise the stop to the buy price after the nearest take-profit fills. */
+  moveStopToEntry?: boolean;
   trailType?: 'percent' | 'offset';
   trailValue?: number;
   lotMethod?: 'fifo' | 'lifo';
@@ -76,6 +80,7 @@ export type PlacePortfolioOrderResponse = {
   order?: PendingOrder | SpreadOrder;
   entry?: PendingOrder;
   takeProfit?: PendingOrder;
+  takeProfits?: PendingOrder[];
   stopLoss?: PendingOrder;
   ocoGroupId?: string;
   bracketId?: string;
@@ -117,7 +122,11 @@ export type PreviewPortfolioOrderArg = {
   riskPercent?: number;
   triggerPrice?: number;
   takeProfitPrice?: number;
+  /** Scale-out slices. The percents sum to 100. */
+  takeProfitTargets?: { percent: number; price?: number; offsetPercent?: number }[];
   stopLossPrice?: number;
+  /** Raise the stop to the buy price after the nearest take-profit fills. */
+  moveStopToEntry?: boolean;
   trailType?: 'percent' | 'offset';
   trailValue?: number;
   lotMethod?: 'fifo' | 'lifo';
@@ -396,7 +405,9 @@ export const portfolioApi = baseApi.injectEndpoints({
           quantity: body.quantity,
           triggerPrice: body.triggerPrice,
           takeProfitPrice: body.takeProfitPrice,
+          ...(body.takeProfitTargets ? { takeProfitTargets: body.takeProfitTargets } : {}),
           stopLossPrice: body.stopLossPrice,
+          ...(body.moveStopToEntry ? { moveStopToEntry: true } : {}),
           trailType: body.trailType,
           trailValue: body.trailValue,
           lotMethod: body.lotMethod,
@@ -428,7 +439,9 @@ export const portfolioApi = baseApi.injectEndpoints({
           riskPercent: body.riskPercent,
           triggerPrice: body.triggerPrice,
           takeProfitPrice: body.takeProfitPrice,
+          ...(body.takeProfitTargets ? { takeProfitTargets: body.takeProfitTargets } : {}),
           stopLossPrice: body.stopLossPrice,
+          ...(body.moveStopToEntry ? { moveStopToEntry: true } : {}),
           trailType: body.trailType,
           trailValue: body.trailValue,
           lotMethod: body.lotMethod,

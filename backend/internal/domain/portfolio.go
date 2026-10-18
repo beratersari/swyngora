@@ -181,7 +181,8 @@ const (
 // PendingOrder is a limit or stop order waiting for a price condition.
 // Buy orders reserve cash (quantity * triggerPrice for remaining size).
 // Sell orders reserve position quantity so it cannot be spent by other orders.
-// OCO pairs (take-profit limit_sell + stop_loss) share one reserved size via OCOGroupID.
+// OCO groups (one or more take-profit limit sells + one stop) share one reserved size via OCOGroupID.
+// The stop quantity is the coins still held.
 type PendingOrder struct {
 	ID                string
 	ClientID          string
@@ -217,7 +218,15 @@ type PendingOrder struct {
 	// BracketID links entry + take-profit + stop-loss of a bracket order.
 	BracketID string
 	// BracketRole is entry | take_profit | stop_loss when BracketID is set.
-	BracketRole  string
+	BracketRole string
+	// TargetPercent is this take-profit's share of the order (25 means 25%).
+	// Zero on a single legacy target means the whole size. The stop leaves it zero.
+	TargetPercent float64
+	// MoveStopToEntry raises the stop to EntryPrice when the nearest take-profit fills.
+	MoveStopToEntry bool
+	// EntryPrice is that buy price. An OCO stores the average cost at placement.
+	// A bracket stores the average fill price of the entry as it fills.
+	EntryPrice   float64
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	FilledAt     *time.Time
@@ -428,6 +437,8 @@ type PortfolioPort interface {
 	CreatePendingOrder(ctx context.Context, o PendingOrder) (*PendingOrder, error)
 	// CreateOCOPair inserts take-profit + stop-loss legs in one transaction (shared size reservation).
 	CreateOCOPair(ctx context.Context, takeProfit, stopLoss PendingOrder) (tp, sl *PendingOrder, err error)
+	// CreatePendingOrders inserts every leg of an OCO or bracket in one transaction.
+	CreatePendingOrders(ctx context.Context, orders []PendingOrder) ([]PendingOrder, error)
 	// CreateBracket inserts entry (open) + take-profit/stop-loss (pending) in one transaction.
 	// Exit legs activate and size as entry fills.
 	CreateBracket(ctx context.Context, entry, takeProfit, stopLoss PendingOrder) (ent, tp, sl *PendingOrder, err error)
@@ -468,9 +479,10 @@ type PortfolioPort interface {
 	// Updates remaining/reserved, inserts trade, marks filled only when remaining is zero.
 	// Returns ErrNotFound if not open.
 	ExecutePendingFill(ctx context.Context, order *PendingOrder, p *Portfolio, pos *Position, t Trade, at time.Time, lots *LotOps) error
-	// ExecuteOCOFill fills one OCO leg and, in the same transaction, either reduces the peer's
-	// remaining size to match or cancels the peer when this leg is fully filled.
-	// Guarantees a single cash/position update for the fill (no double apply).
+	// ExecuteOCOFill fills one OCO leg and, in the same transaction, updates the rest of the group.
+	// A take-profit fill reduces the stop to the coins still held. A full stop fill cancels the
+	// remaining targets. A partial stop fill shrinks those targets so they cannot sell more than
+	// what is left. Guarantees a single cash/position update for the fill (no double apply).
 	ExecuteOCOFill(ctx context.Context, filled *PendingOrder, peer *PendingOrder, p *Portfolio, pos *Position, t Trade, at time.Time, lots *LotOps) error
 	// CancelOCOGroup cancels both open legs of an OCO (or the remaining open leg) and releases reservation.
 	CancelOCOGroup(ctx context.Context, clientID, groupID string, at time.Time, reason string) error

@@ -51,6 +51,10 @@ func OrderPreviewPayload(p *domain.OrderPreview) map[string]any {
 		"legs":                 legs,
 		"note":                 p.Note,
 	}
+	if p.MoveStopToEntry {
+		out["moveStopToEntry"] = true
+		out["moveStopPrice"] = p.MoveStopPrice
+	}
 	if p.Sizing != nil {
 		out["sizing"] = previewSizingPayload(*p.Sizing)
 	}
@@ -171,6 +175,15 @@ func previewLegPayload(leg domain.OrderPreviewLeg) map[string]any {
 		"fee":            leg.Fee,
 		"cashDebit":      leg.CashDebit,
 		"cashCredit":     leg.CashCredit,
+	}
+	if leg.Quantity > 0 {
+		out["quantity"] = leg.Quantity
+	}
+	if leg.Percent > 0 {
+		out["percent"] = leg.Percent
+	}
+	if leg.OffsetPercent > 0 {
+		out["offsetPercent"] = leg.OffsetPercent
 	}
 	if leg.EstimatedRealizedPnL != nil {
 		out["estimatedRealizedPnl"] = *leg.EstimatedRealizedPnL

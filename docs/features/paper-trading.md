@@ -197,8 +197,8 @@ See `docs/features/paper-margin.md`. Modes: `isolated` (default) vs `cross`; mod
 | `limit_sell` | `quantity`, `triggerPrice` | last ≥ trigger | sell | Reserves `quantity` of position |
 | `stop_loss` | `quantity`, `triggerPrice` | last ≤ trigger | sell | Reserves `quantity` of position |
 | `trailing_stop` | `quantity`, `trailType`, `trailValue` | last ≤ ratcheted stop | sell | Reserves `quantity` of position |
-| `oco` | `quantity`, `takeProfitPrice`, `stopLossPrice` | TP: last ≥ TP; SL: last ≤ SL | sell + sell | Reserves **once** for the pair |
-| `bracket` | `quantity`, `triggerPrice` (entry), `takeProfitPrice`, `stopLossPrice` | Entry limit_buy; exits as OCO after fill | buy + sell pair | Entry reserves cash; exits reserve position only when active |
+| `oco` | `quantity`, `stopLossPrice`, and `takeProfitPrice` or `takeProfitTargets` | Each target: last ≥ its limit; stop: last ≤ stop | sell | Reserves **once** for the whole size |
+| `bracket` | `quantity`, `triggerPrice` (entry), `stopLossPrice`, and `takeProfitPrice` or `takeProfitTargets` | Entry limit_buy; exits after the fill | buy + sells | Entry reserves cash; exits reserve position only when active |
 
 ### Order preview (`POST /api/v1/portfolio/orders/preview`)
 
@@ -246,12 +246,14 @@ Place take-profit and stop-loss **with** a limit-buy entry. Exit legs start as `
 
 | Rule | Behavior |
 |------|----------|
-| Place | Entry `open` limit_buy; TP + SL `pending` with size 0, linked by `bracketId` |
-| Partial entry fill | Exit legs activate for **filled amount only**; size grows as more entry fills |
-| Full entry fill | Exits open for full quantity |
-| Exit fill | TP/SL are OCO: full fill cancels peer; partial reduces peer remaining — no double sell of the same qty |
+| Place | Entry `open` limit_buy; each take-profit and the stop `pending` with size 0, linked by `bracketId` |
+| Partial entry fill | Each target opens for its percent of the **filled** size. The stop opens for that whole fill |
+| Later entry fill | Targets grow by their percent of the new coins. A target that already filled its earlier share reopens for the rest |
+| Target fill | The stop quantity becomes the coins still held. Other targets stay |
+| Move stop to the buy price | Optional `moveStopToEntry`. After the nearest target fills completely, the stop rises to the average entry fill. It never moves down and stays below the next open target |
+| Stop fill | A full stop cancels the remaining targets. A partial stop shrinks them so they cannot sell more than what is left |
 | Cancel entry | Cancels pending/open exits (`bracket_entry_canceled`) |
-| Prices | `takeProfitPrice` > `triggerPrice` (entry) > `stopLossPrice` |
+| Prices | Each target is above the entry, and the entry is above `stopLossPrice` |
 
 ### Trailing stop
 
@@ -272,15 +274,27 @@ Sell stop that follows price higher and never moves back down.
 
 ### OCO (one-cancels-the-other)
 
-Linked **take-profit** (`limit_sell` at `takeProfitPrice`) and **stop-loss** (`stop_loss` at `stopLossPrice`) for the **same quantity**.
+One or more **take-profit** limit sells and one **stop-loss** for the same coins. `takeProfitPrice` is one target for the whole size. `takeProfitTargets` is a scale-out:
+
+```json
+"takeProfitTargets": [
+  { "percent": 25, "offsetPercent": 5 },
+  { "percent": 25, "offsetPercent": 10 },
+  { "percent": 50, "offsetPercent": 15 }
+]
+```
+
+`percent` is the share of the quantity. The shares sum to 100. `offsetPercent` of 5 is a limit 5% above the average cost (or the last price when that cost is missing). `price` is an absolute limit instead of a gain. A bracket uses the same list, and the gain is above the entry limit.
 
 | Rule | Behavior |
 |------|----------|
-| Place | Both legs open with shared `ocoGroupId` / `ocoPeerId`; position size reserved **once** (not 2×) |
-| Full fill | Filling leg → `filled`; peer → `canceled` with `cancelReason=oco_peer_filled` |
-| Partial fill | Filling leg reduces remaining; peer remaining (and reserved size) **matches** the same remaining qty — one cash/position update only |
-| Same tick | If both levels are crossed in one price update, **only stop-loss fills** (peer TP canceled if full); balance/asset never change twice |
-| User cancel | Canceling one open leg cancels the peer (`oco_group_canceled`) |
+| Place | Every target and the stop are open with one `ocoGroupId`. The position is reserved **once** (the stop size, not the sum of the legs) |
+| Target fill | That slice sells. The stop quantity becomes the coins still held. The other targets stay |
+| Move stop to the buy price | Optional `moveStopToEntry`. After the nearest target fills completely, the stop trigger rises to the buy price. An OCO uses the average cost at placement. A bracket uses the average entry fill. The preview shows the entry limit for a bracket. The stop never moves down, and it stays below the next open target. A later entry fill can change the stored average without moving the stop again. A partial fill of the nearest target does not move it. A later target does not move it when a nearer target was canceled. If that nearest target is the whole size, the stop is canceled with the fill and the option does nothing. The buy price must sit strictly between the stop and the first target, or place and preview are rejected |
+| Full stop fill | Stop → `filled`. Every open target → `canceled` with `cancelReason=oco_peer_filled` |
+| Partial stop fill | The open targets shrink in proportion. The furthest target absorbs the rounding, so they cannot sell more than what is left |
+| Same tick | If the stop and a target are both touched, **only the stop fills**. Several targets the price has already reached fill together, nearest first |
+| User cancel | Canceling the stop, or the last target, cancels the rest of the group. Canceling one target while others remain leaves the stop on the coins still held |
 
 Optional pending fields:
 - `timeInForce`: `gtc` (default), `ioc`, or `fok` (single-leg pending; OCO is GTC)
@@ -353,7 +367,7 @@ Releases unused cash/position reservations in one store transaction. `canceled: 
 
 | Surface | Notes |
 |---------|--------|
-| `/portfolio` spot ticket | Market, limit, stop, trailing stop, OCO, bracket; TIF GTC/IOC/FOK; lot FIFO/LIFO on sells. The ticket shows fee, cash, and risk before the order is placed. A buy or a bracket can take a risk % and a stop; the preview fills the quantity |
+| `/portfolio` spot ticket | Market, limit, stop, trailing stop, OCO, bracket; TIF GTC/IOC/FOK; lot FIFO/LIFO on sells. OCO and bracket targets are size % and gain % (for example 25% at +5%, 25% at +10%, 50% at +15%). The preview lists each target and the stop. The ticket shows fee, cash, and risk before the order is placed. A buy or a bracket can take a risk % and a stop; the preview fills the quantity |
 | Open orders table | Cancel + **amend** (standalone GTC limit/stop: trigger and remaining qty) |
 | `/portfolio` margin ticket | Isolated/cross mode, long/short 1–10x, market or limit, optional SL/TP. Same preview: margin, liquidation, borrow cap. A risk % and a stop size the open |
 | Margin positions tab | Mark, liq, debt, uPnL, stop, take profit, full or partial market close. Edit or remove the stop and take profit on an open position |

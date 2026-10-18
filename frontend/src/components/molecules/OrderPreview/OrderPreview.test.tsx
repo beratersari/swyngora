@@ -152,6 +152,68 @@ describe('OrderPreview', () => {
     expect(screen.getByText(/inside the slippage limit|kayma limiti içinde/i)).toBeInTheDocument();
   });
 
+  it('lists each take-profit share and the stop that shrinks', () => {
+    renderWithTheme(
+      <OrderPreview
+        preview={{
+          ...blockedBuy,
+          type: 'oco',
+          side: 'sell',
+          quantity: 1,
+          risk: { ...blockedBuy.risk, blocked: false, weightLimitHit: false },
+          legs: [
+            {
+              role: 'take_profit',
+              side: 'sell',
+              referencePrice: 105,
+              fillPrice: 105,
+              quantity: 0.25,
+              percent: 25,
+              offsetPercent: 5,
+            },
+            {
+              role: 'take_profit',
+              side: 'sell',
+              referencePrice: 115,
+              fillPrice: 115,
+              quantity: 0.5,
+              percent: 50,
+              offsetPercent: 15,
+            },
+            { role: 'stop_loss', side: 'sell', referencePrice: 90, fillPrice: 90, quantity: 1, percent: 100 },
+          ],
+        }}
+      />,
+    );
+    const legs = screen.getAllByTestId('preview-leg');
+    expect(legs[0]).toHaveTextContent(/25/);
+    expect(legs[0]).toHaveTextContent(/5/);
+    expect(legs[1]).toHaveTextContent(/50/);
+    expect(legs[2]).toHaveTextContent(/90/);
+    expect(screen.getByTestId('preview-stop-shrinks')).toBeInTheDocument();
+  });
+
+  it('says the stop moves to the buy price after the first target', () => {
+    renderWithTheme(
+      <OrderPreview
+        preview={{
+          ...blockedBuy,
+          type: 'oco',
+          side: 'sell',
+          quantity: 1,
+          risk: { ...blockedBuy.risk, blocked: false, weightLimitHit: false },
+          moveStopToEntry: true,
+          moveStopPrice: 100,
+          legs: [
+            { role: 'take_profit', side: 'sell', referencePrice: 110, fillPrice: 110, quantity: 1, percent: 100 },
+            { role: 'stop_loss', side: 'sell', referencePrice: 90, fillPrice: 90, quantity: 1, percent: 100 },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByTestId('preview-move-stop')).toHaveTextContent(/100/);
+  });
+
   it('says nothing was placed', () => {
     renderWithTheme(<OrderPreview preview={blockedBuy} />);
     expect(screen.getByText(/preview only|yalnızca önizleme/i)).toBeInTheDocument();

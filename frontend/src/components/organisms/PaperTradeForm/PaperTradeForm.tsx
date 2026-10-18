@@ -10,7 +10,9 @@ import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
 import { rtkErrorMessage } from '@/libs/api';
 import { sizedQuantity } from '@/libs/hooks/orderPreview';
 import { Actions, Field, FieldRow, FormStack } from './PaperTradeForm.styles';
+import { TakeProfitTargets } from './TakeProfitTargets';
 import type { PaperTradeFormProps, PaperTradeFormValues } from './PaperTradeForm.types';
+import { targetWire, targetsComplete, type TargetRow } from './targets';
 import {
   canSizeByRisk,
   needsSide,
@@ -61,8 +63,11 @@ export function PaperTradeForm({
   const [kind, setKind] = useState<SpotOrderKind>('market');
   const [quantity, setQuantity] = useState<number | null>(null);
   const [triggerPrice, setTriggerPrice] = useState<number | null>(null);
-  const [takeProfitPrice, setTakeProfitPrice] = useState<number | null>(null);
+  const [targets, setTargets] = useState<TargetRow[]>([
+    { percent: 100, offsetPercent: null, price: null },
+  ]);
   const [stopLossPrice, setStopLossPrice] = useState<number | null>(null);
+  const [moveStopToEntry, setMoveStopToEntry] = useState(false);
   const [riskPercent, setRiskPercent] = useState<number | null>(null);
   const [trailType, setTrailType] = useState<'percent' | 'offset'>('percent');
   const [trailValue, setTrailValue] = useState<number | null>(null);
@@ -141,6 +146,7 @@ export function PaperTradeForm({
   const minutes = spreadMinutes != null && spreadMinutes >= 1 ? Math.round(spreadMinutes) : 10;
   const slices = sliceCount != null && sliceCount >= 2 ? Math.round(sliceCount) : 10;
   const wireExchange = routing ? 'all' : exchange;
+  const profit = useMemo(() => targetWire(showTpSl ? targets : []), [showTpSl, targets]);
   const canSize = canSizeByRisk(kind, side) && !routing;
   const selectedStyle: ExecutionStyleId = !routing ? 'market' : pacing ? 'spread' : 'best_cost';
   const chooseStyle = (style: ExecutionStyleId) => {
@@ -179,8 +185,10 @@ export function PaperTradeForm({
       side,
       quantity: quantity ?? 0,
       triggerPrice: showTrigger && triggerPrice != null ? triggerPrice : undefined,
-      takeProfitPrice: showTpSl && takeProfitPrice != null ? takeProfitPrice : undefined,
+      takeProfitPrice: showTpSl ? profit.takeProfitPrice : undefined,
+      takeProfitTargets: showTpSl ? profit.takeProfitTargets : undefined,
       stopLossPrice: (showTpSl || riskActive) && stopLossPrice != null ? stopLossPrice : undefined,
+      moveStopToEntry: showTpSl && moveStopToEntry ? true : undefined,
       riskPercent: riskActive ? (riskPercent ?? undefined) : undefined,
       trailType: showTrail ? trailType : undefined,
       trailValue: showTrail && trailValue != null ? trailValue : undefined,
@@ -202,8 +210,9 @@ export function PaperTradeForm({
     side,
     quantity,
     triggerPrice,
-    takeProfitPrice,
+    profit,
     stopLossPrice,
+    moveStopToEntry,
     trailType,
     trailValue,
     lotMethod,
@@ -223,6 +232,14 @@ export function PaperTradeForm({
       setLocalError(t('portfolio:trade.validation.quantity'));
       return;
     }
+    if (showTpSl && !targetsComplete(targets)) {
+      setLocalError(t('portfolio:trade.validation.targets'));
+      return;
+    }
+    if (showTpSl && !(stopLossPrice != null && stopLossPrice > 0)) {
+      setLocalError(t('portfolio:trade.validation.stopLossPrice'));
+      return;
+    }
     const sym = symbol.trim().toUpperCase();
     const orderType = toApiOrderType(kind, s);
     const values: PaperTradeFormValues = {
@@ -236,8 +253,10 @@ export function PaperTradeForm({
       side: s,
       quantity: quantity ?? 0,
       triggerPrice: showTrigger ? (triggerPrice ?? undefined) : undefined,
-      takeProfitPrice: showTpSl ? (takeProfitPrice ?? undefined) : undefined,
+      takeProfitPrice: showTpSl ? profit.takeProfitPrice : undefined,
+      takeProfitTargets: showTpSl ? profit.takeProfitTargets : undefined,
       stopLossPrice: showTpSl ? (stopLossPrice ?? undefined) : undefined,
+      moveStopToEntry: showTpSl && moveStopToEntry ? true : undefined,
       trailType: showTrail ? trailType : undefined,
       trailValue: showTrail ? (trailValue ?? undefined) : undefined,
       lotMethod:
@@ -257,8 +276,9 @@ export function PaperTradeForm({
       setRiskPercent(null);
       if (showTrigger) setTriggerPrice(null);
       if (showTpSl) {
-        setTakeProfitPrice(null);
+        setTargets([{ percent: 100, offsetPercent: null, price: null }]);
         setStopLossPrice(null);
+        setMoveStopToEntry(false);
       }
       if (showTrail) setTrailValue(null);
     } catch {
@@ -459,18 +479,12 @@ export function PaperTradeForm({
 
         {showTpSl ? (
           <>
-            <Field>
-              <Text variant="caption" color="secondary">
-                {t('portfolio:trade.takeProfit')}
-              </Text>
-              <InputNumber
-                min={0}
-                step={0.01}
-                value={takeProfitPrice}
-                onChange={(v) => setTakeProfitPrice(typeof v === 'number' ? v : null)}
-                style={{ minWidth: 120 }}
-              />
-            </Field>
+            <Text variant="caption" color="secondary">
+              {kind === 'bracket'
+                ? t('portfolio:trade.targetsHintBracket')
+                : t('portfolio:trade.targetsHintOco')}
+            </Text>
+            <TakeProfitTargets rows={targets} onChange={setTargets} disabled={disabled || busy} />
             <Field>
               <Text variant="caption" color="secondary">
                 {t('portfolio:trade.stopLoss')}
@@ -481,8 +495,17 @@ export function PaperTradeForm({
                 value={stopLossPrice}
                 onChange={(v) => setStopLossPrice(typeof v === 'number' ? v : null)}
                 style={{ minWidth: 120 }}
+                aria-label={t('portfolio:trade.stopLoss')}
               />
             </Field>
+            <Checkbox
+              checked={moveStopToEntry}
+              disabled={disabled || busy}
+              data-testid="move-stop-to-entry"
+              onChange={(event) => setMoveStopToEntry(event.target.checked)}
+            >
+              {t('portfolio:trade.moveStopToEntry')}
+            </Checkbox>
           </>
         ) : null}
 

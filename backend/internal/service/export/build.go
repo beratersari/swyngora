@@ -478,7 +478,8 @@ func buildCSV(pl *payload) ([]byte, error) {
 					b.ID, o.ID, o.Exchange, o.Symbol, o.Type, o.Side, f64(o.Quantity), f64(o.FilledQuantity),
 					f64(o.RemainingQuantity), f64(o.TriggerPrice), f64(o.ReservedCash), f64(o.ReservedQuantity),
 					o.TimeInForce, derefStr(o.ExpiresAt), o.Status, o.OCOGroupID, o.OCOPeerID, o.TrailType,
-					f64(o.TrailValue), f64(o.TrailPeak), o.BracketID, o.BracketRole, o.LotMethod, o.CreatedAt, o.UpdatedAt,
+					f64(o.TrailValue), f64(o.TrailPeak), o.BracketID, o.BracketRole, f64(o.TargetPercent), o.LotMethod, o.CreatedAt, o.UpdatedAt,
+					boolCSV(o.MoveStopToEntry), f64(o.EntryPrice),
 				})
 			}
 			for _, l := range b.Lots {
@@ -579,7 +580,8 @@ func buildCSV(pl *payload) ([]byte, error) {
 		_ = writeSection("portfolio_orders", []string{
 			"portfolioId", "id", "exchange", "symbol", "type", "side", "quantity", "filledQuantity", "remainingQuantity",
 			"triggerPrice", "reservedCash", "reservedQuantity", "timeInForce", "expiresAt", "status", "ocoGroupId", "ocoPeerId",
-			"trailType", "trailValue", "trailPeak", "bracketId", "bracketRole", "lotMethod", "createdAt", "updatedAt",
+			"trailType", "trailValue", "trailPeak", "bracketId", "bracketRole", "targetPercent", "lotMethod", "createdAt", "updatedAt",
+			"moveStopToEntry", "entryPrice",
 		}, orderRows)
 		_ = writeSection("portfolio_lots", []string{
 			"portfolioId", "id", "exchange", "symbol", "quantity", "originalQuantity", "price", "openedAt", "sourceTradeId", "closedAt",

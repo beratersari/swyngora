@@ -13,15 +13,16 @@ import (
 )
 
 type idempIDs struct {
-	TradeID      string   `json:"tradeId,omitempty"`
-	TradeIDs     []string `json:"tradeIds,omitempty"`
-	OrderID      string   `json:"orderId,omitempty"`
-	TakeProfitID string   `json:"takeProfitId,omitempty"`
-	StopLossID   string   `json:"stopLossId,omitempty"`
-	EntryID      string   `json:"entryId,omitempty"`
-	PositionID   string   `json:"positionId,omitempty"`
-	OutID        string   `json:"outId,omitempty"`
-	InID         string   `json:"inId,omitempty"`
+	TradeID       string   `json:"tradeId,omitempty"`
+	TradeIDs      []string `json:"tradeIds,omitempty"`
+	OrderID       string   `json:"orderId,omitempty"`
+	TakeProfitID  string   `json:"takeProfitId,omitempty"`
+	TakeProfitIDs []string `json:"takeProfitIds,omitempty"`
+	StopLossID    string   `json:"stopLossId,omitempty"`
+	EntryID       string   `json:"entryId,omitempty"`
+	PositionID    string   `json:"positionId,omitempty"`
+	OutID         string   `json:"outId,omitempty"`
+	InID          string   `json:"inId,omitempty"`
 }
 
 func hashParts(parts ...any) string {
@@ -129,28 +130,47 @@ func (s *Service) replayPending(ctx context.Context, rec *domain.IdempotencyReco
 	return s.store.GetPendingOrder(ctx, rec.ClientID, ids.OrderID)
 }
 
-func (s *Service) replayOCO(ctx context.Context, rec *domain.IdempotencyRecord) (*domain.PendingOrder, *domain.PendingOrder, error) {
+func (s *Service) replayOCO(ctx context.Context, rec *domain.IdempotencyRecord) ([]*domain.PendingOrder, *domain.PendingOrder, error) {
 	ids := parseIdempIDs(rec.ResultJSON)
-	tp, err := s.store.GetPendingOrder(ctx, rec.ClientID, ids.TakeProfitID)
-	if err != nil {
-		return nil, nil, err
+	tpIDs := ids.TakeProfitIDs
+	if len(tpIDs) == 0 && ids.TakeProfitID != "" {
+		tpIDs = []string{ids.TakeProfitID}
+	}
+	tps := make([]*domain.PendingOrder, 0, len(tpIDs))
+	for _, id := range tpIDs {
+		tp, err := s.store.GetPendingOrder(ctx, rec.ClientID, id)
+		if err != nil {
+			return nil, nil, err
+		}
+		tps = append(tps, tp)
+	}
+	if len(tps) == 0 {
+		return nil, nil, domain.ErrNotFound
 	}
 	sl, err := s.store.GetPendingOrder(ctx, rec.ClientID, ids.StopLossID)
-	return tp, sl, err
+	return tps, sl, err
 }
 
-func (s *Service) replayBracket(ctx context.Context, rec *domain.IdempotencyRecord) (*domain.PendingOrder, *domain.PendingOrder, *domain.PendingOrder, error) {
+func (s *Service) replayBracket(ctx context.Context, rec *domain.IdempotencyRecord) (*domain.PendingOrder, []*domain.PendingOrder, *domain.PendingOrder, error) {
 	ids := parseIdempIDs(rec.ResultJSON)
 	entry, err := s.store.GetPendingOrder(ctx, rec.ClientID, ids.EntryID)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	tp, err := s.store.GetPendingOrder(ctx, rec.ClientID, ids.TakeProfitID)
-	if err != nil {
-		return entry, nil, nil, err
+	tpIDs := ids.TakeProfitIDs
+	if len(tpIDs) == 0 && ids.TakeProfitID != "" {
+		tpIDs = []string{ids.TakeProfitID}
+	}
+	tps := make([]*domain.PendingOrder, 0, len(tpIDs))
+	for _, id := range tpIDs {
+		tp, err := s.store.GetPendingOrder(ctx, rec.ClientID, id)
+		if err != nil {
+			return entry, nil, nil, err
+		}
+		tps = append(tps, tp)
 	}
 	sl, err := s.store.GetPendingOrder(ctx, rec.ClientID, ids.StopLossID)
-	return entry, tp, sl, err
+	return entry, tps, sl, err
 }
 
 func (s *Service) replayMarginOpen(ctx context.Context, rec *domain.IdempotencyRecord) (*domain.MarginPosition, *domain.MarginOrder, error) {

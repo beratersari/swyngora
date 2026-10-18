@@ -229,6 +229,30 @@ def test_arch_review_oco_sends_portfolio_id(monkeypatch):
     assert last.url.path == "/api/v1/portfolio/orders"
     body = json.loads(last.content.decode())
     assert body.get("portfolioId") == "book-1", body
+    assert "moveStopToEntry" not in body
+
+
+def test_arch_review_oco_sends_move_stop_to_entry(monkeypatch):
+    transport = _RecordingTransport()
+    tools = _install(monkeypatch, transport)
+    tok = bind_client_id("arch-ai")
+    try:
+        out = tools["place_portfolio_oco_order"].invoke(
+            {
+                "client_id": "arch-ai",
+                "symbol": "BTCUSDT",
+                "quantity": 1,
+                "take_profit_price": 110,
+                "stop_loss_price": 90,
+                "move_stop_to_entry": True,
+            }
+        )
+    finally:
+        reset_bound_client_id(tok)
+
+    assert "ERROR" not in out, out
+    body = json.loads(transport.requests[-1].content.decode())
+    assert body.get("moveStopToEntry") is True, body
 
 
 def test_arch_review_place_margin_http_sends_portfolio_id(monkeypatch):

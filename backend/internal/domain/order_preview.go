@@ -17,6 +17,12 @@ type OrderPreviewLeg struct {
 	CashDebit            float64
 	CashCredit           float64
 	EstimatedRealizedPnL *float64
+	// Quantity is the coin size of this leg. For a stop it is the whole order.
+	Quantity float64
+	// Percent is this take-profit's share of the order. 25 means 25%.
+	Percent float64
+	// OffsetPercent is the gain above the entry or average cost. 5 means +5%.
+	OffsetPercent float64
 }
 
 // OrderPreviewRisk is the risk-limit read for this order.
@@ -81,8 +87,12 @@ type OrderPreview struct {
 	BorrowedAsset       string
 	Risk                OrderPreviewRisk
 	Legs                []OrderPreviewLeg
-	Sizing              *OrderPreviewSizing
-	Note                string
+	// MoveStopToEntry is set when the stop should rise to the buy price after the first target fills.
+	MoveStopToEntry bool
+	// MoveStopPrice is that buy price. A bracket shows the entry limit. The live stop uses the fill.
+	MoveStopPrice float64
+	Sizing        *OrderPreviewSizing
+	Note          string
 	// Situation is the live coin read for a spot buy, limit buy, or bracket.
 	// SituationStatus is ready, blank, failed, or skipped.
 	Situation       *CoinSituation

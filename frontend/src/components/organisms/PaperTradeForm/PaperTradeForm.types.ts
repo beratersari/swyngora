@@ -1,5 +1,5 @@
 import type { ExecutionCompare, MarketExchange, OrderPreview, PaperOrderType } from '@/libs/api';
-import type { SpotOrderPreviewDraft } from '@/libs/hooks/orderPreview';
+import type { SpotOrderPreviewDraft, TakeProfitTargetInput } from '@/libs/hooks/orderPreview';
 
 export type PaperTradeFormValues = {
   exchange: MarketExchange | 'all';
@@ -11,7 +11,10 @@ export type PaperTradeFormValues = {
   quantity: number;
   triggerPrice?: number;
   takeProfitPrice?: number;
+  takeProfitTargets?: TakeProfitTargetInput[];
   stopLossPrice?: number;
+  /** Raise the stop to the buy price after the nearest take-profit fills. */
+  moveStopToEntry?: boolean;
   trailType?: 'percent' | 'offset';
   trailValue?: number;
   lotMethod?: 'fifo' | 'lifo';

@@ -44,10 +44,14 @@ func TestPortfolio_BracketPartialEntrySizesExitsAndOCO(t *testing.T) {
 	if _, err := svc.Create(ctx, CreateInput{ClientID: "br1", StartingBalance: 10000}); err != nil {
 		t.Fatal(err)
 	}
-	entry, tp, sl, err := svc.PlaceBracketOrder(ctx, BracketOrderInput{
+	entry, tps, sl, err := svc.PlaceBracketOrder(ctx, BracketOrderInput{
 		ClientID: "br1", Symbol: "BTCUSDT", Quantity: 2,
 		EntryPrice: 100, TakeProfitPrice: 120, StopLossPrice: 90,
 	})
+	tp := (*domain.PendingOrder)(nil)
+	if len(tps) > 0 {
+		tp = tps[0]
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,10 +112,14 @@ func TestPortfolio_BracketExitsInactiveUntilEntry(t *testing.T) {
 	if _, err := svc.Create(ctx, CreateInput{ClientID: "br2", StartingBalance: 10000}); err != nil {
 		t.Fatal(err)
 	}
-	_, tp, sl, err := svc.PlaceBracketOrder(ctx, BracketOrderInput{
+	_, tps, sl, err := svc.PlaceBracketOrder(ctx, BracketOrderInput{
 		ClientID: "br2", Symbol: "ETHUSDT", Quantity: 1,
 		EntryPrice: 95, TakeProfitPrice: 110, StopLossPrice: 80,
 	})
+	var tp *domain.PendingOrder
+	if len(tps) > 0 {
+		tp = tps[0]
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,10 +254,14 @@ func TestPortfolio_OCOFullFillCancelsPeer(t *testing.T) {
 	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "oco1", Symbol: "BTCUSDT", Side: "buy", Quantity: 1}); err != nil {
 		t.Fatal(err)
 	}
-	tp, sl, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
+	tps, sl, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
 		ClientID: "oco1", Symbol: "BTCUSDT", Quantity: 1,
 		TakeProfitPrice: 120, StopLossPrice: 90,
 	})
+	var tp *domain.PendingOrder
+	if len(tps) > 0 {
+		tp = tps[0]
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,22 +318,22 @@ func TestPortfolio_OCOSameTickOnlyStopFills(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Overlapping triggers so one price can hit both (engine still picks stop only).
-	tp, sl, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
+	_, _, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
 		ClientID: "oco2", Symbol: "ETHUSDT", Quantity: 2,
 		TakeProfitPrice: 100, StopLossPrice: 110, // invalid economically but Validate requires tp>sl
 	})
-	// ValidateOCO requires tp > sl — use normal prices and ProcessOCOPair with price that only hits one,
-	// plus unit test for both. For same-tick both: use internal winner with engineered types via direct fill path.
-	_ = tp
-	_ = sl
+	// Validate requires each take-profit above the stop.
 	if err == nil {
-		// takeProfit must be > stopLoss — expect error
 		t.Fatal("expected validate error for tp < sl")
 	}
-	tp, sl, err = svc.PlaceOCOOrder(ctx, OCOOrderInput{
+	tps, sl, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
 		ClientID: "oco2", Symbol: "ETHUSDT", Quantity: 2,
 		TakeProfitPrice: 120, StopLossPrice: 90,
 	})
+	var tp *domain.PendingOrder
+	if len(tps) > 0 {
+		tp = tps[0]
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -358,10 +370,14 @@ func TestPortfolio_OCOPartialSyncsPeerRemaining(t *testing.T) {
 	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "oco3", Symbol: "BTCUSDT", Side: "buy", Quantity: 2}); err != nil {
 		t.Fatal(err)
 	}
-	tp, sl, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
+	tps, sl, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
 		ClientID: "oco3", Symbol: "BTCUSDT", Quantity: 2,
 		TakeProfitPrice: 120, StopLossPrice: 90,
 	})
+	var tp *domain.PendingOrder
+	if len(tps) > 0 {
+		tp = tps[0]
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1023,9 +1039,13 @@ func TestPortfolio_AmendRejectsOCOAndCanceled(t *testing.T) {
 	if _, _, err := svc.PlaceOrder(ctx, OrderInput{ClientID: "amd-4", Symbol: "BTCUSDT", Side: "buy", Quantity: 1}); err != nil {
 		t.Fatal(err)
 	}
-	tp, _, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
+	tps, _, err := svc.PlaceOCOOrder(ctx, OCOOrderInput{
 		ClientID: "amd-4", Symbol: "BTCUSDT", Quantity: 1, TakeProfitPrice: 120, StopLossPrice: 80,
 	})
+	var tp *domain.PendingOrder
+	if len(tps) > 0 {
+		tp = tps[0]
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1284,6 +1304,7 @@ func TestPaperCosts_RecurringBuyIncludesFee(t *testing.T) {
 		t.Fatalf("run price=%v want slipped %v", runs[0].Price, fill)
 	}
 }
+
 type haltedPx struct {
 	price string
 }

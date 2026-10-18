@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -984,33 +985,41 @@ type PendingOrderInput struct {
 	Reason domain.SituationReason
 }
 
-// OCOOrderInput places a linked take-profit limit_sell + stop_loss for the same quantity.
+// OCOOrderInput places take-profit limit sells plus one stop for the same coins.
+// TakeProfitTargets splits the quantity. An empty list uses TakeProfitPrice for the whole size.
 type OCOOrderInput struct {
-	ClientID        string
-	PortfolioID     string
-	OwnerClientID   string
-	Exchange        string
-	Symbol          string
-	Quantity        float64
-	TakeProfitPrice float64 // limit_sell trigger
-	StopLossPrice   float64 // stop_loss trigger
+	ClientID          string
+	PortfolioID       string
+	OwnerClientID     string
+	Exchange          string
+	Symbol            string
+	Quantity          float64
+	TakeProfitPrice   float64 // single limit when TakeProfitTargets is empty
+	TakeProfitTargets []domain.TakeProfitTarget
+	StopLossPrice     float64 // stop_loss trigger
+	// MoveStopToEntry raises the stop to the average cost after the nearest target fills.
+	MoveStopToEntry bool
 	ExpiresAt       *time.Time
 	LotMethod       string
 	IdempotencyKey  string
 }
 
-// BracketOrderInput places a limit-buy entry with inactive take-profit + stop-loss exits.
-// Exits stay pending until entry fills; exit size tracks cumulative entry filled quantity.
+// BracketOrderInput places a limit-buy entry with inactive take-profit targets and one stop.
+// Exits stay pending until entry fills; each target's size is its share of the filled quantity.
+// The stop covers whatever those targets have not sold.
 type BracketOrderInput struct {
-	ClientID        string
-	PortfolioID     string
-	OwnerClientID   string
-	Exchange        string
-	Symbol          string
-	Quantity        float64
-	EntryPrice      float64 // limit_buy trigger
-	TakeProfitPrice float64
-	StopLossPrice   float64
+	ClientID          string
+	PortfolioID       string
+	OwnerClientID     string
+	Exchange          string
+	Symbol            string
+	Quantity          float64
+	EntryPrice        float64 // limit_buy trigger
+	TakeProfitPrice   float64
+	TakeProfitTargets []domain.TakeProfitTarget
+	StopLossPrice     float64
+	// MoveStopToEntry raises the stop to the average entry fill after the nearest target fills.
+	MoveStopToEntry bool
 	ExpiresAt       *time.Time
 	LotMethod       string
 	IdempotencyKey  string
@@ -1018,9 +1027,10 @@ type BracketOrderInput struct {
 	Reason domain.SituationReason
 }
 
-// PlaceBracketOrder creates entry (open limit_buy) + TP/SL (pending) linked by bracket id.
-// Exit OCO becomes open only for filled entry size; peer cancel prevents double-selling.
-func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (entry, tp, sl *domain.PendingOrder, err error) {
+// PlaceBracketOrder creates entry (open limit_buy) plus take-profit targets and one stop.
+// Exits stay pending until the entry fills. Each target then opens for its share of the
+// filled size, and the stop opens for the coins those targets have not sold.
+func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (entry *domain.PendingOrder, tps []*domain.PendingOrder, sl *domain.PendingOrder, err error) {
 	if s.store == nil {
 		return nil, nil, nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
@@ -1043,7 +1053,17 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 		math.IsNaN(in.Quantity) || math.IsInf(in.Quantity, 0) {
 		return nil, nil, nil, fmt.Errorf("%w: quantity out of range", domain.ErrInvalidArgument)
 	}
-	if err := domain.ValidateBracketPrices(in.EntryPrice, in.TakeProfitPrice, in.StopLossPrice); err != nil {
+	if in.EntryPrice <= 0 || math.IsNaN(in.EntryPrice) || math.IsInf(in.EntryPrice, 0) {
+		return nil, nil, nil, fmt.Errorf("%w: entry triggerPrice must be positive", domain.ErrInvalidArgument)
+	}
+	if in.StopLossPrice >= in.EntryPrice {
+		return nil, nil, nil, fmt.Errorf("%w: stopLossPrice must be below entry price", domain.ErrInvalidArgument)
+	}
+	resolved, err := domain.NormalizeTakeProfitTargets(in.TakeProfitTargets, in.TakeProfitPrice, in.Quantity, in.EntryPrice, in.StopLossPrice, true)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if err := rejectMoveStop(in.MoveStopToEntry, in.EntryPrice, in.StopLossPrice, resolved); err != nil {
 		return nil, nil, nil, err
 	}
 	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
@@ -1057,7 +1077,7 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 	if err := domain.RequireQuoteMatchesCurrency(ex, sym, p.Currency); err != nil {
 		return nil, nil, nil, err
 	}
-	idempHash := hashParts("bracket", string(ex), sym, in.Quantity, in.EntryPrice, in.TakeProfitPrice, in.StopLossPrice, in.LotMethod, in.Reason.HashPart())
+	idempHash := bracketIdempotencyHash(ex, sym, in, resolved)
 	if rec, err := s.checkIdempotency(ctx, clientID, idempKey, idempHash); err != nil {
 		return nil, nil, nil, err
 	} else if rec != nil {
@@ -1095,7 +1115,6 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 	bracketID := uuid.NewString()
 	ocoID := uuid.NewString()
 	entryID := uuid.NewString()
-	tpID := uuid.NewString()
 	slID := uuid.NewString()
 	entryOrd := domain.PendingOrder{
 		ID: entryID, ClientID: clientID, Exchange: ex, Symbol: sym,
@@ -1104,19 +1123,34 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 		TriggerPrice: in.EntryPrice, ReservedCash: need,
 		TimeInForce: domain.TimeInForceGTC, ExpiresAt: expiresAt,
 		Status: domain.PendingStatusOpen, BracketID: bracketID, BracketRole: domain.BracketRoleEntry,
-		CreatedAt: now, UpdatedAt: now,
+		MoveStopToEntry: in.MoveStopToEntry,
+		CreatedAt:       now, UpdatedAt: now,
 	}
-	// Exits inactive: pending, zero size until entry fills.
-	tpOrd := domain.PendingOrder{
-		ID: tpID, ClientID: clientID, Exchange: ex, Symbol: sym,
-		Type: domain.PendingLimitSell, Side: domain.TradeSideSell,
-		Quantity: 0, RemainingQuantity: 0, TriggerPrice: in.TakeProfitPrice,
-		TimeInForce: domain.TimeInForceGTC, ExpiresAt: expiresAt,
-		Status:     domain.PendingStatusPending,
-		OCOGroupID: ocoID, OCOPeerID: slID,
-		BracketID: bracketID, BracketRole: domain.BracketRoleTakeProfit,
-		LotMethod: pendingLotMethod(in.LotMethod),
-		CreatedAt: now, UpdatedAt: now,
+	orders := make([]domain.PendingOrder, 0, len(resolved)+2)
+	orders = append(orders, entryOrd)
+	tpIDs := make([]string, len(resolved))
+	for i := range resolved {
+		tpIDs[i] = uuid.NewString()
+	}
+	sit := s.captureSituation(ctx, ex, sym)
+	if sit != nil {
+		orders[0].Situation = sit
+	}
+	applyBuyReason(&orders[0], in.Reason)
+	for i, target := range resolved {
+		tpOrd := domain.PendingOrder{
+			ID: tpIDs[i], ClientID: clientID, Exchange: ex, Symbol: sym,
+			Type: domain.PendingLimitSell, Side: domain.TradeSideSell,
+			Quantity: 0, RemainingQuantity: 0, TriggerPrice: target.Price,
+			TimeInForce: domain.TimeInForceGTC, ExpiresAt: expiresAt,
+			Status:     domain.PendingStatusPending,
+			OCOGroupID: ocoID, OCOPeerID: slID,
+			BracketID: bracketID, BracketRole: domain.BracketRoleTakeProfit,
+			TargetPercent: target.Percent, MoveStopToEntry: in.MoveStopToEntry,
+			LotMethod: pendingLotMethod(in.LotMethod),
+			CreatedAt: now, UpdatedAt: now, Situation: sit,
+		}
+		orders = append(orders, tpOrd)
 	}
 	slOrd := domain.PendingOrder{
 		ID: slID, ClientID: clientID, Exchange: ex, Symbol: sym,
@@ -1124,19 +1158,15 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 		Quantity: 0, RemainingQuantity: 0, TriggerPrice: in.StopLossPrice,
 		TimeInForce: domain.TimeInForceGTC, ExpiresAt: expiresAt,
 		Status:     domain.PendingStatusPending,
-		OCOGroupID: ocoID, OCOPeerID: tpID,
+		OCOGroupID: ocoID, OCOPeerID: tpIDs[0],
 		BracketID: bracketID, BracketRole: domain.BracketRoleStopLoss,
-		LotMethod: pendingLotMethod(in.LotMethod),
-		CreatedAt: now, UpdatedAt: now,
+		MoveStopToEntry: in.MoveStopToEntry,
+		LotMethod:       pendingLotMethod(in.LotMethod),
+		CreatedAt:       now, UpdatedAt: now, Situation: sit,
 	}
-	if sit := s.captureSituation(ctx, ex, sym); sit != nil {
-		entryOrd.Situation = sit
-		tpOrd.Situation = sit
-		slOrd.Situation = sit
-	}
-	applyBuyReason(&entryOrd, in.Reason)
-	ctx = s.withIdempotency(ctx, clientID, idempKey, idempHash, domain.IdempotencyKindBracket, idempIDs{EntryID: entryID, TakeProfitID: tpID, StopLossID: slID})
-	entry, tp, sl, err = s.store.CreateBracket(ctx, entryOrd, tpOrd, slOrd)
+	orders = append(orders, slOrd)
+	ctx = s.withIdempotency(ctx, clientID, idempKey, idempHash, domain.IdempotencyKindBracket, idempIDs{EntryID: entryID, TakeProfitID: tpIDs[0], TakeProfitIDs: tpIDs, StopLossID: slID})
+	created, err := s.store.CreatePendingOrders(ctx, orders)
 	if err != nil {
 		if isIdempotencyHit(err) {
 			if rec, rerr := s.replayAfterHit(ctx, clientID, idempKey, idempHash); rerr == nil && rec != nil {
@@ -1145,13 +1175,22 @@ func (s *Service) PlaceBracketOrder(ctx context.Context, in BracketOrderInput) (
 		}
 		return nil, nil, nil, err
 	}
+	entry = &created[0]
+	tps = make([]*domain.PendingOrder, len(tpIDs))
+	for i := range tpIDs {
+		cp := created[i+1]
+		tps[i] = &cp
+	}
+	slCopy := created[len(created)-1]
+	sl = &slCopy
 	s.notifyChange(ctx, clientID, domain.PortfolioChangeOrderPlaced, entry, nil, nil)
-	return entry, tp, sl, nil
+	return entry, tps, sl, nil
 }
 
-// PlaceOCOOrder creates take-profit + stop-loss legs that share one reserved position size.
-// When one leg fully fills, the peer is canceled; partial fills shrink both remainings.
-func (s *Service) PlaceOCOOrder(ctx context.Context, in OCOOrderInput) (tp, sl *domain.PendingOrder, err error) {
+// PlaceOCOOrder creates take-profit targets and one stop that share one reserved position.
+// A filled target reduces the stop to the coins still held. A full stop fill cancels the
+// remaining targets. The position is reserved once for the whole size.
+func (s *Service) PlaceOCOOrder(ctx context.Context, in OCOOrderInput) (tps []*domain.PendingOrder, sl *domain.PendingOrder, err error) {
 	if s.store == nil {
 		return nil, nil, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
@@ -1172,18 +1211,37 @@ func (s *Service) PlaceOCOOrder(ctx context.Context, in OCOOrderInput) (tp, sl *
 		math.IsNaN(in.Quantity) || math.IsInf(in.Quantity, 0) {
 		return nil, nil, fmt.Errorf("%w: quantity out of range", domain.ErrInvalidArgument)
 	}
-	if err := domain.ValidateOCOPrices(in.TakeProfitPrice, in.StopLossPrice); err != nil {
-		return nil, nil, err
-	}
 	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
 	if err != nil {
+		return nil, nil, err
+	}
+	var held, avg float64
+	pos, perr := s.store.GetPosition(ctx, clientID, ex, sym)
+	if perr == nil && pos != nil {
+		held, avg = pos.Quantity, pos.AvgCost
+	} else if perr != nil && perr != domain.ErrNotFound {
+		return nil, nil, perr
+	}
+	reference := avg
+	if reference <= 0 && targetsNeedReference(in.TakeProfitTargets) {
+		last, lerr := s.lastPrice(ctx, string(ex), sym)
+		if lerr != nil {
+			return nil, nil, lerr
+		}
+		reference = last
+	}
+	resolved, err := domain.NormalizeTakeProfitTargets(in.TakeProfitTargets, in.TakeProfitPrice, in.Quantity, reference, in.StopLossPrice, false)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := rejectMoveStop(in.MoveStopToEntry, avg, in.StopLossPrice, resolved); err != nil {
 		return nil, nil, err
 	}
 	idempKey, err := domain.NormalizeIdempotencyKey(in.IdempotencyKey)
 	if err != nil {
 		return nil, nil, err
 	}
-	idempHash := hashParts("oco", string(ex), sym, in.Quantity, in.TakeProfitPrice, in.StopLossPrice, in.LotMethod)
+	idempHash := ocoIdempotencyHash(ex, sym, in, resolved)
 	if rec, err := s.checkIdempotency(ctx, clientID, idempKey, idempHash); err != nil {
 		return nil, nil, err
 	} else if rec != nil {
@@ -1193,16 +1251,9 @@ func (s *Service) PlaceOCOOrder(ctx context.Context, in OCOOrderInput) (tp, sl *
 	if err != nil {
 		return nil, nil, err
 	}
-	// Two legs count toward the open-order cap.
-	if n+2 > domain.MaxOpenPendingOrders {
+	// Every target and the stop count toward the open-order cap.
+	if n+len(resolved)+1 > domain.MaxOpenPendingOrders {
 		return nil, nil, fmt.Errorf("%w: max open pending orders (%d) reached", domain.ErrInvalidArgument, domain.MaxOpenPendingOrders)
-	}
-	var held float64
-	pos, perr := s.store.GetPosition(ctx, clientID, ex, sym)
-	if perr == nil && pos != nil {
-		held = pos.Quantity
-	} else if perr != nil && perr != domain.ErrNotFound {
-		return nil, nil, perr
 	}
 	resQty, rerr := s.store.SumReservedQuantity(ctx, clientID, ex, sym)
 	if rerr != nil {
@@ -1222,35 +1273,39 @@ func (s *Service) PlaceOCOOrder(ctx context.Context, in OCOOrderInput) (tp, sl *
 		expiresAt = &exp
 	}
 	groupID := uuid.NewString()
-	tpID := uuid.NewString()
 	slID := uuid.NewString()
-	// Reservation is counted once per OCO group (SumReservedQuantity); both legs store remaining size.
-	tpOrd := domain.PendingOrder{
-		ID: tpID, ClientID: clientID, Exchange: ex, Symbol: sym,
-		Type: domain.PendingLimitSell, Side: domain.TradeSideSell,
-		Quantity: in.Quantity, FilledQuantity: 0, RemainingQuantity: in.Quantity,
-		TriggerPrice: in.TakeProfitPrice, ReservedQuantity: in.Quantity,
-		TimeInForce: domain.TimeInForceGTC, ExpiresAt: expiresAt,
-		Status: domain.PendingStatusOpen, OCOGroupID: groupID, OCOPeerID: slID,
-		LotMethod: pendingLotMethod(in.LotMethod),
-		CreatedAt: now, UpdatedAt: now,
+	tpIDs := make([]string, len(resolved))
+	for i := range resolved {
+		tpIDs[i] = uuid.NewString()
 	}
-	slOrd := domain.PendingOrder{
+	sit := s.captureSituation(ctx, ex, sym)
+	orders := make([]domain.PendingOrder, 0, len(resolved)+1)
+	for i, target := range resolved {
+		orders = append(orders, domain.PendingOrder{
+			ID: tpIDs[i], ClientID: clientID, Exchange: ex, Symbol: sym,
+			Type: domain.PendingLimitSell, Side: domain.TradeSideSell,
+			Quantity: target.Quantity, FilledQuantity: 0, RemainingQuantity: target.Quantity,
+			TriggerPrice: target.Price, ReservedQuantity: target.Quantity,
+			TimeInForce: domain.TimeInForceGTC, ExpiresAt: expiresAt,
+			Status: domain.PendingStatusOpen, OCOGroupID: groupID, OCOPeerID: slID,
+			TargetPercent: target.Percent, MoveStopToEntry: in.MoveStopToEntry, EntryPrice: ocoBuyPrice(in.MoveStopToEntry, avg),
+			LotMethod: pendingLotMethod(in.LotMethod),
+			CreatedAt: now, UpdatedAt: now, Situation: sit,
+		})
+	}
+	orders = append(orders, domain.PendingOrder{
 		ID: slID, ClientID: clientID, Exchange: ex, Symbol: sym,
 		Type: domain.PendingStopLoss, Side: domain.TradeSideSell,
 		Quantity: in.Quantity, FilledQuantity: 0, RemainingQuantity: in.Quantity,
 		TriggerPrice: in.StopLossPrice, ReservedQuantity: in.Quantity,
 		TimeInForce: domain.TimeInForceGTC, ExpiresAt: expiresAt,
-		Status: domain.PendingStatusOpen, OCOGroupID: groupID, OCOPeerID: tpID,
+		Status: domain.PendingStatusOpen, OCOGroupID: groupID, OCOPeerID: tpIDs[0],
+		MoveStopToEntry: in.MoveStopToEntry, EntryPrice: ocoBuyPrice(in.MoveStopToEntry, avg),
 		LotMethod: pendingLotMethod(in.LotMethod),
-		CreatedAt: now, UpdatedAt: now,
-	}
-	ctx = s.withIdempotency(ctx, clientID, idempKey, idempHash, domain.IdempotencyKindOCO, idempIDs{TakeProfitID: tpID, StopLossID: slID})
-	if sit := s.captureSituation(ctx, ex, sym); sit != nil {
-		tpOrd.Situation = sit
-		slOrd.Situation = sit
-	}
-	tp, sl, err = s.store.CreateOCOPair(ctx, tpOrd, slOrd)
+		CreatedAt: now, UpdatedAt: now, Situation: sit,
+	})
+	ctx = s.withIdempotency(ctx, clientID, idempKey, idempHash, domain.IdempotencyKindOCO, idempIDs{TakeProfitID: tpIDs[0], TakeProfitIDs: tpIDs, StopLossID: slID})
+	created, err := s.store.CreatePendingOrders(ctx, orders)
 	if err != nil {
 		if isIdempotencyHit(err) {
 			if rec, rerr := s.replayAfterHit(ctx, clientID, idempKey, idempHash); rerr == nil && rec != nil {
@@ -1259,8 +1314,15 @@ func (s *Service) PlaceOCOOrder(ctx context.Context, in OCOOrderInput) (tp, sl *
 		}
 		return nil, nil, err
 	}
-	s.notifyChange(ctx, clientID, domain.PortfolioChangeOrderPlaced, tp, nil, nil)
-	return tp, sl, nil
+	tps = make([]*domain.PendingOrder, len(tpIDs))
+	for i := range tpIDs {
+		cp := created[i]
+		tps[i] = &cp
+	}
+	slCopy := created[len(created)-1]
+	sl = &slCopy
+	s.notifyChange(ctx, clientID, domain.PortfolioChangeOrderPlaced, tps[0], nil, nil)
+	return tps, sl, nil
 }
 
 // PlacePendingOrder creates an open resting order and reserves cash or position.
@@ -1925,20 +1987,29 @@ func (s *Service) maxFillableQty(o domain.PendingOrder, remaining, lastPrice flo
 	}
 }
 
-// ProcessOCOPair evaluates an OCO take-profit + stop-loss pair against one last price.
-// At most one leg fills per tick; the peer is canceled on full fill or reduced on partial fill.
+// ProcessOCOPair evaluates one OCO group. A stop that is touched is the only fill.
+// Otherwise every take-profit the price has reached fills, nearest first, and each
+// fill reduces the stop to the coins still held.
 func (s *Service) ProcessOCOPair(ctx context.Context, a, b domain.PendingOrder, lastPrice float64, now time.Time, maxFillQty float64) (*domain.PendingOrder, bool, error) {
+	return s.ProcessOCOGroup(ctx, []domain.PendingOrder{a, b}, lastPrice, now, maxFillQty)
+}
+
+// ProcessOCOGroup evaluates every open leg of one OCO group against one last price.
+func (s *Service) ProcessOCOGroup(ctx context.Context, legs []domain.PendingOrder, lastPrice float64, now time.Time, maxFillQty float64) (*domain.PendingOrder, bool, error) {
 	if s.store == nil {
 		return nil, false, fmt.Errorf("%w: portfolio store not configured", domain.ErrUpstream)
 	}
-	unlock := s.lockClient(a.ClientID)
+	if len(legs) == 0 {
+		return nil, false, nil
+	}
+	unlock := s.lockClient(legs[0].ClientID)
 	defer unlock()
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	// Fresh reload both legs.
-	var tp, sl *domain.PendingOrder
-	for _, o := range []domain.PendingOrder{a, b} {
+	var tps []*domain.PendingOrder
+	var sl *domain.PendingOrder
+	for _, o := range legs {
 		cur, err := s.store.GetPendingOrder(ctx, o.ClientID, o.ID)
 		if err != nil {
 			if err == domain.ErrNotFound {
@@ -1949,23 +2020,41 @@ func (s *Service) ProcessOCOPair(ctx context.Context, a, b domain.PendingOrder, 
 		if cur.Status != domain.PendingStatusOpen {
 			continue
 		}
-		// Expiry on either leg cancels the group.
 		if domain.PendingOrderExpired(*cur, now) {
 			_ = s.store.CancelOCOGroup(ctx, cur.ClientID, cur.OCOGroupID, now, domain.CancelReasonExpired)
 			return cur, true, nil
 		}
-		switch cur.Type {
-		case domain.PendingLimitSell:
-			tp = cur
-		case domain.PendingStopLoss:
+		switch {
+		case cur.Type == domain.PendingStopLoss:
 			sl = cur
+		case cur.Type == domain.PendingLimitSell:
+			tps = append(tps, cur)
 		}
 	}
-	winner := domain.OCOWinnerForTick(tp, sl, lastPrice)
-	if winner == nil {
+	if sl != nil && domain.PendingOrderTriggered(sl.Type, sl.TriggerPrice, lastPrice) {
+		return s.tryFillPendingOrderLocked(ctx, *sl, lastPrice, maxFillQty)
+	}
+	sort.SliceStable(tps, func(i, j int) bool { return tps[i].TriggerPrice < tps[j].TriggerPrice })
+	var last *domain.PendingOrder
+	filledAny := false
+	for _, tp := range tps {
+		if !domain.PendingOrderTriggered(tp.Type, tp.TriggerPrice, lastPrice) {
+			continue
+		}
+		got, ok, err := s.tryFillPendingOrderLocked(ctx, *tp, lastPrice, maxFillQty)
+		if err != nil {
+			return last, filledAny, err
+		}
+		if !ok || got == nil {
+			continue
+		}
+		filledAny = true
+		last = got
+	}
+	if !filledAny {
 		return nil, false, nil
 	}
-	return s.tryFillPendingOrderLocked(ctx, *winner, lastPrice, maxFillQty)
+	return last, true, nil
 }
 
 // TryFillPendingOrder evaluates one open order against lastPrice and applies a fill.
@@ -2184,6 +2273,12 @@ func (s *Service) tryFillPendingOrderLocked(ctx context.Context, o domain.Pendin
 		tr.LotFills = lotOps.Fills
 	}
 	updated.FillTradeID = tr.ID
+	if o.IsBracketEntry() && o.MoveStopToEntry {
+		total := o.FilledQuantity + fillQty
+		if total > 0 {
+			updated.EntryPrice = (o.FilledQuantity*o.EntryPrice + fillQty*fillPrice) / total
+		}
+	}
 
 	if o.IsOCO() && o.OCOPeerID != "" {
 		peer, perr := s.store.GetPendingOrder(ctx, o.ClientID, o.OCOPeerID)

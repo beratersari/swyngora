@@ -14,18 +14,21 @@ import (
 
 // OrderPreviewInput is a paper spot or margin order that should be priced, not placed.
 type OrderPreviewInput struct {
-	ClientID        string
-	PortfolioID     string
-	OwnerClientID   string
-	Product         string // spot (default) or margin
-	Exchange        string
-	Symbol          string
-	Side            string
-	Type            string
-	Quantity        float64
-	TriggerPrice    float64
-	TakeProfitPrice float64
-	StopLossPrice   float64
+	ClientID          string
+	PortfolioID       string
+	OwnerClientID     string
+	Product           string // spot (default) or margin
+	Exchange          string
+	Symbol            string
+	Side              string
+	Type              string
+	Quantity          float64
+	TriggerPrice      float64
+	TakeProfitPrice   float64
+	TakeProfitTargets []domain.TakeProfitTarget
+	StopLossPrice     float64
+	// MoveStopToEntry asks the preview to price a stop that rises to the buy price.
+	MoveStopToEntry bool
 	TrailType       string
 	TrailValue      float64
 	LotMethod       string
@@ -425,20 +428,36 @@ func (s *Service) previewSpot(
 		out.Side = string(domain.TradeSideSell)
 		fillResting(out, domain.TradeSideSell, trigger, in.Quantity, cost, avail, cash, availQty, lots, bookID, ex, sym, posQty, avg, lotMethod, snap, false)
 	case "oco":
-		if err := domain.ValidateOCOPrices(in.TakeProfitPrice, in.StopLossPrice); err != nil {
+		reference, rerr := ocoOffsetReference(avg, last, in.TakeProfitTargets)
+		if rerr != nil {
+			return nil, rerr
+		}
+		resolved, err := domain.NormalizeTakeProfitTargets(in.TakeProfitTargets, in.TakeProfitPrice, in.Quantity, reference, in.StopLossPrice, false)
+		if err != nil {
 			return nil, err
 		}
 		out.Side = string(domain.TradeSideSell)
 		out.ReservedQuantity = in.Quantity
 		out.ReferencePrice = last
 		out.InsufficientQuantity = in.Quantity > availQty+domain.PositionEpsilon
-		out.Legs = []domain.OrderPreviewLeg{
-			sellLeg("take_profit", in.TakeProfitPrice, in.Quantity, cost, lots, bookID, ex, sym, posQty, avg, lotMethod, out.InsufficientQuantity),
-			sellLeg("stop_loss", in.StopLossPrice, in.Quantity, cost, lots, bookID, ex, sym, posQty, avg, lotMethod, out.InsufficientQuantity),
+		out.Legs = exitPreviewLegs(resolved, in.StopLossPrice, in.Quantity, cost, lots, bookID, ex, sym, posQty, avg, lotMethod, out.InsufficientQuantity)
+		if err := rejectMoveStop(in.MoveStopToEntry, avg, in.StopLossPrice, resolved); err != nil {
+			return nil, err
+		}
+		if in.MoveStopToEntry {
+			out.MoveStopToEntry = true
+			out.MoveStopPrice = avg
 		}
 		out.Risk = snap.sellView(0)
 	case "bracket":
-		if err := domain.ValidateBracketPrices(in.TriggerPrice, in.TakeProfitPrice, in.StopLossPrice); err != nil {
+		if in.TriggerPrice <= 0 || math.IsNaN(in.TriggerPrice) || math.IsInf(in.TriggerPrice, 0) {
+			return nil, fmt.Errorf("%w: entry triggerPrice must be positive", domain.ErrInvalidArgument)
+		}
+		if in.StopLossPrice >= in.TriggerPrice {
+			return nil, fmt.Errorf("%w: stopLossPrice must be below entry price", domain.ErrInvalidArgument)
+		}
+		resolved, err := domain.NormalizeTakeProfitTargets(in.TakeProfitTargets, in.TakeProfitPrice, in.Quantity, in.TriggerPrice, in.StopLossPrice, true)
+		if err != nil {
 			return nil, err
 		}
 		out.Side = string(domain.TradeSideBuy)
@@ -449,9 +468,13 @@ func (s *Service) previewSpot(
 		hyp := append(append([]domain.TaxLot{}, lots...), ops.Created...)
 		hypQty := posQty + in.Quantity
 		hypAvg := domain.AvgCostFromLots(hyp)
-		out.Legs = []domain.OrderPreviewLeg{
-			sellLeg("take_profit", in.TakeProfitPrice, in.Quantity, cost, hyp, bookID, ex, sym, hypQty, hypAvg, lotMethod, false),
-			sellLeg("stop_loss", in.StopLossPrice, in.Quantity, cost, hyp, bookID, ex, sym, hypQty, hypAvg, lotMethod, false),
+		out.Legs = exitPreviewLegs(resolved, in.StopLossPrice, in.Quantity, cost, hyp, bookID, ex, sym, hypQty, hypAvg, lotMethod, false)
+		if err := rejectMoveStop(in.MoveStopToEntry, in.TriggerPrice, in.StopLossPrice, resolved); err != nil {
+			return nil, err
+		}
+		if in.MoveStopToEntry {
+			out.MoveStopToEntry = true
+			out.MoveStopPrice = in.TriggerPrice
 		}
 	default:
 		return nil, fmt.Errorf("%w: type must be market, limit_buy, limit_sell, stop_loss, trailing_stop, oco, or bracket", domain.ErrInvalidArgument)

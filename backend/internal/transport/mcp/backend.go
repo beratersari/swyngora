@@ -5202,14 +5202,19 @@ func (b *Backend) GetPortfolioPerformance(ctx context.Context, clientID, period 
 	return mustJSON(m)
 }
 
-func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int) (json.RawMessage, error) {
+func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int, takeProfitTargets string, moveStopToEntry bool) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	targets, err := decodeTakeProfitTargets(takeProfitTargets)
+	if err != nil {
+		return nil, err
 	}
 	got, err := b.Portfolio.PreviewOrder(ctx, portfolio.OrderPreviewInput{
 		ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol,
 		Side: side, Type: orderType, Product: product, TrailType: trailType, LotMethod: lotMethod,
 		Quantity: quantity, TriggerPrice: triggerPrice, TakeProfitPrice: takeProfitPrice, StopLossPrice: stopLossPrice,
+		TakeProfitTargets: targets, MoveStopToEntry: moveStopToEntry,
 		TrailValue: trailValue, LimitPrice: limitPrice, Leverage: leverage, RiskPercent: riskPercent,
 		Reason: reasonInput(ctx), CompareExchange: compareExchange, MaxSlippagePct: maxSlippagePct, Spread: spread,
 		SpreadMinutes: spreadMinutes, SliceCount: sliceCount,
@@ -5467,7 +5472,7 @@ func (b *Backend) PlacePortfolioPendingOrder(ctx context.Context, clientID, exch
 	})
 }
 
-func (b *Backend) PlacePortfolioBracketOrder(ctx context.Context, clientID, exchange, symbol string, quantity, entryPrice, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error) {
+func (b *Backend) PlacePortfolioBracketOrder(ctx context.Context, clientID, exchange, symbol string, quantity, entryPrice, takeProfitPrice, stopLossPrice float64, expiresAt, takeProfitTargets string, moveStopToEntry bool) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
@@ -5483,10 +5488,15 @@ func (b *Backend) PlacePortfolioBracketOrder(ctx context.Context, clientID, exch
 		tu := t.UTC()
 		exp = &tu
 	}
-	entry, tp, sl, err := b.Portfolio.PlaceBracketOrder(ctx, portfolio.BracketOrderInput{
+	targets, err := decodeTakeProfitTargets(takeProfitTargets)
+	if err != nil {
+		return nil, err
+	}
+	entry, tps, sl, err := b.Portfolio.PlaceBracketOrder(ctx, portfolio.BracketOrderInput{
 		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID:    clientID, Exchange: exchange, Symbol: symbol, Quantity: quantity,
-		EntryPrice: entryPrice, TakeProfitPrice: takeProfitPrice, StopLossPrice: stopLossPrice, ExpiresAt: exp,
+		EntryPrice: entryPrice, TakeProfitPrice: takeProfitPrice, TakeProfitTargets: targets,
+		StopLossPrice: stopLossPrice, MoveStopToEntry: moveStopToEntry, ExpiresAt: exp,
 		Reason: reasonInput(ctx),
 	})
 	if err != nil {
@@ -5494,12 +5504,13 @@ func (b *Backend) PlacePortfolioBracketOrder(ctx context.Context, clientID, exch
 	}
 	return mustJSON(map[string]any{
 		"type": "bracket", "bracketId": entry.BracketID,
-		"entry": pendingOrderMap(entry), "takeProfit": pendingOrderMap(tp), "stopLoss": pendingOrderMap(sl),
-		"note": "Paper bracket: exits pending until entry fills; size tracks filled qty; OCO exits.",
+		"entry": pendingOrderMap(entry), "takeProfit": pendingOrderMap(tps[0]),
+		"takeProfits": pendingOrderMaps(tps), "stopLoss": pendingOrderMap(sl),
+		"note": "Paper bracket: exits pending until entry fills. Each target is its share of the filled size. The stop covers the coins still held.",
 	})
 }
 
-func (b *Backend) PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange, symbol string, quantity, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error) {
+func (b *Backend) PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange, symbol string, quantity, takeProfitPrice, stopLossPrice float64, expiresAt, takeProfitTargets string, moveStopToEntry bool) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
@@ -5515,20 +5526,26 @@ func (b *Backend) PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange
 		tu := t.UTC()
 		exp = &tu
 	}
-	tp, sl, err := b.Portfolio.PlaceOCOOrder(ctx, portfolio.OCOOrderInput{
+	targets, err := decodeTakeProfitTargets(takeProfitTargets)
+	if err != nil {
+		return nil, err
+	}
+	tps, sl, err := b.Portfolio.PlaceOCOOrder(ctx, portfolio.OCOOrderInput{
 		PortfolioID: PortfolioIDFrom(ctx),
 		ClientID:    clientID, Exchange: exchange, Symbol: symbol, Quantity: quantity,
-		TakeProfitPrice: takeProfitPrice, StopLossPrice: stopLossPrice, ExpiresAt: exp,
+		TakeProfitPrice: takeProfitPrice, TakeProfitTargets: targets, StopLossPrice: stopLossPrice,
+		MoveStopToEntry: moveStopToEntry, ExpiresAt: exp,
 	})
 	if err != nil {
 		return nil, err
 	}
 	return mustJSON(map[string]any{
-		"type":       "oco",
-		"ocoGroupId": tp.OCOGroupID,
-		"takeProfit": pendingOrderMap(tp),
-		"stopLoss":   pendingOrderMap(sl),
-		"note":       "Paper OCO: take-profit + stop-loss for the same size; one fill cancels or shrinks the other.",
+		"type":        "oco",
+		"ocoGroupId":  tps[0].OCOGroupID,
+		"takeProfit":  pendingOrderMap(tps[0]),
+		"takeProfits": pendingOrderMaps(tps),
+		"stopLoss":    pendingOrderMap(sl),
+		"note":        "Paper OCO: each take-profit is a share of the size. When one fills, the stop covers the coins still held.",
 	})
 }
 
@@ -6372,6 +6389,28 @@ func recurringRunMap(r *domain.RecurringBuyRun) map[string]any {
 	}
 }
 
+func pendingOrderMaps(orders []*domain.PendingOrder) []map[string]any {
+	out := make([]map[string]any, 0, len(orders))
+	for _, o := range orders {
+		if o != nil {
+			out = append(out, pendingOrderMap(o))
+		}
+	}
+	return out
+}
+
+func decodeTakeProfitTargets(raw string) ([]domain.TakeProfitTarget, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	var out []domain.TakeProfitTarget
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil, fmt.Errorf("%w: takeProfitTargets must be a JSON array", domain.ErrInvalidArgument)
+	}
+	return out, nil
+}
+
 func pendingOrderMap(o *domain.PendingOrder) map[string]any {
 	tif := string(o.TimeInForce)
 	if tif == "" {
@@ -6390,6 +6429,15 @@ func pendingOrderMap(o *domain.PendingOrder) map[string]any {
 		"createdAt":   o.CreatedAt.UTC().Format(time.RFC3339Nano),
 		"updatedAt":   o.UpdatedAt.UTC().Format(time.RFC3339Nano),
 		"fillTradeId": o.FillTradeID, "fillPrice": o.FillPrice, "rejectReason": o.RejectReason, "cancelReason": o.CancelReason,
+	}
+	if o.TargetPercent > 0 {
+		m["targetPercent"] = o.TargetPercent
+	}
+	if o.MoveStopToEntry {
+		m["moveStopToEntry"] = true
+	}
+	if o.EntryPrice > 0 {
+		m["entryPrice"] = o.EntryPrice
 	}
 	if o.Situation != nil {
 		m["situation"] = o.Situation

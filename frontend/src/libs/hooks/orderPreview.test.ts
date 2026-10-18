@@ -36,6 +36,21 @@ describe('previewDraftReady', () => {
         stopLossPrice: 80,
       }),
     ).toBe(true);
+    expect(
+      previewDraftReady({
+        ...spot,
+        type: 'bracket',
+        side: 'buy',
+        quantity: 1,
+        triggerPrice: 100,
+        stopLossPrice: 90,
+        takeProfitTargets: [
+          { percent: 25, offsetPercent: 5 },
+          { percent: 25, offsetPercent: 10 },
+          { percent: 50, offsetPercent: 15 },
+        ],
+      }),
+    ).toBe(true);
   });
 
   it('waits for a margin limit price and a leverage from 1 to 10', () => {

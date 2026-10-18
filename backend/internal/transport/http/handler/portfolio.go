@@ -346,33 +346,35 @@ func (h *PortfolioHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 type orderBody struct {
-	ClientID        string    `json:"clientId"`
-	PortfolioID     string    `json:"portfolioId"`
-	OwnerClientID   string    `json:"ownerClientId"`
-	Exchange        string    `json:"exchange"`
-	Symbol          string    `json:"symbol"`
-	Side            string    `json:"side"`
-	Quantity        float64   `json:"quantity"`
-	Type            string    `json:"type"`            // market | limit_buy | limit_sell | stop_loss | trailing_stop | oco | bracket
-	TriggerPrice    float64   `json:"triggerPrice"`    // pending single-leg / bracket entry
-	TakeProfitPrice float64   `json:"takeProfitPrice"` // oco / bracket
-	StopLossPrice   float64   `json:"stopLossPrice"`   // oco / bracket
-	TrailType       string    `json:"trailType"`       // trailing_stop: percent | offset
-	TrailValue      float64   `json:"trailValue"`      // trailing_stop distance
-	TimeInForce     string    `json:"timeInForce"`     // gtc | ioc | fok
-	ExpiresAt       string    `json:"expiresAt"`       // RFC3339; GTC only
-	LotMethod       string    `json:"lotMethod"`       // fifo | lifo (sells)
-	IdempotencyKey  string    `json:"idempotencyKey"`
-	Product         string    `json:"product"`     // spot (default) or margin — preview only
-	Leverage        int       `json:"leverage"`    // margin preview, 1–10
-	LimitPrice      float64   `json:"limitPrice"`  // margin limit preview
-	RiskPercent     float64   `json:"riskPercent"` // preview only: size from equity and the stop
-	Reason          *[]string `json:"reason"`      // clauses a buy stores; omitted keeps the whole read
-	CompareExchange string    `json:"compareExchange"`
-	MaxSlippagePct  float64   `json:"maxSlippagePct"`
-	Spread          bool      `json:"spread"`
-	SpreadMinutes   int       `json:"spreadMinutes"`
-	SliceCount      int       `json:"sliceCount"`
+	ClientID          string                    `json:"clientId"`
+	PortfolioID       string                    `json:"portfolioId"`
+	OwnerClientID     string                    `json:"ownerClientId"`
+	Exchange          string                    `json:"exchange"`
+	Symbol            string                    `json:"symbol"`
+	Side              string                    `json:"side"`
+	Quantity          float64                   `json:"quantity"`
+	Type              string                    `json:"type"`            // market | limit_buy | limit_sell | stop_loss | trailing_stop | oco | bracket
+	TriggerPrice      float64                   `json:"triggerPrice"`    // pending single-leg / bracket entry
+	TakeProfitPrice   float64                   `json:"takeProfitPrice"` // oco / bracket, one target for the whole size
+	TakeProfitTargets []domain.TakeProfitTarget `json:"takeProfitTargets,omitempty"`
+	StopLossPrice     float64                   `json:"stopLossPrice"` // oco / bracket
+	MoveStopToEntry   bool                      `json:"moveStopToEntry,omitempty"`
+	TrailType         string                    `json:"trailType"`   // trailing_stop: percent | offset
+	TrailValue        float64                   `json:"trailValue"`  // trailing_stop distance
+	TimeInForce       string                    `json:"timeInForce"` // gtc | ioc | fok
+	ExpiresAt         string                    `json:"expiresAt"`   // RFC3339; GTC only
+	LotMethod         string                    `json:"lotMethod"`   // fifo | lifo (sells)
+	IdempotencyKey    string                    `json:"idempotencyKey"`
+	Product           string                    `json:"product"`     // spot (default) or margin — preview only
+	Leverage          int                       `json:"leverage"`    // margin preview, 1–10
+	LimitPrice        float64                   `json:"limitPrice"`  // margin limit preview
+	RiskPercent       float64                   `json:"riskPercent"` // preview only: size from equity and the stop
+	Reason            *[]string                 `json:"reason"`      // clauses a buy stores; omitted keeps the whole read
+	CompareExchange   string                    `json:"compareExchange"`
+	MaxSlippagePct    float64                   `json:"maxSlippagePct"`
+	Spread            bool                      `json:"spread"`
+	SpreadMinutes     int                       `json:"spreadMinutes"`
+	SliceCount        int                       `json:"sliceCount"`
 }
 
 func situationReasonFrom(raw *[]string) (domain.SituationReason, error) {
@@ -402,6 +404,9 @@ type pendingOrderDTO struct {
 	OCOPeerID         string                `json:"ocoPeerId,omitempty"`
 	BracketID         string                `json:"bracketId,omitempty"`
 	BracketRole       string                `json:"bracketRole,omitempty"`
+	TargetPercent     float64               `json:"targetPercent,omitempty"`
+	MoveStopToEntry   bool                  `json:"moveStopToEntry,omitempty"`
+	EntryPrice        float64               `json:"entryPrice,omitempty"`
 	TrailType         string                `json:"trailType,omitempty"`
 	TrailValue        float64               `json:"trailValue,omitempty"`
 	TrailPeak         float64               `json:"trailPeak,omitempty"`
@@ -419,6 +424,17 @@ type pendingOrderDTO struct {
 	Reason            []string              `json:"reason,omitempty"`
 }
 
+func pendingOrderDTOs(orders []*domain.PendingOrder) []pendingOrderDTO {
+	out := make([]pendingOrderDTO, 0, len(orders))
+	for _, o := range orders {
+		if o == nil {
+			continue
+		}
+		out = append(out, pendingOrderToDTO(o))
+	}
+	return out
+}
+
 func pendingOrderToDTO(o *domain.PendingOrder) pendingOrderDTO {
 	tif := string(o.TimeInForce)
 	if tif == "" {
@@ -432,7 +448,8 @@ func pendingOrderToDTO(o *domain.PendingOrder) pendingOrderDTO {
 		TimeInForce: tif,
 		Status:      string(o.Status),
 		OCOGroupID:  o.OCOGroupID, OCOPeerID: o.OCOPeerID,
-		BracketID: o.BracketID, BracketRole: o.BracketRole,
+		BracketID: o.BracketID, BracketRole: o.BracketRole, TargetPercent: o.TargetPercent,
+		MoveStopToEntry: o.MoveStopToEntry, EntryPrice: o.EntryPrice,
 		TrailType: o.TrailType, TrailValue: o.TrailValue, TrailPeak: o.TrailPeak,
 		CreatedAt:   o.CreatedAt.UTC().Format(time.RFC3339Nano),
 		UpdatedAt:   o.UpdatedAt.UTC().Format(time.RFC3339Nano),
@@ -597,9 +614,10 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			tu := t.UTC()
 			exp = &tu
 		}
-		tp, sl, err := h.svc.PlaceOCOOrder(r.Context(), portfolio.OCOOrderInput{
+		tps, sl, err := h.svc.PlaceOCOOrder(r.Context(), portfolio.OCOOrderInput{
 			ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
-			Quantity: body.Quantity, TakeProfitPrice: body.TakeProfitPrice, StopLossPrice: body.StopLossPrice,
+			Quantity: body.Quantity, TakeProfitPrice: body.TakeProfitPrice, TakeProfitTargets: body.TakeProfitTargets,
+			StopLossPrice: body.StopLossPrice, MoveStopToEntry: body.MoveStopToEntry,
 			ExpiresAt: exp, LotMethod: body.LotMethod,
 			IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
 		})
@@ -608,11 +626,12 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusCreated, map[string]any{
-			"type":       "oco",
-			"ocoGroupId": tp.OCOGroupID,
-			"takeProfit": pendingOrderToDTO(tp),
-			"stopLoss":   pendingOrderToDTO(sl),
-			"note":       "Paper OCO: take-profit limit sell + stop-loss for the same size. One fill cancels or shrinks the other. Not real money.",
+			"type":        "oco",
+			"ocoGroupId":  tps[0].OCOGroupID,
+			"takeProfit":  pendingOrderToDTO(tps[0]),
+			"takeProfits": pendingOrderDTOs(tps),
+			"stopLoss":    pendingOrderToDTO(sl),
+			"note":        "Paper OCO: each take-profit is a share of the size. When one fills, the stop covers the coins still held. A full stop fill cancels the remaining targets. Not real money.",
 		})
 	case "bracket":
 		var exp *time.Time
@@ -628,10 +647,11 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			tu := t.UTC()
 			exp = &tu
 		}
-		entry, tp, sl, err := h.svc.PlaceBracketOrder(r.Context(), portfolio.BracketOrderInput{
+		entry, tps, sl, err := h.svc.PlaceBracketOrder(r.Context(), portfolio.BracketOrderInput{
 			ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
 			Quantity: body.Quantity, EntryPrice: body.TriggerPrice,
-			TakeProfitPrice: body.TakeProfitPrice, StopLossPrice: body.StopLossPrice,
+			TakeProfitPrice: body.TakeProfitPrice, TakeProfitTargets: body.TakeProfitTargets,
+			StopLossPrice: body.StopLossPrice, MoveStopToEntry: body.MoveStopToEntry,
 			ExpiresAt: exp, LotMethod: body.LotMethod,
 			IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
 			Reason:         reason,
@@ -641,12 +661,13 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusCreated, map[string]any{
-			"type":       "bracket",
-			"bracketId":  entry.BracketID,
-			"entry":      pendingOrderToDTO(entry),
-			"takeProfit": pendingOrderToDTO(tp),
-			"stopLoss":   pendingOrderToDTO(sl),
-			"note":       "Paper bracket: limit-buy entry with take-profit + stop-loss. Exits stay pending until entry fills; size tracks filled qty; OCO exits cannot double-sell. Not real money.",
+			"type":        "bracket",
+			"bracketId":   entry.BracketID,
+			"entry":       pendingOrderToDTO(entry),
+			"takeProfit":  pendingOrderToDTO(tps[0]),
+			"takeProfits": pendingOrderDTOs(tps),
+			"stopLoss":    pendingOrderToDTO(sl),
+			"note":        "Paper bracket: limit-buy entry with take-profit targets and one stop. Exits stay pending until the entry fills. Each target is its share of the filled size. The stop covers the coins still held. Not real money.",
 		})
 	default:
 		writeError(w, fmt.Errorf("%w: type must be market, limit_buy, limit_sell, stop_loss, trailing_stop, oco, or bracket", domain.ErrInvalidArgument))

@@ -197,15 +197,15 @@ type DataPort interface {
 	PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct, maxExposurePct *float64) (json.RawMessage, error)
 	DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetPaperTradingCosts(ctx context.Context, exchange string) (json.RawMessage, error)
-	PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int) (json.RawMessage, error)
+	PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int, takeProfitTargets string, moveStopToEntry bool) (json.RawMessage, error)
 	CompareOrderExecution(ctx context.Context, clientID, exchange, symbol, side string, quantity, maxSlippagePct float64, spreadMinutes, sliceCount int) (json.RawMessage, error)
 	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int) (json.RawMessage, error)
 	ListSpreadOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
 	CancelSpreadOrder(ctx context.Context, clientID, orderID string) (json.RawMessage, error)
 	PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt, trailType string, trailValue float64, lotMethod string) (json.RawMessage, error)
 	ListPortfolioLots(ctx context.Context, clientID, exchange, symbol, status string) (json.RawMessage, error)
-	PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange, symbol string, quantity, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error)
-	PlacePortfolioBracketOrder(ctx context.Context, clientID, exchange, symbol string, quantity, entryPrice, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error)
+	PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange, symbol string, quantity, takeProfitPrice, stopLossPrice float64, expiresAt, takeProfitTargets string, moveStopToEntry bool) (json.RawMessage, error)
+	PlacePortfolioBracketOrder(ctx context.Context, clientID, exchange, symbol string, quantity, entryPrice, takeProfitPrice, stopLossPrice float64, expiresAt, takeProfitTargets string, moveStopToEntry bool) (json.RawMessage, error)
 	ListPortfolioOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
 	GetPortfolioOrder(ctx context.Context, clientID, id string) (json.RawMessage, error)
 	AmendPortfolioOrder(ctx context.Context, clientID, id string, triggerPrice, remainingQuantity *float64) (json.RawMessage, error)
@@ -3552,7 +3552,8 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("compareExchange", mcp.Description("Preview only. Venue to price the whole quantity against when exchange is all.")),
 		mcp.WithNumber("maxSlippagePct", mcp.Description("Best-cost cap in percent. 0.5 keeps fills within 0.5% of the best price. Zero means no cap. When the size inside the cap is short, nothing is filled.")),
 		mcp.WithNumber("triggerPrice", mcp.Description("Limit, stop, or bracket entry price")),
-		mcp.WithNumber("takeProfitPrice", mcp.Description("OCO, bracket, or margin take-profit")),
+		mcp.WithNumber("takeProfitPrice", mcp.Description("Single take-profit limit for the whole size. Omit when takeProfitTargets is set.")),
+		mcp.WithString("takeProfitTargets", mcp.Description("JSON array of take-profit slices for an OCO or bracket. Each object is {percent, price} or {percent, offsetPercent}. percent is the share of the quantity; the shares sum to 100. offsetPercent 5 means +5% above the bracket entry, or above the average cost of an OCO position. Example: [{\"percent\":25,\"offsetPercent\":5},{\"percent\":25,\"offsetPercent\":10},{\"percent\":50,\"offsetPercent\":15}]. When a target fills, the stop quantity becomes the coins still held.")),
 		mcp.WithNumber("stopLossPrice", mcp.Description("Stop used to size the order. Also the OCO, bracket, or margin stop.")),
 		mcp.WithString("trailType", mcp.Description("trailing_stop: percent|offset")),
 		mcp.WithNumber("trailValue", mcp.Description("trailing_stop distance")),
@@ -3563,6 +3564,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithBoolean("spread", mcp.Description("With exchange=all and a spot market order, price timed slices. routeLegs are the first slice on the current book. Later slices read the books again. Nothing is written.")),
 		mcp.WithNumber("spreadMinutes", mcp.Description("Minutes from the first slice to the last. Default 10. From 1 to 1440. The last slice is due at the end.")),
 		mcp.WithNumber("sliceCount", mcp.Description("How many times the books are read. Default 10. From 2 to 60. Slices closer than 15 seconds are rejected.")),
+		mcp.WithBoolean("moveStopToEntry", mcp.Description("OCO or bracket. After the nearest take-profit fills, move the stop up to the buy price. An OCO uses the average cost. A bracket uses the average entry fill. The stop never moves down and stays below the next target. Default false.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -3588,7 +3590,8 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			qty, req.GetFloat("triggerPrice", 0), req.GetFloat("takeProfitPrice", 0), req.GetFloat("stopLossPrice", 0),
 			req.GetFloat("trailValue", 0), req.GetFloat("limitPrice", 0), int(req.GetFloat("leverage", 0)), riskPct,
 			req.GetString("compareExchange", ""), req.GetFloat("maxSlippagePct", 0), req.GetBool("spread", false),
-			int(req.GetFloat("spreadMinutes", 0)), int(req.GetFloat("sliceCount", 0)))
+			int(req.GetFloat("spreadMinutes", 0)), int(req.GetFloat("sliceCount", 0)), req.GetString("takeProfitTargets", ""),
+			req.GetBool("moveStopToEntry", false))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -3819,16 +3822,18 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("place_portfolio_oco_order",
-		mcp.WithDescription("Place a paper OCO: take-profit limit sell + stop-loss for the same quantity. Full fill of one cancels the other; partial fill shrinks both remainings. Same tick fills at most one leg. Simulated only."),
+		mcp.WithDescription("Place a paper OCO: one or more take-profit limit sells plus one stop for the same coins. takeProfitTargets is a JSON array of {percent, price} or {percent, offsetPercent}; the shares sum to 100. offsetPercent is above the average cost. When a target fills, the stop quantity becomes the coins still held. A full stop fill cancels the remaining targets. A single takeProfitPrice still covers the whole size. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base size for both legs")),
-		mcp.WithNumber("takeProfitPrice", mcp.Required(), mcp.Description("Limit sell price (must be above stop)")),
-		mcp.WithNumber("stopLossPrice", mcp.Required(), mcp.Description("Stop-loss trigger (must be below take-profit)")),
+		mcp.WithNumber("takeProfitPrice", mcp.Description("Limit sell for the whole size. Omit when takeProfitTargets is set.")),
+		mcp.WithString("takeProfitTargets", mcp.Description("JSON array of {percent, price} or {percent, offsetPercent}. Shares sum to 100. offsetPercent 5 means +5% above average cost.")),
+		mcp.WithNumber("stopLossPrice", mcp.Required(), mcp.Description("Stop-loss trigger (must be below every take-profit)")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
 		mcp.WithString("expiresAt", mcp.Description("RFC3339 expiry for GTC legs")),
 		mcp.WithString("idempotencyKey", mcp.Description("Optional retry key; same key + same request returns the original pair")),
+		mcp.WithBoolean("moveStopToEntry", mcp.Description("After the nearest take-profit fills, move the stop up to the average cost. It never moves down and stays below the next target. Default false.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		ctx = WithIdempotencyKey(ctx, req.GetString("idempotencyKey", ""))
 		clientID, err := req.RequireString("clientId")
@@ -3844,15 +3849,16 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		tp, err := req.RequireFloat("takeProfitPrice")
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+		tp := req.GetFloat("takeProfitPrice", 0)
+		targets := req.GetString("takeProfitTargets", "")
+		if tp <= 0 && strings.TrimSpace(targets) == "" {
+			return mcp.NewToolResultError("takeProfitPrice or takeProfitTargets is required"), nil
 		}
 		sl, err := req.RequireFloat("stopLossPrice")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.PlacePortfolioOCOOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, qty, tp, sl, req.GetString("expiresAt", ""))
+		raw, err := api.PlacePortfolioOCOOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, qty, tp, sl, req.GetString("expiresAt", ""), targets, req.GetBool("moveStopToEntry", false))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -3860,18 +3866,20 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("place_portfolio_bracket_order",
-		mcp.WithDescription("Place a paper bracket: limit-buy entry with take-profit + stop-loss. Exits stay pending until entry fills; exit size tracks filled qty; exits are OCO. Simulated only."),
+		mcp.WithDescription("Place a paper bracket: limit-buy entry with take-profit targets and one stop. Exits stay pending until the entry fills. Each target is its share of the filled size. takeProfitTargets is a JSON array of {percent, price} or {percent, offsetPercent}; offsetPercent is above the entry. When a target fills, the stop quantity becomes the coins still held. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Entry size")),
 		mcp.WithNumber("entryPrice", mcp.Required(), mcp.Description("Limit buy price")),
-		mcp.WithNumber("takeProfitPrice", mcp.Required(), mcp.Description("Limit sell above entry")),
+		mcp.WithNumber("takeProfitPrice", mcp.Description("Limit sell above entry for the whole size. Omit when takeProfitTargets is set.")),
+		mcp.WithString("takeProfitTargets", mcp.Description("JSON array of {percent, price} or {percent, offsetPercent}. Shares sum to 100. offsetPercent 5 means +5% above the entry.")),
 		mcp.WithNumber("stopLossPrice", mcp.Required(), mcp.Description("Stop below entry")),
 		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
 		mcp.WithString("expiresAt", mcp.Description("RFC3339 expiry")),
 		mcp.WithString("idempotencyKey", mcp.Description("Optional retry key; same key + same request returns the original bracket")),
 		mcp.WithString("reason", mcp.Description("Clauses the entry buy stores, comma-separated. Omit to store the whole read. Pass none to store no read.")),
+		mcp.WithBoolean("moveStopToEntry", mcp.Description("After the nearest take-profit fills, move the stop up to the average entry fill. It never moves down and stays below the next target. Default false.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		ctx = WithIdempotencyKey(ctx, req.GetString("idempotencyKey", ""))
 		var err error
@@ -3896,15 +3904,16 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		tp, err := req.RequireFloat("takeProfitPrice")
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
+		tp := req.GetFloat("takeProfitPrice", 0)
+		targets := req.GetString("takeProfitTargets", "")
+		if tp <= 0 && strings.TrimSpace(targets) == "" {
+			return mcp.NewToolResultError("takeProfitPrice or takeProfitTargets is required"), nil
 		}
 		sl, err := req.RequireFloat("stopLossPrice")
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.PlacePortfolioBracketOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, qty, entry, tp, sl, req.GetString("expiresAt", ""))
+		raw, err := api.PlacePortfolioBracketOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, qty, entry, tp, sl, req.GetString("expiresAt", ""), targets, req.GetBool("moveStopToEntry", false))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

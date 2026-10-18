@@ -192,9 +192,12 @@ type portfolioOrderPayload struct {
 	TrailPeak         float64 `json:"trailPeak,omitempty"`
 	BracketID         string  `json:"bracketId,omitempty"`
 	BracketRole       string  `json:"bracketRole,omitempty"`
+	TargetPercent     float64 `json:"targetPercent,omitempty"`
 	LotMethod         string  `json:"lotMethod,omitempty"`
 	CreatedAt         string  `json:"createdAt"`
 	UpdatedAt         string  `json:"updatedAt"`
+	MoveStopToEntry   bool    `json:"moveStopToEntry,omitempty"`
+	EntryPrice        float64 `json:"entryPrice,omitempty"`
 }
 
 type portfolioLotPayload struct {
@@ -367,8 +370,9 @@ func snapshotToPayload(snap domain.PortfolioSnapshot) portfolioBookPayload {
 			TriggerPrice: o.TriggerPrice, ReservedCash: o.ReservedCash, ReservedQuantity: o.ReservedQuantity,
 			TimeInForce: string(o.TimeInForce), ExpiresAt: rfcNanoPtr(o.ExpiresAt), Status: string(o.Status),
 			OCOGroupID: o.OCOGroupID, OCOPeerID: o.OCOPeerID, TrailType: o.TrailType, TrailValue: o.TrailValue,
-			TrailPeak: o.TrailPeak, BracketID: o.BracketID, BracketRole: o.BracketRole, LotMethod: string(o.LotMethod),
+			TrailPeak: o.TrailPeak, BracketID: o.BracketID, BracketRole: o.BracketRole, TargetPercent: o.TargetPercent, LotMethod: string(o.LotMethod),
 			CreatedAt: rfcNano(o.CreatedAt), UpdatedAt: rfcNano(o.UpdatedAt),
+			MoveStopToEntry: o.MoveStopToEntry, EntryPrice: o.EntryPrice,
 		})
 	}
 	for _, l := range snap.Lots {
@@ -526,7 +530,13 @@ func situationCSV(s *domain.CoinSituation) string {
 }
 
 func f64(v float64) string { return strconv.FormatFloat(v, 'f', -1, 64) }
-func i64(v int) string     { return strconv.Itoa(v) }
+func boolCSV(v bool) string {
+	if v {
+		return "true"
+	}
+	return "false"
+}
+func i64(v int) string { return strconv.Itoa(v) }
 func derefStr(p *string) string {
 	if p == nil {
 		return ""

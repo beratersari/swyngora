@@ -1,5 +1,12 @@
 import type { PreviewPortfolioOrderArg } from '@/libs/api';
 
+/** One scale-out slice. Percent shares sum to 100. Price or offsetPercent, not both. */
+export type TakeProfitTargetInput = {
+  percent: number;
+  price?: number;
+  offsetPercent?: number;
+};
+
 /** Wait before pricing a ticket so each keystroke does not call the API. */
 export const ORDER_PREVIEW_DEBOUNCE_MS = 300;
 
@@ -15,7 +22,11 @@ export type SpotOrderPreviewDraft = {
   quantity: number;
   triggerPrice?: number;
   takeProfitPrice?: number;
+  /** Scale-out slices. Omitted when one absolute price covers the whole size. */
+  takeProfitTargets?: TakeProfitTargetInput[];
   stopLossPrice?: number;
+  /** Raise the stop to the buy price after the nearest take-profit fills. */
+  moveStopToEntry?: boolean;
   trailType?: 'percent' | 'offset';
   trailValue?: number;
   lotMethod?: 'fifo' | 'lifo';
@@ -54,6 +65,19 @@ export type OrderPreviewDraft = SpotOrderPreviewDraft | MarginOrderPreviewDraft;
 
 function positive(value: number | undefined): boolean {
   return value != null && Number.isFinite(value) && value > 0;
+}
+
+function hasTakeProfit(draft: SpotOrderPreviewDraft): boolean {
+  if (positive(draft.takeProfitPrice)) return true;
+  const targets = draft.takeProfitTargets;
+  if (!targets || targets.length === 0 || targets.length > 8) return false;
+  const sum = targets.reduce((total, target) => total + target.percent, 0);
+  if (Math.abs(sum - 100) > 0.01) return false;
+  return targets.every((target) => {
+    const price = positive(target.price);
+    const gain = positive(target.offsetPercent);
+    return target.percent > 0 && target.percent <= 100 && price !== gain;
+  });
 }
 
 /** True when the draft asks the server to size the order from a stop. */
@@ -103,13 +127,9 @@ export function previewDraftReady(
         positive(draft.trailValue)
       );
     case 'oco':
-      return positive(draft.takeProfitPrice) && positive(draft.stopLossPrice);
+      return positive(draft.stopLossPrice) && hasTakeProfit(draft);
     case 'bracket':
-      return (
-        positive(draft.triggerPrice) &&
-        positive(draft.takeProfitPrice) &&
-        positive(draft.stopLossPrice)
-      );
+      return positive(draft.triggerPrice) && positive(draft.stopLossPrice) && hasTakeProfit(draft);
     default:
       return false;
   }
@@ -154,7 +174,9 @@ export function toPreviewArg(
     riskPercent: riskSizingActive(draft.riskPercent) ? draft.riskPercent : undefined,
     triggerPrice: positive(draft.triggerPrice) ? draft.triggerPrice : undefined,
     takeProfitPrice: positive(draft.takeProfitPrice) ? draft.takeProfitPrice : undefined,
+    takeProfitTargets: draft.takeProfitTargets,
     stopLossPrice: positive(draft.stopLossPrice) ? draft.stopLossPrice : undefined,
+    moveStopToEntry: draft.moveStopToEntry || undefined,
     trailType: draft.trailType,
     trailValue: positive(draft.trailValue) ? draft.trailValue : undefined,
     lotMethod: draft.lotMethod,
