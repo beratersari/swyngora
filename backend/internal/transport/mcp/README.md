@@ -217,7 +217,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `continue_portfolio_rebalance` | Re-plan leftover mix from the current book (new attempt) |
 | `set_margin_mode` | Set isolated or cross (locked if open pos/orders) |
 | `place_margin_order` | Paper margin long/short open (market/limit, 1x–10x). Stores the coin read from placement. Optional idempotencyKey |
-| `list_margin_positions` | Open margin positions, including `entrySituation` from placement |
+| `list_margin_positions` | Open margin positions, including `entrySituation` from when the position opened. A limit fill stores a new read then |
 | `close_margin_position` | Full/partial margin close (optional idempotencyKey) |
 | `adjust_margin` | Add/remove isolated position margin |
 | `repay_margin_debt` | Pay interest then principal without closing |

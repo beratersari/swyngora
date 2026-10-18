@@ -679,7 +679,7 @@ func (s *Service) PlaceMarginOrder(ctx context.Context, in MarginOrderInput) (*d
 			return nil, nil, fmt.Errorf("%w: insufficient available cash for margin (need %g, available %g)", domain.ErrInvalidArgument, need, avail)
 		}
 		// Reserve required margin; released on cancel/reject/fill (fill then debits cash).
-		// The coin read is the placement tape. The fill copies it and does not read again.
+		// The coin read stays on the order. The fill stores a new read.
 		o := domain.MarginOrder{
 			ID: uuid.NewString(), ClientID: clientID, Exchange: ex, Symbol: sym,
 			Side: side, Type: domain.MarginOrderLimit, Quantity: in.Quantity, Leverage: in.Leverage,
@@ -1352,7 +1352,7 @@ func (s *Service) tryFillMarginLimit(ctx context.Context, o *domain.MarginOrder,
 		Quantity: o.Quantity, EntryPrice: entry, Leverage: o.Leverage, Margin: margin,
 		DebtPrincipal: borrowP, DebtInterest: 0, DebtAsset: debtAsset, LastInterestAt: lastInt,
 		LiquidationPrice: liq, StopLoss: o.StopLoss, TakeProfit: o.TakeProfit,
-		Status: domain.MarginPositionOpen, EntrySituation: o.Situation,
+		Status: domain.MarginPositionOpen, EntrySituation: s.captureSituation(ctx, o.Exchange, o.Symbol),
 		OpenedAt: now, UpdatedAt: now,
 	}
 	tr := domain.MarginTrade{

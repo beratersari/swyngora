@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { openMarginFor } from './helpers';
+import { openMarginFor, storedReadComparison } from './helpers';
 
 describe('openMarginFor', () => {
   it('keeps the open rows for this coin', () => {
@@ -15,5 +15,17 @@ describe('openMarginFor', () => {
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.side).toBe('long');
+  });
+});
+
+describe('storedReadComparison', () => {
+  const entry = { priceCvd: { kind: 'price_up_cvd_down' as const } };
+
+  it('names a kind that left and stays quiet when the live read failed', () => {
+    const cmp = storedReadComparison(entry, { priceCvd: { kind: 'agrees' } }, true);
+    expect(cmp?.same).toBe(false);
+    expect(cmp?.clauses?.[0]).toMatchObject({ clause: 'priceCvd', status: 'changed', live: 'agrees' });
+    expect(storedReadComparison(entry, undefined, false)).toBeUndefined();
+    expect(storedReadComparison(undefined, { priceCvd: { kind: 'agrees' } }, true)).toBeUndefined();
   });
 });

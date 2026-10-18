@@ -1,9 +1,19 @@
 import type { CoinSituation, MarginPosition, SpotPosition } from '@/libs/api';
-import type { SituationComparison } from '@/components/molecules/CoinSituation';
+import { compareCoinSituation, type SituationComparison } from '@/components/molecules/CoinSituation';
 import { formatDateTime } from '@/libs/utils/formatMarket';
 import { formatPrice } from '@/libs/utils/formatPrice';
 
 const CASH_EQUITIES = new Set(['nasdaq', 'bist']);
+
+/** The stored entry against a live read. A failed live read stays quiet. */
+export function storedReadComparison(
+  entry: CoinSituation | null | undefined,
+  live: CoinSituation | null | undefined,
+  liveOk: boolean,
+): SituationComparison | undefined {
+  if (!liveOk || !entry) return undefined;
+  return compareCoinSituation(entry, live);
+}
 
 export function isCashEquity(exchange: string | undefined): boolean {
   return CASH_EQUITIES.has((exchange ?? '').trim().toLowerCase());
