@@ -27,6 +27,7 @@ export type RebalanceResult = components['schemas']['RebalanceResult'];
 export type RebalanceLegOutcome = components['schemas']['RebalanceLegOutcome'];
 export type RebalanceLineSnapshot = components['schemas']['RebalanceLineSnapshot'];
 export type PendingOrder = components['schemas']['PendingOrder'];
+export type SpreadOrder = components['schemas']['SpreadOrder'];
 
 export type SpotPosition = components['schemas']['PortfolioPosition'];
 
@@ -40,7 +41,7 @@ export type PaperOrderType =
 
 export type PlacePortfolioOrderArg = {
   portfolioId?: string;
-  exchange?: MarketExchange;
+  exchange?: MarketExchange | 'all';
   symbol: string;
   side?: 'buy' | 'sell';
   type?: PaperOrderType;
@@ -54,14 +55,25 @@ export type PlacePortfolioOrderArg = {
   timeInForce?: 'gtc' | 'ioc' | 'fok';
   expiresAt?: string;
   idempotencyKey?: string;
+  /** Best-cost cap in percent. 0.5 means 0.5% from the best price. */
+  maxSlippagePct?: number;
+  /** Work a best-cost market order as timed slices. */
+  spread?: boolean;
+  /** Minutes from the first slice to the last. */
+  spreadMinutes?: number;
+  /** How many slices. */
+  sliceCount?: number;
   /** Clauses a buy stores. Omit to store the whole read. An empty list stores no read. */
   reason?: string[];
 };
 
 export type PlacePortfolioOrderResponse = {
   type?: string;
+  routed?: boolean;
+  spread?: boolean;
   trade?: PaperTrade;
-  order?: PendingOrder;
+  trades?: PaperTrade[];
+  order?: PendingOrder | SpreadOrder;
   entry?: PendingOrder;
   takeProfit?: PendingOrder;
   stopLoss?: PendingOrder;
@@ -74,11 +86,27 @@ export type PlacePortfolioOrderResponse = {
 export type OrderPreview = components['schemas']['OrderPreview'];
 export type OrderPreviewLeg = components['schemas']['OrderPreviewLeg'];
 export type OrderPreviewRisk = components['schemas']['OrderPreviewRisk'];
+export type ExecutionCompare = components['schemas']['ExecutionCompare'];
+export type ExecutionQuote = components['schemas']['ExecutionQuote'];
+
+/** Three prices for one crypto size. Nothing is placed. */
+export type CompareOrderExecutionArg = {
+  portfolioId?: string;
+  exchange: string;
+  symbol: string;
+  side: 'buy' | 'sell';
+  quantity: number;
+  maxSlippagePct?: number;
+  spreadMinutes?: number;
+  sliceCount?: number;
+};
 
 /** Read-only price of a spot or margin ticket. Nothing is placed. */
 export type PreviewPortfolioOrderArg = {
   portfolioId?: string;
   exchange?: string;
+  compareExchange?: string;
+  maxSlippagePct?: number;
   symbol: string;
   product?: 'spot' | 'margin';
   type?: string;
@@ -95,7 +123,13 @@ export type PreviewPortfolioOrderArg = {
   lotMethod?: 'fifo' | 'lifo';
   limitPrice?: number;
   leverage?: number;
-  /** Clauses a spot buy would store. Omit to leave the stored set unset. */
+  /** Price a best-cost market order as timed slices. */
+  spread?: boolean;
+  /** Minutes from the first slice to the last. */
+  spreadMinutes?: number;
+  /** How many slices. */
+  sliceCount?: number;
+  /** Clauses a spot buy would store. Omit to leave the request unset. */
   reason?: string[];
 };
 
@@ -369,6 +403,10 @@ export const portfolioApi = baseApi.injectEndpoints({
           timeInForce: body.timeInForce,
           expiresAt: body.expiresAt,
           idempotencyKey: body.idempotencyKey,
+          maxSlippagePct: body.maxSlippagePct,
+          ...(body.spread ? { spread: true } : {}),
+          ...(body.spread && body.spreadMinutes ? { spreadMinutes: body.spreadMinutes } : {}),
+          ...(body.spread && body.sliceCount ? { sliceCount: body.sliceCount } : {}),
           ...(body.reason !== undefined ? { reason: body.reason } : {}),
         },
         headers: body.idempotencyKey ? { 'Idempotency-Key': body.idempotencyKey } : undefined,
@@ -396,10 +434,58 @@ export const portfolioApi = baseApi.injectEndpoints({
           lotMethod: body.lotMethod,
           limitPrice: body.limitPrice,
           leverage: body.leverage,
+          compareExchange: body.compareExchange,
+          maxSlippagePct: body.maxSlippagePct,
+          ...(body.spread ? { spread: true } : {}),
+          ...(body.spread && body.spreadMinutes ? { spreadMinutes: body.spreadMinutes } : {}),
+          ...(body.spread && body.sliceCount ? { sliceCount: body.sliceCount } : {}),
           ...(body.reason !== undefined ? { reason: body.reason } : {}),
         },
       }),
       providesTags: ['Portfolio'],
+    }),
+    compareOrderExecution: build.query<ExecutionCompare, CompareOrderExecutionArg>({
+      query: (body) => ({
+        url: '/api/v1/portfolio/orders/execution-compare',
+        method: 'POST',
+        body: {
+          portfolioId: body.portfolioId,
+          exchange: body.exchange,
+          symbol: body.symbol,
+          side: body.side,
+          quantity: body.quantity,
+          maxSlippagePct: body.maxSlippagePct,
+          spreadMinutes: body.spreadMinutes,
+          sliceCount: body.sliceCount,
+        },
+      }),
+      providesTags: ['Portfolio'],
+    }),
+    listSpreadOrders: build.query<
+      { orders?: SpreadOrder[]; count?: number; status?: string },
+      ({ status?: string; limit?: number; offset?: number } & BookArg) | void
+    >({
+      query: (arg) => ({
+        url: '/api/v1/portfolio/spread-orders',
+        params: {
+          status: arg?.status ?? 'open',
+          limit: arg?.limit ?? 50,
+          offset: arg?.offset ?? 0,
+          ...bookParams(arg?.portfolioId),
+        },
+      }),
+      providesTags: ['Portfolio'],
+    }),
+    cancelSpreadOrder: build.mutation<
+      { order?: SpreadOrder; note?: string },
+      { id: string; portfolioId?: string }
+    >({
+      query: ({ id, portfolioId }) => ({
+        url: `/api/v1/portfolio/spread-orders/${encodeURIComponent(id)}`,
+        method: 'DELETE',
+        params: bookParams(portfolioId),
+      }),
+      invalidatesTags: ['Portfolio'],
     }),
     listPortfolioOrders: build.query<
       OrdersListResponse,
@@ -698,6 +784,9 @@ export const {
   useRevokePortfolioShareMutation,
   usePlacePortfolioOrderMutation,
   usePreviewPortfolioOrderQuery,
+  useCompareOrderExecutionQuery,
+  useListSpreadOrdersQuery,
+  useCancelSpreadOrderMutation,
   useListPortfolioOrdersQuery,
   useAmendPortfolioOrderMutation,
   useCancelPortfolioOrderMutation,

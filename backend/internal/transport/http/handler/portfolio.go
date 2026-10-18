@@ -368,6 +368,11 @@ type orderBody struct {
 	LimitPrice      float64   `json:"limitPrice"`  // margin limit preview
 	RiskPercent     float64   `json:"riskPercent"` // preview only: size from equity and the stop
 	Reason          *[]string `json:"reason"`      // clauses a buy stores; omitted keeps the whole read
+	CompareExchange string    `json:"compareExchange"`
+	MaxSlippagePct  float64   `json:"maxSlippagePct"`
+	Spread          bool      `json:"spread"`
+	SpreadMinutes   int       `json:"spreadMinutes"`
+	SliceCount      int       `json:"sliceCount"`
 }
 
 func situationReasonFrom(raw *[]string) (domain.SituationReason, error) {
@@ -483,8 +488,50 @@ func (h *PortfolioHandler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	if typ == "" {
 		typ = "market"
 	}
+	if err := rejectSpreadMisuse(body, typ); err != nil {
+		writeError(w, err)
+		return
+	}
+	if body.Spread {
+		h.placeSpread(w, r, clientID, pfID, ownerID, body, reason)
+		return
+	}
 	switch typ {
 	case "market":
+		if domain.IsPaperRouteExchange(body.Exchange) {
+			trades, view, err := h.svc.PlaceRoutedOrder(r.Context(), portfolio.OrderInput{
+				ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
+				Side: body.Side, Quantity: body.Quantity, LotMethod: body.LotMethod,
+				IdempotencyKey: idempotencyKeyFrom(r, body.IdempotencyKey),
+				Reason:         reason,
+				MaxSlippagePct: body.MaxSlippagePct,
+			})
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			dtos := make([]tradeDTO, 0, len(trades))
+			for i := range trades {
+				dtos = append(dtos, tradeToDTO(&trades[i]))
+			}
+			var first any
+			if len(dtos) > 0 {
+				first = dtos[0]
+			}
+			note := ""
+			if view != nil {
+				note = view.Note
+			}
+			writeJSON(w, http.StatusOK, map[string]any{
+				"type":      "market",
+				"routed":    true,
+				"trade":     first,
+				"trades":    dtos,
+				"portfolio": portfolioViewDTO(view),
+				"note":      note,
+			})
+			return
+		}
 		tr, view, err := h.svc.PlaceOrder(r.Context(), portfolio.OrderInput{
 			ClientID: clientID, PortfolioID: pfID, OwnerClientID: ownerID, Exchange: body.Exchange, Symbol: body.Symbol,
 			Side: body.Side, Quantity: body.Quantity, LotMethod: body.LotMethod,

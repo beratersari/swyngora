@@ -197,8 +197,11 @@ type DataPort interface {
 	PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct, maxExposurePct *float64) (json.RawMessage, error)
 	DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetPaperTradingCosts(ctx context.Context, exchange string) (json.RawMessage, error)
-	PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64) (json.RawMessage, error)
-	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string) (json.RawMessage, error)
+	PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int) (json.RawMessage, error)
+	CompareOrderExecution(ctx context.Context, clientID, exchange, symbol, side string, quantity, maxSlippagePct float64, spreadMinutes, sliceCount int) (json.RawMessage, error)
+	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int) (json.RawMessage, error)
+	ListSpreadOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
+	CancelSpreadOrder(ctx context.Context, clientID, orderID string) (json.RawMessage, error)
 	PlacePortfolioPendingOrder(ctx context.Context, clientID, exchange, symbol, orderType string, quantity, triggerPrice float64, timeInForce, expiresAt, trailType string, trailValue float64, lotMethod string) (json.RawMessage, error)
 	ListPortfolioLots(ctx context.Context, clientID, exchange, symbol, status string) (json.RawMessage, error)
 	PlacePortfolioOCOOrder(ctx context.Context, clientID, exchange, symbol string, quantity, takeProfitPrice, stopLossPrice float64, expiresAt string) (json.RawMessage, error)
@@ -3536,7 +3539,7 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("preview_portfolio_order",
-		mcp.WithDescription("Preview a paper order before it is placed. Returns the slipped fill, taker fee, cash in or out, reserved cash or quantity, estimated sell profit, and whether a risk limit or the borrow cap would block it. Pass riskPercent and stopLossPrice to size a spot buy, bracket, or margin open from portfolio equity (quantity is then ignored). product=spot (default) or margin. When reason names clauses and the live read is ready, reasonHistory is how this book's past closes of each selected live kind did: still kept the kind, left changed or went blank. Both counts at zero means no past close stored that kind. The rows are not one total. A failed history read omits reasonHistory and still returns the price. correlation is how the open coins moved together and how this order changes the book's day swing. A failed correlation read omits it and still returns the price. Nothing is written. Not real money."),
+		mcp.WithDescription("Preview a paper order before it is placed. Returns the slipped fill, taker fee, cash in or out, reserved cash or quantity, estimated sell profit, and whether a risk limit or the borrow cap would block it. Pass riskPercent and stopLossPrice to size a spot buy, bracket, or margin open from portfolio equity (quantity is then ignored). product=spot (default) or margin. exchange=all splits a spot market order across Binance, Coinbase, and Bybit by depth and taker fee. compareExchange prices that whole size on one venue. maxSlippagePct (0.5 means 0.5%) keeps a buy at or below that far from the best ask and a sell at or above that far from the best bid. When the size inside the cap is short, nothing is filled. routeLegs lists each venue. A missing book is named. A sell only uses coins already held on that venue. When reason names clauses and the live read is ready, reasonHistory is how this book's past closes of each selected live kind did: still kept the kind, left changed or went blank. Both counts at zero means no past close stored that kind. The rows are not one total. A failed history read omits reasonHistory and still returns the price. correlation is how the open coins moved together and how this order changes the book's day swing. A failed correlation read omits it and still returns the price. Nothing is written. Not real money."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
@@ -3545,7 +3548,9 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithString("side", mcp.Description("Spot market: buy|sell. Margin: long|short")),
 		mcp.WithString("type", mcp.Description("Spot: market|limit_buy|limit_sell|stop_loss|trailing_stop|oco|bracket. Margin: market|limit")),
 		mcp.WithString("product", mcp.Description("spot (default) or margin")),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist|all. all splits a spot market order by depth and taker fee.")),
+		mcp.WithString("compareExchange", mcp.Description("Preview only. Venue to price the whole quantity against when exchange is all.")),
+		mcp.WithNumber("maxSlippagePct", mcp.Description("Best-cost cap in percent. 0.5 keeps fills within 0.5% of the best price. Zero means no cap. When the size inside the cap is short, nothing is filled.")),
 		mcp.WithNumber("triggerPrice", mcp.Description("Limit, stop, or bracket entry price")),
 		mcp.WithNumber("takeProfitPrice", mcp.Description("OCO, bracket, or margin take-profit")),
 		mcp.WithNumber("stopLossPrice", mcp.Description("Stop used to size the order. Also the OCO, bracket, or margin stop.")),
@@ -3555,6 +3560,9 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		mcp.WithNumber("limitPrice", mcp.Description("Margin limit price")),
 		mcp.WithNumber("leverage", mcp.Description("Margin leverage 1-10")),
 		mcp.WithString("reason", mcp.Description("Spot buy, limit_buy, or bracket only. Comma-separated clauses to store: priceCvd, openInterest, liquidation, prints, funding, crowd, size. Omit to store the whole read. Pass none to store no read. A sell ignores this and keeps the whole read.")),
+		mcp.WithBoolean("spread", mcp.Description("With exchange=all and a spot market order, price timed slices. routeLegs are the first slice on the current book. Later slices read the books again. Nothing is written.")),
+		mcp.WithNumber("spreadMinutes", mcp.Description("Minutes from the first slice to the last. Default 10. From 1 to 1440. The last slice is due at the end.")),
+		mcp.WithNumber("sliceCount", mcp.Description("How many times the books are read. Default 10. From 2 to 60. Slices closer than 15 seconds are rejected.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -3578,7 +3586,50 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			req.GetString("side", ""), req.GetString("type", ""), req.GetString("product", ""),
 			req.GetString("trailType", ""), req.GetString("lotMethod", ""),
 			qty, req.GetFloat("triggerPrice", 0), req.GetFloat("takeProfitPrice", 0), req.GetFloat("stopLossPrice", 0),
-			req.GetFloat("trailValue", 0), req.GetFloat("limitPrice", 0), int(req.GetFloat("leverage", 0)), riskPct)
+			req.GetFloat("trailValue", 0), req.GetFloat("limitPrice", 0), int(req.GetFloat("leverage", 0)), riskPct,
+			req.GetString("compareExchange", ""), req.GetFloat("maxSlippagePct", 0), req.GetBool("spread", false),
+			int(req.GetFloat("spreadMinutes", 0)), int(req.GetFloat("sliceCount", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("compare_order_execution",
+		mcp.WithDescription("Compare fees and slippage for the same crypto spot size before placing it. Returns three rows: market walks one venue now, best_cost splits Binance, Coinbase, and Bybit now by fee-adjusted price, and spread repeats a slice of that walk as if each slice finds this book again. If the book does not refill, spread costs the same as best cost. Later prices are not known. slippagePct is the average fill versus the best price, in percent, before the fee. fee is the taker fee. savedVsMarket is positive when a buy spends less or a sell receives more than the single venue, and only when both can fill. maxSlippagePct caps best cost and the time split. The market row ignores it. A path the book cannot hold fills nothing. A bad slice schedule leaves that row as schedule and still returns the other two. A missing book is named. Nothing is written. Not real money."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("side", mcp.Required(), mcp.Description("buy or sell")),
+		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base asset quantity priced on every path")),
+		mcp.WithString("exchange", mcp.Required(), mcp.Description("Venue for the market row: binance, coinbase, or bybit")),
+		mcp.WithNumber("maxSlippagePct", mcp.Description("Cap for best cost and the time split. 0.5 means 0.5% from the best price. Zero means no cap. The market row ignores it.")),
+		mcp.WithNumber("spreadMinutes", mcp.Description("Minutes from the first slice to the last. Default 10. From 1 to 1440.")),
+		mcp.WithNumber("sliceCount", mcp.Description("How many slices. Default 10. From 2 to 60. Slices closer than 15 seconds leave the spread row unpriced.")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		side, err := req.RequireString("side")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		qty := req.GetFloat("quantity", 0)
+		if qty <= 0 {
+			return mcp.NewToolResultError("quantity is required"), nil
+		}
+		exchange, err := req.RequireString("exchange")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		raw, err := api.CompareOrderExecution(ctx, clientID, exchange, symbol, side, qty,
+			req.GetFloat("maxSlippagePct", 0), int(req.GetFloat("spreadMinutes", 0)), int(req.GetFloat("sliceCount", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
@@ -3586,16 +3637,20 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 	})
 
 	addTool(mcp.NewTool("place_portfolio_order",
-		mcp.WithDescription("Paper market buy/sell. Fill is last price plus adverse slippage; a taker fee is charged. Buy lot cost includes the fee; sell realized PnL is after the fee. Simulated only."),
+		mcp.WithDescription("Paper market buy/sell. Fill walks the visible spot book; a taker fee is charged. exchange=all splits the quantity across Binance, Coinbase, and Bybit by depth and taker fee and returns one trade per venue. maxSlippagePct (0.5 means 0.5%) refuses prices past that distance from the best price, and refuses the order when the size inside the cap is short. Buy lot cost includes the fee; sell realized PnL is after the fee. A sell only uses coins already held on that venue. Simulated only."),
 		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
 		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
 		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
 		mcp.WithString("side", mcp.Required(), mcp.Description("buy | sell")),
 		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base asset quantity")),
-		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist")),
+		mcp.WithString("exchange", mcp.Description("binance|coinbase|bybit|nasdaq|bist|all. all splits a spot market order by depth and taker fee.")),
 		mcp.WithString("lotMethod", mcp.Description("fifo (default) or lifo — sell lot matching")),
+		mcp.WithNumber("maxSlippagePct", mcp.Description("Best-cost cap in percent. 0.5 keeps fills within 0.5% of the best price. Zero means no cap.")),
 		mcp.WithString("idempotencyKey", mcp.Description("Optional retry key; same key + same request returns the original fill")),
 		mcp.WithString("reason", mcp.Description("Buy only. Comma-separated clauses to store: priceCvd, openInterest, liquidation, prints, funding, crowd, size. Omit to store the whole read. Pass none to store no read. A sell ignores this.")),
+		mcp.WithBoolean("spread", mcp.Description("With exchange=all, work the order as timed slices. Each slice reads the books again and takes the cheapest venue for that size. The first slice is due now. The last slice is due at the end of spreadMinutes. Nothing fills inside this call.")),
+		mcp.WithNumber("spreadMinutes", mcp.Description("Minutes from the first slice to the last. Default 10. From 1 to 1440.")),
+		mcp.WithNumber("sliceCount", mcp.Description("How many slices. Default 10. From 2 to 60. Slices closer than 15 seconds are rejected.")),
 	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		clientID, err := req.RequireString("clientId")
 		if err != nil {
@@ -3619,7 +3674,49 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}
-		raw, err := api.PlacePortfolioOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, side, qty, req.GetString("lotMethod", ""))
+		raw, err := api.PlacePortfolioOrder(ctx, clientID, req.GetString("exchange", "binance"), symbol, side, qty, req.GetString("lotMethod", ""), req.GetFloat("maxSlippagePct", 0), req.GetBool("spread", false), int(req.GetFloat("spreadMinutes", 0)), int(req.GetFloat("sliceCount", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("list_spread_orders",
+		mcp.WithDescription("List paper spread orders. A spread order is a best-cost spot market order worked as timed slices. durationMinutes is the clock. Each slice reads the books again. status=open (default), filled, canceled, or all."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
+		mcp.WithString("status", mcp.Description("open|filled|canceled|all. Default open.")),
+		mcp.WithNumber("limit", mcp.Description("Max rows default 50")),
+		mcp.WithNumber("offset", mcp.Description("Offset default 0")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		raw, err := api.ListSpreadOrders(ctx, clientID, req.GetString("status", ""), int(req.GetFloat("limit", 0)), int(req.GetFloat("offset", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("cancel_spread_order",
+		mcp.WithDescription("Cancel an open paper spread order. Slices that already filled stay. The unused cash or quantity lock is released."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
+		mcp.WithString("orderId", mcp.Required(), mcp.Description("Spread order id")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		orderID, err := req.RequireString("orderId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		raw, err := api.CancelSpreadOrder(ctx, clientID, orderID)
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

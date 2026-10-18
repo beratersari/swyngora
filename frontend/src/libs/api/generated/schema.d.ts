@@ -4028,9 +4028,54 @@ export interface paths {
          *     base amount that loses that percent of portfolio equity if the stop fills, after the taker
          *     fee and adverse slippage. It applies to a spot buy (market, limit_buy, bracket) and to a
          *     margin long or short. A spot sell or exit is rejected. The stop is placed only with a
-         *     bracket or a margin open. Not real money.
+         *     bracket or a margin open.
+         *     exchange=all (or best) on a spot market order splits the quantity across Binance, Coinbase,
+         *     and Bybit. Each level is taken at price×(1+fee) for a buy and price×(1−fee) for a sell, lowest
+         *     total cost first. One preview lists a leg per venue. compareExchange prices that whole quantity
+         *     on one venue and returns savedCash when both can fill. A missing book is named in missingVenues.
+         *     A sell only uses coins already held on that venue. A USDT book books a Coinbase USD fill 1:1.
+         *     spread=true on that best-cost market order prices timed slices instead of one fill.
+         *     spreadMinutes is the clock from the first slice to the last (default 10). sliceCount is how
+         *     many reads (default 10). The last slice is due at the end. routeLegs are the first slice on
+         *     the current book. Later slices read the books again.
+         *     A buy shows the cash the whole order would lock. A sell shows the quantity it would lock.
+         *     Margin, equities, and resting orders stay on one venue. Not real money.
          */
         post: operations["previewPortfolioOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/orders/execution-compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compare market, best cost, and a time split
+         * @description Prices the same crypto spot size three ways and writes nothing.
+         *     `exchange` is one of binance, coinbase, or bybit. That column walks only that venue's
+         *     visible book. Best cost walks Binance, Coinbase, and Bybit and takes the cheapest
+         *     fee-adjusted price. Over time repeats a slice of that walk (`spreadMinutes`, `sliceCount`;
+         *     default 10 slices over 10 minutes) as if each slice finds this same book again.
+         *     If the book does not refill, over time costs the same as best cost. Later prices are not known.
+         *     `slippagePct` is the average fill versus the best price across the books, in percent, before the fee.
+         *     `fee` is the taker fee and `feePct` is that fee as a percent of notional. Cash includes the fee.
+         *     `savedVsMarket` is set when that path and the single venue can both fill. Positive means a buy
+         *     spends less, or a sell receives more, than the single venue.
+         *     `maxSlippagePct` of 0.5 caps best cost and the time split at 0.5% from the best price.
+         *     The single venue does not use that cap. A path the book cannot hold has a status other than
+         *     `filled` and no cash. A missing book is named and is not zero. A bad slice schedule leaves
+         *     that row as `schedule` and still returns the other two prices. A sell only uses coins already
+         *     held on each venue. Equities are rejected. Not real money.
+         */
+        post: operations["compareOrderExecution"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4070,10 +4115,62 @@ export interface paths {
          *     Optional Idempotency-Key header or idempotencyKey body: a retry with the same key and same request
          *     returns the original order/trade instead of creating a second one. A different request with the same
          *     key returns 409. Keys last 24 hours and are scoped to the paper book.
-         *     Paper trading only — not real money.
+         *     exchange=all on type=market splits the quantity across Binance, Coinbase, and Bybit by
+         *     fee-adjusted depth and writes one trade per venue that received size. The cash change is one
+         *     balance update. A book that cannot hold the size fills nothing. A sell only uses coins already
+         *     held on that venue. Margin, equities, and resting orders stay on one venue.
+         *     spread=true with exchange=all and type=market does not fill now. It locks cash for a buy, or
+         *     quantity on the venues that already hold the coin for a sell, and works the order as timed slices.
+         *     spreadMinutes (default 10) is the clock. sliceCount (default 10) is how many fills. The last
+         *     slice is due at the end. Each slice reads the books again. The response is 201 and order is a SpreadOrder.
+         *     The first slice is due immediately and is filled by the background worker. Cancel releases the
+         *     size that has not filled. Paper trading only — not real money.
          */
         post: operations["placePortfolioOrder"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/spread-orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List spread paper orders
+         * @description Best-cost orders that fill as timed slices. The last slice is due when the duration ends.
+         *     Defaults to open orders. status=open|filled|canceled|all.
+         *     Paper trading only — not real money.
+         */
+        get: operations["listSpreadOrders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/spread-orders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Cancel an open spread order
+         * @description Stops slices that have not run and releases the unused cash or quantity lock.
+         *     Slices that already filled stay on the book.
+         */
+        delete: operations["cancelSpreadOrder"];
         options?: never;
         head?: never;
         patch?: never;
@@ -10383,10 +10480,22 @@ export interface components {
             clientId?: string;
             portfolioId?: string;
             /**
+             * @description all prices a spot market order as a best-cost split across Binance, Coinbase, and Bybit.
              * @default binance
              * @enum {string}
              */
-            exchange: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
+            exchange: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist" | "all";
+            /**
+             * @description Venue to price the whole quantity against when exchange is all. Preview only.
+             * @enum {string}
+             */
+            compareExchange?: "binance" | "coinbase" | "bybit";
+            /**
+             * @description Best-cost price cap in percent. 0.5 means a buy stays at or below 0.5% above the best ask,
+             *     and a sell stays at or above 0.5% below the best bid. Zero or omitted means no cap.
+             *     When the size inside the cap is short, nothing is filled.
+             */
+            maxSlippagePct?: number;
             symbol: string;
             /**
              * @description spot uses the paper order types. margin prices a long or short open.
@@ -10430,6 +10539,15 @@ export interface components {
              *     Omit the field to leave the stored set unset. An empty array would store no read.
              */
             reason?: ("priceCvd" | "openInterest" | "liquidation" | "prints" | "funding" | "crowd" | "size")[];
+            /**
+             * @description When true with exchange=all and a spot market order, price timed slices.
+             *     The legs are the first slice. Nothing is written.
+             */
+            spread?: boolean;
+            /** @description Minutes from the first slice to the last. Omit for 10. */
+            spreadMinutes?: number;
+            /** @description How many slices. Omit for 10. A gap shorter than 15 seconds is rejected. */
+            sliceCount?: number;
         };
         OrderPreviewLeg: {
             /** @enum {string} */
@@ -10537,6 +10655,91 @@ export interface components {
             note: string;
             add?: components["schemas"]["PortfolioCorrAdd"];
         };
+        ExecutionCompareRequest: {
+            clientId?: string;
+            portfolioId?: string;
+            ownerClientId?: string;
+            /**
+             * @description Venue for the market column. Best cost and the time split still read all three books.
+             * @enum {string}
+             */
+            exchange: "binance" | "coinbase" | "bybit";
+            symbol: string;
+            /** @enum {string} */
+            side: "buy" | "sell";
+            /** @description Base size priced on every path. */
+            quantity: number;
+            /** @description Cap for best cost and the time split. 0.5 means 0.5% from the best price. Zero or omitted means no cap. The market column ignores it. */
+            maxSlippagePct?: number;
+            /** @description Minutes from the first slice to the last. Zero uses 10. */
+            spreadMinutes?: number;
+            /** @description How many slices. Zero uses 10. */
+            sliceCount?: number;
+        };
+        ExecutionQuote: {
+            /** @enum {string} */
+            style?: "market" | "best_cost" | "spread";
+            /**
+             * @description filled means this path can take the whole size. Anything else fills nothing.
+             * @enum {string}
+             */
+            status?: "filled" | "exhausted" | "slippage_limited" | "inventory_short" | "missing" | "schedule";
+            exchange?: string;
+            symbol?: string;
+            quantity?: number;
+            filledQuantity?: number;
+            averagePrice?: number;
+            /** @description Best ask or bid across the books. Slippage is measured from this price. */
+            touchPrice?: number;
+            /** @description Average fill versus touchPrice, in percent, before the fee. 0.5 means 0.5% worse. */
+            slippagePct?: number;
+            notional?: number;
+            /** @description Taker fee in quote currency. */
+            fee?: number;
+            /** @description Taker fee as a percent of notional. */
+            feePct?: number;
+            /** @description Cash a buy would spend, including the fee. */
+            cashDebit?: number;
+            /** @description Cash a sell would receive after the fee. */
+            cashCredit?: number;
+            /** @description Cash per coin, including the fee. */
+            unitCash?: number;
+            /** @description Versus the market column, when both can fill. Positive means a buy spends less or a sell receives more. */
+            savedVsMarket?: number;
+            levelsUsed?: number;
+            legs?: components["schemas"]["PaperRouteLeg"][];
+            /** @description Venues whose book did not load. Their size is not zero. */
+            missing?: string[];
+            detail?: string;
+            /**
+             * @description Why the time split could not be named. interval is closer than 15 seconds.
+             * @enum {string}
+             */
+            schedule?: "interval" | "range" | "size";
+            spreadMinutes?: number;
+            sliceCount?: number;
+            sliceQuantity?: number;
+            /**
+             * @description refill means every slice was priced on this book. A book that does not refill matches best cost.
+             * @enum {string}
+             */
+            assumption?: "refill";
+        };
+        ExecutionCompare: {
+            /** @enum {string} */
+            side?: "buy" | "sell";
+            symbol?: string;
+            quantity?: number;
+            /** @description Venue used for the market column. */
+            exchange?: string;
+            touchPrice?: number;
+            /** @description Venue that posted the best price. */
+            touchExchange?: string;
+            /** @description Cap applied to best cost and the time split. Zero means no cap. */
+            maxSlippagePct?: number;
+            rows?: components["schemas"]["ExecutionQuote"][];
+            note?: string;
+        };
         OrderPreview: {
             /** @enum {string} */
             product?: "spot" | "margin";
@@ -10626,7 +10829,119 @@ export interface components {
              *     is still returned.
              */
             reasonHistory?: components["schemas"]["SituationLeaveRow"][];
+            /** @description True when this preview splits a spot market order across venues. */
+            routed?: boolean;
+            /** @description One leg per venue that would receive size, cheapest fee-adjusted level first. */
+            routeLegs?: components["schemas"]["PaperRouteLeg"][];
+            /** @description Spot venues whose book did not load. Their size is not zero. */
+            missingVenues?: string[];
+            /** @description Venues left out because their quote is outside this book's currency. */
+            skippedVenues?: components["schemas"]["PaperRouteSkip"][];
+            compare?: components["schemas"]["PaperRouteCompare"];
+            /** @description How the split was chosen. */
+            routeNote?: string;
+            /** @description Best-cost cap in percent. Present when the request set one. */
+            maxSlippagePct?: number;
+            /** @description Best ask for a buy, or best bid for a sell, that the cap is measured from. */
+            slippageTouch?: number;
+            /** @description Furthest raw price the cap allows. */
+            slippageLimitPrice?: number;
+            /** @description Visible size at or better than slippageLimitPrice. */
+            slippageInsideQuantity?: number;
+            /** @description True when that size is shorter than the order, so nothing is filled. */
+            slippageLimited?: boolean;
+            /** @description True when this preview is timed slices instead of one fill. */
+            spread?: boolean;
+            /** @description Minutes from the first slice to the last. The last slice is due at the end. */
+            spreadMinutes?: number;
+            /** @description How many times the order reads the books. */
+            sliceCount?: number;
+            /** @description Size of the first slice. Later slices use whatever quantity is still open. */
+            sliceQuantity?: number;
+            /** @description Seconds between slices, rounded to the nearest second. The stored gap divides the duration by one less than the slice count. */
+            sliceIntervalSec?: number;
             note?: string;
+        };
+        /**
+         * @description A best-cost spot market order worked as timed slices.
+         *     The last slice is due when the duration ends. Each slice reads Binance, Coinbase, and Bybit again. Paper only.
+         */
+        SpreadOrder: {
+            id?: string;
+            clientId?: string;
+            symbol?: string;
+            /** @enum {string} */
+            side?: "buy" | "sell";
+            quantity?: number;
+            filledQuantity?: number;
+            remainingQuantity?: number;
+            sliceCount?: number;
+            slicesDone?: number;
+            /** @description Minutes from the first slice to the last. */
+            durationMinutes?: number;
+            /** Format: date-time */
+            nextSliceAt?: string;
+            /**
+             * Format: date-time
+             * @description When the last slice is due if every slice runs on time.
+             */
+            endsAt?: string;
+            /** @enum {string} */
+            status?: "open" | "filled" | "canceled";
+            maxSlippagePct?: number;
+            /** @description Cash still locked for a buy. It falls as slices fill and returns to available when the order ends. */
+            reservedCash?: number;
+            filledNotional?: number;
+            filledFee?: number;
+            /** @enum {string} */
+            lotMethod?: "fifo" | "lifo";
+            reasonSet?: boolean;
+            reason?: string[];
+            cancelReason?: string;
+            /** @description Quantity a sell still has locked on each venue. */
+            holds?: {
+                exchange?: string;
+                symbol?: string;
+                quantity?: number;
+            }[];
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        PaperRouteLeg: {
+            exchange?: string;
+            symbol?: string;
+            quote?: string;
+            /** @description True when the venue quote differs from the book currency and is booked 1:1. */
+            aliased?: boolean;
+            quantity?: number;
+            fillPrice?: number;
+            notional?: number;
+            fee?: number;
+            feeRate?: number;
+            cashDebit?: number;
+            cashCredit?: number;
+            levelsUsed?: number;
+            estimatedRealizedPnl?: number;
+        };
+        PaperRouteSkip: {
+            exchange?: string;
+            symbol?: string;
+            /** @enum {string} */
+            reason?: "quote";
+            detail?: string;
+        };
+        PaperRouteCompare: {
+            exchange?: string;
+            symbol?: string;
+            known?: boolean;
+            /** @description Cash the single venue would spend or receive. */
+            cash?: number;
+            /** @description Positive when the split spends less on a buy or receives more on a sell. */
+            savedCash?: number;
+            exhausted?: boolean;
+            inventoryShort?: boolean;
         };
         PortfolioCashMovement: {
             id?: string;
@@ -17127,6 +17442,32 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
+    compareOrderExecution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExecutionCompareRequest"];
+            };
+        };
+        responses: {
+            /** @description Three prices for one size. The book is unchanged. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionCompare"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
     listPortfolioOrders: {
         parameters: {
             query?: {
@@ -17170,10 +17511,13 @@ export interface operations {
                 "application/json": {
                     clientId?: string;
                     /**
+                     * @description all splits a spot market order across Binance, Coinbase, and Bybit by depth and taker fee.
                      * @default binance
                      * @enum {string}
                      */
-                    exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist";
+                    exchange?: "binance" | "coinbase" | "bybit" | "nasdaq" | "bist" | "all";
+                    /** @description Best-cost cap in percent. 0.5 keeps fills within 0.5% of the best price. Zero means no cap. */
+                    maxSlippagePct?: number;
                     symbol: string;
                     /**
                      * @default market
@@ -17229,6 +17573,15 @@ export interface operations {
                      *     A sell ignores this and keeps the whole read, so a close can still be compared with each buy.
                      */
                     reason?: ("priceCvd" | "openInterest" | "liquidation" | "prints" | "funding" | "crowd" | "size")[];
+                    /**
+                     * @description With exchange=all and type=market, work the order as timed slices.
+                     *     Each slice chooses the cheapest venue from the books at that time.
+                     */
+                    spread?: boolean;
+                    /** @description Minutes from the first slice to the last. Omit for 10. The last slice is due at the end. */
+                    spreadMinutes?: number;
+                    /** @description How many slices. Omit for 10. A gap shorter than 15 seconds is rejected. */
+                    sliceCount?: number;
                 };
             };
         };
@@ -17242,13 +17595,17 @@ export interface operations {
                     "application/json": {
                         /** @example market */
                         type?: string;
+                        /** @description True when exchange=all wrote one trade per venue. */
+                        routed?: boolean;
                         trade?: components["schemas"]["PaperTrade"];
+                        /** @description Present on a best-cost fill. trade is the first of these. */
+                        trades?: components["schemas"]["PaperTrade"][];
                         portfolio?: components["schemas"]["PortfolioView"];
                         note?: string;
                     };
                 };
             };
-            /** @description Pending order or OCO pair created */
+            /** @description Pending order, OCO pair, or spread order created. A spread order has not filled yet. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -17256,7 +17613,9 @@ export interface operations {
                 content: {
                     "application/json": {
                         type?: string;
-                        order?: components["schemas"]["PendingOrder"];
+                        /** @description True when order is a spread order and no slice has filled yet. */
+                        spread?: boolean;
+                        order?: components["schemas"]["PendingOrder"] | components["schemas"]["SpreadOrder"];
                         ocoGroupId?: string;
                         bracketId?: string;
                         entry?: components["schemas"]["PendingOrder"];
@@ -17267,6 +17626,69 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    listSpreadOrders: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                status?: "open" | "filled" | "canceled" | "all";
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Spread orders */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        orders?: components["schemas"]["SpreadOrder"][];
+                        count?: number;
+                        status?: string;
+                    };
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    cancelSpreadOrder: {
+        parameters: {
+            query?: {
+                clientId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Spread order canceled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        order?: components["schemas"]["SpreadOrder"];
+                        note?: string;
+                    };
+                };
+            };
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
         };

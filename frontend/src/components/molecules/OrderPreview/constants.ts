@@ -8,6 +8,7 @@ export const PREVIEW_WARNING_IDS = [
   'borrow',
   'stopBeyondLiquidation',
   'book',
+  'slippage',
 ] as const;
 
 export type PreviewWarningId = (typeof PREVIEW_WARNING_IDS)[number];

@@ -36,6 +36,98 @@ describe('PaperTradeForm', () => {
     expect(arg.quantity).toBe(0.01);
   });
 
+  it('sends a best-cost market order across venues', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const onDraftChange = vi.fn();
+    renderWithTheme(
+      <PaperTradeForm
+        lockedExchange="binance"
+        lockedSymbol="BTCUSDT"
+        compact
+        onDraftChange={onDraftChange}
+        onSubmit={onSubmit}
+      />,
+    );
+    fireEvent.click(screen.getByRole('radio', { name: /best cost|en düşük maliyet/i }));
+    await waitFor(() => {
+      const last = onDraftChange.mock.calls.at(-1)?.[0] as {
+        exchange: string;
+        compareExchange?: string;
+      };
+      expect(last.exchange).toBe('all');
+      expect(last.compareExchange).toBe('binance');
+    });
+    const spin = screen.getByRole('spinbutton', { name: /quantity|miktar/i });
+    fireEvent.change(spin, { target: { value: '0.5' } });
+    fireEvent.blur(spin);
+    const slip = screen.getByRole('spinbutton', { name: /max slippage|kayma/i });
+    fireEvent.change(slip, { target: { value: '0.5' } });
+    fireEvent.blur(slip);
+    fireEvent.click(screen.getByRole('button', { name: /paper buy|kağıt al/i }));
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalled();
+    });
+    const arg = onSubmit.mock.calls.at(-1)?.[0] as {
+      exchange: string;
+      quantity: number;
+      maxSlippagePct?: number;
+    };
+    expect(arg.exchange).toBe('all');
+    expect(arg.quantity).toBe(0.5);
+    expect(arg.maxSlippagePct).toBe(0.5);
+  });
+
+  it('sends a best-cost order as ten slices', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const onDraftChange = vi.fn();
+    renderWithTheme(
+      <PaperTradeForm
+        lockedExchange="binance"
+        lockedSymbol="BTCUSDT"
+        compact
+        onDraftChange={onDraftChange}
+        onSubmit={onSubmit}
+      />,
+    );
+    fireEvent.click(screen.getByRole('radio', { name: /best cost|en düşük maliyet/i }));
+    fireEvent.click(screen.getByRole('radio', { name: /^spread$|^yay$/i }));
+    const minutes = screen.getByRole('spinbutton', { name: /minutes|dakika/i });
+    const slices = screen.getByRole('spinbutton', { name: /slices|dilim/i });
+    fireEvent.change(minutes, { target: { value: '30' } });
+    fireEvent.blur(minutes);
+    fireEvent.change(slices, { target: { value: '15' } });
+    fireEvent.blur(slices);
+    await waitFor(() => {
+      const last = onDraftChange.mock.calls.at(-1)?.[0] as {
+        exchange: string;
+        spread?: boolean;
+        spreadMinutes?: number;
+        sliceCount?: number;
+      };
+      expect(last.exchange).toBe('all');
+      expect(last.spread).toBe(true);
+      expect(last.spreadMinutes).toBe(30);
+      expect(last.sliceCount).toBe(15);
+    });
+    const spin = screen.getByRole('spinbutton', { name: /quantity|miktar/i });
+    fireEvent.change(spin, { target: { value: '1' } });
+    fireEvent.blur(spin);
+    fireEvent.click(screen.getByRole('button', { name: /paper buy|kağıt al/i }));
+    await waitFor(() => {
+      expect(onSubmit).toHaveBeenCalled();
+    });
+    const arg = onSubmit.mock.calls.at(-1)?.[0] as {
+      spread?: boolean;
+      quantity: number;
+      spreadMinutes?: number;
+      sliceCount?: number;
+    };
+    expect(arg.spread).toBe(true);
+    expect(arg.quantity).toBe(1);
+    expect(arg.spreadMinutes).toBe(30);
+    expect(arg.sliceCount).toBe(15);
+  });
+
   it('finding 8: limit ticket posts the raw typed trigger with no FX conversion', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(undefined);

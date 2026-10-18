@@ -2393,7 +2393,7 @@ func (c *APIClient) DeletePortfolioRiskLimits(ctx context.Context, clientID stri
 }
 
 // PreviewPortfolioOrder prices a paper order without placing it.
-func (c *APIClient) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64) (json.RawMessage, error) {
+func (c *APIClient) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int) (json.RawMessage, error) {
 	body := map[string]any{
 		"clientId": clientID, "exchange": exchange, "symbol": symbol, "side": side,
 		"type": orderType, "product": product,
@@ -2428,23 +2428,94 @@ func (c *APIClient) PreviewPortfolioOrder(ctx context.Context, clientID, exchang
 	if leverage > 0 {
 		body["leverage"] = leverage
 	}
+	if compareExchange != "" {
+		body["compareExchange"] = compareExchange
+	}
+	if maxSlippagePct > 0 {
+		body["maxSlippagePct"] = maxSlippagePct
+	}
+	if spread {
+		body["spread"] = true
+	}
+	if spreadMinutes > 0 {
+		body["spreadMinutes"] = spreadMinutes
+	}
+	if sliceCount > 0 {
+		body["sliceCount"] = sliceCount
+	}
 	applySituationReason(ctx, body)
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders/preview", body)
 }
 
+// CompareOrderExecution prices one venue, best cost, and a time split. Nothing is placed.
+func (c *APIClient) CompareOrderExecution(ctx context.Context, clientID, exchange, symbol, side string, quantity, maxSlippagePct float64, spreadMinutes, sliceCount int) (json.RawMessage, error) {
+	body := map[string]any{
+		"clientId": clientID, "exchange": exchange, "symbol": symbol, "side": side, "quantity": quantity,
+	}
+	if maxSlippagePct > 0 {
+		body["maxSlippagePct"] = maxSlippagePct
+	}
+	if spreadMinutes > 0 {
+		body["spreadMinutes"] = spreadMinutes
+	}
+	if sliceCount > 0 {
+		body["sliceCount"] = sliceCount
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders/execution-compare", body)
+}
+
 // PlacePortfolioOrder places a paper market order.
-func (c *APIClient) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string) (json.RawMessage, error) {
+func (c *APIClient) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int) (json.RawMessage, error) {
 	body := map[string]any{
 		"clientId": clientID, "exchange": exchange, "symbol": symbol, "side": side, "quantity": quantity,
 	}
 	if lotMethod != "" {
 		body["lotMethod"] = lotMethod
 	}
+	if maxSlippagePct > 0 {
+		body["maxSlippagePct"] = maxSlippagePct
+	}
+	if spread {
+		body["spread"] = true
+	}
+	if spreadMinutes > 0 {
+		body["spreadMinutes"] = spreadMinutes
+	}
+	if sliceCount > 0 {
+		body["sliceCount"] = sliceCount
+	}
 	if k := IdempotencyKeyFrom(ctx); k != "" {
 		body["idempotencyKey"] = k
 	}
 	applySituationReason(ctx, body)
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders", body)
+}
+
+func (c *APIClient) ListSpreadOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	if status != "" {
+		q.Set("status", status)
+	}
+	if limit > 0 {
+		q.Set("limit", fmt.Sprint(limit))
+	}
+	if offset > 0 {
+		q.Set("offset", fmt.Sprint(offset))
+	}
+	return c.get(ctx, "/api/v1/portfolio/spread-orders", q)
+}
+
+func (c *APIClient) CancelSpreadOrder(ctx context.Context, clientID, orderID string) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/portfolio/spread-orders/" + url.PathEscape(orderID)
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodDelete, path, nil)
 }
 
 func (c *APIClient) ListPortfolioLots(ctx context.Context, clientID, exchange, symbol, status string) (json.RawMessage, error) {

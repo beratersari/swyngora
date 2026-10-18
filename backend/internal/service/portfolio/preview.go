@@ -34,6 +34,16 @@ type OrderPreviewInput struct {
 	RiskPercent     float64 // when > 0, quantity is sized from equity and the stop
 	// Reason names the clauses a spot buy would store. Unset leaves the stored set unset on the preview.
 	Reason domain.SituationReason
+	// CompareExchange prices the whole quantity on one venue when Exchange is all.
+	CompareExchange string
+	// MaxSlippagePct caps a best-cost walk. 0.5 means 0.5% from the best price. Zero means no cap.
+	MaxSlippagePct float64
+	// Spread prices a best-cost spot market order as timed slices.
+	Spread bool
+	// SpreadMinutes is the clock from the first slice to the last. Zero means 10.
+	SpreadMinutes int
+	// SliceCount is how many times the books are read. Zero means 10.
+	SliceCount int
 }
 
 // riskSnap is the live book used to price one preview. It is not saved as an order.
@@ -91,6 +101,25 @@ func (s *Service) PreviewOrder(ctx context.Context, in OrderPreviewInput) (*doma
 	} else if in.Quantity < domain.MinTradeQuantity || in.Quantity > domain.MaxTradeQuantity ||
 		math.IsNaN(in.Quantity) || math.IsInf(in.Quantity, 0) {
 		return nil, fmt.Errorf("%w: quantity out of range", domain.ErrInvalidArgument)
+	}
+	if domain.IsPaperRouteExchange(in.Exchange) {
+		if product != "spot" {
+			return nil, fmt.Errorf("%w: best cost is a spot market order", domain.ErrInvalidArgument)
+		}
+		typ := strings.ToLower(strings.TrimSpace(in.Type))
+		if typ != "" && typ != "market" {
+			return nil, fmt.Errorf("%w: best cost is a market order", domain.ErrInvalidArgument)
+		}
+		if sizingOn {
+			return nil, fmt.Errorf("%w: best cost uses the quantity you send", domain.ErrInvalidArgument)
+		}
+		if in.Spread {
+			return s.previewSpread(ctx, p, in)
+		}
+		return s.previewRouted(ctx, p, in)
+	}
+	if in.Spread {
+		return nil, fmt.Errorf("%w: a spread order uses best cost", domain.ErrInvalidArgument)
 	}
 	ex, sym, err := normalizeExchangeSymbol(in.Exchange, in.Symbol)
 	if err != nil {

@@ -443,6 +443,9 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_
 	if err := s.migrateTransferAttempts(); err != nil {
 		return err
 	}
+	if err := s.migrateSpreadOrders(); err != nil {
+		return err
+	}
 	// Additive migrations for DBs created before reservations/partial fills.
 	alters := []string{
 		`ALTER TABLE trades ADD COLUMN pending_order_id TEXT NOT NULL DEFAULT ''`,
@@ -461,6 +464,7 @@ CREATE INDEX IF NOT EXISTS idx_portfolio_shares_owner ON portfolio_shares(owner_
 		`ALTER TABLE pending_orders ADD COLUMN trail_peak REAL NOT NULL DEFAULT 0`,
 		`ALTER TABLE pending_orders ADD COLUMN bracket_id TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE pending_orders ADD COLUMN bracket_role TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE spread_orders ADD COLUMN duration_sec INTEGER NOT NULL DEFAULT 540`,
 		`CREATE INDEX IF NOT EXISTS idx_pending_orders_bracket ON pending_orders(bracket_id) WHERE bracket_id != ''`,
 		`ALTER TABLE portfolios ADD COLUMN margin_mode TEXT NOT NULL DEFAULT 'isolated'`,
 		`ALTER TABLE margin_positions ADD COLUMN mode TEXT NOT NULL DEFAULT 'isolated'`,
@@ -700,6 +704,8 @@ func (s *SQLite) DeletePortfolio(ctx context.Context, clientID, id string) error
 		`DELETE FROM allocation_baskets WHERE client_id = ?`,
 		`DELETE FROM recurring_buy_runs WHERE client_id = ?`,
 		`DELETE FROM recurring_buy_plans WHERE client_id = ?`,
+		`DELETE FROM spread_holds WHERE order_id IN (SELECT id FROM spread_orders WHERE client_id = ?)`,
+		`DELETE FROM spread_orders WHERE client_id = ?`,
 		`DELETE FROM pending_orders WHERE client_id = ?`,
 		`DELETE FROM tax_lot_fills WHERE lot_id IN (SELECT id FROM tax_lots WHERE client_id = ?)`,
 		`DELETE FROM tax_lots WHERE client_id = ?`,
@@ -952,6 +958,66 @@ func (s *SQLite) ExecuteTrade(ctx context.Context, p *domain.Portfolio, pos *dom
 	}
 	if c := domain.RecurringFillFromContext(ctx); c != nil {
 		if err := applyRecurringFillTx(ctx, tx, c); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// ExecuteRoutedTrades writes every venue fill and one cash balance together.
+func (s *SQLite) ExecuteRoutedTrades(ctx context.Context, p *domain.Portfolio, fills []domain.RoutedFill) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if p == nil || len(fills) == 0 {
+		return fmt.Errorf("%w: routed fill is empty", domain.ErrInvalidArgument)
+	}
+	at := p.UpdatedAt
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if err := s.txInsertIdempotency(ctx, tx); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE portfolios SET cash_balance = ?, realized_pnl_total = ?, updated_at = ?
+		WHERE id = ?
+	`, p.CashBalance, p.RealizedPnLTotal, at.UTC().Format(time.RFC3339Nano), p.BookID()); err != nil {
+		return err
+	}
+	for _, fill := range fills {
+		tradeAt := fill.Trade.CreatedAt
+		if tradeAt.IsZero() {
+			tradeAt = at
+		}
+		pos := fill.Position
+		if pos != nil {
+			if pos.Quantity <= domain.PositionEpsilon {
+				if _, err := tx.ExecContext(ctx, `
+					DELETE FROM positions WHERE client_id = ? AND exchange = ? AND symbol = ?
+				`, pos.ClientID, string(pos.Exchange), pos.Symbol); err != nil {
+					return err
+				}
+			} else if _, err := tx.ExecContext(ctx, `
+				INSERT INTO positions (client_id, exchange, symbol, quantity, avg_cost, updated_at)
+				VALUES (?, ?, ?, ?, ?, ?)
+				ON CONFLICT(client_id, exchange, symbol) DO UPDATE SET
+					quantity = excluded.quantity,
+					avg_cost = excluded.avg_cost,
+					updated_at = excluded.updated_at
+			`, pos.ClientID, string(pos.Exchange), pos.Symbol, pos.Quantity, pos.AvgCost,
+				tradeAt.UTC().Format(time.RFC3339Nano)); err != nil {
+				return err
+			}
+		}
+		if err := execInsertTrade(ctx, tx, fill.Trade, tradeAt); err != nil {
+			return err
+		}
+		if err := applyLotOps(ctx, tx, fill.Lots, fill.Trade.ID, tradeAt); err != nil {
 			return err
 		}
 	}
@@ -1300,9 +1366,14 @@ func (s *SQLite) CountOpenPendingOrders(ctx context.Context, clientID string) (i
 func (s *SQLite) SumReservedCash(ctx context.Context, clientID string) (float64, error) {
 	var n sql.NullFloat64
 	err := s.db.QueryRowContext(ctx, `
-		SELECT COALESCE(SUM(reserved_cash), 0) FROM pending_orders
-		WHERE client_id = ? AND status = 'open' AND reserved_cash > 0
-	`, clientID).Scan(&n)
+		SELECT COALESCE(SUM(reserved_cash), 0) FROM (
+			SELECT reserved_cash FROM pending_orders
+			WHERE client_id = ? AND status = 'open' AND reserved_cash > 0
+			UNION ALL
+			SELECT reserved_cash FROM spread_orders
+			WHERE client_id = ? AND status = 'open' AND reserved_cash > 0
+		)
+	`, clientID, clientID).Scan(&n)
 	if err != nil {
 		return 0, err
 	}
@@ -1335,7 +1406,16 @@ func (s *SQLite) SumReservedQuantity(ctx context.Context, clientID string, excha
 	if err != nil {
 		return 0, err
 	}
-	return standalone.Float64 + oco.Float64, nil
+	var spread sql.NullFloat64
+	err = s.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(h.quantity), 0) FROM spread_holds h
+		JOIN spread_orders o ON o.id = h.order_id
+		WHERE o.client_id = ? AND o.status = 'open' AND h.exchange = ? AND h.symbol = ?
+	`, clientID, string(exchange), symbol).Scan(&spread)
+	if err != nil {
+		return 0, err
+	}
+	return standalone.Float64 + oco.Float64 + spread.Float64, nil
 }
 
 // ListAllOpenPendingOrders returns all open orders for the background filler.

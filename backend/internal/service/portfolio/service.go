@@ -401,6 +401,11 @@ type OrderInput struct {
 	RecurringCatchUp bool
 	// Reason names the clauses a buy stores. Unset keeps the whole read.
 	Reason domain.SituationReason
+	// MaxSlippagePct caps a best-cost walk. 0.5 means 0.5% from the best price. Zero means no cap.
+	MaxSlippagePct float64
+	// SpreadMinutes and SliceCount schedule a spread order. Zero means 10 minutes and 10 slices.
+	SpreadMinutes int
+	SliceCount    int
 }
 
 // requireBook loads a book the caller owns (owner role).

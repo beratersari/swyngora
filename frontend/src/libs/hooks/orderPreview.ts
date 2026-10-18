@@ -23,6 +23,16 @@ export type SpotOrderPreviewDraft = {
   riskPercent?: number;
   /** Clauses this buy stores. Omit to leave the request unset. An empty list stores no read. */
   reason?: string[];
+  /** Set when exchange is all. The venue the whole order is compared with. */
+  compareExchange?: string;
+  /** Best-cost cap in percent. 0.5 means 0.5% from the best price. */
+  maxSlippagePct?: number;
+  /** Price the best-cost order as timed slices. */
+  spread?: boolean;
+  /** Minutes from the first slice to the last. */
+  spreadMinutes?: number;
+  /** How many slices. */
+  sliceCount?: number;
 };
 
 export type MarginOrderPreviewDraft = {
@@ -149,5 +159,10 @@ export function toPreviewArg(
     trailValue: positive(draft.trailValue) ? draft.trailValue : undefined,
     lotMethod: draft.lotMethod,
     reason: draft.reason,
+    compareExchange: draft.compareExchange,
+    maxSlippagePct: draft.maxSlippagePct,
+    spread: draft.spread || undefined,
+    spreadMinutes: draft.spread ? draft.spreadMinutes : undefined,
+    sliceCount: draft.spread ? draft.sliceCount : undefined,
   };
 }

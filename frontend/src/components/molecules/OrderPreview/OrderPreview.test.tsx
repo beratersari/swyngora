@@ -79,6 +79,79 @@ describe('OrderPreview', () => {
     ).toBeInTheDocument();
   });
 
+  it('lists each venue and the cash saved against one exchange', () => {
+    renderWithTheme(
+      <OrderPreview
+        preview={{
+          ...blockedBuy,
+          routed: true,
+          side: 'buy',
+          fillsNow: true,
+          risk: { ...blockedBuy.risk, blocked: false, weightLimitHit: false },
+          routeLegs: [
+            { exchange: 'binance', symbol: 'BTCUSDT', quantity: 0.4, fillPrice: 100, fee: 0.04 },
+            { exchange: 'bybit', symbol: 'BTCUSDT', quantity: 0.6, fillPrice: 100.05, fee: 0.06 },
+          ],
+          missingVenues: ['coinbase'],
+          compare: { exchange: 'binance', known: true, savedCash: 0.57 },
+        }}
+      />,
+    );
+    expect(screen.getAllByTestId('route-leg')).toHaveLength(2);
+    expect(screen.getByTestId('route-saved')).toHaveTextContent(/0[.,]57/);
+    expect(screen.getByText(/left out|dışarıda/i)).toBeInTheDocument();
+    expect(screen.getByText(/after the taker fee|komisyon sonrası/i)).toBeInTheDocument();
+  });
+
+  it('shows a 10-slice plan and the first slice', () => {
+    renderWithTheme(
+      <OrderPreview
+        preview={{
+          ...blockedBuy,
+          routed: true,
+          side: 'buy',
+          spread: true,
+          fillsNow: false,
+          sliceCount: 15,
+          spreadMinutes: 30,
+          sliceIntervalSec: 129,
+          sliceQuantity: 0.0667,
+          risk: { ...blockedBuy.risk, blocked: false, weightLimitHit: false },
+          routeLegs: [
+            { exchange: 'binance', symbol: 'BTCUSDT', quantity: 0.1, fillPrice: 100, fee: 0.01 },
+          ],
+          compare: { exchange: 'coinbase', known: true, savedCash: 0.2 },
+        }}
+      />,
+    );
+    expect(screen.getByTestId('spread-plan')).toHaveTextContent(/15/);
+    expect(screen.getByTestId('spread-plan')).toHaveTextContent(/30/);
+    expect(screen.getByTestId('spread-plan')).toHaveTextContent(/2 min 9 s|2 dk 9 sn/);
+    expect(screen.getByTestId('route-leg')).toHaveTextContent(/binance/i);
+    expect(screen.getByTestId('route-saved')).toHaveTextContent(/0[.,]2/);
+    expect(screen.getByText(/later slices choose again|sonraki dilimler yeniden/i)).toBeInTheDocument();
+  });
+
+  it('says a best-cost order past the slippage limit would not fill', () => {
+    renderWithTheme(
+      <OrderPreview
+        preview={{
+          ...blockedBuy,
+          routed: true,
+          side: 'buy',
+          fillsNow: false,
+          risk: { ...blockedBuy.risk, blocked: false, weightLimitHit: false },
+          maxSlippagePct: 0.5,
+          slippageLimitPrice: 100.5,
+          slippageLimited: true,
+          slippageInsideQuantity: 0.4,
+        }}
+      />,
+    );
+    expect(screen.getByTestId('route-slippage')).toHaveTextContent(/0[.,]5%/);
+    expect(screen.getByText(/inside the slippage limit|kayma limiti içinde/i)).toBeInTheDocument();
+  });
+
   it('says nothing was placed', () => {
     renderWithTheme(<OrderPreview preview={blockedBuy} />);
     expect(screen.getByText(/preview only|yalnızca önizleme/i)).toBeInTheDocument();

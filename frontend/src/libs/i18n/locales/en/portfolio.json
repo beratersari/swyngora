@@ -134,6 +134,18 @@
     "submit": "Place order",
     "submitBuy": "Paper buy",
     "submitSell": "Paper sell",
+    "route": "Where it fills",
+    "thisVenue": "This venue",
+    "bestCost": "Best cost",
+    "routeHint": "Split this market order across Binance, Coinbase, and Bybit by depth and taker fee.",
+    "pace": "How it fills",
+    "fillNow": "Now",
+    "spread": "Spread",
+    "spreadMinutes": "Minutes",
+    "spreadSlices": "Slices",
+    "spreadHint": "Each slice reads the books again and takes the cheapest venue for that size. The last slice is due when the minutes end.",
+    "successSpread": "Spread started for {{symbol}}. {{count}} slices over {{minutes}} minutes.",
+    "maxSlippage": "Max slippage %",
     "successBuy": "Bought {{qty}} {{symbol}}",
     "successSell": "Sold {{qty}} {{symbol}}",
     "successPending": "Pending order placed for {{symbol}}",
@@ -163,6 +175,43 @@
       "takeProfitPrice": "Take-profit price is required",
       "stopLossPrice": "Stop-loss price is required",
       "trailValue": "Trail value is required"
+    }
+  },
+  "compare": {
+    "title": "Same size, three ways",
+    "note": "Fee and slippage for this size. A slippage cap applies to best cost and over time. Nothing is placed until you choose.",
+    "enterSize": "Enter a size to compare.",
+    "pricing": "Comparing this size…",
+    "updating": "Updating…",
+    "updated": "Updated {{time}}",
+    "failed": "Could not compare this size.",
+    "touch": "Best price {{price}} on {{venue}}",
+    "lowestBuy": "Least cash",
+    "lowestSell": "Most cash back",
+    "slippage": "Slippage",
+    "fee": "Fee",
+    "average": "Average",
+    "debit": "Cash out",
+    "credit": "Cash in",
+    "saved": "Versus this venue",
+    "missing": "Missing book: {{names}}",
+    "refill": "Each slice is priced as if it finds this book again. If the book does not refill, this matches best cost. Later prices are not known.",
+    "styles": {
+      "market": "This venue",
+      "best_cost": "Best cost",
+      "spread": "Over time"
+    },
+    "status": {
+      "exhausted": "The visible book cannot hold this size. Nothing would fill.",
+      "slippage_limited": "The slippage cap cannot hold this size. Nothing would fill.",
+      "inventory_short": "Not enough coins on this path. Nothing would fill.",
+      "missing": "That book did not load. Nothing would fill.",
+      "schedule": "This schedule cannot be used."
+    },
+    "schedule": {
+      "interval": "Those slices would be closer than 15 seconds.",
+      "range": "Use 1 to 1440 minutes and 2 to 60 slices.",
+      "size": "Each slice would be too small to fill."
     }
   },
   "preview": {
@@ -198,6 +247,21 @@
     "sized": "{{pct}} of the book. The size loses about {{budget}} if the stop fills.",
     "stopNotAttached": "This stop only sizes the buy. A market or limit order does not place it.",
     "fromBook": "The fill is the average of the visible book.",
+    "fromRoute": "The fill walks Binance, Coinbase, and Bybit and takes the cheaper level after the taker fee.",
+    "spreads": "The first slice is priced on this book. Later slices choose again.",
+    "spreadPlan": "{{count}} slices of {{qty}} over {{minutes}} minutes, one every {{every}}.",
+    "everyMin": "{{min}} min",
+    "everyMinSec": "{{min}} min {{sec}} s",
+    "everySec": "{{sec}} s",
+    "savedBuySlice": "{{amount}} less than sending this slice to {{exchange}}.",
+    "savedSellSlice": "{{amount}} more than sending this slice to {{exchange}}.",
+    "routeLeg": "{{exchange}} {{qty}} at {{price}}, fee {{fee}}",
+    "savedBuy": "{{amount}} less than filling all of it on {{exchange}}.",
+    "savedSell": "{{amount}} more than selling all of it on {{exchange}}.",
+    "missingVenues": "Left out, book unavailable: {{names}}.",
+    "aliasQuote": "A USD quote on this book is booked 1:1.",
+    "slippageCapBuy": "Buys stay at or below {{pct}} above the best ask ({{price}}).",
+    "slippageCapSell": "Sells stay at or above {{pct}} below the best bid ({{price}}).",
     "note": "Preview only — nothing was placed. A crypto fill walks the visible book. Equities use a fixed slippage. A size the book cannot hold is not filled. Risk limits block new buys and new margin opens. Sells are not blocked. Not real money.",
     "warnings": {
       "blocked": "Risk limits would block this order.",
@@ -208,7 +272,8 @@
       "quantity": "Not enough available quantity.",
       "borrow": "This would pass the borrow limit.",
       "stopBeyondLiquidation": "The stop is past liquidation, so the position would close there first. The loss would not be the stop distance.",
-      "book": "The visible book cannot hold this size. Nothing would be filled."
+      "book": "The visible book cannot hold this size. Nothing would be filled.",
+      "slippage": "Not enough size inside the slippage limit. Nothing would be filled."
     }
   },
   "margin": {
@@ -292,6 +357,9 @@
   "orders": {
     "title": "Open orders",
     "empty": "No open pending orders",
+    "spreadTitle": "Spread orders",
+    "spreadRow": "{{side}} {{symbol}}: {{filled}} of {{quantity}} filled, slice {{done}} of {{count}} over {{minutes}} min.",
+    "spreadCancel": "Cancel the rest",
     "type": "Type",
     "trigger": "Trigger",
     "filled": "Filled",

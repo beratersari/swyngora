@@ -154,7 +154,13 @@ import {
   type PumpEventDto,
   type IndicatorsResponse,
 } from '@/libs/api';
-import { useDisplayCurrency, useDocumentVisible, useMediaQuery, useOrderPreview } from '@/libs/hooks';
+import {
+  useDisplayCurrency,
+  useDocumentVisible,
+  useExecutionCompare,
+  useMediaQuery,
+  useOrderPreview,
+} from '@/libs/hooks';
 import type { SpotOrderPreviewDraft } from '@/libs/hooks/orderPreview';
 import { usePriceSubscription, usePortfolioSubscription } from '@/libs/realtime';
 import {
@@ -3439,10 +3445,18 @@ export function CoinDetailPage() {
                   timeInForce: values.timeInForce,
                   lotMethod: values.lotMethod,
                   idempotencyKey: newPaperIdempotencyKey('detail'),
+                  maxSlippagePct: values.maxSlippagePct,
+                  spread: values.spread,
                   reason: values.reason,
                 }).unwrap();
                 void message.success(
-                  values.orderType !== 'market'
+                  values.spread
+                    ? t('portfolio:trade.successSpread', {
+                        symbol: values.symbol,
+                        count: values.sliceCount ?? 10,
+                        minutes: values.spreadMinutes ?? 10,
+                      })
+                    : values.orderType !== 'market'
                     ? t('detail:paperTrade.successPending', {
                         defaultValue: 'Pending paper order placed',
                       })
@@ -3482,12 +3496,18 @@ function CoinPaperTicket({
 }) {
   const [draft, setDraft] = useState<SpotOrderPreviewDraft | null>(null);
   const priced = useOrderPreview(draft, { portfolioId, enabled: previewEnabled, visible });
+  const compared = useExecutionCompare(draft, { portfolioId, enabled: previewEnabled, visible });
   return (
     <PaperTradeForm
       {...form}
       preview={priced.preview}
       previewLoading={priced.loading}
       previewFailed={priced.failed}
+      execution={compared.compare}
+      executionLoading={compared.loading}
+      executionRefreshing={compared.refreshing}
+      executionUpdatedAt={compared.updatedAt}
+      executionFailed={compared.failed}
       onDraftChange={setDraft}
     />
   );

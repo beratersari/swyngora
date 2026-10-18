@@ -5202,7 +5202,7 @@ func (b *Backend) GetPortfolioPerformance(ctx context.Context, clientID, period 
 	return mustJSON(m)
 }
 
-func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64) (json.RawMessage, error) {
+func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
@@ -5211,7 +5211,8 @@ func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange,
 		Side: side, Type: orderType, Product: product, TrailType: trailType, LotMethod: lotMethod,
 		Quantity: quantity, TriggerPrice: triggerPrice, TakeProfitPrice: takeProfitPrice, StopLossPrice: stopLossPrice,
 		TrailValue: trailValue, LimitPrice: limitPrice, Leverage: leverage, RiskPercent: riskPercent,
-		Reason: reasonInput(ctx),
+		Reason: reasonInput(ctx), CompareExchange: compareExchange, MaxSlippagePct: maxSlippagePct, Spread: spread,
+		SpreadMinutes: spreadMinutes, SliceCount: sliceCount,
 	})
 	if err != nil {
 		return nil, err
@@ -5219,13 +5220,86 @@ func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange,
 	return mustJSON(portfolio.OrderPreviewPayload(got))
 }
 
-func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string) (json.RawMessage, error) {
+func (b *Backend) CompareOrderExecution(ctx context.Context, clientID, exchange, symbol, side string, quantity, maxSlippagePct float64, spreadMinutes, sliceCount int) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
 	}
+	got, err := b.Portfolio.CompareExecutions(ctx, portfolio.ExecutionCompareInput{
+		ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol,
+		Side: side, Quantity: quantity, MaxSlippagePct: maxSlippagePct,
+		SpreadMinutes: spreadMinutes, SliceCount: sliceCount,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(portfolio.ExecutionComparePayload(got))
+}
+
+func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	if spread {
+		order, v, err := b.Portfolio.PlaceSpreadOrder(ctx, portfolio.OrderInput{
+			ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol, Side: side, Quantity: quantity, LotMethod: lotMethod,
+			IdempotencyKey: IdempotencyKeyFrom(ctx), Reason: reasonInput(ctx), MaxSlippagePct: maxSlippagePct,
+			SpreadMinutes: spreadMinutes, SliceCount: sliceCount,
+		})
+		if err != nil {
+			return nil, err
+		}
+		pv, err := portfolioViewJSON(v)
+		if err != nil {
+			return nil, err
+		}
+		var pmap map[string]any
+		_ = json.Unmarshal(pv, &pmap)
+		note := domain.ExplainSpreadPlace(0, 0)
+		if order != nil {
+			note = domain.ExplainSpreadPlace(order.SliceCount, order.DurationMinutes())
+		}
+		return mustJSON(map[string]any{
+			"type": "spread", "spread": true, "order": spreadOrderJSON(order), "portfolio": pmap, "note": note,
+		})
+	}
+	if domain.IsPaperRouteExchange(exchange) {
+		trades, v, err := b.Portfolio.PlaceRoutedOrder(ctx, portfolio.OrderInput{
+			ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol, Side: side, Quantity: quantity, LotMethod: lotMethod,
+			IdempotencyKey: IdempotencyKeyFrom(ctx), Reason: reasonInput(ctx), MaxSlippagePct: maxSlippagePct,
+		})
+		if err != nil {
+			return nil, err
+		}
+		pv, err := portfolioViewJSON(v)
+		if err != nil {
+			return nil, err
+		}
+		var pmap map[string]any
+		_ = json.Unmarshal(pv, &pmap)
+		items := make([]map[string]any, 0, len(trades))
+		for _, tr := range trades {
+			items = append(items, map[string]any{
+				"id": tr.ID, "exchange": string(tr.Exchange), "symbol": tr.Symbol, "side": string(tr.Side),
+				"quantity": tr.Quantity, "price": tr.Price, "notional": tr.Notional, "realizedPnL": tr.RealizedPnL,
+				"lotMethod": string(tr.LotMethod), "fee": tr.Fee, "lastPrice": tr.LastPrice,
+				"createdAt": tr.CreatedAt.UTC().Format(time.RFC3339Nano),
+			})
+		}
+		var first map[string]any
+		if len(items) > 0 {
+			first = items[0]
+		}
+		note := ""
+		if v != nil {
+			note = v.Note
+		}
+		return mustJSON(map[string]any{
+			"routed": true, "trade": first, "trades": items, "portfolio": pmap, "note": note,
+		})
+	}
 	tr, v, err := b.Portfolio.PlaceOrder(ctx, portfolio.OrderInput{
 		ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol, Side: side, Quantity: quantity, LotMethod: lotMethod,
-		IdempotencyKey: IdempotencyKeyFrom(ctx), Reason: reasonInput(ctx),
+		IdempotencyKey: IdempotencyKeyFrom(ctx), Reason: reasonInput(ctx), MaxSlippagePct: maxSlippagePct,
 	})
 	if err != nil {
 		return nil, err
@@ -5246,6 +5320,75 @@ func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, s
 		"portfolio": pmap,
 		"note":      v.Note,
 	})
+}
+
+func (b *Backend) ListSpreadOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	list, err := b.Portfolio.ListSpreadOrders(ctx, clientID, status, limit, offset, PortfolioIDFrom(ctx))
+	if err != nil {
+		return nil, err
+	}
+	items := make([]map[string]any, 0, len(list))
+	for i := range list {
+		items = append(items, spreadOrderJSON(&list[i]))
+	}
+	if status == "" {
+		status = "open"
+	}
+	return mustJSON(map[string]any{"orders": items, "count": len(items), "status": status})
+}
+
+func (b *Backend) CancelSpreadOrder(ctx context.Context, clientID, orderID string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	o, err := b.Portfolio.CancelSpreadOrder(ctx, clientID, orderID, PortfolioIDFrom(ctx))
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(map[string]any{
+		"order": spreadOrderJSON(o),
+		"note":  "Spread order canceled. Filled slices stay. The unused lock was released.",
+	})
+}
+
+func spreadOrderJSON(o *domain.SpreadOrder) map[string]any {
+	if o == nil {
+		return nil
+	}
+	holds := make([]map[string]any, 0, len(o.Holds))
+	for _, h := range o.Holds {
+		holds = append(holds, map[string]any{"exchange": string(h.Exchange), "symbol": h.Symbol, "quantity": h.Quantity})
+	}
+	out := map[string]any{
+		"id": o.ID, "clientId": o.ClientID, "symbol": o.Symbol, "side": string(o.Side),
+		"quantity": o.Quantity, "filledQuantity": o.FilledQuantity, "remainingQuantity": o.RemainingQuantity,
+		"sliceCount": o.SliceCount, "slicesDone": o.SlicesDone, "durationMinutes": o.DurationMinutes(), "status": string(o.Status),
+		"reservedCash": o.ReservedCash, "filledNotional": o.FilledNotional, "filledFee": o.FilledFee,
+		"holds": holds, "cancelReason": o.CancelReason,
+		"createdAt": o.CreatedAt.UTC().Format(time.RFC3339Nano),
+		"updatedAt": o.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	}
+	if !o.NextSliceAt.IsZero() {
+		out["nextSliceAt"] = o.NextSliceAt.UTC().Format(time.RFC3339Nano)
+	}
+	if !o.EndsAt.IsZero() {
+		out["endsAt"] = o.EndsAt.UTC().Format(time.RFC3339Nano)
+	}
+	if o.MaxSlippage > 0 {
+		out["maxSlippagePct"] = o.MaxSlippage * 100
+	}
+	if o.ReasonSet {
+		reason := o.Reason
+		if reason == nil {
+			reason = []string{}
+		}
+		out["reasonSet"] = true
+		out["reason"] = reason
+	}
+	return out
 }
 
 func (b *Backend) ListPortfolioTrades(ctx context.Context, clientID string, limit, offset int) (json.RawMessage, error) {

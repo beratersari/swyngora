@@ -134,6 +134,18 @@
     "submit": "Emri gönder",
     "submitBuy": "Kağıt al",
     "submitSell": "Kağıt sat",
+    "route": "Nerede dolar",
+    "thisVenue": "Bu borsa",
+    "bestCost": "En düşük maliyet",
+    "routeHint": "Bu piyasa emrini derinlik ve komisyona göre Binance, Coinbase ve Bybit arasında böler.",
+    "pace": "Nasıl dolar",
+    "fillNow": "Şimdi",
+    "spread": "Yay",
+    "spreadMinutes": "Dakika",
+    "spreadSlices": "Dilim",
+    "spreadHint": "Her dilim defterleri yeniden okur ve o boy için en ucuz borsayı seçer. Son dilim, dakikalar bitince gelir.",
+    "successSpread": "{{symbol}} için yayılan emir başladı. {{count}} dilim, {{minutes}} dakika.",
+    "maxSlippage": "En fazla kayma %",
     "successBuy": "{{qty}} {{symbol}} alındı",
     "successSell": "{{qty}} {{symbol}} satıldı",
     "successPending": "{{symbol}} için bekleyen emir oluşturuldu",
@@ -163,6 +175,43 @@
       "takeProfitPrice": "Kâr al fiyatı gerekli",
       "stopLossPrice": "Zarar kes fiyatı gerekli",
       "trailValue": "İz değeri gerekli"
+    }
+  },
+  "compare": {
+    "title": "Aynı boy, üç yol",
+    "note": "Bu boy için komisyon ve kayma. Kayma sınırı en düşük maliyet ve zamana yay için geçerlidir. Siz seçene kadar bir şey yazılmaz.",
+    "enterSize": "Karşılaştırmak için bir boy girin.",
+    "pricing": "Bu boy karşılaştırılıyor…",
+    "updating": "Yenileniyor…",
+    "updated": "Son hesap {{time}}",
+    "failed": "Bu boy karşılaştırılamadı.",
+    "touch": "En iyi fiyat {{price}}, {{venue}}",
+    "lowestBuy": "En az nakit",
+    "lowestSell": "En çok nakit",
+    "slippage": "Kayma",
+    "fee": "Komisyon",
+    "average": "Ortalama",
+    "debit": "Çıkacak nakit",
+    "credit": "Girecek nakit",
+    "saved": "Bu borsaya göre",
+    "missing": "Defter yok: {{names}}",
+    "refill": "Her dilim bu defteri yeniden bulursa. Defter dolmazsa bu, en düşük maliyet ile aynıdır. Sonraki fiyatlar bilinmez.",
+    "styles": {
+      "market": "Bu borsa",
+      "best_cost": "En düşük maliyet",
+      "spread": "Zamana yay"
+    },
+    "status": {
+      "exhausted": "Görünen defter bu boyu tutamaz. Hiçbir şey dolmaz.",
+      "slippage_limited": "Kayma sınırı bu boyu tutamaz. Hiçbir şey dolmaz.",
+      "inventory_short": "Bu yolda yeterli coin yok. Hiçbir şey dolmaz.",
+      "missing": "O defter yüklenmedi. Hiçbir şey dolmaz.",
+      "schedule": "Bu takvim kullanılamaz."
+    },
+    "schedule": {
+      "interval": "Dilimler 15 saniyeden yakın olur.",
+      "range": "1 ile 1440 dakika ve 2 ile 60 dilim kullanın.",
+      "size": "Her dilim dolmak için çok küçük kalır."
     }
   },
   "preview": {
@@ -198,6 +247,21 @@
     "sized": "Defterin {{pct}} kadarı. Stop dolarsa kayıp yaklaşık {{budget}} olur.",
     "stopNotAttached": "Bu zarar kes yalnızca alım miktarını hesaplar. Piyasa veya limit emri onu göndermez.",
     "fromBook": "Dolum, görünen defterin ortalamasıdır.",
+    "fromRoute": "Dolum Binance, Coinbase ve Bybit defterlerini yürür ve komisyon sonrası daha ucuz kademeyi alır.",
+    "spreads": "İlk dilim bu defterden fiyatlanır. Sonraki dilimler yeniden seçer.",
+    "spreadPlan": "{{count}} dilim, her biri {{qty}}, {{minutes}} dakika içinde, her {{every}} bir tane.",
+    "everyMin": "{{min}} dk",
+    "everyMinSec": "{{min}} dk {{sec}} sn",
+    "everySec": "{{sec}} sn",
+    "savedBuySlice": "Bu dilimi {{exchange}} borsasına göndermekten {{amount}} daha az.",
+    "savedSellSlice": "Bu dilimi {{exchange}} borsasına göndermekten {{amount}} daha fazla.",
+    "routeLeg": "{{exchange}} {{qty}} adet {{price}} fiyattan, komisyon {{fee}}",
+    "savedBuy": "{{exchange}} üzerinde tamamını doldurmaktan {{amount}} daha az.",
+    "savedSell": "{{exchange}} üzerinde tamamını satmaktan {{amount}} daha fazla.",
+    "missingVenues": "Dışarıda, defter yok: {{names}}.",
+    "aliasQuote": "Bu defterde USD kotasyonu bire bir yazılır.",
+    "slippageCapBuy": "Alışlar en iyi satışın en fazla {{pct}} üstünde kalır ({{price}}).",
+    "slippageCapSell": "Satışlar en iyi alışın en fazla {{pct}} altında kalır ({{price}}).",
     "note": "Yalnızca önizleme — hiçbir emir gönderilmedi. Kripto dolumu görünen defteri yürür. Hisseler sabit kayma kullanır. Defterin taşımadığı büyüklük dolmaz. Risk limitleri yeni alışları ve yeni marjin açılışlarını durdurur. Satışlar durmaz. Gerçek para değildir.",
     "warnings": {
       "blocked": "Risk limitleri bu emri durdururdu.",
@@ -208,7 +272,8 @@
       "quantity": "Kullanılabilir miktar yetmiyor.",
       "borrow": "Bu emir borç limitini aşardı.",
       "stopBeyondLiquidation": "Zarar kes likidasyonun ötesinde, bu yüzden pozisyon önce orada kapanır. Kayıp, zarar kes mesafesi olmaz.",
-      "book": "Görünen defter bu büyüklüğü taşımıyor. Hiçbir şey dolmaz."
+      "book": "Görünen defter bu büyüklüğü taşımıyor. Hiçbir şey dolmaz.",
+      "slippage": "Kayma limiti içinde yeterli miktar yok. Hiçbir şey dolmaz."
     }
   },
   "margin": {
@@ -291,6 +356,9 @@
   },
   "orders": {
     "title": "Açık emirler",
+    "spreadTitle": "Yayılan emirler",
+    "spreadRow": "{{side}} {{symbol}}: {{quantity}} içinden {{filled}} doldu, dilim {{done}} / {{count}}, {{minutes}} dk.",
+    "spreadCancel": "Kalanı iptal et",
     "empty": "Açık bekleyen emir yok",
     "type": "Tür",
     "trigger": "Tetik",

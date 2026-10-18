@@ -21,6 +21,7 @@ import { PortfolioCorrelation } from '@/components/organisms/PortfolioCorrelatio
 import { PortfolioRiskLimits } from '@/components/organisms/PortfolioRiskLimits';
 import { PortfolioMarginPositionsTable } from '@/components/organisms/PortfolioMarginPositionsTable';
 import { PortfolioOrdersTable } from '@/components/organisms/PortfolioOrdersTable';
+import { SpreadOrderList } from '@/components/organisms/SpreadOrderList';
 import { PortfolioPositionsTable } from '@/components/organisms/PortfolioPositionsTable';
 import { PortfolioSituationLeave } from '@/components/organisms/PortfolioSituationLeave';
 import { PortfolioSituationRecord } from '@/components/organisms/PortfolioSituationRecord';
@@ -33,6 +34,8 @@ import {
   rtkErrorMessage,
   useAmendPortfolioOrderMutation,
   useCancelPortfolioOrderMutation,
+  useCancelSpreadOrderMutation,
+  useListSpreadOrdersQuery,
   useCloseMarginPositionMutation,
   useCreatePortfolioMutation,
   useDepositPortfolioCashMutation,
@@ -58,7 +61,7 @@ import {
   useWithdrawPortfolioCashMutation,
   type PortfolioPerformancePeriod,
 } from '@/libs/api';
-import { useDocumentVisible, useMediaQuery, useOrderPreview } from '@/libs/hooks';
+import { useDocumentVisible, useExecutionCompare, useMediaQuery, useOrderPreview } from '@/libs/hooks';
 import type { MarginOrderPreviewDraft, SpotOrderPreviewDraft } from '@/libs/hooks/orderPreview';
 import { usePortfolioSubscription } from '@/libs/realtime';
 import {
@@ -130,6 +133,14 @@ export function PortfolioPage() {
     { period, portfolioId: bookId },
     { skip: !bookId && books.length !== 1, refetchOnFocus: true },
   );
+  const spreadQuery = useListSpreadOrdersQuery(
+    { status: 'open', portfolioId: bookId },
+    {
+      skip: !bookId && books.length !== 1,
+      pollingInterval: visible ? 10_000 : 0,
+      refetchOnFocus: true,
+    },
+  );
   const ordersQuery = useListPortfolioOrdersQuery(
     { status: 'open', portfolioId: bookId },
     {
@@ -180,6 +191,7 @@ export function PortfolioPage() {
   const [placeOrder, placeState] = usePlacePortfolioOrderMutation();
   const [amendOrder, amendState] = useAmendPortfolioOrderMutation();
   const [cancelOrder, cancelState] = useCancelPortfolioOrderMutation();
+  const [cancelSpread, cancelSpreadState] = useCancelSpreadOrderMutation();
   const [deposit, depositState] = useDepositPortfolioCashMutation();
   const [withdraw, withdrawState] = useWithdrawPortfolioCashMutation();
   const [transfer, transferState] = useTransferPortfolioCashMutation();
@@ -225,11 +237,20 @@ export function PortfolioPage() {
       lotMethod: values.lotMethod,
       timeInForce: values.timeInForce,
       idempotencyKey: newPaperIdempotencyKey('web'),
+      maxSlippagePct: values.maxSlippagePct,
+      spread: values.spread,
       reason: values.reason,
     }).unwrap();
+    const isSpread = Boolean(res.spread);
     const isPending = Boolean(res.order || res.entry || res.ocoGroupId || res.bracketId);
     void message.success(
-      isPending
+      isSpread
+        ? t('portfolio:trade.successSpread', {
+            symbol: values.symbol,
+            count: values.sliceCount ?? 10,
+            minutes: values.spreadMinutes ?? 10,
+          })
+        : isPending
         ? t('portfolio:trade.successPending', { symbol: values.symbol })
         : values.side === 'buy'
           ? t('portfolio:trade.successBuy', { qty: values.quantity, symbol: values.symbol })
@@ -570,6 +591,36 @@ export function PortfolioPage() {
                 key: 'orders',
                 label: t('portfolio:orders.title'),
                 children: (
+                  <>
+                  <SpreadOrderList
+                    items={(rtkCurrent(spreadQuery)?.orders ?? []).flatMap((order) =>
+                      order.id
+                        ? [
+                            {
+                              id: order.id,
+                              symbol: order.symbol ?? '',
+                              side: order.side ?? '',
+                              quantity: order.quantity ?? 0,
+                              filledQuantity: order.filledQuantity ?? 0,
+                              sliceCount: order.sliceCount ?? 0,
+                              slicesDone: order.slicesDone ?? 0,
+                              durationMinutes: order.durationMinutes ?? 0,
+                            },
+                          ]
+                        : [],
+                    )}
+                    canceling={cancelSpreadState.isLoading}
+                    onCancel={(id) => {
+                      void cancelSpread({ id, portfolioId: bookId })
+                        .unwrap()
+                        .then(() => message.success(t('portfolio:orders.cancelSuccess')))
+                        .catch((err: unknown) => {
+                          void message.error(
+                            rtkErrorMessage(err, { resource: t('portfolio:orders.spreadTitle') }),
+                          );
+                        });
+                    }}
+                  />
                   <PortfolioOrdersTable
                     items={rtkCurrent(ordersQuery)?.orders ?? []}
                     loading={rtkCurrentPending(ordersQuery)}
@@ -596,6 +647,7 @@ export function PortfolioPage() {
                         });
                     }}
                   />
+                  </>
                 ),
               },
               {
@@ -758,12 +810,18 @@ function SpotOrderTicket({
   TicketPreviewProps) {
   const [draft, setDraft] = useState<SpotOrderPreviewDraft | null>(null);
   const priced = useOrderPreview(draft, { portfolioId, enabled: previewEnabled, visible });
+  const compared = useExecutionCompare(draft, { portfolioId, enabled: previewEnabled, visible });
   return (
     <PaperTradeForm
       {...form}
       preview={priced.preview}
       previewLoading={priced.loading}
       previewFailed={priced.failed}
+      execution={compared.compare}
+      executionLoading={compared.loading}
+      executionRefreshing={compared.refreshing}
+      executionUpdatedAt={compared.updatedAt}
+      executionFailed={compared.failed}
       onDraftChange={setDraft}
     />
   );

@@ -3,6 +3,7 @@ export { DisplayCurrencyProvider, useDisplayCurrency } from './displayCurrency';
 export type { DisplayCurrencyApi } from './displayCurrency';
 export { useDebouncedValue } from './useDebouncedValue';
 export { useOrderPreview } from './useOrderPreview';
+export { useExecutionCompare } from './useExecutionCompare';
 export { previewDraftReady, toPreviewArg } from './orderPreview';
 export type { MarginOrderPreviewDraft, OrderPreviewDraft, SpotOrderPreviewDraft } from './orderPreview';
 export { useMediaQuery } from './useMediaQuery';

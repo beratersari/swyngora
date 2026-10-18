@@ -99,6 +99,33 @@ type OrderPreview struct {
 	// notional would change the book's day swing. Nil when the tape could not
 	// be read. The price is still valid then.
 	Correlation *PortfolioCorrelation
+	// Routed is true when this preview splits a spot market order across venues.
+	Routed       bool
+	RouteLegs    []PaperRouteLeg
+	RouteMissing []string
+	RouteSkipped []PaperRouteSkip
+	RouteCompare *PaperRouteCompare
+	RouteNote    string
+	// MaxSlippagePct is the best-cost price cap in percent. Zero means no cap.
+	MaxSlippagePct float64
+	// SlippageTouch is the best ask or bid the cap is measured from.
+	SlippageTouch float64
+	// SlippageLimitPrice is the furthest raw price the cap allows.
+	SlippageLimitPrice float64
+	// SlippageInsideQuantity is the visible size inside the cap.
+	SlippageInsideQuantity float64
+	// SlippageLimited means that size is shorter than the order, so nothing fills.
+	SlippageLimited bool
+	// Spread is true when the order works as timed slices instead of one fill.
+	Spread bool
+	// SpreadMinutes is the clock the slices are named with. The last slice is due one interval sooner.
+	SpreadMinutes int
+	// SliceCount is how many times the order reads the books.
+	SliceCount int
+	// SliceQuantity is the first slice. Later slices use whatever is still open.
+	SliceQuantity float64
+	// SliceIntervalSec is the pause between slices.
+	SliceIntervalSec int
 }
 
 // QuoteFill is the slipped fill, notional, fee, and cash movement for a quantity.

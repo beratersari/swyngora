@@ -1,8 +1,8 @@
-import type { MarketExchange, OrderPreview, PaperOrderType } from '@/libs/api';
+import type { ExecutionCompare, MarketExchange, OrderPreview, PaperOrderType } from '@/libs/api';
 import type { SpotOrderPreviewDraft } from '@/libs/hooks/orderPreview';
 
 export type PaperTradeFormValues = {
-  exchange: MarketExchange;
+  exchange: MarketExchange | 'all';
   symbol: string;
   /** API order type */
   orderType: PaperOrderType;
@@ -18,6 +18,14 @@ export type PaperTradeFormValues = {
   timeInForce?: 'gtc' | 'ioc' | 'fok';
   /** Set on a buy that names its clauses. An empty list stores no read. */
   reason?: string[];
+  /** Best-cost cap in percent. 0.5 means 0.5% from the best price. */
+  maxSlippagePct?: number;
+  /** Work the best-cost order as timed slices. */
+  spread?: boolean;
+  /** Minutes from the first slice to the last. */
+  spreadMinutes?: number;
+  /** How many slices. */
+  sliceCount?: number;
 };
 
 export type PaperTradeFormProps = {
@@ -39,6 +47,14 @@ export type PaperTradeFormProps = {
   preview?: OrderPreview | null;
   previewLoading?: boolean;
   previewFailed?: boolean;
+  /** Fee and slippage for this venue, best cost, and a time split. The page owns the request. */
+  execution?: ExecutionCompare | null;
+  executionLoading?: boolean;
+  /** True while a newer comparison is in flight and the rows are the previous success. */
+  executionRefreshing?: boolean;
+  /** Client time of the last successful comparison, in milliseconds. */
+  executionUpdatedAt?: number | null;
+  executionFailed?: boolean;
   /** Fires when the draft changes so the page can price it. */
   onDraftChange?: (draft: SpotOrderPreviewDraft) => void;
   onSubmit: (values: PaperTradeFormValues) => Promise<void>;

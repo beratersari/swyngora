@@ -1926,7 +1926,25 @@ class OrderPreviewInput(BaseModel):
         ),
     )
     product: str = Field(default="spot", description="spot or margin")
-    exchange: str = "binance"
+    exchange: str = Field(
+        default="binance",
+        description=(
+            "binance|coinbase|bybit|nasdaq|bist|all. "
+            "all splits a spot market order across Binance, Coinbase, and Bybit by depth and taker fee."
+        ),
+    )
+    compare_exchange: str = Field(
+        default="",
+        description="Preview only. Venue to price the whole quantity against when exchange is all.",
+    )
+    max_slippage_pct: float = Field(
+        default=0,
+        description=(
+            "Best-cost cap in percent. 0.5 keeps a buy within 0.5% above the best ask "
+            "and a sell within 0.5% below the best bid. Zero means no cap. "
+            "When the size inside the cap is short, nothing is filled."
+        ),
+    )
     trigger_price: float = Field(default=0, description="Limit, stop, or bracket entry")
     take_profit_price: float = Field(default=0, description="OCO, bracket, or margin take-profit")
     stop_loss_price: float = Field(
@@ -1947,6 +1965,49 @@ class OrderPreviewInput(BaseModel):
             "An empty list stores no read. A sell ignores this."
         ),
     )
+    spread: bool = Field(
+        default=False,
+        description=(
+            "With exchange=all and a spot market order, price timed slices. "
+            "The legs are the first slice on the current book. Later slices read the books again. "
+            "Nothing is written."
+        ),
+    )
+    spread_minutes: int = Field(
+        default=0,
+        description="Minutes from the first slice to the last. 0 means 10. From 1 to 1440.",
+    )
+    slice_count: int = Field(
+        default=0,
+        description="How many slices. 0 means 10. From 2 to 60. Closer than 15 seconds is rejected.",
+    )
+
+
+class ExecutionCompareInput(BaseModel):
+    client_id: str
+    symbol: str
+    side: str = Field(description="buy or sell")
+    quantity: float = Field(description="Base size priced on every path")
+    exchange: str = Field(
+        default="binance",
+        description="Venue for the market row: binance, coinbase, or bybit",
+    )
+    max_slippage_pct: float = Field(
+        default=0,
+        description=(
+            "Cap for best cost and the time split. 0.5 means 0.5% from the best price. "
+            "Zero means no cap. The market row ignores it."
+        ),
+    )
+    spread_minutes: int = Field(
+        default=0,
+        description="Minutes from the first slice to the last. 0 means 10.",
+    )
+    slice_count: int = Field(
+        default=0,
+        description="How many slices. 0 means 10. A gap under 15 seconds leaves that row unpriced.",
+    )
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
 class PortfolioOrderInput(BaseModel):
@@ -1954,8 +2015,18 @@ class PortfolioOrderInput(BaseModel):
     symbol: str
     side: str = Field(description="buy | sell")
     quantity: float = Field(gt=0)
-    exchange: str = "binance"
+    exchange: str = Field(
+        default="binance",
+        description=(
+            "binance|coinbase|bybit|nasdaq|bist|all. "
+            "all splits a spot market order across Binance, Coinbase, and Bybit by depth and taker fee."
+        ),
+    )
     lot_method: str = Field(default="", description="fifo (default) or lifo for sells")
+    max_slippage_pct: float = Field(
+        default=0,
+        description="Best-cost cap in percent. 0.5 keeps fills within 0.5% of the best price. Zero means no cap.",
+    )
     idempotency_key: str = Field(
         default="",
         description="Optional retry key; same key + same request returns the original fill",
@@ -1968,6 +2039,34 @@ class PortfolioOrderInput(BaseModel):
             "An empty list stores no read. A sell ignores this."
         ),
     )
+    spread: bool = Field(
+        default=False,
+        description=(
+            "With exchange=all, work the order as timed slices. "
+            "Each slice reads the books again and takes the cheapest venue for that size. "
+            "The first slice is due now. The last slice is due at the end of spread_minutes."
+        ),
+    )
+    spread_minutes: int = Field(
+        default=0,
+        description="Minutes from the first slice to the last. 0 means 10. From 1 to 1440.",
+    )
+    slice_count: int = Field(
+        default=0,
+        description="How many slices. 0 means 10. From 2 to 60.",
+    )
+
+
+class SpreadOrderListInput(BaseModel):
+    client_id: str
+    status: str = Field(default="open", description="open|filled|canceled|all")
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+
+
+class SpreadOrderCancelInput(BaseModel):
+    client_id: str
+    order_id: str
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
 class PortfolioPendingOrderInput(BaseModel):
@@ -4369,6 +4468,11 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         portfolio_id: str = "",
         risk_percent: float = 0,
         reason: list[str] | None = None,
+        compare_exchange: str = "",
+        max_slippage_pct: float = 0,
+        spread: bool = False,
+        spread_minutes: int = 0,
+        slice_count: int = 0,
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -4399,12 +4503,51 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["limitPrice"] = limit_price
         if leverage:
             body["leverage"] = leverage
+        if compare_exchange:
+            body["compareExchange"] = compare_exchange
+        if max_slippage_pct:
+            body["maxSlippagePct"] = max_slippage_pct
+        if spread:
+            body["spread"] = True
+        if spread_minutes:
+            body["spreadMinutes"] = spread_minutes
+        if slice_count:
+            body["sliceCount"] = slice_count
         if portfolio_id:
             body["portfolioId"] = portfolio_id
         if reason is not None:
             body["reason"] = reason
         # A preview does not place, reserve, or open. Read-only sessions may call it.
         return http.post("/api/v1/portfolio/orders/preview", body, mutating=False)
+
+    def compare_order_execution(
+        client_id: str,
+        symbol: str,
+        side: str,
+        quantity: float,
+        exchange: str = "binance",
+        max_slippage_pct: float = 0,
+        spread_minutes: int = 0,
+        slice_count: int = 0,
+        portfolio_id: str = "",
+    ) -> str:
+        body: dict[str, Any] = {
+            "clientId": client_id,
+            "symbol": symbol,
+            "side": side,
+            "quantity": quantity,
+            "exchange": exchange,
+        }
+        if max_slippage_pct:
+            body["maxSlippagePct"] = max_slippage_pct
+        if spread_minutes:
+            body["spreadMinutes"] = spread_minutes
+        if slice_count:
+            body["sliceCount"] = slice_count
+        if portfolio_id:
+            body["portfolioId"] = portfolio_id
+        # The three prices do not place, reserve, or open. Read-only sessions may call this.
+        return http.post("/api/v1/portfolio/orders/execution-compare", body, mutating=False)
 
     def place_portfolio_order(
         client_id: str,
@@ -4416,6 +4559,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         idempotency_key: str = "",
         portfolio_id: str = "",
         reason: list[str] | None = None,
+        max_slippage_pct: float = 0,
+        spread: bool = False,
+        spread_minutes: int = 0,
+        slice_count: int = 0,
     ) -> str:
         body: dict[str, Any] = {
             "clientId": client_id,
@@ -4424,6 +4571,14 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             "quantity": quantity,
             "exchange": exchange,
         }
+        if spread:
+            body["spread"] = True
+        if spread_minutes:
+            body["spreadMinutes"] = spread_minutes
+        if slice_count:
+            body["sliceCount"] = slice_count
+        if max_slippage_pct:
+            body["maxSlippagePct"] = max_slippage_pct
         if lot_method:
             body["lotMethod"] = lot_method
         if idempotency_key:
@@ -4433,6 +4588,22 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if reason is not None:
             body["reason"] = reason
         return http.post("/api/v1/portfolio/orders", body)
+
+    def list_spread_orders(
+        client_id: str,
+        status: str = "open",
+        portfolio_id: str = "",
+    ) -> str:
+        q: dict[str, Any] = {"clientId": client_id, "status": status}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.get("/api/v1/portfolio/spread-orders", q)
+
+    def cancel_spread_order(client_id: str, order_id: str, portfolio_id: str = "") -> str:
+        q: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.delete(f"/api/v1/portfolio/spread-orders/{order_id}", params=q)
 
     def place_portfolio_pending_order(
         client_id: str,
@@ -7241,6 +7412,16 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "estimated sell profit, and whether a risk limit or the borrow cap would block it. "
                 "Pass risk_percent and stop_loss_price to size a spot buy, bracket, or margin open "
                 "from portfolio equity; quantity is then ignored. "
+                "exchange=all splits a spot market order across Binance, Coinbase, and Bybit "
+                "by depth and taker fee. compare_exchange prices that whole size on one venue. "
+                "routeLegs lists each venue. A missing book is named. "
+                "max_slippage_pct of 0.5 keeps fills within 0.5% of the best price. "
+                "When the size inside that cap is short, nothing is filled. "
+                "spread=true with exchange=all prices timed slices. "
+                "spread_minutes is the clock and slice_count is how many reads. "
+                "Defaults are 10 slices over 10 minutes. "
+                "routeLegs are the first slice. Later slices read the books again. "
+                "A sell only uses coins already held on that venue. "
                 "Nothing is written. A spot buy also returns the live coin read. "
                 "Pass reason to name the clauses a buy would store. "
                 "When that reason is set and the read is ready, reasonHistory lists this book's "
@@ -7253,15 +7434,58 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             args_schema=OrderPreviewInput,
         ),
         StructuredTool.from_function(
+            compare_order_execution,
+            name="compare_order_execution",
+            description=(
+                "Compare fees and slippage for the same crypto spot size before placing it. "
+                "Three rows: market walks one venue now, best_cost splits Binance, Coinbase, and Bybit now, "
+                "and spread repeats a slice of that walk as if each slice finds this book again. "
+                "If the book does not refill, spread costs the same as best cost. Later prices are not known. "
+                "slippagePct is the average fill versus the best price, in percent, before the fee. "
+                "savedVsMarket is positive when a buy spends less or a sell receives more than the single venue, "
+                "and only when both can fill. A path the book cannot hold fills nothing. "
+                "A bad slice schedule leaves that row unpriced and still returns the other two. "
+                "Nothing is written. Not real money."
+            ),
+            args_schema=ExecutionCompareInput,
+        ),
+        StructuredTool.from_function(
             place_portfolio_order,
             name="place_portfolio_order",
             description=(
-                "Paper market buy/sell. Fill is last price plus adverse slippage; a taker fee is charged. "
+                "Paper market buy/sell. The fill walks the visible spot book and pays the taker fee. "
+                "exchange=all splits the quantity across Binance, Coinbase, and Bybit by depth and "
+                "taker fee and returns one trade per venue. "
                 "Buy lot cost includes the fee; sell realized PnL is after the fee. "
+                "max_slippage_pct of 0.5 keeps fills within 0.5% of the best price. "
+                "When the size inside that cap is short, nothing is filled. "
+                "spread=true with exchange=all works the order as timed slices. "
+                "spread_minutes is the clock and slice_count is how many fills. "
+                "Defaults are 10 slices over 10 minutes. The last slice is due at the end. "
+                "A sell only uses coins already held on that venue. "
                 "Pass reason to store only those clauses on a buy. Omit it to store the whole read. "
                 "Pass idempotency_key on retries so a timeout does not create a second fill. Not real money."
             ),
             args_schema=PortfolioOrderInput,
+        ),
+        StructuredTool.from_function(
+            list_spread_orders,
+            name="list_spread_orders",
+            description=(
+                "List paper spread orders. A spread order fills a best-cost spot market order "
+                "as timed slices. spread_minutes and slice_count choose the clock. "
+                "status=open (default), filled, canceled, or all."
+            ),
+            args_schema=SpreadOrderListInput,
+        ),
+        StructuredTool.from_function(
+            cancel_spread_order,
+            name="cancel_spread_order",
+            description=(
+                "Cancel an open paper spread order. Slices that already filled stay. "
+                "The unused cash or quantity lock is released."
+            ),
+            args_schema=SpreadOrderCancelInput,
         ),
         StructuredTool.from_function(
             place_portfolio_pending_order,

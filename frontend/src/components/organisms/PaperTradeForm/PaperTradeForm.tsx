@@ -3,10 +3,11 @@ import { Alert, Button, Checkbox, InputNumber, Select, Segmented } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { situationLines } from '@/components/molecules/CoinSituation';
+import { ExecutionCompare, type ExecutionStyleId } from '@/components/molecules/ExecutionCompare';
 import { OrderPreview } from '@/components/molecules/OrderPreview';
 import { OrderReasonHistory } from '@/components/organisms/OrderReasonHistory';
 import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
-import { rtkErrorMessage, type MarketExchange } from '@/libs/api';
+import { rtkErrorMessage } from '@/libs/api';
 import { sizedQuantity } from '@/libs/hooks/orderPreview';
 import { Actions, Field, FieldRow, FormStack } from './PaperTradeForm.styles';
 import type { PaperTradeFormProps, PaperTradeFormValues } from './PaperTradeForm.types';
@@ -44,6 +45,11 @@ export function PaperTradeForm({
   preview,
   previewLoading = false,
   previewFailed = false,
+  execution,
+  executionLoading = false,
+  executionRefreshing = false,
+  executionUpdatedAt = null,
+  executionFailed = false,
   onDraftChange,
   onSubmit,
 }: PaperTradeFormProps) {
@@ -63,6 +69,11 @@ export function PaperTradeForm({
   const [lotMethod, setLotMethod] = useState<'fifo' | 'lifo'>('fifo');
   const [tif, setTif] = useState<'gtc' | 'ioc' | 'fok'>('gtc');
   const [pickedReason, setPickedReason] = useState<string[] | null>(null);
+  const [bestCost, setBestCost] = useState(false);
+  const [spread, setSpread] = useState(false);
+  const [spreadMinutes, setSpreadMinutes] = useState<number | null>(10);
+  const [sliceCount, setSliceCount] = useState<number | null>(10);
+  const [maxSlippagePct, setMaxSlippagePct] = useState<number | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [localBusy, setLocalBusy] = useState(false);
   const inFlightRef = useRef(false);
@@ -124,7 +135,23 @@ export function PaperTradeForm({
     if (reasonPreview?.situationStatus === 'ready') return selectedReason;
     return undefined;
   }, [keepsReason, reasonPreview?.situationStatus, selectedReason]);
-  const canSize = canSizeByRisk(kind, side);
+  const equityVenue = exchange === 'nasdaq' || exchange === 'bist';
+  const routing = bestCost && kind === 'market' && !equityVenue;
+  const pacing = routing && spread;
+  const minutes = spreadMinutes != null && spreadMinutes >= 1 ? Math.round(spreadMinutes) : 10;
+  const slices = sliceCount != null && sliceCount >= 2 ? Math.round(sliceCount) : 10;
+  const wireExchange = routing ? 'all' : exchange;
+  const canSize = canSizeByRisk(kind, side) && !routing;
+  const selectedStyle: ExecutionStyleId = !routing ? 'market' : pacing ? 'spread' : 'best_cost';
+  const chooseStyle = (style: ExecutionStyleId) => {
+    if (style === 'market') {
+      setBestCost(false);
+      setSpread(false);
+      return;
+    }
+    setBestCost(true);
+    setSpread(style === 'spread');
+  };
   const riskActive = canSize && riskPercent != null && riskPercent > 0;
   const stopForSize = stopLossPrice != null && stopLossPrice > 0;
 
@@ -138,7 +165,15 @@ export function PaperTradeForm({
     if (!onDraftChange) return;
     onDraftChange({
       product: 'spot',
-      exchange,
+      exchange: wireExchange,
+      compareExchange: routing ? exchange : undefined,
+      maxSlippagePct:
+        kind === 'market' && !equityVenue && maxSlippagePct != null && maxSlippagePct > 0
+          ? maxSlippagePct
+          : undefined,
+      spread: pacing || undefined,
+      spreadMinutes: kind === 'market' && !equityVenue ? minutes : undefined,
+      sliceCount: kind === 'market' && !equityVenue ? slices : undefined,
       symbol: symbol.trim().toUpperCase(),
       type: toApiOrderType(kind, side),
       side,
@@ -155,6 +190,13 @@ export function PaperTradeForm({
   }, [
     onDraftChange,
     exchange,
+    equityVenue,
+    wireExchange,
+    routing,
+    pacing,
+    minutes,
+    slices,
+    maxSlippagePct,
     symbol,
     kind,
     side,
@@ -184,7 +226,11 @@ export function PaperTradeForm({
     const sym = symbol.trim().toUpperCase();
     const orderType = toApiOrderType(kind, s);
     const values: PaperTradeFormValues = {
-      exchange: exchange as MarketExchange,
+      exchange: wireExchange,
+      maxSlippagePct: routing && maxSlippagePct != null && maxSlippagePct > 0 ? maxSlippagePct : undefined,
+      spread: pacing || undefined,
+      spreadMinutes: pacing ? minutes : undefined,
+      sliceCount: pacing ? slices : undefined,
       symbol: sym,
       orderType,
       side: s,
@@ -265,6 +311,49 @@ export function PaperTradeForm({
               />
             </Field>
           </>
+        ) : null}
+
+        {kind === 'market' && !equityVenue ? (
+          <Field>
+            <Text variant="caption" color="secondary">
+              {t('portfolio:trade.route')}
+            </Text>
+            <Segmented
+              value={routing ? 'all' : 'venue'}
+              aria-label={t('portfolio:trade.route')}
+              options={[
+                { label: t('portfolio:trade.thisVenue'), value: 'venue' },
+                { label: t('portfolio:trade.bestCost'), value: 'all' },
+              ]}
+              onChange={(value) => setBestCost(value === 'all')}
+            />
+            {routing ? (
+              <Text variant="caption" color="secondary">
+                {pacing ? t('portfolio:trade.spreadHint') : t('portfolio:trade.routeHint')}
+              </Text>
+            ) : null}
+            {routing ? (
+              <Segmented
+                value={pacing ? 'spread' : 'now'}
+                aria-label={t('portfolio:trade.pace')}
+                options={[
+                  { label: t('portfolio:trade.fillNow'), value: 'now' },
+                  { label: t('portfolio:trade.spread'), value: 'spread' },
+                ]}
+                onChange={(value) => setSpread(value === 'spread')}
+              />
+            ) : null}
+            <InputNumber
+              min={0}
+              max={100}
+              step={0.1}
+              value={maxSlippagePct}
+              onChange={(value) => setMaxSlippagePct(typeof value === 'number' ? value : null)}
+              style={{ minWidth: 120 }}
+              aria-label={t('portfolio:trade.maxSlippage')}
+              placeholder={t('portfolio:trade.maxSlippage')}
+            />
+          </Field>
         ) : null}
 
         <Field>
@@ -516,6 +605,23 @@ export function PaperTradeForm({
         <Text variant="caption" color="secondary">
           {t('portfolio:trade.reasonBlank')}
         </Text>
+      ) : null}
+
+      {kind === 'market' && !equityVenue ? (
+        <ExecutionCompare
+          compare={execution}
+          hasSize={quantity != null && quantity > 0}
+          loading={executionLoading}
+          refreshing={executionRefreshing}
+          updatedAt={executionUpdatedAt}
+          failed={executionFailed}
+          selected={selectedStyle}
+          minutes={spreadMinutes}
+          slices={sliceCount}
+          onSelect={chooseStyle}
+          onMinutes={setSpreadMinutes}
+          onSlices={setSliceCount}
+        />
       ) : null}
 
       <OrderPreview preview={preview} loading={previewLoading} failed={previewFailed} />
