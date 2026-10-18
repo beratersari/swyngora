@@ -238,7 +238,7 @@ Prices one crypto spot size three ways. Nothing is written.
 
 `maxSlippagePct` of `0.5` caps best cost and the time split. The market row ignores it. A path the book cannot hold has a status other than `filled` and no cash. A missing book is named in `missing` and is not treated as zero. A sell only uses coins already held. The time split locks those coins the way a placed spread order does, then assumes the book refills between slices. The coins do not refill. If the book does not refill, the time split costs the same as best cost. Later prices are not known.
 
-Equities are rejected. Margin stays on one venue. MCP `compare_order_execution`. A read-only assistant session can call it. The crypto market ticket shows the three rows and places the one you choose.
+Equities are rejected. Margin stays on one venue. MCP `compare_order_execution`. A read-only assistant session can call it. The crypto market ticket shows the three rows and places the one you choose. A filled row names each venue with the base size it takes, such as `binance 0.4, bybit 0.6`.
 
 ### Bracket orders (entry + TP/SL)
 

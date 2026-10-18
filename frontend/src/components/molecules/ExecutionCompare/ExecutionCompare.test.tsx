@@ -4,7 +4,8 @@ import userEvent from '@testing-library/user-event';
 import type { ExecutionCompare as ExecutionCompareModel } from '@/libs/api';
 import { renderWithTheme } from '@/test/render';
 import { ExecutionCompare } from './ExecutionCompare';
-import { cheapestStyles, formatComparePct } from './helpers';
+import { formatPrice } from '@/libs/utils/formatPrice';
+import { cheapestStyles, formatComparePct, legVenues } from './helpers';
 
 const priced: ExecutionCompareModel = {
   side: 'buy',
@@ -75,7 +76,8 @@ describe('ExecutionCompare', () => {
     expect(screen.getByText('5%')).toBeInTheDocument();
     expect(screen.getByText(/least cash|en az nakit/i)).toBeInTheDocument();
     expect(screen.getByText(/if the book does not refill|defter dolmazsa/i)).toBeInTheDocument();
-    expect(screen.getByText('binance, coinbase')).toBeInTheDocument();
+    expect(screen.getByText('binance 1, coinbase 1')).toBeInTheDocument();
+    expect(screen.getAllByText('binance 2')).toHaveLength(2);
     await user.click(screen.getByRole('button', { name: /over time|zamana yay/i }));
     expect(onSelect).toHaveBeenCalledWith('spread');
   });
@@ -116,5 +118,16 @@ describe('cheapestStyles', () => {
       ]).size,
     ).toBe(0);
     expect(formatComparePct(0.5)).toBe('0.5%');
+  });
+
+  it('puts the size next to each exchange', () => {
+    expect(
+      legVenues({
+        legs: [
+          { exchange: 'binance', quantity: 0.4 },
+          { exchange: 'bybit', quantity: 0.6 },
+        ],
+      }),
+    ).toBe(`binance ${formatPrice(0.4)}, bybit ${formatPrice(0.6)}`);
   });
 });

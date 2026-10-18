@@ -1,5 +1,6 @@
 import type { TFunction } from 'i18next';
 import type { ExecutionQuote } from '@/libs/api';
+import { formatPrice } from '@/libs/utils/formatPrice';
 import type { ExecutionStyleId } from './constants';
 
 /** Plain sentence for a path that would not fill. */
@@ -47,12 +48,16 @@ export function cheapestStyles(
   return new Set(winners.map((row) => row.style as ExecutionStyleId));
 }
 
-/** Venue names that would receive size, in walk order. */
+/** Each venue and the base size it takes, in walk order. */
 export function legVenues(row: ExecutionQuote): string {
-  const names: string[] = [];
+  const byVenue: { name: string; quantity: number }[] = [];
   for (const leg of row.legs ?? []) {
     const name = leg.exchange?.trim();
-    if (name && !names.includes(name)) names.push(name);
+    const quantity = leg.quantity;
+    if (!name || quantity == null || !Number.isFinite(quantity) || quantity <= 0) continue;
+    const found = byVenue.find((item) => item.name === name);
+    if (found) found.quantity += quantity;
+    else byVenue.push({ name, quantity });
   }
-  return names.join(', ');
+  return byVenue.map((item) => `${item.name} ${formatPrice(item.quantity)}`).join(', ');
 }
