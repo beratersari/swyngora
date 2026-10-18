@@ -2409,6 +2409,23 @@ func (c *APIClient) PreviewPortfolioOrder(ctx context.Context, clientID, exchang
 	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders/preview", body)
 }
 
+// CompareOrderExecution prices one venue, best cost, and a time split. Nothing is placed.
+func (c *APIClient) CompareOrderExecution(ctx context.Context, clientID, exchange, symbol, side string, quantity, maxSlippagePct float64, spreadMinutes, sliceCount int) (json.RawMessage, error) {
+	body := map[string]any{
+		"clientId": clientID, "exchange": exchange, "symbol": symbol, "side": side, "quantity": quantity,
+	}
+	if maxSlippagePct > 0 {
+		body["maxSlippagePct"] = maxSlippagePct
+	}
+	if spreadMinutes > 0 {
+		body["spreadMinutes"] = spreadMinutes
+	}
+	if sliceCount > 0 {
+		body["sliceCount"] = sliceCount
+	}
+	return c.sendJSON(ctx, http.MethodPost, "/api/v1/portfolio/orders/execution-compare", body)
+}
+
 // PlacePortfolioOrder places a paper market order.
 func (c *APIClient) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int) (json.RawMessage, error) {
 	body := map[string]any{

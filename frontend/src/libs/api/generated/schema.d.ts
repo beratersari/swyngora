@@ -3995,6 +3995,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portfolio/orders/execution-compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compare market, best cost, and a time split
+         * @description Prices the same crypto spot size three ways and writes nothing.
+         *     `exchange` is one of binance, coinbase, or bybit. That column walks only that venue's
+         *     visible book. Best cost walks Binance, Coinbase, and Bybit and takes the cheapest
+         *     fee-adjusted price. Over time repeats a slice of that walk (`spreadMinutes`, `sliceCount`;
+         *     default 10 slices over 10 minutes) as if each slice finds this same book again.
+         *     If the book does not refill, over time costs the same as best cost. Later prices are not known.
+         *     `slippagePct` is the average fill versus the best price across the books, in percent, before the fee.
+         *     `fee` is the taker fee and `feePct` is that fee as a percent of notional. Cash includes the fee.
+         *     `savedVsMarket` is set when that path and the single venue can both fill. Positive means a buy
+         *     spends less, or a sell receives more, than the single venue.
+         *     `maxSlippagePct` of 0.5 caps best cost and the time split at 0.5% from the best price.
+         *     The single venue does not use that cap. A path the book cannot hold has a status other than
+         *     `filled` and no cash. A missing book is named and is not zero. A bad slice schedule leaves
+         *     that row as `schedule` and still returns the other two prices. A sell only uses coins already
+         *     held on each venue. Equities are rejected. Not real money.
+         */
+        post: operations["compareOrderExecution"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portfolio/orders": {
         parameters: {
             query?: never;
@@ -10489,6 +10523,91 @@ export interface components {
             stopAttached?: boolean;
             /** @description True when a margin stop is at or past liquidation, so the stop would not be the exit. */
             stopBeyondLiquidation?: boolean;
+        };
+        ExecutionCompareRequest: {
+            clientId?: string;
+            portfolioId?: string;
+            ownerClientId?: string;
+            /**
+             * @description Venue for the market column. Best cost and the time split still read all three books.
+             * @enum {string}
+             */
+            exchange: "binance" | "coinbase" | "bybit";
+            symbol: string;
+            /** @enum {string} */
+            side: "buy" | "sell";
+            /** @description Base size priced on every path. */
+            quantity: number;
+            /** @description Cap for best cost and the time split. 0.5 means 0.5% from the best price. Zero or omitted means no cap. The market column ignores it. */
+            maxSlippagePct?: number;
+            /** @description Minutes from the first slice to the last. Zero uses 10. */
+            spreadMinutes?: number;
+            /** @description How many slices. Zero uses 10. */
+            sliceCount?: number;
+        };
+        ExecutionQuote: {
+            /** @enum {string} */
+            style?: "market" | "best_cost" | "spread";
+            /**
+             * @description filled means this path can take the whole size. Anything else fills nothing.
+             * @enum {string}
+             */
+            status?: "filled" | "exhausted" | "slippage_limited" | "inventory_short" | "missing" | "schedule";
+            exchange?: string;
+            symbol?: string;
+            quantity?: number;
+            filledQuantity?: number;
+            averagePrice?: number;
+            /** @description Best ask or bid across the books. Slippage is measured from this price. */
+            touchPrice?: number;
+            /** @description Average fill versus touchPrice, in percent, before the fee. 0.5 means 0.5% worse. */
+            slippagePct?: number;
+            notional?: number;
+            /** @description Taker fee in quote currency. */
+            fee?: number;
+            /** @description Taker fee as a percent of notional. */
+            feePct?: number;
+            /** @description Cash a buy would spend, including the fee. */
+            cashDebit?: number;
+            /** @description Cash a sell would receive after the fee. */
+            cashCredit?: number;
+            /** @description Cash per coin, including the fee. */
+            unitCash?: number;
+            /** @description Versus the market column, when both can fill. Positive means a buy spends less or a sell receives more. */
+            savedVsMarket?: number;
+            levelsUsed?: number;
+            legs?: components["schemas"]["PaperRouteLeg"][];
+            /** @description Venues whose book did not load. Their size is not zero. */
+            missing?: string[];
+            detail?: string;
+            /**
+             * @description Why the time split could not be named. interval is closer than 15 seconds.
+             * @enum {string}
+             */
+            schedule?: "interval" | "range" | "size";
+            spreadMinutes?: number;
+            sliceCount?: number;
+            sliceQuantity?: number;
+            /**
+             * @description refill means every slice was priced on this book. A book that does not refill matches best cost.
+             * @enum {string}
+             */
+            assumption?: "refill";
+        };
+        ExecutionCompare: {
+            /** @enum {string} */
+            side?: "buy" | "sell";
+            symbol?: string;
+            quantity?: number;
+            /** @description Venue used for the market column. */
+            exchange?: string;
+            touchPrice?: number;
+            /** @description Venue that posted the best price. */
+            touchExchange?: string;
+            /** @description Cap applied to best cost and the time split. Zero means no cap. */
+            maxSlippagePct?: number;
+            rows?: components["schemas"]["ExecutionQuote"][];
+            note?: string;
         };
         OrderPreview: {
             /** @enum {string} */
@@ -17025,6 +17144,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrderPreview"];
+                };
+            };
+            400: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    compareOrderExecution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExecutionCompareRequest"];
+            };
+        };
+        responses: {
+            /** @description Three prices for one size. The book is unchanged. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionCompare"];
                 };
             };
             400: components["responses"]["Error"];

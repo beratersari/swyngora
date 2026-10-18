@@ -60,7 +60,7 @@ import {
   useWithdrawPortfolioCashMutation,
   type PortfolioPerformancePeriod,
 } from '@/libs/api';
-import { useDocumentVisible, useMediaQuery, useOrderPreview } from '@/libs/hooks';
+import { useDocumentVisible, useExecutionCompare, useMediaQuery, useOrderPreview } from '@/libs/hooks';
 import type { MarginOrderPreviewDraft, SpotOrderPreviewDraft } from '@/libs/hooks/orderPreview';
 import { usePortfolioSubscription } from '@/libs/realtime';
 import {
@@ -804,12 +804,16 @@ function SpotOrderTicket({
   TicketPreviewProps) {
   const [draft, setDraft] = useState<SpotOrderPreviewDraft | null>(null);
   const priced = useOrderPreview(draft, { portfolioId, enabled: previewEnabled, visible });
+  const compared = useExecutionCompare(draft, { portfolioId, enabled: previewEnabled, visible });
   return (
     <PaperTradeForm
       {...form}
       preview={priced.preview}
       previewLoading={priced.loading}
       previewFailed={priced.failed}
+      execution={compared.compare}
+      executionLoading={compared.loading}
+      executionFailed={compared.failed}
       onDraftChange={setDraft}
     />
   );

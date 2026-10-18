@@ -1928,6 +1928,33 @@ class OrderPreviewInput(BaseModel):
     )
 
 
+class ExecutionCompareInput(BaseModel):
+    client_id: str
+    symbol: str
+    side: str = Field(description="buy or sell")
+    quantity: float = Field(description="Base size priced on every path")
+    exchange: str = Field(
+        default="binance",
+        description="Venue for the market row: binance, coinbase, or bybit",
+    )
+    max_slippage_pct: float = Field(
+        default=0,
+        description=(
+            "Cap for best cost and the time split. 0.5 means 0.5% from the best price. "
+            "Zero means no cap. The market row ignores it."
+        ),
+    )
+    spread_minutes: int = Field(
+        default=0,
+        description="Minutes from the first slice to the last. 0 means 10.",
+    )
+    slice_count: int = Field(
+        default=0,
+        description="How many slices. 0 means 10. A gap under 15 seconds leaves that row unpriced.",
+    )
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+
+
 class PortfolioOrderInput(BaseModel):
     client_id: str
     symbol: str
@@ -4336,6 +4363,35 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             body["reason"] = reason
         # A preview does not place, reserve, or open. Read-only sessions may call it.
         return http.post("/api/v1/portfolio/orders/preview", body, mutating=False)
+
+    def compare_order_execution(
+        client_id: str,
+        symbol: str,
+        side: str,
+        quantity: float,
+        exchange: str = "binance",
+        max_slippage_pct: float = 0,
+        spread_minutes: int = 0,
+        slice_count: int = 0,
+        portfolio_id: str = "",
+    ) -> str:
+        body: dict[str, Any] = {
+            "clientId": client_id,
+            "symbol": symbol,
+            "side": side,
+            "quantity": quantity,
+            "exchange": exchange,
+        }
+        if max_slippage_pct:
+            body["maxSlippagePct"] = max_slippage_pct
+        if spread_minutes:
+            body["spreadMinutes"] = spread_minutes
+        if slice_count:
+            body["sliceCount"] = slice_count
+        if portfolio_id:
+            body["portfolioId"] = portfolio_id
+        # The three prices do not place, reserve, or open. Read-only sessions may call this.
+        return http.post("/api/v1/portfolio/orders/execution-compare", body, mutating=False)
 
     def place_portfolio_order(
         client_id: str,
@@ -7159,6 +7215,22 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "OCO, bracket, or place_margin_order. Not real money."
             ),
             args_schema=OrderPreviewInput,
+        ),
+        StructuredTool.from_function(
+            compare_order_execution,
+            name="compare_order_execution",
+            description=(
+                "Compare fees and slippage for the same crypto spot size before placing it. "
+                "Three rows: market walks one venue now, best_cost splits Binance, Coinbase, and Bybit now, "
+                "and spread repeats a slice of that walk as if each slice finds this book again. "
+                "If the book does not refill, spread costs the same as best cost. Later prices are not known. "
+                "slippagePct is the average fill versus the best price, in percent, before the fee. "
+                "savedVsMarket is positive when a buy spends less or a sell receives more than the single venue, "
+                "and only when both can fill. A path the book cannot hold fills nothing. "
+                "A bad slice schedule leaves that row unpriced and still returns the other two. "
+                "Nothing is written. Not real money."
+            ),
+            args_schema=ExecutionCompareInput,
         ),
         StructuredTool.from_function(
             place_portfolio_order,

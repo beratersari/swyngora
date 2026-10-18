@@ -85,6 +85,20 @@ export type PlacePortfolioOrderResponse = {
 export type OrderPreview = components['schemas']['OrderPreview'];
 export type OrderPreviewLeg = components['schemas']['OrderPreviewLeg'];
 export type OrderPreviewRisk = components['schemas']['OrderPreviewRisk'];
+export type ExecutionCompare = components['schemas']['ExecutionCompare'];
+export type ExecutionQuote = components['schemas']['ExecutionQuote'];
+
+/** Three prices for one crypto size. Nothing is placed. */
+export type CompareOrderExecutionArg = {
+  portfolioId?: string;
+  exchange: string;
+  symbol: string;
+  side: 'buy' | 'sell';
+  quantity: number;
+  maxSlippagePct?: number;
+  spreadMinutes?: number;
+  sliceCount?: number;
+};
 
 /** Read-only price of a spot or margin ticket. Nothing is placed. */
 export type PreviewPortfolioOrderArg = {
@@ -448,6 +462,23 @@ export const portfolioApi = baseApi.injectEndpoints({
       }),
       providesTags: ['Portfolio'],
     }),
+    compareOrderExecution: build.query<ExecutionCompare, CompareOrderExecutionArg>({
+      query: (body) => ({
+        url: '/api/v1/portfolio/orders/execution-compare',
+        method: 'POST',
+        body: {
+          portfolioId: body.portfolioId,
+          exchange: body.exchange,
+          symbol: body.symbol,
+          side: body.side,
+          quantity: body.quantity,
+          maxSlippagePct: body.maxSlippagePct,
+          spreadMinutes: body.spreadMinutes,
+          sliceCount: body.sliceCount,
+        },
+      }),
+      providesTags: ['Portfolio'],
+    }),
     listSpreadOrders: build.query<
       { orders?: SpreadOrder[]; count?: number; status?: string },
       ({ status?: string; limit?: number; offset?: number } & BookArg) | void
@@ -759,6 +790,7 @@ export const {
   useRevokePortfolioShareMutation,
   usePlacePortfolioOrderMutation,
   usePreviewPortfolioOrderQuery,
+  useCompareOrderExecutionQuery,
   useListSpreadOrdersQuery,
   useCancelSpreadOrderMutation,
   useListPortfolioOrdersQuery,

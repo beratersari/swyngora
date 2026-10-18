@@ -48,7 +48,7 @@ describe('PaperTradeForm', () => {
         onSubmit={onSubmit}
       />,
     );
-    fireEvent.click(screen.getByText(/best cost|en düşük maliyet/i));
+    fireEvent.click(screen.getByRole('radio', { name: /best cost|en düşük maliyet/i }));
     await waitFor(() => {
       const last = onDraftChange.mock.calls.at(-1)?.[0] as {
         exchange: string;
@@ -89,8 +89,8 @@ describe('PaperTradeForm', () => {
         onSubmit={onSubmit}
       />,
     );
-    fireEvent.click(screen.getByText(/best cost|en düşük maliyet/i));
-    fireEvent.click(screen.getByText(/^spread$|^yay$/i));
+    fireEvent.click(screen.getByRole('radio', { name: /best cost|en düşük maliyet/i }));
+    fireEvent.click(screen.getByRole('radio', { name: /^spread$|^yay$/i }));
     const minutes = screen.getByRole('spinbutton', { name: /minutes|dakika/i });
     const slices = screen.getByRole('spinbutton', { name: /slices|dilim/i });
     fireEvent.change(minutes, { target: { value: '30' } });

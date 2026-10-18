@@ -5120,6 +5120,21 @@ func (b *Backend) PreviewPortfolioOrder(ctx context.Context, clientID, exchange,
 	return mustJSON(portfolio.OrderPreviewPayload(got))
 }
 
+func (b *Backend) CompareOrderExecution(ctx context.Context, clientID, exchange, symbol, side string, quantity, maxSlippagePct float64, spreadMinutes, sliceCount int) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	got, err := b.Portfolio.CompareExecutions(ctx, portfolio.ExecutionCompareInput{
+		ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Exchange: exchange, Symbol: symbol,
+		Side: side, Quantity: quantity, MaxSlippagePct: maxSlippagePct,
+		SpreadMinutes: spreadMinutes, SliceCount: sliceCount,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(portfolio.ExecutionComparePayload(got))
+}
+
 func (b *Backend) PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)

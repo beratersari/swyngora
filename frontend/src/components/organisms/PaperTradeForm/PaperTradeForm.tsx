@@ -3,6 +3,7 @@ import { Alert, Button, Checkbox, InputNumber, Select, Segmented } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { situationLines } from '@/components/molecules/CoinSituation';
+import { ExecutionCompare, type ExecutionStyleId } from '@/components/molecules/ExecutionCompare';
 import { OrderPreview } from '@/components/molecules/OrderPreview';
 import { OrderReasonHistory } from '@/components/organisms/OrderReasonHistory';
 import { SymbolSuggest } from '@/components/molecules/SymbolSuggest';
@@ -44,6 +45,9 @@ export function PaperTradeForm({
   preview,
   previewLoading = false,
   previewFailed = false,
+  execution,
+  executionLoading = false,
+  executionFailed = false,
   onDraftChange,
   onSubmit,
 }: PaperTradeFormProps) {
@@ -136,6 +140,16 @@ export function PaperTradeForm({
   const slices = sliceCount != null && sliceCount >= 2 ? Math.round(sliceCount) : 10;
   const wireExchange = routing ? 'all' : exchange;
   const canSize = canSizeByRisk(kind, side) && !routing;
+  const selectedStyle: ExecutionStyleId = !routing ? 'market' : pacing ? 'spread' : 'best_cost';
+  const chooseStyle = (style: ExecutionStyleId) => {
+    if (style === 'market') {
+      setBestCost(false);
+      setSpread(false);
+      return;
+    }
+    setBestCost(true);
+    setSpread(style === 'spread');
+  };
   const riskActive = canSize && riskPercent != null && riskPercent > 0;
   const stopForSize = stopLossPrice != null && stopLossPrice > 0;
 
@@ -151,10 +165,13 @@ export function PaperTradeForm({
       product: 'spot',
       exchange: wireExchange,
       compareExchange: routing ? exchange : undefined,
-      maxSlippagePct: routing && maxSlippagePct != null && maxSlippagePct > 0 ? maxSlippagePct : undefined,
+      maxSlippagePct:
+        kind === 'market' && !equityVenue && maxSlippagePct != null && maxSlippagePct > 0
+          ? maxSlippagePct
+          : undefined,
       spread: pacing || undefined,
-      spreadMinutes: pacing ? minutes : undefined,
-      sliceCount: pacing ? slices : undefined,
+      spreadMinutes: kind === 'market' && !equityVenue ? minutes : undefined,
+      sliceCount: kind === 'market' && !equityVenue ? slices : undefined,
       symbol: symbol.trim().toUpperCase(),
       type: toApiOrderType(kind, side),
       side,
@@ -171,6 +188,7 @@ export function PaperTradeForm({
   }, [
     onDraftChange,
     exchange,
+    equityVenue,
     wireExchange,
     routing,
     pacing,
@@ -323,44 +341,16 @@ export function PaperTradeForm({
                 onChange={(value) => setSpread(value === 'spread')}
               />
             ) : null}
-            {pacing ? (
-              <InputNumber
-                min={1}
-                max={1440}
-                step={1}
-                precision={0}
-                value={spreadMinutes}
-                onChange={(value) => setSpreadMinutes(typeof value === 'number' ? value : null)}
-                style={{ minWidth: 110 }}
-                aria-label={t('portfolio:trade.spreadMinutes')}
-                placeholder={t('portfolio:trade.spreadMinutes')}
-              />
-            ) : null}
-            {pacing ? (
-              <InputNumber
-                min={2}
-                max={60}
-                step={1}
-                precision={0}
-                value={sliceCount}
-                onChange={(value) => setSliceCount(typeof value === 'number' ? value : null)}
-                style={{ minWidth: 110 }}
-                aria-label={t('portfolio:trade.spreadSlices')}
-                placeholder={t('portfolio:trade.spreadSlices')}
-              />
-            ) : null}
-            {routing ? (
-              <InputNumber
-                min={0}
-                max={100}
-                step={0.1}
-                value={maxSlippagePct}
-                onChange={(value) => setMaxSlippagePct(typeof value === 'number' ? value : null)}
-                style={{ minWidth: 120 }}
-                aria-label={t('portfolio:trade.maxSlippage')}
-                placeholder={t('portfolio:trade.maxSlippage')}
-              />
-            ) : null}
+            <InputNumber
+              min={0}
+              max={100}
+              step={0.1}
+              value={maxSlippagePct}
+              onChange={(value) => setMaxSlippagePct(typeof value === 'number' ? value : null)}
+              style={{ minWidth: 120 }}
+              aria-label={t('portfolio:trade.maxSlippage')}
+              placeholder={t('portfolio:trade.maxSlippage')}
+            />
           </Field>
         ) : null}
 
@@ -613,6 +603,21 @@ export function PaperTradeForm({
         <Text variant="caption" color="secondary">
           {t('portfolio:trade.reasonBlank')}
         </Text>
+      ) : null}
+
+      {kind === 'market' && !equityVenue ? (
+        <ExecutionCompare
+          compare={execution}
+          hasSize={quantity != null && quantity > 0}
+          loading={executionLoading}
+          failed={executionFailed}
+          selected={selectedStyle}
+          minutes={spreadMinutes}
+          slices={sliceCount}
+          onSelect={chooseStyle}
+          onMinutes={setSpreadMinutes}
+          onSlices={setSliceCount}
+        />
       ) : null}
 
       <OrderPreview preview={preview} loading={previewLoading} failed={previewFailed} />

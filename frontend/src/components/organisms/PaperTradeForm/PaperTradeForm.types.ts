@@ -1,4 +1,4 @@
-import type { MarketExchange, OrderPreview, PaperOrderType } from '@/libs/api';
+import type { ExecutionCompare, MarketExchange, OrderPreview, PaperOrderType } from '@/libs/api';
 import type { SpotOrderPreviewDraft } from '@/libs/hooks/orderPreview';
 
 export type PaperTradeFormValues = {
@@ -47,6 +47,10 @@ export type PaperTradeFormProps = {
   preview?: OrderPreview | null;
   previewLoading?: boolean;
   previewFailed?: boolean;
+  /** Fee and slippage for this venue, best cost, and a time split. The page owns the request. */
+  execution?: ExecutionCompare | null;
+  executionLoading?: boolean;
+  executionFailed?: boolean;
   /** Fires when the draft changes so the page can price it. */
   onDraftChange?: (draft: SpotOrderPreviewDraft) => void;
   onSubmit: (values: PaperTradeFormValues) => Promise<void>;

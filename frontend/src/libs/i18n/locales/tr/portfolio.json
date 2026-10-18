@@ -128,6 +128,41 @@
       "trailValue": "İz değeri gerekli"
     }
   },
+  "compare": {
+    "title": "Aynı boy, üç yol",
+    "note": "Bu boy için komisyon ve kayma. Kayma sınırı en düşük maliyet ve zamana yay için geçerlidir. Siz seçene kadar bir şey yazılmaz.",
+    "enterSize": "Karşılaştırmak için bir boy girin.",
+    "pricing": "Bu boy karşılaştırılıyor…",
+    "failed": "Bu boy karşılaştırılamadı.",
+    "touch": "En iyi fiyat {{price}}, {{venue}}",
+    "lowestBuy": "En az nakit",
+    "lowestSell": "En çok nakit",
+    "slippage": "Kayma",
+    "fee": "Komisyon",
+    "average": "Ortalama",
+    "debit": "Çıkacak nakit",
+    "credit": "Girecek nakit",
+    "saved": "Bu borsaya göre",
+    "missing": "Defter yok: {{names}}",
+    "refill": "Her dilim bu defteri yeniden bulursa. Defter dolmazsa bu, en düşük maliyet ile aynıdır. Sonraki fiyatlar bilinmez.",
+    "styles": {
+      "market": "Bu borsa",
+      "best_cost": "En düşük maliyet",
+      "spread": "Zamana yay"
+    },
+    "status": {
+      "exhausted": "Görünen defter bu boyu tutamaz. Hiçbir şey dolmaz.",
+      "slippage_limited": "Kayma sınırı bu boyu tutamaz. Hiçbir şey dolmaz.",
+      "inventory_short": "Bu yolda yeterli coin yok. Hiçbir şey dolmaz.",
+      "missing": "O defter yüklenmedi. Hiçbir şey dolmaz.",
+      "schedule": "Bu takvim kullanılamaz."
+    },
+    "schedule": {
+      "interval": "Dilimler 15 saniyeden yakın olur.",
+      "range": "1 ile 1440 dakika ve 2 ile 60 dilim kullanın.",
+      "size": "Her dilim dolmak için çok küçük kalır."
+    }
+  },
   "preview": {
     "title": "Göndermeden önce",
     "pricing": "Bu emir fiyatlanıyor…",

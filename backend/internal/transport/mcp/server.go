@@ -196,6 +196,7 @@ type DataPort interface {
 	DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
 	GetPaperTradingCosts(ctx context.Context, exchange string) (json.RawMessage, error)
 	PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int) (json.RawMessage, error)
+	CompareOrderExecution(ctx context.Context, clientID, exchange, symbol, side string, quantity, maxSlippagePct float64, spreadMinutes, sliceCount int) (json.RawMessage, error)
 	PlacePortfolioOrder(ctx context.Context, clientID, exchange, symbol, side string, quantity float64, lotMethod string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int) (json.RawMessage, error)
 	ListSpreadOrders(ctx context.Context, clientID, status string, limit, offset int) (json.RawMessage, error)
 	CancelSpreadOrder(ctx context.Context, clientID, orderID string) (json.RawMessage, error)
@@ -3530,6 +3531,47 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 			req.GetFloat("trailValue", 0), req.GetFloat("limitPrice", 0), int(req.GetFloat("leverage", 0)), riskPct,
 			req.GetString("compareExchange", ""), req.GetFloat("maxSlippagePct", 0), req.GetBool("spread", false),
 			int(req.GetFloat("spreadMinutes", 0)), int(req.GetFloat("sliceCount", 0)))
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("compare_order_execution",
+		mcp.WithDescription("Compare fees and slippage for the same crypto spot size before placing it. Returns three rows: market walks one venue now, best_cost splits Binance, Coinbase, and Bybit now by fee-adjusted price, and spread repeats a slice of that walk as if each slice finds this book again. If the book does not refill, spread costs the same as best cost. Later prices are not known. slippagePct is the average fill versus the best price, in percent, before the fee. fee is the taker fee. savedVsMarket is positive when a buy spends less or a sell receives more than the single venue, and only when both can fill. maxSlippagePct caps best cost and the time split. The market row ignores it. A path the book cannot hold fills nothing. A bad slice schedule leaves that row as schedule and still returns the other two. A missing book is named. Nothing is written. Not real money."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
+		mcp.WithString("symbol", mcp.Required(), mcp.Description("Pair e.g. BTCUSDT")),
+		mcp.WithString("side", mcp.Required(), mcp.Description("buy or sell")),
+		mcp.WithNumber("quantity", mcp.Required(), mcp.Description("Base asset quantity priced on every path")),
+		mcp.WithString("exchange", mcp.Required(), mcp.Description("Venue for the market row: binance, coinbase, or bybit")),
+		mcp.WithNumber("maxSlippagePct", mcp.Description("Cap for best cost and the time split. 0.5 means 0.5% from the best price. Zero means no cap. The market row ignores it.")),
+		mcp.WithNumber("spreadMinutes", mcp.Description("Minutes from the first slice to the last. Default 10. From 1 to 1440.")),
+		mcp.WithNumber("sliceCount", mcp.Description("How many slices. Default 10. From 2 to 60. Slices closer than 15 seconds leave the spread row unpriced.")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		symbol, err := req.RequireString("symbol")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		side, err := req.RequireString("side")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		qty := req.GetFloat("quantity", 0)
+		if qty <= 0 {
+			return mcp.NewToolResultError("quantity is required"), nil
+		}
+		exchange, err := req.RequireString("exchange")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		raw, err := api.CompareOrderExecution(ctx, clientID, exchange, symbol, side, qty,
+			req.GetFloat("maxSlippagePct", 0), int(req.GetFloat("spreadMinutes", 0)), int(req.GetFloat("sliceCount", 0)))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

@@ -154,7 +154,13 @@ import {
   type PumpEventDto,
   type IndicatorsResponse,
 } from '@/libs/api';
-import { useDisplayCurrency, useDocumentVisible, useMediaQuery, useOrderPreview } from '@/libs/hooks';
+import {
+  useDisplayCurrency,
+  useDocumentVisible,
+  useExecutionCompare,
+  useMediaQuery,
+  useOrderPreview,
+} from '@/libs/hooks';
 import type { SpotOrderPreviewDraft } from '@/libs/hooks/orderPreview';
 import { usePriceSubscription, usePortfolioSubscription } from '@/libs/realtime';
 import {
@@ -3483,12 +3489,16 @@ function CoinPaperTicket({
 }) {
   const [draft, setDraft] = useState<SpotOrderPreviewDraft | null>(null);
   const priced = useOrderPreview(draft, { portfolioId, enabled: previewEnabled, visible });
+  const compared = useExecutionCompare(draft, { portfolioId, enabled: previewEnabled, visible });
   return (
     <PaperTradeForm
       {...form}
       preview={priced.preview}
       previewLoading={priced.loading}
       previewFailed={priced.failed}
+      execution={compared.compare}
+      executionLoading={compared.loading}
+      executionFailed={compared.failed}
       onDraftChange={setDraft}
     />
   );
