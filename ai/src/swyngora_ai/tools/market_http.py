@@ -1900,6 +1900,16 @@ class PortfolioCashListInput(BaseModel):
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
+class EmergencyStopSetInput(BaseModel):
+    client_id: str
+    enabled: bool = Field(description="true arms the stop. false stops further tries and does not undo a close.")
+    loss_pct: float = Field(
+        default=0,
+        description="Today's trading-loss cap in percent. 5 means 5 percent. Required when enabled is true.",
+    )
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+
+
 class RiskLimitsSetInput(BaseModel):
     client_id: str
     max_daily_loss_pct: float = Field(
@@ -4399,6 +4409,24 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if portfolio_id:
             body["portfolioId"] = portfolio_id
         q = f"/api/v1/portfolio/risk-limits?clientId={client_id}"
+        if portfolio_id:
+            q += f"&portfolioId={portfolio_id}"
+        return http.put(q, body)
+
+    def get_emergency_stop(client_id: str, portfolio_id: str = "") -> str:
+        q: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            q["portfolioId"] = portfolio_id
+        return http.get("/api/v1/portfolio/emergency-stop", q)
+
+    def set_emergency_stop(
+        client_id: str,
+        enabled: bool,
+        loss_pct: float = 0,
+        portfolio_id: str = "",
+    ) -> str:
+        body: dict[str, Any] = {"enabled": enabled, "lossPct": loss_pct}
+        q = f"/api/v1/portfolio/emergency-stop?clientId={client_id}"
         if portfolio_id:
             q += f"&portfolioId={portfolio_id}"
         return http.put(q, body)
@@ -7506,6 +7534,29 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="clear_portfolio_risk_limits",
             description="Remove all paper risk limits.",
             args_schema=PortfolioGetInput,
+        ),
+        StructuredTool.from_function(
+            get_emergency_stop,
+            name="get_emergency_stop",
+            description=(
+                "Get the paper emergency stop. enabled, lossPct, today's trading loss, "
+                "and the last trip. Each action is ok or failed. Cash added or removed "
+                "is not part of the loss. This does not close positions."
+            ),
+            args_schema=PortfolioGetInput,
+        ),
+        StructuredTool.from_function(
+            set_emergency_stop,
+            name="set_emergency_stop",
+            description=(
+                "Turn the paper emergency stop on or off. loss_pct 5 means today's "
+                "trading loss of 5 percent. When it is on and that loss is reached, "
+                "pending orders are canceled, recurring buys pause, and open spot and "
+                "margin positions are closed. The result names which steps worked and "
+                "which failed. A failed step is tried again while the loss is still "
+                "past the line. Turning it off does not undo a close. Not real money."
+            ),
+            args_schema=EmergencyStopSetInput,
         ),
         StructuredTool.from_function(
             get_paper_trading_costs,

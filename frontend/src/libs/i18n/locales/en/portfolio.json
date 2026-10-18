@@ -99,6 +99,24 @@
     "limit": "Max total exposure %",
     "save": "Save"
   },
+  "emergency": {
+    "title": "Emergency stop",
+    "hint": "When today's trading loss passes this percent, open orders are canceled, recurring buys pause, and spot and margin positions close. Cash you add or remove does not count. A step that fails is named and tried again.",
+    "now": "Today {{line}}",
+    "switch": "Emergency stop",
+    "loss": "Loss percent",
+    "save": "Save",
+    "ok": "worked",
+    "failed": "failed: {{detail}}",
+    "kind": {
+      "cancel_order": "Cancel {{symbol}}",
+      "cancel_spread": "Cancel timed order {{symbol}}",
+      "pause_recurring": "Pause recurring buy {{symbol}}",
+      "close_spot": "Close {{symbol}}",
+      "close_margin": "Close margin {{symbol}}",
+      "cancel_pending": "Cancel open orders"
+    }
+  },
   "equityChart": {
     "title": "Performance",
     "hint": "Cash you add or take out is not part of this line.",

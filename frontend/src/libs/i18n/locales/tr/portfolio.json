@@ -99,6 +99,24 @@
     "limit": "En fazla toplam risk %",
     "save": "Kaydet"
   },
+  "emergency": {
+    "title": "Acil durdurma",
+    "hint": "Bugünkü işlem zararı bu yüzdeyi geçince açık emirler iptal edilir, tekrarlayan alışlar durur ve spot ile marjin pozisyonları kapanır. Eklenen veya çekilen nakit sayılmaz. Olmayan adım yazılır ve yeniden denenir.",
+    "now": "Bugün {{line}}",
+    "switch": "Acil durdurma",
+    "loss": "Zarar yüzdesi",
+    "save": "Kaydet",
+    "ok": "oldu",
+    "failed": "olmadı: {{detail}}",
+    "kind": {
+      "cancel_order": "{{symbol}} iptal",
+      "cancel_spread": "Zamanlı emir {{symbol}} iptal",
+      "pause_recurring": "Tekrarlayan alış {{symbol}} durdu",
+      "close_spot": "{{symbol}} kapat",
+      "close_margin": "Marjin {{symbol}} kapat",
+      "cancel_pending": "Açık emirleri iptal et"
+    }
+  },
   "equityChart": {
     "title": "Performans",
     "hint": "Eklediğiniz veya çektiğiniz nakit bu çizgide yok.",

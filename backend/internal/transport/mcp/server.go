@@ -196,6 +196,8 @@ type DataPort interface {
 	GetPortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
 	PutPortfolioRiskLimits(ctx context.Context, clientID string, maxDailyLossPct, maxAssetWeightPct, maxExposurePct *float64) (json.RawMessage, error)
 	DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error)
+	GetEmergencyStop(ctx context.Context, clientID string) (json.RawMessage, error)
+	PutEmergencyStop(ctx context.Context, clientID string, enabled bool, lossPct float64) (json.RawMessage, error)
 	GetPaperTradingCosts(ctx context.Context, exchange string) (json.RawMessage, error)
 	PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int, takeProfitTargets string, moveStopToEntry bool) (json.RawMessage, error)
 	CompareOrderExecution(ctx context.Context, clientID, exchange, symbol, side string, quantity, maxSlippagePct float64, spreadMinutes, sliceCount int) (json.RawMessage, error)
@@ -3521,6 +3523,42 @@ func registerTools(s *server.MCPServer, api DataPort, accounts *account.Service)
 		}
 		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
 		raw, err := api.DeletePortfolioRiskLimits(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("get_emergency_stop",
+		mcp.WithDescription("Get the paper emergency stop: whether it is on, the loss percent, today's trading loss, and the last trip. Each action is ok or failed. Cash added or removed is not part of the loss. This does not close positions."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		raw, err := api.GetEmergencyStop(ctx, clientID)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(PrettyJSON(raw)), nil
+	})
+
+	addTool(mcp.NewTool("set_emergency_stop",
+		mcp.WithDescription("Turn the paper emergency stop on or off. lossPct 5 means today's trading loss of 5 percent. When it is on and that loss is reached, pending orders are canceled, recurring buys pause, and open spot and margin positions are closed. The result names which steps worked and which failed. A failed step is tried again while the loss is still past the line. Turning it off stops further tries and does not undo a close. Not real money."),
+		mcp.WithString("clientId", mcp.Required(), mcp.Description("Opaque client id")),
+		mcp.WithString("portfolioId", mcp.Description("Book id or name when multiple portfolios exist")),
+		mcp.WithBoolean("enabled", mcp.Required(), mcp.Description("true arms the stop. false leaves positions as they are.")),
+		mcp.WithNumber("lossPct", mcp.Description("Today's trading-loss cap in percent. Required when enabled is true. 5 means 5 percent.")),
+	), func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		clientID, err := req.RequireString("clientId")
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		ctx = WithPortfolioID(ctx, req.GetString("portfolioId", ""))
+		raw, err := api.PutEmergencyStop(ctx, clientID, req.GetBool("enabled", false), req.GetFloat("lossPct", 0))
 		if err != nil {
 			return mcp.NewToolResultError(err.Error()), nil
 		}

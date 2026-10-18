@@ -4858,6 +4858,30 @@ func (b *Backend) PutPortfolioRiskLimits(ctx context.Context, clientID string, m
 	return mustJSON(riskLimitsViewMap(v))
 }
 
+func (b *Backend) GetEmergencyStop(ctx context.Context, clientID string) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	v, err := b.Portfolio.GetEmergencyStop(ctx, clientID, PortfolioIDFrom(ctx))
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(portfolio.EmergencyStopPayload(v))
+}
+
+func (b *Backend) PutEmergencyStop(ctx context.Context, clientID string, enabled bool, lossPct float64) (json.RawMessage, error) {
+	if b.Portfolio == nil {
+		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)
+	}
+	v, err := b.Portfolio.SetEmergencyStop(ctx, portfolio.EmergencyStopInput{
+		ClientID: clientID, PortfolioID: PortfolioIDFrom(ctx), Enabled: enabled, LossPct: lossPct,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mustJSON(portfolio.EmergencyStopPayload(v))
+}
+
 func (b *Backend) DeletePortfolioRiskLimits(ctx context.Context, clientID string) (json.RawMessage, error) {
 	if b.Portfolio == nil {
 		return nil, fmt.Errorf("%w: portfolio not configured", domain.ErrUpstream)

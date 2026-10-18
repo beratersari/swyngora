@@ -2,7 +2,7 @@
 
 ## Problem / goal
 
-Emotional trading — especially leveraged margin — can blow up an account. Users should be able to set **their own** optional brakes: stop new risk when the day is already down X%, or stop adding to a coin that is already too large. Limits must **never force-close** what they already hold. They can raise, lower, or remove the rules anytime.
+Emotional trading — especially leveraged margin — can blow up an account. Users should be able to set **their own** optional brakes: stop new risk when the day is already down X%, or stop adding to a coin that is already too large. Limits must **never force-close** what they already hold. They can raise, lower, or remove the rules anytime. Closing positions when today's trading loss passes a chosen percent is a separate switch: `docs/features/emergency-stop.md`.
 
 ## Behavior
 

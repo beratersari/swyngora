@@ -3976,6 +3976,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portfolio/emergency-stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the emergency stop and the last trip
+         * @description The switch, today's trading loss, and the actions from the last time the loss
+         *     passed the line. Cash added or removed is not part of that loss. Nothing is closed
+         *     by this read. Paper only.
+         */
+        get: operations["getEmergencyStop"];
+        /**
+         * Turn the emergency stop on or off
+         * @description Saves the switch and the loss percent. 5 means today's trading loss of 5 percent.
+         *     Turning it on checks immediately. Pending orders are canceled, recurring buys pause,
+         *     and open spot and margin positions are closed at the paper market. Each step is
+         *     named ok or failed. A failed step is tried again while the loss is still past the line.
+         *     Turning it off stops further tries and does not undo a close.
+         */
+        put: operations["putEmergencyStop"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portfolio/trading-costs": {
         parameters: {
             query?: never;
@@ -11573,6 +11603,50 @@ export interface components {
             /** @description targetValue − afterValue */
             afterDelta?: number;
         };
+        EmergencyStopInput: {
+            enabled: boolean;
+            /**
+             * @description Today's trading-loss cap in percent. 5 means 5 percent. Required when enabled is true.
+             * @example 5
+             */
+            lossPct?: number;
+        };
+        EmergencyStopAction: {
+            /** @enum {string} */
+            kind?: "cancel_order" | "cancel_spread" | "pause_recurring" | "close_spot" | "close_margin" | "cancel_pending";
+            targetId?: string;
+            exchange?: string;
+            symbol?: string;
+            /** @enum {string} */
+            status?: "ok" | "failed";
+            /** @description Why this step failed. Empty when it worked. */
+            detail?: string;
+        };
+        EmergencyStopRun: {
+            id?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            /** @description Today's trading result in percent. Negative is a loss. */
+            dailyPnlPct?: number;
+            /** @description The cap in force for this trip. */
+            lossPct?: number;
+            actions?: components["schemas"]["EmergencyStopAction"][];
+        };
+        /**
+         * @description The emergency stop for one paper book. hit means today's trading loss is past lossPct.
+         *     run is the latest trip, including a retry of a step that failed.
+         */
+        EmergencyStopView: {
+            enabled?: boolean;
+            lossPct?: number;
+            dailyPnlPct?: number;
+            hit?: boolean;
+            tripped?: boolean;
+            run?: components["schemas"]["EmergencyStopRun"];
+            note?: string;
+        };
         /** @description Settings screen DTO — current rules plus live daily PnL and per-asset weights */
         RiskLimitsView: {
             clientId?: string;
@@ -17483,6 +17557,63 @@ export interface operations {
                 };
                 content?: never;
             };
+            404: components["responses"]["Error"];
+        };
+    };
+    getEmergencyStop: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                portfolioId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Switch, today's loss, and the last trip when one exists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmergencyStopView"];
+                };
+            };
+            404: components["responses"]["Error"];
+        };
+    };
+    putEmergencyStop: {
+        parameters: {
+            query?: {
+                clientId?: string;
+                portfolioId?: string;
+            };
+            header?: {
+                "X-Client-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmergencyStopInput"];
+            };
+        };
+        responses: {
+            /** @description Saved switch, today's loss, and the trip when it fired */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmergencyStopView"];
+                };
+            };
+            400: components["responses"]["Error"];
             404: components["responses"]["Error"];
         };
     };

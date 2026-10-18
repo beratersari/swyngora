@@ -2392,6 +2392,24 @@ func (c *APIClient) DeletePortfolioRiskLimits(ctx context.Context, clientID stri
 	return c.sendJSON(ctx, http.MethodDelete, "/api/v1/portfolio/risk-limits?"+q.Encode(), nil)
 }
 
+func (c *APIClient) GetEmergencyStop(ctx context.Context, clientID string) (json.RawMessage, error) {
+	q := url.Values{}
+	q.Set("clientId", clientID)
+	return c.get(ctx, "/api/v1/portfolio/emergency-stop", q)
+}
+
+func (c *APIClient) PutEmergencyStop(ctx context.Context, clientID string, enabled bool, lossPct float64) (json.RawMessage, error) {
+	q := url.Values{}
+	if clientID != "" {
+		q.Set("clientId", clientID)
+	}
+	path := "/api/v1/portfolio/emergency-stop"
+	if enc := q.Encode(); enc != "" {
+		path += "?" + enc
+	}
+	return c.sendJSON(ctx, http.MethodPut, path, map[string]any{"enabled": enabled, "lossPct": lossPct})
+}
+
 // PreviewPortfolioOrder prices a paper order without placing it.
 func (c *APIClient) PreviewPortfolioOrder(ctx context.Context, clientID, exchange, symbol, side, orderType, product, trailType, lotMethod string, quantity, triggerPrice, takeProfitPrice, stopLossPrice, trailValue, limitPrice float64, leverage int, riskPercent float64, compareExchange string, maxSlippagePct float64, spread bool, spreadMinutes, sliceCount int, takeProfitTargets string, moveStopToEntry bool) (json.RawMessage, error) {
 	body := map[string]any{

@@ -57,6 +57,12 @@ func (f *OrderFiller) RunOnce(ctx context.Context) {
 		f.now = time.Now
 	}
 	now := f.now().UTC()
+	// Flatten armed books before this pass fills another resting order.
+	if n, err := f.Portfolio.ProcessEmergencyStops(ctx); err != nil {
+		f.Logger.Error("emergency stop", "err", err)
+	} else if n > 0 {
+		f.Logger.Info("emergency stop tripped", "books", n)
+	}
 	// Spread orders fill one slice per pass. A restart does not dump the rest at once.
 	if n, err := f.Portfolio.ProcessDueSpreadOrders(ctx, now); err != nil {
 		f.Logger.Error("spread orders", "err", err)

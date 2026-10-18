@@ -6786,6 +6786,71 @@ paths:
           description: Limits removed
         '404':
           $ref: '#/components/responses/Error'
+  /api/v1/portfolio/emergency-stop:
+    get:
+      summary: Get the emergency stop and the last trip
+      description: |
+        The switch, today's trading loss, and the actions from the last time the loss
+        passed the line. Cash added or removed is not part of that loss. Nothing is closed
+        by this read. Paper only.
+      operationId: getEmergencyStop
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: portfolioId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      responses:
+        '200':
+          description: Switch, today's loss, and the last trip when one exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyStopView'
+        '404':
+          $ref: '#/components/responses/Error'
+    put:
+      summary: Turn the emergency stop on or off
+      description: |
+        Saves the switch and the loss percent. 5 means today's trading loss of 5 percent.
+        Turning it on checks immediately. Pending orders are canceled, recurring buys pause,
+        and open spot and margin positions are closed at the paper market. Each step is
+        named ok or failed. A failed step is tried again while the loss is still past the line.
+        Turning it off stops further tries and does not undo a close.
+      operationId: putEmergencyStop
+      tags: [Portfolio]
+      parameters:
+        - name: clientId
+          in: query
+          schema: { type: string }
+        - name: portfolioId
+          in: query
+          schema: { type: string }
+        - name: X-Client-Id
+          in: header
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmergencyStopInput'
+      responses:
+        '200':
+          description: Saved switch, today's loss, and the trip when it fired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmergencyStopView'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /api/v1/portfolio/trading-costs:
     get:
       summary: Paper trading fee and slippage rates
@@ -16220,6 +16285,50 @@ components:
         afterValue: { type: number }
         targetValue: { type: number }
         afterDelta: { type: number, description: targetValue − afterValue }
+    EmergencyStopInput:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+        lossPct:
+          type: number
+          description: Today's trading-loss cap in percent. 5 means 5 percent. Required when enabled is true.
+          example: 5
+    EmergencyStopAction:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [cancel_order, cancel_spread, pause_recurring, close_spot, close_margin, cancel_pending]
+        targetId: { type: string }
+        exchange: { type: string }
+        symbol: { type: string }
+        status: { type: string, enum: [ok, failed] }
+        detail: { type: string, description: Why this step failed. Empty when it worked. }
+    EmergencyStopRun:
+      type: object
+      properties:
+        id: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        dailyPnlPct: { type: number, description: Today's trading result in percent. Negative is a loss. }
+        lossPct: { type: number, description: The cap in force for this trip. }
+        actions:
+          type: array
+          items: { $ref: '#/components/schemas/EmergencyStopAction' }
+    EmergencyStopView:
+      type: object
+      description: |
+        The emergency stop for one paper book. hit means today's trading loss is past lossPct.
+        run is the latest trip, including a retry of a step that failed.
+      properties:
+        enabled: { type: boolean }
+        lossPct: { type: number }
+        dailyPnlPct: { type: number }
+        hit: { type: boolean }
+        tripped: { type: boolean }
+        run: { $ref: '#/components/schemas/EmergencyStopRun' }
+        note: { type: string }
     RiskLimitsView:
       type: object
       description: Settings screen DTO — current rules plus live daily PnL and per-asset weights

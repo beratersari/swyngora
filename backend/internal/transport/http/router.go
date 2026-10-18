@@ -251,6 +251,8 @@ func NewRouterWithOptions(marketSvc *market.Service, watchSvc *watchlist.Service
 		mux.HandleFunc("GET /api/v1/portfolio/risk-limits", ph.GetRiskLimits)
 		mux.HandleFunc("PUT /api/v1/portfolio/risk-limits", ph.PutRiskLimits)
 		mux.HandleFunc("DELETE /api/v1/portfolio/risk-limits", ph.DeleteRiskLimits)
+		mux.HandleFunc("GET /api/v1/portfolio/emergency-stop", ph.GetEmergencyStop)
+		mux.HandleFunc("PUT /api/v1/portfolio/emergency-stop", ph.PutEmergencyStop)
 		mux.HandleFunc("POST /api/v1/portfolio/orders/preview", ph.PreviewOrder)
 		mux.HandleFunc("POST /api/v1/portfolio/orders/execution-compare", ph.CompareExecution)
 		mux.HandleFunc("GET /api/v1/portfolio/spread-orders", ph.ListSpreadOrders)

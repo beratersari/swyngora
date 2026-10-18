@@ -424,6 +424,11 @@ type PortfolioPort interface {
 	AddFillCostActual(ctx context.Context, clientID, spreadOrderID, leadTradeID string, fee, slippage, qty float64, complete bool) error
 	// ListCompleteFillCosts returns finished checks whose newest fill is in the set, keyed by that fill.
 	ListCompleteFillCosts(ctx context.Context, clientID string, tradeIDs []string) (map[string]FillCostCheck, error)
+	GetEmergencyStop(ctx context.Context, bookID string) (*EmergencyStop, error)
+	UpsertEmergencyStop(ctx context.Context, row EmergencyStop) error
+	ListEnabledEmergencyStops(ctx context.Context) ([]EmergencyStop, error)
+	SaveEmergencyStopRun(ctx context.Context, run EmergencyStopRun) error
+	GetEmergencyStopRun(ctx context.Context, bookID, runID string) (*EmergencyStopRun, error)
 	GetTrade(ctx context.Context, clientID, id string) (*Trade, error)
 	ListTrades(ctx context.Context, clientID string, limit, offset int) ([]Trade, error)
 	CountTrades(ctx context.Context, clientID string) (int, error)

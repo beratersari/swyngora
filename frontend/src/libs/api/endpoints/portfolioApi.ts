@@ -5,6 +5,7 @@ import type { MarketExchange } from './marketApi';
 export type PortfolioSummary = components['schemas']['PortfolioSummary'];
 export type PortfolioPerformance = components['schemas']['PortfolioPerformance'];
 export type RiskLimitsView = components['schemas']['RiskLimitsView'];
+export type EmergencyStopView = components['schemas']['EmergencyStopView'];
 export type PortfolioCorrelation = components['schemas']['PortfolioCorrelation'];
 export type PortfolioEquityPoint = components['schemas']['PortfolioEquityPoint'];
 export type PortfolioPerformancePeriod = NonNullable<
@@ -743,6 +744,25 @@ export const portfolioApi = baseApi.injectEndpoints({
     >({
       query: ({ portfolioId, ...body }) => ({
         url: '/api/v1/portfolio/risk-limits',
+        method: 'PUT',
+        params: bookParams(portfolioId),
+        body,
+      }),
+      invalidatesTags: ['Portfolio'],
+    }),
+    getEmergencyStop: build.query<EmergencyStopView, BookArg | void>({
+      query: (arg) => ({
+        url: '/api/v1/portfolio/emergency-stop',
+        params: bookParams(arg?.portfolioId),
+      }),
+      providesTags: ['Portfolio'],
+    }),
+    setEmergencyStop: build.mutation<
+      EmergencyStopView,
+      { portfolioId?: string; enabled: boolean; lossPct: number }
+    >({
+      query: ({ portfolioId, ...body }) => ({
+        url: '/api/v1/portfolio/emergency-stop',
         method: 'PUT',
         params: bookParams(portfolioId),
         body,
