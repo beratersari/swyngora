@@ -597,7 +597,7 @@ class PerpDepthInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
         default="all",
-        description="binance|bybit|all (default all = both + combined)",
+        description="binance|bybit|okx|hyperliquid|all (default all = Binance, Bybit, and OKX plus combined; hyperliquid is that book alone, at most 20 levels a side, and is not inside all)",
     )
     range_pct: float = Field(
         default=1,
@@ -608,7 +608,7 @@ class PerpDepthInput(BaseModel):
 class DerivativesBoardInput(BaseModel):
     exchange: str = Field(
         default="all",
-        description="binance|bybit|okx|hyperliquid|all (default all). hyperliquid is mark, open interest, and hourly funding only",
+        description="binance|bybit|okx|hyperliquid|all (default all). hyperliquid fills mark, open interest, hourly funding, and tape or book columns when that read is complete. Liquidation and crowd stay blank. It is not inside all",
     )
     limit: int = Field(
         default=36,
@@ -619,7 +619,7 @@ class DerivativesBoardInput(BaseModel):
 class DerivativesGridInput(BaseModel):
     exchange: str = Field(
         default="all",
-        description="binance|bybit|okx|hyperliquid|all (default all). hyperliquid funding and open interest only; CVD and liquidations stay blank",
+        description="binance|bybit|okx|hyperliquid|all (default all). hyperliquid fills funding, open interest, and CVD when the stored tape covers the column. Liquidations stay blank. It is not inside all",
     )
     metric: str = Field(
         default="funding",
@@ -748,7 +748,7 @@ class TakerFlowInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
         default="all",
-        description="binance|bybit|all (default all = both + combined)",
+        description="binance|bybit|okx|hyperliquid|all (default all = Binance, Bybit, and OKX plus combined; hyperliquid is that venue's tape and is not inside all)",
     )
 
 
@@ -756,7 +756,7 @@ class CvdInput(BaseModel):
     symbol: str = Field(description="Pair e.g. BTCUSDT")
     exchange: str = Field(
         default="all",
-        description="binance|bybit|okx|all (default all = venues + combined)",
+        description="binance|bybit|okx|hyperliquid|all (default all = Binance, Bybit, and OKX plus combined; hyperliquid is that venue's tape and is not inside all)",
     )
     range: str = Field(
         default="24h",
@@ -5401,6 +5401,8 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "How much perpetual liquidity is waiting below vs above the "
                 "price. Example: 40M bid within 1% below mid vs 15M ask above. "
                 "Binance USD-M, Bybit linear, and OKX USDT-swap separately plus combined. "
+                "exchange=hyperliquid is that book alone, at most 20 levels a side, and is not inside combined. "
+                "A band those levels do not reach stays incomplete. "
                 "range_pct default 1. This is the futures book, not spot."
             ),
             args_schema=PerpDepthInput,
@@ -5449,8 +5451,12 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "live series does not reach that hour. change24hMissing names "
                 "each venue with no sample, and that venue is not treated as "
                 "zero. exchange=hyperliquid fills mark, open interest, and the "
-                "hourly funding rate. Liquidation, tape, and book columns stay "
-                "blank and are named unsupported. It is not part of exchange=all. "
+                "hourly funding rate, and fills day CVD, print size, order count, "
+                "taker buy share, and 1% bid share when that tape or book covers "
+                "the window. A short tape stays blank and is not zero. The public "
+                "book is at most 20 levels a side, so bid share stays blank until "
+                "those levels reach 1% of mid. Liquidation and crowd stay blank "
+                "and are named unsupported. It is not part of exchange=all. "
                 "limit default 36, max 100."
             ),
             args_schema=DerivativesBoardInput,
@@ -5473,9 +5479,10 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "column. A missing exchange on that list has no value and "
                 "is not a zero. The open column also stays "
                 "blank when its newest sample is older than five minutes. "
-                "exchange=hyperliquid is mark, open interest, and hourly funding "
-                "only. It is not folded into exchange=all. CVD and liquidation "
-                "cells stay blank and name Hyperliquid. They are not zeros. "
+                "exchange=hyperliquid fills funding, open interest, and CVD when "
+                "the stored tape covers that column. It is not folded into "
+                "exchange=all. Liquidation cells stay blank and name Hyperliquid. "
+                "They are not zeros. A short tape stays blank. "
                 "limit default 36, max 100."
             ),
             args_schema=DerivativesGridInput,
@@ -5890,7 +5897,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="get_taker_flow",
             description=(
                 "Aggressive futures buy vs sell volume (who is hitting the "
-                "book) for 5m, 1h, and 4h on Binance and Bybit, plus combined."
+                "book) for 5m, 1h, and 4h on Binance, Bybit, and OKX, plus combined. "
+                "exchange=hyperliquid is that venue's own tape and is not inside "
+                "the combined view. Its hour grows while this process is watching."
             ),
             args_schema=TakerFlowInput,
         ),
@@ -5920,7 +5929,9 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
                 "30d (2-hour), or 90d (4-hour) from stored minutes. "
                 "Binance minutes for the liquid list are filled from public "
                 "aggTrades, about 7 days. Bybit and OKX stay on minutes this "
-                "process recorded. Futures combined is complete only when Binance, "
+                "process recorded. exchange=hyperliquid is that venue's own tape, "
+                "grows only while this process is watching, and is not inside "
+                "the combined view. Futures combined is complete only when Binance, "
                 "Bybit, and OKX each cover the range. Spot combined "
                 "(spotVenues / spotCombined) needs Binance and Bybit. OKX has "
                 "no spot CVD. A missing venue keeps combined incomplete. "

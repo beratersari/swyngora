@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -134,9 +135,18 @@ type TakerFlowPort interface {
 	GetTakerFlow(ctx context.Context, symbol string) (*TakerVenueFlow, error)
 }
 
-// ParseTakerExchange is binance, bybit, or all.
+// ParseTakerExchange accepts binance, bybit, okx, hyperliquid, or all.
+// all stays Binance, Bybit, and OKX. Hyperliquid is its own tape.
 func ParseTakerExchange(raw string) (string, error) {
-	return ParseLiquidationExchange(raw)
+	s := strings.ToLower(strings.TrimSpace(raw))
+	if s == "" || s == "all" || s == "combined" {
+		return "all", nil
+	}
+	ex := Exchange(s)
+	if IsFuturesVenue(ex) || IsMarkOnlyVenue(ex) {
+		return s, nil
+	}
+	return "", fmt.Errorf("%w: exchange must be binance, bybit, okx, hyperliquid, or all", ErrInvalidArgument)
 }
 
 // TakerDominant labels who hit the market more. 5% band around even is balanced.

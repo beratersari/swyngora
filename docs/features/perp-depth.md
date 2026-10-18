@@ -6,6 +6,9 @@ Spot order books are already on the desk. For **BTC perpetual** (and other
 linear USDT perps), show how much liquidity is waiting **below** last vs
 **above** it — for example **40M bid within 1% below** and **15M ask
 above**. Binance, Bybit, and OKX separately, plus combined.
+`exchange=hyperliquid` is that book alone. The public snapshot is at most
+20 levels a side, so a band those levels do not reach stays incomplete.
+It is not inside the combined book.
 
 ## Behavior
 

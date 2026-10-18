@@ -106,7 +106,9 @@ Useful when:
   [`derivatives-board.md`](derivatives-board.md).
 
 Futures CVD on Binance, Bybit, and OKX is the sum of measured prints
-(price × size). Minutes are stored in `data/futures.db` (`taker_buckets`)
+(price × size). `exchange=hyperliquid` is that venue's own tape and is not
+inside the combined line. It grows only while this process is watching, and
+a window the tape has not reached stays incomplete. Minutes are stored in `data/futures.db` (`taker_buckets`)
 while the server is recording. A 24h series is `complete` only after
 that tape covers it. A 7d, 30d, or 90d series uses the same minutes and
 is `complete` only when the oldest stored minute reaches the start of

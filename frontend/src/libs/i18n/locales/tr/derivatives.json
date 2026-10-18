@@ -22,7 +22,7 @@
   "gridCombined": "Birleşik",
   "gridVenueMissing": "Eksik. Sıfır sayılmaz.",
   "gridNoVenues": "Bu hücre için borsa dökümü yok.",
-  "hyperliquidHint": "Hyperliquid mark, açık pozisyon ve saatlik fonlama oranını gösterir. Likidasyon, işlem akışı ve emir defteri sütunları boş kalır çünkü bu borsa onları yayımlamaz. Açık pozisyon mark çarpı coin büyüklüğüdür. Marjin USDC’dir ve USDT adıyla hizalanır.",
+  "hyperliquidHint": "Hyperliquid mark, açık pozisyon ve saatlik fonlama oranını gösterir. Günlük CVD, işlem boyutu, emir sayısı, alıcı payı ve alış payı, bant veya defter o pencereyi kapattığında dolar. Kısa bir bant boş kalır. Açık defter en fazla 20 kademedir, bu yüzden %1 alış payı o kademeler %1’e ulaşana kadar boş kalır. Likidasyon ve kalabalık boş kalır çünkü Hyperliquid bunları yayımlamaz. Açık pozisyon mark çarpı coin büyüklüğüdür. Marjin USDC’dir ve USDT adıyla hizalanır.",
   "gridBlank": "Bu sütun için her borsa dolu olana kadar birleşik toplam yok.",
   "gridMissing": "Eksik: {{venues}}. Bu borsa sıfır sayılmaz.",
   "metric": "Renk",

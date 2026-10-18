@@ -66,18 +66,18 @@ type PerpDepthReport struct {
 	Note     string
 }
 
-// ParsePerpDepthExchange is binance, bybit, okx, or all.
+// ParsePerpDepthExchange accepts binance, bybit, okx, hyperliquid, or all.
+// all stays Binance, Bybit, and OKX. Hyperliquid is its own book.
 func ParsePerpDepthExchange(raw string) (string, error) {
 	s := strings.ToLower(strings.TrimSpace(raw))
 	if s == "" || s == "all" || s == "combined" {
 		return "all", nil
 	}
-	switch Exchange(s) {
-	case ExchangeBinance, ExchangeBybit, ExchangeOKX:
+	ex := Exchange(s)
+	if IsFuturesVenue(ex) || IsMarkOnlyVenue(ex) {
 		return s, nil
-	default:
-		return "", fmt.Errorf("%w: exchange must be binance, bybit, okx, or all", ErrInvalidArgument)
 	}
+	return "", fmt.Errorf("%w: exchange must be binance, bybit, okx, hyperliquid, or all", ErrInvalidArgument)
 }
 
 // ParsePerpDepthRangePct clamps the headline ±% band (empty = 1).

@@ -35,11 +35,15 @@ func TestGetDerivativesBoard_HyperliquidIsMarkOpenInterestAndFunding(t *testing.
 	if got.Universe != 5 || !got.Coins[0].OpenInterestDefinite || !got.Coins[0].FundingDefinite {
 		t.Fatalf("%+v", got.Coins[0])
 	}
-	if got.Coins[0].PriceExchange != "hyperliquid" || got.Coins[0].LiqDefinite || got.Coins[0].TakerDefinite || got.Coins[0].CVDDayDefinite {
+	if got.Coins[0].PriceExchange != "hyperliquid" || got.Coins[0].LiqDefinite || got.Coins[0].TakerDefinite || got.Coins[0].CVDDayDefinite || got.Coins[0].BidDefinite {
 		t.Fatalf("columns %+v", got.Coins[0])
 	}
-	if got.Coins[0].Venues[0].LiqStatus != domain.VenueReadUnsupported || got.Coins[0].Venues[0].BookStatus != domain.VenueReadUnsupported {
-		t.Fatalf("venue %+v", got.Coins[0].Venues[0])
+	venue := got.Coins[0].Venues[0]
+	if venue.LiqStatus != domain.VenueReadUnsupported || venue.LongStatus != domain.VenueReadUnsupported || venue.GapStatus != domain.VenueReadUnsupported {
+		t.Fatalf("liquidation or crowd %+v", venue)
+	}
+	if venue.BookStatus != domain.VenueReadMissing || venue.TakerStatus != domain.VenueReadMissing || venue.CVDStatus != domain.VenueReadMissing {
+		t.Fatalf("a missing tape is not unsupported %+v", venue)
 	}
 	if _, err := svc.GetDerivativesBoard(context.Background(), "coinbase", 5); err == nil {
 		t.Fatal("coinbase is not a derivatives venue")

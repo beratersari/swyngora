@@ -12,7 +12,7 @@ import (
 	"gitlab.com/trace-analysis/swyngora/backend/internal/domain"
 )
 
-const perpDepthDisclaimer = "Resting USD-M / linear / USDT-swap perpetual depth: bid notional within N% below mid vs ask notional within N% above. Binance USD-M (1000 levels), Bybit linear (500 levels), and OKX USDT-swap (400 levels, contracts converted to base) separately plus combined. Combined adds each venue's own ±% band (not a shared price grid). Snapshot may not fully cover 2%. Informational only — not financial advice."
+const perpDepthDisclaimer = "Resting USD-M / linear / USDT-swap perpetual depth: bid notional within N% below mid vs ask notional within N% above. Binance USD-M (1000 levels), Bybit linear (500 levels), and OKX USDT-swap (400 levels, contracts converted to base) separately plus combined. exchange=hyperliquid is that venue's book alone, at most 20 levels a side, and is not inside combined. A band those levels do not reach stays incomplete. Combined adds each venue's own ±% band (not a shared price grid). Snapshot may not fully cover 2%. Informational only — not financial advice."
 
 // GetPerpDepth returns bid-below vs ask-above liquidity on BTC (and other) perps.
 func (s *Service) GetPerpDepth(ctx context.Context, exchange, symbol string, rangePct float64) (*domain.PerpDepthReport, error) {

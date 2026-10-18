@@ -199,7 +199,7 @@
     "funding": "Fonlama",
     "fundingLine": "{{exchange}} fonlama %",
     "fundingLineHourly": "{{exchange}} saatlik fonlama %",
-    "hyperliquidLimit": "Hyperliquid yalnızca mark, açık pozisyon ve saatlik fonlamadır. Bu grafikte likidasyon, işlem akışı ve emir defteri yoktur. Açık pozisyon mark çarpı coin büyüklüğüdür. Marjin USDC’dir ve bu USDT adıyla hizalanır.",
+    "hyperliquidLimit": "Bu grafik Hyperliquid açık pozisyonunu ve saatlik fonlamayı çizer. Hyperliquid işlem bandını ve emir defterini çizmez. O okumalar türev masasındadır. Hyperliquid likidasyon veya kalabalık oranı yayımlamaz. Açık pozisyon mark çarpı coin büyüklüğüdür. Marjin USDC’dir ve bu USDT adıyla hizalanır.",
     "liqNotional": "Likidasyonlar",
     "liqMap": "Likidasyon haritası",
     "openLevels": "Açık seviyeler",

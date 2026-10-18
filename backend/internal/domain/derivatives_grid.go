@@ -223,7 +223,7 @@ func BuildDerivativesGrid(in GridBuildInput) *DerivativesGrid {
 	}
 	note := derivativesGridNote
 	if IsMarkOnlyVenue(Exchange(ex)) {
-		note += " Hyperliquid publishes mark, open interest, and hourly funding only. CVD and liquidation columns stay blank and name that venue. They are not zeros."
+		note += " Hyperliquid tape minutes fill the CVD column when that hour or day is covered. A short tape stays blank and is not zero. Liquidation cells stay blank and name that venue. They are not zeros."
 	}
 	return &DerivativesGrid{
 		Exchange: ex,

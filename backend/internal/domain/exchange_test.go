@@ -18,10 +18,19 @@ func TestFuturesVenuesIncludesOKX(t *testing.T) {
 		t.Fatal("coinbase is not a futures book")
 	}
 	if IsFuturesVenue(ExchangeHyperliquid) || !IsMarkOnlyVenue(ExchangeHyperliquid) {
-		t.Fatal("hyperliquid is mark, open interest, and funding only")
+		t.Fatal("hyperliquid stays out of exchange=all")
 	}
 	if _, err := ParseLiquidationExchange("hyperliquid"); err == nil {
 		t.Fatal("liquidations do not accept hyperliquid")
+	}
+	if got, err := ParseTakerExchange("hyperliquid"); err != nil || got != "hyperliquid" {
+		t.Fatalf("taker %s %v", got, err)
+	}
+	if got, err := ParseTakerExchange("all"); err != nil || got != "all" {
+		t.Fatalf("taker all %s %v", got, err)
+	}
+	if got, err := ParsePerpDepthExchange("hyperliquid"); err != nil || got != "hyperliquid" {
+		t.Fatalf("book %s %v", got, err)
 	}
 	gotEx, err := ParseOpenInterestExchange("hyperliquid")
 	if err != nil || gotEx != "hyperliquid" {

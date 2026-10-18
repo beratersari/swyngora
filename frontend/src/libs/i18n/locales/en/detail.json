@@ -199,7 +199,7 @@
     "funding": "Funding",
     "fundingLine": "{{exchange}} funding %",
     "fundingLineHourly": "{{exchange}} funding % per hour",
-    "hyperliquidLimit": "Hyperliquid is mark, open interest, and hourly funding only. It has no liquidation, tape, or book on this chart. Open interest is the mark times coin size, and the margin is USDC lined up with this USDT name.",
+    "hyperliquidLimit": "This chart draws Hyperliquid open interest and hourly funding. It does not draw the Hyperliquid tape or book. Those reads are on the derivatives desk. Hyperliquid does not publish liquidations or a crowd ratio. Open interest is the mark times coin size, and the margin is USDC lined up with this USDT name.",
     "liqNotional": "Liquidations",
     "liqMap": "Liq map",
     "openLevels": "Open levels",

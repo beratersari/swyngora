@@ -33,7 +33,8 @@ prints hit that row, or what the **delta** was.
 - `truncated` / `complete`: the ladder may not cover the whole window.
   The live tape is the Binance, Bybit, and OKX trade stream once it
   reaches the start of the window; until then the newest public trades
-  are used. Closed minutes are stored while the server runs (about
+  are used. `exchange=hyperliquid` uses that venue's own tape and is not
+  inside the combined ladder. It grows only while this process is watching. Closed minutes are stored while the server runs (about
   30 days, `FLOW_AT_PRICES_RETENTION`) for the liquid recorder list
   plus pairs someone has opened. Binance minutes for that liquid list
   are also filled from public USD-M aggregate trades, about 7 days,

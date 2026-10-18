@@ -21,6 +21,7 @@ const (
 	defaultBaseURL = "https://api.hyperliquid.xyz"
 	infoPath       = "/info"
 	bookTTL        = 20 * time.Second
+	depthTTL       = 3 * time.Second
 	maxBody        = 8 << 20
 	fundingPageCap = 500
 	fundingPages   = 8
@@ -28,12 +29,20 @@ const (
 
 // Client reads Hyperliquid's public info endpoint.
 // One metaAndAssetCtxs call covers mark, open interest, and the current funding rate.
-// There is no liquidation stream, trade tape, or order book in this client.
+// l2Book is the public order book, at most 20 levels a side.
+// recentTrades plus the trades websocket are the aggressive tape.
+// There is no liquidation stream and no crowd ratio.
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
 	books      *cache.TTL[assetBook]
 	bookSF     singleflight.Group
+	depth      *cache.TTL[*domain.RawOrderBook]
+	depthSF    singleflight.Group
+	taker      *domain.TakerBook
+	tape       *domain.PrintTape
+	takerWatch func(string)
+	seedSF     singleflight.Group
 }
 
 // Options configures the public info client.
@@ -56,6 +65,9 @@ func NewClient(opts Options) *Client {
 		baseURL:    base,
 		httpClient: hc,
 		books:      cache.New[assetBook](bookTTL),
+		depth:      cache.New[*domain.RawOrderBook](depthTTL),
+		taker:      domain.NewTakerBook(),
+		tape:       domain.NewPrintTape(),
 	}
 }
 
@@ -166,6 +178,17 @@ func (c *Client) ListFundingHistory(ctx context.Context, symbol string, from, to
 		}
 	}
 	return out, nil
+}
+
+func (c *Client) hasCoin(ctx context.Context, coin string) error {
+	book, err := c.book(ctx)
+	if err != nil {
+		return err
+	}
+	if _, ok := book.coins[coin]; !ok {
+		return fmt.Errorf("%w: hyperliquid %s", domain.ErrNotFound, coin)
+	}
+	return nil
 }
 
 func (c *Client) lookup(ctx context.Context, symbol string) (string, assetBook, asset, error) {

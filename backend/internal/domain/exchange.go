@@ -16,9 +16,10 @@ const (
 	ExchangeOKX Exchange = "okx"
 	// ExchangeDeribit is options-only (not a spot list venue).
 	ExchangeDeribit Exchange = "deribit"
-	// ExchangeHyperliquid is a USDC-margined perp for mark, open interest, and
-	// hourly funding. It is not a FuturesVenues member: it has no liquidation
-	// stream, tape, or book, so exchange=all does not require it.
+	// ExchangeHyperliquid is a USDC-margined perp lined up with the USDT name.
+	// It publishes mark, open interest, hourly funding, a 20-level book, and
+	// a trade tape. It is not a FuturesVenues member: it has no liquidation
+	// stream and no crowd ratio, so exchange=all does not require it.
 	ExchangeHyperliquid Exchange = "hyperliquid"
 )
 
@@ -38,12 +39,14 @@ func IsFuturesVenue(ex Exchange) bool {
 	}
 }
 
-// MarkOnlyVenues publish mark, open interest, and funding, and nothing else.
+// MarkOnlyVenues stay out of exchange=all. Hyperliquid also has its own book
+// and trade tape. Those reads are not folded into the combined desks.
 func MarkOnlyVenues() []Exchange {
 	return []Exchange{ExchangeHyperliquid}
 }
 
-// IsMarkOnlyVenue reports a perp that must not be treated as a tape, book, or liquidation feed.
+// IsMarkOnlyVenue reports a perp that stays out of exchange=all.
+// It has no liquidation stream and no crowd ratio. Its tape and book are separate.
 func IsMarkOnlyVenue(ex Exchange) bool {
 	switch Exchange(strings.ToLower(strings.TrimSpace(string(ex)))) {
 	case ExchangeHyperliquid:
