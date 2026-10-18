@@ -2290,8 +2290,17 @@ func (c *APIClient) GetPaperTradingCosts(ctx context.Context, exchange string) (
 	return c.get(ctx, "/api/v1/portfolio/trading-costs", q)
 }
 
-func (c *APIClient) StressPortfolio(ctx context.Context, clientID, moves string) (json.RawMessage, error) {
-	body := map[string]any{"moves": parseStressMoveBody(moves)}
+func (c *APIClient) StressPortfolio(ctx context.Context, clientID, moves, from, to string) (json.RawMessage, error) {
+	body := map[string]any{}
+	if strings.TrimSpace(from) != "" || strings.TrimSpace(to) != "" {
+		if strings.TrimSpace(moves) != "" {
+			return nil, fmt.Errorf("%w: send moves or a period, not both", domain.ErrInvalidArgument)
+		}
+		body["from"] = strings.TrimSpace(from)
+		body["to"] = strings.TrimSpace(to)
+	} else {
+		body["moves"] = parseStressMoveBody(moves)
+	}
 	q := url.Values{}
 	if clientID != "" {
 		q.Set("clientId", clientID)

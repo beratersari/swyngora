@@ -67,12 +67,20 @@ Blocked trades return **403** `forbidden` with a human `message` (e.g. `BTC woul
 
 ```bash
 cd backend
-go test ./internal/domain/ ./internal/service/portfolio/ ./internal/transport/http/handler/ -run 'Risk' -count=1
+go test ./internal/domain/ ./internal/service/portfolio/ ./internal/transport/http/handler/ -run 'Risk|Stress|Replay' -count=1
 ```
 
 ## What-if (not a limit)
 
-`POST /api/v1/portfolio/stress` with `moves: [{asset, movePct}]` reprices the open book before anything happens. BTC −10 and ETH −15 return equity, total P&L, and margin equity before and after. A margin row that crosses its liquidation price loses the margin locked on it. The portfolio screen shows this under **If the market moves**. Nothing is saved or traded. MCP `stress_portfolio` takes `moves` as `BTC:-10,ETH:-15`.
+`POST /api/v1/portfolio/stress` reprices the open book before anything happens. Nothing is saved or traded.
+
+Typed percents use `moves: [{asset, movePct}]`. BTC −10 and ETH −15 return equity, total P&L, and margin equity before and after. A margin row that crosses its liquidation price loses the margin locked on it.
+
+A past window uses `from` and `to` instead of `moves`. Send one of those, not both. `YYYY-MM-DD` is a UTC day and the end day is included. The start price is the close entering the first day. The end price is the close of the last day. An RFC3339 pair uses the last close at or before each instant. An end in the future is cut back to now. A window of at least 24 hours uses daily closes. A shorter window uses hourly closes. The window has to be at least an hour and at most 10 years.
+
+Each open position keeps its own venue's change. Spot weight is market value. Margin weight is notional (quantity times mark). When the same coin is open on two venues, each venue is repriced on its own, and `movePct` on the coin is the value-weighted average of the venues that priced. A coin or venue with no close at either end stays unchanged and is named (`no_start`, `no_end`, `same_close`, `out_of_range`, `no_history`, `fetch_failed`). Cash does not change. Equities read the venue's latest daily or hourly window (about two years of daily bars, about a month of hourly bars). A close outside that window is named and left unchanged.
+
+The portfolio screen shows this under **If the market moves**, with **Type a move** and **Replay a period**. MCP and the paper assistant tool `stress_portfolio` take `moves` as `BTC:-10,ETH:-15`, or `from` / `to` (`period_from` / `period_to` in Python).
 
 ## Limitations
 

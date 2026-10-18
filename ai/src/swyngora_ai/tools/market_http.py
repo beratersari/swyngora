@@ -1800,6 +1800,23 @@ class PortfolioPerformanceInput(BaseModel):
     portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
 
 
+class StressPortfolioInput(BaseModel):
+    client_id: str
+    portfolio_id: str = Field(default="", description="Book id or name when multiple exist")
+    moves: str = Field(
+        default="",
+        description="Typed percents, e.g. BTC:-10,ETH:-15. Omit when period_from and period_to are set.",
+    )
+    period_from: str = Field(
+        default="",
+        description="Start of a past window. YYYY-MM-DD (UTC day, included) or RFC3339. Use with period_to, instead of moves.",
+    )
+    period_to: str = Field(
+        default="",
+        description="End of that window. A YYYY-MM-DD is included. Use with period_from, instead of moves.",
+    )
+
+
 class PortfolioCashMoveInput(BaseModel):
     client_id: str
     amount: float = Field(gt=0, description="Positive cash amount")
@@ -4132,6 +4149,47 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
         if portfolio_id:
             q["portfolioId"] = portfolio_id
         return http.get("/api/v1/portfolio/performance", q)
+
+    def stress_portfolio(
+        client_id: str,
+        moves: str = "",
+        period_from: str = "",
+        period_to: str = "",
+        portfolio_id: str = "",
+    ) -> str:
+        """Reprice the open book. A past window is not a trade, so a read-only session may call it."""
+        typed = moves.strip()
+        start = period_from.strip()
+        end = period_to.strip()
+        if (start or end) and typed:
+            return "ERROR 400: send moves or a period, not both"
+        body: dict[str, Any] = {"clientId": client_id}
+        if portfolio_id:
+            body["portfolioId"] = portfolio_id
+        if start or end:
+            if not start or not end:
+                return "ERROR 400: period_from and period_to are both required"
+            body["from"] = start
+            body["to"] = end
+        elif typed:
+            parsed: list[dict[str, Any]] = []
+            for raw_part in typed.split(","):
+                part = raw_part.strip()
+                if ":" not in part:
+                    continue
+                asset, pct = part.split(":", 1)
+                try:
+                    move = float(pct.strip())
+                except ValueError:
+                    continue
+                parsed.append({"asset": asset.strip(), "movePct": move})
+            if not parsed:
+                return "ERROR 400: moves must look like BTC:-10,ETH:-15"
+            body["moves"] = parsed
+        else:
+            return "ERROR 400: moves or a period is required"
+        path = f"/api/v1/portfolio/stress?clientId={client_id}"
+        return http.post(path, body, mutating=False)
 
     def deposit_portfolio_cash(
         client_id: str, amount: float, note: str = "", portfolio_id: str = ""
@@ -6957,6 +7015,21 @@ def build_market_tools(settings: Settings | None = None, pack: str | None = None
             name="get_portfolio_performance",
             description="Paper portfolio equity history for 1d/1w/1m/3m plus trading P&L amount and percent. Deposits, withdrawals, and transfers are netFlow, not profit or loss. maxDrawdown ignores that cash.",
             args_schema=PortfolioPerformanceInput,
+        ),
+        StructuredTool.from_function(
+            stress_portfolio,
+            name="stress_portfolio",
+            description=(
+                "Preview the open paper book after a shock. Nothing is traded or saved. "
+                "moves is BTC:-10,ETH:-15. period_from and period_to replay that past window: "
+                "each open coin keeps its own close-to-close change. A YYYY-MM-DD includes the end day. "
+                "A window of at least 24 hours uses daily closes. A shorter window uses hourly closes. "
+                "A position with no close at either end stays unchanged and is named in replay.missing. "
+                "One coin on two venues keeps each venue's own move. "
+                "Send moves or a period, not both. "
+                "A margin row that crosses its liquidation price loses the margin locked on it."
+            ),
+            args_schema=StressPortfolioInput,
         ),
         StructuredTool.from_function(
             deposit_portfolio_cash,

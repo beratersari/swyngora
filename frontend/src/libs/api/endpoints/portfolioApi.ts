@@ -153,31 +153,12 @@ export type CloseMarginPositionArg = {
 
 type BookArg = { portfolioId?: string };
 
-export type PortfolioStressLine = {
-  kind?: string;
-  symbol?: string;
-  side?: string;
-  asset?: string;
-  movePct?: number;
-  shockedValue?: number;
-  shockedUnrealized?: number;
-  liquidated?: boolean;
-};
-
-export type PortfolioStressReport = {
-  equity?: number;
-  shockedEquity?: number;
-  equityDelta?: number;
-  totalPnl?: number;
-  shockedTotalPnl?: number;
-  unrealizedPnl?: number;
-  shockedUnrealizedPnl?: number;
-  marginEquity?: number;
-  shockedMarginEquity?: number;
-  liquidated?: number;
-  lines?: PortfolioStressLine[];
-  note?: string;
-};
+export type PortfolioStressLine = components['schemas']['PortfolioStressLine'];
+export type PortfolioStressReplayVenue = components['schemas']['PortfolioStressReplayVenue'];
+export type PortfolioStressReplayMove = components['schemas']['PortfolioStressReplayMove'];
+export type PortfolioStressReplayGap = components['schemas']['PortfolioStressReplayGap'];
+export type PortfolioStressReplay = components['schemas']['PortfolioStressReplay'];
+export type PortfolioStressReport = components['schemas']['PortfolioStressReport'];
 type CashMoveArg = { amount: number; note?: string; portfolioId?: string };
 type CashMovementListResponse = {
   clientId?: string;
@@ -661,7 +642,12 @@ export const portfolioApi = baseApi.injectEndpoints({
     }),
     stressPortfolio: build.mutation<
       PortfolioStressReport,
-      { portfolioId?: string; moves: { asset: string; movePct: number }[] }
+      {
+        portfolioId?: string;
+        moves?: { asset: string; movePct: number }[];
+        from?: string;
+        to?: string;
+      }
     >({
       query: (body) => ({
         url: '/api/v1/portfolio/stress',

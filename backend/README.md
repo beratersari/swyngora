@@ -152,7 +152,7 @@ OpenAPI contract: [`api/openapi/openapi.yaml`](api/openapi/openapi.yaml).
 | `GET` | `/api/v1/portfolio/transfers/attempts` | Transfer request tries (completed / replayed / conflict) |
 | `GET` | `/api/v1/portfolio/cash-movements` | Deposit / withdraw / transfer history |
 | `GET` | `/api/v1/portfolio/performance` | Equity history + period trading P&L (`1d`/`1w`/`1m`/`3m`). Deposits, withdrawals, and transfers are not profit or loss. Includes the largest performance drop and when it ran |
-| `POST` | `/api/v1/portfolio/stress` | What-if: equity, total P&L, and margin after asset percent moves (e.g. BTC −10, ETH −15) |
+| `POST` | `/api/v1/portfolio/stress` | What-if: equity, total P&L, and margin after typed percents (BTC −10) or a past window (`from`/`to`). A coin with no close stays unchanged and is named |
 | `GET`/`PUT`/`DELETE` | `/api/v1/portfolio/risk-limits` | Optional risk brakes (daily loss %, max coin weight, max total exposure); block new buys/margin only |
 | `GET` | `/api/v1/portfolio/trading-costs` | Per-exchange paper taker fee and slippage |
 | `POST` | `/api/v1/portfolio/orders/preview` | Price a spot or margin order from the visible spot book and check risk. Equities use fixed slippage. A size the book cannot hold is not a fill. `riskPercent` plus a stop sizes the order. A named spot-buy reason also returns `reasonHistory` for past closes of each selected live kind. Nothing is written |

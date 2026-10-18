@@ -177,7 +177,7 @@ Exposes Swyngora market and watchlist HTTP APIs as **MCP tools** for AI agents.
 | `withdraw_portfolio_cash` | Withdraw available virtual cash |
 | `list_portfolio_cash_movements` | Deposit/withdraw history (optional `portfolioId`) |
 | `get_portfolio_performance` | Equity history + period trading P&L (1d/1w/1m/3m). Deposits, withdrawals, and transfers are `netFlow`, not profit or loss. Largest performance drop with its start and end times |
-| `stress_portfolio` | Preview equity, total P&L, and margin after `BTC:-10,ETH:-15` |
+| `stress_portfolio` | Preview equity, total P&L, and margin after `BTC:-10,ETH:-15`, or after `from`/`to` replays each open coin's close-to-close change. A coin with no close stays unchanged and is named. Nothing is traded |
 | `get_portfolio_risk_limits` | Optional risk limits + live status |
 | `set_portfolio_risk_limits` | Set daily-loss %, max coin weight %, and/or max total exposure % |
 | `clear_portfolio_risk_limits` | Remove all risk limits |

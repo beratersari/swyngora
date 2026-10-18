@@ -494,8 +494,12 @@ export function PortfolioPage() {
                     ? rtkErrorMessage(stressState.error, { resource: t('portfolio:resource') })
                     : null
                 }
-                onPreview={(moves) => {
-                  void stressBook({ portfolioId: bookId, moves });
+                onPreview={(request) => {
+                  if ('moves' in request) {
+                    void stressBook({ portfolioId: bookId, moves: request.moves });
+                    return;
+                  }
+                  void stressBook({ portfolioId: bookId, from: request.from, to: request.to });
                 }}
               />
             </PanelCard>

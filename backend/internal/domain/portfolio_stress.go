@@ -8,9 +8,12 @@ import (
 const portfolioStressNote = "What-if on the current paper book. Spot marks and margin P&L move with each coin. An isolated margin position that crosses its liquidation price loses the margin locked on it. Cash does not change. Nothing is traded. Informational only."
 
 // StressMove is a percent change for one base asset (BTC -10).
+// Exchange and Symbol, when set, apply only to that holding. Typed shocks leave them empty.
 type StressMove struct {
-	Asset   string
-	MovePct float64
+	Asset    string
+	Exchange string
+	Symbol   string
+	MovePct  float64
 }
 
 // StressLine is one spot or margin row after the shock.
@@ -45,6 +48,9 @@ type StressReport struct {
 	Liquidated            int
 	Lines                 []StressLine
 	Note                  string
+	// Replay is set when the moves were taken from a past window. It stays nil
+	// when the caller typed the percents.
+	Replay *StressReplay
 }
 
 // ParseStressMoves checks a short list of asset shocks.
@@ -75,14 +81,11 @@ func ParseStressMoves(in []StressMove) ([]StressMove, error) {
 }
 
 // StressPortfolio reprices the current view. Coins without a move stay put.
+// A move with a symbol hits only that venue. A move without one hits every row of the asset.
 func StressPortfolio(v PortfolioView, moves []StressMove) (StressReport, error) {
-	parsed, err := ParseStressMoves(moves)
+	byAsset, byVenue, err := stressMoveIndex(moves)
 	if err != nil {
 		return StressReport{}, err
-	}
-	by := map[string]float64{}
-	for _, m := range parsed {
-		by[m.Asset] = m.MovePct
 	}
 	rep := StressReport{
 		Equity: v.Equity, TotalPnL: v.TotalPnL, UnrealizedPnL: v.UnrealizedPnL,
@@ -92,7 +95,7 @@ func StressPortfolio(v PortfolioView, moves []StressMove) (StressReport, error) 
 	var spotValue, spotU, marginU float64
 	for _, p := range v.Positions {
 		asset := stressAsset(p.Symbol)
-		pct, ok := by[asset]
+		pct, ok := stressPct(byAsset, byVenue, string(p.Exchange), p.Symbol, asset)
 		mark := p.MarkPrice
 		if mark <= 0 {
 			mark = p.AvgCost
@@ -122,7 +125,7 @@ func StressPortfolio(v PortfolioView, moves []StressMove) (StressReport, error) 
 			continue
 		}
 		asset := stressAsset(p.Symbol)
-		pct, ok := by[asset]
+		pct, ok := stressPct(byAsset, byVenue, string(p.Exchange), p.Symbol, asset)
 		mark := p.MarkPrice
 		next := mark
 		u := p.UnrealizedPnL
@@ -154,6 +157,58 @@ func StressPortfolio(v PortfolioView, moves []StressMove) (StressReport, error) 
 	rep.EquityDelta = rep.ShockedEquity - v.Equity
 	rep.ShockedTotalPnL = v.TotalPnL + rep.EquityDelta
 	return rep, nil
+}
+
+func stressMoveIndex(in []StressMove) (byAsset, byVenue map[string]float64, err error) {
+	venue := false
+	for _, m := range in {
+		if strings.TrimSpace(m.Symbol) != "" {
+			venue = true
+			break
+		}
+	}
+	if !venue {
+		parsed, err := ParseStressMoves(in)
+		if err != nil {
+			return nil, nil, err
+		}
+		byAsset = map[string]float64{}
+		for _, m := range parsed {
+			byAsset[m.Asset] = m.MovePct
+		}
+		return byAsset, map[string]float64{}, nil
+	}
+	if len(in) > 40 {
+		return nil, nil, fmt.Errorf("%w: at most 40 moves", ErrInvalidArgument)
+	}
+	byVenue = map[string]float64{}
+	for _, m := range in {
+		if m.MovePct <= -100 || m.MovePct > 500 || m.MovePct != m.MovePct {
+			return nil, nil, fmt.Errorf("%w: movePct must be greater than -100 and at most 500", ErrInvalidArgument)
+		}
+		key := stressPosKey(m.Exchange, m.Symbol)
+		if _, ok := byVenue[key]; ok {
+			return nil, nil, fmt.Errorf("%w: duplicate holding %s", ErrInvalidArgument, key)
+		}
+		byVenue[key] = m.MovePct
+	}
+	return map[string]float64{}, byVenue, nil
+}
+
+func stressPct(byAsset, byVenue map[string]float64, exchange, symbol, asset string) (float64, bool) {
+	if pct, ok := byVenue[stressPosKey(exchange, symbol)]; ok {
+		return pct, true
+	}
+	pct, ok := byAsset[asset]
+	return pct, ok
+}
+
+func stressPosKey(exchange, symbol string) string {
+	ex := strings.ToLower(strings.TrimSpace(exchange))
+	if ex == "" {
+		ex = string(ExchangeBinance)
+	}
+	return ex + "|" + strings.ToUpper(strings.TrimSpace(symbol))
 }
 
 func stressAsset(raw string) string {

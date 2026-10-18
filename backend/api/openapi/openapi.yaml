@@ -6574,10 +6574,19 @@ paths:
     post:
       summary: Preview a paper book after price shocks
       description: |
-        Reprices the open spot and margin book. Each move is a percent on a
-        base asset (BTC -10, ETH -15). Returns equity, total P&L, and margin
-        equity before and after. A margin row that crosses its liquidation
-        price loses the margin locked on it. Nothing is traded.
+        Reprices the open spot and margin book. Nothing is traded.
+        Send `moves` or a past window (`from` and `to`), not both.
+        Each move is a percent on a base asset (BTC -10, ETH -15).
+        A past window replays each open coin's own close-to-close change
+        onto the current book. YYYY-MM-DD is a UTC day and the end day is
+        included. A window of at least 24 hours uses daily closes. A shorter
+        window uses hourly closes. A coin or venue with no close at either
+        end stays unchanged and is named. Each position uses its own venue's
+        change. A coin's movePct is the value-weighted average of the venues
+        that priced, weighted by spot market value and margin notional.
+        Returns equity, total P&L, and margin equity before and
+        after. A margin row that crosses its liquidation price loses the
+        margin locked on it.
       operationId: stressPortfolio
       tags: [Portfolio]
       requestBody:
@@ -6586,11 +6595,19 @@ paths:
           application/json:
             schema:
               type: object
-              required: [moves]
               properties:
                 portfolioId: { type: string }
+                from:
+                  type: string
+                  description: Start of a past window. YYYY-MM-DD (UTC, included) or RFC3339. Send with to, instead of moves.
+                  example: "2024-08-05"
+                to:
+                  type: string
+                  description: End of that window. A date is included. An RFC3339 time uses the last close at or before that instant.
+                  example: "2024-08-06"
                 moves:
                   type: array
+                  description: Typed percents. Omit when from and to are set.
                   items:
                     type: object
                     required: [asset, movePct]
@@ -6599,11 +6616,14 @@ paths:
                       movePct: { type: number, example: -10 }
       responses:
         '200':
-          description: Before and after totals
+          description: Before and after totals. replay is set when the moves came from a past window.
           content:
             application/json:
-              schema: { type: object }
+              schema:
+                $ref: '#/components/schemas/PortfolioStressReport'
         '400':
+          $ref: '#/components/responses/Error'
+        '502':
           $ref: '#/components/responses/Error'
   /api/v1/portfolio/risk-limits:
     get:
@@ -14960,6 +14980,106 @@ components:
         outMovementId: { type: string }
         inMovementId: { type: string }
         createdAt: { type: string, format: date-time }
+    PortfolioStressReport:
+      type: object
+      description: |
+        Open book before and after a what-if. replay is present when the percents
+        came from a past window. Cash does not change. Nothing is traded.
+      properties:
+        equity: { type: number }
+        shockedEquity: { type: number }
+        equityDelta: { type: number }
+        totalPnl: { type: number }
+        shockedTotalPnl: { type: number }
+        unrealizedPnl: { type: number }
+        shockedUnrealizedPnl: { type: number }
+        positionsValue: { type: number }
+        shockedPositionsValue: { type: number }
+        marginEquity: { type: number }
+        shockedMarginEquity: { type: number }
+        liquidated:
+          type: integer
+          description: Open margin rows whose shocked mark crosses the liquidation price
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortfolioStressLine'
+        note: { type: string }
+        replay:
+          $ref: '#/components/schemas/PortfolioStressReplay'
+    PortfolioStressLine:
+      type: object
+      properties:
+        kind: { type: string, enum: [spot, margin] }
+        symbol: { type: string }
+        side: { type: string }
+        asset: { type: string }
+        movePct: { type: number }
+        mark: { type: number }
+        shockedMark: { type: number }
+        value: { type: number }
+        shockedValue: { type: number }
+        unrealized: { type: number }
+        shockedUnrealized: { type: number }
+        liquidated: { type: boolean }
+    PortfolioStressReplay:
+      type: object
+      description: |
+        Closes used to reprice the open book. from and to are the instants the
+        selector used, after a future end is cut back to now. A date request's
+        to is the midnight after the included end day.
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        interval:
+          type: string
+          enum: [1h, 1d]
+          description: 1d when the window is at least 24 hours, otherwise 1h
+        moves:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortfolioStressReplayMove'
+        missing:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortfolioStressReplayGap'
+    PortfolioStressReplayMove:
+      type: object
+      properties:
+        asset: { type: string }
+        movePct:
+          type: number
+          description: Value-weighted average of the venues that priced. Each position is repriced with its own venue move.
+        venues:
+          type: array
+          items:
+            $ref: '#/components/schemas/PortfolioStressReplayVenue'
+    PortfolioStressReplayVenue:
+      type: object
+      properties:
+        exchange: { type: string }
+        symbol: { type: string }
+        start: { type: number, description: Close at the start of the window }
+        end: { type: number, description: Close at the end of the window }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        movePct: { type: number }
+        weight:
+          type: number
+          description: Spot market value, or margin notional (quantity times mark), used in the blend
+    PortfolioStressReplayGap:
+      type: object
+      properties:
+        asset: { type: string }
+        exchange: { type: string }
+        symbol: { type: string }
+        reason:
+          type: string
+          enum: [no_start, no_end, same_close, out_of_range, no_history, fetch_failed]
+          description: |
+            no_start and no_end have no close at that end. same_close has only one close.
+            out_of_range is outside -100% to +500%. no_history returned no bars.
+            fetch_failed could not read the candles. That holding stays unchanged.
     PortfolioPerformance:
       type: object
       description: Period trading P&L plus equity time series. External cash is not profit or loss.
