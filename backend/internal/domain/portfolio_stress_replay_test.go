@@ -97,6 +97,33 @@ func TestBuildReplayPlan_WeightsVenuesAndNamesTheGap(t *testing.T) {
 	}
 }
 
+func TestBuildReplayPlan_SortsCoinsByAbsoluteMove(t *testing.T) {
+	now := time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)
+	from := time.Date(2024, 8, 5, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2024, 8, 7, 0, 0, 0, 0, time.UTC)
+	plan := BuildReplayPlan([]ReplaySeries{
+		{Exchange: "binance", Symbol: "ETHUSDT", Weight: 10, Bars: replayDays(t, 100, 110)},
+		{Exchange: "binance", Symbol: "ADAUSDT", Weight: 10, Bars: replayDays(t, 100, 80)},
+		{Exchange: "binance", Symbol: "SOLUSDT", Weight: 10, Bars: replayDays(t, 100, 140)},
+		{Exchange: "binance", Symbol: "BTCUSDT", Weight: 10, Bars: replayDays(t, 100, 50)},
+		{Exchange: "binance", Symbol: "DOGEUSDT", Weight: 10, Bars: replayDays(t, 100, 120)},
+	}, from, to, Interval1d, now)
+	var names []string
+	for _, m := range plan.Replay.Moves {
+		names = append(names, m.Asset)
+	}
+	// −50, +40, then −20 and +20 by name, then +10.
+	want := []string{"BTC", "SOL", "ADA", "DOGE", "ETH"}
+	if len(names) != len(want) {
+		t.Fatalf("names %v", names)
+	}
+	for i := range want {
+		if names[i] != want[i] {
+			t.Fatalf("order %v", names)
+		}
+	}
+}
+
 func TestBuildReplayPlan_FlatCloseIsARealMove(t *testing.T) {
 	now := time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)
 	from := time.Date(2024, 8, 5, 0, 0, 0, 0, time.UTC)

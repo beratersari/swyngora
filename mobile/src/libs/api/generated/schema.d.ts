@@ -10375,6 +10375,7 @@ export interface components {
              * @enum {string}
              */
             interval?: "1h" | "1d";
+            /** @description Coins ordered by the size of the close-to-close change, largest up or down first. Equal sizes stay in name order. */
             moves?: components["schemas"]["PortfolioStressReplayMove"][];
             missing?: components["schemas"]["PortfolioStressReplayGap"][];
         };

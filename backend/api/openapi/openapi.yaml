@@ -15037,6 +15037,7 @@ components:
           description: 1d when the window is at least 24 hours, otherwise 1h
         moves:
           type: array
+          description: Coins ordered by the size of the close-to-close change, largest up or down first. Equal sizes stay in name order.
           items:
             $ref: '#/components/schemas/PortfolioStressReplayMove'
         missing:

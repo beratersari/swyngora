@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -245,7 +246,21 @@ func BuildReplayPlan(in []ReplaySeries, from, to time.Time, interval CandleInter
 			Asset: asset, MovePct: move, Venues: venues,
 		})
 	}
+	sortReplayMoves(plan.Replay.Moves)
 	return plan
+}
+
+// sortReplayMoves lists the largest price change first, whether it was up or down.
+// Equal sizes stay in asset name order.
+func sortReplayMoves(moves []StressReplayMove) {
+	sort.SliceStable(moves, func(i, j int) bool {
+		left := math.Abs(moves[i].MovePct)
+		right := math.Abs(moves[j].MovePct)
+		if math.Abs(left-right) > 1e-9 {
+			return left > right
+		}
+		return moves[i].Asset < moves[j].Asset
+	})
 }
 
 func priceReplayVenue(row ReplaySeries, step time.Duration, from, to, now time.Time) (StressReplayVenue, string) {
