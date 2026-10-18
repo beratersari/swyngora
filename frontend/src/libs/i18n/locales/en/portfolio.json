@@ -63,7 +63,7 @@
       "no_history": "No candles for that window.",
       "fetch_failed": "The price history could not be read."
     },
-    "equity": "Equity {{now}} → {{next}} ({{delta}})",
+    "equity": "Equity {{now}} → {{next}} ({{change}})",
     "pnl": "Total P&L {{now}} → {{next}}",
     "margin": "Margin equity {{now}} → {{next}}",
     "liquidated": "{{n}} margin position would be liquidated"

@@ -4,7 +4,7 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { Text } from '@/components/atoms/Text';
 import { STRESS_START_MOVES } from './constants';
-import { money, replayMoveLine, replayPreset, utcDay } from './helpers';
+import { money, portfolioChange, replayMoveLine, replayPreset, utcDay } from './helpers';
 import type { PortfolioStressPanelProps, StressMode, StressMove } from './PortfolioStressPanel.types';
 import type { TFunction } from 'i18next';
 
@@ -198,7 +198,11 @@ export function PortfolioStressPanel({ disabled, isLoading, report, errorMessage
             </div>
           ) : null}
           <Text variant="body" color="primary">
-            {t('stress.equity', { now: money(report.equity), next: money(report.shockedEquity), delta: money(report.equityDelta, true) })}
+            {t('stress.equity', {
+              now: money(report.equity),
+              next: money(report.shockedEquity),
+              change: portfolioChange(report.equity, report.equityDelta),
+            })}
           </Text>
           <Text variant="body" color="primary">
             {t('stress.pnl', { now: money(report.totalPnl, true), next: money(report.shockedTotalPnl, true) })}

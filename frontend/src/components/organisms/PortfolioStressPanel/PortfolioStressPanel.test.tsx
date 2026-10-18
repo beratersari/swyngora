@@ -23,7 +23,9 @@ describe('PortfolioStressPanel', () => {
         }}
       />,
     );
-    expect(screen.getByTestId('portfolio-stress-result')).toHaveTextContent(/9[.,\s]?895/);
+    const result = screen.getByTestId('portfolio-stress-result');
+    expect(result).toHaveTextContent(/9[.,\s]?895/);
+    expect(result).toHaveTextContent(/1[.,]05\s*%/);
     await userEvent.click(screen.getByRole('button', { name: /preview|önizle/i }));
     expect(onPreview).toHaveBeenCalledWith({
       moves: [

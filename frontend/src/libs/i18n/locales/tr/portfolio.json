@@ -63,7 +63,7 @@
       "no_history": "Bu pencere için mum yok.",
       "fetch_failed": "Fiyat geçmişi okunamadı."
     },
-    "equity": "Özkaynak {{now}} → {{next}} ({{delta}})",
+    "equity": "Özkaynak {{now}} → {{next}} ({{change}})",
     "pnl": "Toplam kâr/zarar {{now}} → {{next}}",
     "margin": "Marj özkaynağı {{now}} → {{next}}",
     "liquidated": "{{n}} marj pozisyonu likide olur"

@@ -9,6 +9,24 @@ export function money(n: number | undefined, signed = false): string {
   return body;
 }
 
+/** Percent change of the book. Blank when current equity is not a positive base. */
+export function equityChangePct(equity?: number, delta?: number): number | undefined {
+  if (equity == null || delta == null || !(equity > 0) || !Number.isFinite(equity) || !Number.isFinite(delta)) {
+    return undefined;
+  }
+  const pct = (delta / equity) * 100;
+  if (!Number.isFinite(pct)) return undefined;
+  return pct;
+}
+
+/** Signed money change, with the percent of current equity beside it. */
+export function portfolioChange(equity?: number, delta?: number): string {
+  const amount = money(delta, true);
+  const pct = equityChangePct(equity, delta);
+  if (pct == null) return amount;
+  return `${amount}, ${formatMovePct(pct)}`;
+}
+
 export function formatMovePct(n: number | undefined): string {
   if (n == null || !Number.isFinite(n)) return '—';
   const body = Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 2 });

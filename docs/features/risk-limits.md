@@ -80,7 +80,7 @@ A past window uses `from` and `to` instead of `moves`. Send one of those, not bo
 
 Each open position keeps its own venue's change. The coins are listed by the size of that price change, largest up or down first. Equal sizes stay in name order. Spot weight is market value. Margin weight is notional (quantity times mark). When the same coin is open on two venues, each venue is repriced on its own, and `movePct` on the coin is the value-weighted average of the venues that priced. A coin or venue with no close at either end stays unchanged and is named (`no_start`, `no_end`, `same_close`, `out_of_range`, `no_history`, `fetch_failed`). Cash does not change. Equities read the venue's latest daily or hourly window (about two years of daily bars, about a month of hourly bars). A close outside that window is named and left unchanged.
 
-The portfolio screen shows this under **If the market moves**, with **Type a move** and **Replay a period**. MCP and the paper assistant tool `stress_portfolio` take `moves` as `BTC:-10,ETH:-15`, or `from` / `to` (`period_from` / `period_to` in Python).
+The portfolio screen shows this under **If the market moves**, with **Type a move** and **Replay a period**. The equity line shows the money change and that change as a percent of current equity. A book at zero or below keeps the money change and leaves the percent off. MCP and the paper assistant tool `stress_portfolio` take `moves` as `BTC:-10,ETH:-15`, or `from` / `to` (`period_from` / `period_to` in Python).
 
 ## Limitations
 
